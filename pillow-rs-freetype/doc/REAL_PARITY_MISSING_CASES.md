@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Multi_Master` invalid/non-variable route
+Current verified result after `FT_Render_Glyph` invalid render-mode route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3841`
+  - `real-parity`: `3844`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `354`
+  - `generic-error-fallback`: `351`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3762,6 +3762,39 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error
+```
+
+### Issue Set CM: `FT_Render_Glyph` invalid render-mode route
+
+Previous blocker:
+
+- `freetype.FT_Render_Glyph.invalid_render_mode` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftobjs.c:4983-4994`
+  and `freetype/src/base/ftobjs.c:4733-4855`: the public wrapper rejects null
+  or detached slots before dispatch, then delegates loaded slots to
+  `FT_Render_Glyph_Internal`, where renderers reject unsupported render modes
+  with the public FreeType error.
+
+Plan:
+
+1. Keep the fixture intact; it exercises three concrete local fonts with the
+   same invalid render-mode value.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused invalid-render-mode row passes exact comparison for all three
+  variants against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies the three concrete
+  `freetype.FT_Render_Glyph.invalid_render_mode` rows as `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.invalid_render_mode
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
