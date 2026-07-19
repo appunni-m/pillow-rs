@@ -81,6 +81,18 @@ FTDRIVER_SUCCESS_OPERATIONS = {
     "ftdriver.interpreter_version_property",
 }
 
+FTMODAPI_SUCCESS_OPERATIONS = {
+    "ftmodapi.inspect_module_flags",
+}
+
+SFNT_METADATA_SUCCESS_OPERATIONS = {
+    "face.enumerate_charmaps",
+    "freetype.enumerate_charmaps",
+    "sfnt.charmap_and_name_metadata",
+    "sfnt.enumerate_charmaps",
+    "sfnt.enumerate_charmaps_and_names",
+}
+
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
     "fterrors.FT_NOERRORDEF_",
@@ -1570,6 +1582,18 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         and has_runtime_asset(row)
     ):
         return "FT driver property/interpreter success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in FTMODAPI_SUCCESS_OPERATIONS
+        and row.expectation_status in {"ok", "build_dependent"}
+        and has_runtime_asset(row)
+    ):
+        return "FT module API runtime success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in SFNT_METADATA_SUCCESS_OPERATIONS
+        and row.expectation_status in {"ok", "build_dependent"}
+        and has_runtime_asset(row)
+    ):
+        return "SFNT/charmap metadata runtime output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
