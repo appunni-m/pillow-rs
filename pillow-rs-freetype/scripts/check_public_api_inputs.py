@@ -1626,6 +1626,14 @@ def has_runtime_asset(row: ConcreteInput) -> bool:
     return any(key in row.assets for key in ("font", "fixture", "foreign_font"))
 
 
+def unresolved_assets_reason(row: ConcreteInput) -> str | None:
+    reasons = [
+        unresolved_asset_reason(asset, name)
+        for name, asset in sorted(row.assets.items())
+    ]
+    return next((reason for reason in reasons if reason), None)
+
+
 def unresolved_asset_reason(value: object, label: str) -> str | None:
     if isinstance(value, list):
         for index, item in enumerate(value):
@@ -1659,6 +1667,9 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if not operation_is_real_parity(row.operation):
         return None
+    unresolved = unresolved_assets_reason(row)
+    if unresolved and not exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return f"{unresolved}; exact runtime parity would be a green placeholder"
     unresolved_future_asset_cases = {
         "ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer": (
             "tracked cache bitmap strike asset is not a C-openable success fixture; "
@@ -2054,6 +2065,25 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def future_batch_unresolved_asset_pending_reason(row: ConcreteInput) -> str | None:
+    if row.operation not in (
+        FTMM_SUCCESS_OPERATIONS
+        | FTDRIVER_SUCCESS_OPERATIONS
+        | FTMODAPI_SUCCESS_OPERATIONS
+    ):
+        return None
+    if row.expectation_status not in {"ok", "build_dependent"}:
+        return None
+    unresolved = unresolved_assets_reason(row)
+    if not unresolved:
+        return None
+    return (
+        f"{unresolved}; future-batch success output cannot count as real "
+        "parity until the fixture is C-openable and the Rust FFI, C ABI, and "
+        "WASM ABI routes compare exact output"
+    )
+
+
 def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     if (row.operation, row.case_id) in FTERRDEF_EXACT_ERROR_BATCH:
         return "fterrdef load-glyph exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -2061,18 +2091,21 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         row.operation in FTMM_SUCCESS_OPERATIONS
         and row.expectation_status == "ok"
         and has_runtime_asset(row)
+        and unresolved_assets_reason(row) is None
     ):
         return "FT multiple-master/variation success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation in FTDRIVER_SUCCESS_OPERATIONS
         and row.expectation_status in {"ok", "build_dependent"}
         and has_runtime_asset(row)
+        and unresolved_assets_reason(row) is None
     ):
         return "FT driver property/interpreter success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation in FTMODAPI_SUCCESS_OPERATIONS
         and row.expectation_status in {"ok", "build_dependent"}
         and has_runtime_asset(row)
+        and unresolved_assets_reason(row) is None
     ):
         return "FT module API runtime success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
@@ -3937,6 +3970,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
     if lifecycle_null_reason:
         return ("real-parity", lifecycle_null_reason)
+    future_batch_pending = future_batch_unresolved_asset_pending_reason(row)
+    if future_batch_pending:
+        return ("pending-route", future_batch_pending)
     future_batch_real_reason = future_batch_real_parity_reason(row)
     if future_batch_real_reason:
         return ("real-parity", future_batch_real_reason)

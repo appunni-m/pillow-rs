@@ -1,36 +1,55 @@
 # Real-Parity Missing Cases
 
-### Issue Set Current: remaining FTMM/MVAR future batch
+### Issue Set Current: future-batch unresolved-asset correction
 
-Status: planned; do not promote until the implementation and fixture
-dependencies below are real.
+Status: classified as explicit pending-route on 2026-07-20.
 
-Route audit baseline on 2026-07-20 at `5edc2a362`:
+Current route-audit ledger after the strict unresolved-asset correction:
 
-- `real-parity=4469`
-- `pending-core=3`
-- `pending-route=514`
+- `real-parity=4417`
+- `pending-core=1`
+- `pending-route=568`
 - `generic-fallback=0`
+- full runtime parity `6601/6601`, `pending=633`
 
-The remaining `pending-core` rows are not green-placeholder cleanup. They are
-three larger variation-font surfaces:
+Finding:
+
+- Focused runtime parity for
+  `ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates` reports
+  `runnable=0`, `pending=1` because the row references unresolved fixture
+  assets such as `fonts/variable/inter-wght.ttf`.
+- Before this correction, the static route audit promoted future-batch success
+  rows for FTMM, FTDRIVER, and FTMODAPI when they declared an asset key, even
+  if that asset was not present under `tests/fixtures`.
+- That made 54 rows look like `real-parity` even though no C-openable fixture
+  existed for exact pinned C oracle, Rust FFI, C ABI, and WASM ABI output
+  comparison. These rows are now explicit `pending-route` with the missing
+  asset named in the reason.
+- Exact error rows that do not require the missing success asset remain real
+  when focused runtime parity proves the public error route. For example,
+  `ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count`
+  remains `real-parity`.
+
+Impact:
+
+- `real-parity`: `4471 -> 4417`
+- `pending-route`: `514 -> 568`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+The remaining `pending-core` row is not green-placeholder cleanup. It is a
+larger Adobe multiple-master surface:
 
 | Case | Current blocker | Required first implementable slice |
 |---|---|---|
 | `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default` | No maintained Adobe MM fixture is present under `tests/fixtures`; the row also requires real Adobe multiple-master state, not only OpenType `fvar` named instances. | Add or generate a maintained Adobe MM Type 1 fixture, parse the MM design space in pure Rust, implement default design reset semantics for `FT_Set_Named_Instance(0)`, then compare face flags, face index, and design coordinates through Rust FFI, C ABI, and WASM ABI. |
-| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`. Rust now applies fractional `gvar` point deltas through the native scaled sidecar and evaluates `HVAR` advance-width deltas, but exact rendered bytes still diverge because FreeType's autohinter consumes the variable outline through its own no-scale reload/hint pipeline. | Carry the remaining fractional `gvar` behavior through the autohint bitmap path, then promote the maintained C oracle glyph-output route through Rust FFI, C ABI, and WASM ABI. |
-| `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation` | No maintained vertical MVAR fixture is present; `mvar-horizontal-metrics.ttf` has no `MVAR` table and the expected `mvar-vertical-metrics.ttf` asset is missing. | Add or generate a vertical metrics variation fixture with `vhea`/`vmtx`/`fvar`/`MVAR`, implement shared item-variation-store evaluation, apply `MVAR` deltas to vertical header fields after coordinate changes, then compare default and varied `TT_VertHeader` records exactly. |
 
 Execution order:
 
-1. Start with `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`.
-   It has the required `gvar`/`HVAR` fixture tables already, so the next work is
-   pure implementation plus focused C/Rust tracing.
-2. Build the shared variation-region evaluator needed by `gvar`, `HVAR`, and
-   later `MVAR`; do not write one-off evaluators per table.
-3. After `gvar`/`HVAR` is proven, add the missing vertical `MVAR` fixture and
-   reuse the evaluator for `TT_VertHeader`.
-4. Treat Adobe MM as a separate Type 1 multiple-master parser/fixture slice.
+1. Do not promote future-batch success rows unless every declared runtime asset
+   resolves and the focused row executes through pinned C FreeType, Rust FFI,
+   C ABI, and WASM ABI.
+2. Treat Adobe MM as a separate Type 1 multiple-master parser/fixture slice.
    Do not fake it with an OpenType variable font.
 
 2026-07-20 progress:
@@ -40,17 +59,16 @@ Execution order:
 - Core now parses `gvar` tuple-variation data, including shared tuples,
   embedded tuples, intermediate regions, shared/private point lists, and packed
   X/Y deltas, then applies point deltas to simple glyph outlines before hinting.
-- This is not yet a parity promotion. The output row remains `pending-core`
-  because exact glyph-output comparison still needs fractional `gvar` point
-  precision through scaling/autohinting plus HVAR advance/side-bearing deltas
-  where the fixture observes metrics.
+- This diagnostic was resolved in later commits. The named-instance output row
+  is now real parity through Rust FFI, C ABI, and WASM ABI; it must not be
+  re-counted as pending work.
 
-2026-07-20 diagnostic update:
+2026-07-20 historical named-instance diagnostic:
 
 - Added a maintained C oracle/harness route for
-  `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`, but kept the
-  row pending so an explicit focused run reports the fractional-gvar blocker
-  instead of a false green.
+  `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`. At this point
+  in the history the row was still pending, so an explicit focused run reported
+  the fractional-gvar blocker instead of a false green.
 - Unguarded focused comparison first failed at `FT_GlyphSlot.advance.x`
   (`expected=1152`, Rust `actual=1216`). Applying `gvar` phantom deltas to the
   core scaler and autohint advance path fixed that mismatch.
@@ -71,15 +89,15 @@ Execution order:
 - FreeType's autofit loader reloads glyphs with `FT_LOAD_NO_SCALE` before
   `af_glyph_hints_reload`; the native TrueType unrounded sidecar must not be
   applied directly to that autohint reload path.
-- Unguarded focused comparison still fails only at `bitmap.buffer_hex`; HVAR is
-  no longer part of the observed pending reason for this row.
+- At this historical point the unguarded focused comparison still failed only
+  at `bitmap.buffer_hex`; HVAR was no longer part of the observed pending
+  reason for this row. Later commits resolved and promoted the named-instance
+  output row.
 
-Verification required before any row moves to `real-parity`:
+Verification required before the remaining Adobe MM row moves to `real-parity`:
 
 ```bash
 make -C pillow-rs-freetype route-audit
-make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.output_changes_to_named_instance
-make -C pillow-rs-freetype test-case CASE=tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default
 make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype test-harness
@@ -9222,8 +9240,15 @@ Current verified ledger:
 - Focused `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation`
   now passes exact pinned C oracle vs Rust FFI comparison for the default and
   changed `TT_VertHeader` record fields.
-- Route audit: `real-parity=4471`, `pending-core=1`, `pending-route=514`.
-- Full runtime parity: `6613/6613` runnable passed, `pending=621`.
+- Route audit at promotion time: `real-parity=4471`, `pending-core=1`,
+  `pending-route=514`.
+- Later strict unresolved-asset classification kept this MVAR row real, but
+  moved 54 unrelated future-batch success rows with missing assets from
+  `real-parity` to `pending-route`; the current global route audit ledger is
+  `real-parity=4417`, `pending-core=1`, `pending-route=568`.
+- Full runtime parity at promotion time: `6613/6613` runnable passed,
+  `pending=621`; after the later unresolved-asset correction, full runtime
+  parity is `6601/6601`, `pending=633`.
 - Follow-up wrapper verification adds thin C ABI and WASM ABI execution for the
   same MVAR `TT_VertHeader` sequence: C exports
   `FT_Set_Var_Design_Coordinates`, WASM exports
