@@ -799,6 +799,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "freetype.FT_Load_Glyph.matrix_load",
         "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode",
         "freetype.FT_New_Memory_Face.error_null_file_base",
         "freetype.FT_New_Memory_Face.error_null_library_or_aface",
@@ -1096,6 +1097,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_Open_Face.error_invalid_source_flags"
     ):
         return "FT_Open_Face invalid source-flag errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "load_glyph"
+        and row.case_id == "freetype.FT_Load_Glyph.matrix_load"
+    ):
+        return "FT_Load_Glyph matrix-load error rows validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
