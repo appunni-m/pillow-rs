@@ -155,7 +155,8 @@ Required pure-Rust pieces:
 - `avar`: design-to-normalized coordinate mapping.
 - active variation state: design coordinates, blend coordinates, selected named
   instance, face-index bits, variation flag semantics.
-- `gvar`: simple and composite glyph deltas before hinting.
+- `gvar`: simple and composite glyph deltas before hinting, including
+  fractional point precision for variable-font raster parity.
 - `HVAR`/`VVAR`: advance and side-bearing deltas.
 - `MVAR`: face and size metric deltas, including vertical header behavior.
 - `cvar`: CVT deltas before native TrueType hinting.

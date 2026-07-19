@@ -2957,7 +2957,10 @@ pub fn apply_hints(
         let haxis = &hints.axis[Dimension::Horz as usize];
         let num_horz_edges = haxis.edges.len();
         let advance_width = font_data.map_or(0, |data| {
-            ft_mul_fix(data.hmtx.get(glyph_index).advance_width as i32, x_scale)
+            let advance_fu = data
+                .hmtx_hori_advance_with_gvar_delta(glyph_index, raw_outline.points.len())
+                .unwrap_or_else(|_| data.hmtx.get(glyph_index).advance_width as i32);
+            ft_mul_fix(advance_fu, x_scale)
         });
         let target_light = no_horizontal_hinting && !stem_adjust && !horz_snap && !vert_snap;
         let preserve_original_advance = !target_light

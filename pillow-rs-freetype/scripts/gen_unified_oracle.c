@@ -9973,6 +9973,48 @@ static int emit_set_named_instance(int argc, char** argv) {
     return 0;
 }
 
+static int emit_set_named_instance_glyph_output(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    FT_UInt instance_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[10], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[11], NULL, 10);
+
+    OracleFace face;
+    int opened = open_oracle_face(source_kind, source_value, face_index, &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Error err = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+    if (!err) {
+        err = FT_Set_Named_Instance(face.face, instance_index);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(face.face, glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Render_Glyph(face.face->glyph, render_mode);
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{");
+        print_slot_body(face.face->glyph, glyph_index);
+        printf("}}\n");
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_set_charmap_row(
     const char* variant,
     FT_Int charmap_index,
@@ -14780,6 +14822,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--set-named-instance")) {
         return emit_set_named_instance(argc, argv);
+    }
+    if (argc == 12 && streq(argv[1], "--set-named-instance-glyph-output")) {
+        return emit_set_named_instance_glyph_output(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--set-named-instance-descriptor")) {
         return emit_set_named_instance_descriptor(argc, argv);

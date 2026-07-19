@@ -746,8 +746,6 @@ fn scale_glyph_impl_with_context(
     let scale = ScaleMetrics::from_font_data(data);
 
     let h_metric = data.hmtx.get(glyph_index);
-    let advance_width = scale.scale_x(h_metric.advance_width as i32);
-    let mut slot_advance_width = advance_width;
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
     let outline_raw: std::rc::Rc<crate::tt::glyf::GlyphOutline> = if round_component_offsets {
@@ -767,6 +765,10 @@ fn scale_glyph_impl_with_context(
     } else {
         data.load_glyph_outline(glyph_index)?
     };
+    let hori_advance_fu =
+        data.hmtx_hori_advance_with_gvar_delta(glyph_index, outline_raw.points.len())?;
+    let advance_width = scale.scale_x(hori_advance_fu);
+    let mut slot_advance_width = advance_width;
 
     if data.cff.is_none() && !allow_bytecode && latin_metrics.is_none() {
         // C: unhinted TrueType loads scale phantom points independently, then
@@ -774,7 +776,7 @@ fn scale_glyph_impl_with_context(
         // (`src/truetype/ttgload.c`).  Scaling the raw advance as one value
         // loses one 26.6 unit whenever `pp1.x` and `pp2.x` round differently.
         let pp1x_fu = outline_raw.bbox_xmin - h_metric.lsb as i32;
-        let pp2x_fu = pp1x_fu + h_metric.advance_width as i32;
+        let pp2x_fu = pp1x_fu + hori_advance_fu;
         slot_advance_width = scale.scale_x(pp2x_fu) - scale.scale_x(pp1x_fu);
     }
 
@@ -813,7 +815,7 @@ fn scale_glyph_impl_with_context(
             Some(empty_autohint_vertical_metrics(
                 data,
                 glyph_index,
-                h_metric.advance_width as i32,
+                hori_advance_fu,
                 y_adj,
             ))
         } else {
@@ -894,7 +896,7 @@ fn scale_glyph_impl_with_context(
         pp1x_fu
     };
     let mut phantom_pp1_x = scale.scale_x(pp1x_fu);
-    let mut phantom_pp2_x = scale.scale_x(pp1x_fu + h_metric.advance_width as i32);
+    let mut phantom_pp2_x = scale.scale_x(pp1x_fu + hori_advance_fu);
     let (raw_pp3_y, raw_pp4_y) = vertical_phantom_font_units(data, glyph_index, outline_raw.ymax);
     let mut phantom_pp3_y = ft_mul_fix(raw_pp3_y, y_adj);
     let mut phantom_pp4_y = ft_mul_fix(raw_pp4_y, y_adj);
@@ -1103,7 +1105,7 @@ fn scale_glyph_impl_with_context(
                 &point_tags,
                 &outline_raw.end_pts_of_contours,
                 advance_width,
-                h_metric.advance_width as i32,
+                hori_advance_fu,
                 scale.scale_x(pp1x_fu),
                 pp1x_fu,
                 raw_pp3_y,
@@ -1159,7 +1161,11 @@ fn scale_glyph_impl_with_context(
 
     // C `tt_loader_init` enables `size->widthp` only when v40 backward
     // compatibility is inactive, notably for mono loads (ttgload.c:2280-2313).
-    let hdmx_slot_advance_width = if use_hdmx && !legacy_hinter_phantoms && allow_bytecode {
+    let hdmx_slot_advance_width = if use_hdmx
+        && !legacy_hinter_phantoms
+        && allow_bytecode
+        && data.normalized_variation_coords.is_empty()
+    {
         data.hdmx
             .as_ref()
             .and_then(|hdmx| hdmx.width_for_ppem(scale.ppem, glyph_index))
@@ -1229,7 +1235,7 @@ fn scale_glyph_impl_with_context(
             data,
             glyph_index,
             &outline_raw,
-            h_metric.advance_width as i32,
+            hori_advance_fu,
             y_adj,
             x_min,
             y_max,
