@@ -26,12 +26,18 @@ Promoted rows:
   `generic-fallback` to `real-parity`.
 - `ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property`
   moved from `generic-fallback` to `real-parity`.
+- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error` moved
+  from `pending-route` to `real-parity` after `generated/sfnt/missing-hmtx.ttf`
+  was replaced by a maintained generated SFNT with `hhea` present and `hmtx`
+  absent. Pinned FreeType 2.14.3 `FT_New_Memory_Face` returns
+  `FT_Err_Hmtx_Table_Missing` (`147`), and the focused parity row passes across
+  Rust FFI, C ABI, and WASM.
 
 Route audit impact:
 
-- `real-parity`: `4436 -> 4454`.
+- `real-parity`: `4436 -> 4455`.
 - `generic-fallback`: `519 -> 501`.
-- `pending-route`: unchanged at `24`.
+- `pending-route`: `24 -> 23`.
 
 Rejected or blocked during the same pass:
 
@@ -52,11 +58,6 @@ Rejected or blocked during the same pass:
 - `ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning` reported
   pinned C error `7` under strict focused parity; only the PFR-pair success row
   was promoted.
-- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error` is not a
-  routable exact-error row yet. `generated/sfnt/missing-hmtx.ttf` is currently
-  a symlink to valid `DejaVuSans.ttf`, and pinned C `FT_New_Memory_Face` opens
-  it successfully with error code `0`. It needs a maintained malformed-SFNT
-  fixture generator before promotion.
 - Other `generated/sfnt/*` future rows are still missing generated assets:
   `missing-cmap.ttf`, `missing-hmtx-incremental.ttf`,
   `invalid-post-format.ttf`, `truncated-png-bitmap.ttf`, and
@@ -74,6 +75,7 @@ make -C pillow-rs-freetype test-op OP=ftcid
 make -C pillow-rs-freetype test-op OP=ftpfr
 make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error
 FONTDONE_UNIFIED_ORACLE_REFRESH=1 make fontdone-parity
 python3 pillow-rs-freetype/scripts/check_public_api_inputs.py --route-audit --route-audit-json /tmp/fontdone-route-audit-final.json
 ```

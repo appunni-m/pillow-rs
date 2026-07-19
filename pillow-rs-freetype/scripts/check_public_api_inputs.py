@@ -928,6 +928,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Missing_Encoding_Field.bdf_glyph_without_encoding",
         "fterrdef.FT_Err_Missing_Font_Field.bdf_chars_before_font",
         "fterrdef.FT_Err_Missing_Fontboundingbox_Field.bdf_chars_before_fontboundingbox",
+        "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
         "fterrdef.FT_Err_Missing_Size_Field.bdf_chars_before_size",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_encoding_before_startchar",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_nested_startchar_before_endchar",
@@ -1268,10 +1269,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "load_glyph",
             "fterrdef.FT_Err_Glyph_Too_Big.ps_builder_large_outline_returns_error",
         ),
-        (
-            "new_memory_face",
-            "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
-        ),
         ("load_glyph", "fterrdef.FT_Err_Invalid_Opcode.tt_bytecode_invalid_opcode"),
         (
             "load_glyph",
@@ -1319,15 +1316,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "raw FT_Outline null-internal-pointer scenarios are not safely routed; "
             "the attempted pinned-C FT_Outline_Decompose probe segfaulted, so "
             "accepting a generic Invalid_Outline would be a green placeholder"
-        )
-    if (
-        row.operation == "new_memory_face"
-        and row.case_id == "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error"
-    ):
-        return (
-            "generated/sfnt/missing-hmtx.ttf is a symlink to valid DejaVuSans.ttf; "
-            "pinned C opens it successfully, so exact Hmtx_Table_Missing parity "
-            "needs a maintained malformed-SFNT fixture generator"
         )
     if (
         (row.operation, row.case_id) in exact_error_route_gaps
@@ -1987,6 +1975,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         (
             "FT_Open_Face",
             "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c",
+        ),
+        (
+            "new_memory_face",
+            "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
         ),
         ("FT_Open_Face", "fterrdef.FT_Err_Missing_Module.no_driver_matches_face"),
         (
