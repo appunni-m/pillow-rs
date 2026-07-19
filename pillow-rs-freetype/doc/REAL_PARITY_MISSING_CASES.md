@@ -1,5 +1,63 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftmodapi` module/library lifecycle route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `8a5599e28`: `real-parity=4465`,
+  `generic-fallback=160`, `pending-route=354`, `pending-core=7`.
+
+Finding:
+
+- Existing exact module API rows and runtime-asset rows are classified
+  separately as real parity when they have pinned C/Rust/C-ABI/WASM proof.
+- The remaining `ftmodapi` rows cover `FT_New_Library`,
+  `FT_Reference_Library`, `FT_Done_Library`, `FT_Add_Module`,
+  `FT_Remove_Module`, `FT_Get_Module`, `FT_FACE_DRIVER_NAME`,
+  `FT_Module_Class`, `FT_Module_Interface`, `FT_MODULE_*` flags, and
+  `FT_Set_Default_Properties` no-op/malformed-property behavior.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  module API route that constructs libraries, installs/removes modules, tracks
+  reference counts and destruction side effects, queries module classes and
+  driver names, and compares default-property parsing behavior across all ABI
+  lanes.
+
+Classification change:
+
+- 19 `ftmodapi` rows moved from `generic-fallback` to `pending-route`.
+- Existing exact module API rows remain `real-parity`; the classifier is
+  intentionally exact-case scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=141`,
+  `pending-route=373`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained module API route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust library/module state first: module registration/removal,
+   reference counting, final library destruction, face/module cleanup, module
+   requester interface output, driver names, and module flag metadata.
+3. Compare exact return codes, pointer/nullness behavior, module identity,
+   module class fields, reference-count effects, final-destroy effects,
+   driver-name strings, default-property environment parsing/no-op behavior,
+   and malformed-property handling.
+4. Keep already-routed exact module API rows real; do not demote them while
+   building the broader module route.
+5. Promote rows only after focused `ftmodapi` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftmodapi
+```
+
 ### Issue Set Current: `ftmm` MM/variation descriptor route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

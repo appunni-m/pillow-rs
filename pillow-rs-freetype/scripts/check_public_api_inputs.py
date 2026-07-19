@@ -1290,6 +1290,40 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for module/library lifecycle data that do not have a maintained route."""
+    ftmodapi_rows_without_maintained_route = {
+        "ftmodapi.FT_Add_Module.add_minimal_module_success",
+        "ftmodapi.FT_Done_Library.decrements_reference_without_destroying",
+        "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
+        "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name",
+        "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format",
+        "ftmodapi.FT_Get_Module.lookup_existing_and_missing_module",
+        "ftmodapi.FT_Get_Module.null_inputs_return_null",
+        "ftmodapi.FT_MODULE_DRIVER_HAS_HINTER.present_on_native_hinter_drivers",
+        "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c",
+        "ftmodapi.FT_MODULE_DRIVER_SCALABLE.scalable_driver_flags_match_c",
+        "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration",
+        "ftmodapi.FT_MODULE_STYLER.styler_module_registration",
+        "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle",
+        "ftmodapi.FT_Module_Interface.requester_return_type",
+        "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount",
+        "ftmodapi.FT_Reference_Library.increments_refcount",
+        "ftmodapi.FT_Remove_Module.removes_installed_module",
+        "ftmodapi.FT_Set_Default_Properties.no_environment_noop",
+        "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties",
+    }
+    if row.case_id not in ftmodapi_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Module class, library reference, driver metadata, module lookup, and "
+        "default-property success behavior requires a maintained module API "
+        "route; keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3619,6 +3653,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftmm_pending = ftmm_subsystem_pending_reason(row)
     if ftmm_pending:
         return ("pending-route", ftmm_pending)
+    ftmodapi_pending = ftmodapi_subsystem_pending_reason(row)
+    if ftmodapi_pending:
+        return ("pending-route", ftmodapi_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
