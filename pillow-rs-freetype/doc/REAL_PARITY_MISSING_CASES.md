@@ -9633,6 +9633,18 @@ Classification change:
 - New route audit counts: `real-parity=4465`, `generic-fallback=429`,
   `pending-route=85`, `pending-core=7`.
 
+2026-07-20 null-stroker no-op carve-out:
+
+- `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
+  `FT_Stroker_Done(NULL)` are exact pinned-C no-ops in FreeType 2.14.3
+  `src/base/ftstroke.c`. They do not allocate, free, or touch border state.
+- The maintained route for these three rows runs pinned C, Rust FFI, thin C
+  ABI, and WASM ABI with a null stroker and compares
+  `{"crash": false, "allocator_calls": "none"}`.
+- This is not a full `FT_Stroker` implementation. Non-null stroker allocation,
+  attribute mutation, rewind semantics, path building, export/count geometry,
+  and glyph-stroking rows remain `pending-route`.
+
 Required fix plan:
 
 1. Add a maintained stroker route instead of per-row expected output

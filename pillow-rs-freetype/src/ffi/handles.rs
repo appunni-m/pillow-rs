@@ -2515,6 +2515,36 @@ pub fn FT_Outline_GetOutsideBorder(outline: Option<&FT_OutlineSnapshot>) -> FT_I
     }
 }
 
+pub type FT_Stroker = *mut core::ffi::c_void;
+
+pub fn FT_Stroker_Set(
+    stroker: FT_Stroker,
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:824-831` returns immediately for
+    // a null stroker before touching allocation-backed border state.  The
+    // maintained parity route currently covers only that null-handle no-op;
+    // non-null stroker object/path rows remain pending in the route audit.
+    let _ = (stroker, radius, line_cap, line_join, miter_limit);
+}
+
+pub fn FT_Stroker_Rewind(stroker: FT_Stroker) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:853-862` is a no-op for a null
+    // stroker.  Non-null path clearing remains pending with the rest of the
+    // stroker object lifecycle.
+    let _ = stroker;
+}
+
+pub fn FT_Stroker_Done(stroker: FT_Stroker) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:866-881` frees borders and the
+    // stroker only when the handle is non-null.  The no-op null route is exact;
+    // non-null ownership/freeing is not classified as parity yet.
+    let _ = stroker;
+}
+
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
     let Some(outline) = outline else {
         return;

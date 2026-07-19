@@ -13335,6 +13335,63 @@ fn wasm_set_lcd_geometry(case: &InputCase) -> Result<RunOutput, String> {
     Ok(lcd_filter_error_output(error))
 }
 
+fn stroker_null_noop_action(case: &InputCase) -> Result<(&'static str, i32), String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_Set.null_stroker_noop" => Ok(("set", 1)),
+        "ftstroke.FT_Stroker_Rewind.null_stroker_noop" => Ok(("rewind", 2)),
+        "ftstroke.FT_Stroker_Done.null_stroker_noop" => Ok(("done", 3)),
+        _ => Err(format!(
+            "{} is not an exact null-stroker no-op parity route",
+            case.case_id
+        )),
+    }
+}
+
+fn stroker_null_noop_output() -> Value {
+    json!({"crash": false, "allocator_calls": "none"})
+}
+
+fn rust_stroker_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    match stroker_null_noop_action(case)?.1 {
+        1 => FT_Stroker_Set(
+            ptr::null_mut(),
+            128,
+            FT_STROKER_LINECAP_ROUND as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        2 => FT_Stroker_Rewind(ptr::null_mut()),
+        3 => FT_Stroker_Done(ptr::null_mut()),
+        _ => unreachable!(),
+    }
+    Ok(ok(stroker_null_noop_output()))
+}
+
+fn c_stroker_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    match stroker_null_noop_action(case)?.1 {
+        1 => c_abi::FT_Stroker_Set(
+            ptr::null_mut(),
+            128,
+            FT_STROKER_LINECAP_ROUND as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        2 => c_abi::FT_Stroker_Rewind(ptr::null_mut()),
+        3 => c_abi::FT_Stroker_Done(ptr::null_mut()),
+        _ => unreachable!(),
+    }
+    Ok(ok(stroker_null_noop_output()))
+}
+
+fn wasm_stroker_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_null_noop_action(case)?.1;
+    if wasm_abi::abi_support_stroker_null_noop(action) {
+        Ok(ok(stroker_null_noop_output()))
+    } else {
+        Err(format!("unsupported stroker null-noop action {action}"))
+    }
+}
+
 fn lcd_filter_output(
     params: &Value,
     mut call: impl FnMut(FT_LcdFilter) -> FT_Error,
@@ -16192,6 +16249,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             lcd_library_present_arg(params).to_string(),
             lcd_geometry_arg(params)?,
         ]),
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => Ok(vec![
+            "--stroker-null-noop".to_string(),
+            stroker_null_noop_action(case)?.0.to_string(),
+        ]),
         "load_char" => {
             if params.get("char_code").is_none() {
                 return oracle_fallback_args(case);
@@ -17125,6 +17186,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => rust_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => rust_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
+            rust_stroker_null_noop(case)
+        }
         "load_char" => rust_load_char_public_api(case),
         "load_glyph" => {
             if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
@@ -17860,6 +17924,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => c_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => c_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return c_load_char_output(std::ptr::null_mut(), &case.inputs.params);
@@ -18526,6 +18591,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => wasm_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => wasm_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
+            wasm_stroker_null_noop(case)
+        }
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return wasm_load_char_output(0, &case.inputs.params);

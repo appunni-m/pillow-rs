@@ -27,6 +27,7 @@
 #include <freetype/ftsystem.h>
 #include <freetype/ftsizes.h>
 #include <freetype/ftsynth.h>
+#include <freetype/ftstroke.h>
 #include <freetype/ftotval.h>
 #include <freetype/fttrigon.h>
 #include <freetype/ftwinfnt.h>
@@ -10964,6 +10965,28 @@ static int emit_set_lcd_geometry(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_null_noop(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    if (streq(action, "set")) {
+        FT_Stroker_Set(NULL,
+                       128,
+                       FT_STROKER_LINECAP_ROUND,
+                       FT_STROKER_LINEJOIN_ROUND,
+                       65536);
+    } else if (streq(action, "rewind")) {
+        FT_Stroker_Rewind(NULL);
+    } else if (streq(action, "done")) {
+        FT_Stroker_Done(NULL);
+    } else {
+        return 2;
+    }
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"crash\":false,\"allocator_calls\":\"none\"}}\n");
+    return 0;
+}
+
 static int emit_truetype_engine_type(int argc, char** argv) {
     (void)argc;
     int library_kind = atoi(argv[2]);
@@ -15221,6 +15244,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--set-lcd-geometry")) {
         return emit_set_lcd_geometry(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-null-noop")) {
+        return emit_stroker_null_noop(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);

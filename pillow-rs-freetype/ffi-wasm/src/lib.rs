@@ -1619,6 +1619,23 @@ pub extern "C" fn fontdone_wasm_outline_get_outside_border(
     rust_ffi::FT_Outline_GetOutsideBorder(snapshot.as_ref()) as FT_StrokerBorder
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_null_noop(action: i32) -> bool {
+    match action {
+        1 => rust_ffi::FT_Stroker_Set(
+            ptr::null_mut(),
+            128,
+            rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+            rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        2 => rust_ffi::FT_Stroker_Rewind(ptr::null_mut()),
+        3 => rust_ffi::FT_Stroker_Done(ptr::null_mut()),
+        _ => return false,
+    }
+    true
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_new(
     library_handle: usize,

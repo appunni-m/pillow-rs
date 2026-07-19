@@ -49,6 +49,7 @@ pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
+pub type FT_Stroker = *mut c_void;
 pub type FT_String = c_char;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
@@ -2514,6 +2515,27 @@ pub extern "C" fn FT_Outline_GetInsideBorder(outline: *const FT_Outline) -> FT_S
 pub extern "C" fn FT_Outline_GetOutsideBorder(outline: *const FT_Outline) -> FT_StrokerBorder {
     let snapshot = outline_snapshot_from_c(outline);
     rust_ffi::FT_Outline_GetOutsideBorder(snapshot.as_ref()) as FT_StrokerBorder
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_Set(
+    stroker: FT_Stroker,
+    radius: FT_Fixed,
+    line_cap: c_int,
+    line_join: c_int,
+    miter_limit: FT_Fixed,
+) {
+    rust_ffi::FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_Rewind(stroker: FT_Stroker) {
+    rust_ffi::FT_Stroker_Rewind(stroker);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_Done(stroker: FT_Stroker) {
+    rust_ffi::FT_Stroker_Done(stroker);
 }
 
 #[unsafe(no_mangle)]
