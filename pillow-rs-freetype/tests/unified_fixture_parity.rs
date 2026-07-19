@@ -2232,6 +2232,7 @@ impl BackendComparisonWorker {
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
                     | "ftoutln.outline_decompose"
+                    | "ftoutln.outline_get_bitmap"
                     | "ftbitmap.bitmap_copy"
                     | "ftbitmap.bitmap_convert"
                     | "ftbitmap.bitmap_done"
@@ -8483,12 +8484,14 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors"
             || case.case_id == "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors"
+            || case.case_id == "ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors"
             || case.case_id == "ftoutln.FT_Outline_New.invalid_arguments_and_limits"
             || case.case_id == "ftoutln.FT_Orientation.geometry_fixture_matrix"
             || case.case_id == "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored"
             || case.case_id == "ftimage.FT_Raster_New_Func.renderer_new_error_propagates"
             || case.case_id == "ftimage.FT_Raster_Span_Func.missing_span_callback_errors"
             || case.case_id == "ftimage.FT_Bitmap.invalid_target_buffer_errors"
+            || case.case_id == "ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors"
             || case.case_id == "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape"
             || case.case_id == "ftimage.FT_Raster.null_raster_errors"
             || case.case_id == "ftimage.FT_Raster_Funcs.render_callback_error_contract"
@@ -10787,6 +10790,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
                 | "ftoutln.outline_decompose"
+                | "ftoutln.outline_get_bitmap"
                 // These synthetic public bitmap routes own their precise
                 // null-handle setup below.  Sending them through the generic
                 // face-null classifier would replace the real FreeType error
@@ -20560,6 +20564,7 @@ fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
     case.subject == "ftoutln.FT_Outline_Get_Bitmap"
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
             && case.case == "invalid_render_target_errors")
+        || (case.subject == "ftimage.FT_Bitmap" && case.case == "invalid_target_buffer_errors")
 }
 
 fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
@@ -20570,6 +20575,7 @@ fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
         "invalid_render_target_errors" if case.subject == "ftimage.FT_PIXEL_MODE_NONE" => {
             "invalid-none"
         }
+        "invalid_target_buffer_errors" if case.subject == "ftimage.FT_Bitmap" => "invalid-buffer",
         _ => "unsupported",
     }
 }
@@ -20581,7 +20587,11 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
             let outline = rust_outline_get_bitmap_square(false);
             let mut results = Vec::new();
             for pixel_mode in [FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V] {
-                let target = rust_outline_get_bitmap_target(pixel_mode as u8);
+                let mut buffer = vec![0u8; 16 * 16];
+                let target = rust_outline_get_bitmap_target_with_buffer(
+                    pixel_mode as u8,
+                    buffer.as_mut_ptr(),
+                );
                 let rendered = FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
                     .map_err(|err| format!("FT_Outline_Get_Bitmap failed: {err}"))?;
                 results.push(outline_get_bitmap_result_json(
@@ -20595,7 +20605,11 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
         "mono" => {
             let library = FT_Init_FreeType();
             let outline = rust_outline_get_bitmap_square(false);
-            let target = rust_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as u8);
+            let mut buffer = vec![0u8; 16 * 16];
+            let target = rust_outline_get_bitmap_target_with_buffer(
+                FT_PIXEL_MODE_MONO as u8,
+                buffer.as_mut_ptr(),
+            );
             match FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target)) {
                 Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(0, 0, &rendered))),
                 Err(err) => Ok(error(err)),
@@ -20639,6 +20653,15 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 err,
                 outline_get_bitmap_invalid_target_json(&target),
             ))
+        }
+        "invalid-buffer" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_square(false);
+            let target = rust_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as u8);
+            let err = FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
+                .err()
+                .unwrap_or(FT_Err_Ok);
+            Ok(error(err))
         }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
@@ -20727,6 +20750,18 @@ fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 c_outline_get_bitmap_invalid_target_json(&bitmap),
             ))
         }
+        "invalid-buffer" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_square(false);
+            let mut bitmap = c_outline_get_bitmap_invalid_buffer_target();
+            let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+            c_done_library(library);
+            Ok(error(err))
+        }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
 }
@@ -20791,6 +20826,12 @@ fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 wasm_outline_get_bitmap_invalid_target_json(&bitmap),
             ))
         }
+        "invalid-buffer" => {
+            let mut outline = wasm_outline_get_bitmap_square(false);
+            let mut bitmap = wasm_outline_get_bitmap_invalid_buffer_target();
+            let err = wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+            Ok(error(err))
+        }
         _ => Ok(error(FT_Err_Unimplemented_Feature as FT_Error)),
     }
 }
@@ -20820,11 +20861,15 @@ fn rust_outline_get_bitmap_square(oversized: bool) -> FT_OutlineSnapshot {
 }
 
 fn rust_outline_get_bitmap_target(pixel_mode: u8) -> FT_Bitmap_C {
+    rust_outline_get_bitmap_target_with_buffer(pixel_mode, ptr::null_mut())
+}
+
+fn rust_outline_get_bitmap_target_with_buffer(pixel_mode: u8, buffer: *mut u8) -> FT_Bitmap_C {
     FT_Bitmap_C {
         rows: 16,
         width: 16,
         pitch: 16,
-        buffer: ptr::null_mut(),
+        buffer,
         num_grays: 256,
         pixel_mode,
         palette_mode: 0,
@@ -20965,6 +21010,19 @@ fn c_outline_get_bitmap_invalid_none_target() -> c_abi::FT_Bitmap {
     }
 }
 
+fn c_outline_get_bitmap_invalid_buffer_target() -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: 16,
+        width: 16,
+        pitch: 16,
+        buffer: ptr::null_mut(),
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
 fn c_outline_get_bitmap_result_json(
     err: FT_Error,
     raster_flags: i64,
@@ -21072,6 +21130,20 @@ fn wasm_outline_get_bitmap_invalid_none_target() -> wasm_abi::FontdoneWasmBitmap
         buffer_len: 0,
         num_grays: 0,
         pixel_mode: FT_PIXEL_MODE_NONE,
+        palette_mode: 0,
+        palette: ptr::null(),
+    }
+}
+
+fn wasm_outline_get_bitmap_invalid_buffer_target() -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: 16,
+        width: 16,
+        pitch: 16,
+        buffer: ptr::null(),
+        buffer_len: 0,
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY,
         palette_mode: 0,
         palette: ptr::null(),
     }

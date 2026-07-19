@@ -924,6 +924,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftimage.FT_Raster_New_Func.renderer_new_error_propagates",
         "ftimage.FT_Raster_Span_Func.missing_span_callback_errors",
         "ftimage.FT_Bitmap.invalid_target_buffer_errors",
+        "ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors",
         "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape",
         "ftimage.FT_Raster.null_raster_errors",
         "ftimage.FT_Raster_Funcs.render_callback_error_contract",
@@ -1608,6 +1609,14 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         ),
         ("renderer.raster_render", "ftimage.FT_Raster_Params.invalid_param_errors"),
         ("ftoutln.outline_get_bitmap", "ftimage.FT_Bitmap.invalid_target_buffer_errors"),
+        (
+            "ftoutln.outline_get_bitmap",
+            "ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors",
+        ),
+        (
+            "ftoutln.outline_get_bitmap",
+            "ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors",
+        ),
     }
     if (row.operation, row.case_id) in render_raster_error_cases:
         return "render/raster public error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
