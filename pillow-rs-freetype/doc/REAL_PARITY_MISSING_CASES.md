@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_MM_Var` null-output route
+Current verified result after `FT_Get_MM_Var` invalid-face route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3833`
+  - `real-parity`: `3834`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `362`
+  - `generic-error-fallback`: `361`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3488,6 +3488,39 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.null_output_error
+```
+
+### Issue Set CE: `FT_Get_MM_Var` invalid/non-variable-face route
+
+Previous blocker:
+
+- `ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error` stayed in
+  `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:38-58`
+  and `freetype/src/base/ftmm.c:123-143`: null faces return
+  `FT_Err_Invalid_Face_Handle`, non-variable static faces return
+  `FT_Err_Invalid_Argument`, and the caller's output pointer is preserved.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public `FT_Get_MM_Var` wrapper
+   over null-face and non-variable-face argument rows.
+2. Require exact error comparison for row status and preserved descriptor
+   output pointer.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused invalid/non-variable-face row passes exact comparison against
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error` as `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
