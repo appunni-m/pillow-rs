@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Done_MM_Var` null-library
+Current verified result after `FT_Remove_Module` null-library
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3795`
+  - `real-parity`: `3796`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `398`
+  - `generic-error-fallback`: `397`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2677,6 +2677,71 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Done_MM_Var.null_library_error
+```
+
+### Issue Set BH: `FT_New_Face` null-library/null-output-pointer oracle route blocker
+
+Current blocker:
+
+- `freetype.FT_New_Face.error_null_library_or_aface` stayed in
+  `generic-error-fallback`.
+- Exact-error gating was tested and correctly rejected classification: the
+  pinned oracle path returned success for the current maintained route instead
+  of executing the fixture's null-library/null-`aface` public probes.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_New_Face` error behavior
+   for null library and null `aface`.
+2. Add or repair the pinned C oracle route so it executes both same-input null
+   variants and records exact status/output observations.
+3. Wire the Rust FFI, thin C ABI, and WASM ABI runners through the same public
+   variants.
+4. Only then require exact error status/output comparison and classify the row
+   as `real-parity`.
+
+Failed classification attempt:
+
+- Adding exact-error gating caused the focused case to fail because the oracle
+  returned `ok`:
+  `rust ffi: freetype.FT_New_Face.error_null_library_or_aface requires an exact C error, but the oracle returned ok`.
+- The row must remain in `generic-error-fallback` until the oracle route is
+  repaired.
+
+Diagnostic command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Face.error_null_library_or_aface
+```
+
+### Issue Set BI: `FT_Remove_Module` null-library exact-error route
+
+Previous blocker:
+
+- `ftmodapi.FT_Remove_Module.rejects_null_library` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_Remove_Module(NULL, ...)`.
+2. Require exact error status comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused null-library row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_Remove_Module.rejects_null_library` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Remove_Module.rejects_null_library
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
