@@ -1240,6 +1240,19 @@ def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for GX/classic kern validation data that do not have a maintained route."""
+    if not row.operation.startswith("ftgxval."):
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "TrueType GX and classic kern validation/free success behavior requires "
+        "a maintained validation subsystem route; keeping it generic would be "
+        "a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3545,6 +3558,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     t1tables_pending = t1tables_subsystem_pending_reason(row)
     if t1tables_pending:
         return ("pending-route", t1tables_pending)
+    ftgxval_pending = ftgxval_subsystem_pending_reason(row)
+    if ftgxval_pending:
+        return ("pending-route", ftgxval_pending)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
