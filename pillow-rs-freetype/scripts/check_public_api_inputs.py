@@ -1504,6 +1504,35 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for specialized public records without a maintained route."""
+    specialized_rows_without_maintained_route = {
+        "ftwinfnt.FT_Get_WinFNT_Header.signature_and_dispatch_contract",
+        "ftwinfnt.FT_WinFNT_Header.alias_defined",
+        "ftwinfnt.FT_WinFNT_Header.pointer_abi_contract",
+        "ftwinfnt.FT_WinFNT_Header.mutable_output_handle_contract",
+        "ftwinfnt.FT_WinFNT_HeaderRec.layout_matches_c",
+        "ftwinfnt.FT_WinFNT_HeaderRec.field_order_matches_header",
+        "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
+        "ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap",
+        "otsvg.FT_SVG_Document.alias_defined",
+        "otsvg.FT_SVG_Document.pointer_abi_contract",
+        "otsvg.FT_SVG_Document.renderer_callback_observes_document",
+        "otsvg.FT_SVG_DocumentRec.layout_matches_c",
+        "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
+        "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
+    }
+    if row.case_id not in specialized_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "WinFNT header/charset and OTSVG document public-record behavior "
+        "requires maintained specialized record routes; keeping it generic "
+        "would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3854,6 +3883,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     freetype_core_pending = freetype_core_subsystem_pending_reason(row)
     if freetype_core_pending:
         return ("pending-route", freetype_core_pending)
+    specialized_record_pending = specialized_record_subsystem_pending_reason(row)
+    if specialized_record_pending:
+        return ("pending-route", specialized_record_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",

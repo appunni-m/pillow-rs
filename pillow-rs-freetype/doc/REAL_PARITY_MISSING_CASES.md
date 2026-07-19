@@ -1,5 +1,62 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftwinfnt`/`otsvg` specialized public-record route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `7fa157c05`: `real-parity=4465`,
+  `generic-fallback=47`, `pending-route=467`, `pending-core=7`.
+
+Finding:
+
+- The remaining `ftwinfnt` rows cover `FT_Get_WinFNT_Header`,
+  `FT_WinFNT_Header`, `FT_WinFNT_HeaderRec`, `FT_WinFNT_ID_DEFAULT`, and
+  `FT_WinFNT_ID_MAC`.
+- The remaining `otsvg` rows cover `FT_SVG_Document`,
+  `FT_SVG_DocumentRec`, SVG renderer callback capture, document byte ranges,
+  payload pointers, transforms, and metrics fields.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There are no maintained
+  specialized public-record routes that open the required WinFNT/SVG-backed
+  fixtures, call the relevant APIs/callbacks, and compare exact header fields,
+  charset/charmap behavior, SVG document records, callback payloads, pointer
+  shapes, and layout/ABI contracts across all ABI lanes.
+
+Classification change:
+
+- 8 `ftwinfnt` rows and 6 `otsvg` rows moved from `generic-fallback` to
+  `pending-route`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=33`,
+  `pending-route=481`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add maintained WinFNT and OTSVG public-record routes instead of per-row
+   expected output shortcuts. They must run the same operation sequence through
+   pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust WinFNT behavior first: header extraction, pointer/output
+   mutation semantics, record layout/field order, charset validity, and Mac
+   charset charmap selection.
+3. Implement pure-Rust OTSVG behavior first: document record population,
+   byte-range and payload pointer fields, transform and metrics fields, and
+   renderer callback document capture.
+4. Compare exact return codes, public struct fields, pointer/nullness behavior,
+   callback payloads, layout/ABI values, charset/charmap choices, and
+   build-dependent SVG classifications.
+5. Promote rows only after focused `ftwinfnt` and `otsvg` runtime proves exact
+   C oracle, Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftwinfnt
+make -C pillow-rs-freetype test-case CASE=otsvg
+```
+
 ### Issue Set Current: `freetype` core face/size/slot route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
