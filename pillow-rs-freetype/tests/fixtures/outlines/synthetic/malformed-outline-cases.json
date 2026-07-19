@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "kind": "outline_model_set",
+  "cases": [
+    {
+      "id": "first_point_cubic",
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 64, "y": 64},
+        {"x": 128, "y": 0}
+      ],
+      "tags": [2, 2, 1],
+      "contours": [2],
+      "flags": 0
+    },
+    {
+      "id": "unpaired_cubic",
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 64, "y": 64},
+        {"x": 128, "y": 0}
+      ],
+      "tags": [1, 2, 1],
+      "contours": [2],
+      "flags": 0
+    },
+    {
+      "id": "last_contour_not_n_points_minus_one",
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 64, "y": 0},
+        {"x": 64, "y": 64},
+        {"x": 0, "y": 64}
+      ],
+      "tags": [1, 1, 1, 1],
+      "contours": [2],
+      "flags": 0
+    }
+  ]
+}

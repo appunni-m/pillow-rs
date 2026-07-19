@@ -1083,6 +1083,10 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         return None
     exact_error_route_gaps = {
         (
+            "ftoutln.outline_decompose",
+            "ftimage.FT_Outline.invalid_outline_errors",
+        ),
+        (
             "load_glyph",
             "fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error",
         ),
@@ -1164,6 +1168,15 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature",
         ),
     }
+    if (
+        row.operation == "ftoutln.outline_decompose"
+        and row.case_id == "ftimage.FT_Outline.invalid_outline_errors"
+    ):
+        return (
+            "raw FT_Outline null-internal-pointer scenarios are not safely routed; "
+            "the attempted pinned-C FT_Outline_Decompose probe segfaulted, so "
+            "accepting a generic Invalid_Outline would be a green placeholder"
+        )
     if (row.operation, row.case_id) in exact_error_route_gaps:
         return (
             "exact public error comparison is not routed; accepting any error "
