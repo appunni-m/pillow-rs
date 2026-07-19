@@ -1156,25 +1156,6 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     ):
         return "unloaded and unsupported synthetic glyph-slot states need explicit public runner support"
     if (
-        row.operation == "ftoutln.outline_check"
-        and row.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
-    ):
-        return (
-            "FT_Outline_Check invalid-case matrix needs exact per-scenario error-output "
-            "support; the current exact-error guard requires a top-level C error"
-        )
-    if row.case_id in {
-        "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
-        "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors",
-        "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
-        "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
-        "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
-    }:
-        return (
-            "FT_Outline invalid-case matrix needs exact per-scenario error-output "
-            "support; the current exact-error guard requires a top-level C error"
-        )
-    if (
         row.operation
         in {
             "ftsynth.glyphslot_adjust_weight_after_load",

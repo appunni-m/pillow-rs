@@ -686,25 +686,6 @@ fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> 
     }
 }
 
-fn pending_core_runtime_reason(case: &InputCase) -> Option<&'static str> {
-    if case.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch" {
-        return Some(
-            "FT_Outline_Check invalid matrix needs exact per-scenario error-output support",
-        );
-    }
-    if matches!(
-        case.case_id.as_str(),
-        "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch"
-            | "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors"
-            | "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors"
-            | "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors"
-            | "ftoutln.FT_Outline_New.invalid_arguments_and_limits"
-    ) {
-        return Some("FT_Outline invalid matrix needs exact per-scenario error-output support");
-    }
-    None
-}
-
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
     if case.route_evidence == RouteEvidence::PendingRoute {
         return RuntimeReadiness::Pending {
@@ -717,11 +698,6 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         };
     }
     if let Some(reason) = unrouted_slot_state_runtime_reason(case) {
-        return RuntimeReadiness::Pending {
-            reason: format!("{operation}:{reason}"),
-        };
-    }
-    if let Some(reason) = pending_core_runtime_reason(case) {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:{reason}"),
         };
@@ -2253,6 +2229,12 @@ impl BackendComparisonWorker {
                     | "ftlcdfil.set_lcd_filter"
                     | "ftlcdfil.set_lcd_filter_weights"
                     | "ftlcdfil.set_lcd_geometry"
+                    | "ftoutln.outline_check"
+                    | "ftoutln.outline_copy"
+                    | "ftoutln.outline_done"
+                    | "ftoutln.outline_embolden"
+                    | "ftoutln.outline_embolden_xy"
+                    | "ftoutln.outline_new"
                     | "ftoutln.outline_render"
                     | "ftoutln.outline_render_direct"
                     | "ftoutln.outline_decompose"
@@ -10843,6 +10825,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftlcdfil.set_lcd_filter"
                 | "ftlcdfil.set_lcd_filter_weights"
                 | "ftlcdfil.set_lcd_geometry"
+                | "ftoutln.outline_check"
+                | "ftoutln.outline_copy"
+                | "ftoutln.outline_done"
+                | "ftoutln.outline_embolden"
+                | "ftoutln.outline_embolden_xy"
+                | "ftoutln.outline_new"
                 | "ftoutln.outline_render"
                 | "ftoutln.outline_render_direct"
                 | "ftoutln.outline_decompose"
@@ -25868,13 +25856,15 @@ fn wasm_size_metrics_json(metrics: &wasm_abi::FontdoneWasmSizeMetrics) -> Value 
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
     if case.expect_error {
         if case.expectation.compare.compare_error_output {
-            if oracle.status.kind != StatusKind::Error {
+            let oracle_error_matrix = exact_error_matrix_output(&oracle.output);
+            let actual_error_matrix = exact_error_matrix_output(&actual.output);
+            if oracle.status.kind != StatusKind::Error && !oracle_error_matrix {
                 return Err(format!(
                     "{} requires an exact C error, but the oracle returned ok (backend={:?})",
                     case.case_id, actual.status
                 ));
             }
-            if actual.status.kind != StatusKind::Error {
+            if actual.status.kind != StatusKind::Error && !actual_error_matrix {
                 return Err(format!(
                     "{} requires an exact backend error, but the backend returned ok",
                     case.case_id
@@ -25893,6 +25883,7 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
     }
     if oracle.status.kind == StatusKind::Ok
         && case.expect_error
+        && !exact_error_matrix_output(&oracle.output)
         && !case.expectation.is_build_dependent()
     {
         return Err(format!(
@@ -25912,24 +25903,35 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
     }
     if oracle.status != actual.status && !case.expectation.is_build_dependent() {
         if case.expectation.compare.compare_error_output
-            && oracle.status.kind == StatusKind::Error
-            && actual.status.kind == StatusKind::Error
+            && exact_error_matrix_output(&oracle.output)
+            && exact_error_matrix_output(&actual.output)
         {
-            return Err(format!(
-                "{} error status mismatch: oracle={:?} actual={:?}",
-                case.case_id, oracle.status, actual.status
-            ));
+            // Some public invalid-input rows are scenario matrices: the row's
+            // top-level invocation succeeds, while each scenario records the
+            // exact `FT_Error` returned by FreeType.  These must compare the
+            // result payload exactly instead of forcing a top-level error.
+        } else {
+            if case.expectation.compare.compare_error_output
+                && oracle.status.kind == StatusKind::Error
+                && actual.status.kind == StatusKind::Error
+            {
+                return Err(format!(
+                    "{} error status mismatch: oracle={:?} actual={:?}",
+                    case.case_id, oracle.status, actual.status
+                ));
+            }
+            // Non-exact rows accept any pair of error codes. Different codes
+            // (for example 6 vs 7 for unimplemented features) remain explicitly
+            // classified as fallback evidence by the route audit.
+            if !(oracle.status.kind == StatusKind::Error && actual.status.kind == StatusKind::Error)
+            {
+                return Err(format!(
+                    "{} status mismatch: oracle={:?} actual={:?}",
+                    case.case_id, oracle.status, actual.status
+                ));
+            }
+            // Both errors: skip code comparison, fall through to output comparison.
         }
-        // Non-exact rows accept any pair of error codes. Different codes
-        // (for example 6 vs 7 for unimplemented features) remain explicitly
-        // classified as fallback evidence by the route audit.
-        if !(oracle.status.kind == StatusKind::Error && actual.status.kind == StatusKind::Error) {
-            return Err(format!(
-                "{} status mismatch: oracle={:?} actual={:?}",
-                case.case_id, oracle.status, actual.status
-            ));
-        }
-        // Both errors: skip code comparison, fall through to output comparison.
     }
     if oracle.status.kind == StatusKind::Error {
         return if oracle.output == actual.output {
@@ -25958,6 +25960,19 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             case.case_id, case.schema, path.path, path.expected, path.actual
         ))
     }
+}
+
+fn exact_error_matrix_output(output: &Value) -> bool {
+    let Some(results) = output.get("results").and_then(Value::as_array) else {
+        return false;
+    };
+    !results.is_empty()
+        && results.iter().all(|result| {
+            result
+                .get("return")
+                .and_then(Value::as_i64)
+                .is_some_and(|code| code != 0)
+        })
 }
 
 #[test]
@@ -25999,6 +26014,28 @@ fn unified_fixture_parity_exact_error_guard_rejects_non_error_results() {
     let err = compare_case(&case, &oracle_error, &backend_ok).unwrap_err();
     assert!(err.contains("requires an exact backend error"));
     compare_case(&case, &oracle_error, &backend_error).unwrap();
+
+    let oracle_matrix = ok(json!({
+        "results": [
+            {"label": "null", "return": 20},
+            {"label": "bad_shape", "return": 20}
+        ]
+    }));
+    let backend_matrix = ok(json!({
+        "results": [
+            {"label": "null", "return": 20},
+            {"label": "bad_shape", "return": 20}
+        ]
+    }));
+    compare_case(&case, &oracle_matrix, &backend_matrix).unwrap();
+
+    let backend_success_matrix = ok(json!({
+        "results": [
+            {"label": "null", "return": 0}
+        ]
+    }));
+    let err = compare_case(&case, &oracle_matrix, &backend_success_matrix).unwrap_err();
+    assert!(err.contains("requires an exact backend error"));
 
     case.expectation.compare.compare_error_output = false;
     compare_case(&case, &oracle_ok, &backend_error).unwrap();
