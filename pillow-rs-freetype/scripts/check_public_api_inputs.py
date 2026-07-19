@@ -1118,6 +1118,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Remove_Module null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmodapi.remove_module"
+        and row.case_id == "ftmodapi.FT_Remove_Module.rejects_missing_or_foreign_module"
+    ):
+        return "FT_Remove_Module missing/foreign-module errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmm.done_mm_var"
         and row.case_id == "ftmm.FT_Done_MM_Var.null_library_error"
         and param_is_null(row, "library")
