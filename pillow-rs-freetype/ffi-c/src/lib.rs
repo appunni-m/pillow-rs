@@ -1463,6 +1463,34 @@ pub extern "C" fn FT_Property_Set(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Default_Properties(library: FT_Library) {
+    rust_ffi::FT_Set_Default_Properties(library_mut(library));
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_set_default_properties(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+    let mut library = if library_present == 0 {
+        None
+    } else {
+        Some(rust_ffi::FT_Init_FreeType())
+    };
+    rust_ffi::FT_Set_Default_Properties_From_Env(library.as_mut(), env);
+    let library = library.as_ref()?;
+    let mut value = 0;
+    let error = rust_ffi::FT_Property_Get(
+        Some(library),
+        Some("truetype"),
+        Some("interpreter-version"),
+        Some(&mut value),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        Some(value)
+    } else {
+        None
+    }
+}
+
 fn face_property_from_abi(parameter: &FT_Parameter) -> rust_ffi::FT_Face_Property {
     let value = match parameter.tag as i64 {
         rust_ffi::FT_PARAM_TAG_STEM_DARKENING if !parameter.data.is_null() => {

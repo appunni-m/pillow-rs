@@ -3038,6 +3038,84 @@ pub fn FT_Property_Set(
     }
 }
 
+fn set_string_property_ignored(
+    library: Option<&mut FT_Library>,
+    module_name: &str,
+    property_name: &str,
+    value: &str,
+) {
+    let parsed = property_string_to_uint(value);
+    let _ = FT_Property_Set(
+        library,
+        Some(module_name),
+        Some(property_name),
+        Some(parsed),
+    );
+}
+
+fn property_string_to_uint(value: &str) -> FT_UInt {
+    let trimmed = value.trim_start();
+    let mut chars = trimmed.chars();
+    let negative = matches!(chars.clone().next(), Some('-'));
+    if matches!(chars.clone().next(), Some('-' | '+')) {
+        let _ = chars.next();
+    }
+    let mut parsed: i128 = 0;
+    let mut saw_digit = false;
+    for ch in chars {
+        let Some(digit) = ch.to_digit(10) else {
+            break;
+        };
+        saw_digit = true;
+        parsed = parsed.saturating_mul(10).saturating_add(i128::from(digit));
+    }
+    if !saw_digit {
+        return 0;
+    }
+    let signed = if negative { -parsed } else { parsed };
+    signed as FT_UInt
+}
+
+pub fn FT_Set_Default_Properties_From_Env(library: Option<&mut FT_Library>, env: Option<&str>) {
+    let Some(env) = env else {
+        return;
+    };
+    let mut library = library;
+    for token in env.split_ascii_whitespace() {
+        let Some((module_name, property_tail)) = token.split_once(':') else {
+            break;
+        };
+        if module_name.is_empty() || module_name.len() > 128 {
+            break;
+        }
+        let Some((property_name, property_value)) = property_tail.split_once('=') else {
+            break;
+        };
+        if property_name.is_empty()
+            || property_name.len() > 128
+            || property_value.is_empty()
+            || property_value.len() > 128
+        {
+            break;
+        }
+        // FreeType 2.14.3 `src/base/ftinit.c:112-182` parses
+        // FREETYPE_PROPERTIES tokens and deliberately ignores every
+        // `ft_property_string_set` error, including null-library and unknown
+        // module/property failures.
+        set_string_property_ignored(
+            library.as_deref_mut(),
+            module_name,
+            property_name,
+            property_value,
+        );
+    }
+}
+
+pub fn FT_Set_Default_Properties(library: Option<&mut FT_Library>) {
+    let env = std::env::var("FREETYPE_PROPERTIES").ok();
+    FT_Set_Default_Properties_From_Env(library, env.as_deref());
+}
+
 pub fn FT_Face_Properties(
     face: Option<&mut FT_Face>,
     properties: Option<&[FT_Face_Property]>,

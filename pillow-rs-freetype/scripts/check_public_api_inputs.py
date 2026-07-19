@@ -1338,8 +1338,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount",
         "ftmodapi.FT_Reference_Library.increments_refcount",
         "ftmodapi.FT_Remove_Module.removes_installed_module",
-        "ftmodapi.FT_Set_Default_Properties.no_environment_noop",
-        "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties",
     }
     if row.case_id not in ftmodapi_rows_without_maintained_route:
         return None
@@ -2230,7 +2228,9 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot": "FT_TrueTypeGX_Validate morx output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftimage.FT_GLYPH_FORMAT_NONE.reset_slot_uses_none": "FT_GLYPH_FORMAT_NONE new-face and failed-load slot state validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract": "FT_Set_Debug_Hook TrueType hook index contract validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_Set_Default_Properties.no_environment_noop": "FT_Set_Default_Properties unset-environment behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property": "FT_Set_Default_Properties environment handling validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties": "FT_Set_Default_Properties malformed, missing-property, and null-library ignored-error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success": "PFR advance output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success": "PFR kerning output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }

@@ -2281,6 +2281,7 @@ impl BackendComparisonWorker {
                     | "ftmodapi.property_get"
                     | "ftmodapi.property_set"
                     | "ftmodapi.property_set_then_get"
+                    | "ftmodapi.set_default_properties"
                     | "ftdriver.interpreter_version_default"
                     | "FT_Property_Get"
                     | "freetype.get_kerning"
@@ -2479,6 +2480,9 @@ impl BackendComparisonWorker {
             | "FT_Property_Get" => property_get_case_output(case, PropertyBackend::Rust),
             "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
                 property_set_case_output(case, PropertyBackend::Rust)
+            }
+            "ftmodapi.set_default_properties" => {
+                set_default_properties_case_output(case, PropertyBackend::Rust)
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "freetype.get_kerning" => {
@@ -12148,6 +12152,84 @@ fn property_rejected_set_preservation(
     (set_status, value_after)
 }
 
+fn rust_default_properties_value(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+    let mut library = if library_present == 0 {
+        None
+    } else {
+        Some(FT_Init_FreeType())
+    };
+    FT_Set_Default_Properties_From_Env(library.as_mut(), env);
+    let library = library.as_ref()?;
+    let mut value = PROPERTY_SENTINEL;
+    let error = FT_Property_Get(
+        Some(library),
+        Some("truetype"),
+        Some("interpreter-version"),
+        Some(&mut value),
+    );
+    (error == FT_Err_Ok).then_some(value)
+}
+
+fn c_default_properties_value(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+    c_abi::abi_support_set_default_properties(library_present, env)
+}
+
+fn wasm_default_properties_value(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+    wasm_abi::abi_support_set_default_properties(library_present, env)
+}
+
+fn default_properties_value(
+    backend: PropertyBackend,
+    library_present: i32,
+    env: Option<&str>,
+) -> Option<FT_UInt> {
+    match backend {
+        PropertyBackend::Rust => rust_default_properties_value(library_present, env),
+        PropertyBackend::CAbi => c_default_properties_value(library_present, env),
+        PropertyBackend::Wasm => wasm_default_properties_value(library_present, env),
+    }
+}
+
+fn set_default_properties_case_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_Set_Default_Properties.no_environment_noop" => {
+            let before = default_properties_value(backend, 1, None);
+            let after = default_properties_value(backend, 1, None);
+            Ok(ok(json!({
+                "property_before": before,
+                "property_after": after
+            })))
+        }
+        "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property" => {
+            let after =
+                default_properties_value(backend, 1, Some("truetype:interpreter-version=35"));
+            Ok(ok(json!({
+                "environment_properties_enabled": after == Some(TT_INTERPRETER_VERSION_35 as FT_UInt),
+                "property_after": after
+            })))
+        }
+        "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties" => {
+            let malformed = default_properties_value(backend, 1, Some("malformed"));
+            let missing = default_properties_value(backend, 1, Some("missing:property=1"));
+            let null_library =
+                default_properties_value(backend, 0, Some("truetype:interpreter-version=35"));
+            Ok(ok(json!({
+                "return": "void",
+                "crashed": false,
+                "rows": [
+                    {"scenario": "malformed", "property_after": malformed},
+                    {"scenario": "missing_property", "property_after": missing},
+                    {"scenario": "null_library", "property_after": null_library}
+                ]
+            })))
+        }
+        other => Err(format!("unsupported set default properties case {other}")),
+    }
+}
+
 fn property_module_selector(selector: i32) -> Option<&'static str> {
     match selector {
         0 => None,
@@ -14964,6 +15046,7 @@ fn property_service_route_pending(operation: &str) -> bool {
             | "ftmodapi.property_get"
             | "ftmodapi.property_set"
             | "ftmodapi.property_set_then_get"
+            | "ftmodapi.set_default_properties"
     )
 }
 
@@ -14978,6 +15061,9 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "ftmodapi.FT_Property_Set.rejects_null_arguments"
             | "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
             | "ftmodapi.FT_Property_Set.invalid_property_or_value"
+            | "ftmodapi.FT_Set_Default_Properties.no_environment_noop"
+            | "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property"
+            | "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties"
             | "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip"
             | "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40"
             | "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip"
@@ -15041,6 +15127,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftmodapi.property_get"
         | "ftmodapi.property_set"
         | "ftmodapi.property_set_then_get"
+        | "ftmodapi.set_default_properties"
         | "ftdriver.interpreter_version_property"
         | "ftdriver.interpreter_version_default"
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
@@ -16728,6 +16815,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftmodapi.property_get"
                 | "ftmodapi.property_set"
                 | "ftmodapi.property_set_then_get"
+                | "ftmodapi.set_default_properties"
                 | "ftdriver.interpreter_version_property"
                 | "ftdriver.interpreter_version_default"
                 | "FT_Property_Get"
@@ -17017,6 +17105,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::Rust)
+        }
+        "ftmodapi.set_default_properties" => {
+            set_default_properties_case_output(case, PropertyBackend::Rust)
         }
         "ftdriver.interpreter_version_property" => {
             property_set_case_output(case, PropertyBackend::Rust)
@@ -17750,6 +17841,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
+        "ftmodapi.set_default_properties" => {
+            set_default_properties_case_output(case, PropertyBackend::CAbi)
+        }
         "ftdriver.interpreter_version_property" => {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
@@ -18412,6 +18506,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::Wasm)
+        }
+        "ftmodapi.set_default_properties" => {
+            set_default_properties_case_output(case, PropertyBackend::Wasm)
         }
         "ftdriver.interpreter_version_property" => {
             property_set_case_output(case, PropertyBackend::Wasm)
