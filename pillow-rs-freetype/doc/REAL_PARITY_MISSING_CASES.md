@@ -8153,3 +8153,56 @@ Verification:
 make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox
 make -C pillow-rs-freetype route-audit
 ```
+
+### Issue Set Current: `FT_Stroker` success/lifecycle route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `c5775ac82`: `real-parity=4465`,
+  `generic-fallback=494`, `pending-route=20`, `pending-core=7`.
+
+Finding:
+
+- The route audit already has exact real parity for selected `ftstroke`
+  invalid-argument/error rows and for
+  `FT_Outline_GetInsideBorder` / `FT_Outline_GetOutsideBorder`.
+- The remaining `FT_Stroker` object/path success, no-op, lifecycle, export,
+  count, cap, join, and glyph-stroking rows had stayed in `generic-fallback`
+  with the reason `no explicit maintained route classification`.
+- Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  stroker object/path route that constructs a real `FT_Stroker`, applies
+  `FT_Stroker_Set`, `FT_Stroker_BeginSubPath`, `FT_Stroker_LineTo`,
+  `FT_Stroker_ConicTo`, `FT_Stroker_CubicTo`, `FT_Stroker_EndSubPath`,
+  `FT_Stroker_ParseOutline`, exports borders, and compares the produced
+  outline geometry and counts exactly.
+
+Classification change:
+
+- 65 `ftstroke.*` rows moved from `generic-fallback` to `pending-route`.
+- 21 existing exact `ftstroke` rows remain `real-parity`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=429`,
+  `pending-route=85`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained stroker route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement the pure-Rust stroker object/path state first. The C and WASM ABI
+   layers may only own handle validation, record copying, and lifetime
+   bookkeeping.
+3. Compare exact output counts and exported outline geometry for line, conic,
+   cubic, open-path, closed-path, cap, join, miter-limit, rewind, done, and
+   append-to-existing-outline rows.
+4. Keep the already-routed invalid-argument rows and outline-border rows real;
+   do not demote them while building the success route.
+5. Promote rows only after the focused `ftstroke` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
