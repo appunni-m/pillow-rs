@@ -140,11 +140,17 @@ pub fn face_offsets(data: &[u8]) -> Result<Vec<usize>, FontError> {
         ));
     }
     let num_faces = read_u32(data, 8) as usize;
-    let offset_table_end = 12 + num_faces * 4;
+    // FreeType 2.14.3 `sfnt_open_font` (`src/sfnt/sfobjs.c`) routes a TTC
+    // face-count whose offset array cannot fit in the stream through
+    // `FT_Err_Array_Too_Large` before attempting allocation.
+    let Some(offset_bytes) = num_faces.checked_mul(4) else {
+        return Err(FontError::ArrayTooLarge);
+    };
+    let Some(offset_table_end) = 12usize.checked_add(offset_bytes) else {
+        return Err(FontError::ArrayTooLarge);
+    };
     if data.len() < offset_table_end {
-        return Err(FontError::InvalidFont(
-            "TTC face offset array overflows data".into(),
-        ));
+        return Err(FontError::ArrayTooLarge);
     }
     let mut offsets = Vec::with_capacity(num_faces);
     for i in 0..num_faces {

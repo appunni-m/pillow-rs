@@ -32,12 +32,19 @@ Promoted rows:
   absent. Pinned FreeType 2.14.3 `FT_New_Memory_Face` returns
   `FT_Err_Hmtx_Table_Missing` (`147`), and the focused parity row passes across
   Rust FFI, C ABI, and WASM.
+- `fterrdef.FT_Err_Array_Too_Large.ttc_header_overflow_returns_error` moved
+  from `pending-route` to `real-parity` after the maintained SFNT fixture
+  generator added `malformed/ttc/count-overflows-offset-array.ttc`. The fixture
+  is a 12-byte TTC header with a face count whose offset array cannot fit in
+  the stream. Pinned FreeType 2.14.3 `FT_New_Memory_Face` returns
+  `FT_Err_Array_Too_Large` (`10`), and Rust now preserves that exact public
+  error through Rust FFI, C ABI, and WASM.
 
 Route audit impact:
 
-- `real-parity`: `4436 -> 4455`.
+- `real-parity`: `4436 -> 4456`.
 - `generic-fallback`: `519 -> 501`.
-- `pending-route`: `24 -> 23`.
+- `pending-route`: `24 -> 22`.
 
 Rejected or blocked during the same pass:
 
@@ -62,6 +69,11 @@ Rejected or blocked during the same pass:
   `missing-cmap.ttf`, `missing-hmtx-incremental.ttf`,
   `invalid-post-format.ttf`, `truncated-png-bitmap.ttf`, and
   `invalid-target-table.ttf`.
+- `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
+  remains unpromoted. Short `OTTO`, `true`, zero-table SFNT, unknown scaler,
+  and one-empty-record SFNT probes all returned pinned C error `85`, not
+  `FT_Err_Invalid_File_Format` (`3`), so using them would be a green
+  placeholder.
 - `ftcolor.get_paint_graph` and `ftcolor.traverse_paint_graph` stayed
   unpromoted because focused parity reported unresolved runtime font assets.
 - `ftgxval.truetype_gx_validate`, `ftgxval.classic_kern_validate`, and
@@ -76,6 +88,7 @@ make -C pillow-rs-freetype test-op OP=ftpfr
 make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Array_Too_Large.ttc_header_overflow_returns_error
 FONTDONE_UNIFIED_ORACLE_REFRESH=1 make fontdone-parity
 python3 pillow-rs-freetype/scripts/check_public_api_inputs.py --route-audit --route-audit-json /tmp/fontdone-route-audit-final.json
 ```
