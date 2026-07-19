@@ -8372,6 +8372,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error"
             || case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face"
             || case.case_id
+                == "ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len"
+            || case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id
                 == "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count"
