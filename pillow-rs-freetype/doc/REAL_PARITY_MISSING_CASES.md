@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after outline/allocator public API exact classification:
+Current verified result after SFNT/render-callback public API exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4103`
+  - `real-parity`: `4116`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `92`
+  - `generic-error-fallback`: `79`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -190,6 +190,65 @@ make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_PPem.tt_size_r
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `4103`, `generic-error-fallback` `92`.
+
+### Issue Set Current: SFNT/render-callback public API exact routes
+
+Previous blocker:
+
+- Singleton public error rows across SFNT table/charmap/metrics parsing, PCF
+  stream skipping, cache lookup OOM, module-prefixed errors, SVG preset slot,
+  custom renderer lifecycle, direct span callbacks, outline orientation, and
+  incremental glyph callback propagation were still classified as
+  `generic-error-fallback`.
+- These rows had runnable pinned C, Rust FFI, thin C ABI, and WASM ABI coverage,
+  but fallback classification accepted any error instead of requiring exact
+  public status/output equality.
+
+Promoted rows:
+
+- `fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing`
+- `fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected`
+- `fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected`
+- `fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected`
+- `fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure`
+- `fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom`
+- `ftmoderr.FT_Mod_Err_Raster.prefixed_error_base`
+- `ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base`
+- `fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument`
+- `ftimage.FT_Raster_Span_Func.missing_span_callback_errors`
+- `ftoutln.FT_Orientation.geometry_fixture_matrix`
+- `ftimage.FT_Raster_New_Func.renderer_new_error_propagates`
+- `ftincrem.FT_Incremental_FuncsRec.callback_error_propagates`
+
+Rejected candidates:
+
+- `fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format`:
+  exact-error promotion failed because pinned C returned `Ok`. The row remains
+  a value-contract/oracle-policy issue, not an exact-error row.
+- `fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks`: exact-error
+  promotion failed because pinned C returned `Ok`. The row remains a
+  value-contract/oracle-policy issue, not an exact-error row.
+- `ftimage.FT_RASTER_FLAG_DIRECT.mono_rejects_direct`: exact promotion failed
+  on status mismatch. The row remains an implementation/status parity gap, not
+  an exact-error classification row.
+
+Verified progress:
+
+- Exact comparison passed for all thirteen promoted rows after the rejected
+  render rows were removed from exact-error enforcement.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType for the
+  promoted rows once the fallback guard was removed.
+- Route audit classifies all thirteen promoted rows as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4116`, `generic-error-fallback` `79`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
