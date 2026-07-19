@@ -1080,6 +1080,18 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftwinfnt.get_winfnt_header"
+        and row.case_id
+        in {
+            "ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success",
+            "ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file",
+        }
+    ):
+        return (
+            "WinFNT header success requires a resolved C-openable bitmap-header.fnt; "
+            "counting the missing required_future_asset as real parity would be a green placeholder"
+        )
     if not operation_is_real_parity(row.operation):
         return None
     exact_error_route_gaps = {
@@ -2257,6 +2269,9 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success",
             "ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file",
         }
+        and not any(
+            unresolved_asset_reason(asset, name) for name, asset in sorted(row.assets.items())
+        )
     ):
         return "FT_Get_WinFNT_Header success header copy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
