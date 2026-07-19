@@ -827,6 +827,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
+        "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
+        "ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small",
+        "ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data",
+        "ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib",
+        "ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles",
+        "ftgzip.FT_Stream_OpenGzip.rejects_invalid_gzip_header",
+        "ftgzip.FT_Stream_OpenGzip.reports_unimplemented_without_zlib",
+        "ftlzw.FT_Stream_OpenLZW.invalid_header_error",
+        "ftlzw.FT_Stream_OpenLZW.null_stream_or_source_error",
+        "ftlzw.FT_Stream_OpenLZW.unsupported_build_error",
         "ftotval.FT_OpenType_Validate.service_missing_error",
         "ftotval.FT_OpenType_Validate.malformed_table_error",
         "ftotval.FT_VALIDATE_GDEF.malformed_table_error",
@@ -1336,6 +1346,56 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table"
     ):
         return "FT_TrueTypeGX_Validate unimplemented/invalid-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments"
+    ):
+        return "FT_Gzip_Uncompress invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small"
+    ):
+        return "FT_Gzip_Uncompress buffer-too-small errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data"
+    ):
+        return "FT_Gzip_Uncompress invalid-compressed-data errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib"
+    ):
+        return "FT_Gzip_Uncompress no-zlib unimplemented errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.stream_open_gzip"
+        and row.case_id == "ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles"
+    ):
+        return "FT_Stream_OpenGzip invalid-stream-handle errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.stream_open_gzip"
+        and row.case_id == "ftgzip.FT_Stream_OpenGzip.rejects_invalid_gzip_header"
+    ):
+        return "FT_Stream_OpenGzip invalid-header errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.stream_open_gzip"
+        and row.case_id == "ftgzip.FT_Stream_OpenGzip.reports_unimplemented_without_zlib"
+    ):
+        return "FT_Stream_OpenGzip no-zlib unimplemented errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlzw.stream_open_lzw"
+        and row.case_id == "ftlzw.FT_Stream_OpenLZW.invalid_header_error"
+    ):
+        return "FT_Stream_OpenLZW invalid-header errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlzw.stream_open_lzw"
+        and row.case_id == "ftlzw.FT_Stream_OpenLZW.null_stream_or_source_error"
+    ):
+        return "FT_Stream_OpenLZW null-stream/source errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlzw.stream_open_lzw"
+        and row.case_id == "ftlzw.FT_Stream_OpenLZW.unsupported_build_error"
+    ):
+        return "FT_Stream_OpenLZW unsupported-build errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftotval.open_type_validate"
         and row.case_id == "ftotval.FT_OpenType_Validate.service_missing_error"
