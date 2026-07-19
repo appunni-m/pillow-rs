@@ -1166,6 +1166,10 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "new_memory_face",
             "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
         ),
+        (
+            "new_memory_face",
+            "fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont",
+        ),
         ("load_glyph", "fterrdef.FT_Err_Invalid_Opcode.tt_bytecode_invalid_opcode"),
         (
             "load_glyph",
