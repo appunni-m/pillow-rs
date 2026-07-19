@@ -793,6 +793,8 @@ fn runtime_operation_requires_resolved_declared_asset(operation: &str) -> bool {
             | "abi.value_echo"
             | "macro_eval"
             | "macro_compile_probe"
+            | "ftdriver.interpreter_version_property"
+            | "ftmodapi.inspect_module_flags"
     )
 }
 
@@ -11915,6 +11917,19 @@ fn property_set_case_output(
             .collect::<Vec<_>>();
             Ok(ok(json!({ "rows": rows })))
         }
+        "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip"
+        | "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40"
+        | "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip" => {
+            let value = u32_param(&case.inputs.params, "value")? as FT_UInt;
+            let (set_status, get_status, value_after_get) =
+                property_set_then_get_call(backend, 1, 1, Some(value));
+            Ok(ok(json!({
+                "input": value,
+                "set_status": set_status,
+                "get_status": get_status,
+                "value_after_get": value_after_get
+            })))
+        }
         "ftmodapi.FT_Property_Set.rejects_null_arguments" => {
             let rows = [
                 (
@@ -14862,6 +14877,9 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "ftmodapi.FT_Property_Set.rejects_null_arguments"
             | "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
             | "ftmodapi.FT_Property_Set.invalid_property_or_value"
+            | "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip"
+            | "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40"
+            | "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip"
             | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
     )
@@ -14922,6 +14940,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftmodapi.property_get"
         | "ftmodapi.property_set"
         | "ftmodapi.property_set_then_get"
+        | "ftdriver.interpreter_version_property"
         | "ftdriver.interpreter_version_default"
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
         "freetype.face_properties" => {
@@ -16603,6 +16622,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftmodapi.property_get"
                 | "ftmodapi.property_set"
                 | "ftmodapi.property_set_then_get"
+                | "ftdriver.interpreter_version_property"
                 | "ftdriver.interpreter_version_default"
                 | "FT_Property_Get"
                 | "freetype.get_kerning"
@@ -16890,6 +16910,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             property_get_case_output(case, PropertyBackend::Rust)
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+            property_set_case_output(case, PropertyBackend::Rust)
+        }
+        "ftdriver.interpreter_version_property" => {
             property_set_case_output(case, PropertyBackend::Rust)
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
@@ -17620,6 +17643,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
+        "ftdriver.interpreter_version_property" => {
+            property_set_case_output(case, PropertyBackend::CAbi)
+        }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
@@ -18277,6 +18303,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             property_get_case_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+            property_set_case_output(case, PropertyBackend::Wasm)
+        }
+        "ftdriver.interpreter_version_property" => {
             property_set_case_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),

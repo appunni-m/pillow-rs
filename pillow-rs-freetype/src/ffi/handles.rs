@@ -1176,11 +1176,13 @@ pub struct FT_Library {
 }
 
 const DEFAULT_MODULE_NAMES: &[&str] = &[
+    // C parity: pinned FreeType's default module build exposes these names via
+    // FT_Get_Module after FT_Init_FreeType.  CID has class flag definitions
+    // upstream, but this pinned build does not register the CID module.
     "autofitter",
     "truetype",
     "type1",
     "cff",
-    "cid",
     "pfr",
     "type42",
     "winfonts",

@@ -11231,6 +11231,26 @@ static int emit_property_case(int argc, char** argv) {
         printf("]}}\n");
         return 0;
     }
+    if (streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip") ||
+        streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40") ||
+        streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip")) {
+        FT_UInt value = TT_INTERPRETER_VERSION_40;
+        if (streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip")) {
+            value = TT_INTERPRETER_VERSION_35;
+        } else if (streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40")) {
+            value = TT_INTERPRETER_VERSION_38;
+        }
+        FT_Error set_status = FT_Err_Ok;
+        FT_Error get_status = FT_Err_Ok;
+        FT_UInt out = PROPERTY_SENTINEL;
+        oracle_property_set_then_get(1, 1, &value, &set_status, &get_status, &out);
+        printf(",\"output\":{\"input\":%u,\"set_status\":%d,\"get_status\":%d,\"value_after_get\":%u}}\n",
+               value,
+               set_status,
+               get_status,
+               out);
+        return 0;
+    }
     if (streq(case_id, "ftmodapi.FT_Property_Set.rejects_null_arguments")) {
         FT_UInt value = TT_INTERPRETER_VERSION_40;
         FT_Error library_error = oracle_property_set(0, 1, 1, &value);
