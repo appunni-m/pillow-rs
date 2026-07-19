@@ -1,5 +1,51 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Get_Module` runtime route and ABI contract cleanup
+
+Status: twenty-two-row parity/audit batch completed on 2026-07-20 for pinned
+FreeType 2.14.3 module lookup behavior and public header ABI/import contracts.
+
+Implemented real parity rows:
+
+- `ftmodapi.FT_Get_Module.lookup_existing_and_missing_module`
+- `ftmodapi.FT_Get_Module.null_inputs_return_null`
+
+Additional audit corrections:
+
+- 8 `ftlist`/`ftlogging` callback-provider import rows are header ABI contracts,
+  not runtime callback/provider behavior, so they now classify as
+  `compile-contract`.
+- 6 `ftmm` import rows are public `ftmm.h` symbol contracts, not MM descriptor
+  runtime behavior, so they now classify as `compile-contract`.
+- 6 `ftwinfnt`/`otsvg` header, pointer, and record-layout rows are ABI/layout
+  contracts, not specialized runtime record behavior, so they now classify as
+  `compile-contract`.
+
+Finding:
+
+- The two `FT_Get_Module` rows only require initialized-library module lookup
+  and null-input behavior. They no longer depend on the broader module
+  lifecycle/provider route.
+- Pinned C `FT_Get_Module` returns `NULL` when either `library` or
+  `module_name` is null, and returns the module whose class name matches the
+  registered default module for known names. The parity route compares module
+  nullness and public class name, not unstable pointer addresses.
+
+Impact:
+
+- `real-parity`: `4440 -> 4442`
+- `compile-contract`: `2230 -> 2250`
+- `pending-route`: `550 -> 528`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.get_module
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: module flags and interpreter-version property batch
 
 Status: ten-row parity/audit batch completed on 2026-07-20 for pinned FreeType

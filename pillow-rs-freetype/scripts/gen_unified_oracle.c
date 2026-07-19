@@ -11484,6 +11484,55 @@ static int emit_inspect_module_flags(int argc, char** argv) {
     return 0;
 }
 
+static void print_module_lookup_row(FT_Library library, const char* name) {
+    const char* module_name = (name && streq(name, "null")) ? NULL : name;
+    FT_Module module = FT_Get_Module(library, module_name);
+    const char* class_name = module && module->clazz && module->clazz->module_name
+        ? module->clazz->module_name
+        : NULL;
+    printf("{\"module\":\"%s\",\"nullness\":%s,\"class_name\":",
+           name ? name : "null",
+           module ? "false" : "true");
+    if (class_name) {
+        printf("\"%s\"", class_name);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static int emit_get_module(int argc, char** argv) {
+    if (argc != 4) return 2;
+    int library_present = atoi(argv[2]);
+    const char* modules_csv = argv[3];
+    FT_Library library = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (library_present) {
+        err = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"lookups\":[");
+    int first = 1;
+    const char* cursor = modules_csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        char name[64];
+        if (len >= sizeof(name)) len = sizeof(name) - 1;
+        memcpy(name, cursor, len);
+        name[len] = '\0';
+        if (!first) printf(",");
+        first = 0;
+        print_module_lookup_row(library, name);
+        if (!end) break;
+        cursor = end + 1;
+    }
+    printf("]}}\n");
+    if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
 static void print_renderer_row(FT_Library library, long format) {
     FT_Renderer renderer = FT_Get_Renderer(library, (FT_Glyph_Format)format);
     printf("{\"format\":%ld,\"renderer_present\":%s,\"renderer_class\":",
@@ -14766,6 +14815,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--get-renderer")) {
         return emit_get_renderer(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--get-module")) {
+        return emit_get_module(argc, argv);
     }
     // Generic null-source handler: intercept commands with "null" in handle-level
     // parameters (source kind, source value, or face).

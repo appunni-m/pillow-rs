@@ -1995,6 +1995,15 @@ pub fn abi_support_default_module_flags(name: &str) -> Option<rust_ffi::FT_ULong
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_default_module_present(library_present: i32, name: &str) -> bool {
+    if library_present == 0 {
+        return false;
+    }
+    let library = rust_ffi::FT_Init_FreeType();
+    rust_ffi::FT_Library_Has_Module(Some(&library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_default_renderer_class(
     format: rust_ffi::FT_Glyph_Format,
 ) -> Option<(&'static str, rust_ffi::FT_Glyph_Format, bool, bool)> {
