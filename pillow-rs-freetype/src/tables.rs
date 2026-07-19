@@ -17,6 +17,7 @@ use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
 use crate::tt::hhea::HheaTable;
 use crate::tt::hmtx::HmtxTable;
+use crate::tt::hvar::HvarTable;
 use crate::tt::kern::KernTable;
 use crate::tt::maxp::MaxpTable;
 use crate::tt::name::NameTable;
@@ -41,6 +42,7 @@ pub struct FontData {
     pub gasp: Option<GaspTable>,
     pub head: HeadTable,
     pub hhea: HheaTable,
+    pub hvar: Option<HvarTable>,
     pub hmtx: HmtxTable,
     pub maxp: MaxpTable,
     pub name: NameTable,
@@ -132,7 +134,7 @@ impl FontData {
             return Ok(outline.clone());
         }
         let point_count_with_phantoms = outline.points.len() + 4;
-        let Some(deltas) = gvar.glyph_deltas(
+        let Some(deltas) = gvar.glyph_deltas_fixed(
             glyph_index,
             point_count_with_phantoms,
             &self.normalized_variation_coords,
@@ -141,7 +143,7 @@ impl FontData {
             return Ok(outline.clone());
         };
         let mut varied = outline.clone();
-        crate::tt::gvar::apply_deltas_to_outline(&mut varied, &deltas);
+        crate::tt::gvar::apply_fixed_deltas_to_outline(&mut varied, &deltas);
         Ok(varied)
     }
 
@@ -158,6 +160,9 @@ impl FontData {
         outline_point_count: usize,
     ) -> Result<i32, crate::error::FontError> {
         let advance = self.hmtx.get(glyph_index).advance_width as i32;
+        if let Some(hvar) = &self.hvar {
+            return Ok(advance + hvar.advance_delta(glyph_index, &self.normalized_variation_coords));
+        }
         Ok(advance + self.gvar_hori_advance_delta(glyph_index, outline_point_count)?)
     }
 

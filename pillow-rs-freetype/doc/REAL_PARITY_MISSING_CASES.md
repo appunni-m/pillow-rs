@@ -18,7 +18,7 @@ three larger variation-font surfaces:
 | Case | Current blocker | Required first implementable slice |
 |---|---|---|
 | `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default` | No maintained Adobe MM fixture is present under `tests/fixtures`; the row also requires real Adobe multiple-master state, not only OpenType `fvar` named instances. | Add or generate a maintained Adobe MM Type 1 fixture, parse the MM design space in pure Rust, implement default design reset semantics for `FT_Set_Named_Instance(0)`, then compare face flags, face index, and design coordinates through Rust FFI, C ABI, and WASM ABI. |
-| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`. Rust now applies integer-rounded `gvar` point and phantom advance deltas, but exact rendered bytes still diverge because FreeType keeps fractional variation precision through glyph loading/hinting. | Carry fractional `gvar` point deltas through scaling/autohinting, implement `HVAR` advance/side-bearing deltas where the fixture observes metrics, then promote the maintained C oracle glyph-output route through Rust FFI, C ABI, and WASM ABI. |
+| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`. Rust now applies fractional `gvar` point deltas through the native scaled sidecar and evaluates `HVAR` advance-width deltas, but exact rendered bytes still diverge because FreeType's autohinter consumes the variable outline through its own no-scale reload/hint pipeline. | Carry the remaining fractional `gvar` behavior through the autohint bitmap path, then promote the maintained C oracle glyph-output route through Rust FFI, C ABI, and WASM ABI. |
 | `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation` | No maintained vertical MVAR fixture is present; `mvar-horizontal-metrics.ttf` has no `MVAR` table and the expected `mvar-vertical-metrics.ttf` asset is missing. | Add or generate a vertical metrics variation fixture with `vhea`/`vmtx`/`fvar`/`MVAR`, implement shared item-variation-store evaluation, apply `MVAR` deltas to vertical header fields after coordinate changes, then compare default and varied `TT_VertHeader` records exactly. |
 
 Execution order:
@@ -59,6 +59,20 @@ Execution order:
   point precision. For glyph `a.sc` in `named-instances.ttf`, `fontTools`
   instantiation shows third-font-unit point deltas while the current
   `GlyphOutline` stores integer font units.
+
+2026-07-20 HVAR/fractional diagnostic update:
+
+- Added shared item-variation-store evaluation and HVAR advance-width delta
+  support following `ttgxvar.c` (`tt_var_load_item_variation_store`,
+  `tt_var_load_delta_set_index_mapping`, `tt_var_get_item_delta`, and
+  `tt_hvadvance_adjust`).
+- The scaler now prefers HVAR advance-width deltas over gvar phantom advance
+  deltas when HVAR is present, matching FreeType's double-adjustment avoidance.
+- FreeType's autofit loader reloads glyphs with `FT_LOAD_NO_SCALE` before
+  `af_glyph_hints_reload`; the native TrueType unrounded sidecar must not be
+  applied directly to that autohint reload path.
+- Unguarded focused comparison still fails only at `bitmap.buffer_hex`; HVAR is
+  no longer part of the observed pending reason for this row.
 
 Verification required before any row moves to `real-parity`:
 

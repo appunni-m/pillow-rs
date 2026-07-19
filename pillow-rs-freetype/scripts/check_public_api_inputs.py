@@ -1927,7 +1927,7 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     ):
         return "Adobe MM named-instance reset requires real Adobe MM support"
     if "glyph_index" in row.params:
-        return "named-instance glyph-output parity requires fractional gvar/HVAR support"
+        return "named-instance glyph-output parity requires fractional gvar/autohint bitmap support"
     return None
 
 

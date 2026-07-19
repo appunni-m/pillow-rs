@@ -44,12 +44,25 @@ pub struct OutlinePoint {
     pub tag: u8,
 }
 
+/// A TrueType point coordinate in unscaled 26.6 font units.
+#[derive(Debug, Clone, Copy)]
+pub struct UnroundedPoint {
+    pub x: i32,
+    pub y: i32,
+}
+
 /// A glyph outline as a flattened list of contours.
 #[derive(Debug, Clone, Default)]
 pub struct GlyphOutline {
     pub num_contours: u16,
     pub end_pts_of_contours: Vec<u16>,
     pub points: Vec<OutlinePoint>,
+    /// FreeType's variable-glyph sidecar coordinates after `gvar` deltas.
+    ///
+    /// `TT_Vary_Apply_Glyph_Deltas` keeps integer `outline.points` and a
+    /// parallel unrounded 26.6 array. Scaled variable glyph loads use this
+    /// sidecar before hinting; public no-scale outline state uses `points`.
+    pub unrounded_points: Option<Vec<UnroundedPoint>>,
     pub xmin: i32,
     pub ymin: i32,
     pub xmax: i32,
@@ -311,6 +324,7 @@ fn load_glyph_inner(
             num_contours: num_contours_total,
             end_pts_of_contours: end_pts,
             points,
+            unrounded_points: None,
             xmin: last_sub_xmin,
             ymin,
             xmax,
@@ -437,6 +451,7 @@ fn load_glyph_scaled_inner(
         num_contours: num_contours_total,
         end_pts_of_contours: end_pts,
         points,
+        unrounded_points: None,
         xmin: last_sub_xmin,
         ymin,
         xmax,
@@ -615,6 +630,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         num_contours,
         end_pts_of_contours: end_pts,
         points,
+        unrounded_points: None,
         xmin: 0,
         ymin: 0,
         xmax: 0,

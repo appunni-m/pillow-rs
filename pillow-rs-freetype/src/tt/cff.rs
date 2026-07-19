@@ -333,6 +333,7 @@ impl<'a> Type2Decoder<'a> {
             num_contours,
             end_pts_of_contours: self.end_pts,
             points: self.points,
+            unrounded_points: None,
             xmin,
             ymin,
             xmax,

@@ -16,6 +16,7 @@ pub mod head;
 pub mod hhea;
 pub mod hinter;
 pub mod hmtx;
+pub mod hvar;
 pub mod kern;
 pub mod loca;
 pub mod maxp;
@@ -23,6 +24,7 @@ pub mod name;
 pub mod os2;
 pub mod post;
 pub mod sbit;
+pub mod varstore;
 pub mod vhea;
 pub mod vmtx;
 
