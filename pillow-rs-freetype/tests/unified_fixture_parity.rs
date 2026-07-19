@@ -8418,6 +8418,17 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter"
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter"
             || case.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"
+            || case.case_id == "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments"
+            || case.case_id == "ftstroke.FT_Stroker_ConicTo.invalid_arguments"
+            || case.case_id == "ftstroke.FT_Stroker_CubicTo.invalid_arguments"
+            || case.case_id == "ftstroke.FT_Stroker_EndSubPath.invalid_stroker"
+            || case.case_id == "ftstroke.FT_Stroker_GetBorderCounts.invalid_stroker_or_border"
+            || case.case_id == "ftstroke.FT_Stroker_GetCounts.invalid_stroker"
+            || case.case_id == "ftstroke.FT_Glyph_Stroke.invalid_glyph_arguments"
+            || case.case_id
+                == "ftstroke.FT_Glyph_Stroke.failure_sets_output_null_when_preserving_original"
+            || case.case_id == "ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments"
+            || case.case_id == "ftstroke.FT_Stroker_LineTo.invalid_arguments"
             || case.case_id == "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords"
             || case.case_id == "ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords"
             || case.case_id

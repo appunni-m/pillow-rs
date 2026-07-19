@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after batched ftcolor exact-error classification:
+Current verified result after batched ftstroke exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3989`
+  - `real-parity`: `3999`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `206`
+  - `generic-error-fallback`: `196`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -811,6 +811,49 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: all ten focused exact rows passed. Route audit:
 `real-parity` `3989`, `generic-error-fallback` `206`.
+
+### Issue Set Current: batched ftstroke exact-error routes
+
+Previous blocker:
+
+- Ten concrete public ftstroke error-policy rows were classified as
+  `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftstroke.FT_Stroker_BeginSubPath.invalid_arguments`
+   - `ftstroke.FT_Stroker_ConicTo.invalid_arguments`
+   - `ftstroke.FT_Stroker_CubicTo.invalid_arguments`
+   - `ftstroke.FT_Stroker_EndSubPath.invalid_stroker`
+   - `ftstroke.FT_Stroker_GetBorderCounts.invalid_stroker_or_border`
+   - `ftstroke.FT_Stroker_GetCounts.invalid_stroker`
+   - `ftstroke.FT_Glyph_Stroke.invalid_glyph_arguments`
+   - `ftstroke.FT_Glyph_Stroke.failure_sets_output_null_when_preserving_original`
+   - `ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments`
+   - `ftstroke.FT_Stroker_LineTo.invalid_arguments`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all ten rows before promotion.
+- Exact comparison after promotion passed for all ten rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: all ten focused exact rows passed. Route audit:
+`real-parity` `3999`, `generic-error-fallback` `196`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
