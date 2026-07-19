@@ -1153,6 +1153,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_New_Library allocator-failure output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmodapi.property_get"
+        and row.case_id == "ftmodapi.FT_Property_Get.rejects_null_arguments"
+    ):
+        return "FT_Property_Get null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.property_get"
+        and row.case_id == "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service"
+    ):
+        return "FT_Property_Get missing-module and unsupported-service errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.property_get"
+        and row.case_id == "ftmodapi.FT_Property_Get.invalid_property_name"
+    ):
+        return "FT_Property_Get invalid-property-name errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
