@@ -1839,6 +1839,18 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
             "and allocator facade; treating it as generic would be a green placeholder"
         )
+    malformed_glyph_rows_without_maintained_route = {
+        "ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload",
+        "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range",
+        "ftglyph.FT_GlyphRec.clazz_is_private_identity_only",
+        "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original",
+    }
+    if row.case_id in malformed_glyph_rows_without_maintained_route:
+        return (
+            "malformed glyph slot/class behavior requires maintained synthetic "
+            "slot, class-hook, cleanup, and renderer-failure routes; accepting "
+            "generic errors or record identity would be a green placeholder"
+        )
     if (
         (row.operation, row.case_id) in exact_error_route_gaps
         and (row.operation, row.case_id) not in FTERRDEF_EXACT_ERROR_BATCH
