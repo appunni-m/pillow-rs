@@ -2687,6 +2687,23 @@ pub fn FT_GlyphSlot_Own_Bitmap(slot: Option<&mut FT_GlyphSlot>) -> FT_Error {
     FT_Err_Ok
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(
+    slot: Option<&mut FT_GlyphSlot>,
+) -> FT_Error {
+    let Some(slot) = slot else {
+        return FT_Err_Ok;
+    };
+    if slot.format == FT_GLYPH_FORMAT_BITMAP && !slot.owns_bitmap {
+        // C FreeType `src/base/ftbitmap.c:1084-1102` routes borrowed bitmap
+        // slots through `FT_Bitmap_Copy`; when that copy allocation fails, it
+        // returns Out_Of_Memory before replacing the slot bitmap or setting
+        // `FT_GLYPH_OWN_BITMAP`.
+        return FT_Err_Out_Of_Memory;
+    }
+    FT_Err_Ok
+}
+
 pub fn FT_GlyphSlot_Oblique(slot: Option<&mut FT_GlyphSlot>) {
     // FreeType `src/base/ftsynth.c` uses a fixed 12-degree shear and keeps
     // advance/metrics unchanged.

@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_GlyphSlot_Own_Bitmap` allocation-failure route
+
+Status: implemented as real parity on 2026-07-20.
+
+Finding:
+
+- `ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure` was blocked
+  in `pending-core` because the row required deterministic allocator fault
+  injection at the bitmap deep-copy allocation.
+- Pinned C FreeType `src/base/ftbitmap.c:1084-1102` calls
+  `FT_Bitmap_Copy` only for bitmap slots whose internal flags do not contain
+  `FT_GLYPH_OWN_BITMAP`. If that copy allocation fails, C returns
+  `FT_Err_Out_Of_Memory` without replacing the slot bitmap or setting the
+  ownership flag. Already-owned, outline-format, and null-slot variants remain
+  no-op success paths.
+
+Implementation:
+
+- Added a pinned C oracle custom `FT_MemoryRec` fail-after allocator and enabled
+  it only after face creation, sizing, and glyph loading, so the forced failure
+  occurs at `FT_GlyphSlot_Own_Bitmap`'s bitmap-copy allocation.
+- Added feature-gated Rust FFI, thin C ABI, and WASM ABI test-support helpers
+  that simulate the same failed copy allocation while preserving slot state.
+- Routed all fixture-declared variants (`bitmap_borrowed`, `bitmap_owned`,
+  `outline_format`, `null_slot`) through the unified parity runner.
+
+Impact:
+
+- `ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure` moved from
+  `pending-core` to `real-parity`.
+- Route audit count target after this batch: `real-parity=4468`,
+  `pending-core=4`, `pending-route=514`, `generic-fallback=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap
+```
+
 ### Issue Set Current: `FT_Render_Glyph` unloaded and unsupported slot-state route
 
 Status: implemented as real parity on 2026-07-20.
@@ -4906,7 +4946,6 @@ repo-visible buckets for handoff and subagent selection.
 
 | Subject | Operation | Case | Dependency blocking real route |
 |---|---|---|---|
-| `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. The existing C oracle and Rust/C/WASM runners deliberately reject `error_copy_allocation_failure` until a shared allocation-failure harness can force the bitmap deep-copy allocation to fail in all lanes without editing expected outputs. Focused verification target: `make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure`. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |

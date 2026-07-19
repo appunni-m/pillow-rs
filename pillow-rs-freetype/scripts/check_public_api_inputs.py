@@ -1897,15 +1897,6 @@ def has_null_lifecycle_handle(row: ConcreteInput) -> bool:
 
 def pending_core_reason(row: ConcreteInput) -> str | None:
     if (
-        row.operation == "ftbitmap.glyphslot_own_bitmap"
-        and row.case == "error_copy_allocation_failure"
-    ):
-        return (
-            "FT_GlyphSlot_Own_Bitmap allocation-failure parity needs maintained "
-            "allocator fault injection for the pinned C oracle, Rust FFI, C ABI, "
-            "and WASM ABI"
-        )
-    if (
         row.operation
         in {
             "ftsynth.glyphslot_adjust_weight_after_load",
@@ -2221,6 +2212,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "allocation_failure_harness.fail_after_n",
             "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
         ): "allocator fail-after-N out-of-memory error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftbitmap.glyphslot_own_bitmap",
+            "ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure",
+        ): "FT_GlyphSlot_Own_Bitmap bitmap-copy allocation failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "FTC_cache_lookup",
             "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
