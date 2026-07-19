@@ -71,6 +71,13 @@ Promoted rows:
   pinned-oracle error `7`) and `freetype.open_face_with_params` / `ftparams`
   promotion (`6` strict failures with pinned-oracle error `7`).  They remain
   `generic-fallback` until the underlying route/oracle behavior is made exact.
+- Rejected in the follow-up probe pass: `ftrender.get_renderer` (`2` strict
+  failures with pinned-oracle error `7`), `ftglyph` ownership/type/transform
+  behavior rows (`11` strict failures with pinned-oracle error `7`), and
+  no-asset `ftmodapi` module/property-management rows (`9` strict failures
+  with pinned-oracle error `7`).  These rows pass only through generic fallback
+  today; promoting them would reward an oracle-error placeholder rather than
+  exact C/Rust/C ABI/WASM output.
 - `ftmodapi` module flags plus SFNT/charmap metadata batch: `14 / 14`
   runtime-asset rows promoted from `generic-fallback` to `real-parity`.  The
   promoted rows are limited to existing runtime assets and existing exact
