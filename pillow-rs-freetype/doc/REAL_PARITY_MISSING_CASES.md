@@ -6421,6 +6421,75 @@ Rejected probes:
   They need fixture loading plus runtime support for the specific render case,
   not just route-audit metadata.
 
+### Issue Set BK: `FT_New_Face` invalid output matrix route
+
+Plan:
+
+1. Probe a batch of generic expected-error rows and keep only rows whose C
+   oracle, Rust FFI, C ABI lane, and WASM lane produce exact public error
+   observations.
+2. Do not promote rows whose oracle arguments still reach a normal success
+   path or missing fixture path.
+3. Add a maintained C oracle command for path-based `FT_New_Face` variants
+   instead of reusing the generic fallback.
+4. Compare the `outputs[*].status` and `outputs[*].error` matrix exactly.
+
+First divergence:
+
+- `freetype.FT_New_Face.error_null_library_or_aface` had a fixture declaring
+  exact invalid `library`/`aface` variants, but `oracle_args` ignored
+  `params.variants` for `freetype.new_face`.
+- Pinned C oracle therefore opened the normal DejaVuSans path and returned
+  `{"opened": true}`.
+- Rust FFI had equivalent explicit null-handle behavior available, but the
+  unified runner also ignored the variant matrix.
+
+Fix:
+
+- Added `--new-face-variants` to the C oracle.  It calls pinned C
+  `FT_New_Face` once per variant and emits the same `outputs[]` shape used by
+  the existing memory/open-face variant runners.
+- Added a path-only `font_pathname` helper so `FT_New_Face` cannot accidentally
+  consume inline bytes as a pathname.
+- Routed `freetype.new_face` variant cases through a Rust-side variant runner
+  and promoted only this verified row to exact-error real parity.
+
+Promoted row:
+
+- `freetype.FT_New_Face.error_null_library_or_aface`
+
+Rejected rows from this probe batch:
+
+- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` — oracle still
+  loads a normal glyph and returns successful bbox output; the direct
+  `FT_Outline_Get_BBox` null-input ABI surface is not routed yet.
+- `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`
+  — current fixture routes to `{"error": 0}` on this build, not the declared
+  exact unimplemented-feature error.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike` and
+  `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` — both reference
+  missing BDF/OTB assets in this worktree.
+- `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output` and
+  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` — oracle still
+  returns a top-level successful lookup matrix, not exact invalid-output
+  errors.
+- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error`,
+  `fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments`,
+  `fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format`,
+  `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`,
+  `fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks`, and
+  `fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature` — focused
+  exact promotion showed the oracle still returned top-level success, so these
+  need concrete runner/asset routing before promotion.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Face.error_null_library_or_aface
+```
+
+Result: `runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1`.
+
 ### Issue Set BJ: `FT_Outline_*` exact invalid matrix parity
 
 Plan:

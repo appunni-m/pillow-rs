@@ -11173,6 +11173,101 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     return 0;
 }
 
+static int emit_new_face_variants(int argc, char** argv) {
+    (void)argc;
+    const char* pathname = argv[2];
+    char* rows_arg = (char*)malloc(strlen(argv[3]) + 1);
+    if (!rows_arg) {
+        return 1;
+    }
+    memcpy(rows_arg, argv[3], strlen(argv[3]) + 1);
+
+    size_t row_count = 0;
+    const char* count_cursor = rows_arg;
+    while (count_cursor && *count_cursor) {
+        row_count++;
+        const char* next = strchr(count_cursor, ',');
+        count_cursor = next ? next + 1 : NULL;
+    }
+    MemoryFaceRow* rows = (MemoryFaceRow*)calloc(row_count, sizeof(MemoryFaceRow));
+    FT_Error* errors = (FT_Error*)calloc(row_count, sizeof(FT_Error));
+    int* face_is_null = (int*)calloc(row_count, sizeof(int));
+    if ((!rows || !errors || !face_is_null) && row_count > 0) {
+        free(rows_arg);
+        free(rows);
+        free(errors);
+        free(face_is_null);
+        return 1;
+    }
+
+    char* cursor = rows_arg;
+    size_t row_index = 0;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        if (!parse_memory_face_row(cursor, &rows[row_index])) {
+            fprintf(stderr, "bad new face row: %s\n", cursor);
+            free(rows_arg);
+            free(rows);
+            free(errors);
+            free(face_is_null);
+            return 2;
+        }
+        row_index++;
+        cursor = next ? next + 1 : NULL;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(rows_arg);
+        free(rows);
+        free(errors);
+        free(face_is_null);
+        return 0;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    for (size_t i = 0; i < row_count; i++) {
+        FT_Face face = NULL;
+        FT_Library library_arg = rows[i].library_is_null ? NULL : library;
+        FT_Face* aface_arg = rows[i].aface_is_null ? NULL : &face;
+        errors[i] = FT_New_Face(library_arg, pathname, rows[i].face_index, aface_arg);
+        face_is_null[i] = face == NULL;
+        if (!first_error && errors[i]) {
+            first_error = errors[i];
+        }
+        if (!errors[i] && face) {
+            FT_Done_Face(face);
+        }
+    }
+
+    printf("{");
+    print_status(first_error);
+    printf(",\"output\":{\"outputs\":[");
+    for (size_t i = 0; i < row_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_memory_face_row(rows[i], errors[i], face_is_null[i]);
+    }
+    printf("]}}\n");
+
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(rows_arg);
+    free(rows);
+    free(errors);
+    free(face_is_null);
+    return 0;
+}
+
 static int emit_open_face_variants(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -12252,6 +12347,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--new-memory-face-variants")) {
         return emit_new_memory_face_variants(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--new-face-variants")) {
+        return emit_new_face_variants(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--open-face-variants")) {
         return emit_open_face_variants(argc, argv);

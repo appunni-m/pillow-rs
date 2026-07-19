@@ -8341,6 +8341,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Attach_Stream.error_null_open_args"
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
+            || case.case_id == "freetype.FT_New_Face.error_null_library_or_aface"
             || case.case_id == "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none"
             || case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
             || case.case_id
@@ -9965,6 +9966,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                     face_index_param(params)?.to_string(),
                 ]);
             }
+            if params.get("variants").is_some() {
+                return Ok(vec![
+                    "--new-face-variants".to_string(),
+                    font_pathname(case)?,
+                    memory_face_rows_arg(params)?,
+                ]);
+            }
             if lifecycle_handle_param(params, "pathname") == Some("null")
                 || lifecycle_handle_param(params, "library") == Some("null")
                 || lifecycle_handle_param(params, "aface") == Some("null")
@@ -11277,6 +11285,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                     Ok(_face) => Ok(ok(json!({"opened": true}))),
                     Err(err) => Ok(error(err)),
                 };
+            }
+            if case.inputs.params.get("variants").is_some() {
+                return rust_new_face_variants(case);
             }
             if lifecycle_handle_param(&case.inputs.params, "pathname") == Some("null") {
                 return Ok(error(FT_Err_Cannot_Open_Resource as FT_Error));
@@ -16397,6 +16408,24 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     })
 }
 
+fn rust_new_face_variants(case: &InputCase) -> Result<RunOutput, String> {
+    let pathname = font_pathname(case)?;
+    let library = FT_Init_FreeType();
+    let rows = memory_face_rows(&case.inputs.params)?;
+    memory_face_outputs(rows, |row| {
+        if row.library_is_null {
+            return Ok((FT_Err_Invalid_Library_Handle as FT_Error, true));
+        }
+        if row.aface_is_null {
+            return Ok((FT_Err_Invalid_Argument, true));
+        }
+        match FT_New_Face(&library, &pathname, row.face_index, 20.0) {
+            Ok(_face) => Ok((FT_Err_Ok, false)),
+            Err(err) => Ok((err, true)),
+        }
+    })
+}
+
 fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes(case)?;
     let rows = memory_face_rows(&case.inputs.params)?;
@@ -18186,6 +18215,13 @@ fn font_asset_bytes(font: &Asset) -> Result<Arc<[u8]>, String> {
         }
         Asset::Other(_) => Err("unsupported font asset shape".to_string()),
     }
+}
+
+fn font_pathname(case: &InputCase) -> Result<String, String> {
+    let font = runtime_font_asset(case).ok_or_else(|| "missing font asset".to_string())?;
+    let path = asset_file_path(font)
+        .ok_or_else(|| format!("FT_New_Face requires file asset, got {}", asset_label(font)))?;
+    Ok(fixture_dir().join(path).display().to_string())
 }
 
 fn runtime_font_asset(case: &InputCase) -> Option<&Asset> {
@@ -25963,13 +25999,25 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
 }
 
 fn exact_error_matrix_output(output: &Value) -> bool {
-    let Some(results) = output.get("results").and_then(Value::as_array) else {
+    if output
+        .get("error")
+        .and_then(Value::as_i64)
+        .is_some_and(|code| code != 0)
+    {
+        return true;
+    }
+    exact_error_rows(output, "results", "return")
+        || exact_error_rows(output, "rows", "error")
+        || exact_error_rows(output, "outputs", "error")
+}
+
+fn exact_error_rows(output: &Value, rows_key: &str, error_key: &str) -> bool {
+    let Some(rows) = output.get(rows_key).and_then(Value::as_array) else {
         return false;
     };
-    !results.is_empty()
-        && results.iter().all(|result| {
-            result
-                .get("return")
+    !rows.is_empty()
+        && rows.iter().all(|row| {
+            row.get(error_key)
                 .and_then(Value::as_i64)
                 .is_some_and(|code| code != 0)
         })
@@ -26028,6 +26076,49 @@ fn unified_fixture_parity_exact_error_guard_rejects_non_error_results() {
         ]
     }));
     compare_case(&case, &oracle_matrix, &backend_matrix).unwrap();
+
+    let oracle_rows_matrix = ok(json!({
+        "rows": [
+            {"probe": "null_outline", "error": 20},
+            {"probe": "null_abbox", "error": 6}
+        ]
+    }));
+    let backend_rows_matrix = ok(json!({
+        "rows": [
+            {"probe": "null_outline", "error": 20},
+            {"probe": "null_abbox", "error": 6}
+        ]
+    }));
+    compare_case(&case, &oracle_rows_matrix, &backend_rows_matrix).unwrap();
+
+    let oracle_outputs_matrix = ok(json!({
+        "outputs": [
+            {"status": "error", "error": 33},
+            {"status": "error", "error": 6}
+        ]
+    }));
+    let backend_outputs_matrix = ok(json!({
+        "outputs": [
+            {"status": "error", "error": 33},
+            {"status": "error", "error": 6}
+        ]
+    }));
+    compare_case(&case, &oracle_outputs_matrix, &backend_outputs_matrix).unwrap();
+
+    let oracle_top_level_error_output = ok(json!({
+        "error": 7,
+        "feature_branch": "subpixel_rendering"
+    }));
+    let backend_top_level_error_output = ok(json!({
+        "error": 7,
+        "feature_branch": "subpixel_rendering"
+    }));
+    compare_case(
+        &case,
+        &oracle_top_level_error_output,
+        &backend_top_level_error_output,
+    )
+    .unwrap();
 
     let backend_success_matrix = ok(json!({
         "results": [
