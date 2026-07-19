@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_LOAD_PEDANTIC` load-glyph exact-error
+Current verified result after `FT_Get_BDF_Property` null-argument exact-error
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3957`
+  - `real-parity`: `3958`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `238`
+  - `generic-error-fallback`: `237`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -399,6 +399,103 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_PEDANTIC.pedantic_err
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3957`, `generic-error-fallback` `238`.
+
+### Issue Set Pending: `FT_Err_Divide_By_Zero` load-glyph fixture mismatch
+
+Current blocker:
+
+- `fterrdef.FT_Err_Divide_By_Zero.bytecode_div_zero_returns_error` had a
+  concrete TrueType bytecode error row classified as `generic-error-fallback`.
+- The row uses a generated TrueType font that executes `DIV` with a zero
+  divisor, but fallback classification only proved that an error happened.
+- Promoting it to exact-error comparison exposed that the pinned C oracle returns
+  `ok` for the generated row, not `FT_Err_Divide_By_Zero`.
+
+Fix plan:
+
+1. Do not classify this row as `real-parity` while the pinned C oracle returns
+   `ok`.
+2. Audit the generated `generated/truetype/divide-by-zero.ttf` bytecode and the
+   fixture's `fixture_defined_error_glyph` selection.
+3. If the fixture is wrong, update the maintained generator so the selected
+   public glyph actually reaches FreeType `Ins_DIV` with `args[1] == 0`.
+4. Only after the pinned C oracle returns `FT_Err_Divide_By_Zero`, verify exact
+   status/output through Rust FFI, thin C ABI `FT_Load_Glyph`, and WASM ABI.
+
+Non-coverage probe:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Divide_By_Zero.bytecode_div_zero_returns_error
+```
+
+Result under attempted exact-error classification: failed because the oracle
+returned `ok`. The row remains `generic-error-fallback` until the generator and
+selected glyph are corrected.
+
+### Issue Set Pending: `FT_Err_Invalid_Reference` load-glyph fixture mismatch
+
+Current blocker:
+
+- `fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference` had a
+  concrete TrueType bytecode error row classified as `generic-error-fallback`.
+- Promoting it to exact-error comparison exposed that the pinned C oracle returns
+  `ok` for the generated row, not `FT_Err_Invalid_Reference`.
+
+Fix plan:
+
+1. Do not classify this row as `real-parity` while the pinned C oracle returns
+   `ok`.
+2. Audit the generated TrueType invalid-reference fixture and the selected
+   public glyph index.
+3. If the fixture is wrong, update the maintained generator so the selected
+   public glyph actually reaches the documented invalid-reference bytecode path.
+4. Only after the pinned C oracle returns `FT_Err_Invalid_Reference`, verify
+   exact status/output through Rust FFI, thin C ABI `FT_Load_Glyph`, and WASM
+   ABI.
+
+Non-coverage probe:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference
+```
+
+Result under attempted exact-error classification: failed because the oracle
+returned `ok`. The row remains `generic-error-fallback` until the generator and
+selected glyph are corrected.
+
+### Issue Set Current: `FT_Get_BDF_Property` null-argument exact-error route
+
+Previous blocker:
+
+- `ftbdf.FT_Get_BDF_Property.error_null_face_or_output` had a concrete BDF
+  public error row classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete BDF null-face/null-output row to exact-error
+   comparison.
+2. Keep the BDF fixture input unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_BDF_Property`, and WASM ABI before counting the row as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete BDF null-argument row.
+- The previously fallback-classified error row now validates exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Property.error_null_face_or_output
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3958`, `generic-error-fallback` `237`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
