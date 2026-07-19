@@ -1749,7 +1749,9 @@ pub fn FT_Outline_Render_Direct_Spans(
         return Err(FT_Err_Invalid_Argument as FT_Error);
     }
     if flags & FT_RASTER_FLAG_AA as FT_Int == 0 {
-        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+        // FreeType 2.14.3 reports Invalid_Argument for DIRECT rendering
+        // without the AA flag before entering the mono raster path.
+        return Err(FT_Err_Invalid_Argument as FT_Error);
     }
     if !gray_spans_present {
         // FreeType 2.14.3 `src/smooth/ftgrays.c:1998-2001` returns success

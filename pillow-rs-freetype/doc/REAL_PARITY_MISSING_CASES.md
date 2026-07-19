@@ -468,6 +468,62 @@ Results: each focused probe passed `1 / 1` runtime parity row, `0` failed,
 `0` pending. Route audit after promotion: `real-parity` `4149`,
 `generic-error-fallback` `46`.
 
+### Issue Set Current: mixed render and delegated public error routes
+
+Previous blocker:
+
+- Seven non-load-glyph public error rows were still classified as
+  `generic-error-fallback` even though they have deterministic pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI runners.
+- `ftimage.FT_RASTER_FLAG_DIRECT.mono_rejects_direct` exposed a real status
+  mismatch during exact probing: pinned C returned `FT_Err_Invalid_Argument`
+  (`6`) for DIRECT rendering without `FT_RASTER_FLAG_AA`, while Rust returned
+  `FT_Err_Cannot_Render_Glyph` (`19`).
+
+Fix:
+
+- Match FreeType 2.14.3 DIRECT rendering validation order: DIRECT without AA is
+  rejected as `FT_Err_Invalid_Argument` before entering the mono raster path.
+- Promote only rows that passed exact comparison across pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI.
+
+Promoted rows:
+
+- `ftimage.FT_RASTER_FLAG_DIRECT.mono_rejects_direct`
+- `fterrdef.FT_Err_Invalid_CodeRange.truetype_invalid_coderange`
+- `fterrdef.FT_Err_Locations_Missing.glyf_present_loca_missing`
+- `fterrdef.FT_Err_Too_Many_Caches.cache_manager_cache_limit`
+- `fterrdef.FT_Err_Ignore.parser_ignore_sentinel_not_public_success`
+- `fterrdef.FT_Err_Invalid_Stream_Read.png_embedded_bitmap_read_failure`
+- `fterrdef.FT_Err_Invalid_SVG_Document.svg_document_failure_policy`
+
+Rejected exact-error candidates:
+
+- `ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error`: exact
+  probe was not runnable because the `ftoutln.outline_decompose` callback trace
+  route remains `pending-core`. It is not promoted to real parity.
+
+Verified progress:
+
+- Focused exact comparison passed for all seven promoted rows.
+- Route audit classifies the promoted rows as `real-parity`.
+
+Focused non-coverage results:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_RASTER_FLAG_DIRECT.mono_rejects_direct
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_CodeRange.truetype_invalid_coderange
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Locations_Missing.glyf_present_loca_missing
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Too_Many_Caches.cache_manager_cache_limit
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Ignore.parser_ignore_sentinel_not_public_success
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Stream_Read.png_embedded_bitmap_read_failure
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_SVG_Document.svg_document_failure_policy
+```
+
+Results: each focused probe passed `1 / 1` runtime parity row, `0` failed,
+`0` pending. Route audit after promotion: `real-parity` `4156`,
+`generic-error-fallback` `39`.
+
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
 Previous blocker:
