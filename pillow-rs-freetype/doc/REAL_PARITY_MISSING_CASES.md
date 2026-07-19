@@ -6776,6 +6776,46 @@ units, not as a single monolithic implementation task.
 
 ## Recommended Subagent Slices
 
+### Issue Set Current: output-status public error routes
+
+Problem:
+
+- Some public API error fixtures report the C `FT_Error` inside
+  `output.status` rather than as the top-level runtime status. Treating them
+  as top-level exact-error rows is wrong: focused promotion attempts failed
+  because the oracle command itself returns top-level `Ok` while the public
+  API return value is carried in the output payload.
+- `FT_Get_Glyph_Name` also used direct string comparisons for lifecycle
+  handles, so fixture values like `"NULL"` did not reach the intended null
+  buffer path in the Rust/C/WASM lanes or oracle args.
+
+Fix:
+
+- Normalize `freetype.get_glyph_name` `face` and `buffer` lifecycle params
+  through the case-insensitive null helper.
+- Classify the following rows as real parity through exact
+  `output.status` comparison, not through the top-level exact-error guard:
+  - `fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments`
+  - `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`
+  - `fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format`
+  - `fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks`
+
+Verified progress:
+
+- Route audit moved `real-parity` `4205 -> 4209` and
+  `generic-error-fallback` `33 -> 29`.
+- Focused runtime parity passed for all four rows with pinned C oracle, Rust
+  FFI, thin C ABI, and WASM ABI.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks
+```
+
 1. `ftcache` cache-manager real parity: own `ftcache.*` routes only. Start with
    `FTC_Manager_New`, `FTC_Manager_Done`, and `FTC_CMapCache_New` before lookup
    rows.

@@ -1720,6 +1720,27 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Outline_Get_BBox null-outline/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "freetype.get_glyph_name"
+        and row.case_id == "fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments"
+    ):
+        return "FT_Get_Glyph_Name null-output error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "new_memory_face"
+        and row.case_id == "fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library"
+    ):
+        return "FT_New_Memory_Face null-library error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "render_glyph"
+        and row.case_id
+        == "fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format"
+    ):
+        return "FT_Render_Glyph unsupported-format error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "render_glyph"
+        and row.case_id == "fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks"
+    ):
+        return "FT_Render_Glyph missing-SVG-hooks error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftbdf.get_bdf_property"
         and row.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
     ):
