@@ -1080,6 +1080,94 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if not operation_is_real_parity(row.operation):
         return None
+    exact_error_route_gaps = {
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Code_Overflow.bytecode_jump_past_range_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Code_Overflow.push_instruction_truncation_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Could_Not_Find_Context.truetype_context_allocation_failure_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_DEF_In_Glyf_Bytecode.glyph_program_fdef_returns_error",
+        ),
+        ("load_glyph", "fterrdef.FT_Err_Debug_OpCode.debug_opcode_returns_error"),
+        ("load_glyph", "fterrdef.FT_Err_Divide_By_Zero.bytecode_div_zero_returns_error"),
+        ("load_glyph", "fterrdef.FT_Err_ENDF_In_Exec_Stream.stray_endf_returns_error"),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Execution_Too_Long.opcode_counter_limit_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Execution_Too_Long.negative_jump_limit_returns_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Glyph_Too_Big.ps_builder_large_outline_returns_error",
+        ),
+        (
+            "new_memory_face",
+            "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
+        ),
+        ("load_glyph", "fterrdef.FT_Err_Invalid_Opcode.tt_bytecode_invalid_opcode"),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference",
+        ),
+        ("load_glyph", "fterrdef.FT_Err_Nested_DEFS.truetype_nested_fdef"),
+        ("load_glyph", "fterrdef.FT_Err_Nested_DEFS.truetype_nested_idef"),
+        ("load_glyph", "fterrdef.FT_Err_Stack_Overflow.tt_interpreter_stack_overflow"),
+        ("load_glyph", "fterrdef.FT_Err_Stack_Overflow.cff_charstring_stack_overflow"),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Stack_Underflow.cff_charstring_missing_operands",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Syntax_Error.charstring_or_afm_syntax_error",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Too_Few_Arguments.tt_interpreter_argument_underflow",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Too_Few_Arguments.cff_decoder_underflow_translation",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Too_Many_Function_Defs.tt_fdef_limit_exceeded",
+        ),
+        ("load_glyph", "fterrdef.FT_Err_Too_Many_Hints.tt_glyph_hint_limit"),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Too_Many_Instruction_Defs.tt_idef_limit_exceeded",
+        ),
+        (
+            "load_glyph",
+            "fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature",
+        ),
+    }
+    if (row.operation, row.case_id) in exact_error_route_gaps:
+        return (
+            "exact public error comparison is not routed; accepting any error "
+            "would be a green placeholder"
+        )
     existing_primary_font_cases = {
         "freetype.FT_Face_CheckTrueTypePatents.non_truetype_face_result",
         "freetype.FT_Get_FSType_Flags.sfnt_installable_embedding",
@@ -2962,6 +3050,18 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
     if operation_is_compile_contract(row.operation):
         return ("compile-contract", "header, layout, macro, or scalar contract")
+    if (
+        row.operation == "ftbdf.get_bdf_charset_id"
+        and row.case_id
+        in {
+            "ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike",
+            "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs",
+        }
+    ):
+        return (
+            "pending-route",
+            "exact public BDF charset error comparison is not routed; accepting any error would be a green placeholder",
+        )
     route_pending = pending_route_reason(row)
     if route_pending:
         return ("pending-route", route_pending)

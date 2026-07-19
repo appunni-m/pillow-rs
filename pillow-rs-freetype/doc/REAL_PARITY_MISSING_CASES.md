@@ -6957,3 +6957,48 @@ removed.
    lifetimes through all ABI surfaces.
 10. Legacy formats and streams: own BDF, PFR, CID, Type 1, WinFNT, gzip, bzip2,
     and LZW rows only after the supported-vs-unsupported policy is explicit.
+
+### Issue Set Current: exact-error placeholders made pending
+
+Problem:
+
+- The route audit still had `29` `generic-error-fallback` rows. These rows were
+  green placeholders because the runtime accepted an expected error without an
+  exact C status/output comparison.
+- `26` rows were `load_glyph` malformed bytecode/charstring/font error cases.
+  Prior exact probing showed these are not yet promotable: most symbolic
+  `fixture_defined_error_glyph` rows still make the C oracle load glyph `0` and
+  return top-level success; one row maps C `8` while Rust returns `7`; the
+  reserved load-flag row maps C `6` while Rust returns `7`.
+- One `new_memory_face` HMTX-missing row is also not promotable because the
+  current oracle route returns top-level success.
+- Two BDF charset exact-error rows are blocked by unresolved runtime assets and
+  missing exact route support.
+
+Fix:
+
+- Classify those exact rows as `pending-route` with an explicit reason:
+  accepting any error would be a green placeholder.
+- This does not claim new real parity. It removes false-green fallback coverage
+  so the missing exact routes remain visible.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype test-op OP=load_glyph
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
+```
+
+Observed route audit after the change:
+
+- `generic-error-fallback`: removed from the category counts.
+- `pending-route`: `92`.
+- `real-parity`: unchanged at `4215`.
+
+Focused runtime:
+
+- `load_glyph`: `561 / 561` runnable rows passed, `26` pending with exact-error
+  route placeholder reason.
+- `ftbdf.get_bdf_charset_id`: `1 / 1` runnable row passed, `4` pending; two
+  unresolved BDF assets and two exact-error route placeholders.
