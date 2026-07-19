@@ -725,8 +725,9 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                                     compare.get("compare_error_output", False),
                                 )
                             )
-                            or exact_error_public_family(
+                            or exact_error_public_route(
                                 str(case.get("operation", "")),
+                                str(case.get("case_id", "")),
                                 bool(variant.get("expect_error", case.get("expect_error", False))),
                             ),
                             allow_oracle_errors=bool(
@@ -750,8 +751,9 @@ def concrete_inputs(items: dict[str, ManifestSubject]) -> list[ConcreteInput]:
                         variant_id=None,
                         expect_error=bool(case.get("expect_error", False)),
                         compare_error_output=bool(compare.get("compare_error_output", False))
-                        or exact_error_public_family(
+                        or exact_error_public_route(
                             str(case.get("operation", "")),
+                            str(case.get("case_id", "")),
                             bool(case.get("expect_error", False)),
                         ),
                         allow_oracle_errors=bool(compare.get("allow_oracle_errors", False)),
@@ -773,6 +775,20 @@ def exact_error_public_family(operation: str, expect_error: bool) -> bool:
         operation.startswith("ftsizes.")
         or operation in {"freetype.get_kerning", "freetype.get_subglyph_info"}
     )
+
+
+def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -> bool:
+    """Mirror harness-promoted exact-error routes in the route audit ledger."""
+    if exact_error_public_family(operation, expect_error):
+        return True
+    return expect_error and case_id in {
+        "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords",
+        "ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords",
+        "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count",
+        "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
+        "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
+    }
 
 
 def operation_is_compile_contract(operation: str) -> bool:
@@ -1242,6 +1258,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords"
     ):
         return "FT_Get_Var_Design_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_var_blend_coordinates"
+        and row.case_id == "ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords"
+    ):
+        return "FT_Get_Var_Blend_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_var_design_coordinates"
         and row.case_id
