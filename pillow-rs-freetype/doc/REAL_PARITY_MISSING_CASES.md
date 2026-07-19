@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_New_Library` null-input route
+Current verified result after `FT_Add_Module` fterrdef error-code route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3802`
+  - `real-parity`: `3805`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `391`
+  - `generic-error-fallback`: `388`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2940,6 +2940,43 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output
+```
+
+### Issue Set BP: `FT_Add_Module` fterrdef exact-error routes
+
+Previous blocker:
+
+- The fterrdef `FT_Add_Module` rows for `FT_Err_Invalid_Version`,
+  `FT_Err_Lower_Module_Version`, and `FT_Err_Too_Many_Drivers` stayed in
+  `generic-error-fallback`.
+- The fixtures name exact C behavior from `freetype/src/base/ftobjs.c`, but
+  the harness still accepted them as generic expected-error rows instead of
+  enforcing exact status, error symbol, and module-table observation parity.
+
+Plan:
+
+1. Keep the fterrdef fixtures intact; they exercise public `FT_Add_Module`
+   failure behavior for future required FreeType versions, duplicate lower
+   module versions, and module registry exhaustion.
+2. Require exact error comparison for all three case IDs.
+3. Classify each row as real parity only after focused same-input parity
+   passes through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The three focused `FT_Add_Module` fterrdef rows pass exact comparison against
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `fterrdef.FT_Err_Invalid_Version.module_requires_newer_freetype`
+  - `fterrdef.FT_Err_Lower_Module_Version.duplicate_module_not_newer`
+  - `fterrdef.FT_Err_Too_Many_Drivers.module_registry_limit`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Version.module_requires_newer_freetype
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Lower_Module_Version.duplicate_module_not_newer
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Too_Many_Drivers.module_registry_limit
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker

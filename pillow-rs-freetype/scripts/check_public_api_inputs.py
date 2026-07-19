@@ -1128,6 +1128,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Add_Module duplicate-name/version replacement behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "FT_Add_Module"
+        and row.case_id == "fterrdef.FT_Err_Invalid_Version.module_requires_newer_freetype"
+    ):
+        return "FT_Add_Module future-FreeType-version rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "FT_Add_Module"
+        and row.case_id == "fterrdef.FT_Err_Lower_Module_Version.duplicate_module_not_newer"
+    ):
+        return "FT_Add_Module lower duplicate module-version rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "FT_Add_Module"
+        and row.case_id == "fterrdef.FT_Err_Too_Many_Drivers.module_registry_limit"
+    ):
+        return "FT_Add_Module module-registry-limit rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.new_library"
         and row.case_id == "ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output"
     ):

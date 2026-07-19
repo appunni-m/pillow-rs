@@ -8335,6 +8335,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
             || case.case_id == "freetype.FT_Face.null_and_done_handle_errors"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Version.module_requires_newer_freetype"
+            || case.case_id == "fterrdef.FT_Err_Lower_Module_Version.duplicate_module_not_newer"
+            || case.case_id == "fterrdef.FT_Err_Too_Many_Drivers.module_registry_limit"
             || case.case_id == "ftmodapi.FT_Add_Module.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Add_Module.rejects_null_class"
             || case.case_id == "ftmodapi.FT_Add_Module.rejects_future_required_version"
