@@ -2054,7 +2054,13 @@ impl Font {
     }
 
     pub(crate) fn glyph_index_hori_advance_26dot6(&self, glyph_index: u16) -> i32 {
-        let advance = self.data.hmtx.get(glyph_index).advance_width as i32;
+        let advance = self.data.load_glyph_outline(glyph_index).map_or_else(
+            |_| self.data.hmtx.get(glyph_index).advance_width as i32,
+            |outline| {
+                self.data
+                    .hmtx_hori_advance_with_gvar_delta_or_hmtx(glyph_index, outline.points.len())
+            },
+        );
         ft_mul_fix(advance, self.size_metrics.x_scale)
     }
 
@@ -2068,7 +2074,13 @@ impl Font {
     }
 
     pub(crate) fn glyph_index_hori_advance_16dot16(&self, glyph_index: u16) -> i32 {
-        let advance = self.data.hmtx.get(glyph_index).advance_width as i32;
+        let advance = self.data.load_glyph_outline(glyph_index).map_or_else(
+            |_| self.data.hmtx.get(glyph_index).advance_width as i32,
+            |outline| {
+                self.data
+                    .hmtx_hori_advance_with_gvar_delta_or_hmtx(glyph_index, outline.points.len())
+            },
+        );
         ft_mul_fix(advance * 1024, self.size_metrics.x_scale)
     }
 

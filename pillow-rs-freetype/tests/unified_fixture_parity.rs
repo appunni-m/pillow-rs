@@ -666,6 +666,12 @@ fn validation_flags_param(value: &Value) -> Result<FT_UInt, String> {
 }
 
 fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
+    if case.operation == "ftmm.set_named_instance"
+        && case.case == "output_changes_to_named_instance"
+        && case.inputs.params.get("glyph_index").is_some()
+    {
+        return Some("named-instance glyph-output parity requires fractional gvar/HVAR support");
+    }
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
         && lifecycle_handle_param(&case.inputs.params, "face") == Some("non_sfnt")
@@ -9782,6 +9788,9 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("compare_namedstyle_index").is_some() {
         return rust_set_named_instance_descriptor(case);
     }
+    if case.inputs.params.get("glyph_index").is_some() {
+        return rust_set_named_instance_glyph_output(case);
+    }
     let mut face = rust_new_face_without_size(case)?;
     if let Some(prior_instance) = prior_named_instance_index_param(&case.inputs.params)? {
         let err = FT_Set_Named_Instance(Some(&mut face), prior_instance);
@@ -9821,6 +9830,9 @@ fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     }
     if case.inputs.params.get("compare_namedstyle_index").is_some() {
         return c_set_named_instance_descriptor(case);
+    }
+    if case.inputs.params.get("glyph_index").is_some() {
+        return c_set_named_instance_glyph_output(case);
     }
     let (library, face) = c_new_face_without_size(case)?;
     let output = c_set_named_instance_on_face(face, &case.inputs.params);
@@ -9862,6 +9874,9 @@ fn wasm_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("compare_namedstyle_index").is_some() {
         return wasm_set_named_instance_descriptor(case);
     }
+    if case.inputs.params.get("glyph_index").is_some() {
+        return wasm_set_named_instance_glyph_output(case);
+    }
     let handle = wasm_new_face_without_size(case)?;
     let output = wasm_set_named_instance_on_face(handle, &case.inputs.params);
     wasm_done_face(handle);
@@ -9890,6 +9905,90 @@ fn wasm_set_named_instance_on_face(handle: usize, params: &Value) -> Result<RunO
         &info,
         wasm_postscript_name_json(handle),
     ))
+}
+
+fn rust_set_named_instance_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let err = FT_Set_Named_Instance(
+        Some(&mut face),
+        set_named_instance_index_param(&case.inputs.params)?,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let slot = match FT_Load_Glyph(
+        &face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => slot,
+        Err(err) => return Ok(error(err)),
+    };
+    match FT_Render_Glyph(slot, render_mode_param(&case.inputs.params)?) {
+        Ok(slot) => Ok(ok(slot_json(&slot))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn c_set_named_instance_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let set_err =
+        c_abi::FT_Set_Named_Instance(face, set_named_instance_index_param(&case.inputs.params)?);
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err = c_abi::FT_Load_Glyph(
+            face,
+            glyph_index_param(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let render_err =
+                c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?);
+            if render_err != FT_Err_Ok {
+                Ok(error(render_err))
+            } else {
+                c_slot_json(face).map(ok)
+            }
+        }
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_set_named_instance_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let set_err = wasm_abi::fontdone_wasm_set_named_instance(
+        handle,
+        set_named_instance_index_param(&case.inputs.params)?,
+    );
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(
+            handle,
+            glyph_index_param(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let render_err = wasm_abi::fontdone_wasm_render_glyph(
+                handle,
+                render_mode_param(&case.inputs.params)?,
+            );
+            if render_err != FT_Err_Ok {
+                Ok(error(render_err))
+            } else {
+                wasm_slot_json(handle).map(ok)
+            }
+        }
+    };
+    wasm_done_face(handle);
+    output
 }
 
 fn rust_set_named_instance_descriptor(case: &InputCase) -> Result<RunOutput, String> {
@@ -14499,9 +14598,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 return Ok(args);
             }
             if params.get("glyph_index").is_some() {
-                return Err(
-                    "named-instance glyph-output parity requires gvar/HVAR support".to_string(),
-                );
+                let mut args = vec!["--set-named-instance-glyph-output".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(set_named_instance_index_param(params)?.to_string());
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(render_mode_param(params)?.to_string());
+                return Ok(args);
             }
             let mut args = vec!["--set-named-instance".to_string()];
             push_font_source(case, &mut args)?;

@@ -18,7 +18,7 @@ three larger variation-font surfaces:
 | Case | Current blocker | Required first implementable slice |
 |---|---|---|
 | `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default` | No maintained Adobe MM fixture is present under `tests/fixtures`; the row also requires real Adobe multiple-master state, not only OpenType `fvar` named instances. | Add or generate a maintained Adobe MM Type 1 fixture, parse the MM design space in pure Rust, implement default design reset semantics for `FT_Set_Named_Instance(0)`, then compare face flags, face index, and design coordinates through Rust FFI, C ABI, and WASM ABI. |
-| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`, but Rust currently does not apply those variation deltas to glyph output/metrics. | Implement active variation coordinate propagation into the scaler, apply `gvar` deltas before outline output, apply `HVAR` deltas to advances/metrics, invalidate dependent glyph/size state after named-instance switches, then route exact output comparison through all ABI lanes. |
+| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`. Rust now applies integer-rounded `gvar` point and phantom advance deltas, but exact rendered bytes still diverge because FreeType keeps fractional variation precision through glyph loading/hinting. | Carry fractional `gvar` point deltas through scaling/autohinting, implement `HVAR` advance/side-bearing deltas where the fixture observes metrics, then promote the maintained C oracle glyph-output route through Rust FFI, C ABI, and WASM ABI. |
 | `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation` | No maintained vertical MVAR fixture is present; `mvar-horizontal-metrics.ttf` has no `MVAR` table and the expected `mvar-vertical-metrics.ttf` asset is missing. | Add or generate a vertical metrics variation fixture with `vhea`/`vmtx`/`fvar`/`MVAR`, implement shared item-variation-store evaluation, apply `MVAR` deltas to vertical header fields after coordinate changes, then compare default and varied `TT_VertHeader` records exactly. |
 
 Execution order:
@@ -41,10 +41,24 @@ Execution order:
   embedded tuples, intermediate regions, shared/private point lists, and packed
   X/Y deltas, then applies point deltas to simple glyph outlines before hinting.
 - This is not yet a parity promotion. The output row remains `pending-core`
-  because exact glyph-output comparison still needs phantom-point advance
-  deltas, HVAR advance/side-bearing deltas where the fixture observes metrics,
-  and a native C oracle route that serializes the same glyph output after
-  `FT_Set_Named_Instance`.
+  because exact glyph-output comparison still needs fractional `gvar` point
+  precision through scaling/autohinting plus HVAR advance/side-bearing deltas
+  where the fixture observes metrics.
+
+2026-07-20 diagnostic update:
+
+- Added a maintained C oracle/harness route for
+  `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`, but kept the
+  row pending so an explicit focused run reports the fractional-gvar blocker
+  instead of a false green.
+- Unguarded focused comparison first failed at `FT_GlyphSlot.advance.x`
+  (`expected=1152`, Rust `actual=1216`). Applying `gvar` phantom deltas to the
+  core scaler and autohint advance path fixed that mismatch.
+- The next unguarded failure is `bitmap.buffer_hex` only. Metrics, advance,
+  placement, and route serialization match; the remaining blocker is fractional
+  point precision. For glyph `a.sc` in `named-instances.ttf`, `fontTools`
+  instantiation shows third-font-unit point deltas while the current
+  `GlyphOutline` stores integer font units.
 
 Verification required before any row moves to `real-parity`:
 

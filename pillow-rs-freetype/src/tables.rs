@@ -144,4 +144,56 @@ impl FontData {
         crate::tt::gvar::apply_deltas_to_outline(&mut varied, &deltas);
         Ok(varied)
     }
+
+    /// Return horizontal advance in font units after `gvar` phantom deltas.
+    ///
+    /// FreeType applies `gvar` deltas to the four phantom points as part of
+    /// `TT_Vary_Apply_Glyph_Deltas` before `compute_glyph_metrics`
+    /// (`truetype/ttgxvar.c`, `truetype/ttgload.c`).  The public horizontal
+    /// advance is therefore `pp2.x - pp1.x`, not the static `hmtx` width, for
+    /// active variable-font instances.
+    pub(crate) fn hmtx_hori_advance_with_gvar_delta(
+        &self,
+        glyph_index: u16,
+        outline_point_count: usize,
+    ) -> Result<i32, crate::error::FontError> {
+        let advance = self.hmtx.get(glyph_index).advance_width as i32;
+        Ok(advance + self.gvar_hori_advance_delta(glyph_index, outline_point_count)?)
+    }
+
+    pub(crate) fn hmtx_hori_advance_with_gvar_delta_or_hmtx(
+        &self,
+        glyph_index: u16,
+        outline_point_count: usize,
+    ) -> i32 {
+        self.hmtx_hori_advance_with_gvar_delta(glyph_index, outline_point_count)
+            .unwrap_or_else(|_| self.hmtx.get(glyph_index).advance_width as i32)
+    }
+
+    pub(crate) fn gvar_hori_advance_delta(
+        &self,
+        glyph_index: u16,
+        outline_point_count: usize,
+    ) -> Result<i32, crate::error::FontError> {
+        let Some(gvar) = &self.gvar else {
+            return Ok(0);
+        };
+        if self.normalized_variation_coords.is_empty() {
+            return Ok(0);
+        }
+        let Some(deltas) = gvar.glyph_deltas(
+            glyph_index,
+            outline_point_count + 4,
+            &self.normalized_variation_coords,
+        )?
+        else {
+            return Ok(0);
+        };
+        let pp1_delta = deltas.get(outline_point_count).copied().unwrap_or_default();
+        let pp2_delta = deltas
+            .get(outline_point_count + 1)
+            .copied()
+            .unwrap_or_default();
+        Ok(pp2_delta.0 - pp1_delta.0)
+    }
 }
