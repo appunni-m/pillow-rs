@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Remove_Module` null-library
+Current verified result after `FT_Add_Module` null-library
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3796`
+  - `real-parity`: `3797`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `397`
+  - `generic-error-fallback`: `396`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2742,6 +2742,36 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Remove_Module.rejects_null_library
+```
+
+### Issue Set BJ: `FT_Add_Module` null-library exact-error route
+
+Previous blocker:
+
+- `ftmodapi.FT_Add_Module.rejects_null_library` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_Add_Module(NULL, ...)`.
+2. Require exact error status comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused null-library row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_Add_Module.rejects_null_library` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.rejects_null_library
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
