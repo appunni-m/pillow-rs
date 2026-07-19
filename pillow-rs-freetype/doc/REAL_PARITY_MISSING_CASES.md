@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after render/raster public API exact classification:
+Current verified result after face/table and Smooth module public API exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4136`
+  - `real-parity`: `4147`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `59`
+  - `generic-error-fallback`: `48`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -341,6 +341,72 @@ make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Cannot_Render_Glyph.ou
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `4136`, `generic-error-fallback` `59`.
+
+### Issue Set Current: face/table and Smooth module public API exact error routes
+
+Previous blocker:
+
+- Face opening, table-load, and Smooth renderer module-prefixed public error
+  rows were still classified as `generic-error-fallback`.
+- These rows had runnable pinned C, Rust FFI, thin C ABI, and WASM ABI coverage,
+  but fallback classification accepted any error instead of requiring exact
+  public status/output equality.
+
+Promoted rows:
+
+- `fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error`
+- `fterrdef.FT_Err_Cannot_Open_Stream.resource_fork_stream_failure_returns_error`
+- `fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c`
+- `fterrdef.FT_Err_Missing_Module.no_driver_matches_face`
+- `fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown`
+- `fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format`
+- `fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table`
+- `fterrdef.FT_Err_Invalid_Frame_Read.stream_frame_bounds_rejected`
+- `ftmoderr.FT_Mod_Err_Smooth.prefixed_error_base`
+
+Rejected exact-error candidates:
+
+- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error`:
+  exact-error promotion failed because pinned C returned `Ok`. The row remains
+  a value-contract/oracle-policy issue, not an exact-error row.
+- `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`:
+  exact-error promotion failed because pinned C returned `Ok`. The row remains
+  a value-contract/oracle-policy issue, not an exact-error row.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`:
+  exact probe failed before comparison because fixture
+  `input/fonts/bdf/charset-registry.bdf` is missing. The row remains an
+  incomplete fixture/input issue until the required asset exists.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`:
+  exact probe failed before comparison because fixture
+  `input/fonts/bdf/sfnt-bdf-table.otb` is missing. The row remains an
+  incomplete fixture/input issue until the required asset exists.
+- `ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors`: exact promotion
+  exposed a real status mismatch: pinned C returned error code `6`, while Rust
+  FFI returned error code `35`. This row remains an implementation parity gap.
+- `ftoutln.FT_Outline_Get_Bitmap.null_bitmap_and_delegate_errors`: exact
+  promotion exposed a real status mismatch: pinned C returned error code `6`,
+  while Rust FFI returned error code `35`. This row remains an implementation
+  parity gap.
+
+Verified progress:
+
+- Exact comparison passed for all promoted rows. The Smooth module case
+  represents three concrete rows, so this batch promotes eleven concrete
+  route rows in total.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType for the
+  promoted rows once the fallback guard was removed.
+- Route audit classifies the promoted rows as `real-parity`.
+
+Focused non-coverage results:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error
+make -C pillow-rs-freetype test-case CASE=ftmoderr.FT_Mod_Err_Smooth.prefixed_error_base
+```
+
+Results: `1 / 1` and `3 / 3` runtime parity rows passed, `0` failed, `0`
+pending. Route audit: `real-parity` `4147`, `generic-error-fallback` `48`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
