@@ -666,14 +666,6 @@ fn validation_flags_param(value: &Value) -> Result<FT_UInt, String> {
 }
 
 fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
-    if case.operation == "ftmm.set_named_instance"
-        && case.case == "output_changes_to_named_instance"
-        && case.inputs.params.get("glyph_index").is_some()
-    {
-        return Some(
-            "named-instance glyph-output parity requires fractional gvar/autohint bitmap support",
-        );
-    }
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
         && lifecycle_handle_param(&case.inputs.params, "face") == Some("non_sfnt")

@@ -1926,7 +1926,10 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
         for item in list_value(row.params.get("prior_calls"))
     ):
         return "Adobe MM named-instance reset requires real Adobe MM support"
-    if "glyph_index" in row.params:
+    if (
+        row.case_id != "ftmm.FT_Set_Named_Instance.output_changes_to_named_instance"
+        and "glyph_index" in row.params
+    ):
         return "named-instance glyph-output parity requires fractional gvar/autohint bitmap support"
     return None
 
