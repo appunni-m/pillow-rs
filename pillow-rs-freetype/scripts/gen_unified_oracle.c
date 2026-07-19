@@ -6111,6 +6111,147 @@ static int emit_outline_get_orientation(int argc, char** argv) {
     return 0;
 }
 
+typedef enum CheckOutlineKind_ {
+    CHECK_OUTLINE_NULL,
+    CHECK_OUTLINE_EMPTY,
+    CHECK_OUTLINE_SINGLE_POINT,
+    CHECK_OUTLINE_MULTI_CONTOUR,
+    CHECK_OUTLINE_ZERO_POINTS_ONE_CONTOUR,
+    CHECK_OUTLINE_NONINCREASING_CONTOURS,
+} CheckOutlineKind;
+
+static void build_check_outline(
+    CheckOutlineKind kind,
+    FT_Outline* outline,
+    FT_Vector* points,
+    unsigned char* tags,
+    unsigned short* contours
+) {
+    outline->n_contours = 0;
+    outline->n_points = 0;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+    if (kind == CHECK_OUTLINE_EMPTY) {
+        return;
+    }
+    if (kind == CHECK_OUTLINE_SINGLE_POINT) {
+        points[0].x = 0;
+        points[0].y = 0;
+        tags[0] = FT_CURVE_TAG_ON;
+        contours[0] = 0;
+        outline->n_points = 1;
+        outline->n_contours = 1;
+        return;
+    }
+    if (kind == CHECK_OUTLINE_ZERO_POINTS_ONE_CONTOUR) {
+        contours[0] = 0;
+        outline->n_points = 0;
+        outline->n_contours = 1;
+        return;
+    }
+    points[0].x = 0;
+    points[0].y = 0;
+    points[1].x = 64;
+    points[1].y = 0;
+    points[2].x = 64;
+    points[2].y = 64;
+    points[3].x = 0;
+    points[3].y = 64;
+    for (int i = 0; i < 4; i++) {
+        tags[i] = FT_CURVE_TAG_ON;
+    }
+    outline->n_points = 4;
+    if (kind == CHECK_OUTLINE_NONINCREASING_CONTOURS) {
+        contours[0] = 2;
+        contours[1] = 2;
+        outline->n_contours = 2;
+        return;
+    }
+    points[4].x = 128;
+    points[4].y = 0;
+    points[5].x = 192;
+    points[5].y = 0;
+    points[6].x = 192;
+    points[6].y = 64;
+    points[7].x = 128;
+    points[7].y = 64;
+    for (int i = 4; i < 8; i++) {
+        tags[i] = FT_CURVE_TAG_ON;
+    }
+    contours[0] = 3;
+    contours[1] = 7;
+    outline->n_points = 8;
+    outline->n_contours = 2;
+}
+
+static void print_outline_check_observation(
+    const char* label,
+    CheckOutlineKind kind,
+    int* emitted
+) {
+    if (*emitted) {
+        printf(",");
+    }
+    *emitted = 1;
+    FT_Error error;
+    int n_points = 0;
+    int n_contours = 0;
+    if (kind == CHECK_OUTLINE_NULL) {
+        error = FT_Outline_Check(NULL);
+    } else {
+        FT_Outline outline;
+        FT_Vector points[8];
+        unsigned char tags[8];
+        unsigned short contours[2];
+        build_check_outline(kind, &outline, points, tags, contours);
+        error = FT_Outline_Check(&outline);
+        n_points = outline.n_points;
+        n_contours = outline.n_contours;
+    }
+    printf(
+        "{\"label\":\"%s\",\"return\":%d,\"n_points\":%d,\"n_contours\":%d}",
+        label,
+        error,
+        n_points,
+        n_contours
+    );
+}
+
+static int emit_outline_check(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    printf("{\"results\":[");
+    int emitted = 0;
+    if (strstr(case_id, ".valid_empty_and_single_point")) {
+        print_outline_check_observation("empty", CHECK_OUTLINE_EMPTY, &emitted);
+        print_outline_check_observation("single_point", CHECK_OUTLINE_SINGLE_POINT, &emitted);
+    } else if (strstr(case_id, ".valid_multi_contour_sequence")) {
+        print_outline_check_observation("multi_contour", CHECK_OUTLINE_MULTI_CONTOUR, &emitted);
+    } else if (strstr(case_id, ".invalid_null_or_count_mismatch")) {
+        print_outline_check_observation("null", CHECK_OUTLINE_NULL, &emitted);
+        print_outline_check_observation(
+            "bad_zero_points",
+            CHECK_OUTLINE_ZERO_POINTS_ONE_CONTOUR,
+            &emitted
+        );
+        print_outline_check_observation(
+            "bad_contours",
+            CHECK_OUTLINE_NONINCREASING_CONTOURS,
+            &emitted
+        );
+    } else {
+        fprintf(stderr, "unsupported outline check case: %s\n", case_id);
+        return 2;
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static void build_reverse_outline(
     FT_Outline* outline,
     FT_Vector* points,
@@ -11623,6 +11764,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-orientation")) {
         return emit_outline_get_orientation(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-check")) {
+        return emit_outline_check(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-reverse")) {
         return emit_outline_reverse(argc, argv);

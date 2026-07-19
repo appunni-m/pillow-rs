@@ -1728,6 +1728,14 @@ pub extern "C" fn FT_Outline_Get_Orientation(outline: *const FT_Outline) -> FT_O
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Check(outline: *const FT_Outline) -> FT_Error {
+    let Some(snapshot) = outline_snapshot_from_c(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    rust_ffi::FT_Outline_Check(Some(&snapshot))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Reverse(outline: *mut FT_Outline) {
     let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
         return;

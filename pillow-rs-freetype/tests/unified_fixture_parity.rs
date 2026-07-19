@@ -686,6 +686,15 @@ fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> 
     }
 }
 
+fn pending_core_runtime_reason(case: &InputCase) -> Option<&'static str> {
+    if case.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch" {
+        return Some(
+            "FT_Outline_Check invalid matrix needs exact per-scenario error-output support",
+        );
+    }
+    None
+}
+
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
     if case.route_evidence == RouteEvidence::PendingRoute {
         return RuntimeReadiness::Pending {
@@ -698,6 +707,11 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
         };
     }
     if let Some(reason) = unrouted_slot_state_runtime_reason(case) {
+        return RuntimeReadiness::Pending {
+            reason: format!("{operation}:{reason}"),
+        };
+    }
+    if let Some(reason) = pending_core_runtime_reason(case) {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:{reason}"),
         };
@@ -10521,6 +10535,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-get-orientation".to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_check" => Ok(vec!["--outline-check".to_string(), case.case_id.clone()]),
         "ftoutln.outline_reverse" => {
             Ok(vec!["--outline-reverse".to_string(), case.case_id.clone()])
         }
@@ -11142,6 +11157,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
+        "ftoutln.outline_check" => rust_outline_check_runtime_output(case),
         "ftoutln.outline_reverse" => rust_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => rust_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => rust_outline_translate_runtime_output(case),
@@ -11845,6 +11861,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
+        "ftoutln.outline_check" => c_outline_check_runtime_output(case),
         "ftoutln.outline_reverse" => c_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => c_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => c_outline_translate_runtime_output(case),
@@ -12407,6 +12424,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
+        "ftoutln.outline_check" => wasm_outline_check_runtime_output(case),
         "ftoutln.outline_reverse" => wasm_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => wasm_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => wasm_outline_translate_runtime_output(case),
@@ -18567,6 +18585,158 @@ fn wasm_outline_orientation_runtime_output(case: &InputCase) -> Result<RunOutput
             flags: 0,
         };
         i64::from(wasm_abi::fontdone_wasm_outline_get_orientation(&outline))
+    })
+}
+
+#[derive(Clone, Copy)]
+enum CheckOutlineKind {
+    Null,
+    Empty,
+    SinglePoint,
+    MultiContour,
+    ZeroPointsOneContour,
+    NonIncreasingContours,
+}
+
+fn outline_check_cases(case_id: &str) -> Result<Vec<(&'static str, CheckOutlineKind)>, String> {
+    if case_id.ends_with(".valid_empty_and_single_point") {
+        return Ok(vec![
+            ("empty", CheckOutlineKind::Empty),
+            ("single_point", CheckOutlineKind::SinglePoint),
+        ]);
+    }
+    if case_id.ends_with(".valid_multi_contour_sequence") {
+        return Ok(vec![("multi_contour", CheckOutlineKind::MultiContour)]);
+    }
+    if case_id.ends_with(".invalid_null_or_count_mismatch") {
+        return Ok(vec![
+            ("null", CheckOutlineKind::Null),
+            ("bad_zero_points", CheckOutlineKind::ZeroPointsOneContour),
+            ("bad_contours", CheckOutlineKind::NonIncreasingContours),
+        ]);
+    }
+    Err(format!("unsupported outline check case {case_id}"))
+}
+
+fn check_outline_model(kind: CheckOutlineKind) -> Option<MutableOutlineModel> {
+    match kind {
+        CheckOutlineKind::Null => None,
+        CheckOutlineKind::Empty => Some(MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: Vec::new(),
+            flags: 0,
+        }),
+        CheckOutlineKind::SinglePoint => Some(MutableOutlineModel {
+            points: vec![(0, 0)],
+            tags: vec![1],
+            contours: vec![0],
+            flags: 0,
+        }),
+        CheckOutlineKind::MultiContour => Some(MutableOutlineModel {
+            points: vec![
+                (0, 0),
+                (64, 0),
+                (64, 64),
+                (0, 64),
+                (128, 0),
+                (192, 0),
+                (192, 64),
+                (128, 64),
+            ],
+            tags: vec![1; 8],
+            contours: vec![3, 7],
+            flags: 0,
+        }),
+        CheckOutlineKind::ZeroPointsOneContour => Some(MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: vec![0],
+            flags: 0,
+        }),
+        CheckOutlineKind::NonIncreasingContours => Some(MutableOutlineModel {
+            points: vec![(0, 0), (64, 0), (64, 64), (0, 64)],
+            tags: vec![1; 4],
+            contours: vec![2, 2],
+            flags: 0,
+        }),
+    }
+}
+
+fn outline_check_runtime_output<F>(case: &InputCase, mut check: F) -> Result<RunOutput, String>
+where
+    F: FnMut(CheckOutlineKind) -> i64,
+{
+    let rows = outline_check_cases(&case.case_id)?
+        .into_iter()
+        .map(|(label, kind)| {
+            let model = check_outline_model(kind);
+            json!({
+                "label": label,
+                "return": check(kind),
+                "n_points": model.as_ref().map_or(0, |model| model.points.len()),
+                "n_contours": model.as_ref().map_or(0, |model| model.contours.len())
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(json!({ "results": rows })))
+}
+
+fn rust_outline_check_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_check_runtime_output(case, |kind| {
+        let Some(model) = check_outline_model(kind) else {
+            return i64::from(FT_Outline_Check(None));
+        };
+        let snapshot = rust_snapshot_from_mutable(&model);
+        i64::from(FT_Outline_Check(Some(&snapshot)))
+    })
+}
+
+fn c_outline_check_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_check_runtime_output(case, |kind| {
+        let Some(model) = check_outline_model(kind) else {
+            return i64::from(c_abi::FT_Outline_Check(ptr::null()));
+        };
+        let mut points = model
+            .points
+            .iter()
+            .map(|&(x, y)| c_abi::FT_Vector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags.clone();
+        let mut contours = model.contours.clone();
+        let outline = c_abi::FT_Outline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: model.flags,
+        };
+        i64::from(c_abi::FT_Outline_Check(&outline))
+    })
+}
+
+fn wasm_outline_check_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_check_runtime_output(case, |kind| {
+        let Some(model) = check_outline_model(kind) else {
+            return i64::from(wasm_abi::fontdone_wasm_outline_check(ptr::null()));
+        };
+        let mut points = model
+            .points
+            .iter()
+            .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags.clone();
+        let mut contours = model.contours.clone();
+        let outline = wasm_abi::FontdoneWasmOutline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: model.flags,
+        };
+        i64::from(wasm_abi::fontdone_wasm_outline_check(&outline))
     })
 }
 

@@ -2040,6 +2040,36 @@ pub fn FT_Outline_Get_Orientation(outline: Option<&FT_OutlineSnapshot>) -> FT_Or
     api::outline_get_orientation(Some(&outline)) as FT_Orientation
 }
 
+pub fn FT_Outline_Check(outline: Option<&FT_OutlineSnapshot>) -> FT_Error {
+    let Some(outline) = outline else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    let n_points = outline.points.len();
+    let n_contours = outline.contours.len();
+    // FreeType `src/base/ftoutln.c:352-390` accepts only the fully empty
+    // `(n_points == 0 && n_contours == 0)` case; either count being zero alone
+    // is an invalid outline.
+    if n_points == 0 && n_contours == 0 {
+        return FT_Err_Ok;
+    }
+    if n_points == 0 || n_contours == 0 {
+        return FT_Err_Invalid_Outline as FT_Error;
+    }
+
+    let mut previous_end: Option<usize> = None;
+    for &contour_end in &outline.contours {
+        let end = usize::from(contour_end);
+        if previous_end.is_some_and(|previous| end <= previous) || end >= n_points {
+            return FT_Err_Invalid_Outline as FT_Error;
+        }
+        previous_end = Some(end);
+    }
+    if previous_end != Some(n_points - 1) {
+        return FT_Err_Invalid_Outline as FT_Error;
+    }
+    FT_Err_Ok
+}
+
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
     let Some(outline) = outline else {
         return;
