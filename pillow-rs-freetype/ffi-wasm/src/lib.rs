@@ -34,12 +34,32 @@ pub type FT_LcdFilter = i32;
 pub type FT_TrueTypeEngineType = i32;
 pub type FT_Orientation = i32;
 pub type FT_StrokerBorder = i32;
+pub type FT_Pointer = *mut c_void;
+pub type FT_ListNode = *mut FontdoneWasmListNode;
+pub type FT_List = *mut FontdoneWasmList;
+pub type FT_List_Iterator =
+    Option<unsafe extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmStatus {
     pub error: FT_Error,
     pub handle: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmListNode {
+    pub prev: FT_ListNode,
+    pub next: FT_ListNode,
+    pub data: FT_Pointer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmList {
+    pub head: FT_ListNode,
+    pub tail: FT_ListNode,
 }
 
 #[repr(C)]
@@ -217,6 +237,118 @@ pub struct FontdoneWasmColor {
     pub green: FT_Byte,
     pub red: FT_Byte,
     pub alpha: FT_Byte,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_add(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
+    else {
+        return;
+    };
+    let before = list_ref.tail;
+
+    node_ref.next = ptr::null_mut();
+    node_ref.prev = before;
+
+    if let Some(before_ref) = unsafe { before.as_mut() } {
+        before_ref.next = node;
+    } else {
+        list_ref.head = node;
+    }
+    list_ref.tail = node;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_find(list: FT_List, data: FT_Pointer) -> FT_ListNode {
+    let Some(list_ref) = (unsafe { list.as_ref() }) else {
+        return ptr::null_mut();
+    };
+    let mut cur = list_ref.head;
+    while let Some(cur_ref) = unsafe { cur.as_ref() } {
+        let rust_node = rust_ffi::FT_ListNodeRec {
+            prev: cur_ref.prev.cast(),
+            next: cur_ref.next.cast(),
+            data,
+        };
+        if rust_ffi::FT_List_Find_Node_Matches(&rust_node, cur_ref.data) {
+            return cur;
+        }
+        cur = cur_ref.next;
+    }
+    ptr::null_mut()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_remove(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_ref() })
+    else {
+        return;
+    };
+    let before = node_ref.prev;
+    let after = node_ref.next;
+
+    if let Some(before_ref) = unsafe { before.as_mut() } {
+        before_ref.next = after;
+    } else {
+        list_ref.head = after;
+    }
+
+    if let Some(after_ref) = unsafe { after.as_mut() } {
+        after_ref.prev = before;
+    } else {
+        list_ref.tail = before;
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_up(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
+    else {
+        return;
+    };
+    let before = node_ref.prev;
+    let after = node_ref.next;
+    let Some(before_ref) = (unsafe { before.as_mut() }) else {
+        return;
+    };
+
+    before_ref.next = after;
+
+    if let Some(after_ref) = unsafe { after.as_mut() } {
+        after_ref.prev = before;
+    } else {
+        list_ref.tail = before;
+    }
+
+    node_ref.prev = ptr::null_mut();
+    node_ref.next = list_ref.head;
+    if let Some(head_ref) = unsafe { list_ref.head.as_mut() } {
+        head_ref.prev = node;
+    }
+    list_ref.head = node;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_list_iterate(
+    list: FT_List,
+    iterator: FT_List_Iterator,
+    user: FT_Pointer,
+) -> FT_Error {
+    let (Some(list_ref), Some(iterator)) = (unsafe { list.as_ref() }, iterator) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut cur = list_ref.head;
+    let mut error = rust_ffi::FT_Err_Ok;
+    while let Some(cur_ref) = unsafe { cur.as_ref() } {
+        let next = cur_ref.next;
+        error = unsafe { iterator(cur, user) };
+        if error != rust_ffi::FT_Err_Ok {
+            break;
+        }
+        cur = next;
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -1316,7 +1448,10 @@ pub extern "C" fn fontdone_wasm_outline_done(
         return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
     };
     if outline.flags & rust_ffi::FT_OUTLINE_OWNER as FT_Int != 0 {
-        wasm_dealloc_array::<FontdoneWasmVector>(outline.points.cast(), usize::from(outline.n_points));
+        wasm_dealloc_array::<FontdoneWasmVector>(
+            outline.points.cast(),
+            usize::from(outline.n_points),
+        );
         wasm_dealloc_array::<FT_Byte>(outline.tags.cast(), usize::from(outline.n_points));
         wasm_dealloc_array::<FT_UShort>(outline.contours.cast(), usize::from(outline.n_contours));
     }

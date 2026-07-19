@@ -52,6 +52,11 @@ pub type FT_StrokerBorder = c_int;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
+pub type FT_Pointer = *mut c_void;
+pub type FT_ListNode = *mut FT_ListNodeRec;
+pub type FT_List = *mut FT_ListRec;
+pub type FT_List_Iterator =
+    Option<unsafe extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
@@ -89,6 +94,21 @@ pub struct FT_BBox {
 pub struct FT_Parameter {
     pub tag: FT_ULong,
     pub data: *mut c_void,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_ListNodeRec {
+    pub prev: FT_ListNode,
+    pub next: FT_ListNode,
+    pub data: FT_Pointer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_ListRec {
+    pub head: FT_ListNode,
+    pub tail: FT_ListNode,
 }
 
 #[repr(C)]
@@ -221,6 +241,118 @@ pub extern "C" fn FT_Bitmap_Init(abitmap: *mut FT_Bitmap) {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Bitmap_New(abitmap: *mut FT_Bitmap) {
     FT_Bitmap_Init(abitmap);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Add(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
+    else {
+        return;
+    };
+    let before = list_ref.tail;
+
+    node_ref.next = ptr::null_mut();
+    node_ref.prev = before;
+
+    if let Some(before_ref) = unsafe { before.as_mut() } {
+        before_ref.next = node;
+    } else {
+        list_ref.head = node;
+    }
+    list_ref.tail = node;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Find(list: FT_List, data: FT_Pointer) -> FT_ListNode {
+    let Some(list_ref) = (unsafe { list.as_ref() }) else {
+        return ptr::null_mut();
+    };
+    let mut cur = list_ref.head;
+    while let Some(cur_ref) = unsafe { cur.as_ref() } {
+        let rust_node = rust_ffi::FT_ListNodeRec {
+            prev: cur_ref.prev.cast(),
+            next: cur_ref.next.cast(),
+            data,
+        };
+        if rust_ffi::FT_List_Find_Node_Matches(&rust_node, cur_ref.data) {
+            return cur;
+        }
+        cur = cur_ref.next;
+    }
+    ptr::null_mut()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Remove(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_ref() })
+    else {
+        return;
+    };
+    let before = node_ref.prev;
+    let after = node_ref.next;
+
+    if let Some(before_ref) = unsafe { before.as_mut() } {
+        before_ref.next = after;
+    } else {
+        list_ref.head = after;
+    }
+
+    if let Some(after_ref) = unsafe { after.as_mut() } {
+        after_ref.prev = before;
+    } else {
+        list_ref.tail = before;
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Up(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
+    else {
+        return;
+    };
+    let before = node_ref.prev;
+    let after = node_ref.next;
+    let Some(before_ref) = (unsafe { before.as_mut() }) else {
+        return;
+    };
+
+    before_ref.next = after;
+
+    if let Some(after_ref) = unsafe { after.as_mut() } {
+        after_ref.prev = before;
+    } else {
+        list_ref.tail = before;
+    }
+
+    node_ref.prev = ptr::null_mut();
+    node_ref.next = list_ref.head;
+    if let Some(head_ref) = unsafe { list_ref.head.as_mut() } {
+        head_ref.prev = node;
+    }
+    list_ref.head = node;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Iterate(
+    list: FT_List,
+    iterator: FT_List_Iterator,
+    user: FT_Pointer,
+) -> FT_Error {
+    let (Some(list_ref), Some(iterator)) = (unsafe { list.as_ref() }, iterator) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+
+    let mut cur = list_ref.head;
+    let mut error = rust_ffi::FT_Err_Ok;
+    while let Some(cur_ref) = unsafe { cur.as_ref() } {
+        let next = cur_ref.next;
+        error = unsafe { iterator(cur, user) };
+        if error != rust_ffi::FT_Err_Ok {
+            break;
+        }
+        cur = next;
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -515,8 +647,14 @@ struct FaceState {
 
 impl FaceState {
     fn new(inner: rust_ffi::FT_Face) -> Self {
-        let family_name = inner.family_name.as_ref().and_then(|name| CString::new(name.as_str()).ok());
-        let style_name = inner.style_name.as_ref().and_then(|name| CString::new(name.as_str()).ok());
+        let family_name = inner
+            .family_name
+            .as_ref()
+            .and_then(|name| CString::new(name.as_str()).ok());
+        let style_name = inner
+            .style_name
+            .as_ref()
+            .and_then(|name| CString::new(name.as_str()).ok());
         let postscript_name = postscript_name_cstring(&inner);
         let font_format = font_format_cstring(Some(&inner));
         Self {
@@ -1423,8 +1561,9 @@ pub extern "C" fn FT_Open_Face(
     };
     // SAFETY: `args` is non-null and read-only for this call.
     let args = unsafe { args.as_ref() };
-    let source_flags =
-        args.flags & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME) as FT_UInt);
+    let source_flags = args.flags
+        & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME)
+            as FT_UInt);
     if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
         return rust_ffi::FT_Err_Invalid_Argument;
     }
@@ -1836,10 +1975,7 @@ pub extern "C" fn FT_Outline_Check(outline: *const FT_Outline) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Outline_Copy(
-    source: *const FT_Outline,
-    target: *mut FT_Outline,
-) -> FT_Error {
+pub extern "C" fn FT_Outline_Copy(source: *const FT_Outline, target: *mut FT_Outline) -> FT_Error {
     if source == target.cast_const() && !source.is_null() {
         return rust_ffi::FT_Err_Ok;
     }
@@ -1912,9 +2048,7 @@ pub extern "C" fn FT_Outline_New(
     if numPoints > u32::from(u16::MAX) {
         return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
     }
-    if numContours < 0
-        || u32::try_from(numContours).map_or(true, |contours| contours > numPoints)
-    {
+    if numContours < 0 || u32::try_from(numContours).map_or(true, |contours| contours > numPoints) {
         return rust_ffi::FT_Err_Invalid_Argument;
     }
     let point_count = usize::try_from(numPoints).unwrap_or(usize::MAX);
@@ -1927,7 +2061,11 @@ pub extern "C" fn FT_Outline_New(
     {
         dealloc_outline_array(points.cast::<u8>(), point_count, Layout::array::<FT_Vector>);
         dealloc_outline_array(tags.cast::<u8>(), point_count, Layout::array::<FT_Byte>);
-        dealloc_outline_array(contours.cast::<u8>(), contour_count, Layout::array::<FT_UShort>);
+        dealloc_outline_array(
+            contours.cast::<u8>(),
+            contour_count,
+            Layout::array::<FT_UShort>,
+        );
         return rust_ffi::FT_Err_Out_Of_Memory;
     }
     *outline = FT_Outline {

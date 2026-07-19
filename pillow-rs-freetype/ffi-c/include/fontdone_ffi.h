@@ -35,12 +35,28 @@ typedef int FT_LcdFilter;
 typedef int FT_TrueTypeEngineType;
 typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
+typedef void* FT_Pointer;
 
 typedef struct FT_LibraryRec_* FT_Library;
 typedef struct FT_FaceRec_* FT_Face;
 typedef struct FT_SizeRec_* FT_Size;
 typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
 typedef struct FT_CharMapRec_* FT_CharMap;
+typedef struct FT_ListNodeRec_* FT_ListNode;
+typedef struct FT_ListRec_* FT_List;
+
+typedef struct FT_ListNodeRec_ {
+  FT_ListNode prev;
+  FT_ListNode next;
+  FT_Pointer data;
+} FT_ListNodeRec;
+
+typedef struct FT_ListRec_ {
+  FT_ListNode head;
+  FT_ListNode tail;
+} FT_ListRec;
+
+typedef FT_Error (*FT_List_Iterator)(FT_ListNode node, void* user);
 
 typedef struct FT_Vector_ {
   FT_Pos x;
@@ -384,6 +400,11 @@ FT_Long FT_Get_CMap_Format(FT_CharMap charmap);
 FT_ULong FT_Get_CMap_Language_ID(FT_CharMap charmap);
 FT_UShort FT_Get_FSType_Flags(FT_Face face);
 FT_Int FT_Get_Gasp(FT_Face face, FT_UInt ppem);
+void FT_List_Add(FT_List list, FT_ListNode node);
+FT_ListNode FT_List_Find(FT_List list, void* data);
+void FT_List_Remove(FT_List list, FT_ListNode node);
+void FT_List_Up(FT_List list, FT_ListNode node);
+FT_Error FT_List_Iterate(FT_List list, FT_List_Iterator iterator, void* user);
 FT_Error FT_Get_Glyph_Name(FT_Face face, FT_UInt glyph_index, void* buffer, FT_UInt buffer_max);
 FT_UInt FT_Get_Name_Index(FT_Face face, const char* glyph_name);
 const char* FT_Get_Postscript_Name(FT_Face face);

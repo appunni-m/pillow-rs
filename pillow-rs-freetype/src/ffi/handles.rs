@@ -22,12 +22,12 @@ use super::convert::{
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_Long, FT_MM_Var,
-    FT_Matrix, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
-    FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
-    FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
-    TT_Postscript, TT_VertHeader,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_ListNode, FT_ListNodeRec,
+    FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix, FT_Orientation, FT_OutlineSnapshot, FT_Pointer,
+    FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType,
+    FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
+    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -2613,6 +2613,91 @@ pub fn FT_Set_Debug_Hook(
     {
         *slot = Some(debug_hook);
     }
+}
+
+pub fn FT_List_Add(
+    list: Option<&mut FT_ListRec>,
+    node: Option<&mut FT_ListNodeRec>,
+    before: Option<&mut FT_ListNodeRec>,
+) {
+    let (Some(list), Some(node)) = (list, node) else {
+        return;
+    };
+
+    let before_ptr = list.tail;
+    node.next = std::ptr::null_mut();
+    node.prev = before_ptr;
+
+    if let Some(before) = before {
+        before.next = node as *mut FT_ListNodeRec;
+    } else {
+        list.head = node as *mut FT_ListNodeRec;
+    }
+    list.tail = node as *mut FT_ListNodeRec;
+}
+
+pub fn FT_List_Find_Node_Matches(node: &FT_ListNodeRec, data: FT_Pointer) -> bool {
+    node.data == data
+}
+
+pub fn FT_List_Remove(
+    list: Option<&mut FT_ListRec>,
+    node: Option<&FT_ListNodeRec>,
+    before: Option<&mut FT_ListNodeRec>,
+    after: Option<&mut FT_ListNodeRec>,
+) {
+    let (Some(list), Some(node)) = (list, node) else {
+        return;
+    };
+
+    let before_ptr = node.prev;
+    let after_ptr = node.next;
+
+    if let Some(before) = before {
+        before.next = after_ptr;
+    } else {
+        list.head = after_ptr;
+    }
+
+    if let Some(after) = after {
+        after.prev = before_ptr;
+    } else {
+        list.tail = before_ptr;
+    }
+}
+
+pub fn FT_List_Up(
+    list: Option<&mut FT_ListRec>,
+    node: Option<&mut FT_ListNodeRec>,
+    before: Option<&mut FT_ListNodeRec>,
+    after: Option<&mut FT_ListNodeRec>,
+    head: Option<&mut FT_ListNodeRec>,
+) {
+    let (Some(list), Some(node), Some(before)) = (list, node, before) else {
+        return;
+    };
+
+    let after_ptr = node.next;
+    before.next = after_ptr;
+
+    if let Some(after) = after {
+        after.prev = before as *mut FT_ListNodeRec;
+    } else {
+        list.tail = before as *mut FT_ListNodeRec;
+    }
+
+    node.prev = std::ptr::null_mut();
+    node.next = list.head;
+    if let Some(head) = head {
+        head.prev = node as *mut FT_ListNodeRec;
+    }
+    list.head = node as *mut FT_ListNodeRec;
+}
+
+pub fn FT_List_Iterate_Next(node: &FT_ListNodeRec) -> FT_ListNode {
+    // FreeType snapshots `cur->next` before invoking the iterator callback
+    // (`src/base/ftutil.c:381-392`), allowing the callback to mutate `cur`.
+    node.next
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
