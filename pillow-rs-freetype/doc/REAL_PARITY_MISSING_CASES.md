@@ -39,12 +39,16 @@ Promoted rows:
   the stream. Pinned FreeType 2.14.3 `FT_New_Memory_Face` returns
   `FT_Err_Array_Too_Large` (`10`), and Rust now preserves that exact public
   error through Rust FFI, C ABI, and WASM.
+- `freetype.FT_HAS_COLOR.color_font_semantics` moved from `pending-route` to
+  `real-parity` by reusing the maintained `fonts/color/colr-cpal-v0.ttf`
+  fixture. The row now proves the public `FT_HAS_COLOR` face-flag behavior for
+  a C-openable COLR/CPAL face through pinned C, Rust FFI, C ABI, and WASM.
 
 Route audit impact:
 
-- `real-parity`: `4436 -> 4456`.
+- `real-parity`: `4436 -> 4457`.
 - `generic-fallback`: `519 -> 501`.
-- `pending-route`: `24 -> 22`.
+- `pending-route`: `24 -> 21`.
 
 Rejected or blocked during the same pass:
 
@@ -76,6 +80,10 @@ Rejected or blocked during the same pass:
   placeholder.
 - `ftcolor.get_paint_graph` and `ftcolor.traverse_paint_graph` stayed
   unpromoted because focused parity reported unresolved runtime font assets.
+- `FT_HAS_COLOR` is not evidence for every color font flavor. SVG and sbix
+  face flags remain covered by their dedicated public rows
+  (`FT_HAS_SVG`, `FT_HAS_SBIX`); CBDT/CBLC color bitmap behavior still needs a
+  maintained C-openable fixture before it should be claimed as real parity.
 - `ftgxval.truetype_gx_validate`, `ftgxval.classic_kern_validate`, and
   `ftmodapi.inspect_module_flags` stayed only partially runnable because
   related rows still report unresolved runtime font assets.
@@ -89,6 +97,7 @@ make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Array_Too_Large.ttc_header_overflow_returns_error
+make -C pillow-rs-freetype test-case CASE=freetype.FT_HAS_COLOR.color_font_semantics
 FONTDONE_UNIFIED_ORACLE_REFRESH=1 make fontdone-parity
 python3 pillow-rs-freetype/scripts/check_public_api_inputs.py --route-audit --route-audit-json /tmp/fontdone-route-audit-final.json
 ```

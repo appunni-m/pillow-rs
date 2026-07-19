@@ -54,26 +54,10 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "colr": {
-            "kind": "ref",
+          "font": {
+            "kind": "file",
             "role": "font",
-            "path": "input/fonts/color/colr-cpal-layered.ttf",
-            "status": "required_future_asset",
-            "requires": "COLR/CPAL font with at least one layered color glyph"
-          },
-          "svg": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/svg/color-svg-glyph.ttf",
-            "status": "required_future_asset",
-            "requires": "OpenType SVG table fixture with a glyph renderable through FreeType's SVG path when enabled"
-          },
-          "bitmap_color": {
-            "kind": "ref",
-            "role": "font",
-            "path": "input/fonts/color/cbdt-cblc-color.ttf",
-            "status": "required_future_asset",
-            "requires": "CBDT/CBLC or sbix color bitmap font"
+            "path": "fonts/color/colr-cpal-v0.ttf"
           }
         },
         "params": {
