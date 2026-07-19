@@ -812,6 +812,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior",
         "ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false",
         "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected",
+        "ftcolor.FT_Get_Color_Glyph_Paint.null_and_non_sfnt_rejected",
+        "ftcolor.FT_Get_Colorline_Stops.error_null_or_invalid_iterator",
+        "ftcolor.FT_Get_Colorline_Stops.error_null_color_stop_policy",
+        "ftcolor.FT_Get_Paint.error_null_or_missing_colr",
+        "ftcolor.FT_Get_Paint.error_null_output_policy",
+        "ftcolor.FT_Get_Paint_Layers.error_invalid_iterator_or_paint_offset",
+        "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy",
+        "ftcolor.FT_Palette_Data_Get.error_null_face_or_output",
+        "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled",
+        "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index",
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
@@ -1222,6 +1232,61 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected"
     ):
         return "FT_Get_Color_Glyph_Paint non-null opaque paint rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_paint"
+        and row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_Paint.null_and_non_sfnt_rejected"
+    ):
+        return "FT_Get_Color_Glyph_Paint null/non-SFNT rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_colorline_stops"
+        and row.case_id
+        == "ftcolor.FT_Get_Colorline_Stops.error_null_or_invalid_iterator"
+    ):
+        return "FT_Get_Colorline_Stops null/invalid-iterator rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_colorline_stops"
+        and row.case_id
+        == "ftcolor.FT_Get_Colorline_Stops.error_null_color_stop_policy"
+    ):
+        return "FT_Get_Colorline_Stops null color-stop policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint"
+        and row.case_id == "ftcolor.FT_Get_Paint.error_null_or_missing_colr"
+    ):
+        return "FT_Get_Paint null/missing-COLR rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint"
+        and row.case_id == "ftcolor.FT_Get_Paint.error_null_output_policy"
+    ):
+        return "FT_Get_Paint null-output policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_layers"
+        and row.case_id
+        == "ftcolor.FT_Get_Paint_Layers.error_invalid_iterator_or_paint_offset"
+    ):
+        return "FT_Get_Paint_Layers invalid-iterator/paint-offset rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_layers"
+        and row.case_id == "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy"
+    ):
+        return "FT_Get_Paint_Layers null-argument policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_data_get"
+        and row.case_id == "ftcolor.FT_Palette_Data_Get.error_null_face_or_output"
+    ):
+        return "FT_Palette_Data_Get null-face/output rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_data_get"
+        and row.case_id == "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled"
+    ):
+        return "FT_Palette_Data_Get disabled-color-layers rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_select"
+        and row.case_id
+        == "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index"
+    ):
+        return "FT_Palette_Select null-face/invalid-index rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id

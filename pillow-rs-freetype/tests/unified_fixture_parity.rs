@@ -8352,6 +8352,16 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false"
             || case.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected"
+            || case.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.null_and_non_sfnt_rejected"
+            || case.case_id == "ftcolor.FT_Get_Colorline_Stops.error_null_or_invalid_iterator"
+            || case.case_id == "ftcolor.FT_Get_Colorline_Stops.error_null_color_stop_policy"
+            || case.case_id == "ftcolor.FT_Get_Paint.error_null_or_missing_colr"
+            || case.case_id == "ftcolor.FT_Get_Paint.error_null_output_policy"
+            || case.case_id == "ftcolor.FT_Get_Paint_Layers.error_invalid_iterator_or_paint_offset"
+            || case.case_id == "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy"
+            || case.case_id == "ftcolor.FT_Palette_Data_Get.error_null_face_or_output"
+            || case.case_id == "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled"
+            || case.case_id == "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index"
             || case.case_id
                 == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id
