@@ -1585,6 +1585,31 @@ def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None
     )
 
 
+def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
+    """Residual public data, error, outline, and table rows without a route."""
+    residual_rows_without_maintained_route = {
+        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature",
+        "fterrdef.FT_Err_Missing_Property.known_property_success",
+        "fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output",
+        "fterrdef.FT_Err_Ok.successful_face_lifecycle",
+        "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
+        "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
+        "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
+        "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning",
+        "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
+        "tttables.TT_MaxProfile.malformed_table_error_source",
+    }
+    if row.case_id not in residual_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Residual CID, error/status, OpenType validation, outline orientation, "
+        "PFR metric, and TrueType table behavior requires maintained public "
+        "surface routes; keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3944,6 +3969,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     callback_provider_pending = callback_provider_subsystem_pending_reason(row)
     if callback_provider_pending:
         return ("pending-route", callback_provider_pending)
+    residual_public_pending = residual_public_surface_pending_reason(row)
+    if residual_public_pending:
+        return ("pending-route", residual_public_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
