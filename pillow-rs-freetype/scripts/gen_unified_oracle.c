@@ -9761,6 +9761,15 @@ static void print_named_instance_observation(FT_Face face, FT_Error error) {
     printf("}");
 }
 
+static void print_fixed_coord_array(FT_Fixed* coords, FT_UInt count) {
+    printf("[");
+    for (FT_UInt i = 0; i < count; i++) {
+        if (i) printf(",");
+        printf("%ld", (long)coords[i]);
+    }
+    printf("]");
+}
+
 static void print_named_instance_null_face_observation(FT_Error error) {
     printf("{\"return\":%d,\"face_index\":null,\"face_flags\":null,"
            "\"variation_bit_set\":null,\"postscript_name\":",
@@ -9778,6 +9787,58 @@ static int emit_set_named_instance_null_face(int argc, char** argv) {
     printf(",\"output\":");
     print_named_instance_null_face_observation(err);
     printf("}\n");
+    return 0;
+}
+
+static int emit_set_named_instance_descriptor(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt instance_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt compare_namedstyle_index = (FT_UInt)strtoul(argv[6], NULL, 10);
+
+    FT_MM_Var* master = NULL;
+    FT_Error err = FT_Get_MM_Var(face.face, &master);
+    FT_UInt axis_count = master ? master->num_axis : 0;
+    FT_Fixed* selected = NULL;
+    if (!err && (!master || compare_namedstyle_index >= master->num_namedstyles)) {
+        err = FT_Err_Invalid_Argument;
+    }
+    if (!err) {
+        selected = (FT_Fixed*)malloc(sizeof(FT_Fixed) * (axis_count ? axis_count : 1));
+        if (!selected) {
+            err = FT_Err_Out_Of_Memory;
+        }
+    }
+    if (!err) {
+        err = FT_Set_Named_Instance(face.face, instance_index);
+    }
+    if (!err) {
+        err = FT_Get_Var_Design_Coordinates(face.face, axis_count, selected);
+    }
+
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"namedstyle_coords\":", err);
+        print_fixed_coord_array(master->namedstyle[compare_namedstyle_index].coords, axis_count);
+        printf(",\"selected_design_coords\":");
+        print_fixed_coord_array(selected, axis_count);
+        printf(",\"face_index\":%ld}", (long)face.face->face_index);
+    }
+    printf("}\n");
+
+    free(selected);
+    if (master) {
+        FT_Done_MM_Var(face.library, master);
+    }
+    close_oracle_face(&face);
     return 0;
 }
 
@@ -14719,6 +14780,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--set-named-instance")) {
         return emit_set_named_instance(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--set-named-instance-descriptor")) {
+        return emit_set_named_instance_descriptor(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);

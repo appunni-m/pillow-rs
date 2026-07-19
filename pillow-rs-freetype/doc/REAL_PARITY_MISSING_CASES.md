@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Var_Named_Style` selected instance descriptor route
+
+Status: implemented as real parity on 2026-07-20.
+
+Finding:
+
+- `ftmm.FT_Var_Named_Style.selected_instance_matches_descriptor` was blocked
+  in `pending-core` because the harness had no maintained way to compare the
+  selected named instance against the `FT_MM_Var.namedstyle` coordinate array.
+- Pinned C FreeType obtains namedstyle coordinates from `FT_Get_MM_Var`, then
+  `FT_Set_Named_Instance` updates the public face index and
+  `FT_Get_Var_Design_Coordinates` reports the selected design coordinates. For
+  the fixture row, the selected design coordinates equal the zero-based
+  namedstyle descriptor for the one-based public instance index.
+
+Implementation:
+
+- Added a feature-gated Rust FFI helper that exposes only fvar namedstyle
+  coordinates for parity testing. It does not claim full `FT_MM_Var` ownership,
+  axis flags, Adobe MM, or gvar/HVAR/MVAR support.
+- Added thin C ABI and WASM ABI test-support wrappers over the same core helper.
+- Added a pinned C oracle route that calls real `FT_Get_MM_Var`,
+  `FT_Set_Named_Instance`, and `FT_Get_Var_Design_Coordinates`, then compares
+  `namedstyle_coords`, `selected_design_coords`, and `face_index` across Rust
+  FFI, C ABI, and WASM ABI.
+
+Impact:
+
+- `ftmm.FT_Var_Named_Style.selected_instance_matches_descriptor` moved from
+  `pending-core` to `real-parity`.
+- Route audit count target after this batch: `real-parity=4469`,
+  `pending-core=3`, `pending-route=514`, `generic-fallback=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Named_Style.selected_instance_matches_descriptor
+```
+
 ### Issue Set Current: `FT_GlyphSlot_Own_Bitmap` allocation-failure route
 
 Status: implemented as real parity on 2026-07-20.
@@ -4948,7 +4988,6 @@ repo-visible buckets for handoff and subagent selection.
 |---|---|---|---|
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
-| `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |
 | `tttables.TT_VertHeader` | `sfnt.get_sfnt_table.record` | `sfnt_table_present_runtime.mvar_variation` | `MVAR` variation table behavior must be implemented before this SFNT table row can run. |
 
 ### Issue Set Current: FT_List public route implementation plan

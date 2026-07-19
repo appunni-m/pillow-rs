@@ -3196,6 +3196,12 @@ pub fn abi_glyphslot_own_bitmap_copy_allocation_failure(handle: usize) -> FT_Err
     rust_ffi::FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(slot))
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_fvar_namedstyle_coords(handle: usize, namedstyle_index: FT_UInt) -> Option<Vec<FT_Fixed>> {
+    let face = face_ref(handle)?;
+    rust_ffi::FT_Fvar_Named_Style_Coords(Some(&face.face), namedstyle_index).ok()
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyphslot_adjust_weight(
     handle: usize,

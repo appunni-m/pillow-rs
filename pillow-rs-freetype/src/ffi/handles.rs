@@ -3447,6 +3447,41 @@ pub fn FT_Get_Default_Named_Instance(
     FT_Err_Ok
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn FT_Fvar_Named_Style_Coords(
+    face: Option<&FT_Face>,
+    namedstyle_index: FT_UInt,
+) -> Result<Vec<FT_Fixed>, FT_Error> {
+    let Some(face) = face else {
+        return Err(FT_Err_Invalid_Face_Handle as FT_Error);
+    };
+    if face.face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS == 0 {
+        return Err(FT_Err_Invalid_Argument as FT_Error);
+    }
+    let inner = face.inner.borrow();
+    let font = inner.font();
+    let fvar = font
+        .load_sfnt_table(u32::from_be_bytes(*b"fvar"), 0, None)
+        .ok()
+        .and_then(|bytes| crate::tt::fvar::parse_fvar(&bytes).ok())
+        .ok_or(FT_Err_Invalid_Argument as FT_Error)?;
+    let index =
+        usize::try_from(namedstyle_index).map_err(|_| FT_Err_Invalid_Argument as FT_Error)?;
+    let style = fvar
+        .instances
+        .get(index)
+        .ok_or(FT_Err_Invalid_Argument as FT_Error)?;
+    // C FreeType `ttgxvar.c` populates `FT_Var_Named_Style.coords` directly
+    // from the fvar instance coordinate array.  This test-support accessor is
+    // intentionally limited to that public descriptor field; gvar/HVAR/MVAR
+    // deltas remain separate pending-core work.
+    Ok(style
+        .coords
+        .iter()
+        .map(|coord| FT_Fixed::from(*coord))
+        .collect())
+}
+
 pub fn FT_Get_CMap_Format(charmap: FT_CharMap) -> FT_Long {
     registered_charmap_metadata(charmap).map_or(-1, |(format, _, _)| format)
 }

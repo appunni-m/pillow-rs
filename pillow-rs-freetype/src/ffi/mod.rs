@@ -50,10 +50,10 @@ pub use handles::{
 };
 #[cfg(any(test, feature = "abi-test-support"))]
 pub use handles::{
-    FT_Empty_GlyphSlot, FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure,
-    FT_Library_Debug_Hook_Classes, FT_Library_Default_Module_Names, FT_Library_Has_Module,
-    FT_Library_Has_TrueType_Engine_Service, FT_Library_Has_TrueType_Module,
-    FT_Library_Module_Flags, FT_Library_Renderer_Class, FT_New_Library_Without_Default_Modules,
-    FT_Unsupported_GlyphSlot,
+    FT_Empty_GlyphSlot, FT_Fvar_Named_Style_Coords,
+    FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure, FT_Library_Debug_Hook_Classes,
+    FT_Library_Default_Module_Names, FT_Library_Has_Module, FT_Library_Has_TrueType_Engine_Service,
+    FT_Library_Has_TrueType_Module, FT_Library_Module_Flags, FT_Library_Renderer_Class,
+    FT_New_Library_Without_Default_Modules, FT_Unsupported_GlyphSlot,
 };
 pub use types::*;

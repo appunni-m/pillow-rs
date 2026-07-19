@@ -1926,8 +1926,6 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
         for item in list_value(row.params.get("prior_calls"))
     ):
         return "Adobe MM named-instance reset requires real Adobe MM support"
-    if "compare_namedstyle_index" in row.params:
-        return "namedstyle coordinate parity requires FT_MM_Var support"
     if "glyph_index" in row.params:
         return "named-instance glyph-output parity requires gvar/HVAR support"
     return None
@@ -2216,6 +2214,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftbitmap.glyphslot_own_bitmap",
             "ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure",
         ): "FT_GlyphSlot_Own_Bitmap bitmap-copy allocation failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftmm.set_named_instance",
+            "ftmm.FT_Var_Named_Style.selected_instance_matches_descriptor",
+        ): "FT_Set_Named_Instance selected design coordinates validate against FT_Var_Named_Style fvar descriptor coordinates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "FTC_cache_lookup",
             "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
