@@ -352,6 +352,7 @@ REAL_PARITY_OPERATIONS = {
     "ftimage.outline_decompose",
     "ftoutln.outline_decompose",
     "ftoutln.outline_get_cbox",
+    "ftoutln.outline_get_orientation",
     "ftoutln.get_orientation",
     "ftoutln.get_orientation_after_mutation",
     "ftoutln.outline_check",
