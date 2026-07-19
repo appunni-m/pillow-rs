@@ -1440,6 +1440,38 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for image/raster public records that do not have a maintained route."""
+    ftimage_rows_without_maintained_route = {
+        "ftimage.FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory",
+        "ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled",
+        "ftimage.FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification",
+        "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
+        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior",
+        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior",
+        "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior",
+        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior",
+        "ftimage.FT_PIXEL_MODE_NONE.empty_bitmap_state",
+        "ftimage.FT_Pos.coordinate_outputs_use_ft_pos",
+        "ftimage.FT_Raster.lifecycle_callback_contract",
+        "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done",
+        "ftimage.FT_Raster_Funcs.callback_slots_match_registered_renderers",
+        "ftimage.FT_Raster_New_Func.renderer_lifecycle_calls_new",
+        "ftimage.FT_Raster_Reset_Func.renderer_lifecycle_calls_reset",
+        "ftimage.FT_Raster_Set_Mode_Func.set_mode_result_is_observable",
+        "ftimage.FT_Raster_Span_Func.direct_render_emits_spans",
+    }
+    if row.case_id not in ftimage_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Image glyph-format, outline-flag, pixel-mode, coordinate, and raster "
+        "callback success behavior requires a maintained image/raster route; "
+        "keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3784,6 +3816,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftparams_pending = ftparams_subsystem_pending_reason(row)
     if ftparams_pending:
         return ("pending-route", ftparams_pending)
+    ftimage_pending = ftimage_subsystem_pending_reason(row)
+    if ftimage_pending:
+        return ("pending-route", ftimage_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",

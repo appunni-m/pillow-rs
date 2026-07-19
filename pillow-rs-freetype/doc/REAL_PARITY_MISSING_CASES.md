@@ -1,5 +1,66 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftimage` image/raster route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `4e054d85a`: `real-parity=4465`,
+  `generic-fallback=85`, `pending-route=429`, `pending-core=7`.
+
+Finding:
+
+- The remaining `ftimage` rows cover `FT_GLYPH_FORMAT_PLOTTER`,
+  `FT_GLYPH_FORMAT_SVG`, `FT_IMAGE_TAG`, mono outline dropout flags,
+  `FT_OUTLINE_OWNER`, `FT_PIXEL_MODE_NONE`, `FT_Pos`, and raster callback
+  records/function pointers (`FT_Raster`, `FT_Raster_Funcs`,
+  `FT_Raster_New_Func`, `FT_Raster_Reset_Func`, `FT_Raster_Set_Mode_Func`,
+  `FT_Raster_Span_Func`, and `FT_Raster_Done_Func`).
+- Those rows had stayed in `generic-fallback` with either
+  `no explicit maintained route classification` or a shared Rust fallback
+  reason.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  image/raster route that loads or constructs the relevant glyph/image states,
+  invokes outline bitmap/direct rendering and custom renderer lifecycle
+  callbacks, observes SVG/build-dependent glyph formats, and compares exact
+  public records and callback side effects across all ABI lanes.
+
+Classification change:
+
+- 18 `ftimage` concrete rows moved from `generic-fallback` to `pending-route`;
+  the SVG glyph-format success case expands to two concrete rows.
+- Other generic FreeType core rows remain untouched; this classifier is
+  exact-case scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=67`,
+  `pending-route=447`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained image/raster route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust image/raster behavior first: SVG/build-dependent glyph
+   format reporting, plotter/source emitter inventory, outline dropout flags,
+   owner destruction semantics, empty bitmap pixel mode, `FT_Pos` coordinate
+   outputs, custom raster lifecycle callbacks, set-mode observability, and
+   direct span emission.
+3. Compare exact return codes, glyph format values, outline flag effects,
+   bitmap state, coordinate widths/signs, callback invocation counts/order,
+   raster handles, set-mode results, emitted spans, and ownership/destruction
+   side effects.
+4. Keep already-routed image/raster exact rows real; do not demote them while
+   building the broader image/raster route.
+5. Promote rows only after focused `ftimage` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftimage
+```
+
 ### Issue Set Current: `ftparams` open-face parameter route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
