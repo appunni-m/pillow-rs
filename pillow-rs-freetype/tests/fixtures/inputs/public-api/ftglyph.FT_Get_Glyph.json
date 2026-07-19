@@ -274,17 +274,12 @@
       "schema": "glyph_get",
       "expect_error": true,
       "inputs": {
-        "assets": {
-          "font": { "kind": "ref", "role": "font", "id": "input/fonts/DejaVuSans.ttf" },
-          "malformed_facade": {
-            "kind": "ref",
-            "id": "facades/glyph/malformed-slot-and-class-cases.json",
-            "asset_kind": "fixture"
-          }
-        },
+        "assets": {},
         "params": {
-          "null_slot": true,
-          "null_aglyph": true,
+          "probes": [
+            "null_slot",
+            "null_aglyph"
+          ],
           "sentinel_output": "non_null"
         }
       },

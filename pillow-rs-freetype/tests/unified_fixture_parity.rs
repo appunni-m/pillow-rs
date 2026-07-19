@@ -15047,6 +15047,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftsynth.glyphslot_null_noop" => ftsynth_null_noop_oracle_args(params),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if case.operation == "ftglyph.get_glyph" && params.get("probes").is_some() {
+                return Ok(vec!["--get-glyph-null-inputs".to_string()]);
+            }
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -15735,6 +15738,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             rust_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
+        }
+        "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
+            rust_get_glyph_null_inputs()
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
@@ -16438,6 +16444,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             c_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
         }
+        "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
+            c_get_glyph_null_inputs()
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -17045,6 +17054,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.glyph_get_cbox" if case.inputs.params.get("probes").is_some() => {
             wasm_glyph_get_cbox_null_or_no_bbox(&case.inputs.params)
+        }
+        "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
+            wasm_get_glyph_null_inputs()
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -18953,6 +18965,61 @@ fn wasm_glyph_get_cbox_null_or_no_bbox(params: &Value) -> Result<RunOutput, Stri
     rows.push(json!({"probe": "null_acbox", "bbox": null}));
 
     Ok(glyph_get_cbox_null_or_no_bbox_output(rows))
+}
+
+fn get_glyph_error_row(probe: &str, error: FT_Error, output_pointer_class: &str) -> Value {
+    json!({
+        "probe": probe,
+        "error": error,
+        "output_pointer_class": output_pointer_class
+    })
+}
+
+fn get_glyph_null_inputs_output(rows: Vec<Value>) -> RunOutput {
+    let first_error = rows
+        .iter()
+        .filter_map(|row| row.get("error").and_then(Value::as_i64))
+        .find(|error| *error != 0)
+        .unwrap_or(FT_Err_Ok as i64) as FT_Error;
+    error_with_output(first_error, json!({ "rows": rows }))
+}
+
+fn rust_get_glyph_null_inputs() -> Result<RunOutput, String> {
+    let rows = vec![
+        get_glyph_error_row("null_slot", FT_Get_Glyph(false, true), "non_null"),
+        get_glyph_error_row("null_aglyph", FT_Get_Glyph(true, false), "null"),
+    ];
+    Ok(get_glyph_null_inputs_output(rows))
+}
+
+fn c_get_glyph_null_inputs() -> Result<RunOutput, String> {
+    let mut glyph = 1usize as c_abi::FT_Glyph;
+    let null_slot_error = c_abi::FT_Get_Glyph(ptr::null_mut(), &mut glyph);
+    let null_output_error = c_abi::FT_Get_Glyph(1usize as c_abi::FT_GlyphSlot, ptr::null_mut());
+    let rows = vec![
+        get_glyph_error_row(
+            "null_slot",
+            null_slot_error,
+            if glyph.is_null() { "null" } else { "non_null" },
+        ),
+        get_glyph_error_row("null_aglyph", null_output_error, "null"),
+    ];
+    Ok(get_glyph_null_inputs_output(rows))
+}
+
+fn wasm_get_glyph_null_inputs() -> Result<RunOutput, String> {
+    let mut glyph = 1usize;
+    let null_slot_error = wasm_abi::fontdone_wasm_get_glyph(0, &mut glyph);
+    let null_output_error = wasm_abi::fontdone_wasm_get_glyph(1, ptr::null_mut());
+    let rows = vec![
+        get_glyph_error_row(
+            "null_slot",
+            null_slot_error,
+            if glyph == 0 { "null" } else { "non_null" },
+        ),
+        get_glyph_error_row("null_aglyph", null_output_error, "null"),
+    ];
+    Ok(get_glyph_null_inputs_output(rows))
 }
 
 fn outline_operation_output(
@@ -32019,11 +32086,15 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             Ok(())
         }
         "glyph_get" | "glyph_copy" | "glyph_record" => {
-            require_path(output, "/glyph/format", label, case)?;
-            require_path(output, "/glyph/advance/x", label, case)?;
-            require_path(output, "/glyph/advance/y", label, case)?;
-            require_path(output, "/glyph/library_present", label, case)?;
-            require_path(output, "/glyph/clazz_present", label, case)
+            if output.get("rows").is_some() {
+                require_path(output, "/rows", label, case)
+            } else {
+                require_path(output, "/glyph/format", label, case)?;
+                require_path(output, "/glyph/advance/x", label, case)?;
+                require_path(output, "/glyph/advance/y", label, case)?;
+                require_path(output, "/glyph/library_present", label, case)?;
+                require_path(output, "/glyph/clazz_present", label, case)
+            }
         }
         "glyph_render_sequence" => require_path(output, "/rows", label, case),
         "cache_sbit_result" => validate_cache_sbit_output(output, label, case),

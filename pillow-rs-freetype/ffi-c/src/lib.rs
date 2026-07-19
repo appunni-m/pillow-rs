@@ -1882,6 +1882,18 @@ pub extern "C" fn FT_Glyph_Get_CBox(glyph: FT_Glyph, bbox_mode: FT_UInt, acbox: 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_Error {
+    let err = rust_ffi::FT_Get_Glyph(!slot.is_null(), !aglyph.is_null());
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !aglyph.is_null() {
+        // SAFETY: `aglyph` is non-null and points to caller-provided output storage.
+        unsafe {
+            *aglyph = ptr::null_mut();
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_BBox(outline: *const FT_Outline, abbox: *mut FT_BBox) -> FT_Error {
     if abbox.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument as FT_Error;

@@ -1212,6 +1212,18 @@ pub extern "C" fn fontdone_wasm_glyph_get_cbox(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_glyph(slot_present: i32, aglyph: *mut usize) -> FT_Error {
+    let err = rust_ffi::FT_Get_Glyph(slot_present != 0, !aglyph.is_null());
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !aglyph.is_null() {
+        // SAFETY: `aglyph` is non-null and points to caller-provided output storage.
+        unsafe {
+            *aglyph = 0;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,
     abbox: *mut FontdoneWasmBBox,

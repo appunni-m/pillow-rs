@@ -5106,6 +5106,31 @@ static void print_get_glyph_payload(FT_GlyphSlot slot, const char* action) {
     }
 }
 
+static void print_get_glyph_error_row(const char* probe, FT_Error err, FT_Glyph glyph) {
+    printf("{\"probe\":\"%s\",\"error\":%d,\"output_pointer_class\":\"%s\"}",
+           probe,
+           err,
+           glyph ? "non_null" : "null");
+}
+
+static int emit_get_glyph_null_inputs(void) {
+    FT_Glyph glyph = (FT_Glyph)0x1;
+    FT_Error null_slot_error = FT_Get_Glyph(NULL, &glyph);
+
+    FT_GlyphSlotRec slot;
+    memset(&slot, 0, sizeof(slot));
+    FT_Error null_output_error = FT_Get_Glyph(&slot, NULL);
+
+    printf("{");
+    print_status(null_slot_error ? null_slot_error : null_output_error);
+    printf(",\"output\":{\"rows\":[");
+    print_get_glyph_error_row("null_slot", null_slot_error, glyph);
+    printf(",");
+    print_get_glyph_error_row("null_aglyph", null_output_error, NULL);
+    printf("]}}\n");
+    return 0;
+}
+
 static void print_sbit_payload(FT_GlyphSlot slot) {
     FT_Bitmap* bitmap = &slot->bitmap;
     long len = 0;
@@ -14319,6 +14344,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--glyph-get-cbox-null-or-no-bbox")) {
         return emit_glyph_cbox_null_or_no_bbox(argv[2], (FT_UInt)strtoul(argv[3], NULL, 10));
+    }
+    if (argc == 2 && streq(argv[1], "--get-glyph-null-inputs")) {
+        return emit_get_glyph_null_inputs();
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);
