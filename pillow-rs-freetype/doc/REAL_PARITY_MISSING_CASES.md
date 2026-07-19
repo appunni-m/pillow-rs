@@ -1,5 +1,49 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: remaining FTMM/MVAR future batch
+
+Status: planned; do not promote until the implementation and fixture
+dependencies below are real.
+
+Route audit baseline on 2026-07-20 at `5edc2a362`:
+
+- `real-parity=4469`
+- `pending-core=3`
+- `pending-route=514`
+- `generic-fallback=0`
+
+The remaining `pending-core` rows are not green-placeholder cleanup. They are
+three larger variation-font surfaces:
+
+| Case | Current blocker | Required first implementable slice |
+|---|---|---|
+| `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default` | No maintained Adobe MM fixture is present under `tests/fixtures`; the row also requires real Adobe multiple-master state, not only OpenType `fvar` named instances. | Add or generate a maintained Adobe MM Type 1 fixture, parse the MM design space in pure Rust, implement default design reset semantics for `FT_Set_Named_Instance(0)`, then compare face flags, face index, and design coordinates through Rust FFI, C ABI, and WASM ABI. |
+| `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance` | The fixture `input/fonts/variable/named-instances.ttf` exists and contains `gvar` and `HVAR`, but Rust currently does not apply those variation deltas to glyph output/metrics. | Implement active variation coordinate propagation into the scaler, apply `gvar` deltas before outline output, apply `HVAR` deltas to advances/metrics, invalidate dependent glyph/size state after named-instance switches, then route exact output comparison through all ABI lanes. |
+| `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation` | No maintained vertical MVAR fixture is present; `mvar-horizontal-metrics.ttf` has no `MVAR` table and the expected `mvar-vertical-metrics.ttf` asset is missing. | Add or generate a vertical metrics variation fixture with `vhea`/`vmtx`/`fvar`/`MVAR`, implement shared item-variation-store evaluation, apply `MVAR` deltas to vertical header fields after coordinate changes, then compare default and varied `TT_VertHeader` records exactly. |
+
+Execution order:
+
+1. Start with `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`.
+   It has the required `gvar`/`HVAR` fixture tables already, so the next work is
+   pure implementation plus focused C/Rust tracing.
+2. Build the shared variation-region evaluator needed by `gvar`, `HVAR`, and
+   later `MVAR`; do not write one-off evaluators per table.
+3. After `gvar`/`HVAR` is proven, add the missing vertical `MVAR` fixture and
+   reuse the evaluator for `TT_VertHeader`.
+4. Treat Adobe MM as a separate Type 1 multiple-master parser/fixture slice.
+   Do not fake it with an OpenType variable font.
+
+Verification required before any row moves to `real-parity`:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.output_changes_to_named_instance
+make -C pillow-rs-freetype test-case CASE=tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype test-harness
+```
+
 ### Issue Set Current: `FT_Var_Named_Style` selected instance descriptor route
 
 Status: implemented as real parity on 2026-07-20.
@@ -8443,11 +8487,11 @@ units, not as a single monolithic implementation task.
 | COLR/color/palette traversal | 130 | `ftcolor.*`, `otsvg.*`, SVG/color glyph load probes | `src/tables.rs`, new color table module if added, `src/font.rs`, `src/ffi/*`, `ffi-c/src/lib.rs`, `ffi-wasm/src/lib.rs`, `tests/fixtures/inputs/public-api/ftcolor.*.json` | COLR/CPAL/SVG data model and iterator ABI, then C/Rust/ABI fixture runner routes. |
 | FTC cache subsystem | 112 | `ftcache.*` manager, cmap/image/sbit cache, node lifecycle | new cache module if added, `src/font.rs`, `src/tt/sbit.rs`, `src/ffi/*`, C/WASM wrappers, `ftcache.*.json` inputs | Manager-owned face/size/cache-node handles with exact FreeType error/null behavior. |
 | Stroker geometry | 86 | `ftstroke.*` parse, export, glyph stroke/border, counts | new stroker module if added, `src/outline.rs`, `src/render.rs`, `src/ffi/*`, C/WASM wrappers, `ftstroke.*.json` inputs | Pure-Rust stroker path construction and exact border/count/export geometry. |
-| Multiple-master and variable fonts | 84 | `ftmm.*`, named instances, variation table rows | `src/tt/fvar.rs`, `src/tables.rs`, `src/font.rs`, `src/scaler.rs`, C/WASM wrappers, `ftmm.*.json` inputs | Complete `FT_MM_Var`, Adobe MM, `gvar`/`HVAR`/`MVAR` behavior before pending rows can become real. |
+| Multiple-master and variable fonts | 84 | `ftmm.*`, named instances, variation table rows | `src/tt/fvar.rs`, `src/tables.rs`, `src/font.rs`, `src/scaler.rs`, C/WASM wrappers, `ftmm.*.json` inputs | Complete Adobe MM reset semantics and `gvar`/`HVAR`/`MVAR` behavior before the three remaining pending-core rows can become real. |
 | Error-path asset routing | 54 | `fterrdef.*` error rows across face load, render, module, stream paths | `tests/unified_fixture_parity.rs`, public-api input rows, runner/oracle routing, then relevant core modules | Replace no-asset expected-error placeholders with concrete C oracle inputs and Rust route execution. |
 | Outline/image/raster callbacks | 88 | `ftimage.*`, `ftoutln.*`, `ftrender.*` decompose/render/raster routes | `src/outline.rs`, `src/render.rs`, `src/grays.rs`, `src/ffi/*`, C/WASM wrappers | Callback-compatible outline decomposition, bitmap extraction, renderer mode state, and exact error propagation. |
 | Module/property APIs | 72 | `ftmodapi.*`, `ftdriver.*`, `ftparams.*`, `freetype.face_properties*` | `src/api.rs`, `src/font.rs`, `src/autohint/*`, `src/tt/hinter/*`, `src/ffi/*`, C/WASM wrappers | Decide exact supported-vs-unsupported module surface, then route properties through real core state. |
-| Glyph object APIs | 25 | `ftglyph.*` plus the allocator-fault `ftbitmap.glyphslot_own_bitmap` pending row | `src/render.rs`, `src/font.rs`, `src/outline.rs`, `src/ffi/*`, C/WASM wrappers | Glyph object handles, bitmap glyph ownership, transform/copy/done semantics, and maintained allocator fault injection for the remaining bitmap pending row. |
+| Glyph object APIs | 25 | `ftglyph.*` routes | `src/render.rs`, `src/font.rs`, `src/outline.rs`, `src/ffi/*`, C/WASM wrappers | Glyph object handles, bitmap glyph ownership, transform/copy/done semantics. The `ftbitmap.glyphslot_own_bitmap` allocator-fault row is already real parity. |
 | GX/OpenType validation | 58 | `ftgxval.*`, `ftotval.*` validate/free rows | `src/tables.rs`, new validator modules if added, `src/ffi/*`, C/WASM wrappers | Validation buffer ownership and exact selected-table success/error behavior. |
 | Legacy format/stream families | 100 | `t1tables.*`, `ftwinfnt.*`, `ftbdf.*`, `ftpfr.*`, `ftcid.*`, compressed stream rows | new format/stream modules if added, `src/font.rs`, `src/tables.rs`, `src/ffi/*`, C/WASM wrappers | Decide supported pure-Rust parsers vs exact unsupported/error policy, then add real oracle inputs. |
 
@@ -8616,17 +8660,18 @@ removed.
    reaches SVG glyph loading.
 3. `ftstroke` stroker core: own stroker create/configure/parse/count/export
    routes. Do not mix with generic outline decomposition fixes.
-4. `ftmm` variable-font descriptors and named instances: own `ftmm.*` and the
-   three pending named-instance rows; leave `MVAR` SFNT row as a follow-up if
-   `MVAR` is not implemented.
+4. `ftmm` variable-font descriptors and named instances: own `ftmm.*`, the
+   remaining Adobe MM reset row, and named-instance `gvar`/`HVAR` glyph-output
+   row; leave the `MVAR` SFNT row as a separate follow-up if `MVAR` is not
+   implemented.
 5. Error-path concrete assets: own `generic-error-fallback`,
    `null-error-fallback`, and `void-fallback` rows, converting placeholders to
    concrete C/Rust route checks without changing expected outputs.
 6. Outline/image/raster callbacks: own `ftimage.*`, `ftoutln.*`, and
    `ftrender.*` routes that require callback or renderer state.
-7. Glyph object lifecycle: own `ftglyph.*` rows and the remaining
-   `ftbitmap.glyphslot_own_bitmap` allocator-fault pending row. The public
-   bitmap copy/convert/done/embolden/blend routes are already real parity.
+7. Glyph object lifecycle: own `ftglyph.*` rows. The
+   `ftbitmap.glyphslot_own_bitmap` allocator-fault row and the public bitmap
+   copy/convert/done/embolden/blend routes are already real parity.
 8. Module/property behavior: own `ftmodapi.*`, `ftdriver.*`, `ftparams.*`, and
    `freetype.face_properties*`; first classify exact unsupported behavior vs
    real stateful support.

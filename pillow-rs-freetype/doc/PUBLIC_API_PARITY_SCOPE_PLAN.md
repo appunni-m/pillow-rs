@@ -137,14 +137,14 @@ Recommended first buckets:
 
 Full route/core pending rows:
 
-1. `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`
-2. `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`
-3. `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
-4. `ftmm.FT_Var_Named_Style.selected_instance_matches_descriptor`
-5. `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation`
+1. `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`
+2. `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
+3. `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation`
 
-The three runtime pending rows are all `ftmm.set_named_instance`; the render
-slot-state and MVAR rows are audit-visible route/core pending work.
+The two runtime pending rows are `ftmm.set_named_instance`; the MVAR vertical
+header row is audit-visible route/core pending work. The earlier render
+slot-state and `FT_Var_Named_Style.selected_instance_matches_descriptor` rows
+are already real parity and must not be re-counted as pending work.
 
 ### Variation Implementation Scope
 
