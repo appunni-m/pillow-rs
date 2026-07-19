@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after batched validation exact-error classification:
+Current verified result after batched compression exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4009`
+  - `real-parity`: `4019`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `186`
+  - `generic-error-fallback`: `176`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -897,6 +897,49 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: all ten focused exact rows passed. Route audit:
 `real-parity` `4009`, `generic-error-fallback` `186`.
+
+### Issue Set Current: batched gzip/LZW exact-error routes
+
+Previous blocker:
+
+- Ten concrete public compression rows were classified as
+  `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments`
+   - `ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small`
+   - `ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data`
+   - `ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib`
+   - `ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles`
+   - `ftgzip.FT_Stream_OpenGzip.rejects_invalid_gzip_header`
+   - `ftgzip.FT_Stream_OpenGzip.reports_unimplemented_without_zlib`
+   - `ftlzw.FT_Stream_OpenLZW.invalid_header_error`
+   - `ftlzw.FT_Stream_OpenLZW.null_stream_or_source_error`
+   - `ftlzw.FT_Stream_OpenLZW.unsupported_build_error`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all ten rows before promotion.
+- Exact comparison after promotion passed for all ten rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: all ten focused exact rows passed. Route audit:
+`real-parity` `4019`, `generic-error-fallback` `176`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
