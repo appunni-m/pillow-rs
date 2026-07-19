@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Render_Glyph` unloaded and unsupported slot-state route
+
+Status: implemented as real parity on 2026-07-20.
+
+Finding:
+
+- `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`
+  was blocked in `pending-core` because the harness had no public runner for
+  rendering a just-opened unloaded glyph slot or a synthetic unknown public slot
+  format.
+- Pinned C FreeType returns `FT_Err_Cannot_Render_Glyph` (`19`) for both
+  variants and leaves the slot fields unchanged. The synthetic unknown-format
+  probe preserves `format=0x12345678`, `glyph_index=77`, and
+  `advance=(11,22)`.
+
+Implementation:
+
+- Added a public Rust FFI `FT_Render_Glyph` guard for non-outline/non-bitmap
+  slot formats so unloaded, composite, and unknown public formats return
+  `Cannot_Render_Glyph` before renderer mutation.
+- Added feature-gated ABI test-support helpers to install the synthetic
+  unsupported slot in thin C ABI and WASM ABI handles without exporting new
+  public C symbols.
+- Added the maintained `--render-glyph-slot-states` pinned C oracle route and
+  unified fixture runners for Rust FFI, C ABI, and WASM ABI.
+
+Impact:
+
+- `freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`
+  moved from `pending-core` to `real-parity`.
+- Route audit count target after this batch: `real-parity=4467`,
+  `pending-core=5`, `pending-route=514`, `generic-fallback=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format
+```
+
 ### Issue Set Current: `FT_GLYPH_FORMAT_NONE` empty-slot route
 
 Status: implemented as real parity on 2026-07-20.
@@ -4867,7 +4907,6 @@ repo-visible buckets for handoff and subagent selection.
 | Subject | Operation | Case | Dependency blocking real route |
 |---|---|---|---|
 | `ftbitmap.FT_GlyphSlot_Own_Bitmap` | `glyphslot_own_bitmap` | allocation failure | Deterministic allocator fault injection must be maintained before this row can run as real parity. The existing C oracle and Rust/C/WASM runners deliberately reject `error_copy_allocation_failure` until a shared allocation-failure harness can force the bitmap deep-copy allocation to fail in all lanes without editing expected outputs. Focused verification target: `make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap.error_copy_allocation_failure`. |
-| `freetype.FT_Render_Glyph` | `render_glyph` | `error_unloaded_or_unsupported_slot_format.unrouted_slot_states` | Unloaded render behavior still needs explicit public runner support for `FT_Render_Glyph` itself. The empty-slot state is now observable through `freetype.slot_format_probe`, but rendering an unloaded or synthetic unsupported-format slot must still compare exact C error and mutation behavior without routing through C/WASM wrapper-only branches. Focused verification target: `make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states`. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `success_adobe_mm_resets_default` | Adobe MM named-instance reset requires real Adobe MM support. |
 | `ftmm.FT_Set_Named_Instance` | `ftmm.set_named_instance` | `output_changes_to_named_instance` | Named-instance glyph-output parity requires `gvar`/`HVAR` support. |
 | `ftmm.FT_Var_Named_Style` | `ftmm.set_named_instance` | `selected_instance_matches_descriptor` | Named-style coordinate parity requires `FT_MM_Var` support. |

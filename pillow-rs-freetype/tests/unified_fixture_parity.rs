@@ -675,13 +675,8 @@ fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
     None
 }
 
-fn unrouted_slot_state_runtime_reason(case: &InputCase) -> Option<&'static str> {
-    match case.case_id.as_str() {
-        "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states" => {
-            Some("unloaded and unsupported glyph-slot states need explicit public runner support")
-        }
-        _ => None,
-    }
+fn unrouted_slot_state_runtime_reason(_case: &InputCase) -> Option<&'static str> {
+    None
 }
 
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
@@ -2843,6 +2838,12 @@ impl BackendComparisonWorker {
             "ftotval.open_type_validate" => c_open_type_validate(case),
             "ftotval.open_type_free" => c_open_type_free(case),
             "render_glyph" => {
+                if case.case_id
+                    == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+                {
+                    let face = self.c_face(case)?;
+                    return c_render_glyph_slot_states(face, &case.inputs.params);
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
                 let face = self.c_face(case)?;
@@ -3120,6 +3121,12 @@ impl BackendComparisonWorker {
             "ftotval.open_type_validate" => wasm_open_type_validate(case),
             "ftotval.open_type_free" => wasm_open_type_free(case),
             "render_glyph" => {
+                if case.case_id
+                    == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+                {
+                    let handle = self.wasm_face(case)?;
+                    return wasm_render_glyph_slot_states(handle, &case.inputs.params);
+                }
                 let load_flags = load_flags_param(&case.inputs.params)?;
                 let render_mode = render_mode_param(&case.inputs.params)?;
                 let handle = self.wasm_face(case)?;
@@ -14912,6 +14919,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(string_array_param(params, "probes")?.join(","));
             Ok(args)
         }
+        "render_glyph"
+            if case.case_id
+                == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states" =>
+        {
+            let mut args = vec!["--render-glyph-slot-states".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(render_glyph_slot_state_variants(params)?.join(","));
+            args.push(render_mode_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(params, "glyph_slot") == Some("null") {
                 return Ok(vec![
@@ -16704,14 +16722,20 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "render_glyph" => {
             let (library, face) = c_open_face(case)?;
-            let output = c_render_glyph(
-                face,
-                glyph_load_input_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-                render_mode_param(&case.inputs.params)?,
-                render_repeat_count_param(&case.inputs.params)?,
-                bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
-            );
+            let output = if case.case_id
+                == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+            {
+                c_render_glyph_slot_states(face, &case.inputs.params)
+            } else {
+                c_render_glyph(
+                    face,
+                    glyph_load_input_param(&case.inputs.params)?,
+                    load_flags_param(&case.inputs.params)?,
+                    render_mode_param(&case.inputs.params)?,
+                    render_repeat_count_param(&case.inputs.params)?,
+                    bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
+                )
+            };
             c_done_face(face);
             c_done_library(library);
             output
@@ -17328,14 +17352,20 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "render_glyph" => {
             let handle = wasm_open_face(case)?;
-            let output = wasm_render_glyph(
-                handle,
-                glyph_load_input_param(&case.inputs.params)?,
-                load_flags_param(&case.inputs.params)?,
-                render_mode_param(&case.inputs.params)?,
-                render_repeat_count_param(&case.inputs.params)?,
-                bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
-            );
+            let output = if case.case_id
+                == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+            {
+                wasm_render_glyph_slot_states(handle, &case.inputs.params)
+            } else {
+                wasm_render_glyph(
+                    handle,
+                    glyph_load_input_param(&case.inputs.params)?,
+                    load_flags_param(&case.inputs.params)?,
+                    render_mode_param(&case.inputs.params)?,
+                    render_repeat_count_param(&case.inputs.params)?,
+                    bool_param(&case.inputs.params, "capture_render_error_slot", false)?,
+                )
+            };
             wasm_done_face(handle);
             output
         }
@@ -17377,6 +17407,90 @@ fn rust_slot_format_probe(face: &FT_Face, params: &Value) -> Result<RunOutput, S
             Ok((err, slot_json(&slot)))
         }
         other => Err(format!("unsupported slot format probe {other}")),
+    })
+}
+
+fn render_glyph_slot_state_variants(params: &Value) -> Result<Vec<String>, String> {
+    let rows = params
+        .get("variants")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "render_glyph slot-state row requires params.variants".to_string())?;
+    let mut variants = Vec::with_capacity(rows.len());
+    for row in rows {
+        if row.get("slot_state").and_then(Value::as_str) == Some("new_unloaded_slot") {
+            variants.push("new_unloaded_slot".to_string());
+        } else if row.get("slot_format").and_then(Value::as_str)
+            == Some("unsupported_synthetic_format")
+        {
+            variants.push("unsupported_synthetic_format".to_string());
+        } else {
+            return Err(format!("unsupported render glyph slot-state variant {row}"));
+        }
+    }
+    Ok(variants)
+}
+
+fn render_glyph_slot_state_rows<F>(params: &Value, mut run: F) -> Result<RunOutput, String>
+where
+    F: FnMut(&str) -> Result<(FT_Error, Value), String>,
+{
+    let mut rows = Vec::new();
+    for variant in render_glyph_slot_state_variants(params)? {
+        let (status, slot) = run(&variant)?;
+        rows.push(json!({
+            "variant": variant,
+            "status": status,
+            "slot": slot
+        }));
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_render_glyph_slot_states(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let render_mode = render_mode_param(params)?;
+    render_glyph_slot_state_rows(params, |variant| {
+        let slot = match variant {
+            "new_unloaded_slot" => FT_Empty_GlyphSlot(face),
+            "unsupported_synthetic_format" => FT_Unsupported_GlyphSlot(face),
+            other => {
+                return Err(format!(
+                    "unsupported render glyph slot-state variant {other}"
+                ));
+            }
+        };
+        let status = match FT_Render_Glyph(slot.clone(), render_mode) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+        Ok((status, slot_json(&slot)))
+    })
+}
+
+fn c_render_glyph_slot_states(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let render_mode = render_mode_param(params)?;
+    render_glyph_slot_state_rows(params, |variant| {
+        if variant == "unsupported_synthetic_format" {
+            let err = c_abi::abi_set_unsupported_glyph_slot(face);
+            if err != FT_Err_Ok {
+                return Ok((err, c_slot_json(face)?));
+            }
+        }
+        let status = c_abi::abi_render_glyph_from_face(face, render_mode);
+        Ok((status, c_slot_json(face)?))
+    })
+}
+
+fn wasm_render_glyph_slot_states(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let render_mode = render_mode_param(params)?;
+    render_glyph_slot_state_rows(params, |variant| {
+        if variant == "unsupported_synthetic_format" {
+            let err = wasm_abi::abi_set_unsupported_glyph_slot(handle);
+            if err != FT_Err_Ok {
+                return Ok((err, wasm_slot_json(handle)?));
+            }
+        }
+        let status = wasm_abi::fontdone_wasm_render_glyph(handle, render_mode);
+        Ok((status, wasm_slot_json(handle)?))
     })
 }
 
@@ -20274,6 +20388,12 @@ fn autohint_coverage_bits_param(case: &InputCase) -> Result<Option<Vec<u32>>, St
 }
 
 fn rust_render_glyph_public_api(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+    {
+        let face = open_face(case)?;
+        return rust_render_glyph_slot_states(&face, &case.inputs.params);
+    }
     let raw_load_flags = load_flags_param(&case.inputs.params)?;
     let repeat_count = render_repeat_count_param(&case.inputs.params)?;
     let capture_error_slot = bool_param(&case.inputs.params, "capture_render_error_slot", false)?;
@@ -32714,6 +32834,11 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 
 fn comparison_schema(case: &InputCase) -> &str {
     if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return "api_object";
+    }
+    if case.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+    {
         return "api_object";
     }
     if open_face_name_options_runtime_supported(case) {

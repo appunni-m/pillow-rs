@@ -4437,6 +4437,45 @@ static int print_slot_format_probe_rows(FT_Face face, const char* probes_arg) {
     return 0;
 }
 
+static int print_render_glyph_slot_state_rows(FT_Face face, const char* variants_arg, FT_Render_Mode render_mode) {
+    char* variants = (char*)malloc(strlen(variants_arg) + 1);
+    if (!variants) {
+        return 2;
+    }
+    memcpy(variants, variants_arg, strlen(variants_arg) + 1);
+
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    char* variant = strtok(variants, ",");
+    int row_index = 0;
+    while (variant) {
+        FT_UInt glyph_index = 0;
+        if (streq(variant, "new_unloaded_slot")) {
+            glyph_index = 0;
+        } else if (streq(variant, "unsupported_synthetic_format")) {
+            face->glyph->format = (FT_Glyph_Format)0x12345678;
+            face->glyph->glyph_index = 77;
+            face->glyph->advance.x = 11;
+            face->glyph->advance.y = 22;
+            glyph_index = 77;
+        } else {
+            free(variants);
+            return 2;
+        }
+
+        FT_Error status = FT_Render_Glyph(face->glyph, render_mode);
+        if (row_index) printf(",");
+        printf("{\"variant\":\"%s\",\"status\":%d,\"slot\":{", variant, status);
+        print_slot_body(face->glyph, glyph_index);
+        printf("}}");
+        row_index++;
+        variant = strtok(NULL, ",");
+    }
+    printf("]}}\n");
+    free(variants);
+    return 0;
+}
+
 static void print_bbox_named(const char* name, FT_BBox bbox);
 static void print_vector_named(const char* name, FT_Vector vector);
 static void print_metrics_named(const char* name, FT_Glyph_Metrics metrics);
@@ -12660,6 +12699,13 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return result ? 2 : 0;
     }
+    if (streq(command, "--render-glyph-slot-states")) {
+        int result = print_render_glyph_slot_state_rows(face, argv[7], (FT_Render_Mode)strtol(argv[8], NULL, 10));
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return result ? 2 : 0;
+    }
 
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
@@ -14633,6 +14679,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--render-glyph-slot-states")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--glyphslot-null-noop")) {
