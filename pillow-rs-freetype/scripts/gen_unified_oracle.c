@@ -10339,6 +10339,7 @@ typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
     FT_Long file_size;
+    FT_UInt open_flags;
     int file_base_is_null;
     int library_is_null;
     int aface_is_null;
@@ -10346,12 +10347,12 @@ typedef struct MemoryFaceRow_ {
 } MemoryFaceRow;
 
 static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
-    char* fields[7];
+    char* fields[8];
     char* cursor = row;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         fields[i] = cursor;
         char* sep = strchr(cursor, ':');
-        if (i == 6) {
+        if (i == 7) {
             if (sep) {
                 return 0;
             }
@@ -10366,10 +10367,11 @@ static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
     out->face_index = (FT_Long)strtol(fields[0], NULL, 10);
     out->has_file_size = (int)strtol(fields[1], NULL, 10) != 0;
     out->file_size = (FT_Long)strtol(fields[2], NULL, 10);
-    out->file_base_is_null = (int)strtol(fields[3], NULL, 10) != 0;
-    out->library_is_null = (int)strtol(fields[4], NULL, 10) != 0;
-    out->aface_is_null = (int)strtol(fields[5], NULL, 10) != 0;
-    out->open_args_is_null = (int)strtol(fields[6], NULL, 10) != 0;
+    out->open_flags = (FT_UInt)strtoul(fields[3], NULL, 10);
+    out->file_base_is_null = (int)strtol(fields[4], NULL, 10) != 0;
+    out->library_is_null = (int)strtol(fields[5], NULL, 10) != 0;
+    out->aface_is_null = (int)strtol(fields[6], NULL, 10) != 0;
+    out->open_args_is_null = (int)strtol(fields[7], NULL, 10) != 0;
     return 1;
 }
 
@@ -10608,7 +10610,7 @@ static int emit_open_face_variants(int argc, char** argv) {
         FT_Long file_size = rows[i].has_file_size ? rows[i].file_size : data_len;
         FT_Open_Args args;
         memset(&args, 0, sizeof(args));
-        args.flags = FT_OPEN_MEMORY;
+        args.flags = rows[i].open_flags;
         args.memory_base = rows[i].file_base_is_null ? NULL : data;
         args.memory_size = file_size;
         FT_Library library_arg = rows[i].library_is_null ? NULL : library;

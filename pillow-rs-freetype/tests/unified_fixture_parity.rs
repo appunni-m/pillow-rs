@@ -8337,6 +8337,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_file_base"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_library_or_aface"
+            || case.case_id == "freetype.FT_Open_Face.error_invalid_source_flags"
             || case.case_id == "freetype.FT_Open_Face.error_null_library_args_or_aface"
             || case.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
             || case.case_id == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format"
@@ -16063,6 +16064,15 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
+        if case.subject == "freetype.FT_Open_Face" {
+            let source_flags =
+                row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
+            if source_flags != FT_OPEN_MEMORY {
+                // C `FT_Open_Face` rejects calls unless exactly one source flag
+                // is selected before any driver probing (ftobjs.c:2524-2547).
+                return Ok((FT_Err_Invalid_Argument, true));
+            }
+        }
         let Some(bytes) = memory_face_row_bytes(data.as_ref(), row)? else {
             return Ok((FT_Err_Invalid_Argument, true));
         };
@@ -16095,7 +16105,7 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
             &mut face
         };
         let open_args = c_abi::FT_Open_Args {
-            flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+            flags: row.open_flags as c_abi::FT_UInt,
             memory_base: bytes.as_ptr(),
             memory_size: file_size,
             pathname: std::ptr::null_mut(),
@@ -16104,7 +16114,10 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
             num_params: 0,
             params: std::ptr::null_mut(),
         };
-        let err = if row.has_open_args || row.open_args_is_null {
+        let err = if case.subject == "freetype.FT_Open_Face"
+            || row.has_open_args
+            || row.open_args_is_null
+        {
             let args_ptr = if row.open_args_is_null {
                 std::ptr::null()
             } else {
@@ -16167,6 +16180,13 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         }
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
+        }
+        if case.subject == "freetype.FT_Open_Face" {
+            let source_flags =
+                row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
+            if source_flags != FT_OPEN_MEMORY {
+                return Ok((FT_Err_Invalid_Argument, true));
+            }
         }
         let file_size = memory_face_file_size(bytes.len(), row)?;
         let Ok(file_size) = usize::try_from(file_size) else {
@@ -24801,6 +24821,7 @@ fn optional_symbol_under_test(value: &Value) -> String {
 struct MemoryFaceRow {
     face_index: i64,
     file_size: Option<i64>,
+    open_flags: i64,
     file_base_is_null: bool,
     library_is_null: bool,
     aface_is_null: bool,
@@ -24817,10 +24838,11 @@ fn memory_face_rows_arg(params: &Value) -> Result<String, String> {
         .into_iter()
         .map(|row| {
             format!(
-                "{}:{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}:{}",
                 row.face_index,
                 if row.file_size.is_some() { 1 } else { 0 },
                 row.file_size.unwrap_or(0),
+                row.open_flags,
                 if row.file_base_is_null { 1 } else { 0 },
                 if row.library_is_null { 1 } else { 0 },
                 if row.aface_is_null { 1 } else { 0 },
@@ -24857,9 +24879,13 @@ fn memory_face_row(value: &Value, defaults: &Value) -> Result<MemoryFaceRow, Str
         .get("file_size")
         .map(|value| i64_value(value, "file_size"))
         .transpose()?;
+    let open_flags = object
+        .get("flags")
+        .map_or(Ok(i64::from(FT_OPEN_MEMORY)), open_face_flags_param)?;
     Ok(MemoryFaceRow {
         face_index,
         file_size,
+        open_flags,
         file_base_is_null: object
             .get("file_base")
             .and_then(Value::as_str)
@@ -24882,6 +24908,17 @@ fn memory_face_row(value: &Value, defaults: &Value) -> Result<MemoryFaceRow, Str
         has_source_override: object.get("source").is_some(),
         has_open_driver: object.get("open_driver").is_some(),
     })
+}
+
+fn open_face_flags_param(value: &Value) -> Result<i64, String> {
+    let flags = value
+        .as_array()
+        .ok_or_else(|| "FT_Open_Face flags must be an array".to_string())?;
+    let mut bits = 0;
+    for flag in flags {
+        bits |= i64_value(flag, "FT_Open_Face flags")?;
+    }
+    Ok(bits)
 }
 
 fn memory_face_row_runtime_supported(row: &MemoryFaceRow) -> bool {
