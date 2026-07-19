@@ -864,6 +864,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_Manager_New.error_null_requester_or_output",
         "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler",
         "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup",
+        "ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output",
+        "ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup",
         "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
         "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
         "freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face",
@@ -1894,6 +1896,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"
     ):
         return "FTC_ImageCache_LookupScaler null-scaler/aglyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_lookup"
+        and row.case_id == "ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output"
+    ):
+        return "FTC_SBitCache_Lookup null-sbit-output error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_lookup"
+        and row.case_id == "ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup"
+    ):
+        return "FTC_SBitCache_Lookup output-clearing error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcache.image_cache_new"
         and row.case_id == "ftcache.FTC_ImageCache_New.error_null_manager_or_output"
