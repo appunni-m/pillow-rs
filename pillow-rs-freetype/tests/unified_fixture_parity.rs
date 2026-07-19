@@ -8342,6 +8342,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmodapi.FT_Add_Module.rejects_null_class"
             || case.case_id == "ftmodapi.FT_Add_Module.rejects_future_required_version"
             || case.case_id == "ftmodapi.FT_Done_Library.rejects_null_library"
+            || case.case_id == "ftmodapi.FT_New_Library.allocation_failure_preserves_output"
             || case.case_id == "ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output"
             || case.case_id == "ftmodapi.FT_Reference_Library.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
