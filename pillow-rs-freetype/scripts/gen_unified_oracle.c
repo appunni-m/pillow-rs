@@ -10339,15 +10339,18 @@ typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
     FT_Long file_size;
+    int file_base_is_null;
+    int library_is_null;
+    int aface_is_null;
 } MemoryFaceRow;
 
 static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
-    char* fields[3];
+    char* fields[6];
     char* cursor = row;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 6; i++) {
         fields[i] = cursor;
         char* sep = strchr(cursor, ':');
-        if (i == 2) {
+        if (i == 5) {
             if (sep) {
                 return 0;
             }
@@ -10362,6 +10365,9 @@ static int parse_memory_face_row(char* row, MemoryFaceRow* out) {
     out->face_index = (FT_Long)strtol(fields[0], NULL, 10);
     out->has_file_size = (int)strtol(fields[1], NULL, 10) != 0;
     out->file_size = (FT_Long)strtol(fields[2], NULL, 10);
+    out->file_base_is_null = (int)strtol(fields[3], NULL, 10) != 0;
+    out->library_is_null = (int)strtol(fields[4], NULL, 10) != 0;
+    out->aface_is_null = (int)strtol(fields[5], NULL, 10) != 0;
     return 1;
 }
 
@@ -10467,7 +10473,15 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     for (size_t i = 0; i < row_count; i++) {
         FT_Face face = NULL;
         FT_Long file_size = rows[i].has_file_size ? rows[i].file_size : data_len;
-        errors[i] = FT_New_Memory_Face(library, data, file_size, rows[i].face_index, &face);
+        FT_Library library_arg = rows[i].library_is_null ? NULL : library;
+        const FT_Byte* file_base_arg = rows[i].file_base_is_null ? NULL : data;
+        FT_Face* aface_arg = rows[i].aface_is_null ? NULL : &face;
+        errors[i] = FT_New_Memory_Face(
+            library_arg,
+            file_base_arg,
+            file_size,
+            rows[i].face_index,
+            aface_arg);
         /* FT_New_Memory_Face delegates through FT_Open_Face.  A valid `aface`
          * is assigned only after the face opens successfully; error exits leave
          * the caller's output unchanged.  Capture it before success cleanup so

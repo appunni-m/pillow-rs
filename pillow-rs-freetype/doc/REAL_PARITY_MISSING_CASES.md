@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_New_Memory_Face` null file-base route
+Current verified result after `FT_New_Memory_Face` null library/aface route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3848`
+  - `real-parity`: `3849`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `347`
+  - `generic-error-fallback`: `346`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3935,9 +3935,9 @@ Verified command:
 make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_null_file_base
 ```
 
-### Issue Set CR: `FT_New_Memory_Face` null library/aface route blocker
+### Issue Set CR: `FT_New_Memory_Face` null library/aface route
 
-Current blocker:
+Previous blocker:
 
 - `freetype.FT_New_Memory_Face.error_null_library_or_aface` stayed in
   `generic-error-fallback`.
@@ -3956,19 +3956,29 @@ Current blocker:
 
 Plan:
 
-1. Do not classify this row as real parity until the oracle runner emits the
-   two variant statuses for null `library` and null `aface`.
-2. Inspect the current `new_memory_face` variant runner and oracle output
-   shape; preserve the fixture and compare both exact status values.
-3. Re-enable exact-error gating only after focused same-input comparison passes
+1. Preserve the fixture and teach the maintained `new_memory_face` variant row
+   encoding to carry null `library` and null `aface` flags to the C oracle.
+2. Make the Rust FFI and WASM lanes apply the same public wrapper input policy
+   for null `library`/`aface` variants.
+3. Fix the thin C ABI `FT_New_Memory_Face` validation order to match C
+   FreeType: null `file_base` returns `Invalid_Argument`, then null `library`
+   returns `Invalid_Library_Handle`, then null `aface` returns
+   `Invalid_Argument`.
+4. Require exact error comparison only after focused same-input parity passes
    through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
 
-Blocked verification:
+Verified progress:
 
-- Attempted exact-error promotion failed with
-  `rust ffi:value: freetype.FT_New_Memory_Face.error_null_library_or_aface requires an exact C error, but the oracle returned ok`.
+- The C oracle now receives and executes the row's null `library` and null
+  `aface` variants instead of collapsing them into normal face opens.
+- The thin C ABI now returns `FT_Err_Invalid_Library_Handle` for null
+  `library`, matching pinned C FreeType.
+- The focused null library/aface row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `freetype.FT_New_Memory_Face.error_null_library_or_aface` as `real-parity`.
 
-Rejected command:
+Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_null_library_or_aface
