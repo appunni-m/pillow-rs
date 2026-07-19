@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_BDF_Charset_ID` non-BDF-face
+Current verified result after `FT_Get_PFR_Advance` non-PFR-face
 exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3964`
+  - `real-parity`: `3965`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `231`
+  - `generic-error-fallback`: `230`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -524,6 +524,34 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_null
 Result: failed before parity comparison with missing asset
 `input/fonts/bdf/charset-registry.bdf`; row remains `generic-error-fallback`.
 
+### Issue Set Pending: `FT_Get_BDF_Charset_ID` missing SFNT-BDF fixture
+
+Current blocker:
+
+- `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`
+  references `input/fonts/bdf/sfnt-bdf-table.otb`.
+- The focused parity command fails before C/Rust comparison because that asset
+  is missing from the current fixture tree.
+
+Fix plan:
+
+1. Do not classify this row as `real-parity` until the same SFNT-BDF/OTB asset
+   is present and deterministic.
+2. Add or regenerate the maintained `sfnt-bdf-table.otb` fixture through the
+   project fixture workflow.
+3. Re-run the focused row and promote only if exact status/output matches
+   pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI.
+
+Non-coverage probe:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike
+```
+
+Result: failed before parity comparison with missing asset
+`input/fonts/bdf/sfnt-bdf-table.otb`; row remains
+`generic-error-fallback`.
+
 ### Issue Set Current: `FT_Get_BDF_Charset_ID` non-BDF-face exact-error route
 
 Previous blocker:
@@ -562,6 +590,40 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_non_
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3964`, `generic-error-fallback` `231`.
+
+### Issue Set Current: `FT_Get_PFR_Advance` non-PFR-face exact-error route
+
+Previous blocker:
+
+- `ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument` had a concrete
+  PFR public error row classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete `FT_Get_PFR_Advance` non-PFR-face row to
+   exact-error comparison.
+2. Keep the existing non-PFR font input unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_PFR_Advance`, and WASM ABI before counting the row as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete PFR advance non-PFR-face row.
+- The previously fallback-classified error row now validates exact
+  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3965`, `generic-error-fallback` `230`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 

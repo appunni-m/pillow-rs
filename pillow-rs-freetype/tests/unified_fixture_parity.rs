@@ -8345,6 +8345,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id
                 == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs"
+            || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "freetype.FT_Load_Glyph.matrix_load"
             || case.case_id
                 == "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags"
