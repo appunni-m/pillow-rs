@@ -1160,6 +1160,24 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
     }
 
 
+def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for the stroker object/path subsystem that do not have a maintained route."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    if row.operation in {
+        "ftstroke.outline_get_inside_border",
+        "ftstroke.outline_get_outside_border",
+        "ftstroke.outline_border_orientation_pair",
+    }:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "FT_Stroker object/path success and lifecycle behavior requires a "
+        "maintained stroker route; keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3453,6 +3471,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
             "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
             "and allocator facade; treating it as generic would be a green placeholder",
         )
+    ftstroke_pending = ftstroke_stroker_pending_reason(row)
+    if ftstroke_pending:
+        return ("pending-route", ftstroke_pending)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
