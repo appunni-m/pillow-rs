@@ -8335,6 +8335,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
             || case.case_id == "freetype.FT_Face.null_and_done_handle_errors"
+            || case.case_id == "ftmodapi.FT_Done_Library.rejects_null_library"
             || case.case_id
                 == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
             || case.case_id == "ftadvanc.FT_Get_Advance.error_null_face_or_output"

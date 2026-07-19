@@ -1094,6 +1094,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Done_FreeType null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmodapi.done_library"
+        and row.case_id == "ftmodapi.FT_Done_Library.rejects_null_library"
+        and lifecycle_handle(row, "library") == "null"
+    ):
+        return "FT_Done_Library null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "freetype.done_face"
         and row.case_id == "freetype.FT_Done_Face.error_null_face"
         and lifecycle_handle(row, "face") == "null"
