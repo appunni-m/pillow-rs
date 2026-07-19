@@ -1329,6 +1329,11 @@ pub fn abi_support_library_has_module(library: FT_Library, name: &str) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_module_flags(library: FT_Library, name: &str) -> Option<FT_ULong> {
+    rust_ffi::FT_Library_Module_Flags(library_ref(library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_default_module_names(library: FT_Library) -> &'static [&'static str] {
     rust_ffi::FT_Library_Default_Module_Names(library_ref(library))
 }

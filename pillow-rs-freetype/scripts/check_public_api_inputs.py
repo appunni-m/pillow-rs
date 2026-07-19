@@ -1462,6 +1462,15 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def inspect_module_flags_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "ftmodapi.inspect_module_flags"
+        and row.case_id == "ftmodapi.FT_MODULE_FONT_DRIVER.font_driver_modules_set_bit"
+    ):
+        return "module class font-driver flags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
 def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
         row.operation == "ftmm.done_mm_var"
@@ -3256,6 +3265,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     add_default_modules_real_reason = add_default_modules_real_parity_reason(row)
     if add_default_modules_real_reason:
         return ("real-parity", add_default_modules_real_reason)
+    inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
+    if inspect_module_flags_real_reason:
+        return ("real-parity", inspect_module_flags_real_reason)
     done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
     if done_mm_var_real_reason:
         return ("real-parity", done_mm_var_real_reason)

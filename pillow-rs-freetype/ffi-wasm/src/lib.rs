@@ -1710,6 +1710,12 @@ pub fn abi_support_add_default_modules_observation(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_default_module_flags(name: &str) -> Option<rust_ffi::FT_ULong> {
+    let library = rust_ffi::FT_Init_FreeType();
+    rust_ffi::FT_Library_Module_Flags(Some(&library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_init_free_type_created_library() -> bool {
     let _library = rust_ffi::FT_Init_FreeType();
     true

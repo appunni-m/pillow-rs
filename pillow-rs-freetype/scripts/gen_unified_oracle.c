@@ -10434,6 +10434,55 @@ static void print_add_default_modules_observation(FT_Library library, const char
     printf("}");
 }
 
+static unsigned long module_flag_value(const char* flag) {
+    if (streq(flag, "FT_MODULE_FONT_DRIVER")) return FT_MODULE_FONT_DRIVER;
+    if (streq(flag, "FT_MODULE_RENDERER")) return FT_MODULE_RENDERER;
+    if (streq(flag, "FT_MODULE_HINTER")) return FT_MODULE_HINTER;
+    if (streq(flag, "FT_MODULE_STYLER")) return FT_MODULE_STYLER;
+    if (streq(flag, "FT_MODULE_DRIVER_SCALABLE")) return FT_MODULE_DRIVER_SCALABLE;
+    if (streq(flag, "FT_MODULE_DRIVER_NO_OUTLINES")) return FT_MODULE_DRIVER_NO_OUTLINES;
+    if (streq(flag, "FT_MODULE_DRIVER_HAS_HINTER")) return FT_MODULE_DRIVER_HAS_HINTER;
+    if (streq(flag, "FT_MODULE_DRIVER_HINTS_LIGHTLY")) return FT_MODULE_DRIVER_HINTS_LIGHTLY;
+    return 0;
+}
+
+static int emit_inspect_module_flags(int argc, char** argv) {
+    if (argc != 4) return 2;
+    const char* flag_symbol = argv[2];
+    const char* modules_csv = argv[3];
+    unsigned long flag = module_flag_value(flag_symbol);
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"flag\":\"%s\",\"flag_value\":%lu,\"modules\":[", flag_symbol, flag);
+    int first = 1;
+    const char* cursor = modules_csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        char name[64];
+        if (len >= sizeof(name)) len = sizeof(name) - 1;
+        memcpy(name, cursor, len);
+        name[len] = '\0';
+        FT_Module module = library ? FT_Get_Module(library, name) : NULL;
+        unsigned long flags = module && module->clazz ? module->clazz->module_flags : 0;
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"module\":\"%s\",\"present\":%s,\"flags\":%lu,\"has_flag\":%s}",
+               name,
+               module ? "true" : "false",
+               flags,
+               module && (flags & flag) ? "true" : "false");
+        if (!end) break;
+        cursor = end + 1;
+    }
+    printf("]}}");
+    if (library) FT_Done_FreeType(library);
+    printf("\n");
+    return 0;
+}
+
 static int emit_add_default_modules(int argc, char** argv) {
     int action = atoi(argv[2]);
     if (action == 1) {
@@ -13977,6 +14026,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 3 || argc == 4) && streq(argv[1], "--add-default-modules")) {
         return emit_add_default_modules(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--inspect-module-flags")) {
+        return emit_inspect_module_flags(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--done-mm-var")) {
         return emit_done_mm_var(argc, argv);
