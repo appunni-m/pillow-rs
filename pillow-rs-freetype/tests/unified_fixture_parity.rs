@@ -14123,8 +14123,34 @@ fn oracle_fallback_args(case: &InputCase) -> Result<Vec<String>, String> {
     Ok(vec!["--error".to_string(), "7".to_string()])
 }
 
+fn property_service_route_pending(operation: &str) -> bool {
+    matches!(
+        operation,
+        "FT_Property_Get"
+            | "FT_Property_Set_or_Get"
+            | "FT_Property_Get_then_FT_Load_Glyph"
+            | "FT_Property_Set_then_Get"
+            | "FT_Property_Set_then_FT_Load_Glyph"
+            | "ftdriver.glyph_to_script_map"
+            | "ftdriver.hinting_engine_property"
+            | "ftdriver.interpreter_version_default"
+            | "ftdriver.interpreter_version_glyph_output"
+            | "ftdriver.interpreter_version_property"
+            | "ftdriver.property_set_get"
+            | "ftmodapi.property_get"
+            | "ftmodapi.property_set"
+            | "ftmodapi.property_set_then_get"
+    )
+}
+
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
+    if property_service_route_pending(case.operation.as_str()) {
+        return Err(
+            "FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI property APIs; generic fallback would be a green placeholder"
+                .to_string(),
+        );
+    }
     if matches!(
         case.case_id.as_str(),
         "ftlist.FT_List_Iterate.iterates_all_nodes_success"

@@ -1,5 +1,75 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Property_Get/Set` false-green route correction
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Current route-audit ledger after the property-service correction:
+
+- `real-parity=4405`
+- `pending-core=1`
+- `pending-route=580`
+- `generic-fallback=0`
+- full runtime parity `6590/6590`, `pending=644`
+
+Finding:
+
+- Focused runtime parity for
+  `ftmodapi.FT_Property_Get.gets_supported_property` previously passed because
+  both the pinned oracle route and all three backends returned the generic
+  fallback `FT_Err_Unimplemented_Feature` (`7`).
+- The same false-green pattern was observed for
+  `ftmodapi.FT_Property_Set.sets_supported_property`.
+- `ftmodapi.FT_Property_Get.rejects_null_arguments` and
+  `ftmodapi.FT_Property_Get.invalid_property_name` previously passed through a
+  generic null/error fallback (`FT_Err_Invalid_Library_Handle`, `35`) rather
+  than a maintained `FT_Property_Get` public route.
+- `fterrdef.FT_Err_Missing_Property.driver_property_unknown_name` previously
+  passed as generic `Unimplemented_Feature` (`7`), not the intended
+  `FT_Err_Missing_Property` (`12`) public behavior.
+- The core crate, thin C ABI, and WASM ABI currently expose no maintained
+  `FT_Property_Get` or `FT_Property_Set` API. Counting these rows as
+  `real-parity` would reward generic fallback equality, not same-input
+  same-output FreeType behavior.
+
+Impact:
+
+- 12 property-service rows moved from `real-parity` to explicit
+  `pending-route`.
+- `real-parity`: `4417 -> 4405`
+- `pending-route`: `568 -> 580`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Required implementation plan:
+
+1. Add pure-Rust public property service support in `fontdone` for the pinned
+   minimum useful set:
+   - `FT_Property_Get(library, "truetype", "interpreter-version", &value)`;
+   - `FT_Property_Set(library, "truetype", "interpreter-version", &value)`;
+   - exact null-library/module/property/value errors;
+   - exact missing-module, unsupported-service, missing-property, and invalid
+     value behavior.
+2. Keep state on the library/driver model, not in the C/WASM wrappers.
+3. Add thin C ABI exports for `FT_Property_Get` and `FT_Property_Set` that only
+   validate raw pointers, copy scalar property values, and delegate to core.
+4. Add matching WASM ABI functions with the same scalar property record shape.
+5. Add maintained pinned C oracle routes for the property rows instead of using
+   `--error 7` or null-error fallbacks.
+6. Promote rows only after focused runtime parity proves exact output through
+   pinned C, Rust FFI, C ABI, and WASM ABI.
+
+Verification before promotion:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.gets_supported_property
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.sets_supported_property
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Missing_Property.driver_property_unknown_name
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype test-harness
+```
+
 ### Issue Set Current: future-batch unresolved-asset correction
 
 Status: classified as explicit pending-route on 2026-07-20.
