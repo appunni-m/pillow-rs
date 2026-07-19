@@ -830,6 +830,15 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_ImageCache_Lookup.error_null_aglyph",
         "ftcache.FTC_ImageCache_Lookup.error_invalid_cache_type_face_or_glyph",
         "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph",
+        "ftcache.FTC_ImageCache_New.error_null_manager_or_output",
+        "ftcache.FTC_ImageCache_New.error_too_many_caches",
+        "ftcache.FTC_Manager_LookupFace.error_null_output_or_manager",
+        "ftcache.FTC_Manager_LookupFace.error_requester_failure",
+        "fterrdef.FT_Err_Invalid_Cache_Handle.cache_lookup_rejects_null_manager",
+        "ftcache.FTC_Manager_LookupSize.error_null_scaler_output_or_manager",
+        "ftcache.FTC_Manager_LookupSize.error_requester_or_size_selection_failure",
+        "ftcache.FTC_Manager_New.error_null_library",
+        "ftcache.FTC_Manager_New.error_null_requester_or_output",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1367,6 +1376,54 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"
     ):
         return "FTC_ImageCache_LookupScaler null-scaler/aglyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_new"
+        and row.case_id == "ftcache.FTC_ImageCache_New.error_null_manager_or_output"
+    ):
+        return "FTC_ImageCache_New null-manager/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_new"
+        and row.case_id == "ftcache.FTC_ImageCache_New.error_too_many_caches"
+    ):
+        return "FTC_ImageCache_New too-many-caches errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_face"
+        and row.case_id == "ftcache.FTC_Manager_LookupFace.error_null_output_or_manager"
+    ):
+        return "FTC_Manager_LookupFace null-output/manager errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_face"
+        and row.case_id == "ftcache.FTC_Manager_LookupFace.error_requester_failure"
+    ):
+        return "FTC_Manager_LookupFace requester-failure errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_face"
+        and row.case_id
+        == "fterrdef.FT_Err_Invalid_Cache_Handle.cache_lookup_rejects_null_manager"
+    ):
+        return "FTC_Manager_LookupFace null-manager cache-handle errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_size"
+        and row.case_id
+        == "ftcache.FTC_Manager_LookupSize.error_null_scaler_output_or_manager"
+    ):
+        return "FTC_Manager_LookupSize null-scaler/output/manager errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_size"
+        and row.case_id
+        == "ftcache.FTC_Manager_LookupSize.error_requester_or_size_selection_failure"
+    ):
+        return "FTC_Manager_LookupSize requester/size-selection errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_new"
+        and row.case_id == "ftcache.FTC_Manager_New.error_null_library"
+    ):
+        return "FTC_Manager_New null-library errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_new"
+        and row.case_id == "ftcache.FTC_Manager_New.error_null_requester_or_output"
+    ):
+        return "FTC_Manager_New null-requester/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
