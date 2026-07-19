@@ -1085,6 +1085,16 @@ pub fn abi_support_library_has_truetype_module(library: FT_Library) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_has_module(library: FT_Library, name: &str) -> bool {
+    rust_ffi::FT_Library_Has_Module(library_ref(library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_default_module_names(library: FT_Library) -> &'static [&'static str] {
+    rust_ffi::FT_Library_Default_Module_Names(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_has_truetype_engine_service(library: FT_Library) -> bool {
     rust_ffi::FT_Library_Has_TrueType_Engine_Service(library_ref(library))
 }

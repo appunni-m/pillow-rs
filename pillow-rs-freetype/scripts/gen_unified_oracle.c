@@ -9544,20 +9544,109 @@ static int emit_set_debug_hook(int argc, char** argv) {
     return 0;
 }
 
+static const char* default_module_probe_order[] = {
+    "autofitter",
+    "truetype",
+    "type1",
+    "cff",
+    "cid",
+    "pfr",
+    "type42",
+    "winfonts",
+    "pcf",
+    "bdf",
+    "psaux",
+    "psnames",
+    "pshinter",
+    "sfnt",
+    "smooth",
+    "raster1",
+    "sdf",
+    "bsdf",
+    "svg",
+    NULL
+};
+
+static int csv_contains_token(const char* csv, const char* needle) {
+    size_t needle_len = strlen(needle);
+    const char* cursor = csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        if (len == needle_len && strncmp(cursor, needle, len) == 0) {
+            return 1;
+        }
+        if (!end) break;
+        cursor = end + 1;
+    }
+    return 0;
+}
+
+static void print_add_default_modules_observation(FT_Library library, const char* probes_csv) {
+    printf("\"module_names_in_order\":[");
+    int first = 1;
+    for (int i = 0; default_module_probe_order[i]; ++i) {
+        const char* name = default_module_probe_order[i];
+        if (csv_contains_token(probes_csv, name) && FT_Get_Module(library, name)) {
+            if (!first) printf(",");
+            first = 0;
+            printf("\"%s\"", name);
+        }
+    }
+    printf("],\"lookup_results\":{");
+    char* probes = (char*)malloc(strlen(probes_csv) + 1);
+    if (!probes) {
+        printf("}");
+        return;
+    }
+    memcpy(probes, probes_csv, strlen(probes_csv) + 1);
+    char* token = strtok(probes, ",");
+    first = 1;
+    while (token) {
+        if (!first) printf(",");
+        first = 0;
+        printf("\"%s\":%s", token, FT_Get_Module(library, token) ? "true" : "false");
+        token = strtok(NULL, ",");
+    }
+    free(probes);
+    printf("}");
+}
+
 static int emit_add_default_modules(int argc, char** argv) {
-    (void)argc;
     int action = atoi(argv[2]);
-    if (action != 1) {
+    if (action == 1) {
         printf("{");
-        print_status(FT_Err_Unimplemented_Feature);
-        printf(",\"output\":null}\n");
+        FT_Add_Default_Modules(NULL);
+        print_status(FT_Err_Ok);
+        printf(",\"output\":{\"return\":\"void\",\"crashed\":false,\"observable_writes\":\"none\"}}\n");
+        return 0;
+    }
+
+    if (action == 2) {
+        const char* probes_csv = argc > 3 ? argv[3] : "";
+        struct FT_MemoryRec_ memory = {NULL, oracle_alloc, oracle_free, oracle_realloc};
+        FT_Library library = NULL;
+        FT_Error err = FT_New_Library(&memory, &library);
+        printf("{");
+        if (err) {
+            print_status(err);
+            printf(",\"output\":null}\n");
+            return 0;
+        }
+        FT_Add_Default_Modules(library);
+        print_status(FT_Err_Ok);
+        printf(",\"output\":{\"return\":\"void\",");
+        print_add_default_modules_observation(library, probes_csv);
+        printf("}}\n");
+        if (library) {
+            FT_Done_Library(library);
+        }
         return 0;
     }
 
     printf("{");
-    FT_Add_Default_Modules(NULL);
-    print_status(FT_Err_Ok);
-    printf(",\"output\":{\"return\":\"void\",\"crashed\":false,\"observable_writes\":\"none\"}}\n");
+    print_status(FT_Err_Unimplemented_Feature);
+    printf(",\"output\":null}\n");
     return 0;
 }
 
@@ -12898,7 +12987,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
     }
-    if (argc == 3 && streq(argv[1], "--add-default-modules")) {
+    if ((argc == 3 || argc == 4) && streq(argv[1], "--add-default-modules")) {
         return emit_add_default_modules(argc, argv);
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--done-freetype")) {

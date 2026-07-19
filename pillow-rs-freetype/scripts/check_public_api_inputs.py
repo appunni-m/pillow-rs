@@ -1379,10 +1379,9 @@ def set_debug_hook_real_parity_reason(row: ConcreteInput) -> str | None:
 def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
         row.operation == "ftmodapi.add_default_modules"
-        and row.case_id
-        == "ftmodapi.FT_Add_Default_Modules.null_library_no_return_error"
+        and row.subject == "ftmodapi.FT_Add_Default_Modules"
     ):
-        return "FT_Add_Default_Modules null-library void/no-crash behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        return "FT_Add_Default_Modules module-table mutation/no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

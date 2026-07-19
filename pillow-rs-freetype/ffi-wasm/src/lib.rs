@@ -1380,6 +1380,22 @@ pub fn abi_support_add_default_modules(library_present: i32) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_default_modules_observation(
+    library_present: i32,
+) -> (bool, &'static [&'static str]) {
+    let mut library = if library_present != 0 {
+        Some(rust_ffi::FT_New_Library_Without_Default_Modules())
+    } else {
+        None
+    };
+    rust_ffi::FT_Add_Default_Modules(library.as_mut());
+    (
+        false,
+        rust_ffi::FT_Library_Default_Module_Names(library.as_ref()),
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_init_free_type_created_library() -> bool {
     let _library = rust_ffi::FT_Init_FreeType();
     true

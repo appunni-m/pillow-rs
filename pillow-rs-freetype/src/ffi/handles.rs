@@ -1167,10 +1167,32 @@ pub fn FT_Bitmap_Blend(
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,
-    has_truetype_module: bool,
+    module_names: &'static [&'static str],
     debug_hooks: [FT_DebugHook_Func; 4],
     _lcd_geometry: [FT_Vector; 3],
 }
+
+const DEFAULT_MODULE_NAMES: &[&str] = &[
+    "autofitter",
+    "truetype",
+    "type1",
+    "cff",
+    "cid",
+    "pfr",
+    "type42",
+    "winfonts",
+    "pcf",
+    "bdf",
+    "psaux",
+    "psnames",
+    "pshinter",
+    "sfnt",
+    "smooth",
+    "raster1",
+    "sdf",
+    "bsdf",
+    "svg",
+];
 
 #[derive(Clone)]
 pub struct FT_Face {
@@ -1422,7 +1444,7 @@ pub struct FT_GlyphSlot {
 pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
-        has_truetype_module: true,
+        module_names: DEFAULT_MODULE_NAMES,
         debug_hooks: [None; 4],
         _lcd_geometry: [
             FT_Vector { x: -21, y: 0 },
@@ -1435,7 +1457,7 @@ pub fn FT_Init_FreeType() -> FT_Library {
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_New_Library_Without_Default_Modules() -> FT_Library {
     FT_Library {
-        has_truetype_module: false,
+        module_names: &[],
         ..FT_Init_FreeType()
     }
 }
@@ -2486,7 +2508,7 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
     // FreeType 2.14.3 `src/base/ftobjs.c:FT_Get_TrueType_Engine_Type` first
     // looks up the "truetype" module; a library created by `FT_New_Library`
     // without default modules therefore returns `NONE`, same as a null library.
-    if library.is_some_and(|library| library.has_truetype_module) {
+    if library.is_some_and(|library| library.module_names.contains(&"truetype")) {
         FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
     } else {
         FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
@@ -2496,10 +2518,11 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
 pub fn FT_Add_Default_Modules(library: Option<&mut FT_Library>) {
     // FreeType 2.14.3 `src/base/ftinit.c:FT_Add_Default_Modules` returns
     // `void`; null-library errors are swallowed while iterating
-    // `FT_Add_Module`.  For a live library, the public effect relevant to
-    // currently modeled modules is that the TrueType module becomes available.
+    // `FT_Add_Module`.  For a live library, the observable public effect is
+    // that the default module classes from `ftmodule.h` become discoverable
+    // through module lookups in registration order.
     if let Some(library) = library {
-        library.has_truetype_module = true;
+        library.module_names = DEFAULT_MODULE_NAMES;
     }
 }
 
@@ -2550,12 +2573,22 @@ fn same_debug_hook(left: FT_DebugHook_Func, right: FT_DebugHook_Func) -> bool {
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Has_TrueType_Module(library: Option<&FT_Library>) -> bool {
-    library.is_some_and(|library| library.has_truetype_module)
+    FT_Library_Has_Module(library, "truetype")
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Has_TrueType_Engine_Service(library: Option<&FT_Library>) -> bool {
     FT_Library_Has_TrueType_Module(library)
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Has_Module(library: Option<&FT_Library>, name: &str) -> bool {
+    library.is_some_and(|library| library.module_names.contains(&name))
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Default_Module_Names(library: Option<&FT_Library>) -> &'static [&'static str] {
+    library.map_or(&[], |library| library.module_names)
 }
 
 pub fn FT_Set_Transform(
