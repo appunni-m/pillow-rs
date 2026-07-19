@@ -4619,6 +4619,97 @@ Verified commands:
 make -C pillow-rs-freetype test-case CASE=ftadvanc.FT_Get_Advances.error_null_face_or_output
 ```
 
+### Issue Set Deferred 10+: rejected route-only batches and next real surfaces
+
+Previous blocker:
+
+- The user requested at least ten related issues per batch, but the largest
+  remaining placeholder-style buckets are not valid route-label promotions.
+- Broad route-audit promotion was tested and rejected for these buckets because
+  it changed generic fallback rows into exact runtime rows that the maintained
+  oracle or runtime lanes do not currently implement.
+
+Rejected route-only batches:
+
+1. `ftlist` mutation/lifecycle rows: 27 rows look related, but promoting the
+   family makes the focused `ftlist.FT_List` run fail because the pinned C
+   oracle returns harness error `7` for 27 rows. Required work is a maintained
+   C oracle route plus Rust FFI, thin C ABI, and WASM list-state runners.
+2. `load_glyph` public error rows: 26 rows use malformed-glyph fixtures, but
+   most specify `glyph_index: "fixture_defined_error_glyph"`. The current
+   harness maps that symbolic selector to glyph 0, and direct C oracle probes
+   over sampled generated fonts returned `FT_Err_Ok` for tested glyphs instead
+   of the declared bytecode/CFF errors. Required work is to fix fixture
+   generation/metadata so the malformed glyph is source-backed and selected
+   deterministically, then fix any Rust core divergence exposed by exact C
+   comparison.
+3. `ftdriver` autohinter/driver property rows: 12 rows pass only while generic
+   fallback is allowed. Promoting `ftdriver.property_set_get`,
+   `ftdriver.glyph_to_script_map`, and `ftdriver.hinting_engine_property`
+   makes the `ftdriver.FT_AUTOHINTER_SCRIPT_` focused run fail with C oracle
+   harness error `7` for the runtime rows. Required work is real
+   `FT_Property_Set`/`FT_Property_Get` property runners plus matching Rust FFI,
+   thin C ABI, and WASM observations for property readback, glyph-to-script-map
+   pointers, and glyph output side effects.
+4. `ftmm` descriptor/coordinate success rows: enough rows exist numerically,
+   but most remaining rows reference missing or `required_future_asset`
+   variation/MM fonts such as `fonts/variable/inter-wght.ttf` and
+   `fonts/type1-mm/adobe-mm-two-axis.pfb`. Required work is source-backed
+   fixture generation or checked-in active assets before those rows can become
+   real parity.
+
+Plan:
+
+1. Do not promote any of the above buckets through route audit until the exact
+   focused lane fails without generic fallback for the right C-vs-Rust reason.
+2. For `ftdriver`, start with one representative `FT_AUTOHINTER_SCRIPT_LATIN`
+   property row and implement the pinned C oracle command first; then add Rust
+   FFI, C ABI, and WASM outputs only if they observe the same public fields.
+3. For `load_glyph`, add explicit fixture metadata for the malformed glyph
+   index or regenerate the font with a deterministic named malformed glyph;
+   never keep `fixture_defined_error_glyph -> 0` as proof of error parity.
+4. For `ftmm`, add or generate the missing active variable/MM fixtures before
+   promoting success descriptor rows.
+5. For `ftlist`, implement maintained list-state runners before changing the
+   route audit category.
+
+### Issue Set Current: `FT_Library_SetLcdGeometry` unavailable-subpixel exact route
+
+Previous blocker:
+
+- `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`
+  remained in `generic-error-fallback` even though the existing runtime route
+  compared pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI successfully.
+
+Plan:
+
+1. Keep the fixture intact.
+2. Require exact error status/output comparison for this concrete public case
+   ID.
+3. Add a route-audit reason specific to `FT_Library_SetLcdGeometry` unavailable
+   subpixel support.
+4. Re-run the focused row and route audit before committing.
+
+Verified progress:
+
+- Focused parity passed before reclassification:
+  `runtime_parity: passed=1 failed=0 total=1`.
+- The route audit now classifies
+  `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`
+  as a real exact route.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering
+make -C pillow-rs-freetype test-ffi-compat
+FONTDONE_UNIFIED_ORACLE_REFRESH=1 make -C pillow-rs-freetype test
+make -C pillow-rs-freetype fmt
+make -C pillow-rs-freetype clippy
+make -C pillow-rs-freetype build
+git diff --check
+```
+
 ### Issue Set AZ: `FT_Get_Advance` invalid-glyph/invalid-flags exact-error route
 
 Previous blocker:
