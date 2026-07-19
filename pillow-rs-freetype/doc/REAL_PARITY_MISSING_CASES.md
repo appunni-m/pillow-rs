@@ -1,5 +1,60 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: future-batch exact route triage
+
+Scope:
+
+- The requested future batch was treated as a promotion pass over pending
+  `required_future_asset` and generic fallback rows, with coverage disabled.
+- Rows were promoted only when a focused refreshed parity run compared pinned C
+  FreeType, Rust FFI, C ABI, and WASM ABI exactly.
+
+Rejected future-asset probes:
+
+- `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: temporarily
+  removing `required_future_asset` made the row runnable, but pinned C returned
+  error `85`; the tracked `fonts/bitmap/bitmap-only.pcf` file is still not a
+  C-openable bitmap-only face for this public macro route.
+- `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: temporarily
+  removing `required_future_asset` made the row runnable, but pinned C returned
+  error `6`; the current `input/fonts/cache/bitmap-strike-small-sbits.ttf`
+  symlink does not satisfy the missing-SBit success contract.
+- `ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`: the row still
+  references an unresolved SVG glyph asset and remains unpromoted.
+- `ftotval.FT_VALIDATE_BASE`, `FT_VALIDATE_GDEF`, `FT_VALIDATE_GPOS`,
+  `FT_VALIDATE_GSUB`, `FT_VALIDATE_JSTF`, `FT_VALIDATE_MATH`, and
+  `FT_VALIDATE_OT` success rows remain asset-pending where the focused
+  operation reports unresolved runtime fonts.
+- `ftstroke.FT_Stroker_ConicTo` success rows, `ftstroke.FT_Stroker_CubicTo`
+  success rows, `ftstroke.FT_Stroker_LineTo` success rows, and
+  `ftstroke.FT_Stroker_GetCounts` success rows initially passed under generic
+  fallback classification. After exact promotion, the refreshed C oracle
+  returned error `7` for the success rows, so they remain generic fallback
+  until the stroker success route is fixed at the public endpoint.
+
+Promoted rows:
+
+- `ftotval.FT_OpenType_Validate.selected_tables_success`
+
+Focused non-coverage proof before promotion:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftotval.open_type_validate
+make -C pillow-rs-freetype test-op OP=ftstroke.conic_to
+make -C pillow-rs-freetype test-op OP=ftstroke.cubic_to
+make -C pillow-rs-freetype test-op OP=ftstroke.line_to
+make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
+```
+
+Results:
+
+- `ftotval.open_type_validate`: `11 / 11` runnable rows passed, with nine
+  existing asset-pending rows left visible.
+- Each selected stroker operation passed `4 / 4` only while fallback-classified;
+  exact promotion failed with C error `7`, so those rows were not retained.
+- No fixture input, oracle output, expected value, threshold, or runtime logic
+  was changed.
+
 ## 2026-07-18 Parity-Only Fix Plan
 
 Current branch: `ftmm-route-audit-placeholder-parity`.

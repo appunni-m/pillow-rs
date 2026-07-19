@@ -2308,6 +2308,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_OpenType_Validate malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_OpenType_Validate.selected_tables_success"
+    ):
+        return "FT_OpenType_Validate selected-table success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
         and row.case_id == "ftotval.FT_VALIDATE_GDEF.malformed_table_error"
     ):
         return "FT_VALIDATE_GDEF malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
