@@ -48,9 +48,9 @@ pub use handles::{
     FT_RoundFix, FT_Select_Charmap, FT_Select_Size, FT_Set_Char_Size, FT_Set_Charmap,
     FT_Set_Debug_Hook, FT_Set_Default_Properties, FT_Set_Default_Properties_From_Env,
     FT_Set_Named_Instance, FT_Set_Pixel_Sizes, FT_Set_Transform, FT_Set_Var_Design_Coordinates,
-    FT_Sfnt_Table_Info, FT_Sin, FT_Tan, FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize,
-    FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent,
-    FTOutlineDecomposeRun,
+    FT_Sfnt_Table_Info, FT_Sin, FT_Stroker, FT_Stroker_Done, FT_Stroker_Rewind, FT_Stroker_Set,
+    FT_Tan, FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate,
+    FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
 };
 #[cfg(any(test, feature = "abi-test-support"))]
 pub use handles::{

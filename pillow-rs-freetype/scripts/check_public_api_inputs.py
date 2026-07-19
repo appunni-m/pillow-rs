@@ -1196,6 +1196,8 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
         return None
+    if ftstroke_null_noop_real_parity_reason(row):
+        return None
     if operation_is_compile_contract(row.operation):
         return None
     if row.operation in {
@@ -1210,6 +1212,20 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
         "FT_Stroker object/path success and lifecycle behavior requires a "
         "maintained stroker route; keeping it generic would be a green placeholder"
     )
+
+
+def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact null-stroker no-op routes verified against FreeType ftstroke.c."""
+    if row.case_id in {
+        "ftstroke.FT_Stroker_Set.null_stroker_noop",
+        "ftstroke.FT_Stroker_Rewind.null_stroker_noop",
+        "ftstroke.FT_Stroker_Done.null_stroker_noop",
+    }:
+        return (
+            "FreeType ftstroke.c null-stroker no-op with explicit C oracle, "
+            "Rust FFI, C ABI, and WASM route"
+        )
+    return None
 
 
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
@@ -4012,6 +4028,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
             "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
             "and allocator facade; treating it as generic would be a green placeholder",
         )
+    ftstroke_null_noop_reason = ftstroke_null_noop_real_parity_reason(row)
+    if ftstroke_null_noop_reason:
+        return ("real-parity", ftstroke_null_noop_reason)
     ftstroke_pending = ftstroke_stroker_pending_reason(row)
     if ftstroke_pending:
         return ("pending-route", ftstroke_pending)
