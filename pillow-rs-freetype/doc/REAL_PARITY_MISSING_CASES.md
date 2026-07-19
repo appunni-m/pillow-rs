@@ -3699,12 +3699,25 @@ repo-visible buckets for handoff and subagent selection.
 
 ### Issue Set Current: FT_List public route implementation plan
 
-Problem:
+Status:
+
+- `FT_List_Add` and `FT_List_Find` are now strict real parity. The pinned C
+  oracle emits tokenized list topology/identity JSON from actual FreeType
+  `src/base/ftutil.c` calls, and the Rust FFI, C ABI, and WASM ABI lanes call
+  their own list APIs before emitting the same tokenized graph. Route audit
+  impact: `real-parity` 4311 -> 4318 and `generic-fallback` 619 -> 612.
+- `FT_List_Remove`, `FT_List_Up`, `FT_List_Iterate` success/mutation rows, and
+  `FT_List_Finalize` remain unpromoted. They need the same strict oracle/backend
+  topology serializers before route classification changes. `FT_List_Finalize`
+  additionally needs allocator/free-event modeling because C frees nodes through
+  `FT_Memory`.
+
+Previous blocker:
 
 - `FT_List_Add`, `FT_List_Finalize`, `FT_List_Find`,
-  `FT_List_Iterate`, `FT_List_Remove`, and `FT_List_Up` are present in the
-  public manifest and fixtures, but the current C ABI and WASM layers do not
-  export these list functions, and `fontdone::ffi` only defines the raw
+  `FT_List_Iterate`, `FT_List_Remove`, and `FT_List_Up` were present in the
+  public manifest and fixtures, but the C ABI and WASM layers did not export
+  these list functions, and `fontdone::ffi` only defined the raw
   `FT_ListRec`/`FT_ListNodeRec` layout types.
 - Temporary route promotions for `FT_List_Add`, `FT_List_Finalize`,
   `FT_List_Find`, and the two `FT_List_Iterate` success rows failed strict
@@ -3712,22 +3725,34 @@ Problem:
   (`7`). The two existing `FT_List_Iterate` error rows only exercise generic
   invalid-argument behavior; they are not enough to prove list traversal.
 
-Required fix:
+Completed fix:
 
 1. Add safe core-owned list operations in `fontdone::ffi` that take Rust
-   references or typed callback adapters. This is the behavior owner.
+   references or typed callback adapters. This is the behavior owner. Done for
+   Add/Find/Remove/Up/Iterate-next helpers; Finalize remains allocator-gated.
 2. Add thin C ABI exports that only validate raw pointers, adapt callbacks, and
-   call the core functions. Do not implement list topology logic in
-   `ffi-c/src/lib.rs`.
+   call the core functions. Done for Add/Find/Remove/Up/Iterate.
 3. Add equivalent WASM ABI test-support exports only if the public route audit
    expects JS/WASM coverage for these rows; they must delegate to the same core
-   list operations.
+   list operations. Done for Add/Find/Remove/Up/Iterate.
 4. Extend the pinned C oracle dispatch in `scripts/gen_unified_oracle.c` for
    the synthetic list fixtures instead of accepting the fallback `error 7`.
+   Done for Add/Find only.
 5. Add the missing facade fixtures under `tests/fixtures/facades/list/` with
    input topology/callback descriptions only. Do not embed oracle outputs.
-6. Promote rows case-by-case only after strict full parity passes; do not add
-   broad `ftlist.*` operation classification.
+   Still pending for broader Remove/Up/Iterate/Finalize expansion.
+6. Promote rows case-by-case only after strict full parity passes. Done for
+   `ftlist.list_add` and `ftlist.list_find` only; do not add broad `ftlist.*`
+   operation classification.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftlist
+make -C pillow-rs-freetype test-ffi-compat
+make fontdone-lint
+make fontdone-parity
+```
 
 Rejected shortcuts:
 

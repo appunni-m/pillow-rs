@@ -285,6 +285,8 @@ REAL_PARITY_OPERATIONS = {
     "ftbitmap.glyphslot_own_bitmap",
     "ftbitmap.bitmap_init",
     "ftbitmap.bitmap_new",
+    "ftlist.list_add",
+    "ftlist.list_find",
     "ftcache.sbit_cache_lookup",
     "ftcache.manager_reset",
     "ftoutln.outline_render",

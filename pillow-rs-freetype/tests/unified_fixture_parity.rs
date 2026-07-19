@@ -2637,6 +2637,8 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftlist.list_add" => c_ftlist_add(case),
+            "ftlist.list_find" => c_ftlist_find(case),
             "size_metrics" => {
                 let face = self.c_face(case)?;
                 c_size_metrics_json(face).map(ok)
@@ -2903,6 +2905,8 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftlist.list_add" => wasm_ftlist_add(case),
+            "ftlist.list_find" => wasm_ftlist_find(case),
             "size_metrics" => {
                 let handle = self.wasm_face(case)?;
                 let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
@@ -3369,6 +3373,637 @@ fn rust_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
     }
     let face = rust_new_face_without_size(case)?;
     Ok(ok(gasp_json(FT_Get_Gasp(Some(&face), ppem), ppem)))
+}
+
+fn rust_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
+    let mut data_a = 1_u8;
+    let mut data_b = 2_u8;
+    let mut data_c = 3_u8;
+    let data_a = (&mut data_a as *mut u8).cast::<c_void>();
+    let data_b = (&mut data_b as *mut u8).cast::<c_void>();
+    let data_c = (&mut data_c as *mut u8).cast::<c_void>();
+
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Add.success_empty_list" => {
+            let mut list = FT_ListRec::default();
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..FT_ListNodeRec::default()
+            };
+            FT_List_Add(Some(&mut list), Some(&mut node_a), None);
+            Ok(ok(json!({
+                "list": rust_list_pair(list.head, list.tail, &node_a, None, None),
+                "nodes": [rust_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)]
+            })))
+        }
+        "ftlist.FT_List_Add.success_non_empty_list" => {
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..FT_ListNodeRec::default()
+            };
+            let mut node_b = FT_ListNodeRec {
+                data: data_b,
+                ..FT_ListNodeRec::default()
+            };
+            let mut node_c = FT_ListNodeRec {
+                prev: ptr::with_exposed_provenance_mut(0x51),
+                next: ptr::with_exposed_provenance_mut(0x52),
+                data: data_c,
+            };
+            node_a.next = &mut node_b;
+            node_b.prev = &mut node_a;
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            FT_List_Add(Some(&mut list), Some(&mut node_c), Some(&mut node_b));
+            Ok(ok(json!({
+                "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)),
+                "nodes": [
+                    rust_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    rust_list_node("node_b", &node_b, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    rust_list_node("node_c", &node_c, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c))
+                ]
+            })))
+        }
+        "ftlist.FT_List_Add.null_list_or_node_noop" => {
+            let mut list = FT_ListRec::default();
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..FT_ListNodeRec::default()
+            };
+            FT_List_Add(None, Some(&mut node_a), None);
+            let null_list = json!({
+                "variant": "null_list",
+                "list": rust_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": rust_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            FT_List_Add(Some(&mut list), None, None);
+            let null_node = json!({
+                "variant": "null_node",
+                "list": rust_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": rust_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            Ok(ok(json!({"rows": [null_list, null_node]})))
+        }
+        other => Err(format!("unsupported rust FT_List_Add case {other}")),
+    }
+}
+
+fn rust_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
+    let mut missing = 1_u8;
+    let mut other = 2_u8;
+    let mut needle = 3_u8;
+    let missing = (&mut missing as *mut u8).cast::<c_void>();
+    let other = (&mut other as *mut u8).cast::<c_void>();
+    let needle = (&mut needle as *mut u8).cast::<c_void>();
+    let mut node_a = FT_ListNodeRec {
+        data: needle,
+        ..FT_ListNodeRec::default()
+    };
+    let mut node_b = FT_ListNodeRec {
+        data: other,
+        ..FT_ListNodeRec::default()
+    };
+    let mut node_c = FT_ListNodeRec {
+        data: needle,
+        ..FT_ListNodeRec::default()
+    };
+    node_a.next = &mut node_b;
+    node_b.prev = &mut node_a;
+    node_b.next = &mut node_c;
+    node_c.prev = &mut node_b;
+    let list = FT_ListRec {
+        head: &mut node_a,
+        tail: &mut node_c,
+    };
+
+    let (list_arg, data_arg) = match case.case_id.as_str() {
+        "ftlist.FT_List_Find.success_finds_first_matching_node" => {
+            (&list as *const FT_ListRec as FT_List, needle)
+        }
+        "ftlist.FT_List_Find.missing_data_returns_null" => {
+            (&list as *const FT_ListRec as FT_List, missing)
+        }
+        "ftlist.FT_List_Find.null_list_returns_null" => (ptr::null_mut(), needle),
+        "ftlist.FT_List_Find.null_data_matches_null_node_data" => {
+            node_b.data = ptr::null_mut();
+            node_c.data = ptr::null_mut();
+            (&list as *const FT_ListRec as FT_List, ptr::null_mut())
+        }
+        other => return Err(format!("unsupported rust FT_List_Find case {other}")),
+    };
+
+    let (found, visited) =
+        rust_list_find_with_visited(list_arg, data_arg, &node_a, Some(&node_b), Some(&node_c));
+    Ok(ok(json!({"return": found, "visited_nodes": visited})))
+}
+
+fn rust_list_find_with_visited(
+    list: FT_List,
+    data: FT_Pointer,
+    node_a: &FT_ListNodeRec,
+    node_b: Option<&FT_ListNodeRec>,
+    node_c: Option<&FT_ListNodeRec>,
+) -> (&'static str, Vec<&'static str>) {
+    if list.is_null() {
+        return ("null", Vec::new());
+    }
+    let mut visited = Vec::new();
+    let mut found = "null";
+    for (token, node) in [
+        ("node_a", Some(node_a)),
+        ("node_b", node_b),
+        ("node_c", node_c),
+    ] {
+        if let Some(node) = node {
+            visited.push(token);
+            if FT_List_Find_Node_Matches(node, data) {
+                found = token;
+                break;
+            }
+        }
+    }
+    (found, visited)
+}
+
+fn rust_list_pair(
+    head: FT_ListNode,
+    tail: FT_ListNode,
+    node_a: &FT_ListNodeRec,
+    node_b: Option<&FT_ListNodeRec>,
+    node_c: Option<&FT_ListNodeRec>,
+) -> Value {
+    json!({
+        "head": rust_list_node_token(head, node_a, node_b, node_c),
+        "tail": rust_list_node_token(tail, node_a, node_b, node_c)
+    })
+}
+
+fn rust_list_node(
+    id: &str,
+    node: &FT_ListNodeRec,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+    node_a: &FT_ListNodeRec,
+    node_b: Option<&FT_ListNodeRec>,
+    node_c: Option<&FT_ListNodeRec>,
+) -> Value {
+    json!({
+        "id": id,
+        "prev": rust_list_node_token(node.prev, node_a, node_b, node_c),
+        "next": rust_list_node_token(node.next, node_a, node_b, node_c),
+        "data": list_data_token(node.data, data_a, data_b, data_c)
+    })
+}
+
+fn rust_list_node_token(
+    node: FT_ListNode,
+    node_a: &FT_ListNodeRec,
+    node_b: Option<&FT_ListNodeRec>,
+    node_c: Option<&FT_ListNodeRec>,
+) -> &'static str {
+    if node.is_null() {
+        "null"
+    } else if std::ptr::eq(node.cast_const(), node_a) {
+        "node_a"
+    } else if node_b.is_some_and(|node_b| std::ptr::eq(node.cast_const(), node_b)) {
+        "node_b"
+    } else if node_c.is_some_and(|node_c| std::ptr::eq(node.cast_const(), node_c)) {
+        "node_c"
+    } else {
+        "foreign"
+    }
+}
+
+fn list_data_token(
+    data: FT_Pointer,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> &'static str {
+    if data.is_null() {
+        "null"
+    } else if data == data_a {
+        "data_a"
+    } else if data == data_b {
+        "data_b"
+    } else if data == data_c {
+        "data_c"
+    } else {
+        "foreign"
+    }
+}
+
+fn c_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
+    let mut data_a = 1_u8;
+    let mut data_b = 2_u8;
+    let mut data_c = 3_u8;
+    let data_a = (&mut data_a as *mut u8).cast::<c_void>();
+    let data_b = (&mut data_b as *mut u8).cast::<c_void>();
+    let data_c = (&mut data_c as *mut u8).cast::<c_void>();
+
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Add.success_empty_list" => {
+            let mut list = c_abi::FT_ListRec::default();
+            let mut node_a = c_abi::FT_ListNodeRec {
+                data: data_a,
+                ..c_abi::FT_ListNodeRec::default()
+            };
+            c_abi::FT_List_Add(&mut list, &mut node_a);
+            Ok(ok(json!({
+                "list": c_list_pair(list.head, list.tail, &node_a, None, None),
+                "nodes": [c_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)]
+            })))
+        }
+        "ftlist.FT_List_Add.success_non_empty_list" => {
+            let mut node_a = c_abi::FT_ListNodeRec {
+                data: data_a,
+                ..c_abi::FT_ListNodeRec::default()
+            };
+            let mut node_b = c_abi::FT_ListNodeRec {
+                data: data_b,
+                ..c_abi::FT_ListNodeRec::default()
+            };
+            let mut node_c = c_abi::FT_ListNodeRec {
+                prev: ptr::with_exposed_provenance_mut(0x51),
+                next: ptr::with_exposed_provenance_mut(0x52),
+                data: data_c,
+            };
+            node_a.next = &mut node_b;
+            node_b.prev = &mut node_a;
+            let mut list = c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            c_abi::FT_List_Add(&mut list, &mut node_c);
+            Ok(ok(json!({
+                "list": c_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)),
+                "nodes": [
+                    c_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    c_list_node("node_b", &node_b, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    c_list_node("node_c", &node_c, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c))
+                ]
+            })))
+        }
+        "ftlist.FT_List_Add.null_list_or_node_noop" => {
+            let mut list = c_abi::FT_ListRec::default();
+            let mut node_a = c_abi::FT_ListNodeRec {
+                data: data_a,
+                ..c_abi::FT_ListNodeRec::default()
+            };
+            c_abi::FT_List_Add(ptr::null_mut(), &mut node_a);
+            let null_list = json!({
+                "variant": "null_list",
+                "list": c_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": c_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            c_abi::FT_List_Add(&mut list, ptr::null_mut());
+            let null_node = json!({
+                "variant": "null_node",
+                "list": c_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": c_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            Ok(ok(json!({"rows": [null_list, null_node]})))
+        }
+        other => Err(format!("unsupported c FT_List_Add case {other}")),
+    }
+}
+
+fn c_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
+    let mut missing = 1_u8;
+    let mut other = 2_u8;
+    let mut needle = 3_u8;
+    let missing = (&mut missing as *mut u8).cast::<c_void>();
+    let other = (&mut other as *mut u8).cast::<c_void>();
+    let needle = (&mut needle as *mut u8).cast::<c_void>();
+    let mut node_a = c_abi::FT_ListNodeRec {
+        data: needle,
+        ..c_abi::FT_ListNodeRec::default()
+    };
+    let mut node_b = c_abi::FT_ListNodeRec {
+        data: other,
+        ..c_abi::FT_ListNodeRec::default()
+    };
+    let mut node_c = c_abi::FT_ListNodeRec {
+        data: needle,
+        ..c_abi::FT_ListNodeRec::default()
+    };
+    node_a.next = &mut node_b;
+    node_b.prev = &mut node_a;
+    node_b.next = &mut node_c;
+    node_c.prev = &mut node_b;
+    let list = c_abi::FT_ListRec {
+        head: &mut node_a,
+        tail: &mut node_c,
+    };
+    let (list_arg, data_arg) = match case.case_id.as_str() {
+        "ftlist.FT_List_Find.success_finds_first_matching_node" => {
+            (&list as *const c_abi::FT_ListRec as c_abi::FT_List, needle)
+        }
+        "ftlist.FT_List_Find.missing_data_returns_null" => {
+            (&list as *const c_abi::FT_ListRec as c_abi::FT_List, missing)
+        }
+        "ftlist.FT_List_Find.null_list_returns_null" => (ptr::null_mut(), needle),
+        "ftlist.FT_List_Find.null_data_matches_null_node_data" => {
+            node_b.data = ptr::null_mut();
+            node_c.data = ptr::null_mut();
+            (
+                &list as *const c_abi::FT_ListRec as c_abi::FT_List,
+                ptr::null_mut(),
+            )
+        }
+        other => return Err(format!("unsupported c FT_List_Find case {other}")),
+    };
+    let found = c_abi::FT_List_Find(list_arg, data_arg);
+    let visited = c_find_visited(list_arg, data_arg, &node_a, Some(&node_b), Some(&node_c));
+    Ok(ok(json!({
+        "return": c_list_node_token(found, &node_a, Some(&node_b), Some(&node_c)),
+        "visited_nodes": visited
+    })))
+}
+
+fn c_find_visited(
+    list: c_abi::FT_List,
+    data: *mut c_void,
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: Option<&c_abi::FT_ListNodeRec>,
+    node_c: Option<&c_abi::FT_ListNodeRec>,
+) -> Vec<&'static str> {
+    if list.is_null() {
+        return Vec::new();
+    }
+    let mut visited = Vec::new();
+    for (token, node) in [
+        ("node_a", Some(node_a)),
+        ("node_b", node_b),
+        ("node_c", node_c),
+    ] {
+        if let Some(node) = node {
+            visited.push(token);
+            if node.data == data {
+                break;
+            }
+        }
+    }
+    visited
+}
+
+fn c_list_pair(
+    head: c_abi::FT_ListNode,
+    tail: c_abi::FT_ListNode,
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: Option<&c_abi::FT_ListNodeRec>,
+    node_c: Option<&c_abi::FT_ListNodeRec>,
+) -> Value {
+    json!({
+        "head": c_list_node_token(head, node_a, node_b, node_c),
+        "tail": c_list_node_token(tail, node_a, node_b, node_c)
+    })
+}
+
+fn c_list_node(
+    id: &str,
+    node: &c_abi::FT_ListNodeRec,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: Option<&c_abi::FT_ListNodeRec>,
+    node_c: Option<&c_abi::FT_ListNodeRec>,
+) -> Value {
+    json!({
+        "id": id,
+        "prev": c_list_node_token(node.prev, node_a, node_b, node_c),
+        "next": c_list_node_token(node.next, node_a, node_b, node_c),
+        "data": list_data_token(node.data, data_a, data_b, data_c)
+    })
+}
+
+fn c_list_node_token(
+    node: c_abi::FT_ListNode,
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: Option<&c_abi::FT_ListNodeRec>,
+    node_c: Option<&c_abi::FT_ListNodeRec>,
+) -> &'static str {
+    if node.is_null() {
+        "null"
+    } else if std::ptr::eq(node.cast_const(), node_a) {
+        "node_a"
+    } else if node_b.is_some_and(|node_b| std::ptr::eq(node.cast_const(), node_b)) {
+        "node_b"
+    } else if node_c.is_some_and(|node_c| std::ptr::eq(node.cast_const(), node_c)) {
+        "node_c"
+    } else {
+        "foreign"
+    }
+}
+
+fn wasm_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
+    let mut data_a = 1_u8;
+    let mut data_b = 2_u8;
+    let mut data_c = 3_u8;
+    let data_a = (&mut data_a as *mut u8).cast::<c_void>();
+    let data_b = (&mut data_b as *mut u8).cast::<c_void>();
+    let data_c = (&mut data_c as *mut u8).cast::<c_void>();
+
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Add.success_empty_list" => {
+            let mut list = wasm_abi::FontdoneWasmList::default();
+            let mut node_a = wasm_abi::FontdoneWasmListNode {
+                data: data_a,
+                ..wasm_abi::FontdoneWasmListNode::default()
+            };
+            wasm_abi::fontdone_wasm_list_add(&mut list, &mut node_a);
+            Ok(ok(json!({
+                "list": wasm_list_pair(list.head, list.tail, &node_a, None, None),
+                "nodes": [wasm_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)]
+            })))
+        }
+        "ftlist.FT_List_Add.success_non_empty_list" => {
+            let mut node_a = wasm_abi::FontdoneWasmListNode {
+                data: data_a,
+                ..wasm_abi::FontdoneWasmListNode::default()
+            };
+            let mut node_b = wasm_abi::FontdoneWasmListNode {
+                data: data_b,
+                ..wasm_abi::FontdoneWasmListNode::default()
+            };
+            let mut node_c = wasm_abi::FontdoneWasmListNode {
+                prev: ptr::with_exposed_provenance_mut(0x51),
+                next: ptr::with_exposed_provenance_mut(0x52),
+                data: data_c,
+            };
+            node_a.next = &mut node_b;
+            node_b.prev = &mut node_a;
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            wasm_abi::fontdone_wasm_list_add(&mut list, &mut node_c);
+            Ok(ok(json!({
+                "list": wasm_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)),
+                "nodes": [
+                    wasm_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    wasm_list_node("node_b", &node_b, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c)),
+                    wasm_list_node("node_c", &node_c, data_a, data_b, data_c, &node_a, Some(&node_b), Some(&node_c))
+                ]
+            })))
+        }
+        "ftlist.FT_List_Add.null_list_or_node_noop" => {
+            let mut list = wasm_abi::FontdoneWasmList::default();
+            let mut node_a = wasm_abi::FontdoneWasmListNode {
+                data: data_a,
+                ..wasm_abi::FontdoneWasmListNode::default()
+            };
+            wasm_abi::fontdone_wasm_list_add(ptr::null_mut(), &mut node_a);
+            let null_list = json!({
+                "variant": "null_list",
+                "list": wasm_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": wasm_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            wasm_abi::fontdone_wasm_list_add(&mut list, ptr::null_mut());
+            let null_node = json!({
+                "variant": "null_node",
+                "list": wasm_list_pair(list.head, list.tail, &node_a, None, None),
+                "node": wasm_list_node("node_a", &node_a, data_a, data_b, data_c, &node_a, None, None)
+            });
+            Ok(ok(json!({"rows": [null_list, null_node]})))
+        }
+        other => Err(format!("unsupported wasm FT_List_Add case {other}")),
+    }
+}
+
+fn wasm_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
+    let mut missing = 1_u8;
+    let mut other = 2_u8;
+    let mut needle = 3_u8;
+    let missing = (&mut missing as *mut u8).cast::<c_void>();
+    let other = (&mut other as *mut u8).cast::<c_void>();
+    let needle = (&mut needle as *mut u8).cast::<c_void>();
+    let mut node_a = wasm_abi::FontdoneWasmListNode {
+        data: needle,
+        ..wasm_abi::FontdoneWasmListNode::default()
+    };
+    let mut node_b = wasm_abi::FontdoneWasmListNode {
+        data: other,
+        ..wasm_abi::FontdoneWasmListNode::default()
+    };
+    let mut node_c = wasm_abi::FontdoneWasmListNode {
+        data: needle,
+        ..wasm_abi::FontdoneWasmListNode::default()
+    };
+    node_a.next = &mut node_b;
+    node_b.prev = &mut node_a;
+    node_b.next = &mut node_c;
+    node_c.prev = &mut node_b;
+    let list = wasm_abi::FontdoneWasmList {
+        head: &mut node_a,
+        tail: &mut node_c,
+    };
+    let (list_arg, data_arg) = match case.case_id.as_str() {
+        "ftlist.FT_List_Find.success_finds_first_matching_node" => (
+            &list as *const wasm_abi::FontdoneWasmList as wasm_abi::FT_List,
+            needle,
+        ),
+        "ftlist.FT_List_Find.missing_data_returns_null" => (
+            &list as *const wasm_abi::FontdoneWasmList as wasm_abi::FT_List,
+            missing,
+        ),
+        "ftlist.FT_List_Find.null_list_returns_null" => (ptr::null_mut(), needle),
+        "ftlist.FT_List_Find.null_data_matches_null_node_data" => {
+            node_b.data = ptr::null_mut();
+            node_c.data = ptr::null_mut();
+            (
+                &list as *const wasm_abi::FontdoneWasmList as wasm_abi::FT_List,
+                ptr::null_mut(),
+            )
+        }
+        other => return Err(format!("unsupported wasm FT_List_Find case {other}")),
+    };
+    let found = wasm_abi::fontdone_wasm_list_find(list_arg, data_arg);
+    let visited = wasm_find_visited(list_arg, data_arg, &node_a, Some(&node_b), Some(&node_c));
+    Ok(ok(json!({
+        "return": wasm_list_node_token(found, &node_a, Some(&node_b), Some(&node_c)),
+        "visited_nodes": visited
+    })))
+}
+
+fn wasm_find_visited(
+    list: wasm_abi::FT_List,
+    data: *mut c_void,
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: Option<&wasm_abi::FontdoneWasmListNode>,
+    node_c: Option<&wasm_abi::FontdoneWasmListNode>,
+) -> Vec<&'static str> {
+    if list.is_null() {
+        return Vec::new();
+    }
+    let mut visited = Vec::new();
+    for (token, node) in [
+        ("node_a", Some(node_a)),
+        ("node_b", node_b),
+        ("node_c", node_c),
+    ] {
+        if let Some(node) = node {
+            visited.push(token);
+            if node.data == data {
+                break;
+            }
+        }
+    }
+    visited
+}
+
+fn wasm_list_pair(
+    head: wasm_abi::FT_ListNode,
+    tail: wasm_abi::FT_ListNode,
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: Option<&wasm_abi::FontdoneWasmListNode>,
+    node_c: Option<&wasm_abi::FontdoneWasmListNode>,
+) -> Value {
+    json!({
+        "head": wasm_list_node_token(head, node_a, node_b, node_c),
+        "tail": wasm_list_node_token(tail, node_a, node_b, node_c)
+    })
+}
+
+fn wasm_list_node(
+    id: &str,
+    node: &wasm_abi::FontdoneWasmListNode,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: Option<&wasm_abi::FontdoneWasmListNode>,
+    node_c: Option<&wasm_abi::FontdoneWasmListNode>,
+) -> Value {
+    json!({
+        "id": id,
+        "prev": wasm_list_node_token(node.prev, node_a, node_b, node_c),
+        "next": wasm_list_node_token(node.next, node_a, node_b, node_c),
+        "data": list_data_token(node.data, data_a, data_b, data_c)
+    })
+}
+
+fn wasm_list_node_token(
+    node: wasm_abi::FT_ListNode,
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: Option<&wasm_abi::FontdoneWasmListNode>,
+    node_c: Option<&wasm_abi::FontdoneWasmListNode>,
+) -> &'static str {
+    if node.is_null() {
+        "null"
+    } else if std::ptr::eq(node.cast_const(), node_a) {
+        "node_a"
+    } else if node_b.is_some_and(|node_b| std::ptr::eq(node.cast_const(), node_b)) {
+        "node_b"
+    } else if node_c.is_some_and(|node_c| std::ptr::eq(node.cast_const(), node_c)) {
+        "node_c"
+    } else {
+        "foreign"
+    }
 }
 
 fn c_get_gasp(case: &InputCase) -> Result<RunOutput, String> {
@@ -9967,6 +10602,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-done".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
+        "ftlist.list_add" | "ftlist.list_find" => {
+            Ok(vec!["--ft-list".to_string(), case.case_id.clone()])
+        }
         "ftbitmap.bitmap_embolden" => Ok(vec![
             "--bitmap-embolden".to_string(),
             string_param(params, "scenario")?.to_string(),
@@ -11571,6 +12209,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_rust(case),
+        "ftlist.list_add" => rust_ftlist_add(case),
+        "ftlist.list_find" => rust_ftlist_find(case),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)

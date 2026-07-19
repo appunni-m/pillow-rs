@@ -18,6 +18,7 @@
 #include <freetype/ftimage.h>
 #include <freetype/ftincrem.h>
 #include <freetype/ftlcdfil.h>
+#include <freetype/ftlist.h>
 #include <freetype/ftmm.h>
 #include <freetype/ftmodapi.h>
 #include <freetype/ftoutln.h>
@@ -288,6 +289,158 @@ static void print_bitmap_convert_run(const char* label, FT_Error err, const FT_B
         printf("null,\"target_active_bytes_hash\":null,\"target_buffer_len\":0");
     }
     printf("}");
+}
+
+static const char* ft_list_node_token(FT_ListNode node,
+                                      FT_ListNode node_a,
+                                      FT_ListNode node_b,
+                                      FT_ListNode node_c) {
+    if (!node) return "null";
+    if (node == node_a) return "node_a";
+    if (node == node_b) return "node_b";
+    if (node == node_c) return "node_c";
+    return "foreign";
+}
+
+static const char* ft_list_data_token(void* data, void* data_a, void* data_b, void* data_c) {
+    if (!data) return "null";
+    if (data == data_a) return "data_a";
+    if (data == data_b) return "data_b";
+    if (data == data_c) return "data_c";
+    return "foreign";
+}
+
+static void print_ft_list_pair(const char* key,
+                               FT_ListNode head,
+                               FT_ListNode tail,
+                               FT_ListNode node_a,
+                               FT_ListNode node_b,
+                               FT_ListNode node_c) {
+    printf("\"%s\":{\"head\":\"%s\",\"tail\":\"%s\"}",
+           key,
+           ft_list_node_token(head, node_a, node_b, node_c),
+           ft_list_node_token(tail, node_a, node_b, node_c));
+}
+
+static void print_ft_list_node(const char* id,
+                               FT_ListNode node,
+                               void* data_a,
+                               void* data_b,
+                               void* data_c,
+                               FT_ListNode node_a,
+                               FT_ListNode node_b,
+                               FT_ListNode node_c) {
+    printf("{\"id\":\"%s\",\"prev\":\"%s\",\"next\":\"%s\",\"data\":\"%s\"}",
+           id,
+           ft_list_node_token(node ? node->prev : NULL, node_a, node_b, node_c),
+           ft_list_node_token(node ? node->next : NULL, node_a, node_b, node_c),
+           ft_list_data_token(node ? node->data : NULL, data_a, data_b, data_c));
+}
+
+static void print_ft_list_find_result(FT_List list,
+                                      void* data,
+                                      FT_ListNode node_a,
+                                      FT_ListNode node_b,
+                                      FT_ListNode node_c) {
+    FT_ListNode found = FT_List_Find(list, data);
+    printf("\"return\":\"%s\",\"visited_nodes\":[",
+           ft_list_node_token(found, node_a, node_b, node_c));
+    int first = 1;
+    if (list) {
+        FT_ListNode cur = list->head;
+        while (cur) {
+            if (!first) printf(",");
+            first = 0;
+            printf("\"%s\"", ft_list_node_token(cur, node_a, node_b, node_c));
+            if (cur->data == data) break;
+            cur = cur->next;
+        }
+    }
+    printf("]");
+}
+
+static int emit_ft_list(const char* case_id) {
+    unsigned char data_a = 1;
+    unsigned char data_b = 2;
+    unsigned char data_c = 3;
+    FT_ListNodeRec node_a = { NULL, NULL, &data_a };
+    FT_ListNodeRec node_b = { NULL, NULL, &data_b };
+    FT_ListNodeRec node_c = { NULL, NULL, &data_c };
+    FT_ListRec list = { NULL, NULL };
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":");
+
+    if (streq(case_id, "ftlist.FT_List_Add.success_empty_list")) {
+        FT_List_Add(&list, &node_a);
+        printf("{");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, NULL, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, NULL, NULL);
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Add.success_non_empty_list")) {
+        node_a.next = &node_b;
+        node_b.prev = &node_a;
+        node_c.prev = (FT_ListNode)(uintptr_t)0x51;
+        node_c.next = (FT_ListNode)(uintptr_t)0x52;
+        list.head = &node_a;
+        list.tail = &node_b;
+        FT_List_Add(&list, &node_c);
+        printf("{");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, &node_c);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf(",");
+        print_ft_list_node("node_c", &node_c, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Add.null_list_or_node_noop")) {
+        FT_List_Add(NULL, &node_a);
+        printf("{\"rows\":[{\"variant\":\"null_list\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, NULL, NULL);
+        printf(",\"node\":");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, NULL, NULL);
+        FT_List_Add(&list, NULL);
+        printf("},{\"variant\":\"null_node\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, NULL, NULL);
+        printf(",\"node\":");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, NULL, NULL);
+        printf("}]}");
+    } else if (streq(case_id, "ftlist.FT_List_Find.success_finds_first_matching_node") ||
+               streq(case_id, "ftlist.FT_List_Find.missing_data_returns_null") ||
+               streq(case_id, "ftlist.FT_List_Find.null_list_returns_null") ||
+               streq(case_id, "ftlist.FT_List_Find.null_data_matches_null_node_data")) {
+        node_a.data = &data_c;
+        node_b.data = &data_b;
+        node_c.data = &data_c;
+        node_a.next = &node_b;
+        node_b.prev = &node_a;
+        node_b.next = &node_c;
+        node_c.prev = &node_b;
+        list.head = &node_a;
+        list.tail = &node_c;
+        FT_List list_arg = &list;
+        void* data_arg = &data_c;
+        if (streq(case_id, "ftlist.FT_List_Find.missing_data_returns_null")) {
+            data_arg = &data_a;
+        } else if (streq(case_id, "ftlist.FT_List_Find.null_list_returns_null")) {
+            list_arg = NULL;
+        } else if (streq(case_id, "ftlist.FT_List_Find.null_data_matches_null_node_data")) {
+            node_b.data = NULL;
+            node_c.data = NULL;
+            data_arg = NULL;
+        }
+        printf("{");
+        print_ft_list_find_result(list_arg, data_arg, &node_a, &node_b, &node_c);
+        printf("}");
+    } else {
+        printf("null}\n");
+        return 2;
+    }
+    printf("}\n");
+    return 0;
 }
 
 static int emit_bitmap_convert(const char* scenario) {
@@ -13344,6 +13497,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-cbox-null-inputs")) {
         return emit_outline_get_cbox_null_inputs(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--ft-list")) {
+        return emit_ft_list(argv[2]);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);
