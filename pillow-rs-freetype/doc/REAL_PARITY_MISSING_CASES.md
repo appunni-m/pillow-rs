@@ -42,12 +42,11 @@ Rejected future-asset probes:
   failed with C error `7`; keep fallback-classified until the list success
   runner calls the public list endpoint across C, Rust, C ABI, and WASM.
 - `fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont` was
-  rechecked in the current future-batch pass.  Requiring strict error output
-  exposed a real mismatch: pinned C FreeType returns
-  `FT_Err_Unknown_File_Format` (`85`) for the current BDF-like fixture while
-  Rust FFI returns `FT_Err_Cannot_Open_Resource` (`3`).  The row is now
-  classified as `pending-route` instead of `generic-error-fallback`, because
-  accepting any error would be a green placeholder.
+  rechecked in the current future-batch pass.  The pinned public
+  `FT_New_Memory_Face` result for the BDF-like fixture is
+  `FT_Err_Invalid_Stream_Operation` (`85`) with a null face; the pure-Rust
+  constructor now detects the same BDF-like missing-STARTFONT probe before
+  SFNT fallback and routes that exact public error.
 
 Promoted rows:
 

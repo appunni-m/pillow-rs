@@ -57,6 +57,10 @@ pub enum FontError {
     #[error("Invalid glyph composite")]
     InvalidComposite,
 
+    /// BDF-like input did not start with `STARTFONT` at public face open.
+    #[error("BDF stream is missing STARTFONT")]
+    BdfMissingStartfontStreamOperation,
+
     /// A BDF glyph bitmap declaration is too large.
     #[error("BDF glyph bitmap is too large")]
     BdfBbxTooBig,
@@ -168,5 +172,11 @@ mod tests {
     fn invalid_composite_has_static_message() {
         let err = FontError::InvalidComposite;
         assert_eq!(err.to_string(), "Invalid glyph composite");
+    }
+
+    #[test]
+    fn bdf_missing_startfont_has_static_message() {
+        let err = FontError::BdfMissingStartfontStreamOperation;
+        assert_eq!(err.to_string(), "BDF stream is missing STARTFONT");
     }
 }
