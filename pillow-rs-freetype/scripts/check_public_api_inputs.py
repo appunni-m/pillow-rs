@@ -1920,6 +1920,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_BDF_Charset_ID non-BDF-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftbdf.get_bdf_charset_id"
+        and row.case_id
+        == "ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike"
+    ):
+        return "FT_Get_BDF_Charset_ID unselected-strike errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbdf.get_bdf_charset_id"
+        and row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs"
+    ):
+        return "FT_Get_BDF_Charset_ID null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftcolor.get_color_glyph_paint"
         and row.case_id == "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior"
     ):
@@ -3137,18 +3148,6 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("explicit-unsupported", "explicit Rust stub returns Unimplemented_Feature")
     if operation_is_compile_contract(row.operation):
         return ("compile-contract", "header, layout, macro, or scalar contract")
-    if (
-        row.operation == "ftbdf.get_bdf_charset_id"
-        and row.case_id
-        in {
-            "ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike",
-            "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs",
-        }
-    ):
-        return (
-            "pending-route",
-            "exact public BDF charset error comparison is not routed; accepting any error would be a green placeholder",
-        )
     route_pending = pending_route_reason(row)
     if route_pending:
         return ("pending-route", route_pending)

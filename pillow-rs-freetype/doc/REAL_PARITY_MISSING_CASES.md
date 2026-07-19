@@ -330,9 +330,9 @@ Rejected batch probes:
 - `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`:
   exact-error probe failed because pinned C returned `Ok`; do not promote as
   an expected-error row.
-- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`: focused probe is
-  not runnable because `input/fonts/bdf/charset-registry.bdf` is missing; keep
-  under the documented BDF charset fixture gap.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`: rechecked with
+  strict error output in the current route batch and promoted to exact runtime
+  parity through pinned C, Rust FFI, C ABI, and WASM.
 
 ### Issue Set Current: stale existing-asset route batch
 
@@ -729,14 +729,12 @@ Rejected exact-error candidates:
 - `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`:
   exact-error promotion failed because pinned C returned `Ok`. The row remains
   a value-contract/oracle-policy issue, not an exact-error row.
-- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`:
-  exact probe failed before comparison because fixture
-  `input/fonts/bdf/charset-registry.bdf` is missing. The row remains an
-  incomplete fixture/input issue until the required asset exists.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`: rechecked with
+  strict error output in the current route batch and promoted to exact runtime
+  parity.
 - `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`:
-  exact probe failed before comparison because fixture
-  `input/fonts/bdf/sfnt-bdf-table.otb` is missing. The row remains an
-  incomplete fixture/input issue until the required asset exists.
+  rechecked with strict error output in the current route batch and promoted
+  to exact runtime parity.
 - `ftimage.FT_PIXEL_MODE_NONE.invalid_render_target_errors`: exact promotion
   exposed a real status mismatch: pinned C returned error code `6`, while Rust
   FFI returned error code `35`. This row remains an implementation parity gap.
@@ -1442,60 +1440,32 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Property.error_null_f
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3958`, `generic-error-fallback` `237`.
 
-### Issue Set Pending: `FT_Get_BDF_Charset_ID` missing charset fixture
+### Issue Set Promoted: `FT_Get_BDF_Charset_ID` exact-error route
 
-Current blocker:
+Previous blocker:
 
-- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` references
-  `input/fonts/bdf/charset-registry.bdf`.
-- The focused parity command fails before C/Rust comparison because that asset
-  is missing from the current fixture tree.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` and
+  `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike` were
+  classified as `pending-route` because exact public BDF charset error
+  comparison was not enabled.
 
-Fix plan:
+Fix:
 
-1. Do not classify this row as `real-parity` until the same BDF charset asset is
-   present and deterministic.
-2. Add or regenerate the maintained `charset-registry.bdf` fixture through the
-   project fixture workflow.
-3. Re-run the focused row and promote only if exact status/output matches
-   pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI.
-
-Non-coverage probe:
-
-```bash
-make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs
-```
-
-Result: failed before parity comparison with missing asset
-`input/fonts/bdf/charset-registry.bdf`; row remains `generic-error-fallback`.
-
-### Issue Set Pending: `FT_Get_BDF_Charset_ID` missing SFNT-BDF fixture
-
-Current blocker:
-
-- `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`
-  references `input/fonts/bdf/sfnt-bdf-table.otb`.
-- The focused parity command fails before C/Rust comparison because that asset
-  is missing from the current fixture tree.
-
-Fix plan:
-
-1. Do not classify this row as `real-parity` until the same SFNT-BDF/OTB asset
-   is present and deterministic.
-2. Add or regenerate the maintained `sfnt-bdf-table.otb` fixture through the
-   project fixture workflow.
-3. Re-run the focused row and promote only if exact status/output matches
-   pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI.
+1. Add both concrete BDF charset error rows to the exact-error promotion list.
+2. Remove their route-audit `pending-route` override.
+3. Keep the unresolved success fixture rows pending; this promotion covers only
+   the two exact error rows that now run through pinned C, Rust FFI, C ABI, and
+   WASM.
 
 Non-coverage probe:
 
 ```bash
-make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 ```
 
-Result: failed before parity comparison with missing asset
-`input/fonts/bdf/sfnt-bdf-table.otb`; row remains
-`generic-error-fallback`.
+Result: `3 / 3` runnable rows passed, `0` failed, `2` pending for the
+unresolved BDF charset success fixtures. Route audit moved `real-parity`
+`4288 -> 4290` and `pending-route` `52 -> 50`.
 
 ### Issue Set Current: `FT_Get_BDF_Charset_ID` non-BDF-face exact-error route
 
@@ -1521,11 +1491,9 @@ Verified progress:
 - The previously fallback-classified error row now validates exact
   status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
 - No runtime Rust behavior change was needed for this row.
-- The broader `ftbdf.get_bdf_charset_id` operation lane still fails before
-  parity comparison because
-  `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` references missing
-  fixture `input/fonts/bdf/charset-registry.bdf`. That blocker remains tracked
-  separately above and is not promoted by this row.
+- The broader `ftbdf.get_bdf_charset_id` operation lane now has three exact
+  error rows promoted and passing. Two success fixture rows remain pending for
+  unresolved BDF charset assets.
 
 Focused non-coverage result:
 
@@ -7221,8 +7189,8 @@ Focused runtime:
 
 - `load_glyph`: `561 / 561` runnable rows passed, `26` pending with exact-error
   route placeholder reason.
-- `ftbdf.get_bdf_charset_id`: `1 / 1` runnable row passed, `4` pending; two
-  unresolved BDF assets and two exact-error route placeholders.
+- `ftbdf.get_bdf_charset_id`: `3 / 3` runnable rows passed, `2` pending for
+  unresolved BDF charset success assets.
 
 ### Issue Set Current: ftimage outline-decompose callback aliases
 
