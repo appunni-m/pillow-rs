@@ -208,5 +208,16 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
+        FontError::BdfBbxTooBig => FT_Err_Bbx_Too_Big as FT_Error,
+        FontError::BdfCorruptedFontHeader => FT_Err_Corrupted_Font_Header as FT_Error,
+        FontError::BdfCorruptedFontGlyphs => FT_Err_Corrupted_Font_Glyphs as FT_Error,
+        FontError::BdfMissingBbxField => FT_Err_Missing_Bbx_Field as FT_Error,
+        FontError::BdfMissingEncodingField => FT_Err_Missing_Encoding_Field as FT_Error,
+        FontError::BdfMissingFontField => FT_Err_Missing_Font_Field as FT_Error,
+        FontError::BdfMissingFontboundingboxField => {
+            FT_Err_Missing_Fontboundingbox_Field as FT_Error
+        }
+        FontError::BdfMissingSizeField => FT_Err_Missing_Size_Field as FT_Error,
+        FontError::BdfMissingStartcharField => FT_Err_Missing_Startchar_Field as FT_Error,
     }
 }

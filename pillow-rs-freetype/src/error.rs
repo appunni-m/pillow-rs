@@ -56,6 +56,42 @@ pub enum FontError {
     /// A TrueType outline or embedded bitmap composite is malformed.
     #[error("Invalid glyph composite")]
     InvalidComposite,
+
+    /// A BDF glyph bitmap declaration is too large.
+    #[error("BDF glyph bitmap is too large")]
+    BdfBbxTooBig,
+
+    /// BDF header fields are structurally corrupted or incomplete.
+    #[error("BDF font header is corrupted")]
+    BdfCorruptedFontHeader,
+
+    /// BDF glyph fields are structurally corrupted or incomplete.
+    #[error("BDF font glyphs are corrupted")]
+    BdfCorruptedFontGlyphs,
+
+    /// BDF glyph is missing its `BBX` field.
+    #[error("BDF glyph is missing BBX field")]
+    BdfMissingBbxField,
+
+    /// BDF glyph is missing its `ENCODING` field.
+    #[error("BDF glyph is missing ENCODING field")]
+    BdfMissingEncodingField,
+
+    /// BDF header is missing its `FONT` field.
+    #[error("BDF header is missing FONT field")]
+    BdfMissingFontField,
+
+    /// BDF header is missing its `FONTBOUNDINGBOX` field.
+    #[error("BDF header is missing FONTBOUNDINGBOX field")]
+    BdfMissingFontboundingboxField,
+
+    /// BDF header is missing its `SIZE` field.
+    #[error("BDF header is missing SIZE field")]
+    BdfMissingSizeField,
+
+    /// BDF glyph data is missing a valid `STARTCHAR` section.
+    #[error("BDF glyph is missing STARTCHAR field")]
+    BdfMissingStartcharField,
 }
 
 #[cfg(test)]

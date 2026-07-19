@@ -40,6 +40,39 @@ The remaining WinFNT fixture gap is the distinct
 `fonts/winfnt/ushort-fields-known.fnt` contract row; do not replace it with a
 duplicate charset or bitmap-header fixture.
 
+## 2026-07-19 malformed BDF constructor errors
+
+`scripts/generate_malformed_bdf_fixtures.py` creates deterministic malformed
+BDF inputs for `FT_New_Memory_Face`/`new_memory_face` constructor error parity.
+The promoted rows compare exact pinned C FreeType, Rust FFI, C ABI, and WASM
+ABI error output for:
+
+- `FT_Err_Bbx_Too_Big`
+- `FT_Err_Corrupted_Font_Glyphs`
+- `FT_Err_Corrupted_Font_Header`
+- `FT_Err_Missing_Bbx_Field`
+- `FT_Err_Missing_Encoding_Field`
+- `FT_Err_Missing_Font_Field`
+- `FT_Err_Missing_Fontboundingbox_Field`
+- `FT_Err_Missing_Size_Field`
+- `FT_Err_Missing_Startchar_Field` through both encoding-before-startchar and
+  nested-startchar cases
+
+The pure-Rust implementation intentionally performs only the constructor-time
+BDF checks needed for these public error rows; it does not add BDF rendering or
+successful BDF face support.
+
+Do not promote `FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont`
+from the same generator output. Pinned C FreeType classifies a first line that
+is not `STARTFONT` as `FT_Err_Unknown_File_Format` (`85`), so that row needs a
+separate public-input audit before it can become exact real parity.
+
+Verified focused command:
+
+```bash
+make -C pillow-rs-freetype test-op OP=new_memory_face
+```
+
 ## End State
 
 The work is complete only when all of the following are true:
