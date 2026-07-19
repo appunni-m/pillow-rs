@@ -1159,6 +1159,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Property_Get null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.property_get"
+        and row.case_id == "ftmodapi.FT_Property_Get.gets_supported_property"
+    ):
+        return "FT_Property_Get supported TrueType property value validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.property_get"
         and row.case_id == "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service"
     ):
         return "FT_Property_Get missing-module and unsupported-service errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -1172,6 +1177,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Property_Set.rejects_null_arguments"
     ):
         return "FT_Property_Set null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.property_set_then_get"
+        and row.case_id == "ftmodapi.FT_Property_Set.sets_supported_property"
+    ):
+        return "FT_Property_Set supported TrueType property round-trip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.property_set"
         and row.case_id == "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
