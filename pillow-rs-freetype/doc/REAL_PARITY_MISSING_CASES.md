@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Open_Face` null library/args/aface route
+Current verified result after `FT_Open_Face` invalid source-flag route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3850`
+  - `real-parity`: `3851`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `345`
+  - `generic-error-fallback`: `344`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -42,6 +42,47 @@ Parity-only rule for this phase:
 - A row is fixed only when the same public input has exact output agreement
   against pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI, or when
   the row is explicitly documented as a real unsupported/pending public surface.
+
+### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Open_Face.error_invalid_source_flags` was classified as
+  `generic-error-fallback`.
+- The fixture contains three public `FT_Open_Args.flags` variants: no source
+  flag, multiple source flags, and an unsupported stream-source variant. The
+  shared memory-face row encoding did not serialize the flags, so the runners
+  could not prove the same input as pinned C FreeType.
+
+Fix plan:
+
+1. Carry `FT_Open_Args.flags` through the maintained variant row encoding.
+2. Route `FT_Open_Face` rows through the pinned C `--open-face-variants`
+   command instead of `FT_New_Memory_Face`.
+3. Make Rust FFI, thin C ABI, and WASM lanes reject invalid source-flag
+   combinations with the same `FT_Err_Invalid_Argument` result as C for the
+   currently modeled observable fields.
+4. Keep stream lifecycle callback evidence visible as future work; do not invent
+   a green `stream_close_count` placeholder.
+
+Verified progress:
+
+- Pinned C oracle, Rust FFI, C ABI, and WASM ABI now receive the same
+  `FT_Open_Args.flags` values for this row.
+- The thin C ABI runner dispatches flag-only `FT_Open_Face` rows to
+  `FT_Open_Face`, not `FT_New_Memory_Face`.
+- Focused exact comparison passes for
+  `freetype.FT_Open_Face.error_invalid_source_flags`.
+- Route audit classifies the row as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Face.error_invalid_source_flags
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3851`, `generic-error-fallback` `344`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
