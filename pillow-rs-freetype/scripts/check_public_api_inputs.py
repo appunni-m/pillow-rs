@@ -2287,6 +2287,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Glyph_Transform non-scalable bitmap errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftlist.list_iterate"
+        and row.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success"
+    ):
+        return "FT_List_Iterate success traversal validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlist.list_iterate"
         and row.case_id == "ftlist.FT_List_Iterate.stops_on_callback_error"
     ):
         return "FT_List_Iterate callback-error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

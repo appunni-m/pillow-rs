@@ -102,6 +102,11 @@ Promoted rows:
   `memory->free(memory, node)` invocation order, null-destructor behavior, and
   null list/memory no-ops. C/WASM wrappers own raw traversal; safe `fontdone`
   receives explicit nodes plus `&FT_MemoryRec`.
+- `ftlist.FT_List_Iterate.iterates_all_nodes_success`: `1 / 1` traversal row
+  now compares exact pinned-C FreeType, Rust FFI, thin C ABI, and WASM ABI
+  output for empty, one-node, and three-node lists. The proof records
+  head-to-tail visited data tokens, user pointer identity, unchanged final
+  topology, and FreeType's `next` snapshot step via the safe Rust helper.
 
 Focused non-coverage proof before promotion:
 
@@ -139,7 +144,8 @@ Results:
   library/null-descriptor route.
 - `ftlist`: `29 / 29` focused runtime rows passed with `0` pending after
   promoting the ten `FT_List_Insert`, `FT_List_Remove`, and `FT_List_Up`
-  topology rows plus the four `FT_List_Finalize` callback/free rows.
+  topology rows, the four `FT_List_Finalize` callback/free rows, and the
+  `FT_List_Iterate` success traversal row.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
@@ -147,10 +153,10 @@ Results:
 
 Latest route proof after the FT_List follow-up:
 
-- Route audit moved fourteen FT_List rows from `generic-fallback` to
-  `real-parity` across the topology and Finalize follow-ups.
-- Current route audit after the change: `real-parity` `4332`,
-  `generic-fallback` `598`, `pending-route` `49`, `pending-core` `7`.
+- Route audit moved fifteen FT_List rows from `generic-fallback` to
+  `real-parity` across the topology, Finalize, and Iterate success follow-ups.
+- Current route audit after the change: `real-parity` `4333`,
+  `generic-fallback` `597`, `pending-route` `49`, `pending-core` `7`.
 - Full refreshed parity remains green: `6802 / 6802` runnable rows passed with
   `432` pending. The global runnable total did not increase; these rows are
   now maintained exact routes instead of fallback-classified/pending focused

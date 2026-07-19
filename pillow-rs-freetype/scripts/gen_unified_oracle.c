@@ -474,6 +474,77 @@ static void finalize_print_trace(FinalizeTrace* trace, FT_List list) {
            list && list->tail ? "non_null" : "null");
 }
 
+static void print_ft_list_topology3(FT_List list,
+                                    void* data_a,
+                                    void* data_b,
+                                    void* data_c,
+                                    FT_ListNode node_a,
+                                    FT_ListNode node_b,
+                                    FT_ListNode node_c) {
+    FT_ListNode nodes[3] = { node_a, node_b, node_c };
+    const char* labels[3] = { "node_a", "node_b", "node_c" };
+    printf("{\"list\":{\"head\":\"%s\",\"tail\":\"%s\"},\"nodes\":[",
+           ft_list_node_token(list ? list->head : NULL, node_a, node_b, node_c),
+           ft_list_node_token(list ? list->tail : NULL, node_a, node_b, node_c));
+    int first = 1;
+    for (int i = 0; i < 3; i++) {
+        if (!nodes[i]) continue;
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"id\":\"%s\",\"prev\":\"%s\",\"next\":\"%s\",\"data\":\"%s\"}",
+               labels[i],
+               ft_list_node_token(nodes[i]->prev, node_a, node_b, node_c),
+               ft_list_node_token(nodes[i]->next, node_a, node_b, node_c),
+               ft_list_data_token(nodes[i]->data, data_a, data_b, data_c));
+    }
+    printf("],\"data_tokens\":[\"data_a\",\"data_b\",\"data_c\"]}");
+}
+
+typedef struct IterateTrace_ {
+    FT_ListNode nodes[3];
+    const char* node_labels[3];
+    const char* visited[8];
+    int user_matches[8];
+    int visited_count;
+    void* expected_user;
+} IterateTrace;
+
+static IterateTrace* current_iterate_trace = NULL;
+
+static FT_Error iterate_record_callback(FT_ListNode node, void* user) {
+    IterateTrace* trace = current_iterate_trace;
+    const char* label = "foreign";
+    for (int i = 0; i < 3; i++) {
+        if (node == trace->nodes[i]) {
+            label = trace->node_labels[i];
+            break;
+        }
+    }
+    if (strcmp(label, "node_a") == 0) trace->visited[trace->visited_count] = "data_a";
+    else if (strcmp(label, "node_b") == 0) trace->visited[trace->visited_count] = "data_b";
+    else if (strcmp(label, "node_c") == 0) trace->visited[trace->visited_count] = "data_c";
+    else trace->visited[trace->visited_count] = label;
+    trace->user_matches[trace->visited_count] = user == trace->expected_user;
+    trace->visited_count++;
+    return FT_Err_Ok;
+}
+
+static const char* iterate_user_identity(IterateTrace* trace) {
+    for (int i = 0; i < trace->visited_count; i++) {
+        if (!trace->user_matches[i]) return "foreign";
+    }
+    return "user";
+}
+
+static void iterate_print_visited(IterateTrace* trace) {
+    printf("[");
+    for (int i = 0; i < trace->visited_count; i++) {
+        if (i) printf(",");
+        printf("\"%s\"", trace->visited[i]);
+    }
+    printf("]");
+}
+
 static void print_ft_list_find_result(FT_List list,
                                       void* data,
                                       FT_ListNode node_a,
@@ -778,6 +849,46 @@ static int emit_ft_list(const char* case_id) {
         list = (FT_ListRec){ a, a };
         FT_List_Finalize(&list, finalize_record_destructor, &memory, trace.expected_user);
         finalize_print_trace(&trace, &list);
+    } else if (streq(case_id, "ftlist.FT_List_Iterate.iterates_all_nodes_success")) {
+        const char* shapes[3] = { "empty", "one_node", "three_nodes" };
+        printf("{\"rows\":[");
+        for (int i = 0; i < 3; i++) {
+            node_a = (FT_ListNodeRec){ NULL, NULL, &data_a };
+            node_b = (FT_ListNodeRec){ NULL, NULL, &data_b };
+            node_c = (FT_ListNodeRec){ NULL, NULL, &data_c };
+            if (i == 0) {
+                list = (FT_ListRec){ NULL, NULL };
+            } else if (i == 1) {
+                list = (FT_ListRec){ &node_a, &node_a };
+            } else {
+                node_a.next = &node_b;
+                node_b.prev = &node_a;
+                node_b.next = &node_c;
+                node_c.prev = &node_b;
+                list = (FT_ListRec){ &node_a, &node_c };
+            }
+            IterateTrace trace = { 0 };
+            trace.nodes[0] = &node_a;
+            trace.nodes[1] = &node_b;
+            trace.nodes[2] = &node_c;
+            trace.node_labels[0] = "node_a";
+            trace.node_labels[1] = "node_b";
+            trace.node_labels[2] = "node_c";
+            trace.expected_user = (void*)0x7111;
+            current_iterate_trace = &trace;
+            FT_Error err = FT_List_Iterate(&list, iterate_record_callback, trace.expected_user);
+            current_iterate_trace = NULL;
+            if (i) printf(",");
+            printf("{\"shape\":\"%s\",\"status\":%d,\"visited_data_tokens\":", shapes[i], err);
+            iterate_print_visited(&trace);
+            printf(",\"user_pointer_identity\":\"%s\",\"final_topology\":", iterate_user_identity(&trace));
+            print_ft_list_topology3(&list, &data_a, &data_b, &data_c,
+                                    i == 0 ? NULL : &node_a,
+                                    i == 2 ? &node_b : NULL,
+                                    i == 2 ? &node_c : NULL);
+            printf("}");
+        }
+        printf("]}");
     } else if (streq(case_id, "ftlist.FT_List_Find.success_finds_first_matching_node") ||
                streq(case_id, "ftlist.FT_List_Find.missing_data_returns_null") ||
                streq(case_id, "ftlist.FT_List_Find.null_list_returns_null") ||

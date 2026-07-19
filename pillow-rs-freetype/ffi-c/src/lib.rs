@@ -55,8 +55,7 @@ pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 pub type FT_Pointer = *mut c_void;
 pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
-pub type FT_List_Iterator =
-    Option<unsafe extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
+pub type FT_List_Iterator = Option<extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
 pub type FT_Memory = *mut FT_MemoryRec;
 pub type FT_Alloc_Func = Option<extern "C" fn(memory: FT_Memory, size: c_long) -> FT_Pointer>;
 pub type FT_Free_Func = Option<extern "C" fn(memory: FT_Memory, block: FT_Pointer)>;
@@ -387,7 +386,7 @@ pub extern "C" fn FT_List_Iterate(
     let mut error = rust_ffi::FT_Err_Ok;
     while let Some(cur_ref) = unsafe { cur.as_ref() } {
         let next = cur_ref.next;
-        error = unsafe { iterator(cur, user) };
+        error = iterator(cur, user);
         if error != rust_ffi::FT_Err_Ok {
             break;
         }
