@@ -1,16 +1,16 @@
 # Real-Parity Missing Cases
 
-### Issue Set Current: `FT_Property_Get/Set` false-green route correction
+### Issue Set Current: `FT_Property_Get/Set` scalar TrueType property slice
 
-Status: classified as explicit pending-route on 2026-07-20.
+Status: scalar `truetype:interpreter-version` route implemented on
+2026-07-20; autohinter and face-global driver properties remain pending-route.
 
-Current route-audit ledger after the property-service correction:
+Current route-audit ledger after the scalar property implementation:
 
-- `real-parity=4405`
+- `real-parity=4415`
 - `pending-core=1`
-- `pending-route=580`
+- `pending-route=570`
 - `generic-fallback=0`
-- full runtime parity `6590/6590`, `pending=644`
 
 Finding:
 
@@ -27,37 +27,35 @@ Finding:
 - `fterrdef.FT_Err_Missing_Property.driver_property_unknown_name` previously
   passed as generic `Unimplemented_Feature` (`7`), not the intended
   `FT_Err_Missing_Property` (`12`) public behavior.
-- The core crate, thin C ABI, and WASM ABI currently expose no maintained
-  `FT_Property_Get` or `FT_Property_Set` API. Counting these rows as
-  `real-parity` would reward generic fallback equality, not same-input
-  same-output FreeType behavior.
+- The scalar TrueType property route now has maintained public behavior in
+  core Rust, C ABI, WASM ABI, and the pinned C oracle for:
+  - all 8 `ftmodapi.FT_Property_Get/Set` manifest rows;
+  - `fterrdef.FT_Err_Missing_Property.driver_property_unknown_name`;
+  - `ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version`.
+- The implementation matches FreeType 2.14.3
+  `src/base/ftobjs.c:ft_property_do` dispatch and
+  `src/truetype/ttdriver.c:tt_property_get/set` for
+  `interpreter-version`: default `40`, set `35`, normalize `38` to `40`,
+  accept `40`, reject invalid values with `FT_Err_Unimplemented_Feature`, and
+  preserve the previous value on rejection.
 
 Impact:
 
-- 12 property-service rows moved from `real-parity` to explicit
-  `pending-route`.
-- `real-parity`: `4417 -> 4405`
-- `pending-route`: `568 -> 580`
+- 10 scalar property-service rows moved from explicit `pending-route` to
+  `real-parity`.
+- `real-parity`: `4405 -> 4415`
+- `pending-route`: `580 -> 570`
 - `pending-core`: stays `1`
 - `generic-fallback`: stays `0`
 
-Required implementation plan:
+Remaining property implementation plan:
 
-1. Add pure-Rust public property service support in `fontdone` for the pinned
-   minimum useful set:
-   - `FT_Property_Get(library, "truetype", "interpreter-version", &value)`;
-   - `FT_Property_Set(library, "truetype", "interpreter-version", &value)`;
-   - exact null-library/module/property/value errors;
-   - exact missing-module, unsupported-service, missing-property, and invalid
-     value behavior.
-2. Keep state on the library/driver model, not in the C/WASM wrappers.
-3. Add thin C ABI exports for `FT_Property_Get` and `FT_Property_Set` that only
-   validate raw pointers, copy scalar property values, and delegate to core.
-4. Add matching WASM ABI functions with the same scalar property record shape.
-5. Add maintained pinned C oracle routes for the property rows instead of using
-   `--error 7` or null-error fallbacks.
-6. Promote rows only after focused runtime parity proves exact output through
-   pinned C, Rust FFI, C ABI, and WASM ABI.
+1. Keep autohinter `glyph-to-script-map` pending until the Rust core owns the
+   face-global glyph-style map and exposes it through thin ABI records.
+2. Keep autohinter `increase-x-height` pending until face-global x-height state
+   affects actual auto-hinted glyph output.
+3. Keep CFF/Type1 hinting-engine properties pending until the corresponding
+   driver property storage and glyph behavior are implemented in core.
 
 Verification before promotion:
 
@@ -65,9 +63,10 @@ Verification before promotion:
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.gets_supported_property
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.sets_supported_property
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Missing_Property.driver_property_unknown_name
+make -C pillow-rs-freetype test-case CASE=ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version
 make -C pillow-rs-freetype route-audit
 make -C pillow-rs-freetype test-ffi-compat
-make -C pillow-rs-freetype test-harness
+make -C pillow-rs-freetype test
 ```
 
 ### Issue Set Current: future-batch unresolved-asset correction

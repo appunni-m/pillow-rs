@@ -166,6 +166,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_outline_transform",
     "fontdone_wasm_outline_translate",
     "fontdone_wasm_get_truetype_engine_type",
+    "fontdone_wasm_property_get",
+    "fontdone_wasm_property_set_then_get",
     "fontdone_wasm_library_set_lcd_filter",
     "fontdone_wasm_library_set_lcd_filter_weights",
     "fontdone_wasm_library_set_lcd_geometry",
@@ -1310,14 +1312,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle",
         "ftmodapi.FT_Module_Interface.requester_return_type",
         "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount",
-        "ftmodapi.FT_Property_Get.gets_supported_property",
-        "ftmodapi.FT_Property_Get.rejects_null_arguments",
-        "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service",
-        "ftmodapi.FT_Property_Get.invalid_property_name",
-        "ftmodapi.FT_Property_Set.sets_supported_property",
-        "ftmodapi.FT_Property_Set.rejects_null_arguments",
-        "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service",
-        "ftmodapi.FT_Property_Set.invalid_property_or_value",
         "ftmodapi.FT_Reference_Library.increments_refcount",
         "ftmodapi.FT_Remove_Module.removes_installed_module",
         "ftmodapi.FT_Set_Default_Properties.no_environment_noop",
@@ -1355,7 +1349,6 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
         "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
-        "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
     }
     if row.case_id not in ftdriver_rows_without_maintained_route:
         return None
@@ -1370,7 +1363,6 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 def property_service_pending_reason(row: ConcreteInput) -> str | None:
     property_rows_without_maintained_route = {
-        "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
@@ -1378,15 +1370,6 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
         "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
-        "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
-        "ftmodapi.FT_Property_Get.gets_supported_property",
-        "ftmodapi.FT_Property_Get.rejects_null_arguments",
-        "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service",
-        "ftmodapi.FT_Property_Get.invalid_property_name",
-        "ftmodapi.FT_Property_Set.sets_supported_property",
-        "ftmodapi.FT_Property_Set.rejects_null_arguments",
-        "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service",
-        "ftmodapi.FT_Property_Set.invalid_property_or_value",
     }
     if row.case_id not in property_rows_without_maintained_route:
         return None
@@ -2177,6 +2160,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face": "CID registry/ordering/supplement output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern": "FT_ClassicKern_Validate MS/classic-kern output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
