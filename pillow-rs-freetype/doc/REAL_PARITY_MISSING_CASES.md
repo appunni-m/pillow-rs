@@ -3935,6 +3935,82 @@ Verified command:
 make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_null_file_base
 ```
 
+### Issue Set CR: `FT_New_Memory_Face` null library/aface route blocker
+
+Current blocker:
+
+- `freetype.FT_New_Memory_Face.error_null_library_or_aface` stayed in
+  `generic-error-fallback`.
+- The fixture pins two same-input variants for valid font bytes:
+  null `library` and valid `aface`, then valid `library` and null `aface`.
+  `FT_New_Memory_Face` delegates non-null `file_base` inputs to
+  `ft_open_face_internal` (`freetype/src/base/ftobjs.c:1629-1647`); the null
+  library variant fails through `FT_Stream_New`
+  (`freetype/src/base/ftobjs.c:199-211`), while the null `aface` variant is
+  rejected after stream creation in `ft_open_face_internal`
+  (`freetype/src/base/ftobjs.c:2568-2586`).
+- Exact-error gating was tested and correctly rejected classification: the
+  maintained oracle route returned `Ok` for the current row shape, so the
+  strict comparator reported `rust ffi:value` instead of proving exact C error
+  parity.
+
+Plan:
+
+1. Do not classify this row as real parity until the oracle runner emits the
+   two variant statuses for null `library` and null `aface`.
+2. Inspect the current `new_memory_face` variant runner and oracle output
+   shape; preserve the fixture and compare both exact status values.
+3. Re-enable exact-error gating only after focused same-input comparison passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Blocked verification:
+
+- Attempted exact-error promotion failed with
+  `rust ffi:value: freetype.FT_New_Memory_Face.error_null_library_or_aface requires an exact C error, but the oracle returned ok`.
+
+Rejected command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_null_library_or_aface
+```
+
+### Issue Set CS: `FT_Open_Face` null library/args/aface route blocker
+
+Current blocker:
+
+- `freetype.FT_Open_Face.error_null_library_args_or_aface` stayed in
+  `generic-error-fallback`.
+- The fixture pins three same-input variants: null `library`, null `args`, and
+  null `aface`. `FT_Open_Face` delegates to `ft_open_face_internal`
+  (`freetype/src/base/ftobjs.c:2514-2525`); null `args` is rejected there,
+  null `library` is rejected by `FT_Stream_New`, and null `aface` is rejected
+  after stream creation (`freetype/src/base/ftobjs.c:2568-2586`).
+- Exact-error gating was tested and correctly rejected classification: the
+  maintained oracle route returned `Ok` for the current row shape, so the
+  strict comparator reported `rust ffi:value` instead of proving exact C error
+  parity.
+
+Plan:
+
+1. Do not classify this row as real parity until the oracle runner emits all
+   three variant statuses for null `library`, null `args`, and null `aface`.
+2. Inspect the current `FT_Open_Face`/`new_memory_face` variant runner and
+   oracle output shape; preserve the fixture and compare all exact status
+   values.
+3. Re-enable exact-error gating only after focused same-input comparison passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Blocked verification:
+
+- Attempted exact-error promotion failed with
+  `rust ffi:value: freetype.FT_Open_Face.error_null_library_args_or_aface requires an exact C error, but the oracle returned ok`.
+
+Rejected command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Face.error_null_library_args_or_aface
+```
+
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
 
 Current blocker:
