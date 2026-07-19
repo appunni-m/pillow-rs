@@ -74,6 +74,12 @@ Promoted rows:
 - `new_memory_face` malformed BDF constructor errors: `10 / 10` BDF-specific
   rows now compare exact pinned-C/Rust FFI/C ABI/WASM error output after adding
   deterministic fixtures and explicit Rust BDF constructor error classification.
+- `FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY` /
+  `FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY`: `4 / 4` behavioral rows now
+  compare exact pinned-C/Rust FFI/C ABI/WASM face-name output after adding
+  deterministic preferred-vs-legacy name fixtures and a dedicated
+  `FT_Open_Face` parameter route. The proof compares `family_name` and
+  `style_name` C-string bytes, not just face-open success.
 
 Focused non-coverage proof before promotion:
 

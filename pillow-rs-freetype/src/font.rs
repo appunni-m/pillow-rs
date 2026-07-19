@@ -56,6 +56,8 @@ pub struct Font {
     pub face_globals: crate::autohint::globals::FaceGlobals,
     /// Whether the font is italic/oblique (from head.mac_style bit 1).
     pub is_italic: bool,
+    family_name: String,
+    subfamily_name: String,
     size_metrics: SizeMetrics,
     selected_charmap: usize,
     bytecode_context: BytecodeContextCache,
@@ -999,6 +1001,8 @@ impl Font {
             font_data.as_ref(),
         );
         sync_active_size_metrics(&font_data, size_metrics);
+        let family_name = font_data.name.family.clone();
+        let subfamily_name = font_data.name.subfamily.clone();
 
         Ok(Font {
             data: font_data,
@@ -1009,6 +1013,8 @@ impl Font {
             },
             face_globals,
             is_italic,
+            family_name,
+            subfamily_name,
             size_metrics,
             selected_charmap: 0,
             bytecode_context: BytecodeContextCache::default(),
@@ -1034,6 +1040,8 @@ impl Font {
             font_data.as_ref(),
         );
         sync_active_size_metrics(&font_data, size_metrics);
+        let family_name = font_data.name.family.clone();
+        let subfamily_name = font_data.name.subfamily.clone();
 
         Ok(Font {
             data: font_data,
@@ -1042,6 +1050,8 @@ impl Font {
             face_kind: FaceKind::WinFnt { header },
             face_globals,
             is_italic,
+            family_name,
+            subfamily_name,
             size_metrics,
             selected_charmap: 0,
             bytecode_context: BytecodeContextCache::default(),
@@ -1247,6 +1257,8 @@ impl Font {
         sync_active_size_metrics(&font_data, size_metrics);
 
         let selected_charmap = default_unicode_charmap_index(&font_data.cmap).unwrap_or(0);
+        let family_name = font_data.name.family.clone();
+        let subfamily_name = font_data.name.subfamily.clone();
 
         Ok(Font {
             data: font_data,
@@ -1255,6 +1267,8 @@ impl Font {
             face_kind: FaceKind::Sfnt,
             face_globals,
             is_italic,
+            family_name,
+            subfamily_name,
             size_metrics,
             selected_charmap,
             bytecode_context: BytecodeContextCache::default(),
@@ -1314,12 +1328,12 @@ impl Font {
     /// Return scalar face metadata.
     pub fn face_info(&self) -> FaceInfo {
         let (ascender, descender, height) = face_metric_values(&self.data);
-        let (family_name, style_name) = self.getname();
+        let (family_name, style_name) = self.getname_with_options();
         FaceInfo {
             num_faces: self.num_faces(),
             face_index: self.face_index(),
-            family_name: family_name.to_string(),
-            style_name: style_name.to_string(),
+            family_name,
+            style_name,
             postscript_name: self.data.name.postscript_name.clone(),
             font_format: self.font_format(),
             units_per_em: self.data.head.units_per_em,
@@ -1920,7 +1934,28 @@ impl Font {
 
     /// `getname()` → `(family, style)`.
     pub fn getname(&self) -> (&str, &str) {
-        (&self.data.name.family, &self.data.name.subfamily)
+        (&self.family_name, &self.subfamily_name)
+    }
+
+    /// Return the face names after applying FreeType open-parameter name flags.
+    pub fn getname_with_options(&self) -> (String, String) {
+        (self.family_name.clone(), self.subfamily_name.clone())
+    }
+
+    /// Apply `FT_Open_Face` typographic-name ignore parameters.
+    pub fn set_ignore_typographic_names(
+        &mut self,
+        ignore_typographic_family: bool,
+        ignore_typographic_subfamily: bool,
+    ) {
+        // `sfnt_init_face` applies these `FT_Open_Face` parameters while
+        // choosing `face->family_name` and `face->style_name`
+        // (freetype/src/sfnt/sfobjs.c:829-843).  The parsed SFNT name table
+        // stays shared and immutable; only this opened face's public names
+        // change.
+        self.family_name = tt::name::family_name(&self.data.name, ignore_typographic_family);
+        self.subfamily_name =
+            tt::name::subfamily_name(&self.data.name, ignore_typographic_subfamily);
     }
 
     /// `getmetrics()` → `(ascent, descent)` in pixels.

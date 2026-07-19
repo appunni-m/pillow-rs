@@ -631,6 +631,12 @@ pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_names(handle: usize) -> Option<(Option<String>, Option<String>)> {
+    let face = face_ref(handle)?;
+    Some((face.face.family_name.clone(), face.face.style_name.clone()))
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_slot_snapshot(handle: usize) -> Option<AbiSlotSnapshot> {
     let mut slot = FontdoneWasmGlyphSlot::default();
     if fontdone_wasm_get_slot(handle, &mut slot) != rust_ffi::FT_Err_Ok {
@@ -756,6 +762,18 @@ pub extern "C" fn fontdone_wasm_open_face(
     face_index: FT_Long,
     size_pt: f32,
 ) -> FontdoneWasmStatus {
+    fontdone_wasm_open_face_with_name_options(file_base, file_size, face_index, size_pt, 0, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_open_face_with_name_options(
+    file_base: *const c_uchar,
+    file_size: usize,
+    face_index: FT_Long,
+    size_pt: f32,
+    ignore_typographic_family: FT_Bool,
+    ignore_typographic_subfamily: FT_Bool,
+) -> FontdoneWasmStatus {
     if file_base.is_null() {
         return FontdoneWasmStatus {
             error: rust_ffi::FT_Err_Invalid_Argument,
@@ -765,7 +783,16 @@ pub extern "C" fn fontdone_wasm_open_face(
     // SAFETY: `file_base` is non-null and caller promises `file_size` readable bytes.
     let data = unsafe { slice::from_raw_parts(file_base, file_size) };
     let library = rust_ffi::FT_Init_FreeType();
-    match rust_ffi::FT_New_Memory_Face(&library, data, face_index, size_pt) {
+    match rust_ffi::FT_New_Memory_Face_With_Name_Options(
+        &library,
+        data,
+        face_index,
+        size_pt,
+        rust_ffi::FT_Open_Face_Name_Options {
+            ignore_typographic_family: ignore_typographic_family != 0,
+            ignore_typographic_subfamily: ignore_typographic_subfamily != 0,
+        },
+    ) {
         Ok(face) => {
             let state = make_wasm_face_state(face);
             let active_size = state.active_size;

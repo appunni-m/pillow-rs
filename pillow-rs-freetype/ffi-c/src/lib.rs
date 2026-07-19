@@ -506,6 +506,8 @@ struct FaceState {
     size_records: Vec<FT_Size>,
     charmaps: Box<[FT_CharMapRec]>,
     charmap_ptrs: Box<[FT_CharMap]>,
+    family_name: Option<CString>,
+    style_name: Option<CString>,
     postscript_name: Option<CString>,
     font_format: Option<CString>,
     variant_list: Vec<FT_UInt32>,
@@ -513,6 +515,8 @@ struct FaceState {
 
 impl FaceState {
     fn new(inner: rust_ffi::FT_Face) -> Self {
+        let family_name = inner.family_name.as_ref().and_then(|name| CString::new(name.as_str()).ok());
+        let style_name = inner.style_name.as_ref().and_then(|name| CString::new(name.as_str()).ok());
         let postscript_name = postscript_name_cstring(&inner);
         let font_format = font_format_cstring(Some(&inner));
         Self {
@@ -520,6 +524,8 @@ impl FaceState {
             size_records: Vec::new(),
             charmaps: Box::new([]),
             charmap_ptrs: Box::new([]),
+            family_name,
+            style_name,
             postscript_name,
             font_format,
             variant_list: Vec::new(),
@@ -740,7 +746,17 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
     let internal = unsafe { (*face.as_ptr()).internal };
     let state = NonNull::new(internal.cast::<FaceState>())?;
     // SAFETY: `state` is owned by the live face for the duration of this scalar copy.
-    Some(rust_face_info(&unsafe { state.as_ref() }.inner))
+    let state = unsafe { state.as_ref() };
+    let mut info = rust_face_info(&state.inner);
+    info.family_name = state
+        .family_name
+        .as_ref()
+        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+    info.style_name = state
+        .style_name
+        .as_ref()
+        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+    Some(info)
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1412,13 +1428,41 @@ pub extern "C" fn FT_Open_Face(
     if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
         return rust_ffi::FT_Err_Invalid_Argument;
     }
-    FT_New_Memory_Face(
+    let name_options = open_face_name_options(args);
+    ft_new_memory_face_with_name_options(
         library,
         args.memory_base,
         args.memory_size,
         face_index,
         aface,
+        name_options,
     )
+}
+
+fn open_face_name_options(args: &FT_Open_Args) -> rust_ffi::FT_Open_Face_Name_Options {
+    let mut options = rust_ffi::FT_Open_Face_Name_Options::default();
+    if args.num_params <= 0 || args.params.is_null() {
+        return options;
+    }
+    let Ok(count) = usize::try_from(args.num_params) else {
+        return options;
+    };
+    // SAFETY: `FT_Open_Face` callers provide `num_params` readable parameter
+    // records when `params` is non-null.  We only read tags; parameter data is
+    // intentionally ignored for these FreeType flags.
+    let params = unsafe { slice::from_raw_parts(args.params, count) };
+    for param in params {
+        match param.tag as i64 {
+            rust_ffi::FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY => {
+                options.ignore_typographic_family = true;
+            }
+            rust_ffi::FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY => {
+                options.ignore_typographic_subfamily = true;
+            }
+            _ => {}
+        }
+    }
+    options
 }
 
 #[unsafe(no_mangle)]
@@ -1428,6 +1472,24 @@ pub extern "C" fn FT_New_Memory_Face(
     file_size: FT_Long,
     face_index: FT_Long,
     aface: *mut FT_Face,
+) -> FT_Error {
+    ft_new_memory_face_with_name_options(
+        library,
+        file_base,
+        file_size,
+        face_index,
+        aface,
+        rust_ffi::FT_Open_Face_Name_Options::default(),
+    )
+}
+
+fn ft_new_memory_face_with_name_options(
+    library: FT_Library,
+    file_base: *const c_uchar,
+    file_size: FT_Long,
+    face_index: FT_Long,
+    aface: *mut FT_Face,
+    options: rust_ffi::FT_Open_Face_Name_Options,
 ) -> FT_Error {
     // C FreeType validates `FT_New_Memory_Face` in ftobjs.c:1629-1647:
     // null `file_base` is rejected before delegating to `ft_open_face_internal`;
@@ -1448,7 +1510,13 @@ pub extern "C" fn FT_New_Memory_Face(
     let data = unsafe { slice::from_raw_parts(file_base, file_len) };
     // SAFETY: `library` is a live handle returned by `FT_Init_FreeType`.
     let rust_library = unsafe { &*((*library.as_ptr()).internal.cast::<rust_ffi::FT_Library>()) };
-    match rust_ffi::FT_New_Memory_Face(rust_library, data, face_index, 20.0) {
+    match rust_ffi::FT_New_Memory_Face_With_Name_Options(
+        rust_library,
+        data,
+        face_index,
+        20.0,
+        options,
+    ) {
         Ok(inner) => {
             let metrics = rust_size_metrics_to_abi(inner.size_metrics);
             let rust_size = inner.size;

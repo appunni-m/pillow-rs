@@ -162,6 +162,22 @@ impl Library {
             render_fonts: RenderFontCache::default(),
         })
     }
+
+    /// Open a font face with the name-selection options normally carried by
+    /// `FT_Open_Face` parameters.
+    pub fn new_memory_face_with_name_options(
+        self,
+        data: &[u8],
+        face_index: usize,
+        size_pt: f32,
+        ignore_typographic_family: bool,
+        ignore_typographic_subfamily: bool,
+    ) -> Result<Face, FontError> {
+        let mut face = self.new_memory_face(data, face_index, size_pt)?;
+        face.font
+            .set_ignore_typographic_names(ignore_typographic_family, ignore_typographic_subfamily);
+        Ok(face)
+    }
 }
 
 /// A loaded font face.
