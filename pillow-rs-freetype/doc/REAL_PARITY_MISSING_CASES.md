@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_New_Memory_Face` bad-size/unknown-format
-exact-error classification:
+Current verified result after `FT_Load_Glyph` matrix-load exact-error
+classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3868`
+  - `real-parity`: `3944`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `327`
+  - `generic-error-fallback`: `251`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -162,6 +162,41 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_bad_
 
 Result: `17 / 17` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3868`, `generic-error-fallback` `327`.
+
+### Issue Set Current: `FT_Load_Glyph` matrix-load exact-error route
+
+Previous blocker:
+
+- `freetype.FT_Load_Glyph.matrix_load` had `76` concrete error rows
+  classified as `generic-error-fallback`.
+- The full case family already ran through pinned C FreeType, Rust FFI, thin C
+  ABI, and WASM ABI, but fallback classification accepted any error on the
+  error rows instead of requiring exact public status/output parity.
+
+Fix plan:
+
+1. Promote only the concrete matrix-load case family to exact-error comparison.
+2. Keep all existing matrix fixture inputs unchanged.
+3. Verify all matrix-load variants through Rust FFI, thin C ABI
+   `FT_Load_Glyph`, and WASM ABI before counting the error rows as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for all `305` concrete matrix-load rows.
+- The `76` previously fallback-classified error rows now validate exact
+  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed; the existing implementation
+  already matched once the fallback guard was removed.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Load_Glyph.matrix_load
+```
+
+Result: `305 / 305` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3944`, `generic-error-fallback` `251`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
