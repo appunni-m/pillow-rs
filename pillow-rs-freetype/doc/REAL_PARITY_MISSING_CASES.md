@@ -12,11 +12,6 @@ Scope:
 
 Promoted rows:
 
-- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success`: two concrete PFR metric
-  rows moved from `generic-fallback` to `real-parity`. The focused strict
-  runtime operation passes across pinned C, Rust FFI, C ABI, and WASM. This was
-  the only attempted future-batch family in this pass that had both a runnable
-  public oracle route and non-fallback C success evidence.
 - `ftbdf.FT_Get_BDF_Charset_ID`: two charset rows moved from
   `generic-fallback` to `real-parity`.
 - `ftcid.FT_Get_CID_From_Glyph_Index`: nine CID glyph-index rows moved from
@@ -51,12 +46,19 @@ Promoted rows:
 
 Route audit impact:
 
-- `real-parity`: `4436 -> 4459`.
-- `generic-fallback`: `519 -> 499`.
+- `real-parity`: `4436 -> 4457`.
+- `generic-fallback`: `519 -> 501`.
 - `pending-route`: `24 -> 21`.
 
 Rejected or blocked during the same pass:
 
+- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success` must remain
+  `generic-fallback`. A focused operation run can pass because the row is not
+  forced to require successful oracle output while generic fallback is allowed,
+  but the raw pinned oracle cache for the selected case contains
+  `FT_Err_Unimplemented_Feature` (`7`) and the row's PFR font remains
+  `required_future_asset`. Treating it as `real-parity` would be a green
+  placeholder.
 - A classifier-only 14-row `ftglyph` batch was rejected. After strict
   promotion, `CASE=ftglyph` reported pinned oracle error `7` for the promoted
   success/introspection rows. These rows need maintained public runner/facade
