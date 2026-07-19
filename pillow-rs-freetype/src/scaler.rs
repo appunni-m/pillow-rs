@@ -78,6 +78,11 @@ impl ScaleMetrics {
     }
 }
 
+#[inline]
+fn scale_unrounded_fdot6(value: i32, scale: i32) -> i32 {
+    ft_mul_fix(value, scale).wrapping_add(32) >> 6
+}
+
 pub(crate) fn prepare_native_bytecode_context(
     data: &FontData,
     scale: ScaleMetrics,
@@ -1001,14 +1006,18 @@ fn scale_glyph_impl_with_context(
             }
             scaled
         } else if use_autohint {
+            // FreeType's autofit loader reloads the glyph with
+            // `FT_LOAD_NO_SCALE` before `af_glyph_hints_reload`; at that point
+            // the outline has integer `gvar` deltas, not the scaled
+            // `unrounded` sidecar used by the native TrueType loader.
             let shift_x = autohint_pp1x_fu;
             let origin_shift = no_hinting_origin_shift_x;
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             for p in &outline_raw.points {
-                let x = scale.scale_x(p.x - shift_x) - origin_shift;
+                let x = scale.scale_x(p.x - shift_x);
                 let y = ft_mul_fix(p.y, y_adj);
                 scaled.push(OutlinePoint {
-                    x,
+                    x: x - origin_shift,
                     y,
                     on_curve: p.on_curve,
                 });
@@ -1020,11 +1029,24 @@ fn scale_glyph_impl_with_context(
             let shift_x = no_hinting_origin_shift_x;
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             let mut tags = Vec::with_capacity(outline_raw.points.len());
-            for p in &outline_raw.points {
-                let x = scale.scale_x(p.x) - shift_x;
-                let y = ft_mul_fix(p.y, y_adj);
+            for (index, p) in outline_raw.points.iter().enumerate() {
+                let (x, y) = outline_raw.unrounded_points.as_ref().map_or_else(
+                    || (scale.scale_x(p.x), ft_mul_fix(p.y, y_adj)),
+                    |unrounded| {
+                        let point = unrounded.get(index).copied().unwrap_or({
+                            crate::tt::glyf::UnroundedPoint {
+                                x: p.x << 6,
+                                y: p.y << 6,
+                            }
+                        });
+                        (
+                            scale_unrounded_fdot6(point.x, scale.x_scale),
+                            scale_unrounded_fdot6(point.y, y_adj),
+                        )
+                    },
+                );
                 scaled.push(OutlinePoint {
-                    x,
+                    x: x - shift_x,
                     y,
                     on_curve: p.on_curve,
                 });

@@ -320,6 +320,7 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
             advance_width_max: header.max_width,
             num_hmetrics: 1,
         },
+        hvar: None,
         hmtx: tt::hmtx::HmtxTable {
             h_metrics: vec![tt::hmtx::LongHorMetric {
                 advance_width: header.avg_width.max(header.max_width),
@@ -607,6 +608,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
             advance_width_max: u16::try_from(metadata.bbox.x_max.max(0)).unwrap_or(u16::MAX),
             num_hmetrics: 1,
         },
+        hvar: None,
         hmtx: tt::hmtx::HmtxTable {
             h_metrics: vec![tt::hmtx::LongHorMetric {
                 advance_width: u16::try_from(metadata.bbox.x_max.max(0)).unwrap_or(u16::MAX),
@@ -1201,6 +1203,10 @@ impl Font {
             .and_then(|d| tt::gvar::parse_gvar(d, maxp.num_glyphs).ok());
         let normalized_variation_coords =
             normalized_variation_coords_for_named_instance(&fvar, named_instance);
+        let hvar = dir.find(data, tag(b"HVAR")).and_then(|d| {
+            fvar.as_ref()
+                .and_then(|fvar| tt::hvar::HvarTable::parse(d, fvar.axes.len()).ok())
+        });
         let kern = dir
             .find(data, tag(b"kern"))
             .and_then(|d| tt::kern::parse_kern(d).ok());
@@ -1251,6 +1257,7 @@ impl Font {
             normalized_variation_coords,
             head,
             hhea,
+            hvar,
             hmtx,
             maxp,
             name,

@@ -6,6 +6,7 @@
 //! resulting font-unit deltas before hinting.
 
 use crate::error::FontError;
+use crate::fixed::ft_mul_fix;
 const TUPLES_SHARE_POINT_NUMBERS: u16 = 0x8000;
 const TUPLE_COUNT_MASK: u16 = 0x0FFF;
 const EMBEDDED_PEAK_TUPLE: u16 = 0x8000;
@@ -26,8 +27,8 @@ pub struct GvarTable {
 }
 
 impl GvarTable {
-    /// Return accumulated gvar deltas for `glyph_index` in font units.
-    pub fn glyph_deltas(
+    /// Return accumulated gvar deltas for `glyph_index` in 16.16 font units.
+    pub fn glyph_deltas_fixed(
         &self,
         glyph_index: u16,
         point_count_with_phantoms: usize,
@@ -145,13 +146,30 @@ impl GvarTable {
                 read_packed_deltas(&tuple_data[delta_pos + x_consumed..], points.len())?;
             for ((point_index, dx), dy) in points.into_iter().zip(x_deltas).zip(y_deltas) {
                 if let Some((acc_x, acc_y)) = deltas.get_mut(point_index) {
-                    *acc_x += mul_fix_rounded(dx, scalar);
-                    *acc_y += mul_fix_rounded(dy, scalar);
+                    *acc_x += ft_mul_fix(dx << 16, scalar);
+                    *acc_y += ft_mul_fix(dy << 16, scalar);
                 }
             }
         }
 
         Ok(Some(deltas))
+    }
+
+    /// Return accumulated gvar deltas rounded to integer font units.
+    pub fn glyph_deltas(
+        &self,
+        glyph_index: u16,
+        point_count_with_phantoms: usize,
+        normalized_coords: &[i16],
+    ) -> Result<Option<Vec<(i32, i32)>>, FontError> {
+        Ok(self
+            .glyph_deltas_fixed(glyph_index, point_count_with_phantoms, normalized_coords)?
+            .map(|deltas| {
+                deltas
+                    .into_iter()
+                    .map(|(x, y)| (fixed_to_int(x), fixed_to_int(y)))
+                    .collect()
+            }))
     }
 }
 
@@ -220,6 +238,25 @@ pub(crate) fn apply_deltas_to_outline(
     recompute_outline_bounds(outline);
 }
 
+pub(crate) fn apply_fixed_deltas_to_outline(
+    outline: &mut crate::tt::glyf::GlyphOutline,
+    deltas: &[(i32, i32)],
+) {
+    let mut unrounded_points = Vec::with_capacity(outline.points.len());
+    for (point, (dx, dy)) in outline.points.iter_mut().zip(deltas.iter().copied()) {
+        let original_x = point.x;
+        let original_y = point.y;
+        unrounded_points.push(crate::tt::glyf::UnroundedPoint {
+            x: (original_x << 6).wrapping_add(fixed_to_fdot6(dx)),
+            y: (original_y << 6).wrapping_add(fixed_to_fdot6(dy)),
+        });
+        point.x = point.x.wrapping_add(fixed_to_int(dx));
+        point.y = point.y.wrapping_add(fixed_to_int(dy));
+    }
+    outline.unrounded_points = Some(unrounded_points);
+    recompute_outline_bounds(outline);
+}
+
 fn recompute_outline_bounds(outline: &mut crate::tt::glyf::GlyphOutline) {
     let Some(first) = outline.points.first().copied() else {
         outline.xmin = 0;
@@ -278,6 +315,14 @@ fn div_to_fixed(num: i32, den: i32) -> i32 {
         return 0;
     }
     (((i64::from(num)) << 16) / i64::from(den)) as i32
+}
+
+pub(crate) fn fixed_to_int(value: i32) -> i32 {
+    value.wrapping_add(0x8000) >> 16
+}
+
+pub(crate) fn fixed_to_fdot6(value: i32) -> i32 {
+    value.wrapping_add(0x200) >> 10
 }
 
 fn mul_fix_rounded(value: i32, scalar: i32) -> i32 {

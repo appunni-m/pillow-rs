@@ -670,7 +670,9 @@ fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
         && case.case == "output_changes_to_named_instance"
         && case.inputs.params.get("glyph_index").is_some()
     {
-        return Some("named-instance glyph-output parity requires fractional gvar/HVAR support");
+        return Some(
+            "named-instance glyph-output parity requires fractional gvar/autohint bitmap support",
+        );
     }
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
