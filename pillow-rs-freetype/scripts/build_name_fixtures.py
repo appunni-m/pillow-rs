@@ -293,6 +293,51 @@ def write_missing_name_table() -> None:
     font.save(path, reorderTables=True)
 
 
+def write_preferred_family_distinct() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("LegacyFamily")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("Regular")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("LegacyFamily-Regular")),
+        NameRecordSpec(3, 1, 0x0409, 16, utf16be("PreferredFamily")),
+        NameRecordSpec(3, 1, 0x0409, 17, utf16be("Regular")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "preferred-family-distinct.ttf",
+        build_name_table(records),
+    )
+
+
+def write_preferred_subfamily_distinct() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("Family")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("LegacySubfamily")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("Family-LegacySubfamily")),
+        NameRecordSpec(3, 1, 0x0409, 16, utf16be("Family")),
+        NameRecordSpec(3, 1, 0x0409, 17, utf16be("PreferredSubfamily")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "preferred-subfamily-distinct.ttf",
+        build_name_table(records),
+    )
+
+
+def write_preferred_family_subfamily_distinct() -> None:
+    records = [
+        NameRecordSpec(3, 1, 0x0409, 1, utf16be("LegacyFamily")),
+        NameRecordSpec(3, 1, 0x0409, 2, utf16be("LegacySubfamily")),
+        NameRecordSpec(3, 1, 0x0409, 6, utf16be("LegacyFamily-LegacySubfamily")),
+        NameRecordSpec(3, 1, 0x0409, 16, utf16be("PreferredFamily")),
+        NameRecordSpec(3, 1, 0x0409, 17, utf16be("PreferredSubfamily")),
+    ]
+    write_name_payload(
+        BASE_STATIC,
+        NAME_OUT_DIR / "preferred-family-subfamily-distinct.ttf",
+        build_name_table(records),
+    )
+
+
 def variable_base_records() -> list[NameRecordSpec]:
     return [
         NameRecordSpec(3, 1, 0x0409, 1, utf16be("Ubuntu")),
@@ -660,6 +705,9 @@ def main() -> None:
     write_format1_invalid_langtag_references()
     write_format1_prestorage_strings()
     write_missing_name_table()
+    write_preferred_family_distinct()
+    write_preferred_subfamily_distinct()
+    write_preferred_family_subfamily_distinct()
     write_variable_apple_prefix()
     write_variable_unicode_prefix()
     write_variable_odd_windows_prefix()

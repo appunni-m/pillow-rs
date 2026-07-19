@@ -2950,6 +2950,36 @@ pub fn FT_New_Memory_Face(
         .map_err(error_to_ft)
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FT_Open_Face_Name_Options {
+    pub ignore_typographic_family: bool,
+    pub ignore_typographic_subfamily: bool,
+}
+
+pub fn FT_New_Memory_Face_With_Name_Options(
+    library: &FT_Library,
+    data: &[u8],
+    face_index: FT_Long,
+    size_pt: f32,
+    options: FT_Open_Face_Name_Options,
+) -> Result<FT_Face, FT_Error> {
+    let (face_index, probe_only) = c_face_index_to_core(face_index)?;
+    library
+        .inner
+        .new_memory_face_with_name_options(
+            data,
+            face_index,
+            size_pt,
+            options.ignore_typographic_family,
+            options.ignore_typographic_subfamily,
+        )
+        .map(|mut inner| {
+            inner.reset_size_to_undefined();
+            face_to_ffi(inner, probe_only)
+        })
+        .map_err(error_to_ft)
+}
+
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
     let info = inner.info();

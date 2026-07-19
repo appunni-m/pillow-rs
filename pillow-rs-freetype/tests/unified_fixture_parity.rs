@@ -10017,6 +10017,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                     face_index_param(params)?.to_string(),
                 ]);
             }
+            if open_face_name_options_runtime_supported(case) {
+                let mut args = vec!["--open-face-name-options".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(open_face_name_option_rows_arg(params)?);
+                return Ok(args);
+            }
             let mut args = if case.inputs.params.get("variants").is_some() {
                 if case.subject == "freetype.FT_Open_Face" {
                     vec!["--open-face-variants".to_string()]
@@ -12087,6 +12094,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "new_memory_face" => {
+            if open_face_name_options_runtime_supported(case) {
+                return c_open_face_name_options(case);
+            }
             if case.inputs.params.get("variants").is_some() {
                 return c_new_memory_face_variants(case);
             }
@@ -12743,7 +12753,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output
         }
-        "new_memory_face" => wasm_new_memory_face(case),
+        "new_memory_face" => {
+            if open_face_name_options_runtime_supported(case) {
+                return wasm_open_face_name_options(case);
+            }
+            wasm_new_memory_face(case)
+        }
         "set_pixel_sizes" => {
             let handle = wasm_new_face_without_size(case)?;
             let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
@@ -16992,6 +17007,9 @@ fn wasm_done_face(handle: usize) {
 }
 
 fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
+    if open_face_name_options_runtime_supported(case) {
+        return rust_open_face_name_options(case);
+    }
     if case.inputs.params.get("variants").is_some() {
         return rust_new_memory_face_variants(case);
     }
@@ -17022,6 +17040,229 @@ fn rust_new_memory_face(case: &InputCase) -> Result<RunOutput, String> {
         }
         Err(err) => Ok(error(err)),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OpenFaceNameOptionsRow {
+    ignore_typographic_family: bool,
+    ignore_typographic_subfamily: bool,
+}
+
+fn open_face_name_options_runtime_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.open_face_ignores_typographic_family"
+            | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.absent_or_unknown_param_uses_default_family"
+            | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.open_face_ignores_typographic_subfamily"
+            | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params"
+    ) && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && open_face_name_option_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
+}
+
+fn open_face_name_option_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(open_face_name_option_rows(params)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}",
+                if row.ignore_typographic_family { 1 } else { 0 },
+                if row.ignore_typographic_subfamily {
+                    1
+                } else {
+                    0
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn open_face_name_option_rows(params: &Value) -> Result<Vec<OpenFaceNameOptionsRow>, String> {
+    if let Some(scenarios) = params.get("scenarios").and_then(Value::as_array) {
+        return scenarios
+            .iter()
+            .map(open_face_name_option_row)
+            .collect::<Result<Vec<_>, _>>();
+    }
+    if let Some(open_args) = params.get("open_args") {
+        return Ok(vec![open_face_name_option_row(open_args)?]);
+    }
+    Ok(vec![open_face_name_option_row(params)?])
+}
+
+fn open_face_name_option_row(value: &Value) -> Result<OpenFaceNameOptionsRow, String> {
+    let params = value
+        .get("params")
+        .or_else(|| value.get("parameters"))
+        .and_then(Value::as_array);
+    let mut row = OpenFaceNameOptionsRow {
+        ignore_typographic_family: false,
+        ignore_typographic_subfamily: false,
+    };
+    let Some(params) = params else {
+        return Ok(row);
+    };
+    for param in params {
+        let Some(tag) = param.get("tag").and_then(Value::as_str) else {
+            continue;
+        };
+        match tag {
+            "FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY" | "FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY" => {
+                row.ignore_typographic_family = true
+            }
+            "FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY"
+            | "FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY" => {
+                row.ignore_typographic_subfamily = true;
+            }
+            _ => {}
+        }
+    }
+    Ok(row)
+}
+
+fn open_face_name_output(
+    status: FT_Error,
+    family_name: Option<&str>,
+    style_name: Option<&str>,
+) -> Value {
+    json!({
+        "return": status,
+        "status": status,
+        "opened": status == FT_Err_Ok,
+        "family_name": nullable_c_string_json(family_name),
+        "style_name": nullable_c_string_json(style_name)
+    })
+}
+
+fn open_face_name_run_output(results: Vec<Value>) -> RunOutput {
+    let first_error = results
+        .iter()
+        .filter_map(|row| row.get("status").and_then(Value::as_i64))
+        .find(|status| *status != i64::from(FT_Err_Ok))
+        .unwrap_or(i64::from(FT_Err_Ok)) as FT_Error;
+    let output = json!({ "results": results });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn rust_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let face_index = face_index_param(&case.inputs.params)?;
+    let mut results = Vec::new();
+    for row in open_face_name_option_rows(&case.inputs.params)? {
+        let status = FT_New_Memory_Face_With_Name_Options(
+            &library,
+            data.as_ref(),
+            face_index,
+            20.0,
+            FT_Open_Face_Name_Options {
+                ignore_typographic_family: row.ignore_typographic_family,
+                ignore_typographic_subfamily: row.ignore_typographic_subfamily,
+            },
+        );
+        match status {
+            Ok(face) => results.push(open_face_name_output(
+                FT_Err_Ok,
+                face.family_name.as_deref(),
+                face.style_name.as_deref(),
+            )),
+            Err(err) => results.push(open_face_name_output(err, None, None)),
+        }
+    }
+    Ok(open_face_name_run_output(results))
+}
+
+fn c_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let mut results = Vec::new();
+    let face_index = face_index_param(&case.inputs.params)?;
+    for row in open_face_name_option_rows(&case.inputs.params)? {
+        let mut params = Vec::new();
+        if row.ignore_typographic_family {
+            params.push(c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY as c_abi::FT_ULong,
+                data: std::ptr::null_mut(),
+            });
+        }
+        if row.ignore_typographic_subfamily {
+            params.push(c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY as c_abi::FT_ULong,
+                data: std::ptr::null_mut(),
+            });
+        }
+        let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+        let num_params = c_abi::FT_Int::try_from(params.len())
+            .map_err(|err| format!("FT_Parameter count does not fit FT_Int: {err}"))?;
+        let open_args = c_abi::FT_Open_Args {
+            flags: (FT_OPEN_MEMORY | FT_OPEN_PARAMS) as c_abi::FT_UInt,
+            memory_base: bytes.as_ptr(),
+            memory_size: file_size,
+            pathname: std::ptr::null_mut(),
+            stream: std::ptr::null_mut(),
+            driver: std::ptr::null_mut(),
+            num_params,
+            params: params.as_mut_ptr(),
+        };
+        let mut face = std::ptr::null_mut();
+        let err = c_abi::FT_Open_Face(library, &open_args, face_index, &mut face);
+        if err == FT_Err_Ok {
+            let info =
+                c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+            let family = c_nullable_c_string_json(info.family_name);
+            let style = c_nullable_c_string_json(info.style_name);
+            results.push(json!({
+                "return": err,
+                "status": err,
+                "opened": true,
+                "family_name": family,
+                "style_name": style
+            }));
+            c_done_face(face);
+        } else {
+            results.push(open_face_name_output(err, None, None));
+        }
+    }
+    c_done_library(library);
+    Ok(open_face_name_run_output(results))
+}
+
+fn wasm_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let mut results = Vec::new();
+    for row in open_face_name_option_rows(&case.inputs.params)? {
+        let status = wasm_abi::fontdone_wasm_open_face_with_name_options(
+            bytes.as_ptr(),
+            bytes.len(),
+            face_index,
+            20.0,
+            row.ignore_typographic_family.into(),
+            row.ignore_typographic_subfamily.into(),
+        );
+        if status.error == FT_Err_Ok {
+            let (family, style) = wasm_abi::abi_face_names(status.handle)
+                .ok_or_else(|| "missing wasm face names".to_string())?;
+            results.push(open_face_name_output(
+                status.error,
+                family.as_deref(),
+                style.as_deref(),
+            ));
+        } else {
+            results.push(open_face_name_output(status.error, None, None));
+        }
+        wasm_done_face(status.handle);
+    }
+    Ok(open_face_name_run_output(results))
 }
 
 fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
@@ -27301,6 +27542,9 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 
 fn comparison_schema(case: &InputCase) -> &str {
     if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return "api_object";
+    }
+    if open_face_name_options_runtime_supported(case) {
         return "api_object";
     }
     match case.operation.as_str() {

@@ -11558,6 +11558,118 @@ static void print_memory_face_row(MemoryFaceRow row, FT_Error err, int face_is_n
            face_is_null ? "null" : "non_null");
 }
 
+static void print_open_face_name_output(FT_Error err, FT_Face face) {
+    printf("{\"return\":%d,\"status\":%d,\"opened\":%s,\"family_name\":",
+           err,
+           err,
+           face ? "true" : "false");
+    print_nullable_c_string_result(face ? face->family_name : NULL);
+    printf(",\"style_name\":");
+    print_nullable_c_string_result(face ? face->style_name : NULL);
+    printf("}");
+}
+
+static int emit_open_face_name_options(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    char* rows_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!rows_arg) {
+        return 1;
+    }
+    memcpy(rows_arg, argv[5], strlen(argv[5]) + 1);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(rows_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(rows_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(rows_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(rows_arg);
+        return 0;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"results\":[");
+    char* cursor = rows_arg;
+    int first = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        int ignore_family = 0;
+        int ignore_subfamily = 0;
+        if (sscanf(cursor, "%d:%d", &ignore_family, &ignore_subfamily) != 2) {
+            FT_Done_FreeType(library);
+            free(data);
+            free(rows_arg);
+            return 2;
+        }
+        FT_Parameter params[2];
+        FT_Int num_params = 0;
+        if (ignore_family) {
+            params[num_params].tag = FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY;
+            params[num_params].data = NULL;
+            num_params++;
+        }
+        if (ignore_subfamily) {
+            params[num_params].tag = FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY;
+            params[num_params].data = NULL;
+            num_params++;
+        }
+        FT_Open_Args args;
+        memset(&args, 0, sizeof(args));
+        args.flags = FT_OPEN_MEMORY | FT_OPEN_PARAMS;
+        args.memory_base = data;
+        args.memory_size = data_len;
+        args.num_params = num_params;
+        args.params = num_params ? params : NULL;
+        FT_Face face = NULL;
+        FT_Error err = FT_Open_Face(library, &args, face_index, &face);
+        if (!first_error && err) {
+            first_error = err;
+        }
+        if (!first) {
+            printf(",");
+        }
+        print_open_face_name_output(err, face);
+        first = 0;
+        if (!err && face) {
+            FT_Done_Face(face);
+        }
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+
+    FT_Done_FreeType(library);
+    free(data);
+    free(rows_arg);
+    return 0;
+}
+
 static int emit_new_memory_face_variants(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -12949,6 +13061,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--open-face-variants")) {
         return emit_open_face_variants(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--open-face-name-options")) {
+        return emit_open_face_name_options(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--set-char-size")) {
         return emit_set_char_size(argc, argv);

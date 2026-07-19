@@ -33,6 +33,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
     "fontdone_wasm_open_face",
+    "fontdone_wasm_open_face_with_name_options",
     "fontdone_wasm_done_face",
     "fontdone_wasm_new_size",
     "fontdone_wasm_new_size_out",

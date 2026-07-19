@@ -111,12 +111,8 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     // `tt_face_load_name` drops empty and out-of-range records before
     // `tt_face_get_name` selects public face names.  Select from the validated
     // copies for the same ordering and failure behavior.
-    let family = name_string_from_records(&raw_records, NAME_ID_TYPO_FAMILY)
-        .or_else(|| name_string_from_records(&raw_records, NAME_ID_FAMILY))
-        .unwrap_or_else(|| "Unknown".into());
-    let subfamily = name_string_from_records(&raw_records, NAME_ID_TYPO_SUBFAMILY)
-        .or_else(|| name_string_from_records(&raw_records, NAME_ID_SUBFAMILY))
-        .unwrap_or_else(|| "Regular".into());
+    let family = family_name_from_records(&raw_records, false);
+    let subfamily = subfamily_name_from_records(&raw_records, false);
     let postscript_name = find_postscript_name(&raw_records);
 
     Ok(NameTable {
@@ -197,6 +193,41 @@ fn parse_lang_tags(
 /// Return the preferred FreeType face-name string for a raw name ID.
 pub(crate) fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
     name_string_from_records(&table.records, name_id)
+}
+
+/// Return the public family name after applying FreeType's open-parameter
+/// typographic-name selection flags.
+pub(crate) fn family_name(table: &NameTable, ignore_typographic_family: bool) -> String {
+    family_name_from_records(&table.records, ignore_typographic_family)
+}
+
+/// Return the public subfamily name after applying FreeType's open-parameter
+/// typographic-name selection flags.
+pub(crate) fn subfamily_name(table: &NameTable, ignore_typographic_subfamily: bool) -> String {
+    subfamily_name_from_records(&table.records, ignore_typographic_subfamily)
+}
+
+fn family_name_from_records(records: &[SfntNameRecord], ignore_typographic_family: bool) -> String {
+    if ignore_typographic_family {
+        name_string_from_records(records, NAME_ID_FAMILY)
+    } else {
+        name_string_from_records(records, NAME_ID_TYPO_FAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_FAMILY))
+    }
+    .unwrap_or_else(|| "Unknown".into())
+}
+
+fn subfamily_name_from_records(
+    records: &[SfntNameRecord],
+    ignore_typographic_subfamily: bool,
+) -> String {
+    if ignore_typographic_subfamily {
+        name_string_from_records(records, NAME_ID_SUBFAMILY)
+    } else {
+        name_string_from_records(records, NAME_ID_TYPO_SUBFAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_SUBFAMILY))
+    }
+    .unwrap_or_else(|| "Regular".into())
 }
 
 fn name_string_from_records(records: &[SfntNameRecord], name_id: u16) -> Option<String> {
