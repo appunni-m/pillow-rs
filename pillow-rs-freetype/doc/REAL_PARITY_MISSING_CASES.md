@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Render_Glyph` unsupported slot-format route
+Current verified result after `FT_LOAD_TARGET_MODE` invalid render-target route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3846`
+  - `real-parity`: `3847`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `349`
+  - `generic-error-fallback`: `348`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3864,6 +3864,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format
+```
+
+### Issue Set CP: `FT_LOAD_TARGET_MODE` invalid render-target route
+
+Previous blocker:
+
+- `freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode` stayed in
+  `generic-error-fallback`.
+- The fixture already pins exact C behavior for `FT_Load_Glyph` with
+  `FT_LOAD_RENDER | FT_LOAD_TARGET_(6)`: `FT_LOAD_TARGET_MODE` extracts the
+  four-bit render mode from bits 16-19
+  (`freetype/include/freetype/freetype.h:3617-3636`), and
+  `FT_Load_Glyph` passes that mode into `FT_Render_Glyph` when
+  `FT_LOAD_RENDER` is set (`freetype/src/base/ftobjs.c:1168-1177`). The
+  unsupported render mode returns `FT_Err_Cannot_Render_Glyph`.
+
+Plan:
+
+1. Keep the fixture intact; it already records the exact public error expected
+   for the same input.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused invalid render-target row passes exact comparison against pinned
+  C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
