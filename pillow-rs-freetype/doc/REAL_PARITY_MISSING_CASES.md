@@ -78,6 +78,70 @@ FONTDONE_UNIFIED_ORACLE_REFRESH=1 make fontdone-parity
 python3 pillow-rs-freetype/scripts/check_public_api_inputs.py --route-audit --route-audit-json /tmp/fontdone-route-audit-final.json
 ```
 
+### Issue Set Current: rejected size/cache/list/face strict probes
+
+Scope:
+
+- Continued strict-promotion triage after the `real-parity` `4454` checkpoint.
+- Temporary operation-level probes were used only to expose pinned C behavior;
+  every probe rule was removed before commit because the rows were not valid
+  strict promotions as a family.
+
+Rejected probes:
+
+- `freetype.active_size_handle`: all three `FT_Size` active-size rows failed
+  strict focused parity with pinned C error `7`.
+- `freetype.size_record_state`: all three `FT_SizeRec` active-size record rows
+  failed strict focused parity with pinned C error `7`.
+- `ftcache.manager_lookup_size`: mixed route. `FTC_ScalerRec` pixel/point
+  descriptor rows failed with pinned C error `7`; the apparent route-audit
+  movement also included unresolved runtime-asset rows when checked by exact
+  case filter, so no cache row was promoted from this probe.
+- `ftcache.node_unref` and `ftcache.type_contract`: all probed rows failed
+  strict focused parity with pinned C error `7`.
+- `ftcache.cmap_cache_new`, `ftcache.image_cache_new`,
+  `ftcache.image_cache_lookup`, `ftcache.manager_lookup_face`, and
+  `ftcache.manager_new`: operation filters had some runnable successes, but
+  exact case filters for the route-audit candidate rows reported unresolved
+  runtime font assets. These remain fallback-classified until the fixture/route
+  split is explicit enough to promote only runnable concrete rows.
+- `freetype.open_face_with_params`, `freetype.face_properties_then_render`,
+  `freetype.open_face_args`, and `freetype.inspect_face_rec`: strict focused
+  parity exposed pinned C error `7` on the public rows; the operation-level
+  classifier would be a green placeholder.
+- `ftlist.list_insert_abi`, `ftlist.list_iterate_abi`,
+  `ftlist.list_remove_abi`, and `ftlist.list_up_abi`: each import-contract row
+  failed strict focused parity with pinned C error `7`.
+
+Required follow-up plan:
+
+1. For cache rows, split fixture variants so route-audit candidate IDs map to
+   runnable concrete cases before promotion; do not promote unresolved asset
+   rows based on operation-level successes.
+2. For size/list/face-param rows, inspect the pinned C oracle route first: the
+   first divergence is the oracle returning `7`, not Rust/C-ABI/WASM output.
+3. Only retry strict promotion after the pinned C route returns success for the
+   same concrete input, then verify with focused strict parity and full
+   `make fontdone-parity`.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.active_size_handle
+make -C pillow-rs-freetype test-op OP=freetype.size_record_state
+make -C pillow-rs-freetype test-op OP=ftcache.manager_lookup_size
+make -C pillow-rs-freetype test-op OP=ftcache.node_unref
+make -C pillow-rs-freetype test-op OP=ftcache.type_contract
+make -C pillow-rs-freetype test-op OP=freetype.open_face_with_params
+make -C pillow-rs-freetype test-op OP=freetype.face_properties_then_render
+make -C pillow-rs-freetype test-op OP=freetype.open_face_args
+make -C pillow-rs-freetype test-op OP=freetype.inspect_face_rec
+make -C pillow-rs-freetype test-op OP=ftlist.list_insert_abi
+make -C pillow-rs-freetype test-op OP=ftlist.list_iterate_abi
+make -C pillow-rs-freetype test-op OP=ftlist.list_remove_abi
+make -C pillow-rs-freetype test-op OP=ftlist.list_up_abi
+```
+
 ### Issue Set Current: future-batch exact route triage
 
 Scope:
