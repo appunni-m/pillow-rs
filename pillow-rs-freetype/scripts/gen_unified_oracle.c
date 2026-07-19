@@ -337,6 +337,60 @@ static void print_ft_list_node(const char* id,
            ft_list_data_token(node ? node->data : NULL, data_a, data_b, data_c));
 }
 
+static const char* ft_list_node_token4(FT_ListNode node,
+                                       FT_ListNode node_0,
+                                       FT_ListNode node_a,
+                                       FT_ListNode node_b,
+                                       FT_ListNode node_c) {
+    if (!node) return "null";
+    if (node == node_0) return "node_0";
+    if (node == node_a) return "node_a";
+    if (node == node_b) return "node_b";
+    if (node == node_c) return "node_c";
+    return "foreign";
+}
+
+static const char* ft_list_data_token4(void* data,
+                                       void* data_0,
+                                       void* data_a,
+                                       void* data_b,
+                                       void* data_c) {
+    if (!data) return "null";
+    if (data == data_0) return "data_0";
+    if (data == data_a) return "data_a";
+    if (data == data_b) return "data_b";
+    if (data == data_c) return "data_c";
+    return "foreign";
+}
+
+static void print_ft_list_topology4(FT_List list,
+                                    void* data_0,
+                                    void* data_a,
+                                    void* data_b,
+                                    void* data_c,
+                                    FT_ListNode node_0,
+                                    FT_ListNode node_a,
+                                    FT_ListNode node_b,
+                                    FT_ListNode node_c) {
+    FT_ListNode nodes[4] = { node_0, node_a, node_b, node_c };
+    const char* labels[4] = { "node_0", "node_a", "node_b", "node_c" };
+    printf("{\"list\":{\"head\":\"%s\",\"tail\":\"%s\"},\"nodes\":[",
+           ft_list_node_token4(list ? list->head : NULL, node_0, node_a, node_b, node_c),
+           ft_list_node_token4(list ? list->tail : NULL, node_0, node_a, node_b, node_c));
+    int first = 1;
+    for (int i = 0; i < 4; i++) {
+        if (!nodes[i]) continue;
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"id\":\"%s\",\"prev\":\"%s\",\"next\":\"%s\",\"data\":\"%s\"}",
+               labels[i],
+               ft_list_node_token4(nodes[i]->prev, node_0, node_a, node_b, node_c),
+               ft_list_node_token4(nodes[i]->next, node_0, node_a, node_b, node_c),
+               ft_list_data_token4(nodes[i]->data, data_0, data_a, data_b, data_c));
+    }
+    printf("],\"data_tokens\":[\"data_0\",\"data_a\",\"data_b\",\"data_c\"]}");
+}
+
 static void print_ft_list_find_result(FT_List list,
                                       void* data,
                                       FT_ListNode node_a,
@@ -360,9 +414,11 @@ static void print_ft_list_find_result(FT_List list,
 }
 
 static int emit_ft_list(const char* case_id) {
+    unsigned char data_0 = 0;
     unsigned char data_a = 1;
     unsigned char data_b = 2;
     unsigned char data_c = 3;
+    FT_ListNodeRec node_0 = { NULL, NULL, &data_0 };
     FT_ListNodeRec node_a = { NULL, NULL, &data_a };
     FT_ListNodeRec node_b = { NULL, NULL, &data_b };
     FT_ListNodeRec node_c = { NULL, NULL, &data_c };
@@ -408,6 +464,170 @@ static int emit_ft_list(const char* case_id) {
         printf(",\"node\":");
         print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, NULL, NULL);
         printf("}]}");
+    } else if (streq(case_id, "ftlist.FT_List_Insert.insert_empty_list")) {
+        node_0.prev = (FT_ListNode)(uintptr_t)0x51;
+        node_0.next = (FT_ListNode)(uintptr_t)0x52;
+        FT_List_Insert(&list, &node_0);
+        print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, NULL, NULL, NULL);
+    } else if (streq(case_id, "ftlist.FT_List_Insert.insert_non_empty_list")) {
+        printf("{\"rows\":[");
+        for (int i = 0; i < 2; i++) {
+            node_0 = (FT_ListNodeRec){ NULL, NULL, &data_0 };
+            node_a = (FT_ListNodeRec){ NULL, NULL, &data_a };
+            node_b = (FT_ListNodeRec){ NULL, NULL, &data_b };
+            node_c = (FT_ListNodeRec){ NULL, NULL, &data_c };
+            if (i == 0) {
+                list = (FT_ListRec){ &node_a, &node_a };
+            } else {
+                node_a.next = &node_b;
+                node_b.prev = &node_a;
+                node_b.next = &node_c;
+                node_c.prev = &node_b;
+                list = (FT_ListRec){ &node_a, &node_c };
+            }
+            FT_List_Insert(&list, &node_0);
+            if (i) printf(",");
+            printf("{\"shape\":\"%s\",\"topology\":", i == 0 ? "one_node" : "three_nodes");
+            print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, &node_a, i == 0 ? NULL : &node_b, i == 0 ? NULL : &node_c);
+            printf("}");
+        }
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Insert.null_list_or_node_noop")) {
+        node_0 = (FT_ListNodeRec){ (FT_ListNode)(uintptr_t)0x51, (FT_ListNode)(uintptr_t)0x52, &data_0 };
+        node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+        node_b = (FT_ListNodeRec){ &node_a, NULL, &data_b };
+        list = (FT_ListRec){ &node_a, &node_b };
+        printf("{\"rows\":[{\"variant\":\"null_list\",\"initial_topology\":");
+        print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, &node_a, &node_b, NULL);
+        FT_List_Insert(NULL, &node_0);
+        printf(",\"final_topology\":");
+        print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, &node_a, &node_b, NULL);
+        printf("},{\"variant\":\"null_node\",\"initial_topology\":");
+        print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, &node_a, &node_b, NULL);
+        FT_List_Insert(&list, NULL);
+        printf(",\"final_topology\":");
+        print_ft_list_topology4(&list, &data_0, &data_a, &data_b, &data_c, &node_0, &node_a, &node_b, NULL);
+        printf("}]}");
+    } else if (streq(case_id, "ftlist.FT_List_Remove.remove_head_middle_tail")) {
+        const char* labels[3] = { "node_a", "node_b", "node_c" };
+        printf("{\"rows\":[");
+        for (int i = 0; i < 3; i++) {
+            node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+            node_b = (FT_ListNodeRec){ &node_a, &node_c, &data_b };
+            node_c = (FT_ListNodeRec){ &node_b, NULL, &data_c };
+            list = (FT_ListRec){ &node_a, &node_c };
+            FT_ListNode target = i == 0 ? &node_a : (i == 1 ? &node_b : &node_c);
+            FT_List_Remove(&list, target);
+            if (i) printf(",");
+            printf("{\"remove\":\"%s\",", labels[i]);
+            print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, &node_c);
+            printf(",\"nodes\":[");
+            print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf(",");
+            print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf(",");
+            print_ft_list_node("node_c", &node_c, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf("]}");
+        }
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Remove.remove_only_node")) {
+        list = (FT_ListRec){ &node_a, &node_a };
+        FT_List_Remove(&list, &node_a);
+        printf("{");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, NULL, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, NULL, NULL);
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Remove.null_list_or_node_noop")) {
+        node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+        node_b = (FT_ListNodeRec){ &node_a, NULL, &data_b };
+        list = (FT_ListRec){ &node_a, &node_b };
+        FT_List_Remove(NULL, &node_a);
+        printf("{\"rows\":[{\"variant\":\"null_list\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf("]}");
+        FT_List_Remove(&list, NULL);
+        printf(",{\"variant\":\"null_node\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf("]}]}");
+    } else if (streq(case_id, "ftlist.FT_List_Remove.membership_not_checked")) {
+        FT_ListNodeRec foreign = { &node_a, &node_c, &data_b };
+        node_a = (FT_ListNodeRec){ NULL, NULL, &data_a };
+        node_b = (FT_ListNodeRec){ NULL, NULL, &data_b };
+        node_c = (FT_ListNodeRec){ NULL, NULL, &data_c };
+        list = (FT_ListRec){ &node_b, &node_b };
+        FT_List_Remove(&list, &foreign);
+        printf("{");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, &node_c);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf(",");
+        print_ft_list_node("node_c", &node_c, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Up.move_tail_or_middle_to_head")) {
+        const char* labels[2] = { "node_c", "node_b" };
+        printf("{\"rows\":[");
+        for (int i = 0; i < 2; i++) {
+            node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+            node_b = (FT_ListNodeRec){ &node_a, &node_c, &data_b };
+            node_c = (FT_ListNodeRec){ &node_b, NULL, &data_c };
+            list = (FT_ListRec){ &node_a, &node_c };
+            FT_ListNode target = i == 0 ? &node_c : &node_b;
+            FT_List_Up(&list, target);
+            if (i) printf(",");
+            printf("{\"move\":\"%s\",", labels[i]);
+            print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, &node_c);
+            printf(",\"nodes\":[");
+            print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf(",");
+            print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf(",");
+            print_ft_list_node("node_c", &node_c, &data_a, &data_b, &data_c, &node_a, &node_b, &node_c);
+            printf("]}");
+        }
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Up.already_head_noop")) {
+        node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+        node_b = (FT_ListNodeRec){ &node_a, NULL, &data_b };
+        list = (FT_ListRec){ &node_a, &node_b };
+        FT_List_Up(&list, &node_a);
+        printf("{");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf("]}");
+    } else if (streq(case_id, "ftlist.FT_List_Up.null_list_or_node_noop")) {
+        node_a = (FT_ListNodeRec){ NULL, &node_b, &data_a };
+        node_b = (FT_ListNodeRec){ &node_a, NULL, &data_b };
+        list = (FT_ListRec){ &node_a, &node_b };
+        FT_List_Up(NULL, &node_b);
+        printf("{\"rows\":[{\"variant\":\"null_list\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf("]}");
+        FT_List_Up(&list, NULL);
+        printf(",{\"variant\":\"null_node\",");
+        print_ft_list_pair("list", list.head, list.tail, &node_a, &node_b, NULL);
+        printf(",\"nodes\":[");
+        print_ft_list_node("node_a", &node_a, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf(",");
+        print_ft_list_node("node_b", &node_b, &data_a, &data_b, &data_c, &node_a, &node_b, NULL);
+        printf("]}]}");
     } else if (streq(case_id, "ftlist.FT_List_Find.success_finds_first_matching_node") ||
                streq(case_id, "ftlist.FT_List_Find.missing_data_returns_null") ||
                streq(case_id, "ftlist.FT_List_Find.null_list_returns_null") ||

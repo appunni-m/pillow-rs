@@ -2638,7 +2638,10 @@ impl BackendComparisonWorker {
         }
         match case.operation.as_str() {
             "ftlist.list_add" => c_ftlist_add(case),
+            "ftlist.list_insert" => c_ftlist_insert(case),
             "ftlist.list_find" => c_ftlist_find(case),
+            "ftlist.list_remove" => c_ftlist_remove(case),
+            "ftlist.list_up" => c_ftlist_up(case),
             "size_metrics" => {
                 let face = self.c_face(case)?;
                 c_size_metrics_json(face).map(ok)
@@ -2906,7 +2909,10 @@ impl BackendComparisonWorker {
         }
         match case.operation.as_str() {
             "ftlist.list_add" => wasm_ftlist_add(case),
+            "ftlist.list_insert" => wasm_ftlist_insert(case),
             "ftlist.list_find" => wasm_ftlist_find(case),
+            "ftlist.list_remove" => wasm_ftlist_remove(case),
+            "ftlist.list_up" => wasm_ftlist_up(case),
             "size_metrics" => {
                 let handle = self.wasm_face(case)?;
                 let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
@@ -3450,6 +3456,139 @@ fn rust_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn rust_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Insert.insert_empty_list" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = FT_ListNodeRec {
+                prev: 0x51usize as FT_ListNode,
+                next: 0x52usize as FT_ListNode,
+                data: data_0,
+            };
+            let mut list = FT_ListRec::default();
+            FT_List_Insert(Some(&mut list), Some(&mut node_0), None);
+            Ok(ok(insert_single_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            )))
+        }
+        "ftlist.FT_List_Insert.insert_non_empty_list" => {
+            let mut rows = Vec::new();
+            for shape in ["one_node", "three_nodes"] {
+                let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+                let (data_0, data_a, data_b, data_c) =
+                    list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+                let mut node_0 = FT_ListNodeRec {
+                    data: data_0,
+                    ..Default::default()
+                };
+                let (mut node_a, mut node_b, mut node_c) =
+                    rust_three_list_nodes(data_a, data_b, data_c);
+                let mut list = if shape == "one_node" {
+                    FT_ListRec {
+                        head: &mut node_a,
+                        tail: &mut node_a,
+                    }
+                } else {
+                    rust_link_three(&mut node_a, &mut node_b, &mut node_c);
+                    FT_ListRec {
+                        head: &mut node_a,
+                        tail: &mut node_c,
+                    }
+                };
+                FT_List_Insert(Some(&mut list), Some(&mut node_0), Some(&mut node_a));
+                let (node_b_ref, node_c_ref) = if shape == "one_node" {
+                    (None, None)
+                } else {
+                    (Some(&node_b), Some(&node_c))
+                };
+                rows.push(json!({
+                    "shape": shape,
+                    "topology": insert_four_topology_json(
+                        list.head.cast(),
+                        list.tail.cast(),
+                        &node_0,
+                        &node_a,
+                        node_b_ref,
+                        node_c_ref,
+                        data_0,
+                        data_a,
+                        data_b,
+                        data_c,
+                    )
+                }));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Insert.null_list_or_node_noop" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = FT_ListNodeRec {
+                prev: 0x51usize as FT_ListNode,
+                next: 0x52usize as FT_ListNode,
+                data: data_0,
+            };
+            let (mut node_a, mut node_b, _) = rust_two_list_nodes(data_a, data_b);
+            rust_link_two(&mut node_a, &mut node_b);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let initial = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            FT_List_Insert(None, Some(&mut node_0), None);
+            let null_list_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            FT_List_Insert(Some(&mut list), None, None);
+            let null_node_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            Ok(ok(json!({"rows": [
+                {"variant": "null_list", "initial_topology": initial, "final_topology": null_list_final},
+                {"variant": "null_node", "initial_topology": initial, "final_topology": null_node_final}
+            ]})))
+        }
+        other => Err(format!("unsupported rust FT_List_Insert case {other}")),
+    }
+}
+
 fn rust_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let mut missing = 1_u8;
     let mut other = 2_u8;
@@ -3497,6 +3636,564 @@ fn rust_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let (found, visited) =
         rust_list_find_with_visited(list_arg, data_arg, &node_a, Some(&node_b), Some(&node_c));
     Ok(ok(json!({"return": found, "visited_nodes": visited})))
+}
+
+fn rust_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Remove.remove_head_middle_tail" => {
+            let mut rows = Vec::new();
+            for remove in ["node_a", "node_b", "node_c"] {
+                let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+                let (data_a, data_b, data_c) = (
+                    (&mut data_a as *mut u8).cast::<c_void>(),
+                    (&mut data_b as *mut u8).cast::<c_void>(),
+                    (&mut data_c as *mut u8).cast::<c_void>(),
+                );
+                let (mut node_a, mut node_b, mut node_c) =
+                    rust_three_list_nodes(data_a, data_b, data_c);
+                rust_link_three(&mut node_a, &mut node_b, &mut node_c);
+                let mut list = FT_ListRec {
+                    head: &mut node_a,
+                    tail: &mut node_c,
+                };
+                match remove {
+                    "node_a" => {
+                        FT_List_Remove(Some(&mut list), Some(&node_a), None, Some(&mut node_b))
+                    }
+                    "node_b" => FT_List_Remove(
+                        Some(&mut list),
+                        Some(&node_b),
+                        Some(&mut node_a),
+                        Some(&mut node_c),
+                    ),
+                    _ => FT_List_Remove(Some(&mut list), Some(&node_c), Some(&mut node_b), None),
+                }
+                rows.push(json!({"remove": remove, "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)), "nodes": rust_three_nodes_json(&node_a, &node_b, &node_c, data_a, data_b, data_c)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Remove.remove_only_node" => {
+            let mut data_a = 1_u8;
+            let data_a = (&mut data_a as *mut u8).cast::<c_void>();
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..Default::default()
+            };
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_a,
+            };
+            FT_List_Remove(Some(&mut list), Some(&node_a), None, None);
+            Ok(ok(
+                json!({"list": rust_list_pair(list.head, list.tail, &node_a, None, None), "nodes": [rust_list_node("node_a", &node_a, data_a, ptr::null_mut(), ptr::null_mut(), &node_a, None, None)]}),
+            ))
+        }
+        "ftlist.FT_List_Remove.null_list_or_node_noop" => {
+            let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let (mut node_a, mut node_b, _) = rust_two_list_nodes(data_a, data_b);
+            rust_link_two(&mut node_a, &mut node_b);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            FT_List_Remove(None, Some(&node_a), None, Some(&mut node_b));
+            let row1 = json!({"variant": "null_list", "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), None), "nodes": rust_two_nodes_json(&node_a, &node_b, data_a, data_b, data_c)});
+            FT_List_Remove(Some(&mut list), None, None, None);
+            let row2 = json!({"variant": "null_node", "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), None), "nodes": rust_two_nodes_json(&node_a, &node_b, data_a, data_b, data_c)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Remove.membership_not_checked" => {
+            let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let mut node_a = FT_ListNodeRec {
+                data: data_a,
+                ..Default::default()
+            };
+            let mut node_b = FT_ListNodeRec {
+                data: data_b,
+                ..Default::default()
+            };
+            let mut node_c = FT_ListNodeRec {
+                data: data_c,
+                ..Default::default()
+            };
+            let foreign = FT_ListNodeRec {
+                prev: &mut node_a,
+                next: &mut node_c,
+                data: data_b,
+            };
+            let mut list = FT_ListRec {
+                head: &mut node_b,
+                tail: &mut node_b,
+            };
+            FT_List_Remove(
+                Some(&mut list),
+                Some(&foreign),
+                Some(&mut node_a),
+                Some(&mut node_c),
+            );
+            Ok(ok(
+                json!({"list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)), "nodes": rust_three_nodes_json(&node_a, &node_b, &node_c, data_a, data_b, data_c)}),
+            ))
+        }
+        other => Err(format!("unsupported rust FT_List_Remove case {other}")),
+    }
+}
+
+fn rust_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
+            let mut rows = Vec::new();
+            for move_node in ["node_c", "node_b"] {
+                let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+                let (data_a, data_b, data_c) = (
+                    (&mut data_a as *mut u8).cast::<c_void>(),
+                    (&mut data_b as *mut u8).cast::<c_void>(),
+                    (&mut data_c as *mut u8).cast::<c_void>(),
+                );
+                let (mut node_a, mut node_b, mut node_c) =
+                    rust_three_list_nodes(data_a, data_b, data_c);
+                rust_link_three(&mut node_a, &mut node_b, &mut node_c);
+                let mut list = FT_ListRec {
+                    head: &mut node_a,
+                    tail: &mut node_c,
+                };
+                if move_node == "node_c" {
+                    FT_List_Up(
+                        Some(&mut list),
+                        Some(&mut node_c),
+                        Some(&mut node_b),
+                        None,
+                        false,
+                        Some(&mut node_a),
+                    );
+                } else {
+                    FT_List_Up(
+                        Some(&mut list),
+                        Some(&mut node_b),
+                        Some(&mut node_a),
+                        Some(&mut node_c),
+                        true,
+                        None,
+                    );
+                }
+                rows.push(json!({"move": move_node, "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), Some(&node_c)), "nodes": rust_three_nodes_json(&node_a, &node_b, &node_c, data_a, data_b, data_c)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Up.already_head_noop" => {
+            let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let (mut node_a, mut node_b, _) = rust_two_list_nodes(data_a, data_b);
+            rust_link_two(&mut node_a, &mut node_b);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            FT_List_Up(
+                Some(&mut list),
+                Some(&mut node_a),
+                None,
+                Some(&mut node_b),
+                false,
+                None,
+            );
+            Ok(ok(
+                json!({"list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), None), "nodes": rust_two_nodes_json(&node_a, &node_b, data_a, data_b, data_c)}),
+            ))
+        }
+        "ftlist.FT_List_Up.null_list_or_node_noop" => {
+            let (mut data_a, mut data_b, mut data_c) = (1_u8, 2_u8, 3_u8);
+            let (data_a, data_b, data_c) = (
+                (&mut data_a as *mut u8).cast::<c_void>(),
+                (&mut data_b as *mut u8).cast::<c_void>(),
+                (&mut data_c as *mut u8).cast::<c_void>(),
+            );
+            let (mut node_a, mut node_b, _) = rust_two_list_nodes(data_a, data_b);
+            rust_link_two(&mut node_a, &mut node_b);
+            let mut list = FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            FT_List_Up(
+                None,
+                Some(&mut node_b),
+                Some(&mut node_a),
+                None,
+                false,
+                None,
+            );
+            let row1 = json!({"variant": "null_list", "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), None), "nodes": rust_two_nodes_json(&node_a, &node_b, data_a, data_b, data_c)});
+            FT_List_Up(Some(&mut list), None, None, None, false, None);
+            let row2 = json!({"variant": "null_node", "list": rust_list_pair(list.head, list.tail, &node_a, Some(&node_b), None), "nodes": rust_two_nodes_json(&node_a, &node_b, data_a, data_b, data_c)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        other => Err(format!("unsupported rust FT_List_Up case {other}")),
+    }
+}
+
+fn rust_three_list_nodes(
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> (FT_ListNodeRec, FT_ListNodeRec, FT_ListNodeRec) {
+    let node_a = FT_ListNodeRec {
+        data: data_a,
+        ..Default::default()
+    };
+    let node_b = FT_ListNodeRec {
+        data: data_b,
+        ..Default::default()
+    };
+    let node_c = FT_ListNodeRec {
+        data: data_c,
+        ..Default::default()
+    };
+    (node_a, node_b, node_c)
+}
+
+fn rust_two_list_nodes(
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+) -> (FT_ListNodeRec, FT_ListNodeRec, FT_ListNodeRec) {
+    let node_a = FT_ListNodeRec {
+        data: data_a,
+        ..Default::default()
+    };
+    let node_b = FT_ListNodeRec {
+        data: data_b,
+        ..Default::default()
+    };
+    let node_c = FT_ListNodeRec::default();
+    (node_a, node_b, node_c)
+}
+
+fn rust_link_three(
+    node_a: &mut FT_ListNodeRec,
+    node_b: &mut FT_ListNodeRec,
+    node_c: &mut FT_ListNodeRec,
+) {
+    node_a.next = node_b as *mut FT_ListNodeRec;
+    node_b.prev = node_a as *mut FT_ListNodeRec;
+    node_b.next = node_c as *mut FT_ListNodeRec;
+    node_c.prev = node_b as *mut FT_ListNodeRec;
+}
+
+fn rust_link_two(node_a: &mut FT_ListNodeRec, node_b: &mut FT_ListNodeRec) {
+    node_a.next = node_b;
+    node_b.prev = node_a;
+}
+
+fn rust_three_nodes_json(
+    node_a: &FT_ListNodeRec,
+    node_b: &FT_ListNodeRec,
+    node_c: &FT_ListNodeRec,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Value {
+    json!([
+        rust_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        rust_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        rust_list_node(
+            "node_c",
+            node_c,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        )
+    ])
+}
+
+fn rust_two_nodes_json(
+    node_a: &FT_ListNodeRec,
+    node_b: &FT_ListNodeRec,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Value {
+    json!([
+        rust_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        ),
+        rust_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        )
+    ])
+}
+
+fn list_data_four_ptrs(
+    data_0: &mut u8,
+    data_a: &mut u8,
+    data_b: &mut u8,
+    data_c: &mut u8,
+) -> (FT_Pointer, FT_Pointer, FT_Pointer, FT_Pointer) {
+    (
+        (data_0 as *mut u8).cast::<c_void>(),
+        (data_a as *mut u8).cast::<c_void>(),
+        (data_b as *mut u8).cast::<c_void>(),
+        (data_c as *mut u8).cast::<c_void>(),
+    )
+}
+
+fn insert_four_topology_json<T>(
+    head: *mut c_void,
+    tail: *mut c_void,
+    node_0: &T,
+    node_a: &T,
+    node_b: Option<&T>,
+    node_c: Option<&T>,
+    data_0: FT_Pointer,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Value
+where
+    T: InsertListNodeFields,
+{
+    let nodes = insert_node_refs(node_0, node_a, node_b, node_c);
+    let data = insert_data_refs(data_0, data_a, data_b, data_c);
+    let mut node_values = vec![
+        insert_node_json(
+            "node_0",
+            node_0.prev_ptr(),
+            node_0.next_ptr(),
+            node_0.data_ptr(),
+            &nodes,
+            &data,
+        ),
+        insert_node_json(
+            "node_a",
+            node_a.prev_ptr(),
+            node_a.next_ptr(),
+            node_a.data_ptr(),
+            &nodes,
+            &data,
+        ),
+    ];
+    if let Some(node_b) = node_b {
+        node_values.push(insert_node_json(
+            "node_b",
+            node_b.prev_ptr(),
+            node_b.next_ptr(),
+            node_b.data_ptr(),
+            &nodes,
+            &data,
+        ));
+    }
+    if let Some(node_c) = node_c {
+        node_values.push(insert_node_json(
+            "node_c",
+            node_c.prev_ptr(),
+            node_c.next_ptr(),
+            node_c.data_ptr(),
+            &nodes,
+            &data,
+        ));
+    }
+    insert_topology_json(head, tail, &nodes, &data, &node_values)
+}
+
+fn insert_single_topology_json<T>(
+    head: *mut c_void,
+    tail: *mut c_void,
+    node_0: &T,
+    data_0: FT_Pointer,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Value
+where
+    T: InsertListNodeFields,
+{
+    let nodes = vec![("node_0", (node_0 as *const T).cast())];
+    let data = insert_data_refs(data_0, data_a, data_b, data_c);
+    let node_values = vec![insert_node_json(
+        "node_0",
+        node_0.prev_ptr(),
+        node_0.next_ptr(),
+        node_0.data_ptr(),
+        &nodes,
+        &data,
+    )];
+    insert_topology_json(head, tail, &nodes, &data, &node_values)
+}
+
+trait InsertListNodeFields {
+    fn prev_ptr(&self) -> *mut c_void;
+    fn next_ptr(&self) -> *mut c_void;
+    fn data_ptr(&self) -> FT_Pointer;
+}
+
+impl InsertListNodeFields for FT_ListNodeRec {
+    fn prev_ptr(&self) -> *mut c_void {
+        self.prev.cast()
+    }
+
+    fn next_ptr(&self) -> *mut c_void {
+        self.next.cast()
+    }
+
+    fn data_ptr(&self) -> FT_Pointer {
+        self.data
+    }
+}
+
+impl InsertListNodeFields for c_abi::FT_ListNodeRec {
+    fn prev_ptr(&self) -> *mut c_void {
+        self.prev.cast()
+    }
+
+    fn next_ptr(&self) -> *mut c_void {
+        self.next.cast()
+    }
+
+    fn data_ptr(&self) -> FT_Pointer {
+        self.data
+    }
+}
+
+impl InsertListNodeFields for wasm_abi::FontdoneWasmListNode {
+    fn prev_ptr(&self) -> *mut c_void {
+        self.prev.cast()
+    }
+
+    fn next_ptr(&self) -> *mut c_void {
+        self.next.cast()
+    }
+
+    fn data_ptr(&self) -> FT_Pointer {
+        self.data
+    }
+}
+
+fn insert_node_refs<T>(
+    node_0: &T,
+    node_a: &T,
+    node_b: Option<&T>,
+    node_c: Option<&T>,
+) -> Vec<(&'static str, *const c_void)> {
+    vec![
+        ("node_0", (node_0 as *const T).cast()),
+        ("node_a", (node_a as *const T).cast()),
+        (
+            "node_b",
+            node_b.map_or(ptr::null(), |node| (node as *const T).cast()),
+        ),
+        (
+            "node_c",
+            node_c.map_or(ptr::null(), |node| (node as *const T).cast()),
+        ),
+    ]
+}
+
+fn insert_data_refs(
+    data_0: FT_Pointer,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Vec<(&'static str, *const c_void)> {
+    vec![
+        ("data_0", data_0.cast_const()),
+        ("data_a", data_a.cast_const()),
+        ("data_b", data_b.cast_const()),
+        ("data_c", data_c.cast_const()),
+    ]
+}
+
+fn insert_topology_json(
+    head: *mut c_void,
+    tail: *mut c_void,
+    nodes: &[(&'static str, *const c_void)],
+    data: &[(&'static str, *const c_void)],
+    node_values: &[Value],
+) -> Value {
+    json!({
+        "list": {
+            "head": insert_ptr_token(head.cast_const(), nodes),
+            "tail": insert_ptr_token(tail.cast_const(), nodes)
+        },
+        "nodes": node_values,
+        "data_tokens": data.iter().map(|(label, _)| *label).collect::<Vec<_>>()
+    })
+}
+
+fn insert_node_json(
+    id: &'static str,
+    prev: *mut c_void,
+    next: *mut c_void,
+    node_data: FT_Pointer,
+    nodes: &[(&'static str, *const c_void)],
+    data: &[(&'static str, *const c_void)],
+) -> Value {
+    json!({
+        "id": id,
+        "prev": insert_ptr_token(prev.cast_const(), nodes),
+        "next": insert_ptr_token(next.cast_const(), nodes),
+        "data": insert_ptr_token(node_data.cast_const(), data)
+    })
+}
+
+fn insert_ptr_token(
+    ptr_value: *const c_void,
+    refs: &[(&'static str, *const c_void)],
+) -> &'static str {
+    if ptr_value.is_null() {
+        return "null";
+    }
+    refs.iter()
+        .find_map(|(label, reference)| {
+            (!reference.is_null() && ptr_value == *reference).then_some(*label)
+        })
+        .unwrap_or("foreign")
 }
 
 fn rust_list_find_with_visited(
@@ -3671,6 +4368,139 @@ fn c_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn c_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Insert.insert_empty_list" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = c_abi::FT_ListNodeRec {
+                prev: 0x51usize as c_abi::FT_ListNode,
+                next: 0x52usize as c_abi::FT_ListNode,
+                data: data_0,
+            };
+            let mut list = c_abi::FT_ListRec::default();
+            c_abi::FT_List_Insert(&mut list, &mut node_0);
+            Ok(ok(insert_single_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            )))
+        }
+        "ftlist.FT_List_Insert.insert_non_empty_list" => {
+            let mut rows = Vec::new();
+            for shape in ["one_node", "three_nodes"] {
+                let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+                let (data_0, data_a, data_b, data_c) =
+                    list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+                let mut node_0 = c_abi::FT_ListNodeRec {
+                    data: data_0,
+                    ..Default::default()
+                };
+                let (mut node_a, mut node_b, mut node_c) =
+                    c_three_list_nodes(data_a, data_b, data_c);
+                let mut list = if shape == "one_node" {
+                    c_abi::FT_ListRec {
+                        head: &mut node_a,
+                        tail: &mut node_a,
+                    }
+                } else {
+                    c_link_three(&mut node_a, &mut node_b, &mut node_c);
+                    c_abi::FT_ListRec {
+                        head: &mut node_a,
+                        tail: &mut node_c,
+                    }
+                };
+                c_abi::FT_List_Insert(&mut list, &mut node_0);
+                let (node_b_ref, node_c_ref) = if shape == "one_node" {
+                    (None, None)
+                } else {
+                    (Some(&node_b), Some(&node_c))
+                };
+                rows.push(json!({
+                    "shape": shape,
+                    "topology": insert_four_topology_json(
+                        list.head.cast(),
+                        list.tail.cast(),
+                        &node_0,
+                        &node_a,
+                        node_b_ref,
+                        node_c_ref,
+                        data_0,
+                        data_a,
+                        data_b,
+                        data_c,
+                    )
+                }));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Insert.null_list_or_node_noop" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = c_abi::FT_ListNodeRec {
+                prev: 0x51usize as c_abi::FT_ListNode,
+                next: 0x52usize as c_abi::FT_ListNode,
+                data: data_0,
+            };
+            let (mut node_a, mut node_b) = c_two_list_nodes(data_a, data_b);
+            c_link_two(&mut node_a, &mut node_b);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let initial = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            c_abi::FT_List_Insert(ptr::null_mut(), &mut node_0);
+            let null_list_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            c_abi::FT_List_Insert(&mut list, ptr::null_mut());
+            let null_node_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            Ok(ok(json!({"rows": [
+                {"variant": "null_list", "initial_topology": initial, "final_topology": null_list_final},
+                {"variant": "null_node", "initial_topology": initial, "final_topology": null_node_final}
+            ]})))
+        }
+        other => Err(format!("unsupported c FT_List_Insert case {other}")),
+    }
+}
+
 fn c_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let mut missing = 1_u8;
     let mut other = 2_u8;
@@ -3750,6 +4580,173 @@ fn c_find_visited(
     visited
 }
 
+fn c_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Remove.remove_head_middle_tail" => {
+            let mut rows = Vec::new();
+            for remove in ["node_a", "node_b", "node_c"] {
+                let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+                let (da, db, dc) = (
+                    (&mut da as *mut u8).cast::<c_void>(),
+                    (&mut db as *mut u8).cast::<c_void>(),
+                    (&mut dc as *mut u8).cast::<c_void>(),
+                );
+                let (mut a, mut b, mut c) = c_three_list_nodes(da, db, dc);
+                c_link_three(&mut a, &mut b, &mut c);
+                let mut list = c_abi::FT_ListRec {
+                    head: &mut a,
+                    tail: &mut c,
+                };
+                let target = match remove {
+                    "node_a" => &mut a,
+                    "node_b" => &mut b,
+                    _ => &mut c,
+                };
+                c_abi::FT_List_Remove(&mut list, target);
+                rows.push(json!({"remove": remove, "list": c_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": c_three_nodes_json(&a, &b, &c, da, db, dc)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Remove.remove_only_node" => {
+            let mut da = 1_u8;
+            let da = (&mut da as *mut u8).cast::<c_void>();
+            let mut a = c_abi::FT_ListNodeRec {
+                data: da,
+                ..Default::default()
+            };
+            let mut list = c_abi::FT_ListRec {
+                head: &mut a,
+                tail: &mut a,
+            };
+            c_abi::FT_List_Remove(&mut list, &mut a);
+            Ok(ok(
+                json!({"list": c_list_pair(list.head, list.tail, &a, None, None), "nodes": [c_list_node("node_a", &a, da, ptr::null_mut(), ptr::null_mut(), &a, None, None)]}),
+            ))
+        }
+        "ftlist.FT_List_Remove.null_list_or_node_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = c_two_list_nodes(da, db);
+            c_link_two(&mut a, &mut b);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut a,
+                tail: &mut b,
+            };
+            c_abi::FT_List_Remove(ptr::null_mut(), &mut a);
+            let row1 = json!({"variant": "null_list", "list": c_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": c_two_nodes_json(&a, &b, da, db, dc)});
+            c_abi::FT_List_Remove(&mut list, ptr::null_mut());
+            let row2 = json!({"variant": "null_node", "list": c_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": c_two_nodes_json(&a, &b, da, db, dc)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Remove.membership_not_checked" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let mut a = c_abi::FT_ListNodeRec {
+                data: da,
+                ..Default::default()
+            };
+            let mut b = c_abi::FT_ListNodeRec {
+                data: db,
+                ..Default::default()
+            };
+            let mut c = c_abi::FT_ListNodeRec {
+                data: dc,
+                ..Default::default()
+            };
+            let mut foreign = c_abi::FT_ListNodeRec {
+                prev: &mut a,
+                next: &mut c,
+                data: db,
+            };
+            let mut list = c_abi::FT_ListRec {
+                head: &mut b,
+                tail: &mut b,
+            };
+            c_abi::FT_List_Remove(&mut list, &mut foreign);
+            Ok(ok(
+                json!({"list": c_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": c_three_nodes_json(&a, &b, &c, da, db, dc)}),
+            ))
+        }
+        other => Err(format!("unsupported c FT_List_Remove case {other}")),
+    }
+}
+
+fn c_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
+            let mut rows = Vec::new();
+            for move_node in ["node_c", "node_b"] {
+                let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+                let (da, db, dc) = (
+                    (&mut da as *mut u8).cast::<c_void>(),
+                    (&mut db as *mut u8).cast::<c_void>(),
+                    (&mut dc as *mut u8).cast::<c_void>(),
+                );
+                let (mut a, mut b, mut c) = c_three_list_nodes(da, db, dc);
+                c_link_three(&mut a, &mut b, &mut c);
+                let mut list = c_abi::FT_ListRec {
+                    head: &mut a,
+                    tail: &mut c,
+                };
+                let target = if move_node == "node_c" {
+                    &mut c
+                } else {
+                    &mut b
+                };
+                c_abi::FT_List_Up(&mut list, target);
+                rows.push(json!({"move": move_node, "list": c_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": c_three_nodes_json(&a, &b, &c, da, db, dc)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Up.already_head_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = c_two_list_nodes(da, db);
+            c_link_two(&mut a, &mut b);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut a,
+                tail: &mut b,
+            };
+            c_abi::FT_List_Up(&mut list, &mut a);
+            Ok(ok(
+                json!({"list": c_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": c_two_nodes_json(&a, &b, da, db, dc)}),
+            ))
+        }
+        "ftlist.FT_List_Up.null_list_or_node_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = c_two_list_nodes(da, db);
+            c_link_two(&mut a, &mut b);
+            let mut list = c_abi::FT_ListRec {
+                head: &mut a,
+                tail: &mut b,
+            };
+            c_abi::FT_List_Up(ptr::null_mut(), &mut b);
+            let row1 = json!({"variant": "null_list", "list": c_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": c_two_nodes_json(&a, &b, da, db, dc)});
+            c_abi::FT_List_Up(&mut list, ptr::null_mut());
+            let row2 = json!({"variant": "null_node", "list": c_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": c_two_nodes_json(&a, &b, da, db, dc)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        other => Err(format!("unsupported c FT_List_Up case {other}")),
+    }
+}
+
 fn c_list_pair(
     head: c_abi::FT_ListNode,
     tail: c_abi::FT_ListNode,
@@ -3779,6 +4776,136 @@ fn c_list_node(
         "next": c_list_node_token(node.next, node_a, node_b, node_c),
         "data": list_data_token(node.data, data_a, data_b, data_c)
     })
+}
+
+fn c_three_list_nodes(
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> (
+    c_abi::FT_ListNodeRec,
+    c_abi::FT_ListNodeRec,
+    c_abi::FT_ListNodeRec,
+) {
+    (
+        c_abi::FT_ListNodeRec {
+            data: data_a,
+            ..Default::default()
+        },
+        c_abi::FT_ListNodeRec {
+            data: data_b,
+            ..Default::default()
+        },
+        c_abi::FT_ListNodeRec {
+            data: data_c,
+            ..Default::default()
+        },
+    )
+}
+
+fn c_two_list_nodes(
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+) -> (c_abi::FT_ListNodeRec, c_abi::FT_ListNodeRec) {
+    (
+        c_abi::FT_ListNodeRec {
+            data: data_a,
+            ..Default::default()
+        },
+        c_abi::FT_ListNodeRec {
+            data: data_b,
+            ..Default::default()
+        },
+    )
+}
+
+fn c_link_three(
+    node_a: &mut c_abi::FT_ListNodeRec,
+    node_b: &mut c_abi::FT_ListNodeRec,
+    node_c: &mut c_abi::FT_ListNodeRec,
+) {
+    node_a.next = node_b;
+    node_b.prev = node_a;
+    node_b.next = node_c;
+    node_c.prev = node_b;
+}
+
+fn c_link_two(node_a: &mut c_abi::FT_ListNodeRec, node_b: &mut c_abi::FT_ListNodeRec) {
+    node_a.next = node_b;
+    node_b.prev = node_a;
+}
+
+fn c_three_nodes_json(
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: &c_abi::FT_ListNodeRec,
+    node_c: &c_abi::FT_ListNodeRec,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> Value {
+    json!([
+        c_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        c_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        c_list_node(
+            "node_c",
+            node_c,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        )
+    ])
+}
+
+fn c_two_nodes_json(
+    node_a: &c_abi::FT_ListNodeRec,
+    node_b: &c_abi::FT_ListNodeRec,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> Value {
+    json!([
+        c_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        ),
+        c_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        )
+    ])
 }
 
 fn c_list_node_token(
@@ -3875,6 +5002,139 @@ fn wasm_ftlist_add(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn wasm_ftlist_insert(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Insert.insert_empty_list" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = wasm_abi::FontdoneWasmListNode {
+                prev: 0x51usize as wasm_abi::FT_ListNode,
+                next: 0x52usize as wasm_abi::FT_ListNode,
+                data: data_0,
+            };
+            let mut list = wasm_abi::FontdoneWasmList::default();
+            wasm_abi::fontdone_wasm_list_insert(&mut list, &mut node_0);
+            Ok(ok(insert_single_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            )))
+        }
+        "ftlist.FT_List_Insert.insert_non_empty_list" => {
+            let mut rows = Vec::new();
+            for shape in ["one_node", "three_nodes"] {
+                let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+                let (data_0, data_a, data_b, data_c) =
+                    list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+                let mut node_0 = wasm_abi::FontdoneWasmListNode {
+                    data: data_0,
+                    ..Default::default()
+                };
+                let (mut node_a, mut node_b, mut node_c) =
+                    wasm_three_list_nodes(data_a, data_b, data_c);
+                let mut list = if shape == "one_node" {
+                    wasm_abi::FontdoneWasmList {
+                        head: &mut node_a,
+                        tail: &mut node_a,
+                    }
+                } else {
+                    wasm_link_three(&mut node_a, &mut node_b, &mut node_c);
+                    wasm_abi::FontdoneWasmList {
+                        head: &mut node_a,
+                        tail: &mut node_c,
+                    }
+                };
+                wasm_abi::fontdone_wasm_list_insert(&mut list, &mut node_0);
+                let (node_b_ref, node_c_ref) = if shape == "one_node" {
+                    (None, None)
+                } else {
+                    (Some(&node_b), Some(&node_c))
+                };
+                rows.push(json!({
+                    "shape": shape,
+                    "topology": insert_four_topology_json(
+                        list.head.cast(),
+                        list.tail.cast(),
+                        &node_0,
+                        &node_a,
+                        node_b_ref,
+                        node_c_ref,
+                        data_0,
+                        data_a,
+                        data_b,
+                        data_c,
+                    )
+                }));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Insert.null_list_or_node_noop" => {
+            let (mut data_0, mut data_a, mut data_b, mut data_c) = (0_u8, 1_u8, 2_u8, 3_u8);
+            let (data_0, data_a, data_b, data_c) =
+                list_data_four_ptrs(&mut data_0, &mut data_a, &mut data_b, &mut data_c);
+            let mut node_0 = wasm_abi::FontdoneWasmListNode {
+                prev: 0x51usize as wasm_abi::FT_ListNode,
+                next: 0x52usize as wasm_abi::FT_ListNode,
+                data: data_0,
+            };
+            let (mut node_a, mut node_b) = wasm_two_list_nodes(data_a, data_b);
+            wasm_link_two(&mut node_a, &mut node_b);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_b,
+            };
+            let initial = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            wasm_abi::fontdone_wasm_list_insert(ptr::null_mut(), &mut node_0);
+            let null_list_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            wasm_abi::fontdone_wasm_list_insert(&mut list, ptr::null_mut());
+            let null_node_final = insert_four_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                &node_0,
+                &node_a,
+                Some(&node_b),
+                None,
+                data_0,
+                data_a,
+                data_b,
+                data_c,
+            );
+            Ok(ok(json!({"rows": [
+                {"variant": "null_list", "initial_topology": initial, "final_topology": null_list_final},
+                {"variant": "null_node", "initial_topology": initial, "final_topology": null_node_final}
+            ]})))
+        }
+        other => Err(format!("unsupported wasm FT_List_Insert case {other}")),
+    }
+}
+
 fn wasm_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let mut missing = 1_u8;
     let mut other = 2_u8;
@@ -3956,6 +5216,173 @@ fn wasm_find_visited(
     visited
 }
 
+fn wasm_ftlist_remove(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Remove.remove_head_middle_tail" => {
+            let mut rows = Vec::new();
+            for remove in ["node_a", "node_b", "node_c"] {
+                let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+                let (da, db, dc) = (
+                    (&mut da as *mut u8).cast::<c_void>(),
+                    (&mut db as *mut u8).cast::<c_void>(),
+                    (&mut dc as *mut u8).cast::<c_void>(),
+                );
+                let (mut a, mut b, mut c) = wasm_three_list_nodes(da, db, dc);
+                wasm_link_three(&mut a, &mut b, &mut c);
+                let mut list = wasm_abi::FontdoneWasmList {
+                    head: &mut a,
+                    tail: &mut c,
+                };
+                let target = match remove {
+                    "node_a" => &mut a,
+                    "node_b" => &mut b,
+                    _ => &mut c,
+                };
+                wasm_abi::fontdone_wasm_list_remove(&mut list, target);
+                rows.push(json!({"remove": remove, "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": wasm_three_nodes_json(&a, &b, &c, da, db, dc)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Remove.remove_only_node" => {
+            let mut da = 1_u8;
+            let da = (&mut da as *mut u8).cast::<c_void>();
+            let mut a = wasm_abi::FontdoneWasmListNode {
+                data: da,
+                ..Default::default()
+            };
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut a,
+                tail: &mut a,
+            };
+            wasm_abi::fontdone_wasm_list_remove(&mut list, &mut a);
+            Ok(ok(
+                json!({"list": wasm_list_pair(list.head, list.tail, &a, None, None), "nodes": [wasm_list_node("node_a", &a, da, ptr::null_mut(), ptr::null_mut(), &a, None, None)]}),
+            ))
+        }
+        "ftlist.FT_List_Remove.null_list_or_node_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = wasm_two_list_nodes(da, db);
+            wasm_link_two(&mut a, &mut b);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut a,
+                tail: &mut b,
+            };
+            wasm_abi::fontdone_wasm_list_remove(ptr::null_mut(), &mut a);
+            let row1 = json!({"variant": "null_list", "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": wasm_two_nodes_json(&a, &b, da, db, dc)});
+            wasm_abi::fontdone_wasm_list_remove(&mut list, ptr::null_mut());
+            let row2 = json!({"variant": "null_node", "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": wasm_two_nodes_json(&a, &b, da, db, dc)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        "ftlist.FT_List_Remove.membership_not_checked" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let mut a = wasm_abi::FontdoneWasmListNode {
+                data: da,
+                ..Default::default()
+            };
+            let mut b = wasm_abi::FontdoneWasmListNode {
+                data: db,
+                ..Default::default()
+            };
+            let mut c = wasm_abi::FontdoneWasmListNode {
+                data: dc,
+                ..Default::default()
+            };
+            let mut foreign = wasm_abi::FontdoneWasmListNode {
+                prev: &mut a,
+                next: &mut c,
+                data: db,
+            };
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut b,
+                tail: &mut b,
+            };
+            wasm_abi::fontdone_wasm_list_remove(&mut list, &mut foreign);
+            Ok(ok(
+                json!({"list": wasm_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": wasm_three_nodes_json(&a, &b, &c, da, db, dc)}),
+            ))
+        }
+        other => Err(format!("unsupported wasm FT_List_Remove case {other}")),
+    }
+}
+
+fn wasm_ftlist_up(case: &InputCase) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftlist.FT_List_Up.move_tail_or_middle_to_head" => {
+            let mut rows = Vec::new();
+            for move_node in ["node_c", "node_b"] {
+                let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+                let (da, db, dc) = (
+                    (&mut da as *mut u8).cast::<c_void>(),
+                    (&mut db as *mut u8).cast::<c_void>(),
+                    (&mut dc as *mut u8).cast::<c_void>(),
+                );
+                let (mut a, mut b, mut c) = wasm_three_list_nodes(da, db, dc);
+                wasm_link_three(&mut a, &mut b, &mut c);
+                let mut list = wasm_abi::FontdoneWasmList {
+                    head: &mut a,
+                    tail: &mut c,
+                };
+                let target = if move_node == "node_c" {
+                    &mut c
+                } else {
+                    &mut b
+                };
+                wasm_abi::fontdone_wasm_list_up(&mut list, target);
+                rows.push(json!({"move": move_node, "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), Some(&c)), "nodes": wasm_three_nodes_json(&a, &b, &c, da, db, dc)}));
+            }
+            Ok(ok(json!({"rows": rows})))
+        }
+        "ftlist.FT_List_Up.already_head_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = wasm_two_list_nodes(da, db);
+            wasm_link_two(&mut a, &mut b);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut a,
+                tail: &mut b,
+            };
+            wasm_abi::fontdone_wasm_list_up(&mut list, &mut a);
+            Ok(ok(
+                json!({"list": wasm_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": wasm_two_nodes_json(&a, &b, da, db, dc)}),
+            ))
+        }
+        "ftlist.FT_List_Up.null_list_or_node_noop" => {
+            let (mut da, mut db, mut dc) = (1_u8, 2_u8, 3_u8);
+            let (da, db, dc) = (
+                (&mut da as *mut u8).cast::<c_void>(),
+                (&mut db as *mut u8).cast::<c_void>(),
+                (&mut dc as *mut u8).cast::<c_void>(),
+            );
+            let (mut a, mut b) = wasm_two_list_nodes(da, db);
+            wasm_link_two(&mut a, &mut b);
+            let mut list = wasm_abi::FontdoneWasmList {
+                head: &mut a,
+                tail: &mut b,
+            };
+            wasm_abi::fontdone_wasm_list_up(ptr::null_mut(), &mut b);
+            let row1 = json!({"variant": "null_list", "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": wasm_two_nodes_json(&a, &b, da, db, dc)});
+            wasm_abi::fontdone_wasm_list_up(&mut list, ptr::null_mut());
+            let row2 = json!({"variant": "null_node", "list": wasm_list_pair(list.head, list.tail, &a, Some(&b), None), "nodes": wasm_two_nodes_json(&a, &b, da, db, dc)});
+            Ok(ok(json!({"rows": [row1, row2]})))
+        }
+        other => Err(format!("unsupported wasm FT_List_Up case {other}")),
+    }
+}
+
 fn wasm_list_pair(
     head: wasm_abi::FT_ListNode,
     tail: wasm_abi::FT_ListNode,
@@ -3985,6 +5412,142 @@ fn wasm_list_node(
         "next": wasm_list_node_token(node.next, node_a, node_b, node_c),
         "data": list_data_token(node.data, data_a, data_b, data_c)
     })
+}
+
+fn wasm_three_list_nodes(
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> (
+    wasm_abi::FontdoneWasmListNode,
+    wasm_abi::FontdoneWasmListNode,
+    wasm_abi::FontdoneWasmListNode,
+) {
+    (
+        wasm_abi::FontdoneWasmListNode {
+            data: data_a,
+            ..Default::default()
+        },
+        wasm_abi::FontdoneWasmListNode {
+            data: data_b,
+            ..Default::default()
+        },
+        wasm_abi::FontdoneWasmListNode {
+            data: data_c,
+            ..Default::default()
+        },
+    )
+}
+
+fn wasm_two_list_nodes(
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+) -> (
+    wasm_abi::FontdoneWasmListNode,
+    wasm_abi::FontdoneWasmListNode,
+) {
+    (
+        wasm_abi::FontdoneWasmListNode {
+            data: data_a,
+            ..Default::default()
+        },
+        wasm_abi::FontdoneWasmListNode {
+            data: data_b,
+            ..Default::default()
+        },
+    )
+}
+
+fn wasm_link_three(
+    node_a: &mut wasm_abi::FontdoneWasmListNode,
+    node_b: &mut wasm_abi::FontdoneWasmListNode,
+    node_c: &mut wasm_abi::FontdoneWasmListNode,
+) {
+    node_a.next = node_b;
+    node_b.prev = node_a;
+    node_b.next = node_c;
+    node_c.prev = node_b;
+}
+
+fn wasm_link_two(
+    node_a: &mut wasm_abi::FontdoneWasmListNode,
+    node_b: &mut wasm_abi::FontdoneWasmListNode,
+) {
+    node_a.next = node_b;
+    node_b.prev = node_a;
+}
+
+fn wasm_three_nodes_json(
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: &wasm_abi::FontdoneWasmListNode,
+    node_c: &wasm_abi::FontdoneWasmListNode,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> Value {
+    json!([
+        wasm_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        wasm_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        ),
+        wasm_list_node(
+            "node_c",
+            node_c,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            Some(node_c)
+        )
+    ])
+}
+
+fn wasm_two_nodes_json(
+    node_a: &wasm_abi::FontdoneWasmListNode,
+    node_b: &wasm_abi::FontdoneWasmListNode,
+    data_a: *mut c_void,
+    data_b: *mut c_void,
+    data_c: *mut c_void,
+) -> Value {
+    json!([
+        wasm_list_node(
+            "node_a",
+            node_a,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        ),
+        wasm_list_node(
+            "node_b",
+            node_b,
+            data_a,
+            data_b,
+            data_c,
+            node_a,
+            Some(node_b),
+            None
+        )
+    ])
 }
 
 fn wasm_list_node_token(
@@ -10602,9 +12165,8 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--bitmap-done".to_string(),
             string_param(params, "scenario")?.to_string(),
         ]),
-        "ftlist.list_add" | "ftlist.list_find" => {
-            Ok(vec!["--ft-list".to_string(), case.case_id.clone()])
-        }
+        "ftlist.list_add" | "ftlist.list_insert" | "ftlist.list_find" | "ftlist.list_remove"
+        | "ftlist.list_up" => Ok(vec!["--ft-list".to_string(), case.case_id.clone()]),
         "ftbitmap.bitmap_embolden" => Ok(vec![
             "--bitmap-embolden".to_string(),
             string_param(params, "scenario")?.to_string(),
@@ -12210,7 +13772,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_rust(case),
         "ftlist.list_add" => rust_ftlist_add(case),
+        "ftlist.list_insert" => rust_ftlist_insert(case),
         "ftlist.list_find" => rust_ftlist_find(case),
+        "ftlist.list_remove" => rust_ftlist_remove(case),
+        "ftlist.list_up" => rust_ftlist_up(case),
         operation if operation.starts_with("freetype.face_macro") => {
             let face = rust_new_face_without_size(case)?;
             rust_face_macro(&face, case)

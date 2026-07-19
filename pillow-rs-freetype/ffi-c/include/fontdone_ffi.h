@@ -401,6 +401,7 @@ FT_ULong FT_Get_CMap_Language_ID(FT_CharMap charmap);
 FT_UShort FT_Get_FSType_Flags(FT_Face face);
 FT_Int FT_Get_Gasp(FT_Face face, FT_UInt ppem);
 void FT_List_Add(FT_List list, FT_ListNode node);
+void FT_List_Insert(FT_List list, FT_ListNode node);
 FT_ListNode FT_List_Find(FT_List list, void* data);
 void FT_List_Remove(FT_List list, FT_ListNode node);
 void FT_List_Up(FT_List list, FT_ListNode node);

@@ -48,6 +48,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_bitmap_init",
     "fontdone_wasm_bitmap_new",
     "fontdone_wasm_list_add",
+    "fontdone_wasm_list_insert",
     "fontdone_wasm_list_find",
     "fontdone_wasm_list_iterate",
     "fontdone_wasm_list_remove",
@@ -286,7 +287,10 @@ REAL_PARITY_OPERATIONS = {
     "ftbitmap.bitmap_init",
     "ftbitmap.bitmap_new",
     "ftlist.list_add",
+    "ftlist.list_insert",
     "ftlist.list_find",
+    "ftlist.list_remove",
+    "ftlist.list_up",
     "ftcache.sbit_cache_lookup",
     "ftcache.manager_reset",
     "ftoutln.outline_render",
@@ -1242,8 +1246,25 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Request_Size.success_bitmap_request_match",
         "freetype.FT_Select_Charmap.success_select_present_encoding",
     }
+    ft_list_topology_runner_cases = {
+        "ftlist.FT_List_Insert.insert_empty_list",
+        "ftlist.FT_List_Insert.insert_non_empty_list",
+        "ftlist.FT_List_Insert.null_list_or_node_noop",
+        "ftlist.FT_List_Remove.remove_head_middle_tail",
+        "ftlist.FT_List_Remove.remove_only_node",
+        "ftlist.FT_List_Remove.null_list_or_node_noop",
+        "ftlist.FT_List_Remove.membership_not_checked",
+        "ftlist.FT_List_Up.move_tail_or_middle_to_head",
+        "ftlist.FT_List_Up.already_head_noop",
+        "ftlist.FT_List_Up.null_list_or_node_noop",
+    }
     for name, asset in sorted(row.assets.items()):
         reason = unresolved_asset_reason(asset, name)
+        if (
+            reason == "list_facade references missing fixture facades/list/ft-list-topologies.json"
+            and row.case_id in ft_list_topology_runner_cases
+        ):
+            continue
         if (
             reason in {
                 "font is marked required_future_asset",

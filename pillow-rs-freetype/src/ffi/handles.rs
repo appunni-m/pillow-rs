@@ -2636,6 +2636,29 @@ pub fn FT_List_Add(
     list.tail = node as *mut FT_ListNodeRec;
 }
 
+pub fn FT_List_Insert(
+    list: Option<&mut FT_ListRec>,
+    node: Option<&mut FT_ListNodeRec>,
+    after: Option<&mut FT_ListNodeRec>,
+) {
+    let (Some(list), Some(node)) = (list, node) else {
+        return;
+    };
+
+    // FreeType `src/base/ftutil.c` inserts before the current head and
+    // preserves the existing tail when the list is non-empty.
+    let after_ptr = list.head;
+    node.next = after_ptr;
+    node.prev = std::ptr::null_mut();
+
+    if let Some(after) = after {
+        after.prev = node as *mut FT_ListNodeRec;
+    } else {
+        list.tail = node as *mut FT_ListNodeRec;
+    }
+    list.head = node as *mut FT_ListNodeRec;
+}
+
 pub fn FT_List_Find_Node_Matches(node: &FT_ListNodeRec, data: FT_Pointer) -> bool {
     node.data == data
 }
@@ -2650,6 +2673,8 @@ pub fn FT_List_Remove(
         return;
     };
 
+    // FreeType `src/base/ftutil.c` patches `node->prev`/`node->next`
+    // directly; it does not verify that `node` belongs to `list`.
     let before_ptr = node.prev;
     let after_ptr = node.next;
 
@@ -2671,6 +2696,7 @@ pub fn FT_List_Up(
     node: Option<&mut FT_ListNodeRec>,
     before: Option<&mut FT_ListNodeRec>,
     after: Option<&mut FT_ListNodeRec>,
+    head_is_before: bool,
     head: Option<&mut FT_ListNodeRec>,
 ) {
     let (Some(list), Some(node), Some(before)) = (list, node, before) else {
@@ -2686,9 +2712,14 @@ pub fn FT_List_Up(
         list.tail = before as *mut FT_ListNodeRec;
     }
 
+    // FreeType `src/base/ftutil.c` moves only non-head nodes.  In safe Rust
+    // the previous node can also be the old head, so callers pass that alias
+    // as `head_is_before` instead of forming two `&mut` borrows.
     node.prev = std::ptr::null_mut();
     node.next = list.head;
-    if let Some(head) = head {
+    if head_is_before {
+        before.prev = node as *mut FT_ListNodeRec;
+    } else if let Some(head) = head {
         head.prev = node as *mut FT_ListNodeRec;
     }
     list.head = node as *mut FT_ListNodeRec;
