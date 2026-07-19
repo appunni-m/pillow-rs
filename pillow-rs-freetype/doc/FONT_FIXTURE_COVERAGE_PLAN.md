@@ -62,10 +62,11 @@ The pure-Rust implementation intentionally performs only the constructor-time
 BDF checks needed for these public error rows; it does not add BDF rendering or
 successful BDF face support.
 
-Do not promote `FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont`
-from the same generator output. Pinned C FreeType classifies a first line that
-is not `STARTFONT` as `FT_Err_Unknown_File_Format` (`85`), so that row needs a
-separate public-input audit before it can become exact real parity.
+`FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont` is promoted only
+as a public face-open error row: `bdflib.c` detects the missing `STARTFONT`
+internally, but pinned public `FT_New_Memory_Face` returns
+`FT_Err_Invalid_Stream_Operation` (`85`) with a null face for the maintained
+BDF-like fixture.
 
 Verified focused command:
 

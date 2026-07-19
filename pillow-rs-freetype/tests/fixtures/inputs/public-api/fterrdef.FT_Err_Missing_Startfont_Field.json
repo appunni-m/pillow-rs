@@ -71,9 +71,9 @@
           }
         },
         "params": {
-          "expected_error_symbol": "FT_Err_Missing_Startfont_Field",
-          "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/bdf/bdflib.c:1213",
+          "expected_error_symbol": "FT_Err_Invalid_Stream_Operation",
+          "expected_error_value_source": "pinned public FT_New_Memory_Face result",
+          "pinned_source": "freetype/src/bdf/bdflib.c:1213 and freetype/src/bdf/bdfdrivr.c:360-366",
           "face_index": 0,
           "first_line": "FONT missing-startfont-control",
           "missing_field": "STARTFONT"
@@ -103,9 +103,10 @@
             "output_face.nullness",
             "output_face.identity_class",
             "slot_state.mutation_class"
-          ]
+          ],
+          "compare_error_output": true
         },
-        "error": "FT_Err_Missing_Startfont_Field",
+        "error": "FT_Err_Invalid_Stream_Operation",
         "fixture_requirements": "BDF-like data whose first nonblank parsed line starts with FONT or SIZE instead of STARTFONT."
       }
     }

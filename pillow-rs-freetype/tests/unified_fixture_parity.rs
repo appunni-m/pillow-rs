@@ -26926,6 +26926,9 @@ fn font_error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidArgument(_) => FT_Err_Invalid_Argument,
         FontError::MissingBitmap => FT_Err_Missing_Bitmap as FT_Error,
         FontError::InvalidComposite => FT_Err_Invalid_Composite as FT_Error,
+        FontError::BdfMissingStartfontStreamOperation => {
+            FT_Err_Invalid_Stream_Operation as FT_Error
+        }
         FontError::BdfBbxTooBig => FT_Err_Bbx_Too_Big as FT_Error,
         FontError::BdfCorruptedFontHeader => FT_Err_Corrupted_Font_Header as FT_Error,
         FontError::BdfCorruptedFontGlyphs => FT_Err_Corrupted_Font_Glyphs as FT_Error,

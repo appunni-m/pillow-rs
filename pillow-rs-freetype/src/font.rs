@@ -372,10 +372,33 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
 }
 
 fn bdf_text(data: &[u8]) -> Option<&str> {
-    if !data.starts_with(b"STARTFONT") {
-        return None;
-    }
     std::str::from_utf8(data).ok()
+}
+
+fn first_bdf_keyword(text: &str) -> Option<&str> {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .and_then(|line| line.split_whitespace().next())
+}
+
+fn is_bdf_probe_keyword(keyword: &str) -> bool {
+    matches!(
+        keyword,
+        "COMMENT"
+            | "FONT"
+            | "SIZE"
+            | "FONTBOUNDINGBOX"
+            | "CHARS"
+            | "STARTCHAR"
+            | "ENCODING"
+            | "SWIDTH"
+            | "DWIDTH"
+            | "BBX"
+            | "BITMAP"
+            | "ENDCHAR"
+            | "ENDFONT"
+    )
 }
 
 fn parse_bdf_bbx(line: &str) -> Option<(i64, i64)> {
@@ -402,6 +425,16 @@ fn bdf_bitmap_too_large(width: i64, height: i64) -> bool {
 // successful BDF face loading/rendering remains intentionally unsupported.
 fn parse_bdf_constructor_error(data: &[u8]) -> Option<FontError> {
     let text = bdf_text(data)?;
+    let first_keyword = first_bdf_keyword(text)?;
+    if first_keyword != "STARTFONT" {
+        // FreeType first rejects this in bdflib.c:bdf_parse_start_ as
+        // Missing_Startfont_Field, then the public FT_New_Memory_Face path
+        // surfaces error 85 for the maintained BDF-like fixture.  Keep this
+        // detection narrow so arbitrary UTF-8 non-BDF data can still fall
+        // through to the Type1/SFNT probes.
+        return is_bdf_probe_keyword(first_keyword)
+            .then_some(FontError::BdfMissingStartfontStreamOperation);
+    }
     let mut has_font = false;
     let mut has_size = false;
     let mut has_font_bounding_box = false;
