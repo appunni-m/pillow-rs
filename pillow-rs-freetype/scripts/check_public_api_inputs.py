@@ -799,6 +799,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "freetype.FT_Render_Glyph.invalid_render_mode",
     }
 
 
@@ -1061,6 +1062,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
     ):
         return "FT_Attach_Stream invalid-open-args/unsupported-driver error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "render_glyph"
+        and row.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
+    ):
+        return "FT_Render_Glyph invalid render-mode errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "freetype.face_handle_error_policy"
         and row.case_id == "freetype.FT_Face.null_and_done_handle_errors"
