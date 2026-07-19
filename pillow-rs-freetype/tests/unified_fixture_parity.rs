@@ -8410,6 +8410,17 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params"
             || case.case_id == "ftrender.FT_Set_Renderer.set_mode_parameter_error_propagates"
             || case.case_id == "ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors"
+            || case.case_id == "ftstroke.FT_Stroker_New.invalid_library"
+            || case.case_id == "ftstroke.FT_Stroker_New.invalid_output_pointer"
+            || case.case_id == "ftstroke.FT_Stroker_New.allocation_failure"
+            || case.case_id == "ftstroke.FT_Stroker_ParseOutline.invalid_outline"
+            || case.case_id == "ftstroke.FT_Stroker_ParseOutline.invalid_stroker"
+            || case.case_id
+                == "ftwinfnt.FT_Get_WinFNT_Header.null_face_returns_invalid_face_handle"
+            || case.case_id == "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument"
+            || case.case_id
+                == "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument"
+            || case.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"

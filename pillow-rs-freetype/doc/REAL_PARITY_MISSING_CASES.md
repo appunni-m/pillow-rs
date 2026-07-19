@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after glyph/list/render/lang-tag exact classification:
+Current verified result after stroker/WinFNT/outline exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4060`
+  - `real-parity`: `4069`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `135`
+  - `generic-error-fallback`: `126`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1165,6 +1165,57 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: all ten focused exact rows passed. Route audit:
 `real-parity` `4060`, `generic-error-fallback` `135`.
+
+### Issue Set Current: stroker, WinFNT, and outline utility exact routes
+
+Previous blocker:
+
+- Ten concrete public rows across stroker construction/parse-outline, WinFNT
+  header lookup, and outline utility validation were classified as
+  `generic-error-fallback`.
+- Nine rows passed exact comparison after promotion. One row,
+  `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output`, failed exact
+  promotion because the pinned C oracle returned `Ok`, while exact-error
+  classification would require an error; it remains visible as fallback until
+  the bbox output-value contract is handled correctly.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that a broad fallback path
+  ran.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftstroke.FT_Stroker_New.invalid_library`
+   - `ftstroke.FT_Stroker_New.invalid_output_pointer`
+   - `ftstroke.FT_Stroker_New.allocation_failure`
+   - `ftstroke.FT_Stroker_ParseOutline.invalid_outline`
+   - `ftstroke.FT_Stroker_ParseOutline.invalid_stroker`
+   - `ftwinfnt.FT_Get_WinFNT_Header.null_face_returns_invalid_face_handle`
+   - `ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument`
+   - `ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument`
+   - `ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all ten rows before promotion.
+- Exact comparison after promotion passed for nine rows.
+- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` was not promoted:
+  exact rerun reported `requires an exact C error, but the oracle returned ok`.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: nine focused exact rows passed. Route audit:
+`real-parity` `4069`, `generic-error-fallback` `126`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
