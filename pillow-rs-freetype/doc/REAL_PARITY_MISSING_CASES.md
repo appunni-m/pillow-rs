@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Reference_Library` null-library
+Current verified result after `FT_Done_MM_Var` null-library
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3794`
+  - `real-parity`: `3795`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `399`
+  - `generic-error-fallback`: `398`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2646,6 +2646,37 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Reference_Library.rejects_null_library
+```
+
+### Issue Set BG: `FT_Done_MM_Var` null-library exact-error route
+
+Previous blocker:
+
+- `ftmm.FT_Done_MM_Var.null_library_error` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status/free-event comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public
+   `FT_Done_MM_Var(NULL, sentinel_non_owned_pointer)`.
+2. Require exact error status and free-event comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused null-library row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Done_MM_Var.null_library_error` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Done_MM_Var.null_library_error
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
