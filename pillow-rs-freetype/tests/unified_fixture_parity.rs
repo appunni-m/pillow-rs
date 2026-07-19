@@ -8339,6 +8339,19 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
             || case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
+            || case.case_id == "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior"
+            || case.case_id
+                == "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false"
+            || case.case_id == "ftcolor.FT_COLR_PAINT_FORMAT_MAX.read_paint_rejects_max_and_above"
+            || case.case_id == "ftcolor.FT_Get_Color_Glyph_ClipBox.null_and_non_sfnt_rejected"
+            || case.case_id
+                == "ftcolor.FT_Get_Color_Glyph_ClipBox.malformed_clipbox_false_behavior"
+            || case.case_id == "ftcolor.FT_Get_Color_Glyph_Layer.invalid_inputs_rejected"
+            || case.case_id
+                == "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior"
+            || case.case_id
+                == "ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false"
+            || case.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected"
             || case.case_id
                 == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id
@@ -8350,6 +8363,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
             || case.case_id
                 == "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format"
+            || case.case_id == "ftpfr.FT_Get_PFR_Metrics.optional_outputs_and_null_face"
             || case.case_id == "freetype.FT_Load_Glyph.matrix_load"
             || case.case_id
                 == "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags"
