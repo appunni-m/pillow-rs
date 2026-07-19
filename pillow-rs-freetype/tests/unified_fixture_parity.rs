@@ -8421,6 +8421,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument"
             || case.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
+            || case.case_id
+                == "fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error"
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error"
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error"
             || case.case_id
@@ -8454,6 +8456,11 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom"
+            || case.case_id == "fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted"
+            || case.case_id == "fterrdef.FT_Err_Raster_Corrupted.sdf_raster_missing_flag"
+            || case.case_id
+                == "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height"
+            || case.case_id == "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool"
             || case.case_id == "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing"
             || case.case_id
                 == "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled"
@@ -8469,6 +8476,11 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored"
             || case.case_id == "ftimage.FT_Raster_New_Func.renderer_new_error_propagates"
             || case.case_id == "ftimage.FT_Raster_Span_Func.missing_span_callback_errors"
+            || case.case_id == "ftimage.FT_Bitmap.invalid_target_buffer_errors"
+            || case.case_id == "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape"
+            || case.case_id == "ftimage.FT_Raster.null_raster_errors"
+            || case.case_id == "ftimage.FT_Raster_Funcs.render_callback_error_contract"
+            || case.case_id == "ftimage.FT_Raster_Params.invalid_param_errors"
             || case.case_id == "ftincrem.FT_Incremental_FuncsRec.callback_error_propagates"
             || case.case_id == "ftcolor.FT_Palette_Select.error_color_layers_disabled"
             || case.case_id
