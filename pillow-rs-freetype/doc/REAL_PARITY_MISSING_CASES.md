@@ -55,6 +55,18 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `ftrender.FT_Get_Renderer` renderer lookup batch: `2 / 3` rows moved out
+  of `generic-fallback` after adding a maintained oracle/runtime route for
+  renderer class metadata.  The promoted rows validate outline, bitmap, SVG,
+  and unknown-format renderer lookup through pinned C FreeType, Rust FFI, thin
+  C ABI, and WASM ABI.  C behavior observed in FreeType 2.14.3:
+  `FT_GLYPH_FORMAT_OUTLINE` resolves to `smooth`, `FT_GLYPH_FORMAT_BITMAP`
+  resolves to `bsdf`, `FT_GLYPH_FORMAT_SVG` resolves to `ot-svg`, and an
+  unknown glyph format returns no renderer.  The null-library row remains
+  `pending-route` because pinned C returns `FT_Err_Invalid_Library_Handle`
+  (`35`), not the fixture's declared success/null observation.
+- Current route audit after this batch: `real-parity` `4436`,
+  `generic-fallback` `519`, `pending-route` `24`.
 - `ftrender` renderer-selection plus `ftlogging` debug logging behavior batch:
   `16 / 16` rows promoted from `generic-fallback` to `real-parity`.  The
   promoted rows are limited to strict-success public behavior rows:
@@ -71,9 +83,8 @@ Promoted rows:
   pinned-oracle error `7`) and `freetype.open_face_with_params` / `ftparams`
   promotion (`6` strict failures with pinned-oracle error `7`).  They remain
   `generic-fallback` until the underlying route/oracle behavior is made exact.
-- Rejected in the follow-up probe pass: `ftrender.get_renderer` (`2` strict
-  failures with pinned-oracle error `7`), `ftglyph` ownership/type/transform
-  behavior rows (`11` strict failures with pinned-oracle error `7`), and
+- Rejected in the follow-up probe pass: `ftglyph` ownership/type/transform
+  behavior rows (`11` strict failures with pinned-oracle error `7`) and
   no-asset `ftmodapi` module/property-management rows (`9` strict failures
   with pinned-oracle error `7`).  These rows pass only through generic fallback
   today; promoting them would reward an oracle-error placeholder rather than
