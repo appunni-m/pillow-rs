@@ -6421,14 +6421,56 @@ Rejected probes:
   They need fixture loading plus runtime support for the specific render case,
   not just route-audit metadata.
 
+### Issue Set BJ: `FT_Outline_*` exact invalid matrix parity
+
+Plan:
+
+1. Keep the batch limited to `ftoutln` invalid-case matrices whose runners
+   already produce `results[*].return` for pinned C, Rust FFI, C ABI, and
+   WASM ABI.
+2. Treat top-level `Ok` plus non-zero per-scenario returns as an exact error
+   matrix, not as a generic success.
+3. Exclude these operations from the no-font/null-param shortcut so the Rust
+   lane reaches the maintained outline matrix runners.
+4. Keep exact JSON comparison for every scenario return.
+
+First divergence:
+
+- Pinned C oracle returned top-level `Ok` with exact per-scenario error rows,
+  for example `FT_Outline_Check.invalid_null_or_count_mismatch` produced
+  three `FT_Err_Invalid_Outline` scenario returns.
+- Rust FFI lane returned a single top-level null-param shortcut error before
+  reaching `rust_outline_check_runtime_output`.
+
+Promoted rows:
+
+- `ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch`
+- `ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch`
+- `ftoutln.FT_Outline_Done.invalid_library_or_outline_errors`
+- `ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors`
+- `ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors`
+- `ftoutln.FT_Outline_New.invalid_arguments_and_limits`
+
+Focused verification before promotion:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_check
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_copy
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_done
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_embolden
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_embolden_xy
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_new
+```
+
+Each focused operation passed exact runtime parity with no pending rows.
+
 ### Issue Set BH: FT_Outline lifecycle/mutation invalid matrices need exact error-output support
 
-The success rows for `FT_Outline_Copy`, `FT_Outline_New`,
-`FT_Outline_Done`, `FT_Outline_Embolden`, and `FT_Outline_EmboldenXY` now have
-real Rust/C-ABI/WASM/native-oracle routes.  Their multi-scenario invalid rows
-remain `pending-core`, not generic fallback, because the unified exact-error
-guard currently accepts only a top-level C error status while these manifest
-rows declare per-scenario error results:
+Resolved by Issue Set BJ.  The success rows for `FT_Outline_Copy`,
+`FT_Outline_New`, `FT_Outline_Done`, `FT_Outline_Embolden`, and
+`FT_Outline_EmboldenXY` already had real Rust/C-ABI/WASM/native-oracle routes.
+Their multi-scenario invalid rows now use exact error-matrix comparison instead
+of remaining `pending-core`:
 
 - `ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch`
 - `ftoutln.FT_Outline_Done.invalid_library_or_outline_errors`
@@ -6436,9 +6478,9 @@ rows declare per-scenario error results:
 - `ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors`
 - `ftoutln.FT_Outline_New.invalid_arguments_and_limits`
 
-Do not mark these rows real by returning top-level generic errors or by
-weakening the exact-error guard.  They need maintained per-scenario
-exact-error output support in the unified harness.
+Do not regress these rows by returning top-level generic errors or by weakening
+the exact-error guard.  They require maintained per-scenario exact-error output
+support in the unified harness.
 
 These are the highest-value route families to convert from placeholder success
 to real C/Rust/C-ABI/WASM parity. They are intentionally scoped as subagent
