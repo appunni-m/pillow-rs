@@ -37,8 +37,7 @@ pub type FT_StrokerBorder = i32;
 pub type FT_Pointer = *mut c_void;
 pub type FT_ListNode = *mut FontdoneWasmListNode;
 pub type FT_List = *mut FontdoneWasmList;
-pub type FT_List_Iterator =
-    Option<unsafe extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
+pub type FT_List_Iterator = Option<extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
 pub type FT_Memory = *mut FontdoneWasmMemory;
 pub type FT_Alloc_Func = Option<extern "C" fn(memory: FT_Memory, size: FT_Long) -> FT_Pointer>;
 pub type FT_Free_Func = Option<extern "C" fn(memory: FT_Memory, block: FT_Pointer)>;
@@ -383,7 +382,7 @@ pub extern "C" fn fontdone_wasm_list_iterate(
     let mut error = rust_ffi::FT_Err_Ok;
     while let Some(cur_ref) = unsafe { cur.as_ref() } {
         let next = cur_ref.next;
-        error = unsafe { iterator(cur, user) };
+        error = iterator(cur, user);
         if error != rust_ffi::FT_Err_Ok {
             break;
         }

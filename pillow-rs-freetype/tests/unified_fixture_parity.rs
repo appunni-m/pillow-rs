@@ -2638,6 +2638,11 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftlist.list_iterate"
+                if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
+            {
+                c_ftlist_iterate_success(case)
+            }
             "ftlist.list_add" => c_ftlist_add(case),
             "ftlist.list_insert" => c_ftlist_insert(case),
             "ftlist.list_find" => c_ftlist_find(case),
@@ -2910,6 +2915,11 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftlist.list_iterate"
+                if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
+            {
+                wasm_ftlist_iterate_success(case)
+            }
             "ftlist.list_add" => wasm_ftlist_add(case),
             "ftlist.list_insert" => wasm_ftlist_insert(case),
             "ftlist.list_find" => wasm_ftlist_find(case),
@@ -3875,6 +3885,166 @@ fn rust_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+#[derive(Default)]
+struct ListIterateTrace {
+    node_ptrs: Vec<(*mut c_void, &'static str)>,
+    expected_user: FT_Pointer,
+    visited_nodes: Vec<&'static str>,
+    user_matches: Vec<bool>,
+}
+
+impl ListIterateTrace {
+    fn node_token(&self, ptr_value: *mut c_void) -> &'static str {
+        self.node_ptrs
+            .iter()
+            .find_map(|(ptr, label)| (*ptr == ptr_value).then_some(*label))
+            .unwrap_or(if ptr_value.is_null() {
+                "null"
+            } else {
+                "foreign"
+            })
+    }
+
+    fn record(&mut self, node: *mut c_void, user: FT_Pointer) {
+        let token = self.node_token(node);
+        self.visited_nodes.push(token);
+        self.user_matches.push(user == self.expected_user);
+    }
+
+    fn visited_data_tokens(&self) -> Vec<&'static str> {
+        self.visited_nodes
+            .iter()
+            .map(|node| match *node {
+                "node_a" => "data_a",
+                "node_b" => "data_b",
+                "node_c" => "data_c",
+                "null" => "null",
+                _ => "foreign",
+            })
+            .collect()
+    }
+
+    fn user_pointer_identity(&self) -> &'static str {
+        if self.user_matches.iter().all(|matched| *matched) {
+            "user"
+        } else {
+            "foreign"
+        }
+    }
+}
+
+thread_local! {
+    static LIST_ITERATE_TRACE: RefCell<ListIterateTrace> = RefCell::new(ListIterateTrace::default());
+}
+
+fn reset_iterate_trace(node_ptrs: Vec<(*mut c_void, &'static str)>, expected_user: FT_Pointer) {
+    LIST_ITERATE_TRACE.with_borrow_mut(|trace| {
+        *trace = ListIterateTrace {
+            node_ptrs,
+            expected_user,
+            ..Default::default()
+        };
+    });
+}
+
+fn iterate_trace_values() -> (Vec<&'static str>, &'static str) {
+    LIST_ITERATE_TRACE
+        .with_borrow(|trace| (trace.visited_data_tokens(), trace.user_pointer_identity()))
+}
+
+extern "C" fn c_iterate_record_callback(node: c_abi::FT_ListNode, user: FT_Pointer) -> FT_Error {
+    LIST_ITERATE_TRACE.with_borrow_mut(|trace| trace.record(node.cast(), user));
+    FT_Err_Ok
+}
+
+extern "C" fn wasm_iterate_record_callback(
+    node: wasm_abi::FT_ListNode,
+    user: FT_Pointer,
+) -> FT_Error {
+    LIST_ITERATE_TRACE.with_borrow_mut(|trace| trace.record(node.cast(), user));
+    FT_Err_Ok
+}
+
+fn rust_ftlist_iterate_success(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftlist.FT_List_Iterate.iterates_all_nodes_success" {
+        return Err(format!(
+            "unsupported rust FT_List_Iterate case {}",
+            case.case_id
+        ));
+    }
+    let mut rows = Vec::new();
+    for shape in ["empty", "one_node", "three_nodes"] {
+        let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+        let (data_a, data_b, data_c) = (
+            (&mut data_a as *mut u8).cast::<c_void>(),
+            (&mut data_b as *mut u8).cast::<c_void>(),
+            (&mut data_c as *mut u8).cast::<c_void>(),
+        );
+        let user = (&mut user as *mut u8).cast::<c_void>();
+        let (mut node_a, mut node_b, mut node_c) = rust_three_list_nodes(data_a, data_b, data_c);
+        let list = match shape {
+            "empty" => FT_ListRec::default(),
+            "one_node" => FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_a,
+            },
+            "three_nodes" => {
+                rust_link_three(&mut node_a, &mut node_b, &mut node_c);
+                FT_ListRec {
+                    head: &mut node_a,
+                    tail: &mut node_c,
+                }
+            }
+            _ => unreachable!(),
+        };
+        let mut visited = Vec::new();
+        let mut cur = match shape {
+            "empty" => None,
+            _ => Some("node_a"),
+        };
+        while let Some(token) = cur {
+            let node = match token {
+                "node_a" => &node_a,
+                "node_b" => &node_b,
+                "node_c" => &node_c,
+                _ => unreachable!(),
+            };
+            visited.push(match token {
+                "node_a" => "data_a",
+                "node_b" => "data_b",
+                "node_c" => "data_c",
+                _ => "foreign",
+            });
+            let next = FT_List_Iterate_Next(node);
+            cur = if std::ptr::eq(next.cast_const(), &node_b) {
+                Some("node_b")
+            } else if std::ptr::eq(next.cast_const(), &node_c) {
+                Some("node_c")
+            } else {
+                None
+            };
+        }
+        rows.push(json!({
+            "shape": shape,
+            "status": FT_Err_Ok,
+            "visited_data_tokens": visited,
+            "user_pointer_identity": "user",
+            "final_topology": iterate_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                (shape != "empty").then_some(&node_a),
+                (shape == "three_nodes").then_some(&node_b),
+                (shape == "three_nodes").then_some(&node_c),
+                data_a,
+                data_b,
+                data_c,
+            )
+        }));
+        let _ = user;
+    }
+    Ok(ok(json!({"rows": rows})))
+}
+
 fn rust_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
     let mut missing = 1_u8;
     let mut other = 2_u8;
@@ -4350,6 +4520,72 @@ where
         &nodes,
         &data,
     )];
+    insert_topology_json(head, tail, &nodes, &data, &node_values)
+}
+
+fn iterate_topology_json<T>(
+    head: *mut c_void,
+    tail: *mut c_void,
+    node_a: Option<&T>,
+    node_b: Option<&T>,
+    node_c: Option<&T>,
+    data_a: FT_Pointer,
+    data_b: FT_Pointer,
+    data_c: FT_Pointer,
+) -> Value
+where
+    T: InsertListNodeFields,
+{
+    let nodes = vec![
+        (
+            "node_a",
+            node_a.map_or(ptr::null(), |node| (node as *const T).cast()),
+        ),
+        (
+            "node_b",
+            node_b.map_or(ptr::null(), |node| (node as *const T).cast()),
+        ),
+        (
+            "node_c",
+            node_c.map_or(ptr::null(), |node| (node as *const T).cast()),
+        ),
+    ];
+    let data = vec![
+        ("data_a", data_a.cast_const()),
+        ("data_b", data_b.cast_const()),
+        ("data_c", data_c.cast_const()),
+    ];
+    let mut node_values = Vec::new();
+    if let Some(node_a) = node_a {
+        node_values.push(insert_node_json(
+            "node_a",
+            node_a.prev_ptr(),
+            node_a.next_ptr(),
+            node_a.data_ptr(),
+            &nodes,
+            &data,
+        ));
+    }
+    if let Some(node_b) = node_b {
+        node_values.push(insert_node_json(
+            "node_b",
+            node_b.prev_ptr(),
+            node_b.next_ptr(),
+            node_b.data_ptr(),
+            &nodes,
+            &data,
+        ));
+    }
+    if let Some(node_c) = node_c {
+        node_values.push(insert_node_json(
+            "node_c",
+            node_c.prev_ptr(),
+            node_c.next_ptr(),
+            node_c.data_ptr(),
+            &nodes,
+            &data,
+        ));
+    }
     insert_topology_json(head, tail, &nodes, &data, &node_values)
 }
 
@@ -4918,6 +5154,72 @@ fn c_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
         }
         other => Err(format!("unsupported c FT_List_Finalize case {other}")),
     }
+}
+
+fn c_ftlist_iterate_success(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftlist.FT_List_Iterate.iterates_all_nodes_success" {
+        return Err(format!(
+            "unsupported c FT_List_Iterate case {}",
+            case.case_id
+        ));
+    }
+    let mut rows = Vec::new();
+    for shape in ["empty", "one_node", "three_nodes"] {
+        let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+        let (data_a, data_b, data_c) = (
+            (&mut data_a as *mut u8).cast::<c_void>(),
+            (&mut data_b as *mut u8).cast::<c_void>(),
+            (&mut data_c as *mut u8).cast::<c_void>(),
+        );
+        let user = (&mut user as *mut u8).cast::<c_void>();
+        let (mut node_a, mut node_b, mut node_c) = c_three_list_nodes(data_a, data_b, data_c);
+        let list = match shape {
+            "empty" => c_abi::FT_ListRec::default(),
+            "one_node" => c_abi::FT_ListRec {
+                head: &mut node_a,
+                tail: &mut node_a,
+            },
+            "three_nodes" => {
+                c_link_three(&mut node_a, &mut node_b, &mut node_c);
+                c_abi::FT_ListRec {
+                    head: &mut node_a,
+                    tail: &mut node_c,
+                }
+            }
+            _ => unreachable!(),
+        };
+        reset_iterate_trace(
+            vec![
+                ((&mut node_a as *mut c_abi::FT_ListNodeRec).cast(), "node_a"),
+                ((&mut node_b as *mut c_abi::FT_ListNodeRec).cast(), "node_b"),
+                ((&mut node_c as *mut c_abi::FT_ListNodeRec).cast(), "node_c"),
+            ],
+            user,
+        );
+        let err = c_abi::FT_List_Iterate(
+            (&list as *const c_abi::FT_ListRec).cast_mut(),
+            Some(c_iterate_record_callback),
+            user,
+        );
+        let (visited, user_identity) = iterate_trace_values();
+        rows.push(json!({
+            "shape": shape,
+            "status": err,
+            "visited_data_tokens": visited,
+            "user_pointer_identity": user_identity,
+            "final_topology": iterate_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                (shape != "empty").then_some(&node_a),
+                (shape == "three_nodes").then_some(&node_b),
+                (shape == "three_nodes").then_some(&node_c),
+                data_a,
+                data_b,
+                data_c,
+            )
+        }));
+    }
+    Ok(ok(json!({"rows": rows})))
 }
 
 fn c_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
@@ -5714,6 +6016,81 @@ fn wasm_ftlist_finalize(case: &InputCase) -> Result<RunOutput, String> {
         }
         other => Err(format!("unsupported wasm FT_List_Finalize case {other}")),
     }
+}
+
+fn wasm_ftlist_iterate_success(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftlist.FT_List_Iterate.iterates_all_nodes_success" {
+        return Err(format!(
+            "unsupported wasm FT_List_Iterate case {}",
+            case.case_id
+        ));
+    }
+    let mut rows = Vec::new();
+    for shape in ["empty", "one_node", "three_nodes"] {
+        let (mut data_a, mut data_b, mut data_c, mut user) = (1_u8, 2_u8, 3_u8, 4_u8);
+        let (data_a, data_b, data_c) = (
+            (&mut data_a as *mut u8).cast::<c_void>(),
+            (&mut data_b as *mut u8).cast::<c_void>(),
+            (&mut data_c as *mut u8).cast::<c_void>(),
+        );
+        let user = (&mut user as *mut u8).cast::<c_void>();
+        let (mut node_a, mut node_b, mut node_c) = wasm_three_list_nodes(data_a, data_b, data_c);
+        let list = match shape {
+            "empty" => wasm_abi::FontdoneWasmList::default(),
+            "one_node" => wasm_abi::FontdoneWasmList {
+                head: &mut node_a,
+                tail: &mut node_a,
+            },
+            "three_nodes" => {
+                wasm_link_three(&mut node_a, &mut node_b, &mut node_c);
+                wasm_abi::FontdoneWasmList {
+                    head: &mut node_a,
+                    tail: &mut node_c,
+                }
+            }
+            _ => unreachable!(),
+        };
+        reset_iterate_trace(
+            vec![
+                (
+                    (&mut node_a as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                    "node_a",
+                ),
+                (
+                    (&mut node_b as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                    "node_b",
+                ),
+                (
+                    (&mut node_c as *mut wasm_abi::FontdoneWasmListNode).cast(),
+                    "node_c",
+                ),
+            ],
+            user,
+        );
+        let err = wasm_abi::fontdone_wasm_list_iterate(
+            (&list as *const wasm_abi::FontdoneWasmList).cast_mut(),
+            Some(wasm_iterate_record_callback),
+            user,
+        );
+        let (visited, user_identity) = iterate_trace_values();
+        rows.push(json!({
+            "shape": shape,
+            "status": err,
+            "visited_data_tokens": visited,
+            "user_pointer_identity": user_identity,
+            "final_topology": iterate_topology_json(
+                list.head.cast(),
+                list.tail.cast(),
+                (shape != "empty").then_some(&node_a),
+                (shape == "three_nodes").then_some(&node_b),
+                (shape == "three_nodes").then_some(&node_c),
+                data_a,
+                data_b,
+                data_c,
+            )
+        }));
+    }
+    Ok(ok(json!({"rows": rows})))
 }
 
 fn wasm_ftlist_find(case: &InputCase) -> Result<RunOutput, String> {
@@ -12650,6 +13027,9 @@ fn oracle_fallback_args(case: &InputCase) -> Result<Vec<String>, String> {
 
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
+    if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" {
+        return Ok(vec!["--ft-list".to_string(), case.case_id.clone()]);
+    }
     match case.operation.as_str() {
         "constant" => Ok(vec![
             "--constant".to_string(),
@@ -14356,6 +14736,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftbitmap.bitmap_embolden" => bitmap_embolden_output(case, BitmapEmboldenBackend::Rust),
         "ftbitmap.bitmap_blend" => bitmap_blend_output(case, BitmapBlendBackend::Rust),
         "ftbitmap.glyphslot_own_bitmap" => glyphslot_own_bitmap_rust(case),
+        "ftlist.list_iterate"
+            if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
+        {
+            rust_ftlist_iterate_success(case)
+        }
         "ftlist.list_add" => rust_ftlist_add(case),
         "ftlist.list_insert" => rust_ftlist_insert(case),
         "ftlist.list_find" => rust_ftlist_find(case),
