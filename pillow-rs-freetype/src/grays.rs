@@ -1126,7 +1126,10 @@ fn record_gray_span(spans: &mut Vec<GraySpan>, y: i32, x: i32, len: i32, coverag
         // `short` (`ftimage.h`).  Preserve the signed 16-bit representation so
         // negative direct-render coordinates match the C ABI bit pattern.
         x: (x as i16) as u16,
-        len: u16::try_from(len).unwrap_or(u16::MAX),
+        // FreeType 2.14.3 `src/smooth/ftgrays.c:1806-1808,1848-1850`
+        // assigns direct span lengths with a plain `(unsigned short)` cast.
+        // Wide spans wrap modulo 2^16; they are not saturated.
+        len: len as u16,
         coverage: u8_from_i32(coverage),
     });
 }

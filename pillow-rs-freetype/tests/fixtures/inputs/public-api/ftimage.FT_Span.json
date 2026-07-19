@@ -143,7 +143,7 @@
       "case": "wide_outline_span_limit",
       "operation": "ftoutln.outline_render",
       "schema": "callback_trace_error",
-      "expect_error": true,
+      "expect_error": false,
       "inputs": {
         "assets": {
           "wide_outline": {
@@ -174,7 +174,7 @@
         "path:error"
       ],
       "expectation": {
-        "status": "build_dependent",
+        "status": "ok",
         "output_shape": {
           "status": "FT_Error",
           "callbacks": "array<object>"

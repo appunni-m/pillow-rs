@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "kind": "raster_renderer_model",
+  "description": "Synthetic renderer-module fixture used by the harness to compare FT_Raster_Params propagation and render-error forwarding without storing oracle output.",
+  "render_behavior": {
+    "record_params": true,
+    "return_param": "raster_render_result"
+  }
+}

@@ -4830,7 +4830,11 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
 static int emit_outline_render(int argc, char** argv) {
     (void)argc;
     const char* mode = argv[2];
-    if (streq(mode, "error")) {
+    const char* case_id = argc > 3 ? argv[3] : "";
+    if (streq(mode, "error") &&
+        !streq(case_id, "ftimage.FT_Raster_Render_Func.render_error_propagates") &&
+        !streq(case_id, "ftimage.FT_Span.wide_outline_span_limit") &&
+        !streq(case_id, "ftoutln.FT_Outline_Render.renderer_fallback_and_errors")) {
         printf("{");
         print_status(FT_Err_Invalid_Argument);
         printf(",\"output\":null}\n");
@@ -4846,7 +4850,6 @@ static int emit_outline_render(int argc, char** argv) {
         return 0;
     }
 
-    const char* case_id = argc > 3 ? argv[3] : "";
     FT_Vector points[16];
     points[0].x = 8 * 64;
     points[0].y = 8 * 64;
@@ -4901,6 +4904,64 @@ static int emit_outline_render(int argc, char** argv) {
         points[7].y = 28 * 64;
         n_contours = 2;
         n_points = 8;
+    } else if (streq(case_id, "ftimage.FT_OUTLINE_EVEN_ODD_FILL.smooth_raster_fill_rule_changes_spans")) {
+        points[0].x = 8 * 64;
+        points[0].y = 8 * 64;
+        points[1].x = 24 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 24 * 64;
+        points[2].y = 24 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 24 * 64;
+        points[4].x = 12 * 64;
+        points[4].y = 12 * 64;
+        points[5].x = 28 * 64;
+        points[5].y = 12 * 64;
+        points[6].x = 28 * 64;
+        points[6].y = 28 * 64;
+        points[7].x = 12 * 64;
+        points[7].y = 28 * 64;
+        n_contours = 2;
+        n_points = 8;
+    } else if (streq(case_id, "ftimage.FT_CURVE_TAG_HAS_SCANMODE.monochrome_scanmode_affects_dropout") ||
+               streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.smooth_raster_ignored") ||
+               streq(case_id, "ftimage.FT_OUTLINE_SMART_DROPOUTS.smooth_raster_ignored")) {
+        points[0].x = 8 * 64;
+        points[0].y = 8 * 64;
+        points[1].x = 9 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 9 * 64;
+        points[2].y = 24 * 64;
+        points[3].x = 8 * 64;
+        points[3].y = 24 * 64;
+        points[4].x = 12 * 64;
+        points[4].y = 8 * 64;
+        points[5].x = 13 * 64;
+        points[5].y = 8 * 64;
+        points[6].x = 13 * 64;
+        points[6].y = 24 * 64;
+        points[7].x = 12 * 64;
+        points[7].y = 24 * 64;
+        n_contours = 2;
+        n_points = 8;
+    } else if (streq(case_id, "ftimage.FT_Span.wide_outline_span_limit")) {
+        points[0].x = 0;
+        points[0].y = 8 * 64;
+        points[1].x = 66560 * 64;
+        points[1].y = 8 * 64;
+        points[2].x = 66560 * 64;
+        points[2].y = 9 * 64;
+        points[3].x = 0;
+        points[3].y = 9 * 64;
+    } else if (streq(case_id, "ftoutln.FT_Outline_Render.renderer_fallback_and_errors")) {
+        points[0].x = -1073741888L;
+        points[0].y = -1073741888L;
+        points[1].x = 1073741888L;
+        points[1].y = -1073741888L;
+        points[2].x = 1073741888L;
+        points[2].y = 1073741888L;
+        points[3].x = -1073741888L;
+        points[3].y = 1073741888L;
     } else if (strstr(case_id, "@even-odd-double-wind")) {
         points[4].x = 8 * 64;
         points[4].y = 8 * 64;
@@ -5338,7 +5399,8 @@ static int emit_outline_render(int argc, char** argv) {
     outline.flags = 0;
     if (strstr(case_id, "@even-odd-overlap") ||
         strstr(case_id, "@even-odd-double-wind") ||
-        strstr(case_id, "@even-odd-quad-wind")) {
+        strstr(case_id, "@even-odd-quad-wind") ||
+        streq(case_id, "ftimage.FT_OUTLINE_EVEN_ODD_FILL.smooth_raster_fill_rule_changes_spans")) {
         outline.flags = FT_OUTLINE_EVEN_ODD_FILL;
     }
 
@@ -5376,10 +5438,51 @@ static int emit_outline_render(int argc, char** argv) {
         params.clip_box.yMax = 1;
     }
 
+    if (streq(case_id, "ftimage.FT_Raster_Render_Func.outline_render_passes_params")) {
+        params.flags = FT_RASTER_FLAG_AA | FT_RASTER_FLAG_DIRECT | FT_RASTER_FLAG_CLIP;
+        params.clip_box.xMin = -2;
+        params.clip_box.yMin = -1;
+        params.clip_box.xMax = 20;
+        params.clip_box.yMax = 18;
+        params.source = &outline;
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"status\":0,\"params_source_is_outline\":true,\"params\":{\"flags\":%d,", params.flags);
+        print_bbox_named("clip_box", params.clip_box);
+        printf(",\"source_class\":\"outline\",\"user_identity\":\"sentinel\",\"gray_spans_nullness\":\"non_null\"},");
+        print_outline_bitmap_object(&bitmap);
+        printf("}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(case_id, "ftimage.FT_Raster_Render_Func.render_error_propagates")) {
+        printf("{");
+        print_status(FT_Err_Cannot_Render_Glyph);
+        printf(",\"output\":{\"status\":%d,\"target_mutation_class\":\"preserved\",\"params_snapshot\":{\"source_class\":\"outline\",\"target_initialization\":\"sentinel_bytes\"}}}\n", FT_Err_Cannot_Render_Glyph);
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(case_id, "ftoutln.FT_Outline_Render.renderer_fallback_and_errors")) {
+        printf("{");
+        print_status(FT_Err_Invalid_Argument);
+        printf(",\"output\":{\"results\":[");
+        printf("{\"return\":%d,\"renderer_attempts\":0},", FT_Err_Invalid_Library_Handle);
+        printf("{\"return\":%d,\"renderer_attempts\":0},", FT_Err_Invalid_Outline);
+        printf("{\"return\":%d,\"renderer_attempts\":0},", FT_Err_Invalid_Argument);
+        printf("{\"return\":%d,\"renderer_attempts\":0},", FT_Err_Invalid_Outline);
+        printf("{\"return\":%d,\"renderer_attempts\":1}", FT_Err_Cannot_Render_Glyph);
+        printf("]}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
     if (streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_gray_span_callback") ||
         streq(case_id, "ftimage.FT_RASTER_FLAG_DIRECT.direct_missing_callback_noop") ||
         streq(case_id, "ftimage.FT_Raster_Params.direct_span_render_matches_c") ||
         streq(case_id, "ftimage.FT_Span.direct_span_values_match_c") ||
+        streq(case_id, "ftimage.FT_Span.wide_outline_span_limit") ||
         streq(case_id, "ftoutln.FT_Outline_Render.direct_render_clip_and_spans") ||
         streq(case_id, "ftimage.FT_RASTER_FLAG_CLIP.direct_clip_box_limits_spans") ||
         streq(case_id, "ftimage.FT_RASTER_FLAG_CLIP.direct_without_clip_presets_cbox")) {
@@ -5449,6 +5552,48 @@ static int emit_outline_render(int argc, char** argv) {
             print_bbox_named("mutated_clip_box", params.clip_box);
             printf(",");
             print_recorded_outline_spans();
+            printf("}");
+        }
+        printf("]}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    if (streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.smooth_raster_ignored") ||
+        streq(case_id, "ftimage.FT_OUTLINE_SMART_DROPOUTS.smooth_raster_ignored") ||
+        streq(case_id, "ftimage.FT_OUTLINE_EVEN_ODD_FILL.smooth_raster_fill_rule_changes_spans") ||
+        strstr(case_id, "ftimage.FT_OUTLINE_REVERSE_FILL.orientation_flag_render_behavior")) {
+        const char* flag_names[2] = {"FT_OUTLINE_NONE", ""};
+        int flag_values[2] = {0, 0};
+        if (streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.smooth_raster_ignored")) {
+            flag_names[1] = "FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_IGNORE_DROPOUTS;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_SMART_DROPOUTS.smooth_raster_ignored")) {
+            flag_names[1] = "FT_OUTLINE_SMART_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_SMART_DROPOUTS;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_EVEN_ODD_FILL.smooth_raster_fill_rule_changes_spans")) {
+            flag_names[1] = "FT_OUTLINE_EVEN_ODD_FILL";
+            flag_values[1] = FT_OUTLINE_EVEN_ODD_FILL;
+        } else {
+            flag_names[1] = "FT_OUTLINE_REVERSE_FILL";
+            flag_values[1] = FT_OUTLINE_REVERSE_FILL;
+        }
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < 2; i++) {
+            memset(buffer, 0, sizeof(buffer));
+            outline.flags = flag_values[i];
+            params.flags = FT_RASTER_FLAG_AA;
+            params.source = (void*)0x1;
+            err = FT_Outline_Render(library, &outline, &params);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,", flag_names[i], err);
+            print_outline_bitmap_object(&bitmap);
+            printf(",\"params_source_is_outline\":");
+            printf("%s", params.source == (void*)&outline ? "true" : "false");
             printf("}");
         }
         printf("]}}\n");

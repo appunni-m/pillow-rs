@@ -69,7 +69,7 @@
               },
               "type1_font": {
                 "kind": "ref",
-                "id": "fonts/type1/reverse-fill-orientation.pfb",
+                "id": "assets/fonts/module-dependent-type1.pfa",
                 "asset_kind": "font"
               }
             },
@@ -95,7 +95,7 @@
               },
               "type1_font": {
                 "kind": "ref",
-                "id": "fonts/type1/reverse-fill-orientation.pfb",
+                "id": "assets/fonts/module-dependent-type1.pfa",
                 "asset_kind": "font"
               }
             },

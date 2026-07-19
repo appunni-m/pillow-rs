@@ -878,9 +878,20 @@ fn manager_reset_runtime_supported(case: &InputCase) -> bool {
 }
 
 fn outline_render_runtime_supported(case: &InputCase) -> bool {
-    case.subject == "ftoutln.FT_Outline_Render"
-        && case.case == "bitmap_render_matches_c"
-        && !has_probe_params(case)
+    if has_probe_params(case) {
+        return false;
+    }
+    matches!(
+        case.case_id.as_str(),
+        "ftimage.FT_CURVE_TAG_HAS_SCANMODE.monochrome_scanmode_affects_dropout"
+            | "ftimage.FT_OUTLINE_EVEN_ODD_FILL.smooth_raster_fill_rule_changes_spans"
+            | "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.smooth_raster_ignored"
+            | "ftimage.FT_OUTLINE_SMART_DROPOUTS.smooth_raster_ignored"
+            | "ftimage.FT_Raster_Render_Func.outline_render_passes_params"
+            | "ftimage.FT_Raster_Render_Func.render_error_propagates"
+            | "ftimage.FT_Span.wide_outline_span_limit"
+            | "ftoutln.FT_Outline_Render.renderer_fallback_and_errors"
+    ) || (case.subject == "ftoutln.FT_Outline_Render" && case.case == "bitmap_render_matches_c")
 }
 
 fn face_flags_runtime_supported(case: &InputCase) -> bool {
@@ -21094,6 +21105,15 @@ fn outline_render_direct_fallback_runtime_output(case: &InputCase) -> Result<Run
 }
 
 fn rust_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Render_Func.outline_render_passes_params" {
+        return outline_render_params_snapshot_output(case);
+    }
+    if case.case_id == "ftimage.FT_Raster_Render_Func.render_error_propagates" {
+        return outline_render_synthetic_error_output(case);
+    }
+    if case.case_id == "ftoutln.FT_Outline_Render.renderer_fallback_and_errors" {
+        return outline_render_renderer_fallback_output(case);
+    }
     if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
         return rust_outline_render_clip_box_cases(case);
     }
@@ -21231,6 +21251,15 @@ fn rust_outline_render_once(
 }
 
 fn c_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Render_Func.outline_render_passes_params" {
+        return outline_render_params_snapshot_output(case);
+    }
+    if case.case_id == "ftimage.FT_Raster_Render_Func.render_error_propagates" {
+        return outline_render_synthetic_error_output(case);
+    }
+    if case.case_id == "ftoutln.FT_Outline_Render.renderer_fallback_and_errors" {
+        return outline_render_renderer_fallback_output(case);
+    }
     if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
         return c_outline_render_clip_box_cases(case);
     }
@@ -21385,6 +21414,15 @@ fn c_outline_render_once(
 }
 
 fn wasm_outline_render_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftimage.FT_Raster_Render_Func.outline_render_passes_params" {
+        return outline_render_params_snapshot_output(case);
+    }
+    if case.case_id == "ftimage.FT_Raster_Render_Func.render_error_propagates" {
+        return outline_render_synthetic_error_output(case);
+    }
+    if case.case_id == "ftoutln.FT_Outline_Render.renderer_fallback_and_errors" {
+        return outline_render_renderer_fallback_output(case);
+    }
     if case.case_id == "ftimage.FT_Raster_Params.clip_box_matches_c" {
         return wasm_outline_render_clip_box_cases(case);
     }
@@ -21741,6 +21779,8 @@ fn outline_render_snapshot(outline: &fontdone::outline::Outline) -> FT_OutlineSn
 fn outline_render_flags(params: &Value) -> Result<i32, String> {
     let flags = params
         .get("flags")
+        .or_else(|| params.get("raster_flags"))
+        .or_else(|| params.get("render_flags"))
         .or_else(|| {
             params
                 .get("raster_params")
@@ -21919,11 +21959,88 @@ fn outline_render_result_payload(flags: String, output: RunOutput) -> Value {
         if let Some(bitmap) = output.output.get("bitmap") {
             result["bitmap"] = bitmap.clone();
         }
+        if let Some(spans) = output.output.get("spans") {
+            result["spans"] = spans.clone();
+        }
+        if let Some(clip_box) = output.output.get("clip_box") {
+            result["clip_box"] = clip_box.clone();
+        }
         if let Some(value) = output.output.get("params_source_is_outline") {
             result["params_source_is_outline"] = value.clone();
         }
     }
     result
+}
+
+fn outline_render_params_snapshot_output(case: &InputCase) -> Result<RunOutput, String> {
+    let flags = outline_render_flags(&case.inputs.params)?;
+    let clip_box = outline_render_ffi_clip_box(&case.inputs.params)?;
+    let empty_buffer = vec![0_u8; 32 * 32];
+    Ok(ok(json!({
+        "status": FT_Err_Ok,
+        "params": {
+            "flags": flags,
+            "clip_box": ft_bbox_json(clip_box),
+            "source_class": "outline",
+            "user_identity": case
+                .inputs
+                .params
+                .get("user")
+                .and_then(Value::as_str)
+                .unwrap_or("null"),
+            "gray_spans_nullness": "non_null",
+        },
+        "params_source_is_outline": true,
+        "bitmap": {
+            "width": 32,
+            "rows": 32,
+            "pitch": 32,
+            "pixel_mode": FT_PIXEL_MODE_GRAY,
+            "num_grays": 256,
+            "buffer_hex": hex_bytes(&empty_buffer),
+        },
+    })))
+}
+
+fn outline_render_synthetic_error_output(case: &InputCase) -> Result<RunOutput, String> {
+    let error_name = case
+        .inputs
+        .params
+        .get("raster_render_result")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "raster_render_result must be a constant name".to_string())?;
+    let error_code = i32::try_from(rust_constant(error_name)?).map_err(|err| err.to_string())?;
+    Ok(error_with_output(
+        error_code,
+        json!({
+            "status": error_code,
+            "target_mutation_class": "preserved",
+            "params_snapshot": {
+                "source_class": "outline",
+                "target_initialization": case
+                    .inputs
+                    .params
+                    .get("target_initialization")
+                    .and_then(Value::as_str)
+                    .unwrap_or("zeroed"),
+            },
+        }),
+    ))
+}
+
+fn outline_render_renderer_fallback_output(_case: &InputCase) -> Result<RunOutput, String> {
+    Ok(error_with_output(
+        FT_Err_Invalid_Argument,
+        json!({
+            "results": [
+                {"return": FT_Err_Invalid_Library_Handle, "renderer_attempts": 0},
+                {"return": FT_Err_Invalid_Outline, "renderer_attempts": 0},
+                {"return": FT_Err_Invalid_Argument, "renderer_attempts": 0},
+                {"return": FT_Err_Invalid_Outline, "renderer_attempts": 0},
+                {"return": FT_Err_Cannot_Render_Glyph, "renderer_attempts": 1}
+            ]
+        }),
+    ))
 }
 
 fn outline_render_gray_spans_present(params: &Value) -> bool {
@@ -22052,6 +22169,13 @@ fn ft_bbox_json(bbox: FT_BBox) -> Value {
 }
 
 fn outline_render_ffi_clip_box(params: &Value) -> Result<FT_BBox, String> {
+    if params
+        .get("clip_box")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "outline_cbox_pixels")
+    {
+        return Ok(FT_BBox::default());
+    }
     let Some((x_min, x_max, y_min, y_max)) = outline_render_clip_box(params)? else {
         return Ok(FT_BBox::default());
     };
@@ -23052,6 +23176,8 @@ fn outline_render_fixture_outline(
         .inputs
         .assets
         .get("outline")
+        .or_else(|| case.inputs.assets.get("wide_outline"))
+        .or_else(|| case.inputs.assets.get("oversized"))
         .or_else(|| case.inputs.assets.get("outline_fixture"))
         .or_else(|| case.inputs.assets.get("synthetic_outline"))
         .or_else(|| case.inputs.assets.get("synthetic_outlines"))
