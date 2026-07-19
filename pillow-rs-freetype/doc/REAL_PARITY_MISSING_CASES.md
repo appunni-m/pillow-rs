@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Property_Set` exact-error route
+Current verified result after `FT_Property_Get/Set` supported-property route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3812`
+  - `real-parity`: `3814`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
-  - `generic-fallback`: `698`
+  - `generic-fallback`: `696`
   - `generic-error-fallback`: `381`
   - `pending-route`: `82`
   - `pending-core`: `7`
@@ -3089,6 +3089,43 @@ Verified commands:
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.rejects_null_arguments
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.missing_or_unsupported_property_service
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.invalid_property_or_value
+```
+
+### Issue Set BT: `FT_Property_Get/Set` supported-property exact routes
+
+Previous blocker:
+
+- `ftmodapi.FT_Property_Get.gets_supported_property` and
+  `ftmodapi.FT_Property_Set.sets_supported_property` stayed in
+  `generic-fallback`.
+- The fixtures require exact successful behavior from
+  `freetype/src/base/ftobjs.c:FT_Property_Get`,
+  `freetype/src/base/ftobjs.c:FT_Property_Set`, and the TrueType driver
+  `interpreter-version` property path, but the route audit had no explicit
+  maintained classification for these successful property rows.
+
+Plan:
+
+1. Keep the fixtures intact; they exercise public property get and set/get
+   behavior for the TrueType `interpreter-version` property.
+2. Require the existing exact fixture comparison for status and returned
+   property values.
+3. Classify the rows as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused supported-property get and set/get rows pass exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `ftmodapi.FT_Property_Get.gets_supported_property`
+  - `ftmodapi.FT_Property_Set.sets_supported_property`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.gets_supported_property
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Set.sets_supported_property
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
