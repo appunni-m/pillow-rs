@@ -689,6 +689,27 @@ pub struct TT_OS2 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TT_VertHeader {
+    pub Version: FT_Fixed,
+    pub Ascender: FT_Short,
+    pub Descender: FT_Short,
+    pub Line_Gap: FT_Short,
+    pub advance_Height_Max: FT_UShort,
+    pub min_Top_Side_Bearing: FT_Short,
+    pub min_Bottom_Side_Bearing: FT_Short,
+    pub yMax_Extent: FT_Short,
+    pub caret_Slope_Rise: FT_Short,
+    pub caret_Slope_Run: FT_Short,
+    pub caret_Offset: FT_Short,
+    pub Reserved: [FT_Short; 4],
+    pub metric_Data_Format: FT_Short,
+    pub number_Of_VMetrics: FT_UShort,
+    pub long_metrics: FT_Pointer,
+    pub short_metrics: FT_Pointer,
+}
+
+#[repr(C)]
 pub struct FT_GlyphSlotRec {
     pub glyph_index: FT_UInt,
     pub metrics: FT_Glyph_Metrics,
@@ -1260,6 +1281,32 @@ pub fn abi_sfnt_os2(face: FT_Face) -> Option<TT_OS2> {
         usMaxContext: os2.usMaxContext,
         usLowerOpticalPointSize: os2.usLowerOpticalPointSize,
         usUpperOpticalPointSize: os2.usUpperOpticalPointSize,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_sfnt_vhea(face: FT_Face) -> Option<TT_VertHeader> {
+    let table = FT_Get_Sfnt_Table(face, rust_ffi::FT_SFNT_VHEA as FT_Sfnt_Tag);
+    let table = NonNull::new(table.cast::<rust_ffi::TT_VertHeader>())?;
+    // SAFETY: `FT_Get_Sfnt_Table` returned a live face-owned `TT_VertHeader` pointer.
+    let vhea = unsafe { table.as_ref() };
+    Some(TT_VertHeader {
+        Version: vhea.Version,
+        Ascender: vhea.Ascender,
+        Descender: vhea.Descender,
+        Line_Gap: vhea.Line_Gap,
+        advance_Height_Max: vhea.advance_Height_Max,
+        min_Top_Side_Bearing: vhea.min_Top_Side_Bearing,
+        min_Bottom_Side_Bearing: vhea.min_Bottom_Side_Bearing,
+        yMax_Extent: vhea.yMax_Extent,
+        caret_Slope_Rise: vhea.caret_Slope_Rise,
+        caret_Slope_Run: vhea.caret_Slope_Run,
+        caret_Offset: vhea.caret_Offset,
+        Reserved: vhea.Reserved,
+        metric_Data_Format: vhea.metric_Data_Format,
+        number_Of_VMetrics: vhea.number_Of_VMetrics,
+        long_metrics: vhea.long_metrics.cast(),
+        short_metrics: vhea.short_metrics.cast(),
     })
 }
 
@@ -2900,6 +2947,33 @@ pub extern "C" fn FT_Set_Named_Instance(face: FT_Face, instance_index: FT_UInt) 
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let err = rust_ffi::FT_Set_Named_Instance(Some(&mut state.inner), instance_index);
+    if err == rust_ffi::FT_Err_Ok {
+        state.refresh_charmaps(face);
+        state.refresh_postscript_name();
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Var_Design_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    let err = rust_ffi::FT_Set_Var_Design_Coordinates(
+        Some(&mut state.inner),
+        num_coords,
+        coords,
+    );
     if err == rust_ffi::FT_Err_Ok {
         state.refresh_charmaps(face);
         state.refresh_postscript_name();

@@ -674,6 +674,27 @@ pub struct FontdoneWasmSfntName {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmVertHeader {
+    pub Version: FT_Fixed,
+    pub Ascender: FT_Short,
+    pub Descender: FT_Short,
+    pub Line_Gap: FT_Short,
+    pub advance_Height_Max: FT_UShort,
+    pub min_Top_Side_Bearing: FT_Short,
+    pub min_Bottom_Side_Bearing: FT_Short,
+    pub yMax_Extent: FT_Short,
+    pub caret_Slope_Rise: FT_Short,
+    pub caret_Slope_Run: FT_Short,
+    pub caret_Offset: FT_Short,
+    pub Reserved: [FT_Short; 4],
+    pub metric_Data_Format: FT_Short,
+    pub number_Of_VMetrics: FT_UShort,
+    pub long_metrics: FT_Pointer,
+    pub short_metrics: FT_Pointer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmString {
     pub string: *const c_uchar,
     pub string_len: u32,
@@ -2535,6 +2556,24 @@ pub extern "C" fn fontdone_wasm_set_charmap_from_face(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_var_design_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values in linear memory.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Set_Var_Design_Coordinates(Some(&mut face.face), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
     rust_ffi::FT_Get_FSType_Flags(face_ref(handle).map(|face| &face.face))
 }
@@ -2811,6 +2850,48 @@ pub extern "C" fn fontdone_wasm_get_sfnt_os2(
             usMaxContext: os2.usMaxContext,
             usLowerOpticalPointSize: os2.usLowerOpticalPointSize,
             usUpperOpticalPointSize: os2.usUpperOpticalPointSize,
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_vhea(
+    handle: usize,
+    tag: FT_Sfnt_Tag,
+    out: *mut FontdoneWasmVertHeader,
+) -> FT_Error {
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let table = rust_ffi::FT_Get_Sfnt_Table(&face.face, tag);
+    if table.is_null() {
+        return rust_ffi::FT_Err_Invalid_Table as FT_Error;
+    }
+    // SAFETY: `FT_Get_Sfnt_Table` returns a live face-owned `TT_VertHeader` pointer for this tag.
+    let vhea = unsafe { &*table.cast::<rust_ffi::TT_VertHeader>() };
+    // SAFETY: `out` is non-null and caller provides writable storage.
+    unsafe {
+        *out = FontdoneWasmVertHeader {
+            Version: vhea.Version,
+            Ascender: vhea.Ascender,
+            Descender: vhea.Descender,
+            Line_Gap: vhea.Line_Gap,
+            advance_Height_Max: vhea.advance_Height_Max,
+            min_Top_Side_Bearing: vhea.min_Top_Side_Bearing,
+            min_Bottom_Side_Bearing: vhea.min_Bottom_Side_Bearing,
+            yMax_Extent: vhea.yMax_Extent,
+            caret_Slope_Rise: vhea.caret_Slope_Rise,
+            caret_Slope_Run: vhea.caret_Slope_Run,
+            caret_Offset: vhea.caret_Offset,
+            Reserved: vhea.Reserved,
+            metric_Data_Format: vhea.metric_Data_Format,
+            number_Of_VMetrics: vhea.number_Of_VMetrics,
+            long_metrics: vhea.long_metrics.cast(),
+            short_metrics: vhea.short_metrics.cast(),
         };
     }
     rust_ffi::FT_Err_Ok
