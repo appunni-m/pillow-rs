@@ -1553,6 +1553,19 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftparams_name_option_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Contained FT_Open_Args name-option rows with null data and maintained routes."""
+    if row.case_id in {
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
+    }:
+        return (
+            "FT_Open_Args typographic-name option with null data validates through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    return None
+
+
 def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for image/raster public records that do not have a maintained route."""
     ftimage_rows_without_maintained_route = {
@@ -4149,6 +4162,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftglyph_pending = ftglyph_subsystem_pending_reason(row)
     if ftglyph_pending:
         return ("pending-route", ftglyph_pending)
+    ftparams_name_option_reason = ftparams_name_option_real_parity_reason(row)
+    if ftparams_name_option_reason:
+        return ("real-parity", ftparams_name_option_reason)
     ftparams_pending = ftparams_subsystem_pending_reason(row)
     if ftparams_pending:
         return ("pending-route", ftparams_pending)

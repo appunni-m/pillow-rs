@@ -1,5 +1,50 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Open_Args` typographic-name null-data route
+
+Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
+2.14.3 `FT_Open_Face` name-selection parameters whose `data` pointer is null.
+
+Implemented real parity rows:
+
+- `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted`
+- `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted`
+
+Finding:
+
+- The Rust, C ABI, and WASM backends already had a maintained
+  `FT_Open_Face` name-options route, but it was only selected for the older
+  `FT_PARAM_TAG_IGNORE_PREFERRED_*` case IDs and for `new_memory_face`
+  operation dispatch.
+- These two `FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_*` constants are aliases of the
+  preferred-family/subfamily tags in pinned FreeType. Pinned C checks the tag
+  and does not dereference the `data` pointer for these name-selection
+  parameters, so null data is accepted.
+- The harness now dispatches the exact `freetype.open_face_with_params` rows to
+  the same maintained name-options route for pinned C oracle, Rust FFI, C ABI,
+  and WASM ABI.
+
+Remaining related blockers:
+
+- Other `ftparams` rows remain pending because they require real sbix,
+  incremental font, random seed, stem-darkening, or unpatented-hinting
+  behavior rather than name-selection tag plumbing.
+
+Impact:
+
+- `real-parity`: `4450 -> 4452`
+- `compile-contract`: stays `2265`
+- `pending-route`: `505 -> 503`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.open_face_with_params
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: CID signature and Type1 sentinel contract cleanup
 
 Status: two-row audit cleanup completed on 2026-07-20 for public signature and

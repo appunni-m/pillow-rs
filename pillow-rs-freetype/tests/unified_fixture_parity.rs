@@ -15539,6 +15539,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_macro_param(case)?.to_string());
             Ok(args)
         }
+        "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
+            let mut args = vec!["--open-face-name-options".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(open_face_name_option_rows_arg(params)?);
+            Ok(args)
+        }
         "freetype.face_flags" => {
             let mut args = vec!["--face-flags".to_string()];
             push_font_source(case, &mut args)?;
@@ -17251,6 +17258,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = rust_new_face_without_size(case)?;
             rust_face_flags(&face, case)
         }
+        "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
+            rust_open_face_name_options(case)
+        }
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -17830,6 +17840,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_face(face);
             c_done_library(library);
             output
+        }
+        "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
+            c_open_face_name_options(case)
         }
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
@@ -18557,6 +18570,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_face_flags(handle, case);
             wasm_done_face(handle);
             output
+        }
+        "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
+            wasm_open_face_name_options(case)
         }
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
@@ -24128,8 +24144,10 @@ fn open_face_name_options_runtime_supported(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.open_face_ignores_typographic_family"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.absent_or_unknown_param_uses_default_family"
+            | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.open_face_ignores_typographic_subfamily"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params"
+            | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
         && open_face_name_option_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
