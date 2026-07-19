@@ -1321,6 +1321,15 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "accepting a generic Invalid_Outline would be a green placeholder"
         )
     if (
+        row.operation == "new_memory_face"
+        and row.case_id == "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error"
+    ):
+        return (
+            "generated/sfnt/missing-hmtx.ttf is a symlink to valid DejaVuSans.ttf; "
+            "pinned C opens it successfully, so exact Hmtx_Table_Missing parity "
+            "needs a maintained malformed-SFNT fixture generator"
+        )
+    if (
         (row.operation, row.case_id) in exact_error_route_gaps
         and (row.operation, row.case_id) not in FTERRDEF_EXACT_ERROR_BATCH
     ):
@@ -1623,6 +1632,15 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT debug logging output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
+        "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftbdf.FT_Get_BDF_Charset_ID.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face": "CID registry/ordering/supplement output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -1645,6 +1663,9 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot": "FT_TrueTypeGX_Validate morx table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot": "FT_TrueTypeGX_Validate morx output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract": "FT_Set_Debug_Hook TrueType hook index contract validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property": "FT_Set_Default_Properties environment handling validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success": "PFR advance output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success": "PFR kerning output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 

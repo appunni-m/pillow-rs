@@ -1,5 +1,83 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: future-batch strict route triage
+
+Scope:
+
+- The requested future batch was handled with coverage disabled and exact
+  runtime parity only.
+- Rows are promoted only when they pass after strict classifier promotion. A
+  focused pass while a row is still `generic-fallback` is not sufficient,
+  because `allow_oracle_errors` can hide pinned C errors.
+
+Promoted rows:
+
+- `ftbdf.FT_Get_BDF_Charset_ID`: two charset rows moved from
+  `generic-fallback` to `real-parity`.
+- `ftcid.FT_Get_CID_From_Glyph_Index`: nine CID glyph-index rows moved from
+  `generic-fallback` to `real-parity`.
+- `ftcid.FT_Get_CID_Is_Internally_CID_Keyed`: three CID-keyed rows moved from
+  `generic-fallback` to `real-parity`.
+- `ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face` moved
+  from `generic-fallback` to `real-parity`.
+- `ftpfr.FT_Get_PFR_Advance`: three PFR advance rows moved from
+  `generic-fallback` to `real-parity`.
+- `ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success` moved from
+  `generic-fallback` to `real-parity`.
+- `ftmodapi.FT_Set_Default_Properties.parses_supported_environment_property`
+  moved from `generic-fallback` to `real-parity`.
+
+Route audit impact:
+
+- `real-parity`: `4436 -> 4454`.
+- `generic-fallback`: `519 -> 501`.
+- `pending-route`: unchanged at `24`.
+
+Rejected or blocked during the same pass:
+
+- `ftstroke.set`, `ftstroke.open_path_geometry`, `ftstroke.join_geometry`, and
+  `ftstroke.parse_outline` are not valid strict promotions yet. Focused runs
+  passed while the rows were still generic fallback, but after strict
+  classification the full refreshed parity gate reported pinned C error `7`
+  for 18 stroker rows.
+- `ftmodapi.FT_Set_Default_Properties.no_environment_noop` and
+  `ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties`
+  also reported pinned C error `7` under strict full parity.
+- `ftmodapi.FT_Add_Module.*` and `ftmodapi.FT_Get_Module.*` probe rows
+  reported pinned C error `7` under strict focused parity, so they remain
+  fallback-classified.
+- `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature`
+  reported pinned C error `7` under strict focused parity; only the runtime
+  `success_cid_keyed_face` row was promoted.
+- `ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning` reported
+  pinned C error `7` under strict focused parity; only the PFR-pair success row
+  was promoted.
+- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error` is not a
+  routable exact-error row yet. `generated/sfnt/missing-hmtx.ttf` is currently
+  a symlink to valid `DejaVuSans.ttf`, and pinned C `FT_New_Memory_Face` opens
+  it successfully with error code `0`. It needs a maintained malformed-SFNT
+  fixture generator before promotion.
+- Other `generated/sfnt/*` future rows are still missing generated assets:
+  `missing-cmap.ttf`, `missing-hmtx-incremental.ttf`,
+  `invalid-post-format.ttf`, `truncated-png-bitmap.ttf`, and
+  `invalid-target-table.ttf`.
+- `ftcolor.get_paint_graph` and `ftcolor.traverse_paint_graph` stayed
+  unpromoted because focused parity reported unresolved runtime font assets.
+- `ftgxval.truetype_gx_validate`, `ftgxval.classic_kern_validate`, and
+  `ftmodapi.inspect_module_flags` stayed only partially runnable because
+  related rows still report unresolved runtime font assets.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcid
+make -C pillow-rs-freetype test-op OP=ftpfr
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
+FONTDONE_UNIFIED_ORACLE_REFRESH=1 make fontdone-parity
+python3 pillow-rs-freetype/scripts/check_public_api_inputs.py --route-audit --route-audit-json /tmp/fontdone-route-audit-final.json
+```
+
 ### Issue Set Current: future-batch exact route triage
 
 Scope:
