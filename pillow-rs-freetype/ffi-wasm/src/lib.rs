@@ -1380,6 +1380,12 @@ pub fn abi_support_add_default_modules(library_present: i32) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_init_free_type_created_library() -> bool {
+    let _library = rust_ffi::FT_Init_FreeType();
+    true
+}
+
+#[cfg(feature = "abi-test-support")]
 extern "C" fn abi_support_debug_hook_a(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
     rust_ffi::FT_Err_Ok
 }

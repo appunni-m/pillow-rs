@@ -229,6 +229,7 @@ REAL_PARITY_OPERATIONS = {
     "fterrors.error_string",
     "freetype.get_first_char",
     "freetype.get_next_char",
+    "freetype.init_free_type",
     "freetype.library_version",
     "ftmodapi.get_truetype_engine_type",
     "freetype.done_freetype",

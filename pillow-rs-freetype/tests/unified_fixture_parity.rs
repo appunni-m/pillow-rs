@@ -2280,6 +2280,7 @@ impl BackendComparisonWorker {
                     | "ftbitmap.bitmap_done"
                     | "ftbitmap.bitmap_embolden"
                     | "ftbitmap.bitmap_blend"
+                    | "freetype.init_free_type"
                     | "ftmodapi.get_truetype_engine_type"
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
@@ -7039,6 +7040,203 @@ fn wasm_library_version_output(params: &Value) -> Result<Value, String> {
     })
 }
 
+fn rust_init_free_type(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "alibrary") == Some("null") {
+        return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
+    }
+    let _library = FT_Init_FreeType();
+    Ok(ok(init_free_type_output(
+        case,
+        || Some(1),
+        || rust_init_free_type_version_and_load(case),
+    )?))
+}
+
+fn c_init_free_type(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "alibrary") == Some("null") {
+        return Ok(error(c_abi::FT_Init_FreeType(std::ptr::null_mut())));
+    }
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let output = init_free_type_output(
+        case,
+        || Some(library.addr() as u64),
+        || c_init_free_type_version_and_load(case),
+    )?;
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_init_free_type(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "alibrary") == Some("null") {
+        return Ok(error(FT_Err_Invalid_Face_Handle as FT_Error));
+    }
+    let output = init_free_type_output(
+        case,
+        || {
+            #[cfg(feature = "abi-test-support")]
+            {
+                return Some(u64::from(
+                    wasm_abi::abi_support_init_free_type_created_library(),
+                ));
+            }
+            #[allow(unreachable_code)]
+            None
+        },
+        || wasm_init_free_type_version_and_load(case),
+    )?;
+    Ok(ok(output))
+}
+
+fn init_free_type_output<F, G>(
+    case: &InputCase,
+    library_identity: F,
+    version_and_load: G,
+) -> Result<Value, String>
+where
+    F: FnOnce() -> Option<u64>,
+    G: FnOnce() -> Result<Value, String>,
+{
+    match case.case.as_str() {
+        "creates_library_handle" => {
+            let identity = library_identity();
+            Ok(json!({
+                "library": {
+                    "nullness": if identity.unwrap_or(0) != 0 { "non_null" } else { "null" },
+                    "identity_class": "fresh"
+                }
+            }))
+        }
+        "created_library_reports_version_and_modules" => version_and_load(),
+        other => Err(format!("unsupported init_free_type case {other}")),
+    }
+}
+
+fn rust_init_free_type_version_and_load(case: &InputCase) -> Result<Value, String> {
+    Ok(json!({
+        "version": init_free_type_version_from_rows(rust_library_version_output(&json!({
+            "library": "new_from_FT_Init_FreeType",
+            "outputs": ["amajor", "aminor", "apatch"]
+        }))?)?,
+        "face_load_probe": rust_init_free_type_face_load_probe(case)?
+    }))
+}
+
+fn c_init_free_type_version_and_load(case: &InputCase) -> Result<Value, String> {
+    Ok(json!({
+        "version": init_free_type_version_from_rows(c_library_version_output(&json!({
+            "library": "new_from_FT_Init_FreeType",
+            "outputs": ["amajor", "aminor", "apatch"]
+        }))?)?,
+        "face_load_probe": c_init_free_type_face_load_probe(case)?
+    }))
+}
+
+fn wasm_init_free_type_version_and_load(case: &InputCase) -> Result<Value, String> {
+    Ok(json!({
+        "version": init_free_type_version_from_rows(wasm_library_version_output(&json!({
+            "library": "new_from_FT_Init_FreeType",
+            "outputs": ["amajor", "aminor", "apatch"]
+        }))?)?,
+        "face_load_probe": wasm_init_free_type_face_load_probe(case)?
+    }))
+}
+
+fn init_free_type_version_from_rows(version: Value) -> Result<Value, String> {
+    version
+        .get("rows")
+        .and_then(Value::as_array)
+        .and_then(|rows| rows.first())
+        .and_then(|row| row.get("writes"))
+        .cloned()
+        .ok_or_else(|| "library version output missing writes".to_string())
+}
+
+fn rust_init_free_type_face_load_probe(case: &InputCase) -> Result<Value, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    ) {
+        Ok(face) => {
+            let load_glyph_error = match FT_Load_Glyph(&face, 0, FT_LOAD_DEFAULT) {
+                Ok(_) => FT_Err_Ok,
+                Err(err) => err,
+            };
+            Ok(json!({
+                "new_face_error": FT_Err_Ok,
+                "load_glyph_error": load_glyph_error
+            }))
+        }
+        Err(err) => Ok(json!({
+            "new_face_error": err,
+            "load_glyph_error": FT_Err_Invalid_Face_Handle as FT_Error
+        })),
+    }
+}
+
+fn c_init_free_type_face_load_probe(case: &InputCase) -> Result<Value, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(json!({
+            "new_face_error": init_err,
+            "load_glyph_error": FT_Err_Invalid_Face_Handle as FT_Error
+        }));
+    }
+    let mut face = std::ptr::null_mut();
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let new_face_error = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        file_size,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let load_glyph_error = if new_face_error == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, 0, FT_LOAD_DEFAULT)
+    } else {
+        FT_Err_Invalid_Face_Handle as FT_Error
+    };
+    if !face.is_null() {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    Ok(json!({
+        "new_face_error": new_face_error,
+        "load_glyph_error": load_glyph_error
+    }))
+}
+
+fn wasm_init_free_type_face_load_probe(case: &InputCase) -> Result<Value, String> {
+    let bytes = font_bytes(case)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let load_glyph_error = if status.error == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(status.handle, 0, FT_LOAD_DEFAULT)
+    } else {
+        FT_Err_Invalid_Face_Handle as FT_Error
+    };
+    if status.handle != 0 {
+        wasm_done_face(status.handle);
+    }
+    Ok(json!({
+        "new_face_error": status.error,
+        "load_glyph_error": load_glyph_error
+    }))
+}
+
 fn rust_truetype_engine_output(params: &Value) -> Result<Value, String> {
     let library = match truetype_engine_library_present_arg(params)? {
         0 => None,
@@ -10241,6 +10439,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             library_version_rows_arg(params)?,
             library_version_sentinels_arg(params)?,
         ]),
+        "freetype.init_free_type" => {
+            if lifecycle_handle_param(params, "alibrary") == Some("null") {
+                return Ok(vec!["--init-free-type".to_string(), "null".to_string()]);
+            }
+            if case.case == "creates_library_handle" {
+                return Ok(vec!["--init-free-type".to_string(), "identity".to_string()]);
+            }
+            let mut args = vec![
+                "--init-free-type".to_string(),
+                "version-and-load".to_string(),
+            ];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftmodapi.get_truetype_engine_type" => {
             if truetype_engine_library_present_arg(params).is_err() {
                 return oracle_fallback_args(case);
@@ -10888,6 +11101,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftbitmap.bitmap_done"
                 | "ftbitmap.bitmap_embolden"
                 | "ftbitmap.bitmap_blend"
+                | "freetype.init_free_type"
                 | "ftmodapi.get_truetype_engine_type"
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
@@ -10925,6 +11139,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.face_get_variants_of_char"
                 | "freetype.face_get_chars_of_variant"
                 | "freetype.library_version"
+                | "freetype.init_free_type"
         ) {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null")
                 || lifecycle_handle_param(&case.inputs.params, "library") == Some("null")
@@ -11141,6 +11356,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             )?))
         }
         "fterrors.error_string" => rust_error_string(case),
+        "freetype.init_free_type" => rust_init_free_type(case),
         "freetype.library_version" => Ok(ok(rust_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
@@ -11797,6 +12013,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output.map(ok)
         }
         "fterrors.error_string" => c_error_string(case),
+        "freetype.init_free_type" => c_init_free_type(case),
         "sfnt.load_sfnt_table" => {
             let (library, face) = c_open_face(case)?;
             let output = c_load_sfnt_table_output(face, &case.inputs.params);
@@ -12387,6 +12604,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output.map(ok)
         }
         "fterrors.error_string" => wasm_error_string(case),
+        "freetype.init_free_type" => wasm_init_free_type(case),
         "sfnt.load_sfnt_table" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_load_sfnt_table_output(handle, &case.inputs.params);
@@ -26808,6 +27026,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "freetype.get_charmap_index"
             | "freetype.get_first_char"
             | "freetype.get_next_char"
+            | "freetype.init_free_type"
             | "freetype.library_version"
             | "ftlcdfil.set_lcd_filter"
             | "ftlcdfil.set_lcd_filter_weights"

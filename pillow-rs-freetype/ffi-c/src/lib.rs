@@ -986,7 +986,10 @@ fn abi_glyph_slot(face: FT_Face) -> Option<NonNull<FT_GlyphSlotRec>> {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Init_FreeType(alibrary: *mut FT_Library) -> FT_Error {
     let Some(out) = non_null_mut(alibrary) else {
-        return rust_ffi::FT_Err_Invalid_Argument;
+        // FreeType 2.14.3 `src/base/ftinit.c:FT_Init_FreeType` reports
+        // Invalid_Face_Handle when the output library pointer itself is null;
+        // the pointer check lives in this thin ABI layer.
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let library = Box::new(FT_LibraryRec {
         internal: Box::into_raw(Box::new(rust_ffi::FT_Init_FreeType())).cast::<c_void>(),
