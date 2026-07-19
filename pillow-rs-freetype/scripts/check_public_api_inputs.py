@@ -1472,6 +1472,38 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for core FreeType face/size/slot behavior without a maintained route."""
+    freetype_rows_without_maintained_route = {
+        "freetype.FT_Attach_File.success_attach_auxiliary_file",
+        "freetype.FT_Attach_Stream.success_attach_auxiliary_stream",
+        "freetype.FT_Bitmap_Size.available_sizes_values_match_c",
+        "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership",
+        "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection",
+        "freetype.FT_Face.owns_slot_size_and_charmaps",
+        "freetype.FT_FaceRec.populated_public_fields_match_c",
+        "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success",
+        "freetype.FT_GlyphSlot.overwritten_by_subsequent_load",
+        "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior",
+        "freetype.FT_Open_Args.open_face_consumes_args_like_c",
+        "freetype.FT_Parameter.tag_data_parameters_match_c_behavior",
+        "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes",
+        "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior",
+        "freetype.FT_Size.active_size_handle_runtime",
+        "freetype.FT_SizeRec.active_size_record_runtime",
+    }
+    if row.case_id not in freetype_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Core FreeType attach/open-face ownership, face/size/slot public "
+        "record, load-target, SVG flag, and track-kerning success behavior "
+        "requires a maintained core route; keeping it generic would be a "
+        "green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3819,6 +3851,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftimage_pending = ftimage_subsystem_pending_reason(row)
     if ftimage_pending:
         return ("pending-route", ftimage_pending)
+    freetype_core_pending = freetype_core_subsystem_pending_reason(row)
+    if freetype_core_pending:
+        return ("pending-route", freetype_core_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
