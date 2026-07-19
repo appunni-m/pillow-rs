@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Advance` probe-face invalid-size-handle
+Current verified result after `FT_Done_Library` null-library
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3792`
+  - `real-parity`: `3793`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `401`
+  - `generic-error-fallback`: `400`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2586,6 +2586,66 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Size_Handle.null_or_detached_size_rejected
+```
+
+### Issue Set BD: `FT_Done_Library` null-library exact-error route
+
+Previous blocker:
+
+- `ftmodapi.FT_Done_Library.rejects_null_library` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_Done_Library(NULL)`.
+2. Require exact error status comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused null-library row passes exact comparison against pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_Done_Library.rejects_null_library` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Done_Library.rejects_null_library
+```
+
+### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
+
+Current blocker:
+
+- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` is a valid public
+  `FT_Outline_Get_BBox` null-input fixture, but current maintained runtime
+  runners for `ftbbox.outline_get_bbox` observe a loaded glyph slot's stored
+  `outline_bbox` instead of invoking a public Rust FFI / thin C ABI / WASM ABI
+  `FT_Outline_Get_BBox` endpoint.
+- Exact-error gating was tested and correctly rejected classification: the
+  pinned oracle path returned success for the normal glyph-outline route rather
+  than executing the fixture's `null_outline` / `null_abbox` probes.
+
+Plan:
+
+1. Do not classify this row as real parity until the harness calls an actual
+   `FT_Outline_Get_BBox` endpoint for pinned C, Rust FFI, C ABI, and WASM ABI.
+2. Implement the real public endpoint, not a null-only shortcut.
+3. Reuse the `FT_Outline_Get_CBox` null-input runner structure where possible,
+   but preserve `FT_Outline_Get_BBox`'s distinct return/error behavior from
+   FreeType `src/base/ftbbox.c:474-486`.
+4. Re-enable exact-error gating only after focused same-input comparison
+   passes.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output
 ```
 
 ## Coverage Bulk Context
