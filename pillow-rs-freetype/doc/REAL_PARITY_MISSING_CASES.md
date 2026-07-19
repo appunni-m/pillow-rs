@@ -12,6 +12,11 @@ Scope:
 
 Promoted rows:
 
+- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success`: two concrete PFR metric
+  rows moved from `generic-fallback` to `real-parity`. The focused strict
+  runtime operation passes across pinned C, Rust FFI, C ABI, and WASM. This was
+  the only attempted future-batch family in this pass that had both a runnable
+  public oracle route and non-fallback C success evidence.
 - `ftbdf.FT_Get_BDF_Charset_ID`: two charset rows moved from
   `generic-fallback` to `real-parity`.
 - `ftcid.FT_Get_CID_From_Glyph_Index`: nine CID glyph-index rows moved from
@@ -46,12 +51,28 @@ Promoted rows:
 
 Route audit impact:
 
-- `real-parity`: `4436 -> 4457`.
-- `generic-fallback`: `519 -> 501`.
+- `real-parity`: `4436 -> 4459`.
+- `generic-fallback`: `519 -> 499`.
 - `pending-route`: `24 -> 21`.
 
 Rejected or blocked during the same pass:
 
+- A classifier-only 14-row `ftglyph` batch was rejected. After strict
+  promotion, `CASE=ftglyph` reported pinned oracle error `7` for the promoted
+  success/introspection rows. These rows need maintained public runner/facade
+  support before they can be called real parity.
+- `freetype.attach_file`, `freetype.attach_stream`,
+  `freetype.face_owned_handles`, `freetype.inspect_face_rec`,
+  `freetype.glyph_slot_reuse`, `freetype.open_face_args`,
+  `freetype.parameter_dispatch`, and `ftbzip2.stream_open_bzip2` were rejected
+  as classifier-only promotions. Each passed while generic fallback was
+  allowed, but strict success classification exposed pinned oracle error `7`.
+- `t1tables.get_ps_font_private_mm_blend` was rejected: route audit would move
+  eleven rows, but focused strict parity had zero runnable cases and eleven
+  unresolved runtime font assets.
+- `ftcache.cmap_cache_lookup` was rejected: route audit would move twelve rows,
+  but focused strict parity left fifteen unresolved runtime font assets and the
+  runnable oracle cache contained error `7`.
 - `ftstroke.set`, `ftstroke.open_path_geometry`, `ftstroke.join_geometry`, and
   `ftstroke.parse_outline` are not valid strict promotions yet. Focused runs
   passed while the rows were still generic fallback, but after strict
