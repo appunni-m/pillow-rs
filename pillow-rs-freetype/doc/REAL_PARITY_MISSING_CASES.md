@@ -7261,3 +7261,107 @@ Observed failure during attempted promotion:
 runtime_parity: passed=0 failed=1 total=1
 rust ffi: freetype.FT_ENCODING_NONE.representative_runtime_observation oracle returned unexpected error 23
 ```
+
+### Issue Set Current: `FT_Err_Name_Table_Missing` via `FT_New_Memory_Face`
+
+Problem:
+
+- `fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds` and
+  `fterrdef.FT_Err_Name_Table_Missing.sfnt_without_name_table` are pending-route
+  because their declared `new_memory_face` fixtures do not exist.
+- The existing maintained name fixture generator can create SFNT name-table
+  controls, but fixture existence alone is not enough; the public
+  `FT_New_Memory_Face` route must produce the same pinned C classification as
+  Rust FFI, C ABI, and WASM.
+
+Finding:
+
+- A rejected attempt added generator outputs at the declared public fixture IDs:
+  `fixtures/assets/fonts/name_table_bad_storage.ttf` and
+  `fixtures/assets/fonts/name_table_missing.ttf`, then enabled
+  `compare_error_output=true` on both rows.
+- The route audit then classified both rows as real parity, but focused runtime
+  parity failed.
+- For `sfnt_name_storage_out_of_bounds`, pinned C did not produce
+  `FT_Err_Name_Table_Missing`; the runtime observed `FT_Err_Invalid_File_Format`
+  (`error_code: 3`) for the generated short name-table payload.
+- For `sfnt_without_name_table`, pinned C `FT_New_Memory_Face` opened the face
+  successfully (`error_code: 0`). Missing `name` table behavior is not proven by
+  this endpoint alone.
+- Therefore adding these two assets and exact flags would be a green placeholder
+  unless the fixture generator is adjusted to hit the exact C source branch, or
+  the rows are moved to a public operation that actually observes the missing
+  name table.
+
+Required fix:
+
+1. Keep both rows pending-route until a deterministic fixture produces the exact
+   pinned C error through the declared public route, or the rows are split and
+   assigned to the correct public name-table operation.
+2. If `FT_New_Memory_Face` is not the public endpoint that observes
+   `FT_Err_Name_Table_Missing`, update the fixture definition instead of
+   changing expected outputs to match Rust.
+3. Only promote the rows after focused parity passes with
+   `compare_error_output=true` across pinned C, Rust FFI, C ABI, and WASM.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Name_Table_Missing
+```
+
+Observed failure during attempted promotion:
+
+```text
+runtime_parity: passed=1 failed=2 total=3
+failure_buckets=rust ffi:value:2
+rust ffi: fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds requires an exact C error, but the oracle returned ok (backend=Status { kind: Error, error_code: 3 })
+rust ffi: fterrdef.FT_Err_Name_Table_Missing.sfnt_without_name_table requires an exact C error, but the oracle returned ok (backend=Status { kind: Ok, error_code: 0 })
+```
+
+### Issue Set Current: `FT_Err_Invalid_Post_Table_Format` via `FT_New_Memory_Face`
+
+Problem:
+
+- `fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected` is
+  pending-route because it references missing fixture
+  `generated/sfnt/invalid-post-format.ttf`.
+- The repository already has `fonts/metadata/post-format-unsupported.ttf`,
+  documented as an unsupported `post` format 4.0 control for glyph-name and
+  SFNT-table behavior, so it looked like a possible standard replacement.
+
+Finding:
+
+- A rejected attempt changed the row to use
+  `fonts/metadata/post-format-unsupported.ttf` and enabled
+  `compare_error_output=true`.
+- Focused runtime parity failed: pinned C `FT_New_Memory_Face` opened that
+  fixture successfully for this endpoint (`error_code: 0`).
+- Therefore the existing unsupported-post fixture proves later public metadata
+  behavior, not a face-open `FT_Err_Invalid_Post_Table_Format` route.
+
+Required fix:
+
+1. Keep the `generated/sfnt/invalid-post-format.ttf` row pending-route until a
+   deterministic face-open fixture is created that makes pinned C return
+   `FT_Err_Invalid_Post_Table_Format` from the declared `new_memory_face`
+   operation.
+2. Do not reuse `fonts/metadata/post-format-unsupported.ttf` for this row; it is
+   a valid face-open input for pinned C and would make the exact route fail.
+3. If FreeType only reports this error from a later `post`-table access path for
+   the available fixtures, split or move the fixture to the correct public
+   endpoint instead of changing expected outputs.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected
+```
+
+Observed failure during attempted promotion:
+
+```text
+runtime_parity: passed=0 failed=1 total=1
+failure_buckets=rust ffi:value:1
+rust ffi: fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected requires an exact C error, but the oracle returned ok (backend=Status { kind: Ok, error_code: 0 })
+```
