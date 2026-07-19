@@ -55,6 +55,18 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `ftmodapi` module flags plus SFNT/charmap metadata batch: `14 / 14`
+  runtime-asset rows promoted from `generic-fallback` to `real-parity`.  The
+  promoted rows are limited to existing runtime assets and existing exact
+  routes: `ftmodapi` module-flag rows and SFNT/charmap platform/encoding/name
+  metadata rows.  Focused refreshed parity passed `ftmodapi` `62 / 62`
+  runnable rows and `sfnt` `62 / 62` runnable rows; unresolved `ftmodapi` and
+  SFNT fixtures remain pending/generic until their runtime assets are present.
+  `ftmodapi.done_library` and
+  `ftmodapi.face_driver_name` were tested and left generic because strict
+  promotion exposed pinned-oracle error `7` for the current fixtures.
+- Current route audit after this batch: `real-parity` `4418`,
+  `generic-fallback` `538`, `pending-route` `23`.
 - `ftdriver` interpreter-version batch: `6 / 6` runtime-asset rows promoted
   from `generic-fallback` to `real-parity`.  Focused refreshed parity for the
   `ftdriver` filter passed `26 / 26` runnable rows; `12` driver rows remain
