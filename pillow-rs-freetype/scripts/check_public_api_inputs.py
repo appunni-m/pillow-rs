@@ -861,6 +861,15 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params",
         "ftrender.FT_Set_Renderer.set_mode_parameter_error_propagates",
         "ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors",
+        "ftstroke.FT_Stroker_New.invalid_library",
+        "ftstroke.FT_Stroker_New.invalid_output_pointer",
+        "ftstroke.FT_Stroker_New.allocation_failure",
+        "ftstroke.FT_Stroker_ParseOutline.invalid_outline",
+        "ftstroke.FT_Stroker_ParseOutline.invalid_stroker",
+        "ftwinfnt.FT_Get_WinFNT_Header.null_face_returns_invalid_face_handle",
+        "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument",
+        "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument",
+        "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1561,6 +1570,54 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors"
     ):
         return "FT_Get_Sfnt_LangTag invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.stroker_new"
+        and row.case_id == "ftstroke.FT_Stroker_New.invalid_library"
+    ):
+        return "FT_Stroker_New invalid-library errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.stroker_new"
+        and row.case_id == "ftstroke.FT_Stroker_New.invalid_output_pointer"
+    ):
+        return "FT_Stroker_New invalid-output-pointer errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.stroker_new"
+        and row.case_id == "ftstroke.FT_Stroker_New.allocation_failure"
+    ):
+        return "FT_Stroker_New allocation-failure errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id == "ftstroke.FT_Stroker_ParseOutline.invalid_outline"
+    ):
+        return "FT_Stroker_ParseOutline invalid-outline errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id == "ftstroke.FT_Stroker_ParseOutline.invalid_stroker"
+    ):
+        return "FT_Stroker_ParseOutline invalid-stroker errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftwinfnt.get_winfnt_header"
+        and row.case_id
+        == "ftwinfnt.FT_Get_WinFNT_Header.null_face_returns_invalid_face_handle"
+    ):
+        return "FT_Get_WinFNT_Header null-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftwinfnt.get_winfnt_header"
+        and row.case_id
+        == "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument"
+    ):
+        return "FT_Get_WinFNT_Header null-output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftwinfnt.get_winfnt_header"
+        and row.case_id
+        == "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument"
+    ):
+        return "FT_Get_WinFNT_Header non-WinFNT-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftoutln.outline_check"
+        and row.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
+    ):
+        return "FT_Outline_Check null/count-mismatch errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
