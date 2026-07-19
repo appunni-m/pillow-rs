@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Add_Module` duplicate-name/version route
+Current verified result after `FT_New_Library` null-input route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3801`
+  - `real-parity`: `3802`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `392`
+  - `generic-error-fallback`: `391`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2906,6 +2906,40 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.duplicate_name_version_rules
+```
+
+### Issue Set BO: `FT_New_Library` null-input exact-error route
+
+Previous blocker:
+
+- `ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status, output-pointer, and
+  allocator-call comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_New_Library` behavior for
+   null memory and null output-library pointer inputs.
+2. Require exact error status, preserved output pointer, and no allocator-call
+   comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused null-input row passes exact comparison against pinned C FreeType,
+  Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output` as
+  `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
