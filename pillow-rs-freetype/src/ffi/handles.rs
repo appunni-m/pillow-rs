@@ -2070,6 +2070,56 @@ pub fn FT_Outline_Check(outline: Option<&FT_OutlineSnapshot>) -> FT_Error {
     FT_Err_Ok
 }
 
+pub fn FT_Outline_Copy(
+    source: Option<&FT_OutlineSnapshot>,
+    target: Option<&mut FT_OutlineSnapshot>,
+) -> FT_Error {
+    let (Some(source), Some(target)) = (source, target) else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    if source.points.len() != target.points.len() || source.contours.len() != target.contours.len()
+    {
+        return FT_Err_Invalid_Argument;
+    }
+    let owner = target.flags & FT_OUTLINE_OWNER as FT_Int;
+    target.points.clone_from(&source.points);
+    target.tags.clone_from(&source.tags);
+    target.contours.clone_from(&source.contours);
+    // FreeType `src/base/ftoutln.c:399-430` preserves the target OWNER bit
+    // while copying all other outline flags from the source descriptor.
+    target.flags = (source.flags & !(FT_OUTLINE_OWNER as FT_Int)) | owner;
+    FT_Err_Ok
+}
+
+pub fn FT_Outline_Embolden(outline: Option<&mut FT_OutlineSnapshot>, strength: FT_Pos) -> FT_Error {
+    FT_Outline_EmboldenXY(outline, strength, strength)
+}
+
+pub fn FT_Outline_EmboldenXY(
+    outline: Option<&mut FT_OutlineSnapshot>,
+    xstrength: FT_Pos,
+    ystrength: FT_Pos,
+) -> FT_Error {
+    let Some(snapshot) = outline else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    let Some(mut outline) = outline_snapshot_to_core(snapshot) else {
+        return FT_Err_Invalid_Outline as FT_Error;
+    };
+    if !outline.points.is_empty()
+        && api::outline_get_orientation(Some(&outline)) == FT_ORIENTATION_NONE as i32
+    {
+        return FT_Err_Invalid_Argument;
+    }
+    api::embolden_outline(
+        &mut outline,
+        i32::try_from(xstrength).unwrap_or(if xstrength < 0 { i32::MIN } else { i32::MAX }),
+        i32::try_from(ystrength).unwrap_or(if ystrength < 0 { i32::MIN } else { i32::MAX }),
+    );
+    *snapshot = outline_to_ffi_snapshot(&outline);
+    FT_Err_Ok
+}
+
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
     let Some(outline) = outline else {
         return;

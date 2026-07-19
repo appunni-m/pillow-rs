@@ -53,6 +53,11 @@ WASM_EXPORTS = {
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
     "fontdone_wasm_outline_check",
+    "fontdone_wasm_outline_copy",
+    "fontdone_wasm_outline_embolden",
+    "fontdone_wasm_outline_embolden_xy",
+    "fontdone_wasm_outline_new",
+    "fontdone_wasm_outline_done",
     "fontdone_wasm_outline_get_orientation",
     "fontdone_wasm_outline_reverse",
     "fontdone_wasm_outline_transform",
@@ -243,6 +248,11 @@ REAL_PARITY_OPERATIONS = {
     "ftoutln.outline_get_cbox",
     "ftoutln.get_orientation",
     "ftoutln.outline_check",
+    "ftoutln.outline_copy",
+    "ftoutln.outline_embolden",
+    "ftoutln.outline_embolden_xy",
+    "ftoutln.outline_done",
+    "ftoutln.outline_new",
     "ftoutln.outline_reverse",
     "ftoutln.outline_transform",
     "ftoutln.outline_translate",
@@ -1145,6 +1155,17 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     ):
         return (
             "FT_Outline_Check invalid-case matrix needs exact per-scenario error-output "
+            "support; the current exact-error guard requires a top-level C error"
+        )
+    if row.case_id in {
+        "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
+        "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors",
+        "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
+        "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
+        "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
+    }:
+        return (
+            "FT_Outline invalid-case matrix needs exact per-scenario error-output "
             "support; the current exact-error guard requires a top-level C error"
         )
     if (

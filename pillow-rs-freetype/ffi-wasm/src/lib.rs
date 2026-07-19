@@ -3,7 +3,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
-use std::alloc::{Layout, alloc, dealloc};
+use std::alloc::{Layout, alloc, alloc_zeroed, dealloc};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{c_uchar, c_void};
@@ -642,6 +642,28 @@ pub extern "C" fn fontdone_wasm_free(ptr: *mut c_void, size: usize) {
     unsafe { dealloc(ptr.cast::<u8>(), layout) };
 }
 
+fn wasm_alloc_zeroed_array<T>(count: usize) -> *mut u8 {
+    if count == 0 {
+        return ptr::null_mut();
+    }
+    let Ok(layout) = Layout::array::<T>(count) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: `layout` describes a non-zero array allocation.
+    unsafe { alloc_zeroed(layout) }
+}
+
+fn wasm_dealloc_array<T>(ptr: *mut u8, count: usize) {
+    if ptr.is_null() || count == 0 {
+        return;
+    }
+    let Ok(layout) = Layout::array::<T>(count) else {
+        return;
+    };
+    // SAFETY: outline lifecycle allocations in this module use the same layout.
+    unsafe { dealloc(ptr, layout) };
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_open_face(
     file_base: *const c_uchar,
@@ -1054,6 +1076,124 @@ pub extern "C" fn fontdone_wasm_outline_check(outline: *const FontdoneWasmOutlin
         return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
     };
     rust_ffi::FT_Outline_Check(Some(&snapshot))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_copy(
+    source: *const FontdoneWasmOutline,
+    target: *mut FontdoneWasmOutline,
+) -> FT_Error {
+    if source == target.cast_const() && !source.is_null() {
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(source_snapshot) = outline_snapshot_from_wasm(source) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let Some(mut target_snapshot) = outline_snapshot_from_wasm(target) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_Copy(Some(&source_snapshot), Some(&mut target_snapshot));
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_wasm(target, &target_snapshot, true);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_embolden(
+    outline: *mut FontdoneWasmOutline,
+    strength: FT_Long,
+) -> FT_Error {
+    let Some(mut snapshot) = outline_snapshot_from_wasm(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_Embolden(Some(&mut snapshot), strength);
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_wasm(outline, &snapshot, false);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_embolden_xy(
+    outline: *mut FontdoneWasmOutline,
+    xstrength: FT_Long,
+    ystrength: FT_Long,
+) -> FT_Error {
+    let Some(mut snapshot) = outline_snapshot_from_wasm(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_EmboldenXY(Some(&mut snapshot), xstrength, ystrength);
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_wasm(outline, &snapshot, false);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_new(
+    library_handle: usize,
+    num_points: FT_UInt,
+    num_contours: FT_Int,
+    outline: *mut FontdoneWasmOutline,
+) -> FT_Error {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(outline) = (unsafe { outline.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if num_points > u32::from(u16::MAX) {
+        return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
+    }
+    if num_contours < 0
+        || u32::try_from(num_contours).map_or(true, |contours| contours > num_points)
+    {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let point_count = usize::try_from(num_points).unwrap_or(usize::MAX);
+    let contour_count = usize::try_from(num_contours).unwrap_or(usize::MAX);
+    let points: *mut FontdoneWasmVector =
+        wasm_alloc_zeroed_array::<FontdoneWasmVector>(point_count).cast();
+    let tags: *mut FT_Byte = wasm_alloc_zeroed_array::<FT_Byte>(point_count).cast();
+    let contours: *mut FT_UShort = wasm_alloc_zeroed_array::<FT_UShort>(contour_count).cast();
+    if (point_count > 0 && (points.is_null() || tags.is_null()))
+        || (contour_count > 0 && contours.is_null())
+    {
+        wasm_dealloc_array::<FontdoneWasmVector>(points.cast(), point_count);
+        wasm_dealloc_array::<FT_Byte>(tags.cast(), point_count);
+        wasm_dealloc_array::<FT_UShort>(contours.cast(), contour_count);
+        return rust_ffi::FT_Err_Out_Of_Memory;
+    }
+    *outline = FontdoneWasmOutline {
+        n_contours: FT_UShort::try_from(num_contours).unwrap_or(FT_UShort::MAX),
+        n_points: FT_UShort::try_from(num_points).unwrap_or(FT_UShort::MAX),
+        points,
+        tags,
+        contours,
+        flags: rust_ffi::FT_OUTLINE_OWNER as FT_Int,
+    };
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_done(
+    library_handle: usize,
+    outline: *mut FontdoneWasmOutline,
+) -> FT_Error {
+    if library_handle == 0 {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(outline) = (unsafe { outline.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    if outline.flags & rust_ffi::FT_OUTLINE_OWNER as FT_Int != 0 {
+        wasm_dealloc_array::<FontdoneWasmVector>(outline.points.cast(), usize::from(outline.n_points));
+        wasm_dealloc_array::<FT_Byte>(outline.tags.cast(), usize::from(outline.n_points));
+        wasm_dealloc_array::<FT_UShort>(outline.contours.cast(), usize::from(outline.n_contours));
+    }
+    *outline = FontdoneWasmOutline::default();
+    rust_ffi::FT_Err_Ok
 }
 
 #[unsafe(no_mangle)]
