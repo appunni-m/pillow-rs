@@ -2039,9 +2039,9 @@ Previous blocker:
   `generic-error-fallback`.
 - Nine rows passed exact comparison after promotion. One row,
   `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output`, failed exact
-  promotion because the pinned C oracle returned `Ok`, while exact-error
-  classification would require an error; it remains visible as fallback until
-  the bbox output-value contract is handled correctly.
+  promotion in this older batch because the then-current runner returned `Ok`.
+  This was later resolved by re-running the maintained bbox route and promoting
+  the row only after exact Rust FFI, thin C ABI, and WASM ABI comparison passed.
 - The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
   WASM ABI, but fallback classification only proved that a broad fallback path
   ran.
@@ -2066,8 +2066,9 @@ Verified progress:
 
 - Focused generic-mode probes passed for all ten rows before promotion.
 - Exact comparison after promotion passed for nine rows.
-- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` was not promoted:
-  exact rerun reported `requires an exact C error, but the oracle returned ok`.
+- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` was not promoted
+  in this older batch; superseded by the later direct bbox null exact-error
+  issue set.
 - The previously fallback-classified rows now validate exact status/output
   against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
 - No runtime Rust behavior change was needed for these rows.
@@ -6332,29 +6333,36 @@ Verified command:
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Face.error_null_library_args_or_aface
 ```
 
-### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
+### Issue Set BE: `FT_Outline_Get_BBox` null probe route
 
-Current blocker:
+Previous blocker:
 
 - `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` is a valid public
-  `FT_Outline_Get_BBox` null-input fixture, but current maintained runtime
-  runners for `ftbbox.outline_get_bbox` observe a loaded glyph slot's stored
+  `FT_Outline_Get_BBox` null-input fixture, but older maintained runtime
+  runners for `ftbbox.outline_get_bbox` observed a loaded glyph slot's stored
   `outline_bbox` instead of invoking a public Rust FFI / thin C ABI / WASM ABI
   `FT_Outline_Get_BBox` endpoint.
-- Exact-error gating was tested and correctly rejected classification: the
-  pinned oracle path returned success for the normal glyph-outline route rather
-  than executing the fixture's `null_outline` / `null_abbox` probes.
+- Exact-error gating was previously tested and correctly rejected
+  classification: the pinned oracle path returned success for the normal
+  glyph-outline route rather than executing the fixture's `null_outline` /
+  `null_abbox` probes.
 
 Plan:
 
-1. Do not classify this row as real parity until the harness calls an actual
-   `FT_Outline_Get_BBox` endpoint for pinned C, Rust FFI, C ABI, and WASM ABI.
-2. Implement the real public endpoint, not a null-only shortcut.
-3. Reuse the `FT_Outline_Get_CBox` null-input runner structure where possible,
-   but preserve `FT_Outline_Get_BBox`'s distinct return/error behavior from
-   FreeType `src/base/ftbbox.c:474-486`.
-4. Re-enable exact-error gating only after focused same-input comparison
-   passes.
+1. Keep the fixture row intact.
+2. Require exact error status/output comparison only after focused same-input
+   comparison passes.
+3. Add a route-audit reason specific to the public
+   `FT_Outline_Get_BBox` null-outline/output contract.
+
+Verified progress:
+
+- Focused exact parity passes:
+  `runtime_parity: passed=1 failed=0 total=1`.
+- The route audit now classifies
+  `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` as `real-parity`.
+- Route audit moved `real-parity` `4204 -> 4205` and
+  `generic-error-fallback` `34 -> 33`.
 
 Verified commands:
 
@@ -6362,7 +6370,77 @@ Verified commands:
 make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output
 ```
 
-### Issue Set BF: WinFNT header charset rows are not exact parity yet
+### Issue Set BF: rejected 10+ route-only batches
+
+Current blocker:
+
+- `ftlist.list_add`, `ftlist.list_find`, and `ftlist.list_finalize` rows passed
+  through the unified runtime harness but stayed classified as
+  `generic-fallback` because the route audit had no explicit maintained-route
+  classification for these public operations.
+- Promoting those operations proved this was not a safe route-classification
+  gap: the exact public C oracle route returned error `7` for all 11 rows.
+
+Rejected adjacent batches:
+
+- An 11-row `ftlist.list_add` / `ftlist.list_find` / `ftlist.list_finalize`
+  route probe was attempted and rejected. Before promotion, focused generic
+  fallback probes passed `3/3`, `4/4`, and `4/4`; after adding the operations
+  to `REAL_PARITY_OPERATIONS`, focused exact route probes failed `3/3`, `4/4`,
+  and `4/4` with oracle error `7`.
+- A 26-row generated `load_glyph` exact-error probe was attempted and rejected.
+  Focused `make -C pillow-rs-freetype test-op OP=load_glyph` failed
+  `runtime_parity: passed=561 failed=26 total=587` after temporarily requiring
+  exact error output.
+- Most rows still reached an oracle `Ok` path instead of the fixture-declared
+  error. One row,
+  `fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error`,
+  returned mismatched public errors (`oracle=8`, Rust FFI `=7`).
+- Those generated `load_glyph` rows remain real blockers and must not be
+  promoted until their fixture assets/glyph selectors reach the intended C
+  error path and Rust matches the same error.
+- A 50-row `ftcolor.get_paint_graph` / `ftcolor.traverse_paint_graph` /
+  `FT_TrueTypeGX_Validate` route probe was also rejected after
+  `test-ffi-compat` moved the rows to `pending-route`, not `real-parity`.
+  Focused runtime probes passed, but the audit correctly identified missing
+  or `required_future_asset` inputs for the declared public rows.
+- A 14-row driver/module route probe was attempted and rejected:
+  `ftmodapi.add_module`, `ftmodapi.set_default_properties`,
+  `ftdriver.glyph_to_script_map`, and `ftdriver.property_set_get` moved through
+  the route audit, but focused exact probes failed with oracle error `7` for
+  the success rows. The operation-level routes are not maintained enough for
+  full promotion.
+
+Do not promote yet:
+
+- `ftlist.list_add`
+- `ftlist.list_find`
+- `ftlist.list_finalize`
+- `ftcolor.get_paint_graph`
+- `ftcolor.traverse_paint_graph`
+- `FT_TrueTypeGX_Validate`
+- `ftmodapi.add_module`
+- `ftmodapi.set_default_properties`
+- `ftdriver.glyph_to_script_map`
+- `ftdriver.property_set_get`
+
+Rejected commands:
+
+```bash
+make -C pillow-rs-freetype test-op OP=load_glyph
+make -C pillow-rs-freetype test-op OP=ftlist.list_add
+make -C pillow-rs-freetype test-op OP=ftlist.list_find
+make -C pillow-rs-freetype test-op OP=ftlist.list_finalize
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint_graph
+make -C pillow-rs-freetype test-op OP=ftcolor.traverse_paint_graph
+make -C pillow-rs-freetype test-op OP=FT_TrueTypeGX_Validate
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_module
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_default_properties
+make -C pillow-rs-freetype test-op OP=ftdriver.glyph_to_script_map
+make -C pillow-rs-freetype test-op OP=ftdriver.property_set_get
+```
+
+### Issue Set BG: WinFNT header charset rows are not exact parity yet
 
 Current blocker:
 
@@ -6588,9 +6666,9 @@ Promoted row:
 
 Rejected rows from this probe batch:
 
-- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` — oracle still
-  loads a normal glyph and returns successful bbox output; the direct
-  `FT_Outline_Get_BBox` null-input ABI surface is not routed yet.
+- `ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output` — superseded by the
+  later direct bbox null exact-error issue set; the maintained route now
+  validates exact pinned C, Rust FFI, thin C ABI, and WASM ABI behavior.
 - `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`
   — current fixture routes to `{"error": 0}` on this build, not the declared
   exact unimplemented-feature error.
