@@ -16974,6 +16974,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
                 && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
             {
+                ensure_malformed_glyph_facade(case)?;
                 return rust_glyph_to_bitmap_invalid_inputs();
             }
             let face = open_face(case)?;
@@ -17718,6 +17719,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
                 && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
             {
+                ensure_malformed_glyph_facade(case)?;
                 return c_glyph_to_bitmap_invalid_inputs();
             }
             let (library, face) = c_open_face(case)?;
@@ -18369,6 +18371,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
                 && glyph_to_bitmap_invalid_inputs_supported(&case.inputs.params)
             {
+                ensure_malformed_glyph_facade(case)?;
                 return wasm_glyph_to_bitmap_invalid_inputs();
             }
             let handle = wasm_open_face(case)?;
@@ -20718,6 +20721,67 @@ fn glyph_to_bitmap_invalid_inputs_supported(params: &Value) -> bool {
             .get("no_prepare_hook")
             .and_then(Value::as_bool)
             .unwrap_or(false)
+}
+
+fn ensure_malformed_glyph_facade(case: &InputCase) -> Result<(), String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("malformed_facade")
+        .ok_or_else(|| format!("{} missing malformed_facade asset", case.case_id))?;
+    let path = asset_file_path(asset)
+        .ok_or_else(|| format!("{} malformed_facade asset is unresolved", case.case_id))?;
+    let facade_path = fixture_dir().join(path);
+    let text = fs::read_to_string(&facade_path).map_err(|err| {
+        format!(
+            "{} failed to read malformed glyph facade {}: {err}",
+            case.case_id,
+            facade_path.display()
+        )
+    })?;
+    let value: Value = serde_json::from_str(&text).map_err(|err| {
+        format!(
+            "{} failed to parse malformed glyph facade {}: {err}",
+            case.case_id,
+            facade_path.display()
+        )
+    })?;
+    if value.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err(format!(
+            "{} malformed glyph facade must declare version 1",
+            case.case_id
+        ));
+    }
+    if value.get("subject").and_then(Value::as_str)
+        != Some("ftglyph-malformed-slot-and-class-facade")
+    {
+        return Err(format!(
+            "{} malformed glyph facade has unexpected subject",
+            case.case_id
+        ));
+    }
+    let Some(cases) = value.get("cases").and_then(Value::as_array) else {
+        return Err(format!(
+            "{} malformed glyph facade must contain cases",
+            case.case_id
+        ));
+    };
+    let Some(entry) = cases
+        .iter()
+        .find(|entry| entry.get("case_id").and_then(Value::as_str) == Some(case.case_id.as_str()))
+    else {
+        return Err(format!(
+            "{} is not described by malformed glyph facade {}",
+            case.case_id, path
+        ));
+    };
+    if entry.get("status").and_then(Value::as_str) != Some("routed") {
+        return Err(format!(
+            "{} malformed glyph facade row is not marked routed",
+            case.case_id
+        ));
+    }
+    Ok(())
 }
 
 fn glyph_to_bitmap_error_row(probe: &str, error: FT_Error, caller_handle_class: &str) -> Value {

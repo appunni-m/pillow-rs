@@ -1,5 +1,64 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Glyph_To_Bitmap` malformed invalid-argument route
+
+Status: one malformed glyph facade row promoted to real parity on 2026-07-20
+for the pinned FreeType 2.14.3 early invalid-argument behavior in
+`src/base/ftglyph.c`.
+
+Implemented real parity row:
+
+- `ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format`
+
+Finding:
+
+- The Rust, C ABI, WASM ABI, and pinned C oracle runners already had exact
+  invalid-input probes for:
+  - null `FT_Glyph*` argument;
+  - non-null `FT_Glyph*` pointing to a null glyph;
+  - glyph record with null `library`;
+  - glyph record with null `clazz`;
+  - glyph class without a prepare hook.
+- The row still stayed `pending-route` because it referenced the missing
+  shared malformed glyph facade
+  `facades/glyph/malformed-slot-and-class-cases.json`.
+- The new facade marks this exact invalid-input row as routed and explicitly
+  marks the other malformed glyph rows as `pending-route`. The harness validates
+  that the routed row is present in the facade before running the Rust, C ABI,
+  and WASM invalid-input comparisons.
+
+C behavior verified:
+
+- `FT_Glyph_To_Bitmap` returns exact public `FT_Error` values for each early
+  invalid-argument path and preserves the caller glyph-handle class according
+  to the pinned C behavior before bitmap allocation.
+
+Impact:
+
+- `real-parity`: `4430 -> 4431`
+- `pending-route`: `561 -> 560`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Remaining malformed glyph blockers:
+
+- `ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload`
+- `ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range`
+- `ftglyph.FT_GlyphRec.clazz_is_private_identity_only`
+- `ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original`
+
+These remain pending until maintained synthetic slot, class-hook, cleanup, and
+renderer-failure routes exist across Rust, C ABI, WASM, and pinned C.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=FT_Glyph_To_Bitmap
+make -C pillow-rs-freetype test-case CASE=FT_Get_Glyph
+make -C pillow-rs-freetype test-case CASE=FT_GlyphRec
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_List_Insert/Remove/Up` topology facade route
 
 Status: implemented as real parity on 2026-07-20 for the pinned FreeType
