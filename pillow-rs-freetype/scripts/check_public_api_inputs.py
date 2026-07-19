@@ -825,6 +825,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
+        "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
+        "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
+        "ftotval.FT_OpenType_Validate.service_missing_error",
+        "ftotval.FT_OpenType_Validate.malformed_table_error",
+        "ftotval.FT_VALIDATE_GDEF.malformed_table_error",
+        "ftotval.FT_VALIDATE_GPOS.malformed_table_error",
+        "ftotval.FT_VALIDATE_GSUB.malformed_table_error",
+        "ftotval.FT_VALIDATE_JSTF.absent_or_malformed_table",
+        "ftotval.FT_VALIDATE_MATH.absent_or_malformed_table",
+        "ftotval.FT_VALIDATE_OT.partial_failure_cleanup_contract",
         "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument",
         "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors",
         "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors",
@@ -1315,6 +1325,57 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs"
     ):
         return "FT_Get_CID_Registry_Ordering_Supplement non-CID/null-output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.truetype_gx_validate"
+        and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
+    ):
+        return "FT_TrueTypeGX_Validate invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgxval.truetype_gx_validate"
+        and row.case_id
+        == "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table"
+    ):
+        return "FT_TrueTypeGX_Validate unimplemented/invalid-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_OpenType_Validate.service_missing_error"
+    ):
+        return "FT_OpenType_Validate missing-service errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_OpenType_Validate.malformed_table_error"
+    ):
+        return "FT_OpenType_Validate malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_GDEF.malformed_table_error"
+    ):
+        return "FT_VALIDATE_GDEF malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_GPOS.malformed_table_error"
+    ):
+        return "FT_VALIDATE_GPOS malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_GSUB.malformed_table_error"
+    ):
+        return "FT_VALIDATE_GSUB malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_JSTF.absent_or_malformed_table"
+    ):
+        return "FT_VALIDATE_JSTF absent/malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_MATH.absent_or_malformed_table"
+    ):
+        return "FT_VALIDATE_MATH absent/malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftotval.open_type_validate"
+        and row.case_id == "ftotval.FT_VALIDATE_OT.partial_failure_cleanup_contract"
+    ):
+        return "FT_VALIDATE_OT partial-failure cleanup validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftstroke.begin_subpath"
         and row.case_id == "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments"
