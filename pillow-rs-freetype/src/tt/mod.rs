@@ -10,6 +10,7 @@ pub mod cmap;
 pub mod fvar;
 pub mod gasp;
 pub mod glyf;
+pub mod gvar;
 pub mod hdmx;
 pub mod head;
 pub mod hhea;

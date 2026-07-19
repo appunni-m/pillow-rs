@@ -12,6 +12,7 @@ use crate::tt::cff::CffTable;
 use crate::tt::cmap::CmapTable;
 use crate::tt::fvar::FvarTable;
 use crate::tt::gasp::GaspTable;
+use crate::tt::gvar::GvarTable;
 use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
 use crate::tt::hhea::HheaTable;
@@ -35,6 +36,8 @@ pub struct FontData {
     pub table_directory: crate::tt::TableDirectory,
     pub cmap: CmapTable,
     pub fvar: Option<FvarTable>,
+    pub gvar: Option<GvarTable>,
+    pub normalized_variation_coords: Vec<i16>,
     pub gasp: Option<GaspTable>,
     pub head: HeadTable,
     pub hhea: HheaTable,
@@ -103,16 +106,42 @@ impl FontData {
                 .insert(glyph_index, Rc::clone(&outline));
             return Ok(outline);
         }
-        let outline = Rc::new(crate::tt::glyf::load_glyph(
+        let outline = crate::tt::glyf::load_glyph(
             &self.glyf_data,
             &self.loca_data,
             self.head.index_to_loc_format,
             glyph_index,
             &self.hmtx,
-        )?);
+        )?;
+        let outline = Rc::new(self.apply_gvar_deltas(glyph_index, &outline)?);
         self.glyph_cache
             .borrow_mut()
             .insert(glyph_index, Rc::clone(&outline));
         Ok(outline)
+    }
+
+    fn apply_gvar_deltas(
+        &self,
+        glyph_index: u16,
+        outline: &crate::tt::glyf::GlyphOutline,
+    ) -> Result<crate::tt::glyf::GlyphOutline, crate::error::FontError> {
+        let Some(gvar) = &self.gvar else {
+            return Ok(outline.clone());
+        };
+        if self.normalized_variation_coords.is_empty() {
+            return Ok(outline.clone());
+        }
+        let point_count_with_phantoms = outline.points.len() + 4;
+        let Some(deltas) = gvar.glyph_deltas(
+            glyph_index,
+            point_count_with_phantoms,
+            &self.normalized_variation_coords,
+        )?
+        else {
+            return Ok(outline.clone());
+        };
+        let mut varied = outline.clone();
+        crate::tt::gvar::apply_deltas_to_outline(&mut varied, &deltas);
+        Ok(varied)
     }
 }
