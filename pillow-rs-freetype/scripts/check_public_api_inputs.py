@@ -1355,6 +1355,34 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for incremental font callbacks that do not have a maintained route."""
+    ftincrem_rows_without_maintained_route = {
+        "ftincrem.FT_Incremental.handle_passed_without_deref",
+        "ftincrem.FT_Incremental.lifetime_owned_by_client",
+        "ftincrem.FT_Incremental_FuncsRec.required_and_optional_callbacks",
+        "ftincrem.FT_Incremental_FuncsRec.glyph_data_success_and_release",
+        "ftincrem.FT_Incremental_Interface.parameter_data_cast_shape",
+        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior",
+        "ftincrem.FT_Incremental_InterfaceRec.open_face_stores_interface",
+        "ftincrem.FT_Incremental_InterfaceRec.object_round_trips_to_callbacks",
+        "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data",
+        "ftincrem.FT_Incremental_Metrics.null_not_passed_by_c",
+        "ftincrem.FT_Incremental_MetricsRec.input_metrics_seed_matches_c",
+        "ftincrem.FT_Incremental_MetricsRec.horizontal_override_applied",
+        "ftincrem.FT_Incremental_MetricsRec.vertical_override_applied_where_c_calls_it",
+    }
+    if row.case_id not in ftincrem_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Incremental font interface, callback lifetime, glyph-data release, "
+        "and metrics override behavior requires a maintained incremental-font "
+        "route; keeping it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3690,6 +3718,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftdriver_pending = ftdriver_subsystem_pending_reason(row)
     if ftdriver_pending:
         return ("pending-route", ftdriver_pending)
+    ftincrem_pending = ftincrem_subsystem_pending_reason(row)
+    if ftincrem_pending:
+        return ("pending-route", ftincrem_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
