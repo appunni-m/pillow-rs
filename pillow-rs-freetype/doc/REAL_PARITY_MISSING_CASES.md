@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Library_SetLcdGeometry` exact-error route
+Current verified result after `FT_Library_SetLcdFilter` exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3818`
+  - `real-parity`: `3824`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `377`
+  - `generic-error-fallback`: `371`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3198,6 +3198,51 @@ Verified commands:
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdGeometry.error_null_library
 make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdGeometry.error_null_geometry
+```
+
+### Issue Set BW: `FT_Library_SetLcdFilter` exact-error routes
+
+Previous blocker:
+
+- The enabled-branch `FT_Library_SetLcdFilter` error rows stayed in
+  `generic-error-fallback`.
+- The fixtures require exact behavior from `freetype/src/base/ftlcdfil.c`, but
+  the harness still accepted these rows as generic expected-error rows instead
+  of enforcing exact error output and unchanged-weight observation where
+  applicable.
+
+Plan:
+
+1. Keep the fixtures intact; they exercise public `FT_Library_SetLcdFilter`
+   behavior for null libraries and rejected filter values.
+2. Require exact error comparison for the focused enabled-branch case IDs.
+3. Classify each row as real parity only after focused same-input parity
+   passes through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+4. Leave the build-dependent
+   `ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering`
+   row outside this promotion until it is separately proven.
+
+Verified progress:
+
+- The six focused `FT_Library_SetLcdFilter` rejection rows pass exact
+  comparison against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `ftlcdfil.FT_Library_SetLcdFilter.error_null_library`
+  - `ftlcdfil.FT_Library_SetLcdFilter.error_invalid_filter`
+  - `ftlcdfil.FT_LcdFilter.rejected_filter_values`
+  - `ftlcdfil.FT_LCD_FILTER_LEGACY.rejected_by_set_lcd_filter`
+  - `ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter`
+  - `ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdFilter.error_null_library
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_Library_SetLcdFilter.error_invalid_filter
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_LcdFilter.rejected_filter_values
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_LCD_FILTER_LEGACY.rejected_by_set_lcd_filter
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter
+make -C pillow-rs-freetype test-case CASE=ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
