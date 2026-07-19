@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Add_Module` future-required-version
-exact-error route classification:
+Current verified result after `FT_Add_Module` duplicate-name/version route
+classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3800`
+  - `real-parity`: `3801`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `393`
+  - `generic-error-fallback`: `392`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2870,6 +2870,42 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.rejects_future_required_version
+```
+
+### Issue Set BN: `FT_Add_Module` duplicate-name/version exact route
+
+Previous blocker:
+
+- `ftmodapi.FT_Add_Module.duplicate_name_version_rules` stayed in
+  `generic-error-fallback`.
+- The fixture is marked `expect_error=true` because the call sequence includes
+  an intentional lower-version duplicate error, but the declared expectation is
+  `status: ok` with exact comparison of the full status sequence, module count,
+  destructor calls, and installed version.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the route audit still treated the row as a
+  generic expected-error fallback.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_Add_Module` duplicate
+   module-name/version replacement rules.
+2. Keep the exact comparison over `status_sequence`, `module_count`,
+   `destructor_calls`, and `installed_version`.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused duplicate-name/version row passes exact comparison against pinned
+  C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_Add_Module.duplicate_name_version_rules` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.duplicate_name_version_rules
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
