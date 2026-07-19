@@ -337,6 +337,25 @@ typedef struct TT_OS2_ {
   FT_UShort usUpperOpticalPointSize;
 } TT_OS2;
 
+typedef struct TT_VertHeader_ {
+  FT_Fixed Version;
+  FT_Short Ascender;
+  FT_Short Descender;
+  FT_Short Line_Gap;
+  FT_UShort advance_Height_Max;
+  FT_Short min_Top_Side_Bearing;
+  FT_Short min_Bottom_Side_Bearing;
+  FT_Short yMax_Extent;
+  FT_Short caret_Slope_Rise;
+  FT_Short caret_Slope_Run;
+  FT_Short caret_Offset;
+  FT_Short Reserved[4];
+  FT_Short metric_Data_Format;
+  FT_UShort number_Of_VMetrics;
+  void* long_metrics;
+  void* short_metrics;
+} TT_VertHeader;
+
 struct FT_GlyphSlotRec_ {
   FT_UInt glyph_index;
   FT_Glyph_Metrics metrics;
@@ -450,6 +469,7 @@ const char* FT_Get_Postscript_Name(FT_Face face);
 const char* FT_Get_Font_Format(FT_Face face);
 const char* FT_Get_X11_Font_Format(FT_Face face);
 FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index);
+FT_Error FT_Set_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
 FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
 FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);

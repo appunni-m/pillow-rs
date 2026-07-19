@@ -9026,6 +9026,61 @@ fn rust_sfnt_get_table_mvar_vhea_sequence_output(face: &mut FT_Face) -> Result<R
     })))
 }
 
+fn c_sfnt_get_table_mvar_vhea_sequence_output(face: c_abi::FT_Face) -> Result<RunOutput, String> {
+    let default_ptr = c_abi::FT_Get_Sfnt_Table(face, FT_SFNT_VHEA as c_abi::FT_Sfnt_Tag);
+    let default_record = c_tt_vert_header_record_json(c_abi::abi_sfnt_vhea(face));
+    let coords = mvar_vhea_changed_design_coords_16_16().map(|coord| coord as c_abi::FT_Fixed);
+    let set_status =
+        c_abi::FT_Set_Var_Design_Coordinates(face, coords.len() as c_abi::FT_UInt, coords.as_ptr());
+    let changed_ptr = c_abi::FT_Get_Sfnt_Table(face, FT_SFNT_VHEA as c_abi::FT_Sfnt_Tag);
+    let changed_record = c_tt_vert_header_record_json(c_abi::abi_sfnt_vhea(face));
+    Ok(ok(json!({
+        "default": {
+            "face_load_status": 0,
+            "pointer_null": default_ptr.is_null(),
+            "record": default_record,
+        },
+        "changed": {
+            "set_var_status": set_status,
+            "pointer_null": changed_ptr.is_null(),
+            "record": changed_record,
+        }
+    })))
+}
+
+fn wasm_sfnt_get_table_mvar_vhea_sequence_output(handle: usize) -> Result<RunOutput, String> {
+    let mut default_record = wasm_abi::FontdoneWasmVertHeader::default();
+    let default_status = wasm_abi::fontdone_wasm_get_sfnt_vhea(
+        handle,
+        FT_SFNT_VHEA as wasm_abi::FT_Sfnt_Tag,
+        &mut default_record,
+    );
+    let coords = mvar_vhea_changed_design_coords_16_16().map(|coord| coord as wasm_abi::FT_Fixed);
+    let set_status = wasm_abi::fontdone_wasm_set_var_design_coordinates(
+        handle,
+        coords.len() as wasm_abi::FT_UInt,
+        coords.as_ptr(),
+    );
+    let mut changed_record = wasm_abi::FontdoneWasmVertHeader::default();
+    let changed_status = wasm_abi::fontdone_wasm_get_sfnt_vhea(
+        handle,
+        FT_SFNT_VHEA as wasm_abi::FT_Sfnt_Tag,
+        &mut changed_record,
+    );
+    Ok(ok(json!({
+        "default": {
+            "face_load_status": 0,
+            "pointer_null": default_status != FT_Err_Ok,
+            "record": if default_status == FT_Err_Ok { wasm_tt_vert_header_record_json(default_record) } else { Value::Null },
+        },
+        "changed": {
+            "set_var_status": set_status,
+            "pointer_null": changed_status != FT_Err_Ok,
+            "record": if changed_status == FT_Err_Ok { wasm_tt_vert_header_record_json(changed_record) } else { Value::Null },
+        }
+    })))
+}
+
 fn mvar_vhea_changed_design_coords_16_16() -> [FT_Fixed; 2] {
     [100 * 65_536, 800 * 65_536]
 }
@@ -9034,6 +9089,55 @@ fn tt_vert_header_record_json(record: Option<TT_VertHeader>) -> Value {
     let Some(record) = record else {
         return Value::Null;
     };
+    json!({
+        "Version": record.Version,
+        "Ascender": record.Ascender,
+        "Descender": record.Descender,
+        "Line_Gap": record.Line_Gap,
+        "advance_Height_Max": record.advance_Height_Max,
+        "min_Top_Side_Bearing": record.min_Top_Side_Bearing,
+        "min_Bottom_Side_Bearing": record.min_Bottom_Side_Bearing,
+        "yMax_Extent": record.yMax_Extent,
+        "caret_Slope_Rise": record.caret_Slope_Rise,
+        "caret_Slope_Run": record.caret_Slope_Run,
+        "caret_Offset": record.caret_Offset,
+        "Reserved": record.Reserved,
+        "metric_Data_Format": record.metric_Data_Format,
+        "number_Of_VMetrics": record.number_Of_VMetrics,
+        "long_metrics_nullness": record.long_metrics.is_null(),
+        "short_metrics_nullness": record.short_metrics.is_null(),
+        "long_metrics_identity_class": if record.long_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+        "short_metrics_identity_class": if record.short_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+    })
+}
+
+fn c_tt_vert_header_record_json(record: Option<c_abi::TT_VertHeader>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "Version": record.Version,
+        "Ascender": record.Ascender,
+        "Descender": record.Descender,
+        "Line_Gap": record.Line_Gap,
+        "advance_Height_Max": record.advance_Height_Max,
+        "min_Top_Side_Bearing": record.min_Top_Side_Bearing,
+        "min_Bottom_Side_Bearing": record.min_Bottom_Side_Bearing,
+        "yMax_Extent": record.yMax_Extent,
+        "caret_Slope_Rise": record.caret_Slope_Rise,
+        "caret_Slope_Run": record.caret_Slope_Run,
+        "caret_Offset": record.caret_Offset,
+        "Reserved": record.Reserved,
+        "metric_Data_Format": record.metric_Data_Format,
+        "number_Of_VMetrics": record.number_Of_VMetrics,
+        "long_metrics_nullness": record.long_metrics.is_null(),
+        "short_metrics_nullness": record.short_metrics.is_null(),
+        "long_metrics_identity_class": if record.long_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+        "short_metrics_identity_class": if record.short_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+    })
+}
+
+fn wasm_tt_vert_header_record_json(record: wasm_abi::FontdoneWasmVertHeader) -> Value {
     json!({
         "Version": record.Version,
         "Ascender": record.Ascender,
@@ -16318,6 +16422,16 @@ fn catch_font_error(err: String) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "sfnt.get_sfnt_table.record"
+            if case.case_id
+                == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
+        {
+            let (library, face) = c_open_face(case)?;
+            let output = c_sfnt_get_table_mvar_vhea_sequence_output(face);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftsizes.new_size" => c_new_size(case),
         "ftsizes.done_size" => c_done_size(case),
         "ftsizes.activate_size" => c_activate_size(case),
@@ -17019,6 +17133,15 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "sfnt.get_sfnt_table.record"
+            if case.case_id
+                == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
+        {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_sfnt_get_table_mvar_vhea_sequence_output(handle);
+            wasm_done_face(handle);
+            output
+        }
         "ftsizes.new_size" => wasm_new_size(case),
         "ftsizes.done_size" => wasm_done_size(case),
         "ftsizes.activate_size" => wasm_activate_size(case),

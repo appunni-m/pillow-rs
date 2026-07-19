@@ -9224,9 +9224,12 @@ Current verified ledger:
   changed `TT_VertHeader` record fields.
 - Route audit: `real-parity=4471`, `pending-core=1`, `pending-route=514`.
 - Full runtime parity: `6613/6613` runnable passed, `pending=621`.
-- Existing C ABI and WASM harness handling for `sfnt.get_sfnt_table*` still
-  delegates to the Rust FFI runner; this promotion does not add new
-  wrapper-specific SFNT table execution.
+- Follow-up wrapper verification adds thin C ABI and WASM ABI execution for the
+  same MVAR `TT_VertHeader` sequence: C exports
+  `FT_Set_Var_Design_Coordinates`, WASM exports
+  `fontdone_wasm_set_var_design_coordinates` and
+  `fontdone_wasm_get_sfnt_vhea`, and the unified harness no longer delegates
+  this row's C/WASM backend checks to Rust FFI.
 
 Remaining core row after this issue set:
 
@@ -9269,6 +9272,9 @@ Implemented fix:
 4. Added an exact C oracle route for the default/changed vertical header
    sequence and narrowed the static route audit so this row counts as real
    parity.
+5. Added thin C ABI and WASM ABI forwarding/record-copy paths for this row so
+   the wrapper backends also compare the default/changed `TT_VertHeader`
+   records exactly.
 
 Focused verification before promotion:
 
