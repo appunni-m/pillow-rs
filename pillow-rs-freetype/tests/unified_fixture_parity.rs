@@ -7442,6 +7442,11 @@ fn add_default_modules_action(case: &InputCase) -> Result<i32, String> {
         .contains("ftmodapi.FT_Add_Default_Modules.null_library_no_return_error")
     {
         Ok(1)
+    } else if case
+        .case_id
+        .contains("ftmodapi.FT_Add_Default_Modules.installs_default_module_table")
+    {
+        Ok(2)
     } else {
         Err(format!(
             "unsupported FT_Add_Default_Modules case {}",
@@ -7459,31 +7464,90 @@ fn add_default_modules_output() -> Value {
 }
 
 fn rust_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
-    let Ok(_action) = add_default_modules_action(case) else {
+    let Ok(action) = add_default_modules_action(case) else {
         return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
     };
-    FT_Add_Default_Modules(None);
-    Ok(ok(add_default_modules_output()))
+    if action == 1 {
+        FT_Add_Default_Modules(None);
+        return Ok(ok(add_default_modules_output()));
+    }
+    let mut library = FT_New_Library_Without_Default_Modules();
+    FT_Add_Default_Modules(Some(&mut library));
+    Ok(ok(add_default_modules_observation(
+        &case.inputs.params,
+        FT_Library_Default_Module_Names(Some(&library)),
+    )?))
 }
 
 fn c_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
-    let Ok(_action) = add_default_modules_action(case) else {
+    let Ok(action) = add_default_modules_action(case) else {
         return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
     };
-    c_abi::FT_Add_Default_Modules(std::ptr::null_mut());
-    Ok(ok(add_default_modules_output()))
+    if action == 1 {
+        c_abi::FT_Add_Default_Modules(std::ptr::null_mut());
+        return Ok(ok(add_default_modules_output()));
+    }
+    let library = c_abi::abi_support_new_library_without_default_modules();
+    c_abi::FT_Add_Default_Modules(library);
+    let output = add_default_modules_observation(
+        &case.inputs.params,
+        c_abi::abi_support_library_default_module_names(library),
+    )?;
+    c_done_library(library);
+    Ok(ok(output))
 }
 
 fn wasm_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
-    let Ok(_action) = add_default_modules_action(case) else {
+    let Ok(action) = add_default_modules_action(case) else {
         return Ok(error(FT_Err_Unimplemented_Feature as FT_Error));
     };
-    let crashed = wasm_abi::abi_support_add_default_modules(0);
-    Ok(ok(json!({
+    if action == 1 {
+        let crashed = wasm_abi::abi_support_add_default_modules(0);
+        return Ok(ok(json!({
+            "return": "void",
+            "crashed": crashed,
+            "observable_writes": "none"
+        })));
+    }
+    let (_crashed, module_names) = wasm_abi::abi_support_add_default_modules_observation(1);
+    Ok(ok(add_default_modules_observation(
+        &case.inputs.params,
+        module_names,
+    )?))
+}
+
+fn add_default_modules_observation(params: &Value, module_names: &[&str]) -> Result<Value, String> {
+    let probes = add_default_module_probe_names(params)?;
+    let module_names_in_order = module_names
+        .iter()
+        .copied()
+        .filter(|name| probes.iter().any(|probe| probe == name))
+        .collect::<Vec<_>>();
+    let mut lookup_results = serde_json::Map::new();
+    for probe in probes {
+        lookup_results.insert(probe.clone(), json!(module_names.contains(&probe.as_str())));
+    }
+    Ok(json!({
         "return": "void",
-        "crashed": crashed,
-        "observable_writes": "none"
-    })))
+        "module_names_in_order": module_names_in_order,
+        "lookup_results": lookup_results
+    }))
+}
+
+fn add_default_module_probe_names(params: &Value) -> Result<Vec<String>, String> {
+    array_param(params, "probe_names")?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| format!("probe name must be a string, got {value}"))
+        })
+        .collect()
+}
+
+fn add_default_module_probe_names_arg(params: &Value) -> Result<String, String> {
+    Ok(add_default_module_probe_names(params)?.join(","))
 }
 
 fn rust_done_freetype(case: &InputCase) -> Result<RunOutput, String> {
@@ -10470,13 +10534,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 Err(_) => return oracle_fallback_args(case),
             },
         ]),
-        "ftmodapi.add_default_modules" => Ok(vec![
-            "--add-default-modules".to_string(),
-            match add_default_modules_action(case) {
-                Ok(action) => action.to_string(),
+        "ftmodapi.add_default_modules" => {
+            let action = match add_default_modules_action(case) {
+                Ok(action) => action,
                 Err(_) => return oracle_fallback_args(case),
-            },
-        ]),
+            };
+            let mut args = vec!["--add-default-modules".to_string(), action.to_string()];
+            if action == 2 {
+                args.push(add_default_module_probe_names_arg(params)?);
+            }
+            Ok(args)
+        }
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);

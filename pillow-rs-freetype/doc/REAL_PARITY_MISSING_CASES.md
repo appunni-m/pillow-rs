@@ -31,9 +31,6 @@ Rejected future-asset probes:
   fallback classification. After exact promotion, the refreshed C oracle
   returned error `7` for the success rows, so they remain generic fallback
   until the stroker success route is fixed at the public endpoint.
-- `ftmodapi.FT_Add_Default_Modules.installs_default_module_table`: exact
-  promotion failed with C error `7`; keep fallback-classified until the
-  success route proves the default module table mutation through all ABI lanes.
 - `ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior`,
   `ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior`, and
   `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: exact
@@ -54,6 +51,7 @@ Promoted rows:
   2.14.3 returns `FT_Err_Invalid_Face_Handle` (`35`) for a null `alibrary`
   output pointer; the C ABI wrapper validates this pointer before creating the
   Rust library handle.
+- `ftmodapi.FT_Add_Default_Modules.installs_default_module_table`
 - `ftotval.FT_OpenType_Validate.selected_tables_success`
 - `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
 - `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
@@ -68,6 +66,7 @@ make -C pillow-rs-freetype test-op OP=ftstroke.line_to
 make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
 make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
 make -C pillow-rs-freetype test-op OP=freetype.init_free_type
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
 ```
 
 Results:
@@ -78,6 +77,8 @@ Results:
   existing asset-pending rows left visible.
 - `freetype.init_free_type`: `3 / 3` runnable rows passed after adding the
   explicit pinned-C, Rust FFI, C ABI, and WASM route.
+- `ftmodapi.add_default_modules`: `2 / 2` runnable rows passed after adding
+  the exact module-table mutation route.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
