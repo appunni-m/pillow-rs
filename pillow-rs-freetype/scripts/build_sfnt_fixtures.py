@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE_FONT = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "sfnt"
 GENERATED_OUT_DIR = ROOT / "tests" / "fixtures" / "generated" / "sfnt"
+MALFORMED_TTC_OUT_DIR = ROOT / "tests" / "fixtures" / "malformed" / "ttc"
 
 
 def save_font(name: str, font: TTFont) -> None:
@@ -30,6 +31,14 @@ def save_generated_font(name: str, font: TTFont) -> None:
     if out.exists() or out.is_symlink():
         out.unlink()
     font.save(out, reorderTables=True)
+
+
+def save_malformed_ttc(name: str, data: bytes) -> None:
+    MALFORMED_TTC_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = MALFORMED_TTC_OUT_DIR / name
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    out.write_bytes(data)
 
 
 def base_font() -> TTFont:
@@ -142,6 +151,16 @@ def write_missing_hmtx() -> None:
     save_generated_font("missing-hmtx.ttf", font)
 
 
+def write_ttc_count_overflow() -> None:
+    # FreeType 2.14.3 sfnt/sfobjs.c rejects this TTC header as
+    # FT_Err_Array_Too_Large because the declared face-count makes the offset
+    # array larger than the stream before any face directory is read.
+    save_malformed_ttc(
+        "count-overflows-offset-array.ttc",
+        b"ttcf" + (0x0001_0000).to_bytes(4, "big") + (0x4000_0000).to_bytes(4, "big"),
+    )
+
+
 def main() -> None:
     write_basic()
     write_basic_alias("pclt-missing.ttf")
@@ -152,6 +171,7 @@ def main() -> None:
     write_vertical_present()
     write_no_os2()
     write_missing_hmtx()
+    write_ttc_count_overflow()
 
 
 if __name__ == "__main__":

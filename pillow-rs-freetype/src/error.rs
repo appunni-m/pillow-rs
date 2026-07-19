@@ -16,6 +16,10 @@ pub enum FontError {
     #[error("Invalid font table: {0}")]
     InvalidTable(String),
 
+    /// A public FreeType-style array allocation request is too large.
+    #[error("Array allocation size too large")]
+    ArrayTooLarge,
+
     /// The rasterizer render pool overflowed (FreeType `Raster_Overflow`).
     #[error("Rasterizer buffer overflow")]
     RasterOverflow,
@@ -118,6 +122,12 @@ mod tests {
     fn invalid_table_displays_message() {
         let err = FontError::InvalidTable("bad CFF INDEX".into());
         assert_eq!(err.to_string(), "Invalid font table: bad CFF INDEX");
+    }
+
+    #[test]
+    fn array_too_large_has_static_message() {
+        let err = FontError::ArrayTooLarge;
+        assert_eq!(err.to_string(), "Array allocation size too large");
     }
 
     #[test]

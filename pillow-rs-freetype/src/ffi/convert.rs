@@ -198,6 +198,7 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         }
         FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,
         FontError::InvalidTable(_) => FT_Err_Invalid_Table,
+        FontError::ArrayTooLarge => FT_Err_Array_Too_Large as FT_Error,
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,

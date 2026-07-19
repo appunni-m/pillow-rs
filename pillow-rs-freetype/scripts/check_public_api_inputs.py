@@ -921,6 +921,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len",
         "ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count",
+        "fterrdef.FT_Err_Array_Too_Large.ttc_header_overflow_returns_error",
         "fterrdef.FT_Err_Bbx_Too_Big.bdf_bitmap_size_overflow_returns_error",
         "fterrdef.FT_Err_Corrupted_Font_Glyphs.bdf_glyph_parse_failure_returns_error",
         "fterrdef.FT_Err_Corrupted_Font_Header.bdf_header_parse_failure_returns_error",
@@ -1975,6 +1976,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         (
             "FT_Open_Face",
             "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c",
+        ),
+        (
+            "new_memory_face",
+            "fterrdef.FT_Err_Array_Too_Large.ttc_header_overflow_returns_error",
         ),
         (
             "new_memory_face",
