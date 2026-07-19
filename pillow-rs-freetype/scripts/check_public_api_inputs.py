@@ -962,6 +962,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
         "ftlcdfil.FT_Library_SetLcdFilterWeights.unimplemented_without_subpixel_filtering",
+        "ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering",
         "ftmm.FT_Get_Multi_Master.null_output_error",
         "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error",
         "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error",
@@ -2486,6 +2487,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftlcdfil.FT_Library_SetLcdGeometry.error_null_geometry"
     ):
         return "FT_Library_SetLcdGeometry null-geometry error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlcdfil.set_lcd_geometry"
+        and row.case_id
+        == "ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering"
+    ):
+        return "FT_Library_SetLcdGeometry unavailable-subpixel error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftlcdfil.set_lcd_filter"
         and row.case_id == "ftlcdfil.FT_Library_SetLcdFilter.error_null_library"
