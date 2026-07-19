@@ -39,8 +39,8 @@ Rejected future-asset probes:
   outline-bitmap dropout route is made public-exact.
 - `ftlist.FT_List_Iterate.iterates_all_nodes_success` and
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
-  failed with C error `7`; keep fallback-classified until the list success
-  runner calls the public list endpoint across C, Rust, C ABI, and WASM.
+  now passes through the public list endpoint across pinned C FreeType, Rust
+  FFI, thin C ABI, and WASM ABI.
 - `fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont` was
   rechecked in the current future-batch pass.  The pinned public
   `FT_New_Memory_Face` result for the BDF-like fixture is
@@ -107,6 +107,12 @@ Promoted rows:
   output for empty, one-node, and three-node lists. The proof records
   head-to-tail visited data tokens, user pointer identity, unchanged final
   topology, and FreeType's `next` snapshot step via the safe Rust helper.
+- `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: `1 / 1` callback
+  mutation row now compares exact pinned-C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI output. The proof records that FreeType snapshots `cur->next`
+  before invoking the iterator callback, so removing the current node, moving
+  it to the head, finding its data, or finalizing a side list inside the
+  callback does not change the main traversal order.
 
 Focused non-coverage proof before promotion:
 
@@ -145,7 +151,7 @@ Results:
 - `ftlist`: `29 / 29` focused runtime rows passed with `0` pending after
   promoting the ten `FT_List_Insert`, `FT_List_Remove`, and `FT_List_Up`
   topology rows, the four `FT_List_Finalize` callback/free rows, and the
-  `FT_List_Iterate` success traversal row.
+  two `FT_List_Iterate` traversal/mutation rows.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
@@ -153,10 +159,10 @@ Results:
 
 Latest route proof after the FT_List follow-up:
 
-- Route audit moved fifteen FT_List rows from `generic-fallback` to
-  `real-parity` across the topology, Finalize, and Iterate success follow-ups.
-- Current route audit after the change: `real-parity` `4333`,
-  `generic-fallback` `597`, `pending-route` `49`, `pending-core` `7`.
+- Route audit moved sixteen FT_List rows from `generic-fallback` to
+  `real-parity` across the topology, Finalize, and Iterate follow-ups.
+- Current route audit after the change: `real-parity` `4334`,
+  `generic-fallback` `596`, `pending-route` `49`, `pending-core` `7`.
 - Full refreshed parity remains green: `6802 / 6802` runnable rows passed with
   `432` pending. The global runnable total did not increase; these rows are
   now maintained exact routes instead of fallback-classified/pending focused
