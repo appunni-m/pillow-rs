@@ -50,6 +50,14 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `ftmm` multiple-master/variation success batch: `34 / 34` runtime-asset
+  rows promoted from `generic-fallback` to `real-parity`.  The promoted rows
+  are limited to existing runtime assets and existing exact routes; unresolved
+  future MM fixtures remain pending/generic.  Focused refreshed parity for the
+  `ftmm` filter passed `47 / 47` runnable rows, with `52` rows still pending
+  for unresolved MM runtime fonts.
+- Current route audit after this batch: `real-parity` `4398`,
+  `generic-fallback` `558`, `pending-route` `23`.
 - `fterrdef` load-glyph exact-error batch: `26 / 26` promoted from
   `pending-route` to `real-parity`.  These rows now execute refreshed pinned C
   FreeType, Rust FFI, thin C ABI, and WASM ABI exact-error comparisons instead

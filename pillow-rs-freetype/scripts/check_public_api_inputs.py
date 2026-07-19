@@ -62,6 +62,20 @@ FTERRDEF_EXACT_ERROR_BATCH = {
     ("load_glyph", "fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature"),
 }
 
+FTMM_SUCCESS_OPERATIONS = {
+    "ftmm.get_and_done_mm_var",
+    "ftmm.get_mm_var",
+    "ftmm.get_multi_master",
+    "ftmm.get_var_axis_flags",
+    "ftmm.get_var_blend_coordinates",
+    "ftmm.get_var_design_coordinates",
+    "ftmm.set_mm_blend_coordinates",
+    "ftmm.set_mm_design_coordinates",
+    "ftmm.set_mm_weight_vector",
+    "ftmm.set_var_blend_coordinates",
+    "ftmm.set_var_design_coordinates",
+}
+
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
     "fterrors.FT_NOERRORDEF_",
@@ -1539,6 +1553,12 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
 def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     if (row.operation, row.case_id) in FTERRDEF_EXACT_ERROR_BATCH:
         return "fterrdef load-glyph exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in FTMM_SUCCESS_OPERATIONS
+        and row.expectation_status == "ok"
+        and has_runtime_asset(row)
+    ):
+        return "FT multiple-master/variation success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
