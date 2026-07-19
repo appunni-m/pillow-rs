@@ -1,5 +1,40 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: late ABI scalar/header contract cleanup
+
+Status: eight-row audit cleanup completed on 2026-07-20 for pinned FreeType
+2.14.3 public header, opaque-handle, enum, and scalar sentinel contracts.
+
+Additional audit corrections:
+
+- `ftlzw.FT_Stream_OpenLZW.import_contract` is a public `ftlzw.h` symbol import
+  contract, not LZW stream runtime behavior.
+- `ftstroke.FT_Stroker.alias_defined` and
+  `ftstroke.FT_Stroker.opaque_handle_import_contract` are opaque handle
+  compile/layout contracts, not stroker path lifecycle behavior.
+- `ftwinfnt.FT_WinFNT_HeaderRec.field_order_matches_header` is a public header
+  field-order contract, not WinFNT runtime header extraction.
+- `otsvg.FT_SVG_Document.alias_defined` is a public `otsvg.h` typedef import
+  contract, not SVG renderer callback behavior.
+- `t1tables.T1_Blend_Flags.enum_variants_match_header`,
+  `t1tables.T1_Blend_Flags.max_tracks_variant_count`, and
+  `t1tables.T1_EncodingType.enum_variants_match_header` are scalar/header value
+  contracts, not Type1 runtime table extraction.
+
+Impact:
+
+- `real-parity`: stays `4442`
+- `compile-contract`: `2250 -> 2258`
+- `pending-route`: `528 -> 520`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Get_Module` runtime route and ABI contract cleanup
 
 Status: twenty-two-row parity/audit batch completed on 2026-07-20 for pinned

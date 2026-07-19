@@ -275,6 +275,7 @@ COMPILE_CONTRACT_OPERATIONS = {
     "macro_compile_probe",
     "face_macro_flags",
     "freetype.vector_transform",
+    "ftlzw.stream_open_lzw_abi",
     "ftlist.list_insert_abi",
     "ftlist.list_iterate_abi",
     "ftlist.list_remove_abi",
@@ -290,14 +291,20 @@ COMPILE_CONTRACT_OPERATIONS = {
     "ftmm.get_mm_weightvector_abi",
     "ftmm.get_multi_master_abi",
     "ftmm.get_var_axis_flags_abi",
+    "ftstroke.stroker_type_abi",
     "ftwinfnt.get_winfnt_header_abi",
+    "ftwinfnt.winfnt_header_rec_field_order",
     "ftwinfnt.winfnt_header_type_import",
     "ftwinfnt.winfnt_header_type_abi",
     "ftwinfnt.winfnt_header_rec_abi",
     "ftglyph.matrix_multiply",
     "ftglyph.matrix_invert",
+    "otsvg.svg_document_type_import",
     "otsvg.svg_document_type_abi",
     "otsvg.svg_document_rec_abi",
+    "t1tables.t1_blend_flags_enum",
+    "t1tables.t1_blend_flags_sentinel",
+    "t1tables.t1_encoding_type_enum",
 }
 
 REAL_PARITY_OPERATIONS = {
@@ -1189,6 +1196,8 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
         return None
+    if operation_is_compile_contract(row.operation):
+        return None
     if row.operation in {
         "ftstroke.outline_get_inside_border",
         "ftstroke.outline_get_outside_border",
@@ -1255,6 +1264,8 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for Type1 table runtime data that do not have a maintained route."""
     if not row.operation.startswith("t1tables."):
+        return None
+    if operation_is_compile_contract(row.operation):
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
@@ -1547,10 +1558,8 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
     """Rows for specialized public records without a maintained route."""
     specialized_rows_without_maintained_route = {
         "ftwinfnt.FT_WinFNT_Header.mutable_output_handle_contract",
-        "ftwinfnt.FT_WinFNT_HeaderRec.field_order_matches_header",
         "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
         "ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap",
-        "otsvg.FT_SVG_Document.alias_defined",
         "otsvg.FT_SVG_Document.renderer_callback_observes_document",
         "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
         "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
@@ -1575,7 +1584,6 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
         "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer",
         "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream",
-        "ftlzw.FT_Stream_OpenLZW.import_contract",
         "ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream",
         "ftsystem.FT_Memory.custom_allocator_runtime_events",
         "ftsystem.FT_Stream.external_stream_runtime_contract",
