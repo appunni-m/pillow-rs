@@ -60,6 +60,22 @@ typedef struct FT_BBox_ {
   FT_Pos yMax;
 } FT_BBox;
 
+typedef struct FT_Parameter_ {
+  FT_ULong tag;
+  void* data;
+} FT_Parameter;
+
+typedef struct FT_Open_Args_ {
+  FT_UInt flags;
+  const FT_Byte* memory_base;
+  FT_Long memory_size;
+  char* pathname;
+  void* stream;
+  void* driver;
+  FT_Int num_params;
+  FT_Parameter* params;
+} FT_Open_Args;
+
 typedef struct FT_Outline_ {
   FT_UShort n_contours;
   FT_UShort n_points;
@@ -261,6 +277,7 @@ void FT_Vector_From_Polar(FT_Vector* vector, FT_Fixed length, FT_Angle angle);
 void FT_Vector_Transform(FT_Vector* vector, const FT_Matrix* matrix);
 void FT_Matrix_Multiply(const FT_Matrix* a, FT_Matrix* b);
 FT_Error FT_Matrix_Invert(FT_Matrix* matrix);
+FT_Error FT_Open_Face(FT_Library library, const FT_Open_Args* args, FT_Long face_index, FT_Face* aface);
 FT_Error FT_New_Memory_Face(FT_Library library, const unsigned char* file_base, FT_Long file_size, FT_Long face_index, FT_Face* aface);
 FT_Error FT_Done_Face(FT_Face face);
 FT_Error FT_New_Size(FT_Face face, FT_Size* asize);

@@ -8337,6 +8337,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_file_base"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_library_or_aface"
+            || case.case_id == "freetype.FT_Open_Face.error_null_library_args_or_aface"
             || case.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
             || case.case_id == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format"
             || case.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
@@ -9196,7 +9197,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 ]);
             }
             let mut args = if case.inputs.params.get("variants").is_some() {
-                vec!["--new-memory-face-variants".to_string()]
+                if case.subject == "freetype.FT_Open_Face" {
+                    vec!["--open-face-variants".to_string()]
+                } else {
+                    vec!["--new-memory-face-variants".to_string()]
+                }
             } else {
                 vec!["--new-memory-face".to_string()]
             };
@@ -16052,6 +16057,9 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.library_is_null {
             return Ok((FT_Err_Invalid_Library_Handle as FT_Error, true));
         }
+        if row.open_args_is_null {
+            return Ok((FT_Err_Invalid_Argument, true));
+        }
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
@@ -16086,13 +16094,32 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
         } else {
             &mut face
         };
-        let err = c_abi::FT_New_Memory_Face(
-            library_arg,
-            bytes.as_ptr(),
-            file_size,
-            row.face_index,
-            face_ptr,
-        );
+        let open_args = c_abi::FT_Open_Args {
+            flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+            memory_base: bytes.as_ptr(),
+            memory_size: file_size,
+            pathname: std::ptr::null_mut(),
+            stream: std::ptr::null_mut(),
+            driver: std::ptr::null_mut(),
+            num_params: 0,
+            params: std::ptr::null_mut(),
+        };
+        let err = if row.has_open_args || row.open_args_is_null {
+            let args_ptr = if row.open_args_is_null {
+                std::ptr::null()
+            } else {
+                &open_args
+            };
+            c_abi::FT_Open_Face(library_arg, args_ptr, row.face_index, face_ptr)
+        } else {
+            c_abi::FT_New_Memory_Face(
+                library_arg,
+                bytes.as_ptr(),
+                file_size,
+                row.face_index,
+                face_ptr,
+            )
+        };
         let face_is_null = face.is_null();
         if err == FT_Err_Ok {
             c_done_face(face);
@@ -16134,6 +16161,9 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     memory_face_outputs(rows, |row| {
         if row.library_is_null {
             return Ok((FT_Err_Invalid_Library_Handle as FT_Error, true));
+        }
+        if row.open_args_is_null {
+            return Ok((FT_Err_Invalid_Argument, true));
         }
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
@@ -24774,6 +24804,7 @@ struct MemoryFaceRow {
     file_base_is_null: bool,
     library_is_null: bool,
     aface_is_null: bool,
+    open_args_is_null: bool,
     has_open_args: bool,
     has_open_flags: bool,
     has_stream: bool,
@@ -24786,13 +24817,14 @@ fn memory_face_rows_arg(params: &Value) -> Result<String, String> {
         .into_iter()
         .map(|row| {
             format!(
-                "{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}",
                 row.face_index,
                 if row.file_size.is_some() { 1 } else { 0 },
                 row.file_size.unwrap_or(0),
                 if row.file_base_is_null { 1 } else { 0 },
                 if row.library_is_null { 1 } else { 0 },
                 if row.aface_is_null { 1 } else { 0 },
+                if row.open_args_is_null { 1 } else { 0 },
             )
         })
         .collect::<Vec<_>>()
@@ -24838,6 +24870,10 @@ fn memory_face_row(value: &Value, defaults: &Value) -> Result<MemoryFaceRow, Str
             .is_some_and(|value| value == "null"),
         aface_is_null: object
             .get("aface")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "null"),
+        open_args_is_null: object
+            .get("args")
             .and_then(Value::as_str)
             .is_some_and(|value| value == "null"),
         has_open_args: object.get("open_args").is_some() || object.get("args").is_some(),
