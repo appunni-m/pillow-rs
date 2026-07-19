@@ -96,6 +96,12 @@ Promoted rows:
   FreeType, Rust FFI, thin C ABI, and WASM ABI output. The proof records tail
   and middle movement to head, already-head no-op behavior, and null
   list/node no-ops.
+- `ftlist.FT_List_Finalize.*`: `4 / 4` callback/free rows now compare exact
+  pinned-C FreeType, Rust FFI, thin C ABI, and WASM ABI output. The proof
+  records destructor call order, `(memory, data, user)` identity, caller
+  `memory->free(memory, node)` invocation order, null-destructor behavior, and
+  null list/memory no-ops. C/WASM wrappers own raw traversal; safe `fontdone`
+  receives explicit nodes plus `&FT_MemoryRec`.
 
 Focused non-coverage proof before promotion:
 
@@ -133,7 +139,7 @@ Results:
   library/null-descriptor route.
 - `ftlist`: `29 / 29` focused runtime rows passed with `0` pending after
   promoting the ten `FT_List_Insert`, `FT_List_Remove`, and `FT_List_Up`
-  topology rows.
+  topology rows plus the four `FT_List_Finalize` callback/free rows.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
@@ -141,9 +147,10 @@ Results:
 
 Latest route proof after the FT_List follow-up:
 
-- Route audit moved ten rows from `generic-fallback` to `real-parity`.
-- Current route audit after the change: `real-parity` `4328`,
-  `generic-fallback` `602`, `pending-route` `49`, `pending-core` `7`.
+- Route audit moved fourteen FT_List rows from `generic-fallback` to
+  `real-parity` across the topology and Finalize follow-ups.
+- Current route audit after the change: `real-parity` `4332`,
+  `generic-fallback` `598`, `pending-route` `49`, `pending-core` `7`.
 - Full refreshed parity remains green: `6802 / 6802` runnable rows passed with
   `432` pending. The global runnable total did not increase; these rows are
   now maintained exact routes instead of fallback-classified/pending focused

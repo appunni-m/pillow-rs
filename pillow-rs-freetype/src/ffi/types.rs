@@ -169,9 +169,26 @@ pub struct FT_StreamRec {
     pub limit: *mut FT_Byte,
 }
 
+pub type FT_Alloc_Func = Option<extern "C" fn(memory: FT_Memory, size: c_long) -> FT_Pointer>;
+pub type FT_Free_Func = Option<extern "C" fn(memory: FT_Memory, block: FT_Pointer)>;
+pub type FT_Realloc_Func = Option<
+    extern "C" fn(
+        memory: FT_Memory,
+        cur_size: c_long,
+        new_size: c_long,
+        block: FT_Pointer,
+    ) -> FT_Pointer,
+>;
+pub type FT_List_Destructor =
+    Option<extern "C" fn(memory: FT_Memory, data: FT_Pointer, user: FT_Pointer)>;
+
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_MemoryRec {
-    _private: [u8; 0],
+    pub user: FT_Pointer,
+    pub alloc: FT_Alloc_Func,
+    pub free: FT_Free_Func,
+    pub realloc: FT_Realloc_Func,
 }
 
 #[repr(C)]
