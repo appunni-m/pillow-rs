@@ -1213,6 +1213,31 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Library_SetLcdGeometry null-geometry error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftlcdfil.set_lcd_filter"
+        and row.case_id == "ftlcdfil.FT_Library_SetLcdFilter.error_null_library"
+    ):
+        return "FT_Library_SetLcdFilter null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlcdfil.set_lcd_filter"
+        and row.case_id == "ftlcdfil.FT_Library_SetLcdFilter.error_invalid_filter"
+    ):
+        return "FT_Library_SetLcdFilter invalid-filter errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlcdfil.set_lcd_filter"
+        and row.case_id == "ftlcdfil.FT_LcdFilter.rejected_filter_values"
+    ):
+        return "FT_LcdFilter rejected-filter values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlcdfil.set_lcd_filter"
+        and row.case_id
+        in {
+            "ftlcdfil.FT_LCD_FILTER_LEGACY.rejected_by_set_lcd_filter",
+            "ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter",
+            "ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter",
+        }
+    ):
+        return "FT_Library_SetLcdFilter enum rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
