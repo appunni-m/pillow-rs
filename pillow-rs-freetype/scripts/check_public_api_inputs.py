@@ -1335,6 +1335,23 @@ def absent_or_noop_surface_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def header_or_layout_compile_contract_reason(row: ConcreteInput) -> str | None:
+    """Rows whose manifest expectations are public header, macro, or layout contracts."""
+    compile_contract_cases = {
+        "ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header",
+        "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
+        "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
+        "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
+        "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
+    }
+    if row.case_id in compile_contract_cases:
+        return (
+            "manifest expectation is a public header, macro, enum, or layout "
+            "contract verified by the ABI audit rather than runtime subsystem behavior"
+        )
+    return None
+
+
 def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for MM/variation runtime data that do not have a maintained route."""
     ftmm_rows_without_maintained_route = {
@@ -4064,6 +4081,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)
+    header_or_layout_reason = header_or_layout_compile_contract_reason(row)
+    if header_or_layout_reason:
+        return ("compile-contract", header_or_layout_reason)
     ftstroke_pending = ftstroke_stroker_pending_reason(row)
     if ftstroke_pending:
         return ("pending-route", ftstroke_pending)

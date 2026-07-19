@@ -1,5 +1,49 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: header/layout contract audit cleanup
+
+Status: five-row audit cleanup completed on 2026-07-20 for public header,
+macro, enum, and layout contracts that were incorrectly parked behind runtime
+subsystem pending buckets.
+
+Additional audit corrections:
+
+- `ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header` is an enum/header
+  value contract, not glyph object runtime behavior.
+- `ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match` is a macro
+  alias/header contract, not glyph object runtime behavior.
+- `ftimage.FT_IMAGE_TAG.override_contract_matches_c` is a C macro override
+  compile contract, not raster/image runtime behavior.
+- `ftmm.T1_MAX_MM_AXIS.record_array_capacity` is a public
+  `FT_Multi_Master` layout/capacity contract, not MM runtime descriptor
+  behavior.
+- `ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity` is a public header/layout
+  absence contract for `FT_MM_Axis`, not MM runtime behavior.
+
+Rejected probe:
+
+- The declared non-SFNT color fixture
+  `fonts/bdf/properties-atoms-integers-cardinals.bdf` is still not usable for
+  runtime parity. A temporary generated BDF proved pinned C returns `Ok` for
+  the non-SFNT palette rows, but Rust core currently returns error `7`
+  (`FT_Err_Invalid_File_Format`) when opening that BDF input. The color rows
+  remain pending until BDF/non-SFNT face loading is implemented or the exact
+  declared input is otherwise C-openable and Rust-openable.
+
+Impact:
+
+- `real-parity`: stays `4450`
+- `compile-contract`: `2258 -> 2263`
+- `pending-route`: `512 -> 507`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: GX null free and palette data without CPAL
 
 Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
