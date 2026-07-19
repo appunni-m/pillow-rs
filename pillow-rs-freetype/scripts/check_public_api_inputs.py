@@ -1336,6 +1336,17 @@ def otvalid_real_parity_reason(row: ConcreteInput) -> str | None:
         and has_runtime_asset(row)
     ):
         return "FT_OpenType_Validate missing-service face validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    otvalid_table_success_cases = {
+        "ftotval.FT_VALIDATE_BASE.validate_selects_base_table",
+        "ftotval.FT_VALIDATE_GDEF.validate_selects_gdef_table",
+        "ftotval.FT_VALIDATE_GPOS.validate_selects_gpos_table",
+        "ftotval.FT_VALIDATE_GSUB.validate_selects_gsub_table",
+        "ftotval.FT_VALIDATE_JSTF.validate_selects_jstf_table",
+        "ftotval.FT_VALIDATE_MATH.validate_selects_math_table",
+        "ftotval.FT_VALIDATE_OT.validate_all_requested_tables",
+    }
+    if row.operation == "ftotval.open_type_validate" and row.case_id in otvalid_table_success_cases:
+        return "FT_OpenType_Validate table-selection success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

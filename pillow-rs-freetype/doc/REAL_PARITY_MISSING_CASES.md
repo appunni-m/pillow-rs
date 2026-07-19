@@ -21,10 +21,11 @@ Rejected future-asset probes:
   symlink does not satisfy the missing-SBit success contract.
 - `ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`: the row still
   references an unresolved SVG glyph asset and remains unpromoted.
-- `ftotval.FT_VALIDATE_BASE`, `FT_VALIDATE_GDEF`, `FT_VALIDATE_GPOS`,
-  `FT_VALIDATE_GSUB`, `FT_VALIDATE_JSTF`, `FT_VALIDATE_MATH`, and
-  `FT_VALIDATE_OT` success rows remain asset-pending where the focused
-  operation reports unresolved runtime fonts.
+- `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output`: exact promotion
+  made the row strict and exposed pinned C error `7`; it remains fallback until
+  the absent-BASE-table fixture/route is made public-exact.
+- Remaining unresolved `ftotval.FT_VALIDATE_*` rows stay asset-pending where
+  the focused operation reports unresolved runtime fonts.
 - `ftstroke.FT_Stroker_ConicTo` success rows, `ftstroke.FT_Stroker_CubicTo`
   success rows, `ftstroke.FT_Stroker_LineTo` success rows, and
   `ftstroke.FT_Stroker_GetCounts` success rows initially passed under generic
@@ -51,6 +52,13 @@ Promoted rows:
 - `ftmodapi.FT_Add_Default_Modules.installs_default_module_table`
 - `ftmm.FT_Done_MM_Var.null_descriptor_success`
 - `ftotval.FT_OpenType_Validate.selected_tables_success`
+- `ftotval.FT_VALIDATE_BASE.validate_selects_base_table`
+- `ftotval.FT_VALIDATE_GDEF.validate_selects_gdef_table`
+- `ftotval.FT_VALIDATE_GPOS.validate_selects_gpos_table`
+- `ftotval.FT_VALIDATE_GSUB.validate_selects_gsub_table`
+- `ftotval.FT_VALIDATE_JSTF.validate_selects_jstf_table`
+- `ftotval.FT_VALIDATE_MATH.validate_selects_math_table`
+- `ftotval.FT_VALIDATE_OT.validate_all_requested_tables`
 - `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
 - `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
 
