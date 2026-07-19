@@ -172,12 +172,17 @@ WASM_EXPORTS = {
     "fontdone_wasm_library_set_lcd_filter",
     "fontdone_wasm_library_set_lcd_filter_weights",
     "fontdone_wasm_library_set_lcd_geometry",
+    "fontdone_wasm_palette_data_get",
+    "fontdone_wasm_palette_select",
+    "fontdone_wasm_palette_set_foreground_color",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
     "fontdone_wasm_error_string",
     "fontdone_wasm_open_type_validate",
     "fontdone_wasm_open_type_free",
+    "fontdone_wasm_truetype_gx_free",
+    "fontdone_wasm_classic_kern_free",
     "fontdone_wasm_round_fix",
     "fontdone_wasm_ceil_fix",
     "fontdone_wasm_floor_fix",
@@ -1268,6 +1273,8 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
         return None
+    if absent_or_noop_surface_real_parity_reason(row):
+        return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
     return (
@@ -1296,6 +1303,8 @@ def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for GX/classic kern validation data that do not have a maintained route."""
     if not row.operation.startswith("ftgxval."):
         return None
+    if absent_or_noop_surface_real_parity_reason(row):
+        return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
     return (
@@ -1303,6 +1312,27 @@ def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "a maintained validation subsystem route; keeping it generic would be "
         "a green placeholder"
     )
+
+
+def absent_or_noop_surface_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Contained no-op/absent-table public rows with maintained same-input routes."""
+    color_cases = {
+        "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal",
+    }
+    if row.case_id in color_cases:
+        return (
+            "FT color palette SFNT-without-CPAL behavior validates through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftgxval.FT_TrueTypeGX_Free.null_face_noop",
+        "ftgxval.FT_ClassicKern_Free.null_face_noop",
+    }:
+        return (
+            "GX/classic-kern validation free null-face no-op validates through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    return None
 
 
 def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
@@ -4031,6 +4061,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_null_noop_reason = ftstroke_null_noop_real_parity_reason(row)
     if ftstroke_null_noop_reason:
         return ("real-parity", ftstroke_null_noop_reason)
+    absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
+    if absent_or_noop_reason:
+        return ("real-parity", absent_or_noop_reason)
     ftstroke_pending = ftstroke_stroker_pending_reason(row)
     if ftstroke_pending:
         return ("pending-route", ftstroke_pending)

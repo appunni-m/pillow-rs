@@ -272,6 +272,14 @@ typedef struct FT_Color_ {
   FT_Byte alpha;
 } FT_Color;
 
+typedef struct FT_Palette_Data_ {
+  FT_UShort num_palettes;
+  const FT_UShort* palette_name_ids;
+  const FT_UShort* palette_flags;
+  FT_UShort num_palette_entries;
+  const FT_UShort* palette_entry_name_ids;
+} FT_Palette_Data;
+
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
@@ -280,6 +288,11 @@ FT_Error FT_Bitmap_Done(FT_Library library, FT_Bitmap* bitmap);
 FT_Error FT_Bitmap_Embolden(FT_Library library, FT_Bitmap* bitmap, FT_Pos xStrength, FT_Pos yStrength);
 FT_Error FT_Bitmap_Blend(FT_Library library, const FT_Bitmap* source, FT_Vector source_offset, FT_Bitmap* target, FT_Vector* atarget_offset, FT_Color color);
 FT_Error FT_GlyphSlot_Own_Bitmap(FT_GlyphSlot slot);
+FT_Error FT_Palette_Data_Get(FT_Face face, FT_Palette_Data* apalette_data);
+FT_Error FT_Palette_Select(FT_Face face, FT_UShort palette_index, FT_Color** apalette);
+FT_Error FT_Palette_Set_Foreground_Color(FT_Face face, FT_Color foreground_color);
+void FT_TrueTypeGX_Free(FT_Face face, FT_Bytes table);
+void FT_ClassicKern_Free(FT_Face face, FT_Bytes table);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;

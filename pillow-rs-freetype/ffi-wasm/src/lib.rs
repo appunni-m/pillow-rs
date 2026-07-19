@@ -274,6 +274,36 @@ pub struct FontdoneWasmColor {
     pub alpha: FT_Byte,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmPaletteData {
+    pub num_palettes: FT_UShort,
+    pub palette_name_ids: *const FT_UShort,
+    pub palette_flags: *const FT_UShort,
+    pub num_palette_entries: FT_UShort,
+    pub palette_entry_name_ids: *const FT_UShort,
+}
+
+fn wasm_color_to_rust(color: FontdoneWasmColor) -> rust_ffi::FT_Color {
+    rust_ffi::FT_Color {
+        blue: color.blue,
+        green: color.green,
+        red: color.red,
+        alpha: color.alpha,
+    }
+}
+
+fn copy_rust_palette_data_to_wasm(
+    out: &mut FontdoneWasmPaletteData,
+    value: rust_ffi::FT_Palette_Data,
+) {
+    out.num_palettes = value.num_palettes;
+    out.palette_name_ids = value.palette_name_ids;
+    out.palette_flags = value.palette_flags;
+    out.num_palette_entries = value.num_palette_entries;
+    out.palette_entry_name_ids = value.palette_entry_name_ids;
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_list_add(list: FT_List, node: FT_ListNode) {
     let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
@@ -633,6 +663,64 @@ pub extern "C" fn fontdone_wasm_bitmap_blend(
         atarget_offset_ref.y = rust_target_offset.y;
     }
     err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_palette_data_get(
+    handle: usize,
+    apalette_data: *mut FontdoneWasmPaletteData,
+) -> FT_Error {
+    let Some(out) = (unsafe { apalette_data.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut rust_out = rust_ffi::FT_Palette_Data::default();
+    let err = rust_ffi::FT_Palette_Data_Get(face_ref(handle).map(|face| &face.face), Some(&mut rust_out));
+    if err == rust_ffi::FT_Err_Ok {
+        copy_rust_palette_data_to_wasm(out, rust_out);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_palette_select(
+    handle: usize,
+    palette_index: FT_UShort,
+    apalette: *mut *mut FontdoneWasmColor,
+) -> FT_Error {
+    let mut rust_palette: *const rust_ffi::FT_Color = ptr::null();
+    let err = rust_ffi::FT_Palette_Select(
+        face_ref(handle).map(|face| &face.face),
+        palette_index,
+        (!apalette.is_null()).then_some(&mut rust_palette),
+    );
+    if err == rust_ffi::FT_Err_Ok && !apalette.is_null() {
+        // SAFETY: `apalette` is non-null and caller provided writable storage.
+        unsafe {
+            *apalette = rust_palette.cast::<FontdoneWasmColor>().cast_mut();
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_palette_set_foreground_color(
+    handle: usize,
+    foreground_color: FontdoneWasmColor,
+) -> FT_Error {
+    rust_ffi::FT_Palette_Set_Foreground_Color(
+        face_ref(handle).map(|face| &face.face),
+        wasm_color_to_rust(foreground_color),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_truetype_gx_free(handle: usize, table: FT_Bytes) {
+    rust_ffi::FT_TrueTypeGX_Free(face_ref(handle).map(|face| &face.face), table);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_classic_kern_free(handle: usize, table: FT_Bytes) {
+    rust_ffi::FT_ClassicKern_Free(face_ref(handle).map(|face| &face.face), table);
 }
 
 #[repr(C)]

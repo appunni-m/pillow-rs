@@ -24,8 +24,8 @@ use super::types::{
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
     FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int, FT_Int32, FT_LcdFilter,
     FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix,
-    FT_Memory, FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos,
-    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Memory, FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer,
+    FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType,
     FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
     TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
@@ -2614,7 +2614,7 @@ pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
 
 pub fn FT_OpenType_Validate(
     face: Option<&FT_Face>,
-    _validation_flags: FT_UInt,
+    validation_flags: FT_UInt,
     base_table: Option<&mut FT_Bytes>,
     gdef_table: Option<&mut FT_Bytes>,
     gpos_table: Option<&mut FT_Bytes>,
@@ -2631,6 +2631,88 @@ pub fn FT_OpenType_Validate(
         || jstf_table.is_none()
     {
         return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let _ = validation_flags;
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_TrueTypeGX_Free(face: Option<&FT_Face>, table: FT_Bytes) {
+    // FreeType 2.14.3 `src/base/ftgxval.c:74-84` returns before touching the
+    // table pointer when `face` is null.  Non-null validation-buffer ownership
+    // remains pending.
+    let _ = (face, table);
+}
+
+pub fn FT_ClassicKern_Free(face: Option<&FT_Face>, table: FT_Bytes) {
+    // FreeType 2.14.3 `src/base/ftgxval.c:125-136` returns before touching the
+    // table pointer when `face` is null.  Non-null ckern buffer freeing remains
+    // pending.
+    let _ = (face, table);
+}
+
+fn face_has_sfnt_table(face: &FT_Face, tag: [u8; 4]) -> bool {
+    face.inner
+        .borrow()
+        .font()
+        .load_sfnt_table(u32::from_be_bytes(tag), 0, None)
+        .is_ok()
+}
+
+pub fn FT_Palette_Data_Get(
+    face: Option<&FT_Face>,
+    apalette_data: Option<&mut FT_Palette_Data>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(apalette_data) = apalette_data else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    if !inner.font().is_sfnt() {
+        // FreeType 2.14.3 `src/base/ftcolor.c:34-49` copies
+        // `null_palette_data` for non-SFNT faces.
+        *apalette_data = FT_Palette_Data::default();
+        return FT_Err_Ok;
+    }
+    drop(inner);
+    if !face_has_sfnt_table(face, *b"CPAL") {
+        // `TT_Face.palette_data` is zero/null initialized when an SFNT face has
+        // no CPAL table.
+        *apalette_data = FT_Palette_Data::default();
+        return FT_Err_Ok;
+    }
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Palette_Select(
+    face: Option<&FT_Face>,
+    _palette_index: FT_UShort,
+    apalette: Option<&mut *const FT_Color>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if !face.inner.borrow().font().is_sfnt() {
+        // FreeType 2.14.3 `src/base/ftcolor.c:54-75` returns Ok for non-SFNT
+        // faces and writes a null palette when `apalette` is provided.
+        if let Some(apalette) = apalette {
+            *apalette = ptr::null();
+        }
+        return FT_Err_Ok;
+    }
+    FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Palette_Set_Foreground_Color(face: Option<&FT_Face>, color: FT_Color) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if !face.inner.borrow().font().is_sfnt() {
+        // FreeType 2.14.3 `src/base/ftcolor.c:95-111` returns Ok without
+        // side effects for non-SFNT faces.
+        let _ = color;
+        return FT_Err_Ok;
     }
     FT_Err_Unimplemented_Feature as FT_Error
 }

@@ -1,5 +1,58 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: GX null free and palette data without CPAL
+
+Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
+2.14.3 GX/classic-kern null-face free behavior and SFNT palette-data behavior
+when no CPAL table exists.
+
+Implemented real parity rows:
+
+- `ftgxval.FT_TrueTypeGX_Free.null_face_noop`
+- `ftgxval.FT_ClassicKern_Free.null_face_noop`
+- `ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal`
+
+Finding:
+
+- Pinned C `FT_TrueTypeGX_Free` (`src/base/ftgxval.c`) and
+  `FT_ClassicKern_Free` return immediately when `face` is null; the sentinel
+  validation table pointer is not freed or inspected. Rust FFI, C ABI, and WASM
+  ABI now expose the same null-face no-op route.
+- Pinned C `FT_Palette_Data_Get` (`src/base/ftcolor.c`) copies the face palette
+  data record. For an SFNT face without a CPAL table, that record remains
+  zero/null initialized, and the call succeeds. The maintained route now uses
+  the existing DejaVu Sans fixture alias and compares the zero/null palette
+  fields through pinned C, Rust FFI, C ABI, and WASM ABI.
+
+Remaining related blockers:
+
+- BDF/non-SFNT palette rows remain pending because the declared fixture
+  `fonts/bdf/properties-atoms-integers-cardinals.bdf` is unresolved in this
+  worktree. No substitute fixture was promoted.
+- CPAL/COLR palette rows remain pending until there is a maintained color
+  subsystem route.
+- `ftotval.FT_OpenType_Validate` BASE-absent success behavior remains pending:
+  the attempted same-input probe returned pinned C error `7`
+  (`FT_Err_Invalid_File_Format`) for the referenced fixture, so parity is not
+  proven for that row.
+
+Impact:
+
+- `real-parity`: `4447 -> 4450`
+- `compile-contract`: stays `2258`
+- `pending-route`: `515 -> 512`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftgxval.truetype_gx_free
+make -C pillow-rs-freetype test-op OP=ftgxval.classic_kern_free
+make -C pillow-rs-freetype test-op OP=ftcolor.palette_data_get
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Set_Default_Properties` environment route
 
 Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
