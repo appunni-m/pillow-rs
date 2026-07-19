@@ -1214,6 +1214,19 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "COLR/CPAL paint graph, palette, layer, colorline, and clipbox success "
+        "behavior requires a maintained color subsystem route; keeping it "
+        "generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3513,6 +3526,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftcache_pending = ftcache_subsystem_pending_reason(row)
     if ftcache_pending:
         return ("pending-route", ftcache_pending)
+    ftcolor_pending = ftcolor_subsystem_pending_reason(row)
+    if ftcolor_pending:
+        return ("pending-route", ftcolor_pending)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
