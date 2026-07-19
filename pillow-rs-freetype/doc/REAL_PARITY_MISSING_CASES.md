@@ -84,6 +84,18 @@ Promoted rows:
   deterministic preferred-vs-legacy name fixtures and a dedicated
   `FT_Open_Face` parameter route. The proof compares `family_name` and
   `style_name` C-string bytes, not just face-open success.
+- `ftlist.FT_List_Insert.*`: `3 / 3` topology rows now compare exact pinned-C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI output. The proof records
+  empty-list insertion, insertion before existing head for one-node and
+  three-node lists, and null list/node no-ops.
+- `ftlist.FT_List_Remove.*`: `4 / 4` topology rows now compare exact pinned-C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI output. The proof records
+  `FT_List_Remove` head/middle/tail unlinking, only-node removal, null
+  list/node no-ops, and FreeType's membership-unchecked neighbor patching.
+- `ftlist.FT_List_Up.*`: `3 / 3` topology rows now compare exact pinned-C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI output. The proof records tail
+  and middle movement to head, already-head no-op behavior, and null
+  list/node no-ops.
 
 Focused non-coverage proof before promotion:
 
@@ -98,6 +110,7 @@ make -C pillow-rs-freetype test-op OP=new_memory_face
 make -C pillow-rs-freetype test-op OP=freetype.init_free_type
 make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
 make -C pillow-rs-freetype test-op OP=ftmm.done_mm_var
+make -C pillow-rs-freetype test-case CASE=ftlist
 ```
 
 Results:
@@ -118,10 +131,23 @@ Results:
   the exact module-table mutation route.
 - `ftmm.done_mm_var`: `3 / 3` runnable rows passed after adding the exact
   library/null-descriptor route.
+- `ftlist`: `29 / 29` focused runtime rows passed with `0` pending after
+  promoting the ten `FT_List_Insert`, `FT_List_Remove`, and `FT_List_Up`
+  topology rows.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
   was changed.
+
+Latest route proof after the FT_List follow-up:
+
+- Route audit moved ten rows from `generic-fallback` to `real-parity`.
+- Current route audit after the change: `real-parity` `4328`,
+  `generic-fallback` `602`, `pending-route` `49`, `pending-core` `7`.
+- Full refreshed parity remains green: `6802 / 6802` runnable rows passed with
+  `432` pending. The global runnable total did not increase; these rows are
+  now maintained exact routes instead of fallback-classified/pending focused
+  list rows.
 
 ## 2026-07-18 Parity-Only Fix Plan
 
@@ -222,15 +248,14 @@ Results:
 - `FT_Outline_GetOutsideBorder`: `3 / 3` focused runtime rows passed, `0`
   failed, `0` pending.
 
-Rejected related probe:
+Resolved related probe:
 
-- `ftlist` list mutation routes were not promoted in this batch. Exact
-  `FT_List_Add`, `FT_List_Remove`, and `FT_List_Find` parity requires
-  dereferencing and mutating caller-owned raw `FT_ListRec` / `FT_ListNodeRec`
-  topology. That would put pointer-topology logic in the safe `fontdone` core,
-  which is blocked by the project invariant that `fontdone` remains
-  `#![deny(unsafe_code)]`. Keep those rows pending until a design preserves
-  the thin-wrapper/core-safety boundary.
+- `FT_List_Add`, `FT_List_Find`, `FT_List_Remove`, and `FT_List_Up` now have
+  maintained exact routes. The safe `fontdone` helper layer receives explicit
+  neighboring node references from thin ABI wrappers/tests instead of
+  dereferencing arbitrary raw list topology in core, preserving
+  `#![deny(unsafe_code)]`. Remaining list work should focus on
+  `FT_List_Insert`, `FT_List_Iterate`, and `FT_List_Finalize` route semantics.
 
 ### Issue Set Current: MoveTo callback exact-error route
 

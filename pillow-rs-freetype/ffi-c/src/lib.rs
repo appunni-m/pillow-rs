@@ -263,6 +263,25 @@ pub extern "C" fn FT_List_Add(list: FT_List, node: FT_ListNode) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_List_Insert(list: FT_List, node: FT_ListNode) {
+    let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
+    else {
+        return;
+    };
+    let after = list_ref.head;
+
+    node_ref.next = after;
+    node_ref.prev = ptr::null_mut();
+
+    if let Some(after_ref) = unsafe { after.as_mut() } {
+        after_ref.prev = node;
+    } else {
+        list_ref.tail = node;
+    }
+    list_ref.head = node;
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_List_Find(list: FT_List, data: FT_Pointer) -> FT_ListNode {
     let Some(list_ref) = (unsafe { list.as_ref() }) else {
         return ptr::null_mut();
