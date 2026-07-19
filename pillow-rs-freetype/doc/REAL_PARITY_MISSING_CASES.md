@@ -1,5 +1,62 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftincrem` incremental-font callback route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `9675ced82`: `real-parity=4465`,
+  `generic-fallback=125`, `pending-route=389`, `pending-core=7`.
+
+Finding:
+
+- The remaining `ftincrem` rows cover `FT_Incremental`,
+  `FT_Incremental_Interface`, `FT_Incremental_InterfaceRec`,
+  `FT_Incremental_FuncsRec`, `FT_Incremental_Metrics`, and
+  `FT_Incremental_MetricsRec`.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  incremental-font route that opens a face through `FT_PARAM_TAG_INCREMENTAL`,
+  stores the client interface, calls the glyph-data callbacks, releases glyph
+  data, seeds metrics callback input, applies horizontal and vertical metrics
+  overrides, and compares callback identity/lifetime behavior across all ABI
+  lanes.
+
+Classification change:
+
+- 14 `ftincrem` concrete rows moved from `generic-fallback` to
+  `pending-route`; the glyph-data success case expands to two concrete rows.
+- Existing exact incremental/error rows remain separately classified.
+- New route audit counts: `real-parity=4465`, `generic-fallback=111`,
+  `pending-route=403`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained incremental-font route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust incremental state first: client-owned handle storage,
+   callback table validation, open-face parameter dispatch, glyph-data callback
+   invocation, release callback ordering, metrics callback input seeding, and
+   horizontal/vertical metrics override application.
+3. Compare exact return codes, callback invocation counts/order, passed object
+   identity, glyph-data buffer lifetimes, release behavior, metrics seed values,
+   modified metrics output, null/absent interface behavior, and embedded-data
+   fallback behavior.
+4. Keep already-routed exact incremental/error rows real; do not demote them
+   while building the broader incremental-font route.
+5. Promote rows only after focused `ftincrem` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftincrem
+```
+
 ### Issue Set Current: `ftdriver` driver/autohinter property route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
