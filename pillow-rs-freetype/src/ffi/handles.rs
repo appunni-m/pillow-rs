@@ -1642,10 +1642,11 @@ pub fn FT_Outline_Get_BBox(
     let Some(outline) = outline_snapshot_to_core(outline_snapshot) else {
         return FT_Err_Invalid_Outline as FT_Error;
     };
-    if FT_Outline_Check(Some(outline_snapshot)) != FT_Err_Ok {
-        return FT_Err_Invalid_Outline as FT_Error;
-    }
-
+    // FreeType 2.14.3 `src/base/ftbbox.c:474-547` does not call
+    // `FT_Outline_Check` before computing the bbox.  It can return success for
+    // contour-shape issues that stay on the cbox==bbox fast path, while still
+    // propagating `FT_Outline_Decompose` errors for malformed off-curve
+    // sequences.  Keep this endpoint's validation local to the bbox algorithm.
     match outline_exact_bbox_from_core(&outline) {
         Ok(bbox) => {
             *abbox = bbox;

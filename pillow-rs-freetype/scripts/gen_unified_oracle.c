@@ -4764,6 +4764,142 @@ static int emit_outline_get_bbox_null_inputs(int argc, char** argv) {
     return 0;
 }
 
+typedef enum BBoxMalformedOutlineKind_ {
+    BBOX_MALFORMED_FIRST_POINT_CUBIC,
+    BBOX_MALFORMED_UNPAIRED_CUBIC,
+    BBOX_MALFORMED_LAST_CONTOUR_NOT_N_POINTS_MINUS_ONE
+} BBoxMalformedOutlineKind;
+
+static void build_bbox_malformed_outline(
+    BBoxMalformedOutlineKind kind,
+    FT_Outline* outline,
+    FT_Vector* points,
+    unsigned char* tags,
+    unsigned short* contours
+) {
+    outline->n_contours = 1;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+
+    if (kind == BBOX_MALFORMED_LAST_CONTOUR_NOT_N_POINTS_MINUS_ONE) {
+        outline->n_points = 4;
+        points[0].x = 0;
+        points[0].y = 0;
+        points[1].x = 64;
+        points[1].y = 0;
+        points[2].x = 64;
+        points[2].y = 64;
+        points[3].x = 512;
+        points[3].y = 512;
+        tags[0] = 1;
+        tags[1] = 1;
+        tags[2] = 1;
+        tags[3] = 0;
+        contours[0] = 2;
+        return;
+    }
+
+    outline->n_points = 3;
+    points[0].x = 0;
+    points[0].y = 0;
+    points[1].x = 64;
+    points[1].y = 64;
+    points[2].x = 128;
+    points[2].y = 0;
+    contours[0] = 2;
+    if (kind == BBOX_MALFORMED_FIRST_POINT_CUBIC) {
+        tags[0] = 2;
+        tags[1] = 2;
+        tags[2] = 1;
+    } else {
+        tags[0] = 1;
+        tags[1] = 2;
+        tags[2] = 1;
+    }
+}
+
+static void print_outline_bbox_malformed_row(
+    const char* label,
+    BBoxMalformedOutlineKind kind,
+    FT_BBox sentinel,
+    FT_Error* first_error,
+    int* emitted
+) {
+    if (*emitted) {
+        printf(",");
+    }
+    *emitted = 1;
+    FT_Vector points[4];
+    unsigned char tags[4];
+    unsigned short contours[1];
+    FT_Outline outline;
+    build_bbox_malformed_outline(kind, &outline, points, tags, contours);
+    FT_BBox bbox = sentinel;
+    FT_Error err = FT_Outline_Get_BBox(&outline, &bbox);
+    if (*first_error == 0 && err != 0) {
+        *first_error = err;
+    }
+    printf("{\"malformation\":\"%s\",", label);
+    printf("\"status\":\"%s\",", err ? "error" : "ok");
+    printf("\"error\":%d,", err);
+    print_bbox_named("bbox", bbox);
+    printf("}");
+}
+
+static int emit_outline_get_bbox_malformed(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    char* sentinel_arg = (char*)malloc(strlen(argv[2]) + 1);
+    if (!sentinel_arg) {
+        return 2;
+    }
+    memcpy(sentinel_arg, argv[2], strlen(argv[2]) + 1);
+    long long values[4] = {0, 0, 0, 0};
+    int value_count = split_fixed_math_row(sentinel_arg, values, 4);
+    free(sentinel_arg);
+    if (value_count != 4) {
+        return 2;
+    }
+    FT_BBox sentinel = {
+        (FT_Pos)values[0],
+        (FT_Pos)values[1],
+        (FT_Pos)values[2],
+        (FT_Pos)values[3],
+    };
+    FT_Error first_error = 0;
+    int emitted = 0;
+
+    printf("{\"output\":{\"rows\":[");
+    print_outline_bbox_malformed_row(
+        "first_point_cubic",
+        BBOX_MALFORMED_FIRST_POINT_CUBIC,
+        sentinel,
+        &first_error,
+        &emitted
+    );
+    print_outline_bbox_malformed_row(
+        "unpaired_cubic",
+        BBOX_MALFORMED_UNPAIRED_CUBIC,
+        sentinel,
+        &first_error,
+        &emitted
+    );
+    print_outline_bbox_malformed_row(
+        "last_contour_not_n_points_minus_one",
+        BBOX_MALFORMED_LAST_CONTOUR_NOT_N_POINTS_MINUS_ONE,
+        sentinel,
+        &first_error,
+        &emitted
+    );
+    printf("]},");
+    print_status(first_error);
+    printf("}\n");
+    return 0;
+}
+
 static void print_subglyph_info_row(FT_GlyphSlot slot, FT_UInt sub_index) {
     FT_Int index = 0;
     FT_UInt flags = 0;
@@ -14460,6 +14596,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-bbox-null-inputs")) {
         return emit_outline_get_bbox_null_inputs(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-get-bbox-malformed")) {
+        return emit_outline_get_bbox_malformed(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-get-cbox-null-inputs")) {
         return emit_outline_get_cbox_null_inputs(argc, argv);

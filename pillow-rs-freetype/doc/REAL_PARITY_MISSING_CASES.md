@@ -1337,12 +1337,11 @@ Other rejected or deferred candidates checked in the same pass:
   `get_char_index` route still uses the primary `font` asset and does not
   exercise the `non_unicode_charmap_font` selection metadata. This remains a
   route/fixture-model issue, not a safe classification-only promotion.
-- `ftbbox.FT_Outline_Get_BBox.error_malformed_outline`: the standalone public
-  `FT_Outline_Get_BBox` symbol now exists in Rust FFI/C ABI/WASM and loaded
-  glyph bbox rows assert the real helper matches stored slot bboxes. This row
-  still references missing fixture asset `input/outlines/malformed-outline.bin`,
-  so the remaining work is a maintained malformed-outline fixture/oracle route,
-  not a classifier-only promotion.
+- `ftbbox.FT_Outline_Get_BBox.error_malformed_outline`: closed by the
+  maintained malformed-outline route below. The row now reuses
+  `outlines/synthetic/malformed-outline-cases.json` and requires exact C error
+  output comparison instead of the obsolete missing
+  `input/outlines/malformed-outline.bin` asset.
 - `ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success`:
   still requires a real Adobe Multiple Master Type1 fixture exposing the
   service-with-null-callback behavior. It must not be replaced with a variable
@@ -8101,18 +8100,56 @@ Route audit after accepted promotion:
 - `pending-route=18`
 - `pending-core=7`
 
-The pending-route increase is intentional de-placeholdering. These rows were
-previously hidden under generic fallback and now remain visible until the
-required assets exist:
+The pending-route increase was intentional de-placeholdering. The two
+orientation rows listed below were later closed by reusing the standard
+`outlines/orientation/*` fixture tree and routing
+`ftoutln.outline_get_orientation` through the exact C/Rust/C-ABI/WASM
+orientation matrix:
 
-- `ftoutln.FT_Orientation.orientation_algorithm_contract` needs
-  `outline/orientation/invalid-collapsed-oversized.json`.
-- `ftoutln.FT_ORIENTATION_FILL_LEFT.returned_for_positive_area` needs
-  `outline/orientation/postscript-positive-area.json`.
+- `ftoutln.FT_Orientation.orientation_algorithm_contract`
+- `ftoutln.FT_ORIENTATION_FILL_LEFT.returned_for_positive_area`
 
 Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Orientation
+make -C pillow-rs-freetype route-audit
+```
+
+### Issue Set Current: `FT_Outline_Get_BBox` malformed outline parity
+
+Status: partially closed on 2026-07-20.
+
+Closed:
+
+- `ftbbox.FT_Outline_Get_BBox.error_malformed_outline` now routes three
+  non-null, array-backed malformed outline models through pinned FreeType
+  `FT_Outline_Get_BBox`, Rust FFI, thin C ABI, and WASM ABI.
+- The public input now uses the standard maintained fixture
+  `outlines/synthetic/malformed-outline-cases.json` instead of the obsolete
+  missing binary fixture `input/outlines/malformed-outline.bin`.
+- The row requires `compare_error_output: true`, so route audit counts it only
+  when the same row-level C error/status/bbox output is compared exactly.
+- First divergence found while promoting the row: Rust called
+  `FT_Outline_Check` before bbox computation and rejected
+  `last_contour_not_n_points_minus_one`, while pinned FreeType
+  `src/base/ftbbox.c:474-547` does not call `FT_Outline_Check` and can return
+  success through the `cbox == bbox` fast path. Rust now keeps validation local
+  to the bbox algorithm and lets the decompose path report malformed off-curve
+  sequences.
+
+Remaining:
+
+- Raw `FT_Outline` records with nonzero counts and null internal pointers are
+  still not counted as C parity. The pinned C `FT_Outline_Decompose` probe for
+  those shapes can segfault instead of returning a public `FT_Error`, so those
+  cases remain facade/oracle-safety work under the raw invalid-pointer issue
+  set. Do not fold them into `FT_Outline_Get_BBox` real parity without a
+  same-input C oracle result.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbbox.FT_Outline_Get_BBox
 make -C pillow-rs-freetype route-audit
 ```
