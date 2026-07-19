@@ -1,5 +1,77 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: module flags and interpreter-version property batch
+
+Status: ten-row parity/audit batch completed on 2026-07-20 for pinned FreeType
+2.14.3 default module metadata and TrueType interpreter-version property
+behavior.
+
+Implemented real parity rows:
+
+- `ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip`
+- `ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40`
+- `ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip`
+- `ftmodapi.FT_MODULE_DRIVER_HAS_HINTER.present_on_native_hinter_drivers`
+- `ftmodapi.FT_MODULE_DRIVER_HINTS_LIGHTLY.cff_driver_sets_light_hint_flag`
+- `ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c`
+- `ftmodapi.FT_MODULE_DRIVER_SCALABLE.scalable_driver_flags_match_c`
+- `ftmodapi.FT_MODULE_FONT_DRIVER.font_driver_modules_set_bit`
+- `ftmodapi.FT_MODULE_HINTER.autofitter_module_sets_hinter_bit`
+
+Additional audit correction:
+
+- `ftmm.FT_Done_MM_Var.import_contract` is an ABI import/signature contract, not
+  MM runtime descriptor behavior, so it now classifies as `compile-contract`.
+
+Finding:
+
+- The module-flag rows were blocked by declared future font/module assets even
+  though the maintained route compares only default module-table metadata via
+  `FT_Get_Module(...)->clazz->module_flags`.
+- The interpreter-version property rows were blocked for the same reason; their
+  maintained public route only needs `FT_Property_Set`/`FT_Property_Get` with
+  the `truetype` module and scalar `FT_UInt` values.
+- Running all six module-flag rows exposed a real Rust divergence: Rust
+  registered the CID module in the default library, but the pinned FreeType
+  build returns no `cid` module from `FT_Get_Module`. Core now leaves CID out
+  of the default module list while preserving `type42`, which pinned C does
+  register.
+
+C behavior verified:
+
+- Pinned C returns exact module presence and `module_flags` for `truetype`,
+  `type1`, `type42`, `cff`, bitmap drivers, `autofitter`, renderers, and
+  non-driver helpers from the initialized default library.
+- Pinned C accepts and reads back the three public
+  `TT_INTERPRETER_VERSION_*` scalar values through the TrueType property
+  service. The Rust FFI, C ABI, and WASM ABI now run the same exact property
+  cases instead of relying on the broader generic property-set row.
+
+Impact:
+
+- `real-parity`: `4431 -> 4440`
+- `compile-contract`: `2229 -> 2230`
+- `pending-route`: `560 -> 550`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Remaining related blockers:
+
+- `ftdriver.interpreter_version_glyph_output` remains pending until the
+  bytecode-sensitive runtime glyph fixtures are C-openable.
+- Face-scoped autohinter property records such as
+  `FT_Prop_GlyphToScriptMap` and `FT_Prop_IncreaseXHeight` remain pending
+  because they require typed face/global state, not scalar interpreter-version
+  property plumbing.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftdriver.interpreter_version_property
+make -C pillow-rs-freetype test-op OP=ftmodapi.inspect_module_flags
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Glyph_To_Bitmap` malformed invalid-argument route
 
 Status: one malformed glyph facade row promoted to real parity on 2026-07-20

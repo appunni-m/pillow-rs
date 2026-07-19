@@ -275,6 +275,7 @@ COMPILE_CONTRACT_OPERATIONS = {
     "macro_compile_probe",
     "face_macro_flags",
     "freetype.vector_transform",
+    "ftmm.done_mm_var_abi",
     "ftglyph.matrix_multiply",
     "ftglyph.matrix_invert",
 }
@@ -2080,11 +2081,19 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def inspect_module_flags_real_parity_reason(row: ConcreteInput) -> str | None:
-    if (
-        row.operation == "ftmodapi.inspect_module_flags"
-        and row.case_id == "ftmodapi.FT_MODULE_FONT_DRIVER.font_driver_modules_set_bit"
-    ):
+    if row.operation == "ftmodapi.inspect_module_flags":
         return "module class font-driver flags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
+def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str | None:
+    exact_rows = {
+        "ftdriver.TT_INTERPRETER_VERSION_35.interpreter_version_property_roundtrip",
+        "ftdriver.TT_INTERPRETER_VERSION_38.interpreter_version_property_normalizes_to_40",
+        "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip",
+    }
+    if row.operation == "ftdriver.interpreter_version_property" and row.case_id in exact_rows:
+        return "TT interpreter-version property set/get validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 
@@ -4024,6 +4033,12 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
     if lifecycle_null_reason:
         return ("real-parity", lifecycle_null_reason)
+    inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
+    if inspect_module_flags_real_reason:
+        return ("real-parity", inspect_module_flags_real_reason)
+    interpreter_version_property_real_reason = interpreter_version_property_real_parity_reason(row)
+    if interpreter_version_property_real_reason:
+        return ("real-parity", interpreter_version_property_real_reason)
     future_batch_pending = future_batch_unresolved_asset_pending_reason(row)
     if future_batch_pending:
         return ("pending-route", future_batch_pending)
@@ -4102,9 +4117,6 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     add_default_modules_real_reason = add_default_modules_real_parity_reason(row)
     if add_default_modules_real_reason:
         return ("real-parity", add_default_modules_real_reason)
-    inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
-    if inspect_module_flags_real_reason:
-        return ("real-parity", inspect_module_flags_real_reason)
     focused_success_real_reason = focused_success_real_parity_reason(row)
     if focused_success_real_reason:
         return ("real-parity", focused_success_real_reason)
