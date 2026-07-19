@@ -839,6 +839,10 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_Manager_LookupSize.error_requester_or_size_selection_failure",
         "ftcache.FTC_Manager_New.error_null_library",
         "ftcache.FTC_Manager_New.error_null_requester_or_output",
+        "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler",
+        "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup",
+        "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
+        "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1424,6 +1428,28 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_Manager_New.error_null_requester_or_output"
     ):
         return "FTC_Manager_New null-requester/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_lookup_scaler"
+        and row.case_id
+        == "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler"
+    ):
+        return "FTC_SBitCache_LookupScaler null-sbit/scaler errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_lookup_scaler"
+        and row.case_id
+        == "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup"
+    ):
+        return "FTC_SBitCache_LookupScaler output-clearing behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_new"
+        and row.case_id == "ftcache.FTC_SBitCache_New.error_outputs_null_cache"
+    ):
+        return "FTC_SBitCache_New null-cache output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.sbit_cache_new"
+        and row.case_id == "ftcache.FTC_SBitCache_New.invalid_arguments_match_c"
+    ):
+        return "FTC_SBitCache_New invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
