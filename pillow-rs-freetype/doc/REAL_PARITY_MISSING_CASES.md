@@ -6895,6 +6895,42 @@ Rejected larger batch:
 - Do not promote these exact-error rows until their oracle route/fixture assets
   and Rust error mapping are fixed.
 
+### Issue Set Current: null-error fallback public routes
+
+Problem:
+
+- Six null/invalid-handle public error rows were still classified as
+  `null-error-fallback` even though each row has an executable maintained route
+  through the pinned C oracle, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit caught these before the real-parity hook because the shape
+  fallback classifier ran first.
+
+Fix:
+
+- Add a scoped real-parity override for the six focused-proven case IDs before
+  shape fallback classification:
+  - `freetype.FT_Done_Face.error_invalid_or_foreign_face_handle`
+  - `freetype.FT_Done_FreeType.error_invalid_or_foreign_library_handle`
+  - `freetype.FT_New_Face.error_null_pathname`
+  - `freetype.FT_Render_Glyph.error_null_or_unowned_slot`
+  - `freetype.FT_Set_Char_Size.error_invalid_or_unscalable_face`
+  - `freetype.FT_Set_Pixel_Sizes.error_invalid_or_unscalable_face`
+
+Focused verification before promotion:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Face.error_null_pathname
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Done_Face.error_invalid_or_foreign_face_handle
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Done_FreeType.error_invalid_or_foreign_library_handle
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Render_Glyph.error_null_or_unowned_slot
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Char_Size.error_invalid_or_unscalable_face
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Set_Pixel_Sizes.error_invalid_or_unscalable_face
+```
+
+Each focused case passed exact runtime parity with `0` pending rows.
+Route audit after promotion: `real-parity` `4215`; `null-error-fallback`
+removed.
+
 1. `ftcache` cache-manager real parity: own `ftcache.*` routes only. Start with
    `FTC_Manager_New`, `FTC_Manager_Done`, and `FTC_CMapCache_New` before lookup
    rows.
