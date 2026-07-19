@@ -4487,19 +4487,41 @@ static int is_outline_decompose_touch_mask_case(const char* case_id) {
 static int is_outline_decompose_on_curve_case(const char* case_id) {
     return streq(case_id, "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c") ||
            streq(case_id, "ftimage.FT_Curve_Tag_On.curve_tag_classifies_on_curve_points") ||
-           streq(case_id, "ftimage.FT_Outline_LineTo_Func.callback_abi_matches_c");
+           streq(case_id, "ftimage.FT_Outline_LineTo_Func.callback_abi_matches_c") ||
+           streq(case_id, "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error");
 }
 
 static int is_outline_decompose_conic_case(const char* case_id) {
     return streq(case_id, "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c") ||
            streq(case_id, "ftimage.FT_Curve_Tag_Conic.curve_tag_classifies_conic_points") ||
-           streq(case_id, "ftimage.FT_Outline_ConicTo_Func.callback_abi_matches_c");
+           streq(case_id, "ftimage.FT_Outline_ConicTo_Func.callback_abi_matches_c") ||
+           streq(case_id, "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error");
 }
 
 static int is_outline_decompose_cubic_case(const char* case_id) {
     return streq(case_id, "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c") ||
            streq(case_id, "ftimage.FT_Curve_Tag_Cubic.curve_tag_classifies_cubic_points") ||
-           streq(case_id, "ftimage.FT_Outline_CubicTo_Func.callback_abi_matches_c");
+           streq(case_id, "ftimage.FT_Outline_CubicTo_Func.callback_abi_matches_c") ||
+           streq(case_id, "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error");
+}
+
+static int is_outline_callback_return_matrix_case(const char* case_id) {
+    return streq(case_id, "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error") ||
+           streq(case_id, "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error") ||
+           streq(case_id, "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error");
+}
+
+static const char* outline_callback_return_matrix_callback(const char* case_id) {
+    if (streq(case_id, "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error")) {
+        return "line_to";
+    }
+    if (streq(case_id, "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error")) {
+        return "conic_to";
+    }
+    if (streq(case_id, "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error")) {
+        return "cubic_to";
+    }
+    return "";
 }
 
 static int is_outline_decompose_public_input_alias_case(const char* case_id) {
@@ -5570,6 +5592,7 @@ static int emit_outline_decompose(int argc, char** argv) {
         !is_outline_decompose_on_curve_case(case_id) &&
         !is_outline_decompose_conic_case(case_id) &&
         !is_outline_decompose_cubic_case(case_id) &&
+        !is_outline_callback_return_matrix_case(case_id) &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks") &&
         !streq(case_id, "ftoutln.FT_Outline_Decompose.callback_error_propagates")) {
@@ -5826,6 +5849,54 @@ static int emit_outline_decompose(int argc, char** argv) {
                 printf("]}");
             }
             printf("]}");
+        }
+        printf("]}}\n");
+        return 0;
+    }
+    if (is_outline_callback_return_matrix_case(case_id)) {
+        const int return_values[2] = {7, 1234};
+        const char* callback = outline_callback_return_matrix_callback(case_id);
+        printf("{");
+        print_status(return_values[0]);
+        printf(",\"output\":{\"rows\":[");
+        for (int row = 0; row < 2; row++) {
+            FT_Outline_Funcs funcs;
+            funcs.move_to = record_outline_move_to;
+            funcs.line_to = record_outline_line_to;
+            funcs.conic_to = record_outline_conic_to;
+            funcs.cubic_to = record_outline_cubic_to;
+            funcs.shift = 0;
+            funcs.delta = 0;
+            reset_recorded_outline_events();
+            /* FreeType `src/base/ftoutln.c` checks callback return values
+             * immediately; these standard fixtures all invoke move_to before the
+             * first tested line/conic/cubic callback, so fail index 1 captures the
+             * prefix before the abort. */
+            recorded_outline_decompose_fail_index = 1;
+            recorded_outline_decompose_fail_error = return_values[row];
+            (void)FT_Outline_Decompose(&outline, &funcs, recorded_outline_decompose_user_token);
+            if (row) {
+                printf(",");
+            }
+            printf("{\"status\":%d,\"error\":%d,\"events_before_abort\":[",
+                   return_values[row],
+                   return_values[row]);
+            for (int i = 0; i < recorded_outline_event_count; i++) {
+                if (i) {
+                    printf(",");
+                }
+                printf("{\"kind\":\"%s\",\"points\":[", recorded_outline_events[i].kind);
+                for (int j = 0; j < recorded_outline_events[i].count; j++) {
+                    if (j) {
+                        printf(",");
+                    }
+                    printf("{\"x\":%ld,\"y\":%ld}",
+                           recorded_outline_events[i].points[j].x,
+                           recorded_outline_events[i].points[j].y);
+                }
+                printf("]}");
+            }
+            printf("],\"failing_callback\":\"%s\"}", callback);
         }
         printf("]}}\n");
         return 0;

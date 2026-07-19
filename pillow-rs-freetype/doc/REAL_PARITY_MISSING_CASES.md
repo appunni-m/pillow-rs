@@ -152,10 +152,9 @@ Rejected exact-error probes:
 - `ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering`:
   exact-error promotion failed for the same top-level `Ok` wrapper shape.
 - The adjacent `FT_Outline_LineTo_Func`, `FT_Outline_ConicTo_Func`, and
-  `FT_Outline_CubicTo_Func` callback-error rows are still `pending-route`
-  because they use the older `ftimage.outline_decompose` operation and missing
-  fixture names. They need a deliberate fixture/operation migration, not a
-  metadata-only exact-error promotion.
+  `FT_Outline_CubicTo_Func` callback-error rows were promoted separately by
+  routing them through `ftoutln.outline_decompose`, reusing standard synthetic
+  fixtures, and comparing the exact callback-return matrix output.
 
 ### Issue Set Current: named-instance memory-face stale route plus rejected exact-error batch
 
@@ -7040,9 +7039,24 @@ Result: `21 / 21` runnable rows passed, `2` pending. Route audit moved eight
 rows from `pending-route` to `real-parity`: `real-parity` `4223`,
 `pending-route` `84`.
 
-Remaining blocker:
+Follow-up fix:
 
 - The three `ftimage.FT_Outline_{Conic,Cubic,Line}To_Func.decompose_propagates_callback_error`
-  rows still use `callback_return_values` and need a dedicated exact-error
-  output matrix route. Do not promote them through the existing single-error
-  callback route or by accepting any error.
+  rows now use the same standard fixtures and public `ftoutln.outline_decompose`
+  route.  They require `compare_error_output=true` because accepting "any error"
+  would hide callback-return parity bugs.
+- The dedicated matrix route runs return values `7` and `1234`, fails at the
+  first target line/conic/cubic callback after the initial `move_to`, and
+  compares `rows[*].status`, `rows[*].events_before_abort`, and
+  `rows[*].failing_callback` across the pinned C oracle, Rust FFI, C ABI, and
+  WASM ABI.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_decompose
+```
+
+Result: `24 / 24` runnable rows passed, `2` pending. Route audit moved three
+more rows from `pending-route` to `real-parity`: `real-parity` `4226`,
+`pending-route` `81`.
