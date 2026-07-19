@@ -666,6 +666,13 @@ fn validation_flags_param(value: &Value) -> Result<FT_UInt, String> {
 }
 
 fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
+    if case.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
+        && case.operation == "sfnt.get_sfnt_table.record"
+    {
+        return Some(
+            "MVAR variation table behavior must be implemented before this SFNT table row can run",
+        );
+    }
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
         && lifecycle_handle_param(&case.inputs.params, "face") == Some("non_sfnt")
