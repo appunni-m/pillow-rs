@@ -8207,6 +8207,59 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `t1tables` Type1 runtime table route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `03a1d946d`: `real-parity=4465`,
+  `generic-fallback=231`, `pending-route=283`, `pending-core=7`.
+
+Finding:
+
+- Type1 scalar constants and record layouts are already `compile-contract`.
+- The Type1 runtime rows for `FT_Get_PS_Font_Info`,
+  `FT_Get_PS_Font_Private`, `FT_Get_PS_Font_Value`,
+  `FT_Has_PS_Glyph_Names`, Multiple Master blend dictionary fields, blend flag
+  groups, and Type1 encoding runtime cases had stayed in `generic-fallback`
+  with the reason `no explicit maintained route classification`.
+- Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  Type1 tables route that opens Type1/CFF/MM fixtures, reads the font-info and
+  private dictionaries, queries `FT_Get_PS_Font_Value` for encoding and blend
+  keys, and compares exact public records, arrays, scalar values, lengths, and
+  unsupported/sentinel behavior.
+
+Classification change:
+
+- 31 `t1tables.*` runtime rows moved from `generic-fallback` to
+  `pending-route`.
+- 29 `t1tables.*` constants/layout rows remain `compile-contract`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=200`,
+  `pending-route=314`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained Type1 table route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust Type1/CFF private dictionary, font-info, encoding, and MM
+   blend extraction first. The C and WASM ABI layers may only own handle
+   validation, record copying, and lifetime bookkeeping.
+3. Compare exact `T1_FontInfo`, `T1_Private`, `FT_Get_PS_Font_Value` values,
+   array lengths and contents, encoding type classifications, blend flag groups,
+   and sentinel rejection/no-field behavior.
+4. Keep the existing constants and record-layout compile contracts separate
+   from runtime parity; do not count imports/layout checks as value parity.
+5. Promote rows only after focused `t1tables` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `ftcolor` COLR/CPAL success route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

@@ -1227,6 +1227,19 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for Type1 table runtime data that do not have a maintained route."""
+    if not row.operation.startswith("t1tables."):
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Type1/Multiple Master font-info, private dictionary, encoding, and "
+        "blend runtime data requires a maintained Type1 tables route; keeping "
+        "it generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3529,6 +3542,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftcolor_pending = ftcolor_subsystem_pending_reason(row)
     if ftcolor_pending:
         return ("pending-route", ftcolor_pending)
+    t1tables_pending = t1tables_subsystem_pending_reason(row)
+    if t1tables_pending:
+        return ("pending-route", t1tables_pending)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
