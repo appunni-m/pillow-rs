@@ -944,6 +944,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+        "ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output",
         "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
         "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors",
         "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
@@ -1713,6 +1714,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     }
     if (row.operation, row.case_id) in render_raster_error_cases:
         return "render/raster public error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbbox.outline_get_bbox"
+        and row.case_id == "ftbbox.FT_Outline_Get_BBox.error_null_outline_or_output"
+    ):
+        return "FT_Outline_Get_BBox null-outline/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbdf.get_bdf_property"
         and row.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
