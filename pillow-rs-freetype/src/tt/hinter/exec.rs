@@ -839,17 +839,37 @@ impl ExecContext {
         Ok(())
     }
 
-    fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, u8, usize) {
+    fn point_displacement(
+        &self,
+        opcode: u8,
+        zone: &GlyphZone,
+    ) -> Result<Option<(i32, i32, u8, usize)>, FontError> {
         let (ref_zone, ref_pt) = if opcode & 1 != 0 {
             (self.gs.zp0, self.gs.rp1 as usize)
         } else {
             (self.gs.zp1, self.gs.rp2 as usize)
         };
+        let point_limit = if ref_zone == 0 {
+            self.twilight.n_points as usize
+        } else {
+            zone.n_points as usize
+        };
+        if ref_pt >= point_limit {
+            // FreeType `Compute_Point_Displacement` validates the selected
+            // reference point before SHP/SHC/SHZ movement
+            // (`ttinterp.c:4923-4962`).  Non-pedantic execution ignores the
+            // instruction; FT_LOAD_PEDANTIC reports Invalid_Reference.
+            return if self.pedantic_hinting {
+                Err(FontError::InvalidReference)
+            } else {
+                Ok(None)
+            };
+        }
         let (cx, cy) = self.cur_in(zone, ref_zone, ref_pt);
         let (ox, oy) = self.org_in(zone, ref_zone, ref_pt);
         let dist = self.gs.project(cx - ox, cy - oy);
         let (dx, dy) = self.gs.move_along_free(dist);
-        (dx, dy, ref_zone, ref_pt)
+        Ok(Some((dx, dy, ref_zone, ref_pt)))
     }
 
     fn skip_to_else_or_eif(&mut self) -> Result<(), FontError> {
@@ -1473,7 +1493,9 @@ impl ExecContext {
                 // ── SHP — Shift points by reference-point displacement ──
                 0x32 | 0x33 => {
                     let loop_count = self.gs.loop_counter as usize;
-                    let (dx, dy, _, _) = self.point_displacement(opcode, zone);
+                    let Some((dx, dy, _, _)) = self.point_displacement(opcode, zone)? else {
+                        continue;
+                    };
                     let point_limit = if self.gs.zp2 == 0 {
                         self.twilight.n_points as usize
                     } else {
@@ -1497,7 +1519,11 @@ impl ExecContext {
                 0x34 | 0x35 => {
                     let contour = self.pop()? as usize;
                     if contour < zone.contours.len() {
-                        let (dx, dy, ref_zone, ref_pt) = self.point_displacement(opcode, zone);
+                        let Some((dx, dy, ref_zone, ref_pt)) =
+                            self.point_displacement(opcode, zone)?
+                        else {
+                            continue;
+                        };
                         let start = if contour == 0 {
                             0
                         } else {
@@ -1517,7 +1543,10 @@ impl ExecContext {
                 // ── SHZ — Shift zone by reference-point displacement ──
                 0x36 | 0x37 => {
                     let _zone_selector = self.pop()?;
-                    let (dx, dy, ref_zone, ref_pt) = self.point_displacement(opcode, zone);
+                    let Some((dx, dy, ref_zone, ref_pt)) = self.point_displacement(opcode, zone)?
+                    else {
+                        continue;
+                    };
                     let target_zp = self.gs.zp2;
                     let limit = if target_zp == 0 {
                         self.twilight.n_points as usize
