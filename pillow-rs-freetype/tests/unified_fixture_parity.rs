@@ -8368,6 +8368,12 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output"
             || case.case_id
                 == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs"
+            || case.case_id == "ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero"
+            || case.case_id == "ftcache.FTC_CMapCache_New.error_null_manager_or_output"
+            || case.case_id == "ftcache.FTC_ImageCache_Lookup.error_null_aglyph"
+            || case.case_id
+                == "ftcache.FTC_ImageCache_Lookup.error_invalid_cache_type_face_or_glyph"
+            || case.case_id == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
