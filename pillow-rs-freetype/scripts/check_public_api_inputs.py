@@ -872,6 +872,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch",
         "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
         "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error",
+        "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error",
+        "fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required",
         "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence",
         "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected",
         "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure",
@@ -883,7 +885,10 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected",
         "fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected",
         "fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected",
+        "fterrdef.FT_Err_Invalid_Outline.malformed_outline_rejected",
         "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure",
+        "fterrdef.FT_Err_Invalid_Slot_Handle.null_or_invalid_slot_rejected",
+        "fterrdef.FT_Err_Invalid_Table.malformed_sfnt_table_rejected",
         "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
         "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
         "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch",
@@ -917,6 +922,11 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "tttables.TT_Postscript.invalid_post_format_error_runtime",
         "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_Type1.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_Type42.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1219,6 +1229,26 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure",
         ): "PCF table stream-skip failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "FT_New_Memory_Face_and_table_public_api",
+            "fterrdef.FT_Err_Invalid_Table.malformed_sfnt_table_rejected",
+        ): "FT_New_Memory_Face malformed SFNT table error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_New_Memory_Face_then_charmap_ops",
+            "fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required",
+        ): "SFNT missing-cmap charmap operation error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Get_Glyph_or_FT_Render_Glyph",
+            "fterrdef.FT_Err_Invalid_Slot_Handle.null_or_invalid_slot_rejected",
+        ): "FT_Get_Glyph/Render_Glyph null-or-invalid slot error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Load_Glyph_and_FT_Render_Glyph",
+            "fterrdef.FT_Err_Invalid_Outline.malformed_outline_rejected",
+        ): "FT_Load_Glyph/Render_Glyph malformed outline error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Load_Glyph_then_FT_Render_Glyph",
+            "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error",
+        ): "FT_Render_Glyph unsupported render-mode error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "FT_Property_Get",
             "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         ): "FT_Property_Get glyph-to-script-map invalid-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -1330,6 +1360,26 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "sfnt.new_memory_face_then_charmap_lookup",
             "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected",
         ): "SFNT charmap format rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sfnt.face_load_error_probe",
+            "ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base",
+        ): "SFNT module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "truetype.load_glyph_error_probe",
+            "ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base",
+        ): "TrueType module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "type1.load_glyph_error_probe",
+            "ftmoderr.FT_Mod_Err_Type1.prefixed_error_base",
+        ): "Type1 module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "type42.face_load_error_probe",
+            "ftmoderr.FT_Mod_Err_Type42.prefixed_error_base",
+        ): "Type42 module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "winfonts.face_load_error_probe",
+            "ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base",
+        ): "WinFNT module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "svg.preset_slot",
             "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",

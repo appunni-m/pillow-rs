@@ -8424,6 +8424,10 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error"
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error"
             || case.case_id
+                == "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required"
+            || case.case_id
                 == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure"
@@ -8437,7 +8441,10 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Outline.malformed_outline_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Slot_Handle.null_or_invalid_slot_rejected"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Table.malformed_sfnt_table_rejected"
             || case.case_id == "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             || case.case_id == "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation"
             || case.case_id == "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch"
@@ -8476,6 +8483,11 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "tttables.TT_Postscript.invalid_post_format_error_runtime"
             || case.case_id == "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_Type1.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_Type42.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
