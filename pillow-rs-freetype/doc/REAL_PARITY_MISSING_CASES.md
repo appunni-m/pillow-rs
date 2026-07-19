@@ -41,12 +41,13 @@ Rejected future-asset probes:
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
   runner calls the public list endpoint across C, Rust, C ABI, and WASM.
-- `fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont`: the
-  deterministic malformed-BDF generator made this row runnable, but pinned C
-  FreeType returns `FT_Err_Unknown_File_Format` (`85`) for a first line that is
-  not `STARTFONT`, not `FT_Err_Missing_Startfont_Field` (`176`). Keep it out of
-  exact-error promotion until the test plan identifies a public input that
-  actually reaches the named BDF error.
+- `fterrdef.FT_Err_Missing_Startfont_Field.bdf_first_line_not_startfont` was
+  rechecked in the current future-batch pass.  Requiring strict error output
+  exposed a real mismatch: pinned C FreeType returns
+  `FT_Err_Unknown_File_Format` (`85`) for the current BDF-like fixture while
+  Rust FFI returns `FT_Err_Cannot_Open_Resource` (`3`).  The row is now
+  classified as `pending-route` instead of `generic-error-fallback`, because
+  accepting any error would be a green placeholder.
 
 Promoted rows:
 
