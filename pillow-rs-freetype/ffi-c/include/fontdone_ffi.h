@@ -89,6 +89,47 @@ typedef struct FT_MM_Var_ {
   FT_Var_Named_Style* namedstyle;
 } FT_MM_Var;
 
+typedef struct FT_WinFNT_HeaderRec_ {
+  FT_UShort version;
+  FT_ULong file_size;
+  FT_Byte copyright[60];
+  FT_UShort file_type;
+  FT_UShort nominal_point_size;
+  FT_UShort vertical_resolution;
+  FT_UShort horizontal_resolution;
+  FT_UShort ascent;
+  FT_UShort internal_leading;
+  FT_UShort external_leading;
+  FT_Byte italic;
+  FT_Byte underline;
+  FT_Byte strike_out;
+  FT_UShort weight;
+  FT_Byte charset;
+  FT_UShort pixel_width;
+  FT_UShort pixel_height;
+  FT_Byte pitch_and_family;
+  FT_UShort avg_width;
+  FT_UShort max_width;
+  FT_Byte first_char;
+  FT_Byte last_char;
+  FT_Byte default_char;
+  FT_Byte break_char;
+  FT_UShort bytes_per_row;
+  FT_ULong device_offset;
+  FT_ULong face_name_offset;
+  FT_ULong bits_pointer;
+  FT_ULong bits_offset;
+  FT_Byte reserved;
+  FT_ULong flags;
+  FT_UShort A_space;
+  FT_UShort B_space;
+  FT_UShort C_space;
+  FT_UShort color_table_offset;
+  FT_ULong reserved1[4];
+} FT_WinFNT_HeaderRec;
+
+typedef FT_WinFNT_HeaderRec* FT_WinFNT_Header;
+
 typedef struct FT_Open_Args_ {
   FT_UInt flags;
   const FT_Byte* memory_base;
@@ -350,6 +391,7 @@ const char* FT_Get_Font_Format(FT_Face face);
 const char* FT_Get_X11_Font_Format(FT_Face face);
 FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index);
 FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
+FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);
 void* FT_Get_Sfnt_Table(FT_Face face, FT_Sfnt_Tag tag);

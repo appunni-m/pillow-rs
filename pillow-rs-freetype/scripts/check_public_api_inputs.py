@@ -118,6 +118,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_x11_font_format",
     "fontdone_wasm_set_named_instance",
     "fontdone_wasm_get_default_named_instance",
+    "fontdone_wasm_get_winfnt_header",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
@@ -203,6 +204,8 @@ REAL_PARITY_OPERATIONS = {
     "freetype.face_get_chars_of_variant",
     "ftmm.set_named_instance",
     "ftmm.get_default_named_instance",
+    "winfnt.get_header",
+    "ftwinfnt.get_winfnt_header",
     "freetype.get_glyph_name",
     "freetype.get_name_index",
     "freetype.new_face",
@@ -1060,8 +1063,6 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
         return None
     if not isinstance(value, dict):
         return None
-    if value.get("status") == "required_future_asset":
-        return f"{label} is marked required_future_asset"
     for key, item in value.items():
         if key not in {"id", "path"}:
             reason = unresolved_asset_reason(item, f"{label}.{key}")
@@ -1073,27 +1074,39 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
         return None
     reference = value.get("id") or value.get("path")
     if not isinstance(reference, str) or "/" not in reference:
+        if value.get("status") == "required_future_asset":
+            return f"{label} is marked required_future_asset"
         return None
     if not (FIXTURE_DIR / reference).is_file():
+        if value.get("status") == "required_future_asset":
+            return f"{label} is marked required_future_asset"
         return f"{label} references missing fixture {reference}"
     return None
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
-    if (
-        row.operation == "ftwinfnt.get_winfnt_header"
-        and row.case_id
-        in {
-            "ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success",
-            "ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file",
-        }
-    ):
-        return (
-            "WinFNT header success requires a resolved C-openable bitmap-header.fnt; "
-            "counting the missing required_future_asset as real parity would be a green placeholder"
-        )
     if not operation_is_real_parity(row.operation):
         return None
+    unresolved_future_asset_cases = {
+        "ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer": (
+            "tracked cache bitmap strike asset is not a C-openable success fixture; "
+            "pinned C returns error 6, so exact success would be a green placeholder"
+        ),
+        "freetype.FT_ENCODING_NONE.representative_runtime_observation": (
+            "tracked FT_ENCODING_NONE font is not a C-openable encoding-none fixture; "
+            "pinned C returns error 23, so exact runtime observation would be a green placeholder"
+        ),
+        "freetype.FT_HAS_HORIZONTAL.no_horizontal_metrics_control": (
+            "tracked no-horizontal-metrics control font is not C-openable for this macro; "
+            "pinned C returns error 85, so exact macro success would be a green placeholder"
+        ),
+        "freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false": (
+            "tracked bitmap-only control font is not C-openable for this macro; "
+            "pinned C returns error 85, so exact macro success would be a green placeholder"
+        ),
+    }
+    if row.case_id in unresolved_future_asset_cases:
+        return unresolved_future_asset_cases[row.case_id]
     exact_error_route_gaps = {
         (
             "ftoutln.outline_decompose",

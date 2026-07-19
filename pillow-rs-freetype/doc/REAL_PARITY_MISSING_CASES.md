@@ -37,12 +37,6 @@ Rejected future-asset probes:
   `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: exact
   promotion failed with C error `7`; keep fallback-classified until the
   outline-bitmap dropout route is made public-exact.
-- `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success` and
-  `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`: the focused
-  `ftwinfnt.get_winfnt_header` route reports these two success rows as pending
-  because `fonts/winfnt/bitmap-header.fnt` is still marked
-  `required_future_asset`. They must not be counted as real parity until a
-  resolved, C-openable WinFNT asset proves the header-copy route.
 - `ftlist.FT_List_Iterate.iterates_all_nodes_success` and
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
@@ -65,6 +59,11 @@ Promoted rows:
 - `ftotval.FT_VALIDATE_JSTF.validate_selects_jstf_table`
 - `ftotval.FT_VALIDATE_MATH.validate_selects_math_table`
 - `ftotval.FT_VALIDATE_OT.validate_all_requested_tables`
+- `ftwinfnt.FT_Get_WinFNT_Header.*`: `7 / 7` runnable rows passed after adding
+  deterministic WinFNT fixtures and exact pinned-C/Rust FFI/C ABI/WASM routing.
+- `ftwinfnt.FT_WinFNT_ID_*.charset_roundtrip_from_header`: `18 / 18` concrete
+  charset rows now pass exact pinned-C/Rust FFI/C ABI/WASM comparison through
+  `winfnt.get_header`.
 
 Focused non-coverage proof before promotion:
 
@@ -84,8 +83,10 @@ Results:
 
 - `ftotval.open_type_validate`: `11 / 11` runnable rows passed, with nine
   existing asset-pending rows left visible.
-- `ftwinfnt.get_winfnt_header`: `5 / 5` runnable rows passed, with two
-  existing asset-pending rows left visible.
+- `ftwinfnt.get_winfnt_header`: `7 / 7` runnable rows passed.
+- `winfnt.get_header`: `18 / 18` runnable charset rows passed, with one
+  separate `fttypes.FT_UShort.winfnt_header_field_contract` row still pending
+  because `fonts/winfnt/ushort-fields-known.fnt` is not a tracked fixture.
 - `freetype.init_free_type`: `3 / 3` runnable rows passed after adding the
   explicit pinned-C, Rust FFI, C ABI, and WASM route.
 - `ftmodapi.add_default_modules`: `2 / 2` runnable rows passed after adding
@@ -6645,24 +6646,22 @@ make -C pillow-rs-freetype test-op OP=ftdriver.glyph_to_script_map
 make -C pillow-rs-freetype test-op OP=ftdriver.property_set_get
 ```
 
-### Issue Set BG: WinFNT header charset rows are not exact parity yet
+### Issue Set BG: WinFNT header charset rows promoted to exact parity
 
-Current blocker:
+Current status:
 
-- The 19 `winfnt.get_header` rows are a related bucket, but they must remain
-  generic fallback for now.
-- A focused generic-fallback probe can report pass because it does not require
-  the pinned C oracle output for the declared WinFNT header case IDs.
-- Promoting `winfnt.get_header` to a real-parity operation caused exact runs to
-  call the native oracle route, and the C oracle returned error `7` for the 18
-  `charset_roundtrip_from_header` case IDs.
-- Therefore these rows are not proven C/Rust/C-ABI/WASM parity. Do not add
-  missing `.fnt` files as duplicate placeholders, and do not classify the
-  operation as real parity until the concrete C oracle/input route exists.
+- The 18 concrete `winfnt.get_header` charset rows now run against pinned C
+  FreeType, Rust FFI, C ABI, and WASM ABI and compare exact `error` plus
+  `header.charset` output.
+- The deterministic fixtures live under `tests/fixtures/fonts/winfnt/charset/`
+  and encode the concrete WinFNT header charset byte for each public
+  `FT_WinFNT_ID_*` constant.
+- The separate `fttypes.FT_UShort.winfnt_header_field_contract` row remains
+  pending because `fonts/winfnt/ushort-fields-known.fnt` is still unresolved.
+  It was not replaced with a duplicate placeholder.
 
-Rejected rows:
+Promoted rows:
 
-- `fttypes.FT_UShort.winfnt_header_field_contract`
 - `ftwinfnt.FT_WinFNT_ID_CP1250.charset_roundtrip_from_header`
 - `ftwinfnt.FT_WinFNT_ID_CP1251.charset_roundtrip_from_header`
 - `ftwinfnt.FT_WinFNT_ID_CP1252.charset_roundtrip_from_header`
@@ -6682,26 +6681,21 @@ Rejected rows:
 - `ftwinfnt.FT_WinFNT_ID_OEM.charset_roundtrip_from_header`
 - `ftwinfnt.FT_WinFNT_ID_SYMBOL.charset_roundtrip_from_header`
 
-Required fix:
+Remaining pending row:
 
-1. Add real deterministic WinFNT inputs or explicit native C oracle generation
-   for the header charset matrix.
-2. Ensure the Rust FFI, C ABI, and WASM ABI read the same concrete header data
-   as the pinned C oracle.
-3. Promote only after focused exact runs pass with real oracle output, then run
-   the full unified parity suite.
+- `fttypes.FT_UShort.winfnt_header_field_contract`
 
-Rejected verification:
+Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=charset_roundtrip_from_header
+make -C pillow-rs-freetype test-op OP=winfnt.get_header
 ```
 
-Result after attempted promotion:
+Result after exact route and fixture generation:
 
 ```text
-runtime_parity: passed=0 failed=18 total=18 failure_buckets=rust ffi:value:18
-native oracle returned unexpected error 7 for each charset_roundtrip_from_header row
+runtime_parity: passed=18 failed=0 total=18 covered_manifest_cases=18 failure_buckets=
 ```
 
 ### Issue Set BG: `FT_Outline_Check` invalid matrix needs exact error-output support

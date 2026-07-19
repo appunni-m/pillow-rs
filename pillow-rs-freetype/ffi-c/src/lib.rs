@@ -50,6 +50,8 @@ pub type FT_TrueTypeEngineType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
+pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
+pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
@@ -2413,6 +2415,16 @@ pub extern "C" fn FT_Get_Default_Named_Instance(
         face_state(face).map(|state| &state.inner),
         instance_index,
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_WinFNT_Header(
+    face: FT_Face,
+    header: *mut FT_WinFNT_HeaderRec,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the header output or null.
+    let header = unsafe { header.as_mut() };
+    rust_ffi::FT_Get_WinFNT_Header(face_state(face).map(|state| &state.inner), header)
 }
 
 #[unsafe(no_mangle)]
