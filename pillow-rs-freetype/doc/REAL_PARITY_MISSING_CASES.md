@@ -42,6 +42,14 @@ Rejected future-asset probes:
 - `ftmm.FT_Done_MM_Var.null_descriptor_success`: exact promotion failed with C
   error `7`; keep fallback-classified until the null-descriptor success route
   is proven against the pinned C endpoint.
+- `ftlist.FT_List_Iterate.iterates_all_nodes_success` and
+  `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
+  failed with C error `7`; keep fallback-classified until the list success
+  runner calls the public list endpoint across C, Rust, C ABI, and WASM.
+- `freetype.FT_Init_FreeType.creates_library_handle` and
+  `freetype.FT_Init_FreeType.created_library_reports_version_and_modules`:
+  exact promotion failed with C error `7`; keep fallback-classified until the
+  success library-state route is implemented for all ABI lanes.
 
 Promoted rows:
 
