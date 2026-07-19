@@ -18118,6 +18118,21 @@ fn runtime_font_asset(case: &InputCase) -> Option<&Asset> {
 }
 
 fn runtime_font_asset_entry(case: &InputCase) -> Option<(&str, &Asset)> {
+    if case
+        .inputs
+        .params
+        .get("charmap_selection")
+        .and_then(Value::as_array)
+        .is_some_and(|values| {
+            values
+                .iter()
+                .any(|value| value.as_str() == Some("non_unicode_if_fixture_present"))
+        })
+    {
+        if let Some(asset) = case.inputs.assets.get("non_unicode_charmap_font") {
+            return Some(("non_unicode_charmap_font", asset));
+        }
+    }
     [
         "font",
         "font_bytes",

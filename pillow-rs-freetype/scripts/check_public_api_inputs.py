@@ -845,6 +845,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup",
         "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
         "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
+        "freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face",
         "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source",
         "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header",
         "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments",
@@ -1062,7 +1063,10 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
+        "freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes",
+        "freetype.FT_New_Face.success_negative_face_index_probe",
         "freetype.FT_New_Memory_Face.success_named_instance_index",
+        "freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face",
         "freetype.FT_Open_Face.success_open_variation_named_instance",
         "freetype.FT_Request_Size.success_bitmap_request_match",
         "freetype.FT_Select_Charmap.success_select_present_encoding",
@@ -1073,6 +1077,9 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             reason in {
                 "font is marked required_future_asset",
                 "font_bytes is marked required_future_asset",
+                "malformed is marked required_future_asset",
+                "non_unicode_charmap_font is marked required_future_asset",
+                "variable_font is marked required_future_asset",
             }
             and row.case_id in existing_primary_font_cases
         ):
