@@ -275,9 +275,29 @@ COMPILE_CONTRACT_OPERATIONS = {
     "macro_compile_probe",
     "face_macro_flags",
     "freetype.vector_transform",
+    "ftlist.list_insert_abi",
+    "ftlist.list_iterate_abi",
+    "ftlist.list_remove_abi",
+    "ftlist.list_up_abi",
+    "ftlogging.set_default_log_handler_abi",
+    "ftlogging.set_log_handler_abi",
+    "ftlogging.trace_set_default_level_abi",
+    "ftlogging.trace_set_level_abi",
     "ftmm.done_mm_var_abi",
+    "ftmm.get_default_named_instance_abi",
+    "ftmm.get_mm_blend_coordinates_abi",
+    "ftmm.get_mm_var_abi",
+    "ftmm.get_mm_weightvector_abi",
+    "ftmm.get_multi_master_abi",
+    "ftmm.get_var_axis_flags_abi",
+    "ftwinfnt.get_winfnt_header_abi",
+    "ftwinfnt.winfnt_header_type_import",
+    "ftwinfnt.winfnt_header_type_abi",
+    "ftwinfnt.winfnt_header_rec_abi",
     "ftglyph.matrix_multiply",
     "ftglyph.matrix_invert",
+    "otsvg.svg_document_type_abi",
+    "otsvg.svg_document_rec_abi",
 }
 
 REAL_PARITY_OPERATIONS = {
@@ -1263,19 +1283,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftmm_rows_without_maintained_route = {
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
-        "ftmm.FT_Get_Default_Named_Instance.import_contract",
-        "ftmm.FT_Get_MM_Blend_Coordinates.import_contract",
         "ftmm.FT_Get_MM_Blend_Coordinates.default_blend_coordinates",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_MM_Blend_Coordinates.partial_or_excess_count",
-        "ftmm.FT_Get_MM_Var.import_contract",
         "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
         "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success",
-        "ftmm.FT_Get_MM_WeightVector.import_contract",
         "ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success",
-        "ftmm.FT_Get_Multi_Master.import_contract",
         "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success",
-        "ftmm.FT_Get_Var_Axis_Flags.import_contract",
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
@@ -1303,8 +1317,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
         "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name",
         "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format",
-        "ftmodapi.FT_Get_Module.lookup_existing_and_missing_module",
-        "ftmodapi.FT_Get_Module.null_inputs_return_null",
         "ftmodapi.FT_MODULE_DRIVER_HAS_HINTER.present_on_native_hinter_drivers",
         "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c",
         "ftmodapi.FT_MODULE_DRIVER_SCALABLE.scalable_driver_flags_match_c",
@@ -1534,18 +1546,12 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for specialized public records without a maintained route."""
     specialized_rows_without_maintained_route = {
-        "ftwinfnt.FT_Get_WinFNT_Header.signature_and_dispatch_contract",
-        "ftwinfnt.FT_WinFNT_Header.alias_defined",
-        "ftwinfnt.FT_WinFNT_Header.pointer_abi_contract",
         "ftwinfnt.FT_WinFNT_Header.mutable_output_handle_contract",
-        "ftwinfnt.FT_WinFNT_HeaderRec.layout_matches_c",
         "ftwinfnt.FT_WinFNT_HeaderRec.field_order_matches_header",
         "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
         "ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap",
         "otsvg.FT_SVG_Document.alias_defined",
-        "otsvg.FT_SVG_Document.pointer_abi_contract",
         "otsvg.FT_SVG_Document.renderer_callback_observes_document",
-        "otsvg.FT_SVG_DocumentRec.layout_matches_c",
         "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
         "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
     }
@@ -1590,14 +1596,6 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for callback/provider ABI behavior without a maintained route."""
     callback_provider_rows_without_maintained_route = {
-        "ftlist.FT_List_Insert.import_contract",
-        "ftlist.FT_List_Iterate.import_contract",
-        "ftlist.FT_List_Remove.import_contract",
-        "ftlist.FT_List_Up.import_contract",
-        "ftlogging.FT_Set_Default_Log_Handler.import_contract",
-        "ftlogging.FT_Set_Log_Handler.import_contract",
-        "ftlogging.FT_Trace_Set_Default_Level.import_contract",
-        "ftlogging.FT_Trace_Set_Level.import_contract",
         "ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks",
         "ftrender.FT_Set_Renderer.set_outline_renderer_success",
     }
@@ -2083,6 +2081,12 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
 def inspect_module_flags_real_parity_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftmodapi.inspect_module_flags":
         return "module class font-driver flags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    return None
+
+
+def get_module_real_parity_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftmodapi.get_module":
+        return "FT_Get_Module module nullness and class names validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 
@@ -4036,6 +4040,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
     if inspect_module_flags_real_reason:
         return ("real-parity", inspect_module_flags_real_reason)
+    get_module_real_reason = get_module_real_parity_reason(row)
+    if get_module_real_reason:
+        return ("real-parity", get_module_real_reason)
     interpreter_version_property_real_reason = interpreter_version_property_real_parity_reason(row)
     if interpreter_version_property_real_reason:
         return ("real-parity", interpreter_version_property_real_reason)

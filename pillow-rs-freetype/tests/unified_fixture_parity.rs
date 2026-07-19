@@ -12589,6 +12589,107 @@ fn module_flag_names_arg(params: &Value) -> Result<String, String> {
     Ok(module_flag_names(params)?.join(","))
 }
 
+fn module_lookup_names(params: &Value) -> Result<Vec<String>, String> {
+    if let Some(scenarios) = params.get("scenarios").and_then(Value::as_array) {
+        return scenarios
+            .iter()
+            .map(|scenario| {
+                let object = scenario
+                    .as_object()
+                    .ok_or_else(|| format!("module scenario must be an object, got {scenario}"))?;
+                object
+                    .get("module_name")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| {
+                        format!("module scenario missing string module_name: {scenario}")
+                    })
+            })
+            .collect();
+    }
+    module_flag_names(params)
+}
+
+fn module_lookup_library_present(params: &Value) -> i32 {
+    let library = lifecycle_handle_param(params, "library");
+    if library == Some("null") {
+        return 0;
+    }
+    if let Some(scenarios) = params.get("scenarios").and_then(Value::as_array) {
+        if scenarios.iter().all(|scenario| {
+            scenario
+                .get("library")
+                .and_then(Value::as_str)
+                .is_some_and(|library| library == "null")
+        }) {
+            return 0;
+        }
+    }
+    1
+}
+
+fn module_lookup_names_arg(params: &Value) -> Result<String, String> {
+    Ok(module_lookup_names(params)?.join(","))
+}
+
+fn module_lookup_output<F>(params: &Value, mut present_for: F) -> Result<Value, String>
+where
+    F: FnMut(Option<&str>) -> bool,
+{
+    let rows = module_lookup_names(params)?
+        .into_iter()
+        .map(|module| {
+            let module_name = if module == "null" {
+                None
+            } else {
+                Some(module.as_str())
+            };
+            let present = present_for(module_name);
+            json!({
+                "module": module,
+                "nullness": !present,
+                "class_name": if present { module_name } else { None },
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "lookups": rows }))
+}
+
+fn rust_get_module(case: &InputCase) -> Result<RunOutput, String> {
+    let library = if module_lookup_library_present(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    Ok(ok(module_lookup_output(&case.inputs.params, |name| {
+        name.is_some_and(|name| FT_Library_Has_Module(library.as_ref(), name))
+    })?))
+}
+
+fn c_get_module(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    if module_lookup_library_present(&case.inputs.params) != 0 {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let output = module_lookup_output(&case.inputs.params, |name| {
+        name.is_some_and(|name| c_abi::abi_support_library_has_module(library, name))
+    })?;
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(ok(output))
+}
+
+fn wasm_get_module(case: &InputCase) -> Result<RunOutput, String> {
+    let library_present = module_lookup_library_present(&case.inputs.params);
+    Ok(ok(module_lookup_output(&case.inputs.params, |name| {
+        name.is_some_and(|name| wasm_abi::abi_support_default_module_present(library_present, name))
+    })?))
+}
+
 fn rust_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     Ok(ok(module_flag_output(&case.inputs.params, |name| {
@@ -15905,6 +16006,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             string_param(params, "flag")?.to_string(),
             module_flag_names_arg(params)?,
         ]),
+        "ftmodapi.get_module" => Ok(vec![
+            "--get-module".to_string(),
+            module_lookup_library_present(params).to_string(),
+            module_lookup_names_arg(params)?,
+        ]),
         "ftrender.get_renderer" => Ok(vec![
             "--get-renderer".to_string(),
             if lifecycle_handle_param_is_null(params, "library") {
@@ -16918,6 +17024,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
+        "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "freetype.done_freetype" => rust_done_freetype(case),
@@ -17649,6 +17756,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
+        "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
@@ -18311,6 +18419,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
+        "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
