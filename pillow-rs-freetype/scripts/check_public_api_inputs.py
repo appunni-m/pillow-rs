@@ -1310,6 +1310,14 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle",
         "ftmodapi.FT_Module_Interface.requester_return_type",
         "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount",
+        "ftmodapi.FT_Property_Get.gets_supported_property",
+        "ftmodapi.FT_Property_Get.rejects_null_arguments",
+        "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service",
+        "ftmodapi.FT_Property_Get.invalid_property_name",
+        "ftmodapi.FT_Property_Set.sets_supported_property",
+        "ftmodapi.FT_Property_Set.rejects_null_arguments",
+        "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service",
+        "ftmodapi.FT_Property_Set.invalid_property_or_value",
         "ftmodapi.FT_Reference_Library.increments_refcount",
         "ftmodapi.FT_Remove_Module.removes_installed_module",
         "ftmodapi.FT_Set_Default_Properties.no_environment_noop",
@@ -1341,9 +1349,12 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime",
         "ftdriver.FT_HINTING_ADOBE.hinting_engine_property_runtime",
         "ftdriver.FT_HINTING_FREETYPE.hinting_engine_property_runtime",
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
+        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
         "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
+        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
     }
     if row.case_id not in ftdriver_rows_without_maintained_route:
@@ -1354,6 +1365,36 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "Driver property, autohinter script, glyph-to-script map, x-height, "
         "and hinting-engine success behavior requires a maintained driver "
         "route; keeping it generic would be a green placeholder"
+    )
+
+
+def property_service_pending_reason(row: ConcreteInput) -> str | None:
+    property_rows_without_maintained_route = {
+        "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
+        "fterrdef.FT_Err_Missing_Property.known_property_success",
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
+        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
+        "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
+        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
+        "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
+        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+        "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version",
+        "ftmodapi.FT_Property_Get.gets_supported_property",
+        "ftmodapi.FT_Property_Get.rejects_null_arguments",
+        "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service",
+        "ftmodapi.FT_Property_Get.invalid_property_name",
+        "ftmodapi.FT_Property_Set.sets_supported_property",
+        "ftmodapi.FT_Property_Set.rejects_null_arguments",
+        "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service",
+        "ftmodapi.FT_Property_Set.invalid_property_or_value",
+    }
+    if row.case_id not in property_rows_without_maintained_route:
+        return None
+    return (
+        "FT_Property_Get/Set and driver-property behavior requires maintained "
+        "public property APIs in Rust FFI, C ABI, and WASM ABI; generic "
+        "Unimplemented_Feature or null-error fallback would be a green "
+        "placeholder"
     )
 
 
@@ -3967,6 +4008,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     route_pending = pending_route_reason(row)
     if route_pending:
         return ("pending-route", route_pending)
+    property_pending = property_service_pending_reason(row)
+    if property_pending:
+        return ("pending-route", property_pending)
     lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
     if lifecycle_null_reason:
         return ("real-parity", lifecycle_null_reason)
