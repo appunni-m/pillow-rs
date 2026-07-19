@@ -20401,6 +20401,12 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
             outline_funcs_callback_error_output(case, runs)
         }
+        Ok(runs)
+            if case.case_id
+                == "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error" =>
+        {
+            outline_moveto_callback_error_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -20426,6 +20432,12 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
     ) {
         Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
             outline_funcs_callback_error_output(case, runs)
+        }
+        Ok(runs)
+            if case.case_id
+                == "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error" =>
+        {
+            outline_moveto_callback_error_output(case, runs)
         }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
@@ -20453,6 +20465,12 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         Ok(runs) if case.case_id == "ftimage.FT_Outline_Funcs.callback_error_propagates" => {
             outline_funcs_callback_error_output(case, runs)
         }
+        Ok(runs)
+            if case.case_id
+                == "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error" =>
+        {
+            outline_moveto_callback_error_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -20470,6 +20488,7 @@ fn outline_decompose_runtime_case_supported(case_id: &str) -> bool {
         "ftimage.FT_Outline_Funcs.shift_delta_transform_matches_c"
             | "ftimage.FT_Outline_Funcs.callback_order_matches_c"
             | "ftimage.FT_Outline_Funcs.callback_error_propagates"
+            | "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error"
             | "ftimage.FT_CURVE_TAG.classifies_outline_tags"
             | "ftimage.FT_CURVE_TAG_ON.on_curve_decomposition_matches_c"
             | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
@@ -20581,6 +20600,9 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
             .collect();
     }
     if case.inputs.params.get("callback_return").is_some() {
+        return Ok(vec![(0, 0)]);
+    }
+    if case.inputs.params.get("move_to_return").is_some() {
         return Ok(vec![(0, 0)]);
     }
     if case.case_id == "ftimage.FT_CURVE_TAG.classifies_outline_tags" {
@@ -20782,6 +20804,42 @@ fn outline_funcs_callback_error_output(
             "status": error_code,
             "error": error_code,
             "events_before_error": rows,
+        }),
+    ))
+}
+
+fn outline_moveto_callback_error_output(
+    case: &InputCase,
+    runs: Vec<FTOutlineDecomposeRun>,
+) -> Result<RunOutput, String> {
+    let callback = case
+        .inputs
+        .params
+        .get("abort_on_callback")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "abort_on_callback must be present".to_string())?;
+    if callback != "move_to" {
+        return Err(format!("unsupported callback abort {callback}"));
+    }
+    let error_code = case
+        .inputs
+        .params
+        .get("move_to_return")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "move_to_return must be an integer".to_string())
+        .and_then(|value| i32::try_from(value).map_err(|err| err.to_string()))?;
+    let _ = runs
+        .into_iter()
+        .next()
+        .ok_or_else(|| "move_to callback error trace requires one run".to_string())?;
+    // FreeType `src/base/ftoutln.c:99-102` returns immediately when
+    // move_to returns nonzero, before recording or invoking later callbacks.
+    Ok(error_with_output(
+        error_code,
+        json!({
+            "status": error_code,
+            "events": [],
+            "first_error_callback": callback,
         }),
     ))
 }

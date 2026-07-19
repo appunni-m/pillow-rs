@@ -246,6 +246,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "status",
             "events[*].kind",
