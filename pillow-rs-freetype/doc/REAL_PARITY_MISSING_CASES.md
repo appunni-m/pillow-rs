@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after GX/bzip2/palette exact classification:
+Current verified result after glyph/list/render/lang-tag exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4050`
+  - `real-parity`: `4060`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `145`
+  - `generic-error-fallback`: `135`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -1121,6 +1121,50 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: all eight focused exact rows passed. Route audit:
 `real-parity` `4050`, `generic-error-fallback` `145`.
+
+### Issue Set Current: glyph, list, renderer, and SFNT lang-tag exact routes
+
+Previous blocker:
+
+- Ten concrete public rows across glyph helpers, list iteration, renderer
+  selection, and SFNT language tags were classified as `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that a broad fallback path
+  ran.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftglyph.FT_New_Glyph.error_null_library_or_output`
+   - `ftglyph.FT_New_Glyph.error_unsupported_format`
+   - `ftglyph.FT_New_Glyph.error_allocation_failure`
+   - `ftglyph.FT_Glyph_Transform.error_null_or_bad_glyph`
+   - `ftglyph.FT_Glyph_Transform.error_non_scalable_bitmap`
+   - `ftlist.FT_List_Iterate.stops_on_callback_error`
+   - `ftlist.FT_List_Iterate.null_list_or_iterator_error`
+   - `ftrender.FT_Set_Renderer.invalid_library_renderer_or_params`
+   - `ftrender.FT_Set_Renderer.set_mode_parameter_error_propagates`
+   - `ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all ten rows before promotion.
+- Exact comparison after promotion passed for all ten rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: all ten focused exact rows passed. Route audit:
+`real-parity` `4060`, `generic-error-fallback` `135`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
