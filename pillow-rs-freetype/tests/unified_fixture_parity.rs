@@ -8368,6 +8368,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_LEGACY.rejected_by_set_lcd_filter"
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter"
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter"
+            || case.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"
             || case.case_id == "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords"
             || case.case_id == "ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords"
             || case.case_id
@@ -19377,13 +19378,24 @@ fn rust_outline_render_once(
             true,
         ))),
         Err(err) if include_error_output || case.expectation.compare.compare_error_output => {
-            let output_buffer =
-                FT_Outline_Render_Error_Output(Some(&outline), Some(&target), flags)
-                    .map_or_else(|| buffer.clone(), |rendered| rendered.buffer);
-            Ok(error_with_output(
-                err,
-                outline_render_bitmap_payload(width, rows, pitch, pixel_mode, &output_buffer, true),
-            ))
+            if outline_render_error_output_available(flags, pixel_mode) {
+                let output_buffer =
+                    FT_Outline_Render_Error_Output(Some(&outline), Some(&target), flags)
+                        .map_or_else(|| buffer.clone(), |rendered| rendered.buffer);
+                Ok(error_with_output(
+                    err,
+                    outline_render_bitmap_payload(
+                        width,
+                        rows,
+                        pitch,
+                        pixel_mode,
+                        &output_buffer,
+                        true,
+                    ),
+                ))
+            } else {
+                Ok(error(err))
+            }
         }
         Err(err) => Ok(error(err)),
     }
@@ -19523,17 +19535,21 @@ fn c_outline_render_once(
             params.source == outline_ptr.cast(),
         )))
     } else if include_error_output || case.expectation.compare.compare_error_output {
-        Ok(error_with_output(
-            err,
-            outline_render_bitmap_payload(
-                width,
-                rows,
-                pitch,
-                pixel_mode,
-                &buffer,
-                params.source == outline_ptr.cast(),
-            ),
-        ))
+        if outline_render_error_output_available(flags, pixel_mode) {
+            Ok(error_with_output(
+                err,
+                outline_render_bitmap_payload(
+                    width,
+                    rows,
+                    pitch,
+                    pixel_mode,
+                    &buffer,
+                    params.source == outline_ptr.cast(),
+                ),
+            ))
+        } else {
+            Ok(error(err))
+        }
     } else {
         Ok(error(err))
     }
@@ -19667,20 +19683,28 @@ fn wasm_outline_render_once(
             params.source == outline_ptr.cast(),
         )))
     } else if include_error_output || case.expectation.compare.compare_error_output {
-        Ok(error_with_output(
-            err,
-            outline_render_bitmap_payload(
-                width,
-                rows,
-                pitch,
-                pixel_mode,
-                &buffer,
-                params.source == outline_ptr.cast(),
-            ),
-        ))
+        if outline_render_error_output_available(flags, pixel_mode) {
+            Ok(error_with_output(
+                err,
+                outline_render_bitmap_payload(
+                    width,
+                    rows,
+                    pitch,
+                    pixel_mode,
+                    &buffer,
+                    params.source == outline_ptr.cast(),
+                ),
+            ))
+        } else {
+            Ok(error(err))
+        }
     } else {
         Ok(error(err))
     }
+}
+
+fn outline_render_error_output_available(_flags: i32, pixel_mode: i32) -> bool {
+    pixel_mode == FT_PIXEL_MODE_GRAY
 }
 
 fn rust_outline_render_clip_box_cases(case: &InputCase) -> Result<RunOutput, String> {

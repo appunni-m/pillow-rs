@@ -807,6 +807,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "freetype.FT_Render_Glyph.invalid_render_mode",
         "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
         "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
+        "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa",
     }
 
 
@@ -1094,6 +1095,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
     ):
         return "FT_LOAD_TARGET_MODE invalid render-target errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftoutln.outline_render"
+        and row.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"
+    ):
+        return "FT_RASTER_FLAG_AA mono-render rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "render_glyph"
         and row.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
