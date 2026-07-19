@@ -1054,8 +1054,25 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if not operation_is_real_parity(row.operation):
         return None
+    existing_primary_font_cases = {
+        "freetype.FT_Face_CheckTrueTypePatents.non_truetype_face_result",
+        "freetype.FT_Get_FSType_Flags.sfnt_installable_embedding",
+        "freetype.FT_Get_FSType_Flags.sfnt_restricted_embedding_bits",
+        "freetype.FT_Get_First_Char.charcode_zero_disambiguated_by_glyph_index",
+        "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
+        "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
+        "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
+        "freetype.FT_Open_Face.success_open_variation_named_instance",
+        "freetype.FT_Request_Size.success_bitmap_request_match",
+        "freetype.FT_Select_Charmap.success_select_present_encoding",
+    }
     for name, asset in sorted(row.assets.items()):
         reason = unresolved_asset_reason(asset, name)
+        if (
+            reason == "font is marked required_future_asset"
+            and row.case_id in existing_primary_font_cases
+        ):
+            continue
         if reason:
             return reason
     return None

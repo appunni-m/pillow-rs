@@ -524,6 +524,113 @@ Results: each focused probe passed `1 / 1` runtime parity row, `0` failed,
 `0` pending. Route audit after promotion: `real-parity` `4156`,
 `generic-error-fallback` `39`.
 
+### Issue Set Current: existing primary-font pending assets now real parity
+
+Previous blocker:
+
+- Several rows were classified as `pending-route` because their primary
+  `font` asset still carried `required_future_asset` metadata.
+- The referenced fixture files now exist under `tests/fixtures`, and these
+  routes use the primary `font` asset directly.
+- A broad "existing file means ready" rule was rejected because it also
+  promoted rows whose full exact oracle returned errors. The final change uses
+  an explicit allow-list of only rows proven by full refreshed parity.
+
+Promoted rows:
+
+- `freetype.FT_Face_CheckTrueTypePatents.non_truetype_face_result`
+- `freetype.FT_Get_FSType_Flags.sfnt_installable_embedding`
+- `freetype.FT_Get_FSType_Flags.sfnt_restricted_embedding_bits`
+- `freetype.FT_Get_First_Char.charcode_zero_disambiguated_by_glyph_index`
+- `freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true`
+- `freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true`
+- `freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false`
+- `freetype.FT_Open_Face.success_open_variation_named_instance`
+- `freetype.FT_Request_Size.success_bitmap_request_match`
+- `freetype.FT_Select_Charmap.success_select_present_encoding`
+
+Rejected rows from the same primary-font probe:
+
+- `freetype.FT_ENCODING_NONE.representative_runtime_observation`: full exact
+  classification failed because pinned C returned error `23`.
+- `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: full exact
+  classification failed because pinned C returned error `85`.
+- `freetype.FT_HAS_HORIZONTAL.no_horizontal_metrics_control`: full exact
+  classification failed because pinned C returned error `85`.
+- `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: full exact
+  classification failed because pinned C returned error `6`.
+
+Verified progress:
+
+- Full refreshed parity passed after promoting only the ten proven rows.
+- Route audit classifies the ten rows as `real-parity`.
+
+Non-coverage verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+FONTDONE_UNIFIED_ORACLE_REFRESH=1 make -C pillow-rs-freetype test
+```
+
+Results: `7154 / 7154` runtime parity rows passed, `0` failed, `80` pending.
+Route audit after promotion: `real-parity` `4166`, `pending-route` `72`,
+`generic-fallback` `696`, `generic-error-fallback` `39`.
+
+### Issue Set Deferred: `FT_Get_MM_Var` descriptor success route classification
+
+Probe result:
+
+- Eight `FT_Get_MM_Var` descriptor success rows were still classified as
+  `generic-fallback` even though each row already had runnable pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI comparison.
+- Focused probes were not sufficient evidence because generic fallback allowed
+  oracle errors.
+- Full refreshed parity with exact route classification showed pinned C returns
+  `FT_Err_Invalid_Argument` (`7`) for the eight rows, so they are not real
+  success parity today.
+
+Rejected success-route candidates:
+
+- `ftmm.FT_Get_MM_Var.variable_font_descriptor_success`
+- `ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success`
+- `ftmm.FT_MM_Var.populated_for_variable_true_type`
+- `ftmm.FT_MM_Var.populated_for_adobe_mm`
+- `ftmm.FT_Var_Axis.variable_font_axis_values`
+- `ftmm.FT_Var_Axis.adobe_mm_axis_values`
+- `ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count`
+- `ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c`
+
+Other rejected or deferred candidates checked in the same pass:
+
+- `freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes`:
+  the referenced Apple Roman fixture now exists, but the current generic
+  `get_char_index` route still uses the primary `font` asset and does not
+  exercise the `non_unicode_charmap_font` selection metadata. This remains a
+  route/fixture-model issue, not a safe classification-only promotion.
+- `ftbbox.FT_Outline_Get_BBox.error_malformed_outline`: the standalone public
+  `FT_Outline_Get_BBox` symbol is not implemented in Rust FFI/C ABI/WASM yet;
+  existing bbox parity is derived from loaded glyph snapshots. This remains a
+  core public endpoint/route implementation task.
+- `ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success`:
+  still requires a real Adobe Multiple Master Type1 fixture exposing the
+  service-with-null-callback behavior. It must not be replaced with a variable
+  font placeholder.
+- `ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid`,
+  `ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported`, and
+  `ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c`: focused
+  probes passed under generic fallback, but full exact classification failed
+  all seven concrete rows because pinned C returned `FT_Err_Invalid_Argument`
+  (`7`). These rows remain fixture/oracle-policy issues until the inputs prove
+  the named success behavior on pinned C FreeType.
+
+Verification:
+
+- `FONTDONE_UNIFIED_ORACLE_REFRESH=1 make -C pillow-rs-freetype test` failed
+  the eight rows under exact route classification with `oracle returned
+  unexpected error 7`.
+- The promotion was reverted. Route audit remains at `real-parity` `4156`,
+  `generic-fallback` `696`, `generic-error-fallback` `39`.
+
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
 Previous blocker:
