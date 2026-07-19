@@ -8334,6 +8334,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Attach_Stream.error_null_open_args"
             || case.case_id
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
+            || case.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
             || case.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
             || case.case_id == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format"
             || case.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
