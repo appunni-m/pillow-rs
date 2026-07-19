@@ -2847,6 +2847,18 @@ def raw_slot_null_validation_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def null_error_real_parity_reason(row: ConcreteInput) -> str | None:
+    reasons = {
+        "freetype.FT_Done_Face.error_invalid_or_foreign_face_handle": "FT_Done_Face invalid/foreign-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Done_FreeType.error_invalid_or_foreign_library_handle": "FT_Done_FreeType invalid/foreign-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_New_Face.error_null_pathname": "FT_New_Face null-pathname error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Render_Glyph.error_null_or_unowned_slot": "FT_Render_Glyph null/unowned-slot error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Set_Char_Size.error_invalid_or_unscalable_face": "FT_Set_Char_Size invalid/unscalable-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Set_Pixel_Sizes.error_invalid_or_unscalable_face": "FT_Set_Pixel_Sizes invalid/unscalable-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+    }
+    return reasons.get(row.case_id)
+
+
 def list_value(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
@@ -2938,6 +2950,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     pending = pending_core_reason(row)
     if pending:
         return ("pending-core", pending)
+    null_error_real_reason = null_error_real_parity_reason(row)
+    if null_error_real_reason:
+        return ("real-parity", null_error_real_reason)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
