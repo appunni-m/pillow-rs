@@ -11,6 +11,11 @@ Scope:
 
 Rejected future-asset probes:
 
+- `ftdriver.FT_AUTOHINTER_SCRIPT_*` property-set/get and glyph-to-script-map
+  rows were tested for exact promotion.  The focused `ftdriver` run exposed
+  pinned C oracle error `7` for eight autohinter property/map success rows, so
+  they remain `generic-fallback` until those public property routes are made
+  exact.
 - `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: temporarily
   removing `required_future_asset` made the row runnable, but pinned C returned
   error `85`; the tracked `fonts/bitmap/bitmap-only.pcf` file is still not a
@@ -50,6 +55,13 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `ftdriver` interpreter-version batch: `6 / 6` runtime-asset rows promoted
+  from `generic-fallback` to `real-parity`.  Focused refreshed parity for the
+  `ftdriver` filter passed `26 / 26` runnable rows; `12` driver rows remain
+  pending for unresolved runtime assets, and the autohinter property/map rows
+  remain generic as noted above.
+- Current route audit after this batch: `real-parity` `4404`,
+  `generic-fallback` `552`, `pending-route` `23`.
 - `ftmm` multiple-master/variation success batch: `34 / 34` runtime-asset
   rows promoted from `generic-fallback` to `real-parity`.  The promoted rows
   are limited to existing runtime assets and existing exact routes; unresolved
