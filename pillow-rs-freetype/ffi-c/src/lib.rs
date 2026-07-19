@@ -1145,6 +1145,12 @@ pub fn abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face: FT_Face)
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_fvar_namedstyle_coords(face: FT_Face, namedstyle_index: FT_UInt) -> Option<Vec<FT_Fixed>> {
+    let state = face_state(face)?;
+    rust_ffi::FT_Fvar_Named_Style_Coords(Some(&state.inner), namedstyle_index).ok()
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_glyphslot_set_own_bitmap_from_face(face: FT_Face, owns_bitmap: bool) -> FT_Error {
     let Some(mut slot) = abi_glyph_slot(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;

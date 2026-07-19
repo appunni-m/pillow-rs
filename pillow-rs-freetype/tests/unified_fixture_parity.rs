@@ -9467,6 +9467,12 @@ fn set_named_instance_index_param(params: &Value) -> Result<FT_UInt, String> {
         .map_err(|err| format!("instance_index {value} does not fit FT_UInt: {err}"))
 }
 
+fn compare_namedstyle_index_param(params: &Value) -> Result<FT_UInt, String> {
+    let value = u64_param(params, "compare_namedstyle_index")?;
+    FT_UInt::try_from(value)
+        .map_err(|err| format!("compare_namedstyle_index {value} does not fit FT_UInt: {err}"))
+}
+
 fn default_named_instance_sentinel(params: &Value) -> Result<FT_UInt, String> {
     let value = u64_param(params, "instance_index_initial")?;
     FT_UInt::try_from(value)
@@ -9676,6 +9682,26 @@ fn named_instance_run_output(
     }
 }
 
+fn named_instance_descriptor_json(
+    status: FT_Error,
+    namedstyle_coords: Vec<FT_Fixed>,
+    selected_design_coords: Vec<FT_Fixed>,
+    face_index: FT_Long,
+) -> Value {
+    json!({
+        "return": status,
+        "namedstyle_coords": namedstyle_coords,
+        "selected_design_coords": selected_design_coords,
+        "face_index": face_index
+    })
+}
+
+fn selected_namedstyle_index(instance_index: FT_UInt) -> Result<FT_UInt, String> {
+    instance_index.checked_sub(1).ok_or_else(|| {
+        "named-instance descriptor route requires one-based instance index".to_string()
+    })
+}
+
 fn rust_postscript_name_variant_output(
     face: &mut FT_Face,
     params: &Value,
@@ -9753,6 +9779,9 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
         let err = FT_Set_Named_Instance(None, set_named_instance_index_param(&case.inputs.params)?);
         return Ok(named_instance_null_face_output(err));
     }
+    if case.inputs.params.get("compare_namedstyle_index").is_some() {
+        return rust_set_named_instance_descriptor(case);
+    }
     let mut face = rust_new_face_without_size(case)?;
     if let Some(prior_instance) = prior_named_instance_index_param(&case.inputs.params)? {
         let err = FT_Set_Named_Instance(Some(&mut face), prior_instance);
@@ -9789,6 +9818,9 @@ fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
             set_named_instance_index_param(&case.inputs.params)?,
         );
         return Ok(named_instance_null_face_output(err));
+    }
+    if case.inputs.params.get("compare_namedstyle_index").is_some() {
+        return c_set_named_instance_descriptor(case);
     }
     let (library, face) = c_new_face_without_size(case)?;
     let output = c_set_named_instance_on_face(face, &case.inputs.params);
@@ -9827,6 +9859,9 @@ fn wasm_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
         );
         return Ok(named_instance_null_face_output(err));
     }
+    if case.inputs.params.get("compare_namedstyle_index").is_some() {
+        return wasm_set_named_instance_descriptor(case);
+    }
     let handle = wasm_new_face_without_size(case)?;
     let output = wasm_set_named_instance_on_face(handle, &case.inputs.params);
     wasm_done_face(handle);
@@ -9855,6 +9890,78 @@ fn wasm_set_named_instance_on_face(handle: usize, params: &Value) -> Result<RunO
         &info,
         wasm_postscript_name_json(handle),
     ))
+}
+
+fn rust_set_named_instance_descriptor(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let compare_index = compare_namedstyle_index_param(&case.inputs.params)?;
+    let instance_index = set_named_instance_index_param(&case.inputs.params)?;
+    let namedstyle_coords = FT_Fvar_Named_Style_Coords(Some(&face), compare_index)
+        .map_err(|err| format!("FT_Fvar_Named_Style_Coords returned {err}"))?;
+    let err = FT_Set_Named_Instance(Some(&mut face), instance_index);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let selected_coords =
+        FT_Fvar_Named_Style_Coords(Some(&face), selected_namedstyle_index(instance_index)?)
+            .map_err(|err| format!("selected FT_Fvar_Named_Style_Coords returned {err}"))?;
+    Ok(ok(named_instance_descriptor_json(
+        FT_Err_Ok,
+        namedstyle_coords,
+        selected_coords,
+        rust_face_info(&face).face_index,
+    )))
+}
+
+fn c_set_named_instance_descriptor(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let compare_index = compare_namedstyle_index_param(&case.inputs.params)?;
+    let instance_index = set_named_instance_index_param(&case.inputs.params)?;
+    let namedstyle_coords = c_abi::abi_fvar_namedstyle_coords(face, compare_index)
+        .ok_or_else(|| "missing c namedstyle coords".to_string())?;
+    let err = c_abi::FT_Set_Named_Instance(face, instance_index);
+    if err != FT_Err_Ok {
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(error(err));
+    }
+    let selected_coords =
+        c_abi::abi_fvar_namedstyle_coords(face, selected_namedstyle_index(instance_index)?)
+            .ok_or_else(|| "missing c selected namedstyle coords".to_string())?;
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(named_instance_descriptor_json(
+        FT_Err_Ok,
+        namedstyle_coords,
+        selected_coords,
+        info.face_index,
+    )))
+}
+
+fn wasm_set_named_instance_descriptor(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let compare_index = compare_namedstyle_index_param(&case.inputs.params)?;
+    let instance_index = set_named_instance_index_param(&case.inputs.params)?;
+    let namedstyle_coords = wasm_abi::abi_fvar_namedstyle_coords(handle, compare_index)
+        .ok_or_else(|| "missing wasm namedstyle coords".to_string())?;
+    let err = wasm_abi::fontdone_wasm_set_named_instance(handle, instance_index);
+    if err != FT_Err_Ok {
+        wasm_done_face(handle);
+        return Ok(error(err));
+    }
+    let selected_coords =
+        wasm_abi::abi_fvar_namedstyle_coords(handle, selected_namedstyle_index(instance_index)?)
+            .ok_or_else(|| "missing wasm selected namedstyle coords".to_string())?;
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    wasm_done_face(handle);
+    Ok(ok(named_instance_descriptor_json(
+        FT_Err_Ok,
+        namedstyle_coords,
+        selected_coords,
+        info.face_index,
+    )))
 }
 
 #[derive(Debug, Clone)]
@@ -14384,7 +14491,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 );
             }
             if params.get("compare_namedstyle_index").is_some() {
-                return Err("namedstyle coordinate parity requires FT_MM_Var support".to_string());
+                let mut args = vec!["--set-named-instance-descriptor".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(set_named_instance_index_param(params)?.to_string());
+                args.push(compare_namedstyle_index_param(params)?.to_string());
+                return Ok(args);
             }
             if params.get("glyph_index").is_some() {
                 return Err(
