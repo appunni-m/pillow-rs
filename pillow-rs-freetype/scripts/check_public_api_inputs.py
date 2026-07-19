@@ -52,6 +52,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_outline_get_cbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
+    "fontdone_wasm_outline_check",
     "fontdone_wasm_outline_get_orientation",
     "fontdone_wasm_outline_reverse",
     "fontdone_wasm_outline_transform",
@@ -241,6 +242,7 @@ REAL_PARITY_OPERATIONS = {
     "ftoutln.outline_decompose",
     "ftoutln.outline_get_cbox",
     "ftoutln.get_orientation",
+    "ftoutln.outline_check",
     "ftoutln.outline_reverse",
     "ftoutln.outline_transform",
     "ftoutln.outline_translate",
@@ -1137,6 +1139,14 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
         == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
     ):
         return "unloaded and unsupported synthetic glyph-slot states need explicit public runner support"
+    if (
+        row.operation == "ftoutln.outline_check"
+        and row.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
+    ):
+        return (
+            "FT_Outline_Check invalid-case matrix needs exact per-scenario error-output "
+            "support; the current exact-error guard requires a top-level C error"
+        )
     if (
         row.operation
         in {

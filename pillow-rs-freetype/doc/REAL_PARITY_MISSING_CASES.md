@@ -6178,6 +6178,42 @@ runtime_parity: passed=0 failed=18 total=18 failure_buckets=rust ffi:value:18
 native oracle returned unexpected error 7 for each charset_roundtrip_from_header row
 ```
 
+### Issue Set BG: `FT_Outline_Check` invalid matrix needs exact error-output support
+
+Current blocker:
+
+- `ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch` describes a
+  per-scenario invalid-input matrix: null outline, zero points with one
+  contour, and non-increasing contour endpoints.
+- A real native C/Rust/C-ABI/WASM runner can produce matching per-scenario
+  return codes, but the current unified exact-error guard treats
+  `expect_error=true` rows as requiring a top-level error status from the
+  oracle.
+- Returning a top-level generic `Invalid_Outline` would hide the matrix and
+  would not prove the declared same-input per-scenario output.
+
+Required fix:
+
+1. Add exact error-output comparison support for rows whose declared output is a
+   scenario matrix of `FT_Error` values.
+2. Keep the row pending-core until focused exact comparison checks all three
+   invalid scenarios through pinned C, Rust FFI, C ABI, and WASM ABI.
+3. Do not count this row as real parity based only on a top-level error code.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Check
+```
+
+Result before moving the invalid row to pending-core:
+
+```text
+runtime_parity: passed=2 failed=1 total=3
+ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch requires an exact C error,
+but the oracle returned ok with per-scenario output
+```
+
 ## Coverage Bulk Context
 
 Current condition-coverage bulk context from

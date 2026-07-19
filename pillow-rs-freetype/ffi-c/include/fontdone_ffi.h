@@ -288,6 +288,7 @@ FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
 FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params);
+FT_Error FT_Outline_Check(const FT_Outline* outline);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 void FT_Outline_Reverse(FT_Outline* outline);
 void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);

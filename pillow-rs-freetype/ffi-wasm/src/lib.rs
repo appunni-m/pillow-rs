@@ -1049,6 +1049,14 @@ pub extern "C" fn fontdone_wasm_outline_get_orientation(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_check(outline: *const FontdoneWasmOutline) -> FT_Error {
+    let Some(snapshot) = outline_snapshot_from_wasm(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    rust_ffi::FT_Outline_Check(Some(&snapshot))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_reverse(outline: *mut FontdoneWasmOutline) {
     let Some(mut snapshot) = outline_snapshot_from_wasm(outline) else {
         return;
