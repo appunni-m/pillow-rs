@@ -800,6 +800,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "freetype.FT_Render_Glyph.invalid_render_mode",
+        "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format",
         "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel",
     }
 
@@ -1068,6 +1069,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
     ):
         return "FT_Render_Glyph invalid render-mode errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "render_glyph"
+        and row.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format"
+    ):
+        return "FT_Render_Glyph composite/unsupported slot-format errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "render_glyph"
         and row.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
