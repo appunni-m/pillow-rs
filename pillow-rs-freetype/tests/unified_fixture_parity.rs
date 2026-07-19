@@ -15085,7 +15085,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(manager_reset_glyph_index_param(params)?.to_string());
             Ok(args)
         }
-        "ftoutln.get_orientation" => Ok(vec![
+        "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => Ok(vec![
             "--outline-get-orientation".to_string(),
             case.case_id.clone(),
         ]),
@@ -15797,7 +15797,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_sbit_cache_lookup(&face, case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
-        "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
+            rust_outline_orientation_runtime_output(case)
+        }
         "ftoutln.get_orientation_after_mutation" => {
             rust_outline_orientation_after_mutation_runtime_output(case)
         }
@@ -16551,7 +16553,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
-        "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
+            c_outline_orientation_runtime_output(case)
+        }
         "ftoutln.get_orientation_after_mutation" => {
             c_outline_orientation_after_mutation_runtime_output(case)
         }
@@ -17161,7 +17165,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
-        "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
+            wasm_outline_orientation_runtime_output(case)
+        }
         "ftoutln.get_orientation_after_mutation" => {
             wasm_outline_orientation_after_mutation_runtime_output(case)
         }
@@ -24277,6 +24283,22 @@ fn outline_orientation_cases(
             ("negative", OrientationOutlineKind::Negative),
         ]);
     }
+    if case_id.contains("FT_Orientation.orientation_algorithm_contract") {
+        return Ok(vec![
+            ("positive", OrientationOutlineKind::Positive),
+            ("negative", OrientationOutlineKind::Negative),
+            ("collapsed_horizontal", OrientationOutlineKind::Collapsed),
+            (
+                "collapsed_vertical",
+                OrientationOutlineKind::CollapsedVertical,
+            ),
+            ("zero_area", OrientationOutlineKind::ZeroArea),
+            ("oversized_x_min", OrientationOutlineKind::OversizedXMin),
+            ("oversized_y_min", OrientationOutlineKind::OversizedYMin),
+            ("oversized_x_max", OrientationOutlineKind::Oversized),
+            ("oversized_y_max", OrientationOutlineKind::OversizedYMax),
+        ]);
+    }
     if case_id.contains("FT_Outline_Get_Orientation.collapsed_and_oversized_return_none") {
         return Ok(vec![
             ("collapsed_horizontal", OrientationOutlineKind::Collapsed),
@@ -24301,7 +24323,9 @@ fn outline_orientation_cases(
     {
         return Ok(vec![("negative", OrientationOutlineKind::Negative)]);
     }
-    if case_id.contains("FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript") {
+    if case_id.contains("FT_ORIENTATION_POSTSCRIPT.positive_area_returns_postscript")
+        || case_id.contains("FT_ORIENTATION_FILL_LEFT.returned_for_positive_area")
+    {
         return Ok(vec![("positive", OrientationOutlineKind::Positive)]);
     }
     if case_id.contains("FT_ORIENTATION_NONE.returned_for_collapsed_or_zero_area") {
@@ -32584,7 +32608,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             "freetype.load_glyph_outline" => "outline_result",
             "ftbbox.outline_get_bbox" => "outline_bbox",
             "ftoutln.outline_get_cbox" => "outline_cbox",
-            "ftoutln.get_orientation" => "outline_orientation",
+            "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => "outline_orientation",
             "ftglyph.glyph_get_cbox" => "glyph_cbox",
             "ftcache.sbit_cache_lookup" => "cache_sbit_result",
             operation if operation.starts_with("freetype.face_macro") => "face_macro",

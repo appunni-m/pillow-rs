@@ -62,14 +62,40 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "valid_outlines": {
-            "kind": "ref",
-            "id": "outline/orientation/valid-area-signs.json"
-          },
-          "invalid_outlines": {
-            "kind": "ref",
-            "id": "outline/orientation/invalid-collapsed-oversized.json"
-          }
+          "valid_outlines": [
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/positive-area-square.json",
+              "asset_kind": "outline_model"
+            },
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/negative-area-square.json",
+              "asset_kind": "outline_model"
+            },
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/mixed-orientations.json",
+              "asset_kind": "outline_model_set"
+            }
+          ],
+          "invalid_outlines": [
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/collapsed-line.json",
+              "asset_kind": "outline_model_set"
+            },
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/zero-area-bowtie.json",
+              "asset_kind": "outline_model"
+            },
+            {
+              "kind": "ref",
+              "id": "outlines/orientation/cbox-beyond-0x1000000.json",
+              "asset_kind": "outline_model_set"
+            }
+          ]
         },
         "params": {
           "function": "FT_Outline_Get_Orientation",
@@ -106,8 +132,8 @@
           ]
         },
         "fixture_requirements": [
-          "outline/orientation/valid-area-signs.json must include positive-area, negative-area, multi-contour, translated, and transformed outlines.",
-          "outline/orientation/invalid-collapsed-oversized.json must include collapsed, zero-area, and >0x1000000 coordinate outlines."
+          "outlines/orientation/positive-area-square.json, negative-area-square.json, and mixed-orientations.json cover positive-area, negative-area, and multi-contour outlines.",
+          "outlines/orientation/collapsed-line.json, zero-area-bowtie.json, and cbox-beyond-0x1000000.json cover collapsed, zero-area, and >0x1000000 coordinate outlines."
         ],
         "source_refs": [
           "freetype/src/base/ftoutln.c"

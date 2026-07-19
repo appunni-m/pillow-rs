@@ -58,7 +58,8 @@
         "assets": {
           "outline": {
             "kind": "ref",
-            "id": "outline/orientation/postscript-positive-area.json"
+            "id": "outlines/orientation/positive-area-square.json",
+            "asset_kind": "outline_model"
           },
           "font": {
             "kind": "ref",
@@ -101,7 +102,7 @@
           ]
         },
         "fixture_requirements": [
-          "outline/orientation/postscript-positive-area.json must contain a positive-area outline in 26.6 coordinates."
+          "outlines/orientation/positive-area-square.json must contain a positive-area outline in 26.6 coordinates."
         ],
         "source_refs": [
           "freetype/include/freetype/ftoutln.h",
