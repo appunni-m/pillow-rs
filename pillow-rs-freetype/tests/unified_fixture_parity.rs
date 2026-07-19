@@ -8336,6 +8336,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "freetype.FT_Attach_Stream.error_invalid_open_args_or_unsupported_driver"
             || case.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_file_base"
+            || case.case_id == "freetype.FT_New_Memory_Face.error_null_library_or_aface"
             || case.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
             || case.case_id == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format"
             || case.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
@@ -16048,6 +16049,12 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     let library = FT_Init_FreeType();
     let rows = memory_face_rows(&case.inputs.params)?;
     memory_face_outputs(rows, |row| {
+        if row.library_is_null {
+            return Ok((FT_Err_Invalid_Library_Handle as FT_Error, true));
+        }
+        if row.aface_is_null {
+            return Ok((FT_Err_Invalid_Argument, true));
+        }
         let Some(bytes) = memory_face_row_bytes(data.as_ref(), row)? else {
             return Ok((FT_Err_Invalid_Argument, true));
         };
@@ -16068,13 +16075,23 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
     }
     let output = memory_face_outputs(rows, |row| {
         let file_size = memory_face_file_size(bytes.len(), row)?;
+        let library_arg = if row.library_is_null {
+            std::ptr::null_mut()
+        } else {
+            library
+        };
         let mut face = std::ptr::null_mut();
+        let face_ptr = if row.aface_is_null {
+            std::ptr::null_mut()
+        } else {
+            &mut face
+        };
         let err = c_abi::FT_New_Memory_Face(
-            library,
+            library_arg,
             bytes.as_ptr(),
             file_size,
             row.face_index,
-            &mut face,
+            face_ptr,
         );
         let face_is_null = face.is_null();
         if err == FT_Err_Ok {
@@ -16115,6 +16132,12 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
     let bytes = font_bytes(case)?;
     let rows = memory_face_rows(&case.inputs.params)?;
     memory_face_outputs(rows, |row| {
+        if row.library_is_null {
+            return Ok((FT_Err_Invalid_Library_Handle as FT_Error, true));
+        }
+        if row.aface_is_null {
+            return Ok((FT_Err_Invalid_Argument, true));
+        }
         let file_size = memory_face_file_size(bytes.len(), row)?;
         let Ok(file_size) = usize::try_from(file_size) else {
             return Ok((FT_Err_Invalid_Argument, true));
@@ -24763,10 +24786,13 @@ fn memory_face_rows_arg(params: &Value) -> Result<String, String> {
         .into_iter()
         .map(|row| {
             format!(
-                "{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}",
                 row.face_index,
                 if row.file_size.is_some() { 1 } else { 0 },
-                row.file_size.unwrap_or(0)
+                row.file_size.unwrap_or(0),
+                if row.file_base_is_null { 1 } else { 0 },
+                if row.library_is_null { 1 } else { 0 },
+                if row.aface_is_null { 1 } else { 0 },
             )
         })
         .collect::<Vec<_>>()

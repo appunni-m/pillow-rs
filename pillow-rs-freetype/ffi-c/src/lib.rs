@@ -1347,15 +1347,18 @@ pub extern "C" fn FT_New_Memory_Face(
     face_index: FT_Long,
     aface: *mut FT_Face,
 ) -> FT_Error {
-    let Some(library) = non_null_mut(library) else {
+    // C FreeType validates `FT_New_Memory_Face` in ftobjs.c:1629-1647:
+    // null `file_base` is rejected before delegating to `ft_open_face_internal`;
+    // null `library` is then rejected by `FT_Stream_New`, before null `aface`.
+    if file_base.is_null() || file_size < 0 {
         return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(library) = non_null_mut(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
     };
     let Some(out) = non_null_mut(aface) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    if file_base.is_null() || file_size < 0 {
-        return rust_ffi::FT_Err_Invalid_Argument;
-    }
     let Ok(file_len) = usize::try_from(file_size) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
