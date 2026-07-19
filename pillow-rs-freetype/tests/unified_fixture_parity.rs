@@ -8922,6 +8922,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
             || case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
+            || case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike"
+            || case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs"
             || case.case_id == "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior"
             || case.case_id
                 == "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false"
