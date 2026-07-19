@@ -1,5 +1,65 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: callback/provider route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `22a97f383`: `real-parity=4465`,
+  `generic-fallback=21`, `pending-route=493`, `pending-core=7`.
+
+Finding:
+
+- The remaining callback/provider rows cover `FT_List_Insert`,
+  `FT_List_Iterate`, `FT_List_Remove`, `FT_List_Up`,
+  `FT_Set_Default_Log_Handler`, `FT_Set_Log_Handler`,
+  `FT_Trace_Set_Default_Level`, `FT_Trace_Set_Level`,
+  `FT_Renderer_Class`, and `FT_Set_Renderer`.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There are no maintained
+  callback/provider routes that build equivalent lists, install logging and
+  trace handlers, select renderers, drive callbacks, and compare callback event
+  order, provider selection, mutation side effects, and public return codes
+  across all ABI lanes.
+
+Classification change:
+
+- 4 `ftlist`, 4 `ftlogging`, and 2 `ftrender` rows moved from
+  `generic-fallback` to `pending-route`.
+- New route audit counts: `real-parity=4465`, `generic-fallback=11`,
+  `pending-route=503`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add maintained list, logging, trace, and renderer-provider routes instead of
+   per-row expected output shortcuts. They must run equivalent operation
+   sequences through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust list behavior first: insert/remove/up ordering, iterator
+   callback invocation, node ownership, mutation side effects, and empty-list
+   boundary behavior.
+3. Implement pure-Rust logging and trace behavior first: handler installation,
+   default handler restoration, component-level selection, trace-level state,
+   callback payload shape, and lifecycle behavior.
+4. Implement pure-Rust renderer-provider behavior first: renderer class
+   selection, render-mode acceptance, callback dispatch, and observable
+   `FT_Set_Renderer` side effects without moving logic into C or WASM wrappers.
+5. Compare exact return codes, list order, callback event sequences,
+   provider/renderer identity, trace-level state, and ABI-visible records for
+   the same input.
+6. Promote rows only after focused `ftlist`, `ftlogging`, and `ftrender`
+   runtime proves exact C oracle, Rust FFI, C ABI, and WASM ABI output.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftlist
+make -C pillow-rs-freetype test-case CASE=ftlogging
+make -C pillow-rs-freetype test-case CASE=ftrender
+```
+
 ### Issue Set Current: compressed/external stream route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

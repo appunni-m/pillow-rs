@@ -1560,6 +1560,31 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for callback/provider ABI behavior without a maintained route."""
+    callback_provider_rows_without_maintained_route = {
+        "ftlist.FT_List_Insert.import_contract",
+        "ftlist.FT_List_Iterate.import_contract",
+        "ftlist.FT_List_Remove.import_contract",
+        "ftlist.FT_List_Up.import_contract",
+        "ftlogging.FT_Set_Default_Log_Handler.import_contract",
+        "ftlogging.FT_Set_Log_Handler.import_contract",
+        "ftlogging.FT_Trace_Set_Default_Level.import_contract",
+        "ftlogging.FT_Trace_Set_Level.import_contract",
+        "ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks",
+        "ftrender.FT_Set_Renderer.set_outline_renderer_success",
+    }
+    if row.case_id not in callback_provider_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "List mutation, logging callback, trace-level, and renderer provider "
+        "behavior requires maintained callback/provider routes; keeping it "
+        "generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3916,6 +3941,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     stream_pending = stream_subsystem_pending_reason(row)
     if stream_pending:
         return ("pending-route", stream_pending)
+    callback_provider_pending = callback_provider_subsystem_pending_reason(row)
+    if callback_provider_pending:
+        return ("pending-route", callback_provider_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
