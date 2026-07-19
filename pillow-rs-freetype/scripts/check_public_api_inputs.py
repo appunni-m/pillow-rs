@@ -803,6 +803,15 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
         "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
         "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
+        "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior",
+        "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false",
+        "ftcolor.FT_COLR_PAINT_FORMAT_MAX.read_paint_rejects_max_and_above",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.null_and_non_sfnt_rejected",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.malformed_clipbox_false_behavior",
+        "ftcolor.FT_Get_Color_Glyph_Layer.invalid_inputs_rejected",
+        "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior",
+        "ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false",
+        "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected",
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
@@ -810,6 +819,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors",
         "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors",
         "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format",
+        "ftpfr.FT_Get_PFR_Metrics.optional_outputs_and_null_face",
         "freetype.FT_Load_Glyph.matrix_load",
         "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
         "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior",
@@ -1162,6 +1172,57 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_BDF_Charset_ID non-BDF-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcolor.get_color_glyph_paint"
+        and row.case_id == "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior"
+    ):
+        return "FT_COLOR_ROOT_TRANSFORM_MAX rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_malformed"
+        and row.case_id
+        == "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false"
+    ):
+        return "FT_COLR_PAINTFORMAT_UNSUPPORTED rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_malformed"
+        and row.case_id
+        == "ftcolor.FT_COLR_PAINT_FORMAT_MAX.read_paint_rejects_max_and_above"
+    ):
+        return "FT_COLR_PAINT_FORMAT_MAX rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_clipbox"
+        and row.case_id == "ftcolor.FT_Get_Color_Glyph_ClipBox.null_and_non_sfnt_rejected"
+    ):
+        return "FT_Get_Color_Glyph_ClipBox null/non-SFNT rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_clipbox"
+        and row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_ClipBox.malformed_clipbox_false_behavior"
+    ):
+        return "FT_Get_Color_Glyph_ClipBox malformed clipbox rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_layer"
+        and row.case_id == "ftcolor.FT_Get_Color_Glyph_Layer.invalid_inputs_rejected"
+    ):
+        return "FT_Get_Color_Glyph_Layer invalid-input rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_layer"
+        and row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior"
+    ):
+        return "FT_Get_Color_Glyph_Layer malformed-layer rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_paint"
+        and row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false"
+    ):
+        return "FT_Get_Color_Glyph_Paint missing/invalid-root rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_color_glyph_paint"
+        and row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected"
+    ):
+        return "FT_Get_Color_Glyph_Paint non-null opaque paint rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id
         == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
@@ -1200,6 +1261,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftpfr.FT_Get_PFR_Metrics.non_pfr_outputs_valid_values_and_unknown_format"
     ):
         return "FT_Get_PFR_Metrics non-PFR-face output/error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftpfr.get_pfr_metrics"
+        and row.case_id == "ftpfr.FT_Get_PFR_Metrics.optional_outputs_and_null_face"
+    ):
+        return "FT_Get_PFR_Metrics optional-output/null-face behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftoutln.outline_render"
         and row.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"

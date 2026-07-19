@@ -10,20 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_PFR_Metrics` non-PFR-face
-exact-error classification:
+Current verified result after batched PFR/ftcolor exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3969`
+  - `real-parity`: `3979`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `226`
+  - `generic-error-fallback`: `216`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -726,6 +725,49 @@ make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Metrics.non_pfr_outpu
 
 Result: `2 / 2` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3969`, `generic-error-fallback` `226`.
+
+### Issue Set Current: batched PFR metrics and ftcolor exact-error routes
+
+Previous blocker:
+
+- Ten concrete public rows across PFR metrics and ftcolor error-policy surfaces
+  were classified as `generic-error-fallback`.
+- The rows already ran through pinned C FreeType, Rust FFI, thin C ABI, and
+  WASM ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete rows that pass focused exact comparison:
+   - `ftpfr.FT_Get_PFR_Metrics.optional_outputs_and_null_face`
+   - `ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior`
+   - `ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false`
+   - `ftcolor.FT_COLR_PAINT_FORMAT_MAX.read_paint_rejects_max_and_above`
+   - `ftcolor.FT_Get_Color_Glyph_ClipBox.null_and_non_sfnt_rejected`
+   - `ftcolor.FT_Get_Color_Glyph_ClipBox.malformed_clipbox_false_behavior`
+   - `ftcolor.FT_Get_Color_Glyph_Layer.invalid_inputs_rejected`
+   - `ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior`
+   - `ftcolor.FT_Get_Color_Glyph_Paint.missing_or_invalid_root_returns_false`
+   - `ftcolor.FT_Get_Color_Glyph_Paint.non_null_opaque_paint_rejected`
+2. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
+   counting these rows as `real-parity`.
+
+Verified progress:
+
+- Focused generic-mode probes passed for all ten rows before promotion.
+- Exact comparison after promotion passed for all ten rows.
+- The previously fallback-classified rows now validate exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for these rows.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=<each listed case id>
+```
+
+Result: all ten focused exact rows passed. Route audit:
+`real-parity` `3979`, `generic-error-fallback` `216`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 
