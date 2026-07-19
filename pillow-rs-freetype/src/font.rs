@@ -299,6 +299,8 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
         },
         cmap: tt::cmap::CmapTable::default(),
         fvar: None,
+        gvar: None,
+        normalized_variation_coords: Vec::new(),
         gasp: None,
         head: tt::head::HeadTable {
             units_per_em: header.pixel_height.max(1),
@@ -582,6 +584,8 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         },
         cmap: tt::cmap::CmapTable::default(),
         fvar: None,
+        gvar: None,
+        normalized_variation_coords: Vec::new(),
         gasp: None,
         head: tt::head::HeadTable {
             units_per_em: 1000,
@@ -1192,6 +1196,11 @@ impl Font {
         let hdmx = dir
             .find(data, tag(b"hdmx"))
             .and_then(|d| tt::hdmx::parse_hdmx(d, maxp.num_glyphs).ok());
+        let gvar = dir
+            .find(data, tag(b"gvar"))
+            .and_then(|d| tt::gvar::parse_gvar(d, maxp.num_glyphs).ok());
+        let normalized_variation_coords =
+            normalized_variation_coords_for_named_instance(&fvar, named_instance);
         let kern = dir
             .find(data, tag(b"kern"))
             .and_then(|d| tt::kern::parse_kern(d).ok());
@@ -1238,6 +1247,8 @@ impl Font {
             table_directory: dir,
             cmap,
             fvar,
+            gvar,
+            normalized_variation_coords,
             head,
             hhea,
             hmtx,
@@ -3632,6 +3643,33 @@ fn named_instance_postscript_name(
     result.push('-');
     result.extend(subfamily.chars().filter(|ch| ch.is_ascii_alphanumeric()));
     Some(limit_variation_postscript_name(&prefix, result))
+}
+
+fn normalized_variation_coords_for_named_instance(
+    fvar: &Option<tt::fvar::FvarTable>,
+    named_instance: usize,
+) -> Vec<i16> {
+    let Some(fvar) = fvar else {
+        return Vec::new();
+    };
+    let Some(instance) = named_instance
+        .checked_sub(1)
+        .and_then(|index| fvar.instances.get(index))
+    else {
+        return Vec::new();
+    };
+    fvar.axes
+        .iter()
+        .zip(&instance.coords)
+        .map(|(axis, coord)| {
+            tt::gvar::normalize_axis_coord(
+                *coord,
+                axis.min_value,
+                axis.default_value,
+                axis.max_value,
+            )
+        })
+        .collect()
 }
 
 const VARIATION_PS_NAME_MAX_LEN: usize = 127;

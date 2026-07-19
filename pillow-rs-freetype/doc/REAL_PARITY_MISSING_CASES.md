@@ -33,6 +33,19 @@ Execution order:
 4. Treat Adobe MM as a separate Type 1 multiple-master parser/fixture slice.
    Do not fake it with an OpenType variable font.
 
+2026-07-20 progress:
+
+- Core now parses `fvar` axis min/default/max values and derives active
+  normalized coordinates for named-instance faces.
+- Core now parses `gvar` tuple-variation data, including shared tuples,
+  embedded tuples, intermediate regions, shared/private point lists, and packed
+  X/Y deltas, then applies point deltas to simple glyph outlines before hinting.
+- This is not yet a parity promotion. The output row remains `pending-core`
+  because exact glyph-output comparison still needs phantom-point advance
+  deltas, HVAR advance/side-bearing deltas where the fixture observes metrics,
+  and a native C oracle route that serializes the same glyph output after
+  `FT_Set_Named_Instance`.
+
 Verification required before any row moves to `real-parity`:
 
 ```bash
