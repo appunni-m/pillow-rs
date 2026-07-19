@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_New_Library` allocator-failure route
+Current verified result after `FT_Property_Get` exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3806`
+  - `real-parity`: `3809`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `387`
+  - `generic-error-fallback`: `384`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3011,6 +3011,45 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.allocation_failure_preserves_output
+```
+
+### Issue Set BR: `FT_Property_Get` exact-error routes
+
+Previous blocker:
+
+- The `FT_Property_Get` rows for null arguments, missing or unsupported
+  property services, and invalid property names stayed in
+  `generic-error-fallback`.
+- The fixtures require exact behavior from
+  `freetype/src/base/ftobjs.c:FT_Property_Get`, but the harness still accepted
+  these rows as generic expected-error rows instead of enforcing exact status
+  and output-value preservation.
+
+Plan:
+
+1. Keep the fixtures intact; they exercise public `FT_Property_Get` error
+   behavior for invalid handles, missing modules, unsupported property services,
+   and module callback errors.
+2. Require exact error status and preserved output value comparison for all
+   three case IDs.
+3. Classify each row as real parity only after focused same-input parity
+   passes through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The three focused `FT_Property_Get` rows pass exact comparison against pinned
+  C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `ftmodapi.FT_Property_Get.rejects_null_arguments`
+  - `ftmodapi.FT_Property_Get.missing_or_unsupported_property_service`
+  - `ftmodapi.FT_Property_Get.invalid_property_name`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.rejects_null_arguments
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.missing_or_unsupported_property_service
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Property_Get.invalid_property_name
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
