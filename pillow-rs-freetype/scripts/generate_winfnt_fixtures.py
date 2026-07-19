@@ -96,8 +96,62 @@ def build_fnt(path: Path, charset: int, family: str, exercise_header: bool) -> N
     path.write_bytes(buf)
 
 
+def build_ushort_contract_fnt(path: Path) -> None:
+    header_size = 148
+    face_name = b"WinFNTUShortContract\0"
+    bits_offset = header_size + len(face_name)
+    payload = b"\x80" * 32
+    file_size = bits_offset + len(payload)
+    buf = bytearray(file_size)
+
+    put_u16(buf, 0, 0x0300)
+    put_u32(buf, 2, file_size)
+    copyright_text = b"pillow-rs WinFNT FT_UShort contract fixture"
+    buf[6 : 6 + len(copyright_text)] = copyright_text
+    put_u16(buf, 66, 2)
+    put_u16(buf, 68, 11)
+    put_u16(buf, 70, 73)
+    put_u16(buf, 72, 97)
+    put_u16(buf, 74, 13)
+    put_u16(buf, 76, 3)
+    put_u16(buf, 78, 4)
+    buf[80] = 1
+    buf[81] = 1
+    buf[82] = 1
+    put_u16(buf, 83, 701)
+    buf[85] = 0
+    put_u16(buf, 86, 6)
+    put_u16(buf, 88, 10)
+    buf[90] = 0x31
+    put_u16(buf, 91, 8)
+    put_u16(buf, 93, 12)
+    buf[95] = 32
+    buf[96] = 33
+    buf[97] = 32
+    buf[98] = 32
+    put_u16(buf, 99, 2)
+    put_u32(buf, 101, 0)
+    put_u32(buf, 105, header_size)
+    put_u32(buf, 109, 0)
+    put_u32(buf, 113, bits_offset)
+    buf[117] = 0x5A
+    put_u32(buf, 118, 0x01020304)
+    put_u16(buf, 122, 9)
+    put_u16(buf, 124, 10)
+    put_u16(buf, 126, 11)
+    put_u32(buf, 128, 0x22)
+    put_u32(buf, 132, 0x11121314)
+    put_u32(buf, 140, 0x21222324)
+    buf[header_size:bits_offset] = face_name
+    buf[bits_offset:] = payload
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(buf)
+
+
 def main() -> None:
     build_fnt(FONT_ROOT / "bitmap-header.fnt", 0, "PillowRsWinFNT", True)
+    build_ushort_contract_fnt(FONT_ROOT / "ushort-fields-known.fnt")
     charset_root = FONT_ROOT / "charset"
     for name, value in sorted(CHARSETS.items()):
         build_fnt(
