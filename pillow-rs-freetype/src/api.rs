@@ -750,6 +750,46 @@ pub struct GlyphSlot {
 }
 
 impl GlyphSlot {
+    pub(crate) fn empty() -> Self {
+        // C FreeType initializes `face->glyph` during face creation
+        // (`src/base/ftobjs.c`, glyph-slot allocation path).  Before any
+        // successful load, public callers observe format NONE and zeroed slot
+        // fields; failed loads preserve that empty slot.
+        Self {
+            glyph_index: 0,
+            metrics: GlyphSlotMetrics {
+                width: 0,
+                height: 0,
+                hori_bearing_x: 0,
+                hori_bearing_y: 0,
+                hori_advance: 0,
+                vert_bearing_x: 0,
+                vert_bearing_y: 0,
+                vert_advance: 0,
+            },
+            advance: Vector { x: 0, y: 0 },
+            format: GlyphFormat::None,
+            bitmap: None,
+            bitmap_left: 0,
+            bitmap_top: 0,
+            outline_cbox: BBox {
+                x_min: 0,
+                y_min: 0,
+                x_max: 0,
+                y_max: 0,
+            },
+            outline_bbox: BBox {
+                x_min: 0,
+                y_min: 0,
+                x_max: 0,
+                y_max: 0,
+            },
+            subglyphs: Vec::new(),
+            slot_outline: None,
+            loaded_outline: None,
+        }
+    }
+
     fn new(
         glyph_index: u16,
         loaded: GlyphSlotLoad,
