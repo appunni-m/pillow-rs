@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after stroker/WinFNT/outline exact classification:
+Current verified result after public API error-route exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4069`
+  - `real-parity`: `4079`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `126`
+  - `generic-error-fallback`: `116`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -41,6 +41,47 @@ Parity-only rule for this phase:
 - A row is fixed only when the same public input has exact output agreement
   against pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI, or when
   the row is explicitly documented as a real unsupported/pending public surface.
+
+### Issue Set Current: batched public API exact error routes
+
+Previous blocker:
+
+- Ten concrete public error rows for face opening, stream/frame errors,
+  module properties, and variation axis flags were classified as
+  `generic-error-fallback`.
+- Each row already executed through the pinned C oracle, Rust FFI, thin C ABI,
+  and WASM ABI, but fallback classification accepted any error instead of
+  requiring exact public status/output parity for the same input.
+
+Promoted rows:
+
+- `fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error`
+- `fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error`
+- `fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure`
+- `fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure`
+- `ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c`
+- `fterrdef.FT_Err_Missing_Property.driver_property_unknown_name`
+- `fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected`
+- `fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence`
+- `ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error`
+- `ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error`
+
+Verified progress:
+
+- Exact comparison passed for all ten rows after promotion.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType once the
+  fallback guard was removed.
+- Route audit classifies all ten rows as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4079`, `generic-error-fallback` `116`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 

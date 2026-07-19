@@ -870,6 +870,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument",
         "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument",
         "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch",
+        "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
+        "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error",
+        "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence",
+        "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected",
+        "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure",
+        "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure",
+        "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
+        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
+        "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error",
+        "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1138,6 +1148,51 @@ def add_default_modules_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
+    exact_error_reasons = {
+        (
+            "FT_New_Face",
+            "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
+        ): "FT_New_Face missing-path error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_New_Face",
+            "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error",
+        ): "FT_New_Face zero-length-file error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_New_Open_Face",
+            "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure",
+        ): "FT_New_Open_Face stream-operation failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_New_Open_Face",
+            "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure",
+        ): "FT_New_Open_Face stream-seek failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Property_Get",
+            "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
+        ): "FT_Property_Get glyph-to-script-map invalid-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Property_Get",
+            "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
+        ): "FT_Property_Get unknown driver property error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FT_Stream_Seek_or_FT_Stream_Read",
+            "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected",
+        ): "FT_Stream_Seek/Read null-stream error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftstream.frame_lifecycle",
+            "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence",
+        ): "FT_Stream frame lifecycle invalid-sequence error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftmm.get_mm_var_then_axis_flags",
+            "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error",
+        ): "FT_Get_Var_Axis_Flags out-of-range axis error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftmm.get_var_axis_flags",
+            "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error",
+        ): "FT_Get_Var_Axis_Flags null-master/null-flags error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+    }
+    reason = exact_error_reasons.get((row.operation, row.case_id))
+    if reason:
+        return reason
     if (
         row.operation == "freetype.init_free_type"
         and row.case_id == "freetype.FT_Init_FreeType.error_null_output_pointer"
