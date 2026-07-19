@@ -6061,8 +6061,8 @@ fn glyph_name_output(
 
 fn rust_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
-    let face_null = lifecycle_handle_param(params, "face") == Some("null");
-    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let face_null = lifecycle_handle_param_is_null(params, "face");
+    let buffer_null = lifecycle_handle_param_is_null(params, "buffer");
     let buffer_max = u32_param(params, "buffer_max")?;
     let fill = glyph_name_buffer_initial(params)?;
     let mut buffer = if buffer_null {
@@ -6103,8 +6103,8 @@ fn rust_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
-    let face_null = lifecycle_handle_param(params, "face") == Some("null");
-    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let face_null = lifecycle_handle_param_is_null(params, "face");
+    let buffer_null = lifecycle_handle_param_is_null(params, "buffer");
     let buffer_max = u32_param(params, "buffer_max")?;
     let fill = glyph_name_buffer_initial(params)?;
     let mut buffer = if buffer_null {
@@ -6144,8 +6144,8 @@ fn c_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
 
 fn wasm_get_glyph_name(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
-    let face_null = lifecycle_handle_param(params, "face") == Some("null");
-    let buffer_null = lifecycle_handle_param(params, "buffer") == Some("null");
+    let face_null = lifecycle_handle_param_is_null(params, "face");
+    let buffer_null = lifecycle_handle_param_is_null(params, "buffer");
     let buffer_max = u32_param(params, "buffer_max")?;
     let fill = glyph_name_buffer_initial(params)?;
     let mut buffer = if buffer_null {
@@ -9917,7 +9917,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(u32_param(params, "buffer_max")?.to_string());
             args.push(glyph_name_buffer_initial(params)?.to_string());
             args.push(
-                if lifecycle_handle_param(params, "face") == Some("null") {
+                if lifecycle_handle_param_is_null(params, "face") {
                     "null"
                 } else {
                     "valid"
@@ -9925,7 +9925,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 .to_string(),
             );
             args.push(
-                if lifecycle_handle_param(params, "buffer") == Some("null") {
+                if lifecycle_handle_param_is_null(params, "buffer") {
                     "null"
                 } else {
                     "valid"
