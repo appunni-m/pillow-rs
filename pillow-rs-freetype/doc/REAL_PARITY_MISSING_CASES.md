@@ -37,6 +37,12 @@ Rejected future-asset probes:
   `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: exact
   promotion failed with C error `7`; keep fallback-classified until the
   outline-bitmap dropout route is made public-exact.
+- `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success` and
+  `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`: the focused
+  `ftwinfnt.get_winfnt_header` route reports these two success rows as pending
+  because `fonts/winfnt/bitmap-header.fnt` is still marked
+  `required_future_asset`. They must not be counted as real parity until a
+  resolved, C-openable WinFNT asset proves the header-copy route.
 - `ftlist.FT_List_Iterate.iterates_all_nodes_success` and
   `ftlist.FT_List_Iterate.iterator_can_mutate_current_node`: exact promotion
   failed with C error `7`; keep fallback-classified until the list success
@@ -59,8 +65,6 @@ Promoted rows:
 - `ftotval.FT_VALIDATE_JSTF.validate_selects_jstf_table`
 - `ftotval.FT_VALIDATE_MATH.validate_selects_math_table`
 - `ftotval.FT_VALIDATE_OT.validate_all_requested_tables`
-- `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
-- `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
 
 Focused non-coverage proof before promotion:
 
