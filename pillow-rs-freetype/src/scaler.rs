@@ -885,21 +885,21 @@ fn scale_glyph_impl_with_context(
     } else {
         hinted_pp1x_fu
     };
-    let target_light_autohint = use_autohint
-        && style.no_horizontal_hinting
-        && !style.stem_adjust
-        && !style.horz_snap
-        && !style.vert_snap;
-    let autohint_pp1x_fu = if target_light_autohint {
-        // C's auto-hinter loads glyphs with `FT_LOAD_NO_SCALE` and computes
-        // its own pp1 from `hints->x_delta`; light mode keeps that x delta at
-        // zero (afloader.c:273-285, 407-410, 489-500).  For composites this
-        // means the autohinter sees the top-level glyph origin, not the
-        // selected component phantom used by native TrueType metrics.
-        top_level_pp1x_fu
+    let autohint_scaled_pp1x_fu = if use_autohint && outline_raw.unrounded_points.is_some() {
+        // FreeType's autofit loader reloads glyph outlines with
+        // `FT_LOAD_NO_SCALE | FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_LINEAR_DESIGN`
+        // and seeds the glyph zone from `hints->x_delta`, which is zero for
+        // this untransformed scaler path (`afloader.c`, loader pp1 setup).
+        // For variable outlines with fractional `gvar` sidecar data, do not
+        // reuse TrueType's left phantom origin here; doing so shifted
+        // named-instance autohint outlines left by one font unit. Static
+        // TrueType autohint rows still match C with the existing scaled
+        // phantom translation.
+        0
     } else {
         pp1x_fu
     };
+    let autohint_reload_pp1x_fu = pp1x_fu;
     let mut phantom_pp1_x = scale.scale_x(pp1x_fu);
     let mut phantom_pp2_x = scale.scale_x(pp1x_fu + hori_advance_fu);
     let (raw_pp3_y, raw_pp4_y) = vertical_phantom_font_units(data, glyph_index, outline_raw.ymax);
@@ -1010,7 +1010,7 @@ fn scale_glyph_impl_with_context(
             // `FT_LOAD_NO_SCALE` before `af_glyph_hints_reload`; at that point
             // the outline has integer `gvar` deltas, not the scaled
             // `unrounded` sidecar used by the native TrueType loader.
-            let shift_x = autohint_pp1x_fu;
+            let shift_x = autohint_scaled_pp1x_fu;
             let origin_shift = no_hinting_origin_shift_x;
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             for p in &outline_raw.points {
@@ -1082,7 +1082,7 @@ fn scale_glyph_impl_with_context(
                 is_italic: style.is_italic,
                 mono: target_mono,
             },
-            autohint_pp1x_fu,
+            autohint_reload_pp1x_fu,
         );
         if use_autohint_advance {
             if let Some(advance_width) = hinted_advance {
