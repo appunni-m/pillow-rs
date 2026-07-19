@@ -116,14 +116,14 @@
       "case_id": "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error",
       "subject": "ftimage.FT_Outline_CubicTo_Func",
       "case": "decompose_propagates_callback_error",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/cubic-valid-and-malformed.json"
+            "id": "outlines/synthetic/cubic-paired-controls.json"
           }
         },
         "params": {
@@ -147,6 +147,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "rows[*].status",
             "rows[*].events_before_abort",

@@ -20456,6 +20456,9 @@ fn rust_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         {
             outline_moveto_callback_error_output(case, runs)
         }
+        Ok(runs) if outline_callback_return_matrix_case(&case.case_id) => {
+            outline_callback_return_matrix_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -20487,6 +20490,9 @@ fn c_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, Str
                 == "ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error" =>
         {
             outline_moveto_callback_error_output(case, runs)
+        }
+        Ok(runs) if outline_callback_return_matrix_case(&case.case_id) => {
+            outline_callback_return_matrix_output(case, runs)
         }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
@@ -20520,6 +20526,9 @@ fn wasm_outline_decompose_runtime_output(case: &InputCase) -> Result<RunOutput, 
         {
             outline_moveto_callback_error_output(case, runs)
         }
+        Ok(runs) if outline_callback_return_matrix_case(&case.case_id) => {
+            outline_callback_return_matrix_output(case, runs)
+        }
         Ok(runs) if case.case_id == "ftoutln.FT_Outline_Decompose.callback_error_propagates" => {
             outline_decompose_callback_error_output(case, runs)
         }
@@ -20547,9 +20556,12 @@ fn outline_decompose_runtime_case_supported(case_id: &str) -> bool {
             | "ftimage.FT_CURVE_TAG_CONIC.conic_decomposition_matches_c"
             | "ftimage.FT_Curve_Tag_Conic.curve_tag_classifies_conic_points"
             | "ftimage.FT_Outline_ConicTo_Func.callback_abi_matches_c"
+            | "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error"
             | "ftimage.FT_CURVE_TAG_CUBIC.cubic_decomposition_matches_c"
             | "ftimage.FT_Curve_Tag_Cubic.curve_tag_classifies_cubic_points"
             | "ftimage.FT_Outline_CubicTo_Func.callback_abi_matches_c"
+            | "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error"
+            | "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error"
             | "ftoutln.FT_Outline_Decompose.line_conic_cubic_event_order"
             | "ftoutln.FT_Outline_Decompose.shift_delta_applied_to_callbacks"
             | "ftoutln.FT_Outline_Decompose.callback_error_propagates"
@@ -20660,6 +20672,9 @@ fn outline_decompose_transforms(case: &InputCase) -> Result<Vec<(FT_Int, FT_Pos)
             .collect();
     }
     if case.inputs.params.get("callback_return").is_some() {
+        return Ok(vec![(0, 0)]);
+    }
+    if case.inputs.params.get("callback_return_values").is_some() {
         return Ok(vec![(0, 0)]);
     }
     if case.inputs.params.get("move_to_return").is_some() {
@@ -20815,6 +20830,77 @@ fn outline_decompose_callback_error_output(
             "return": error_code,
             "events_before_error": events_before_error,
         }),
+    ))
+}
+
+fn outline_callback_return_matrix_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftimage.FT_Outline_LineTo_Func.decompose_propagates_callback_error"
+            | "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error"
+            | "ftimage.FT_Outline_CubicTo_Func.decompose_propagates_callback_error"
+    )
+}
+
+fn outline_callback_return_matrix_output(
+    case: &InputCase,
+    runs: Vec<FTOutlineDecomposeRun>,
+) -> Result<RunOutput, String> {
+    let callback = case
+        .inputs
+        .params
+        .get("callback")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "callback must be present".to_string())?;
+    let return_values = case
+        .inputs
+        .params
+        .get("callback_return_values")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "callback_return_values must be an array".to_string())?;
+    if return_values.is_empty() {
+        return Err("callback_return_values must not be empty".to_string());
+    }
+    let run = runs
+        .into_iter()
+        .next()
+        .ok_or_else(|| "callback return matrix requires one run".to_string())?;
+    let event_index = run
+        .events
+        .iter()
+        .position(|event| event.kind == callback)
+        .ok_or_else(|| format!("callback {callback} did not match an event"))?;
+    let events_before_abort = run
+        .events
+        .iter()
+        .take(event_index)
+        .cloned()
+        .map(outline_decompose_event_json)
+        .collect::<Vec<_>>();
+    let mut first_error = None;
+    let rows = return_values
+        .iter()
+        .map(|value| {
+            let error_code = value
+                .as_i64()
+                .ok_or_else(|| "callback_return_values[] must be integers".to_string())
+                .and_then(|value| i32::try_from(value).map_err(|err| err.to_string()))?;
+            if first_error.is_none() {
+                first_error = Some(error_code);
+            }
+            // FreeType `src/base/ftoutln.c` propagates any nonzero line/conic/cubic
+            // callback return immediately, before recording later callbacks.
+            Ok(json!({
+                "status": error_code,
+                "error": error_code,
+                "events_before_abort": events_before_abort,
+                "failing_callback": callback,
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(error_with_output(
+        first_error.ok_or_else(|| "callback_return_values must not be empty".to_string())?,
+        json!({ "rows": rows }),
     ))
 }
 

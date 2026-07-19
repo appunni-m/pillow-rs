@@ -115,14 +115,14 @@
       "case_id": "ftimage.FT_Outline_ConicTo_Func.decompose_propagates_callback_error",
       "subject": "ftimage.FT_Outline_ConicTo_Func",
       "case": "decompose_propagates_callback_error",
-      "operation": "ftimage.outline_decompose",
+      "operation": "ftoutln.outline_decompose",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
         "assets": {
           "outline_fixture": {
             "kind": "ref",
-            "id": "outlines/conic-consecutive-and-closing.json"
+            "id": "outlines/synthetic/conic-single-and-consecutive.json"
           }
         },
         "params": {
@@ -146,6 +146,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "rows[*].status",
             "rows[*].events_before_abort",
