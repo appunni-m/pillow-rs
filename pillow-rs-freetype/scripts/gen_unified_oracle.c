@@ -4709,6 +4709,61 @@ static int emit_outline_get_cbox_null_inputs(int argc, char** argv) {
     return 0;
 }
 
+static void print_outline_bbox_probe_row(const char* probe, FT_Error err, FT_BBox bbox) {
+    printf("{\"probe\":\"%s\",", probe);
+    printf("\"status\":\"%s\",", err ? "error" : "ok");
+    printf("\"error\":%d,", err);
+    print_bbox_named("bbox", bbox);
+    printf("}");
+}
+
+static int emit_outline_get_bbox_null_inputs(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    char* sentinel_arg = (char*)malloc(strlen(argv[2]) + 1);
+    if (!sentinel_arg) {
+        return 2;
+    }
+    memcpy(sentinel_arg, argv[2], strlen(argv[2]) + 1);
+    long long values[4] = {0, 0, 0, 0};
+    int value_count = split_fixed_math_row(sentinel_arg, values, 4);
+    free(sentinel_arg);
+    if (value_count != 4) {
+        return 2;
+    }
+
+    FT_BBox null_outline_bbox = {
+        (FT_Pos)values[0],
+        (FT_Pos)values[1],
+        (FT_Pos)values[2],
+        (FT_Pos)values[3],
+    };
+    FT_Error null_outline_err = FT_Outline_Get_BBox(NULL, &null_outline_bbox);
+
+    FT_Vector points[1] = {{17, -23}};
+    unsigned char tags[1] = {1};
+    unsigned short contours[1] = {0};
+    FT_Outline outline = {1, 1, points, tags, contours, 0};
+    FT_BBox null_abbox_sentinel = {
+        (FT_Pos)values[0],
+        (FT_Pos)values[1],
+        (FT_Pos)values[2],
+        (FT_Pos)values[3],
+    };
+    FT_Error null_abbox_err = FT_Outline_Get_BBox(&outline, NULL);
+    FT_Error first_error = null_outline_err ? null_outline_err : null_abbox_err;
+
+    printf("{\"output\":{\"rows\":[");
+    print_outline_bbox_probe_row("null_outline", null_outline_err, null_outline_bbox);
+    printf(",");
+    print_outline_bbox_probe_row("null_abbox", null_abbox_err, null_abbox_sentinel);
+    printf("]},");
+    print_status(first_error);
+    printf("}\n");
+    return 0;
+}
+
 static void print_subglyph_info_row(FT_GlyphSlot slot, FT_UInt sub_index) {
     FT_Int index = 0;
     FT_UInt flags = 0;
@@ -14211,6 +14266,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 10 && streq(argv[1], "--face-set-unpatented-hinting-post-load")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-get-bbox-null-inputs")) {
+        return emit_outline_get_bbox_null_inputs(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-get-cbox-null-inputs")) {
         return emit_outline_get_cbox_null_inputs(argc, argv);

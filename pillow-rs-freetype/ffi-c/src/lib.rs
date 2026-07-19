@@ -1816,6 +1816,30 @@ pub extern "C" fn FT_Outline_Get_CBox(outline: *const FT_Outline, acbox: *mut FT
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Get_BBox(outline: *const FT_Outline, abbox: *mut FT_BBox) -> FT_Error {
+    if abbox.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(snapshot) = outline_snapshot_from_c(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let mut bbox = rust_ffi::FT_BBox::default();
+    let error = rust_ffi::FT_Outline_Get_BBox(Some(&snapshot), Some(&mut bbox));
+    if error == rust_ffi::FT_Err_Ok {
+        // SAFETY: `abbox` is non-null and the caller provides writable `FT_BBox` storage.
+        unsafe {
+            *abbox = FT_BBox {
+                xMin: bbox.xMin,
+                yMin: bbox.yMin,
+                xMax: bbox.xMax,
+                yMax: bbox.yMax,
+            };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_Bitmap(
     library: FT_Library,
     outline: *const FT_Outline,

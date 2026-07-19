@@ -22,7 +22,7 @@ Outline symbols from `ftoutln.h` and `ftbbox.h`:
 | `FT_Outline_Reverse` | `void (FT_Outline* outline)` | implemented | Safe core contour-buffer reversal plus exact Rust FFI, C ABI, and WASM wrappers. |
 | `FT_Outline_Check` | `FT_Error (FT_Outline* outline)` | planned | Validation exists only as parser/rasterizer errors such as `FontError::InvalidOutline`. |
 | `FT_Outline_Get_CBox` | `void (const FT_Outline* outline, FT_BBox* acbox)` | partial | `scaler::ScaledGlyph::{outline_cbox_*}` and local render cbox helpers. |
-| `FT_Outline_Get_BBox` | `FT_Error (FT_Outline* outline, FT_BBox* abbox)` | planned | `scaler::ScaledGlyph::{outline_bbox_*}` stores exact outline bbox, but no public C-shaped call. |
+| `FT_Outline_Get_BBox` | `FT_Error (FT_Outline* outline, FT_BBox* abbox)` | implemented | Safe Rust FFI plus thin C ABI and WASM wrappers compute the exact bbox through the public C-shaped call; loaded-glyph fixture rows assert it matches `ScaledGlyph::{outline_bbox_*}`. |
 | `FT_Outline_Decompose` | `FT_Error (FT_Outline* outline, const FT_Outline_Funcs* func_interface, void* user)` | partial | Private decomposers in `grays.rs` and `render.rs` walk contours for rasterization. |
 | `FT_Outline_Get_Orientation` | `FT_Orientation (FT_Outline* outline)` | planned | Autohinter computes winding internally; no public orientation endpoint. |
 | `FT_Outline_Get_Bitmap` | `FT_Error (FT_Library library, FT_Outline* outline, const FT_Bitmap* abitmap)` | planned | Rendering currently returns owned `RenderedBitmap`; no caller-supplied `FT_Bitmap` target. |
