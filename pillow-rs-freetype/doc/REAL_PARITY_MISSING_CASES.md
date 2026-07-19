@@ -1868,10 +1868,11 @@ Previous blocker:
 - Six SBit cache rows remained under `generic-error-fallback`.
 - Four rows passed exact comparison and can be promoted.
 - `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output` and
-  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` remain
-  unpromoted: exact-error classification would require an error, but the pinned
-  C oracle returns `Ok`. Those rows need a value-contract fix/classification,
-  not a forced exact-error promotion.
+  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` remained
+  unpromoted in this older batch: exact-error classification required an
+  error, but the then-current runner returned `Ok`. This was later resolved by
+  re-running the maintained SBit cache route and promoting both rows after
+  exact Rust FFI, thin C ABI, and WASM ABI comparison passed.
 
 Fix plan:
 
@@ -1880,9 +1881,9 @@ Fix plan:
    - `ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup`
    - `ftcache.FTC_SBitCache_New.error_outputs_null_cache`
    - `ftcache.FTC_SBitCache_New.invalid_arguments_match_c`
-2. Keep the two `ftcache.FTC_SBitCache_Lookup` rows visible as remaining
-   fallback until their `Ok` status and output-value contract are handled
-   correctly.
+2. Superseded: the two `ftcache.FTC_SBitCache_Lookup` rows are handled by the
+   later SBit exact-error issue set once the maintained route verifies exact
+   errors for the current same-input fixtures.
 3. Keep all fixture inputs, oracle outputs, and comparison rules unchanged.
 4. Verify exact status/output through Rust FFI, thin C ABI, and WASM ABI before
    counting these rows as `real-parity`.
@@ -1906,6 +1907,42 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: four focused exact rows passed. Route audit:
 `real-parity` `4042`, `generic-error-fallback` `153`.
+
+### Issue Set Current: `FTC_SBitCache_Lookup` direct exact-error rows
+
+Previous blocker:
+
+- `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output` and
+  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` stayed in
+  `generic-error-fallback`.
+- Older exact probes reported top-level `Ok` from the runner, so those rows
+  could not be promoted without faking the public error route.
+
+Plan:
+
+1. Keep both fixture rows intact.
+2. Re-run the current maintained `ftcache.sbit_cache_lookup` route against
+   pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+3. Require exact error status/output comparison for the two concrete case IDs
+   only after the focused SBit cache lane passes.
+4. Add explicit route-audit reasons for the null-output and output-clearing
+   public error contracts.
+
+Verified progress:
+
+- Focused `ftcache.FTC_SBitCache_Lookup` parity passes after exact-error
+  gating: `runtime_parity: passed=12 failed=0 total=12`, with one unrelated
+  required-future-asset row still pending.
+- The route audit now classifies both direct SBit lookup error rows as
+  `real-parity`.
+- Route audit moved `real-parity` `4202 -> 4204` and
+  `generic-error-fallback` `36 -> 34`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcache.FTC_SBitCache_Lookup
+```
 
 ### Issue Set Current: GX validation, bzip2, and palette foreground exact routes
 
@@ -6561,9 +6598,9 @@ Rejected rows from this probe batch:
   `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` — both reference
   missing BDF/OTB assets in this worktree.
 - `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output` and
-  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` — oracle still
-  returns a top-level successful lookup matrix, not exact invalid-output
-  errors.
+  `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup` — superseded by
+  the later direct SBit exact-error issue set; the current maintained route now
+  verifies exact errors for both rows.
 - `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error`,
   `fterrdef.FT_Err_Invalid_Argument.null_output_or_bad_flag_arguments`,
   `fterrdef.FT_Err_Invalid_Glyph_Format.render_or_load_rejects_unsupported_glyph_format`,
