@@ -81,6 +81,26 @@ pub struct FT_BBox {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FT_Parameter {
+    pub tag: FT_ULong,
+    pub data: *mut c_void,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Open_Args {
+    pub flags: FT_UInt,
+    pub memory_base: *const FT_Byte,
+    pub memory_size: FT_Long,
+    pub pathname: *mut c_char,
+    pub stream: *mut c_void,
+    pub driver: *mut c_void,
+    pub num_params: FT_Int,
+    pub params: *mut FT_Parameter,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_Outline {
     pub n_contours: FT_UShort,
     pub n_points: FT_UShort,
@@ -1337,6 +1357,36 @@ pub extern "C" fn FT_Matrix_Invert(matrix: *mut FT_Matrix) -> FT_Error {
         }
     }
     err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Open_Face(
+    library: FT_Library,
+    args: *const FT_Open_Args,
+    face_index: FT_Long,
+    aface: *mut FT_Face,
+) -> FT_Error {
+    // C FreeType `FT_Open_Face` delegates to `ft_open_face_internal`
+    // (ftobjs.c:2514-2586): null `args` is rejected before stream creation;
+    // null `library` is then rejected by `FT_Stream_New`; null `aface` is
+    // checked after a stream is successfully created.
+    let Some(args) = NonNull::new(args.cast_mut()) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `args` is non-null and read-only for this call.
+    let args = unsafe { args.as_ref() };
+    let source_flags =
+        args.flags & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME) as FT_UInt);
+    if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    FT_New_Memory_Face(
+        library,
+        args.memory_base,
+        args.memory_size,
+        face_index,
+        aface,
+    )
 }
 
 #[unsafe(no_mangle)]
