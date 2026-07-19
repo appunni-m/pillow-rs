@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Face_Properties` scalar face-property route
+
+Status: scalar `FT_Face_Properties` route implemented on 2026-07-20 for the
+C-callable pinned FreeType 2.14.3 behavior in `src/base/ftobjs.c:4010-4069`.
+
+Implemented real parity rows:
+
+- `freetype.FT_Face_Properties.success_supported_face_properties`
+- `freetype.FT_Face_Properties.success_zero_properties_noop`
+- `freetype.FT_Face_Properties.error_invalid_property_tag_or_value`
+- `ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights`
+- `ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors`
+
+C behavior verified:
+
+- `FT_PARAM_TAG_STEM_DARKENING` writes
+  `face->internal->no_stem_darkening` as `0` for input true, `1` for input
+  false, and `-1` for null data.
+- `FT_PARAM_TAG_RANDOM_SEED` writes `face->internal->random_seed`, clamps
+  negative values to `0`, and resets to `-1` for null data.
+- `FT_PARAM_TAG_LCD_FILTER_WEIGHTS` returns
+  `FT_Err_Unimplemented_Feature` before dereferencing `data`.
+- Unknown tags return `FT_Err_Invalid_Argument`.
+
+Important blocker retained:
+
+- `freetype.FT_Face_Properties.error_null_face` is intentionally not counted
+  as parity. Pinned C dereferences `face` when `num_properties > 0` and
+  segfaults for a null face. Counting Rust `Invalid_Face_Handle` as parity
+  would be a green placeholder, so the row is `pending-route` with that reason.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=FT_Face_Properties
+make -C pillow-rs-freetype test-case CASE=FT_PARAM_TAG_RANDOM_SEED
+make -C pillow-rs-freetype test-case CASE=FT_PARAM_TAG_LCD_FILTER_WEIGHTS
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Property_Get/Set` scalar TrueType property slice
 
 Status: scalar `truetype:interpreter-version` route implemented on

@@ -1235,7 +1235,27 @@ pub struct FT_Face {
     charmap_metadata: Box<[(FT_Long, FT_ULong)]>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
+    no_stem_darkening: i32,
+    random_seed: FT_Int32,
     refcount: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FT_Face_Property_Value {
+    Bool(FT_Bool),
+    Int32(FT_Int32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FT_Face_Property {
+    pub tag: FT_ULong,
+    pub value: Option<FT_Face_Property_Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FT_Face_Properties_State {
+    pub no_stem_darkening: i32,
+    pub random_seed: FT_Int32,
 }
 
 struct FaceSizeState {
@@ -3016,6 +3036,53 @@ pub fn FT_Property_Set(
     }
 }
 
+pub fn FT_Face_Properties(
+    face: Option<&mut FT_Face>,
+    properties: Option<&[FT_Face_Property]>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Face_Properties` mutates only
+    // `face->internal->no_stem_darkening` and `random_seed` for the supported
+    // scalar tags.  LCD weights return `Unimplemented_Feature` before the data
+    // pointer is read.
+    let Some(properties) = properties else {
+        return FT_Err_Invalid_Argument;
+    };
+    if properties.is_empty() {
+        return FT_Err_Ok;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    for property in properties {
+        match property.tag as i64 {
+            FT_PARAM_TAG_STEM_DARKENING => match property.value {
+                Some(FT_Face_Property_Value::Bool(value)) => {
+                    face.no_stem_darkening = if value == 1 { 0 } else { 1 };
+                }
+                None => face.no_stem_darkening = -1,
+                _ => return FT_Err_Invalid_Argument,
+            },
+            FT_PARAM_TAG_LCD_FILTER_WEIGHTS => return FT_Err_Unimplemented_Feature,
+            FT_PARAM_TAG_RANDOM_SEED => match property.value {
+                Some(FT_Face_Property_Value::Int32(value)) => {
+                    face.random_seed = value.max(0);
+                }
+                None => face.random_seed = -1,
+                _ => return FT_Err_Invalid_Argument,
+            },
+            _ => return FT_Err_Invalid_Argument,
+        }
+    }
+    FT_Err_Ok
+}
+
+pub fn FT_Face_Properties_Get_State(face: &FT_Face) -> FT_Face_Properties_State {
+    FT_Face_Properties_State {
+        no_stem_darkening: face.no_stem_darkening,
+        random_seed: face.random_seed,
+    }
+}
+
 pub fn FT_Add_Default_Modules(library: Option<&mut FT_Library>) {
     // FreeType 2.14.3 `src/base/ftinit.c:FT_Add_Default_Modules` returns
     // `void`; null-library errors are swallowed while iterating
@@ -3789,6 +3856,8 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
             yy: 1 << 16,
         },
         transform_delta: FT_Vector { x: 0, y: 0 },
+        no_stem_darkening: -1,
+        random_seed: -1,
         refcount: 1,
     };
     register_face_size_handles(&face);

@@ -391,6 +391,7 @@ FT_Error FT_Library_SetLcdGeometry(FT_Library library, FT_Vector* sub);
 FT_TrueTypeEngineType FT_Get_TrueType_Engine_Type(FT_Library library);
 FT_Error FT_Property_Get(FT_Library library, const FT_String* module_name, const FT_String* property_name, void* value);
 FT_Error FT_Property_Set(FT_Library library, const FT_String* module_name, const FT_String* property_name, const void* value);
+FT_Error FT_Face_Properties(FT_Face face, FT_UInt num_properties, FT_Parameter* properties);
 void FT_Add_Default_Modules(FT_Library library);
 void FT_Set_Debug_Hook(FT_Library library, FT_UInt hook_index, FT_DebugHook_Func debug_hook);
 FT_Long FT_MulDiv(FT_Long a, FT_Long b, FT_Long c);

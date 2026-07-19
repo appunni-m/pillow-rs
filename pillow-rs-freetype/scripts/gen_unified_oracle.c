@@ -11090,6 +11090,75 @@ static void oracle_property_set_then_get(int module_selector,
     FT_Done_FreeType(library);
 }
 
+static void print_face_properties_state(FT_Face face) {
+    printf("{\"no_stem_darkening\":%d,\"random_seed\":%d}",
+           face && face->internal ? face->internal->no_stem_darkening : -9999,
+           face && face->internal ? face->internal->random_seed : -9999);
+}
+
+static int emit_face_properties_case(int argc, char** argv) {
+    const char* case_id = argv[2];
+    OracleFace face = {0};
+    FT_Error error = FT_Err_Ok;
+
+    if (streq(case_id, "freetype.FT_Face_Properties.error_null_face")) {
+        FT_Bool value = 0;
+        FT_Parameter property = {FT_PARAM_TAG_STEM_DARKENING, &value};
+        error = FT_Face_Properties(NULL, 1, &property);
+        printf("{");
+        print_status(error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    if (argc != 6) {
+        fprintf(stderr, "--face-properties-case requires case_id source_kind source_value face_index\n");
+        return 2;
+    }
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened) {
+        return opened;
+    }
+
+    if (streq(case_id, "freetype.FT_Face_Properties.success_supported_face_properties")) {
+        FT_Bool stem_darkening = 1;
+        FT_Int32 seed = 12345;
+        FT_Parameter properties[] = {
+            {FT_PARAM_TAG_STEM_DARKENING, &stem_darkening},
+            {FT_PARAM_TAG_RANDOM_SEED, &seed},
+        };
+        error = FT_Face_Properties(face.face, 2, properties);
+    } else if (streq(case_id, "freetype.FT_Face_Properties.success_zero_properties_noop")) {
+        error = FT_Face_Properties(face.face, 0, NULL);
+    } else if (streq(case_id, "freetype.FT_Face_Properties.error_invalid_property_tag_or_value")) {
+        FT_Int32 value = 1;
+        FT_Parameter property = {FT_MAKE_TAG('b', 'a', 'd', '!'), &value};
+        error = FT_Face_Properties(face.face, 1, &property);
+    } else if (streq(case_id, "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights")) {
+        FT_Parameter property = {FT_PARAM_TAG_LCD_FILTER_WEIGHTS, NULL};
+        error = FT_Face_Properties(face.face, 1, &property);
+    } else if (streq(case_id, "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors")) {
+        FT_Parameter property = {FT_PARAM_TAG_RANDOM_SEED, NULL};
+        error = FT_Face_Properties(face.face, 1, &property);
+    } else {
+        fprintf(stderr, "unsupported face properties case: %s\n", case_id);
+        close_oracle_face(&face);
+        return 2;
+    }
+
+    printf("{");
+    print_status(error);
+    if (error) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"return\":%d,\"face_state\":", error);
+        print_face_properties_state(face.face);
+        printf("}}\n");
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_property_case(int argc, char** argv) {
     (void)argc;
     const char* case_id = argv[2];
@@ -15033,6 +15102,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--property-case")) {
         return emit_property_case(argc, argv);
+    }
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--face-properties-case")) {
+        return emit_face_properties_case(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
