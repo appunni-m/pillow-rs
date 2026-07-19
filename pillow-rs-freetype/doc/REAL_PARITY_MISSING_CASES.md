@@ -42,6 +42,64 @@ Parity-only rule for this phase:
   against pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI, or when
   the row is explicitly documented as a real unsupported/pending public surface.
 
+### Issue Set Current: named-instance memory-face stale route plus rejected exact-error batch
+
+Previous blocker:
+
+- `freetype.FT_New_Memory_Face.success_named_instance_index` was still
+  classified as `pending-route` because its manifest assets carried stale
+  `required_future_asset` metadata for both `font` and `font_bytes`.
+- The actual file already exists as
+  `tests/fixtures/input/fonts/variable/named-instances.ttf`, and the focused
+  parity row executes through the pinned C oracle, Rust FFI, thin C ABI, and
+  WASM ABI.
+- The macOS oracle build path also emitted `nproc: command not found` every
+  time `scripts/build_ft.sh` ran from parity Make targets.
+
+Promoted row:
+
+- `freetype.FT_New_Memory_Face.success_named_instance_index`
+
+Verified progress:
+
+- Focused exact parity passed for the promoted row.
+- Route audit moved one row from `pending-route` to `real-parity`.
+- Current route audit after the change: `real-parity` `4167`,
+  `pending-route` `71`, `generic-error-fallback` `39`,
+  `generic-fallback` `696`.
+- Previous full refreshed parity for this row passed as part of
+  `7155 / 7155` runnable rows with `79` pending.
+- `scripts/build_ft.sh` now resolves build parallelism via
+  `FONTDONE_BUILD_JOBS`, `nproc`, `sysctl -n hw.ncpu`, or `getconf`, so the
+  oracle build remains portable without changing parity semantics.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.success_named_instance_index
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4167`, `pending-route` `71`.
+
+Rejected batch probes:
+
+- `ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output`: exact-error probe
+  failed because pinned C returned `Ok`; do not promote as an expected-error
+  row.
+- `ftcache.FTC_SBitCache_Lookup.clears_outputs_before_lookup`: exact-error
+  probe failed because pinned C returned `Ok`; do not promote as an
+  expected-error row.
+- `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error`:
+  exact-error probe failed because pinned C returned `Ok`; do not promote as
+  an expected-error row.
+- `fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library`:
+  exact-error probe failed because pinned C returned `Ok`; do not promote as
+  an expected-error row.
+- `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs`: focused probe is
+  not runnable because `input/fonts/bdf/charset-registry.bdf` is missing; keep
+  under the documented BDF charset fixture gap.
+
 ### Issue Set Current: batched public API exact error routes
 
 Previous blocker:
