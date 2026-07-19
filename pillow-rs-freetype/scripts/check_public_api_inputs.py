@@ -870,6 +870,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftwinfnt.FT_Get_WinFNT_Header.null_output_returns_invalid_argument",
         "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument",
         "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch",
+        "fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error",
         "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
         "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error",
         "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error",
@@ -897,6 +898,10 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",
         "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
         "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
+        "fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted",
+        "fterrdef.FT_Err_Raster_Corrupted.sdf_raster_missing_flag",
+        "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height",
+        "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool",
         "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
         "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
@@ -910,6 +915,11 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored",
         "ftimage.FT_Raster_New_Func.renderer_new_error_propagates",
         "ftimage.FT_Raster_Span_Func.missing_span_callback_errors",
+        "ftimage.FT_Bitmap.invalid_target_buffer_errors",
+        "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape",
+        "ftimage.FT_Raster.null_raster_errors",
+        "ftimage.FT_Raster_Funcs.render_callback_error_contract",
+        "ftimage.FT_Raster_Params.invalid_param_errors",
         "ftincrem.FT_Incremental_FuncsRec.callback_error_propagates",
         "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
@@ -1525,6 +1535,41 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
     ):
         return "FT_LOAD_TARGET_MODE invalid render-target errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    render_raster_error_cases = {
+        (
+            "FT_Outline_Render",
+            "fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error",
+        ),
+        (
+            "FT_Outline_Render",
+            "fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted",
+        ),
+        (
+            "FT_Outline_Render",
+            "fterrdef.FT_Err_Raster_Corrupted.sdf_raster_missing_flag",
+        ),
+        (
+            "FT_Outline_Render",
+            "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height",
+        ),
+        (
+            "FT_Outline_Render",
+            "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool",
+        ),
+        (
+            "renderer.raster_render",
+            "ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape",
+        ),
+        ("renderer.raster_render", "ftimage.FT_Raster.null_raster_errors"),
+        (
+            "renderer.raster_render",
+            "ftimage.FT_Raster_Funcs.render_callback_error_contract",
+        ),
+        ("renderer.raster_render", "ftimage.FT_Raster_Params.invalid_param_errors"),
+        ("ftoutln.outline_get_bitmap", "ftimage.FT_Bitmap.invalid_target_buffer_errors"),
+    }
+    if (row.operation, row.case_id) in render_raster_error_cases:
+        return "render/raster public error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbdf.get_bdf_property"
         and row.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"

@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after module/load public API exact classification:
+Current verified result after render/raster public API exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4126`
+  - `real-parity`: `4136`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `69`
+  - `generic-error-fallback`: `59`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -291,6 +291,56 @@ make -C pillow-rs-freetype test-case CASE=ftmoderr.FT_Mod_Err_SFNT.prefixed_erro
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `4126`, `generic-error-fallback` `69`.
+
+### Issue Set Current: render/raster public API exact error routes
+
+Previous blocker:
+
+- Ten public render/raster error rows across `FT_Outline_Render`,
+  `renderer.raster_render`, and `FT_Outline_Get_Bitmap` target-buffer
+  validation were still classified as `generic-error-fallback`.
+- These rows had runnable pinned C, Rust FFI, thin C ABI, and WASM ABI coverage,
+  but fallback classification accepted any error instead of requiring exact
+  public status/output equality.
+
+Promoted rows:
+
+- `fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error`
+- `fterrdef.FT_Err_Raster_Corrupted.sdf_raster_missing_flag`
+- `fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted`
+- `fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height`
+- `fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool`
+- `ftimage.FT_RASTER_FLAG_SDF.non_sdf_raster_rejects_sdf_shape`
+- `ftimage.FT_Raster.null_raster_errors`
+- `ftimage.FT_Raster_Funcs.render_callback_error_contract`
+- `ftimage.FT_Raster_Params.invalid_param_errors`
+- `ftimage.FT_Bitmap.invalid_target_buffer_errors`
+
+Rejected exact-error candidates:
+
+- The first attempted `load_glyph` bytecode/interpreter exact-error batch was
+  not promoted. Exact probes showed pinned C returned `Ok` for the sampled
+  rows, including invalid jump, jump overflow, PUSH truncation, glyph-program
+  FDEF, DEBUG opcode, divide-by-zero, stray ENDF, execution-limit, and invalid
+  opcode cases. Those rows remain oracle-policy/test-input issues until the
+  fixture inputs prove the named public errors on pinned C FreeType.
+
+Verified progress:
+
+- Exact comparison passed for all ten promoted render/raster rows.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType for the
+  promoted rows once the fallback guard was removed.
+- Route audit classifies all ten promoted rows as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4136`, `generic-error-fallback` `59`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
