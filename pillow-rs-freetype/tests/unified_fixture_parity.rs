@@ -8337,6 +8337,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_Face.null_and_done_handle_errors"
             || case.case_id == "ftmodapi.FT_Done_Library.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Reference_Library.rejects_null_library"
+            || case.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
             || case.case_id == "ftmm.FT_Done_MM_Var.null_library_error"
             || case.case_id
                 == "freetype.FT_IS_NAMED_INSTANCE.encoded_named_instance_face_index_returns_true"
