@@ -1193,6 +1193,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Property_Set invalid-property-name/value errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftlcdfil.set_lcd_filter_weights"
+        and row.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_library"
+    ):
+        return "FT_Library_SetLcdFilterWeights null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlcdfil.set_lcd_filter_weights"
+        and row.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_weights"
+    ):
+        return "FT_Library_SetLcdFilterWeights null-weights error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
