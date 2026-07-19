@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Add_Module` null-class
+Current verified result after `FT_Add_Module` future-required-version
 exact-error route classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3799`
+  - `real-parity`: `3800`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `698`
-  - `generic-error-fallback`: `394`
+  - `generic-error-fallback`: `393`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -2837,6 +2837,39 @@ Verified commands:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.rejects_null_class
+```
+
+### Issue Set BM: `FT_Add_Module` future-required-version exact-error route
+
+Previous blocker:
+
+- `ftmodapi.FT_Add_Module.rejects_future_required_version` stayed in
+  `generic-error-fallback`.
+- The focused same-input runtime already matched pinned C FreeType, Rust FFI,
+  thin C ABI, and WASM ABI, but the harness still allowed it as a generic
+  expected-error row instead of enforcing exact status, module-count, and
+  lookup-result comparison.
+
+Plan:
+
+1. Keep the fixture intact; it exercises public `FT_Add_Module` behavior for a
+   module class requiring a newer FreeType version than the pinned oracle.
+2. Require exact error status, unchanged-module-count, and null lookup-result
+   comparison.
+3. Classify the concrete row as real parity only after focused exact parity
+   passes.
+
+Verified progress:
+
+- The focused future-required-version row passes exact comparison against
+  pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmodapi.FT_Add_Module.rejects_future_required_version` as `real-parity`.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.rejects_future_required_version
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
