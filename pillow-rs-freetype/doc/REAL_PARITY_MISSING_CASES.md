@@ -1,5 +1,43 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: CID signature and Type1 sentinel contract cleanup
+
+Status: two-row audit cleanup completed on 2026-07-20 for public signature and
+sentinel contracts that were incorrectly parked behind runtime subsystem
+pending buckets.
+
+Additional audit corrections:
+
+- `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature` is a
+  public `ftcid.h` function signature/import contract, not CID runtime face
+  data behavior.
+- `t1tables.T1_BLEND_MAX.sentinel_not_runtime_field` is a public
+  `t1tables.h` enum sentinel/non-field contract, not Type1 blend dictionary
+  runtime extraction.
+
+Rejected candidates:
+
+- FTC cache opaque cache rows remain pending because their expectations require
+  manager-owned cache lifecycle and post-done invalidation behavior.
+- `FT_StreamRec` memory/callback stream rows remain pending because they require
+  exact stream field mutation and callback event parity.
+- `FT_WinFNT_Header.mutable_output_handle_contract` remains pending because it
+  requires exact record mutation behavior for WinFNT and control faces.
+
+Impact:
+
+- `real-parity`: stays `4450`
+- `compile-contract`: `2263 -> 2265`
+- `pending-route`: `507 -> 505`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: header/layout contract audit cleanup
 
 Status: five-row audit cleanup completed on 2026-07-20 for public header,

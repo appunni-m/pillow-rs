@@ -1341,8 +1341,10 @@ def header_or_layout_compile_contract_reason(row: ConcreteInput) -> str | None:
         "ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header",
         "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
         "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
+        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
+        "t1tables.T1_BLEND_MAX.sentinel_not_runtime_field",
     }
     if row.case_id in compile_contract_cases:
         return (
