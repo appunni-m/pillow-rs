@@ -50,6 +50,43 @@ Rejected future-asset probes:
 
 Promoted rows:
 
+- `fterrdef` load-glyph exact-error batch: `26 / 26` promoted from
+  `pending-route` to `real-parity`.  These rows now execute refreshed pinned C
+  FreeType, Rust FFI, thin C ABI, and WASM ABI exact-error comparisons instead
+  of remaining blocked by the generic "any error would be a green placeholder"
+  route guard:
+  - `fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error`
+  - `fterrdef.FT_Err_Code_Overflow.bytecode_jump_past_range_returns_error`
+  - `fterrdef.FT_Err_Code_Overflow.push_instruction_truncation_returns_error`
+  - `fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error`
+  - `fterrdef.FT_Err_Could_Not_Find_Context.truetype_context_allocation_failure_returns_error`
+  - `fterrdef.FT_Err_DEF_In_Glyf_Bytecode.glyph_program_fdef_returns_error`
+  - `fterrdef.FT_Err_Debug_OpCode.debug_opcode_returns_error`
+  - `fterrdef.FT_Err_Divide_By_Zero.bytecode_div_zero_returns_error`
+  - `fterrdef.FT_Err_ENDF_In_Exec_Stream.stray_endf_returns_error`
+  - `fterrdef.FT_Err_Execution_Too_Long.opcode_counter_limit_returns_error`
+  - `fterrdef.FT_Err_Execution_Too_Long.negative_jump_limit_returns_error`
+  - `fterrdef.FT_Err_Glyph_Too_Big.ps_builder_large_outline_returns_error`
+  - `fterrdef.FT_Err_Invalid_Opcode.tt_bytecode_invalid_opcode`
+  - `fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference`
+  - `fterrdef.FT_Err_Nested_DEFS.truetype_nested_fdef`
+  - `fterrdef.FT_Err_Nested_DEFS.truetype_nested_idef`
+  - `fterrdef.FT_Err_Stack_Overflow.tt_interpreter_stack_overflow`
+  - `fterrdef.FT_Err_Stack_Overflow.cff_charstring_stack_overflow`
+  - `fterrdef.FT_Err_Stack_Underflow.cff_charstring_missing_operands`
+  - `fterrdef.FT_Err_Syntax_Error.charstring_or_afm_syntax_error`
+  - `fterrdef.FT_Err_Too_Few_Arguments.tt_interpreter_argument_underflow`
+  - `fterrdef.FT_Err_Too_Few_Arguments.cff_decoder_underflow_translation`
+  - `fterrdef.FT_Err_Too_Many_Function_Defs.tt_fdef_limit_exceeded`
+  - `fterrdef.FT_Err_Too_Many_Hints.tt_glyph_hint_limit`
+  - `fterrdef.FT_Err_Too_Many_Instruction_Defs.tt_idef_limit_exceeded`
+  - `fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature`
+- Current route audit after this batch: `real-parity` `4364`,
+  `pending-route` `23`, `generic-fallback` `592`.
+- Remaining `fterrdef` route-pending rows are not included in this promotion:
+  five need missing malformed SFNT/name/post fixtures, and
+  `fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error` still
+  needs an exact `new_memory_face` error route.
 - `freetype.FT_Init_FreeType.creates_library_handle`
 - `freetype.FT_Init_FreeType.created_library_reports_version_and_modules`
 - `freetype.FT_Init_FreeType.error_null_output_pointer`: pinned C FreeType

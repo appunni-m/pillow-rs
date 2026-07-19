@@ -18,6 +18,50 @@ DEFAULT_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "api_abi_audit.json"
 DEFAULT_ROUTE_AUDIT_JSON = ROOT / "target" / "api-abi-audit" / "route_audit.json"
 DEFAULT_ROUTE_AUDIT_MD = ROOT / "target" / "api-abi-audit" / "route_audit.md"
 
+FTERRDEF_EXACT_ERROR_BATCH = {
+    ("load_glyph", "fterrdef.FT_Err_Bad_Argument.bytecode_invalid_jump_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_Code_Overflow.bytecode_jump_past_range_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_Code_Overflow.push_instruction_truncation_returns_error"),
+    (
+        "load_glyph",
+        "fterrdef.FT_Err_Corrupted_Font_Header.autohint_zero_units_per_em_returns_error",
+    ),
+    (
+        "load_glyph",
+        "fterrdef.FT_Err_Could_Not_Find_Context.truetype_context_allocation_failure_returns_error",
+    ),
+    ("load_glyph", "fterrdef.FT_Err_DEF_In_Glyf_Bytecode.glyph_program_fdef_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_Debug_OpCode.debug_opcode_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_Divide_By_Zero.bytecode_div_zero_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_ENDF_In_Exec_Stream.stray_endf_returns_error"),
+    (
+        "load_glyph",
+        "fterrdef.FT_Err_Execution_Too_Long.opcode_counter_limit_returns_error",
+    ),
+    (
+        "load_glyph",
+        "fterrdef.FT_Err_Execution_Too_Long.negative_jump_limit_returns_error",
+    ),
+    ("load_glyph", "fterrdef.FT_Err_Glyph_Too_Big.ps_builder_large_outline_returns_error"),
+    ("load_glyph", "fterrdef.FT_Err_Invalid_Opcode.tt_bytecode_invalid_opcode"),
+    ("load_glyph", "fterrdef.FT_Err_Invalid_Reference.tt_bytecode_invalid_point_reference"),
+    ("load_glyph", "fterrdef.FT_Err_Nested_DEFS.truetype_nested_fdef"),
+    ("load_glyph", "fterrdef.FT_Err_Nested_DEFS.truetype_nested_idef"),
+    ("load_glyph", "fterrdef.FT_Err_Stack_Overflow.tt_interpreter_stack_overflow"),
+    ("load_glyph", "fterrdef.FT_Err_Stack_Overflow.cff_charstring_stack_overflow"),
+    ("load_glyph", "fterrdef.FT_Err_Stack_Underflow.cff_charstring_missing_operands"),
+    ("load_glyph", "fterrdef.FT_Err_Syntax_Error.charstring_or_afm_syntax_error"),
+    ("load_glyph", "fterrdef.FT_Err_Too_Few_Arguments.tt_interpreter_argument_underflow"),
+    ("load_glyph", "fterrdef.FT_Err_Too_Few_Arguments.cff_decoder_underflow_translation"),
+    ("load_glyph", "fterrdef.FT_Err_Too_Many_Function_Defs.tt_fdef_limit_exceeded"),
+    ("load_glyph", "fterrdef.FT_Err_Too_Many_Hints.tt_glyph_hint_limit"),
+    (
+        "load_glyph",
+        "fterrdef.FT_Err_Too_Many_Instruction_Defs.tt_idef_limit_exceeded",
+    ),
+    ("load_glyph", "fterrdef.FT_Err_Unimplemented_Feature.unsupported_font_feature"),
+}
+
 API_SURFACE_EXCLUSIONS = {
     # Public header setup hooks, not user-callable API subjects.
     "fterrors.FT_NOERRORDEF_",
@@ -1227,7 +1271,10 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "the attempted pinned-C FT_Outline_Decompose probe segfaulted, so "
             "accepting a generic Invalid_Outline would be a green placeholder"
         )
-    if (row.operation, row.case_id) in exact_error_route_gaps:
+    if (
+        (row.operation, row.case_id) in exact_error_route_gaps
+        and (row.operation, row.case_id) not in FTERRDEF_EXACT_ERROR_BATCH
+    ):
         return (
             "exact public error comparison is not routed; accepting any error "
             "would be a green placeholder"
@@ -1490,6 +1537,8 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (row.operation, row.case_id) in FTERRDEF_EXACT_ERROR_BATCH:
+        return "fterrdef load-glyph exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -3238,6 +3287,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
     if lifecycle_null_reason:
         return ("real-parity", lifecycle_null_reason)
+    future_batch_real_reason = future_batch_real_parity_reason(row)
+    if future_batch_real_reason:
+        return ("real-parity", future_batch_real_reason)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
@@ -3283,9 +3335,6 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
     if done_mm_var_real_reason:
         return ("real-parity", done_mm_var_real_reason)
-    future_batch_real_reason = future_batch_real_parity_reason(row)
-    if future_batch_real_reason:
-        return ("real-parity", future_batch_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
         return ("wrapper-null-validation", wrapper_null_reason)
