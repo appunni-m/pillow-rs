@@ -1128,6 +1128,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Add_Module duplicate-name/version replacement behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmodapi.new_library"
+        and row.case_id == "ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output"
+    ):
+        return "FT_New_Library null-input error/output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
