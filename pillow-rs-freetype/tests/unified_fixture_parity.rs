@@ -8361,6 +8361,10 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_LEGACY1.rejected_by_set_lcd_filter"
             || case.case_id == "ftlcdfil.FT_LCD_FILTER_MAX.rejected_by_set_lcd_filter"
             || case.case_id == "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords"
+            || case.case_id
+                == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
+            || case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id == "ftmodapi.FT_Reference_Library.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_missing_or_foreign_module"

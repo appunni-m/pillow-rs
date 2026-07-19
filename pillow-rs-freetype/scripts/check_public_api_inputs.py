@@ -1243,6 +1243,18 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_Var_Design_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_var_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
+    ):
+        return "FT_Set_Var_Design_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_var_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count"
+    ):
+        return "FT_Set_Var_Blend_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"

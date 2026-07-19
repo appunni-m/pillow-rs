@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_Var_Design_Coordinates` exact-error route
+Current verified result after `FT_Set_Var_*_Coordinates` exact-error route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3825`
+  - `real-parity`: `3827`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `370`
+  - `generic-error-fallback`: `368`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3276,6 +3276,42 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Design_Coordinates.error_null_coords
+```
+
+### Issue Set BY: `FT_Set_Var_*_Coordinates` null-input routes
+
+Previous blocker:
+
+- `ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count`
+  and `ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count`
+  stayed in `generic-error-fallback`.
+- The fixtures require exact behavior from `freetype/src/base/ftmm.c`, where
+  the public wrappers return `FT_Err_Invalid_Argument` before service lookup
+  when `num_coords` is nonzero and the coordinate pointer is null.
+
+Plan:
+
+1. Keep the fixtures intact; they exercise public variation-coordinate setter
+   behavior for valid variable faces with null coordinate input pointers.
+2. Require exact error comparison for return status and the
+   `variation_state_changed` observation.
+3. Classify each row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused `FT_Set_Var_Design_Coordinates` and
+  `FT_Set_Var_Blend_Coordinates` null-coordinate rows pass exact comparison
+  against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies these case IDs as `real-parity`:
+  - `ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count`
+  - `ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count`
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
