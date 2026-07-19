@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_BDF_Property` missing-property exact-error
-classification:
+Current verified result after `FT_Get_BDF_Property` unsupported-face
+exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3959`
+  - `real-parity`: `3960`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `236`
+  - `generic-error-fallback`: `235`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -556,6 +556,40 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Property.error_missin
 
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3959`, `generic-error-fallback` `236`.
+
+### Issue Set Current: `FT_Get_BDF_Property` unsupported-face exact-error route
+
+Previous blocker:
+
+- `ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike` had a
+  concrete BDF public error row classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete BDF unsupported-face/unselected-strike row to
+   exact-error comparison.
+2. Keep the BDF/SFNT fixture inputs unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_BDF_Property`, and WASM ABI before counting the row as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete BDF unsupported-face row.
+- The previously fallback-classified error row now validates exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3960`, `generic-error-fallback` `235`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 

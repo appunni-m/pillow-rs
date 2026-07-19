@@ -801,6 +801,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
         "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
+        "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
         "freetype.FT_Load_Glyph.matrix_load",
         "freetype.FT_Load_Glyph.error_out_of_range_null_face_or_invalid_flags",
         "freetype.FT_LOAD_FORCE_AUTOHINT.load_glyph_force_autohint_behavior",
@@ -1141,6 +1142,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none"
     ):
         return "FT_Get_BDF_Property missing-property errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbdf.get_bdf_property"
+        and row.case_id
+        == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
+    ):
+        return "FT_Get_BDF_Property unsupported-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftoutln.outline_render"
         and row.case_id == "ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa"
