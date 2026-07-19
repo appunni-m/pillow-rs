@@ -5354,6 +5354,13 @@ static int emit_glyph_copy_null_inputs(void) {
     return 0;
 }
 
+static int emit_done_glyph_null(void) {
+    FT_Done_Glyph(NULL);
+    print_ok_output_prefix();
+    printf("{\"void\":true,\"null_glyph_noop\":true,\"memory_touched\":false}}\n");
+    return 0;
+}
+
 static void print_sbit_payload(FT_GlyphSlot slot) {
     FT_Bitmap* bitmap = &slot->bitmap;
     long len = 0;
@@ -14611,6 +14618,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--glyph-copy-null-inputs")) {
         return emit_glyph_copy_null_inputs();
+    }
+    if (argc == 2 && streq(argv[1], "--done-glyph-null")) {
+        return emit_done_glyph_null();
     }
     if (argc == 2 && streq(argv[1], "--glyph-to-bitmap-invalid-inputs")) {
         return emit_glyph_to_bitmap_invalid_inputs();

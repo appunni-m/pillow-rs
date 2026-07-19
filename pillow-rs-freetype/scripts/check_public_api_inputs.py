@@ -148,6 +148,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_glyph_get_cbox",
     "fontdone_wasm_get_glyph",
     "fontdone_wasm_glyph_copy",
+    "fontdone_wasm_done_glyph",
     "fontdone_wasm_glyph_to_bitmap",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
@@ -1338,6 +1339,14 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "the attempted pinned-C FT_Outline_Decompose probe segfaulted, so "
             "accepting a generic Invalid_Outline would be a green placeholder"
         )
+    if row.operation == "ftglyph.done_glyph" and not (
+        row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
+        and row.params.get("glyph") is None
+    ):
+        return (
+            "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
+            "and allocator facade; treating it as generic would be a green placeholder"
+        )
     if (
         (row.operation, row.case_id) in exact_error_route_gaps
         and (row.operation, row.case_id) not in FTERRDEF_EXACT_ERROR_BATCH
@@ -1789,8 +1798,8 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         ): "FT_Face_Properties LCD filter weights ignored behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftglyph.done_glyph",
-            "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
-        ): "FT_Done_Glyph invalid-handle error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+            "ftglyph.FT_Done_Glyph.success_null_is_noop",
+        ): "FT_Done_Glyph(NULL) void no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
@@ -3435,6 +3444,15 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     null_error_real_reason = null_error_real_parity_reason(row)
     if null_error_real_reason:
         return ("real-parity", null_error_real_reason)
+    if row.operation == "ftglyph.done_glyph" and not (
+        row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
+        and row.params.get("glyph") is None
+    ):
+        return (
+            "pending-route",
+            "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
+            "and allocator facade; treating it as generic would be a green placeholder",
+        )
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):

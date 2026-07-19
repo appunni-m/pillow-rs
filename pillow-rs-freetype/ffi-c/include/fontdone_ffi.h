@@ -402,6 +402,7 @@ void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 void FT_Glyph_Get_CBox(FT_Glyph glyph, FT_UInt bbox_mode, FT_BBox* acbox);
 FT_Error FT_Get_Glyph(FT_GlyphSlot slot, FT_Glyph* aglyph);
 FT_Error FT_Glyph_Copy(FT_Glyph source, FT_Glyph* target);
+void FT_Done_Glyph(FT_Glyph glyph);
 FT_Error FT_Glyph_To_Bitmap(FT_Glyph* the_glyph, FT_Render_Mode render_mode, const FT_Vector* origin, FT_Bool destroy);
 FT_Error FT_Outline_Get_BBox(const FT_Outline* outline, FT_BBox* abbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);

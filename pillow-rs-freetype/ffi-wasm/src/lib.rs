@@ -1246,6 +1246,11 @@ pub extern "C" fn fontdone_wasm_glyph_copy(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_done_glyph(glyph_present: i32) {
+    rust_ffi::FT_Done_Glyph(glyph_present != 0);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyph_to_bitmap(
     the_glyph_present: i32,
     glyph_present: i32,

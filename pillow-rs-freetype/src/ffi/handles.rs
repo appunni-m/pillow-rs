@@ -1604,6 +1604,12 @@ pub fn FT_Glyph_Copy(
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
+pub fn FT_Done_Glyph(_glyph_present: bool) {
+    // FreeType `src/base/ftglyph.c:580-591` treats NULL as a no-op and returns
+    // void. Non-null lifecycle behavior is owned by class hooks and remains
+    // separate exact glyph ownership/facade work.
+}
+
 pub fn FT_Glyph_To_Bitmap(
     the_glyph_present: bool,
     glyph_present: bool,

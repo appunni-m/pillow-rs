@@ -15073,6 +15073,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(glyph_record_action(case.operation.as_str()).to_string());
             Ok(args)
         }
+        "ftglyph.done_glyph" => {
+            if params.get("glyph").is_some_and(Value::is_null) {
+                return Ok(vec!["--done-glyph-null".to_string()]);
+            }
+            Err("ftglyph.done_glyph non-null ownership facade route is pending".to_string())
+        }
         "ftcache.sbit_cache_lookup" => {
             let mut args = vec!["--sbit-cache-lookup".to_string()];
             push_font_source(case, &mut args)?;
@@ -15763,6 +15769,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             rust_glyph_copy_null_inputs()
         }
+        "ftglyph.done_glyph" => rust_done_glyph_runtime_output(case),
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
@@ -16482,6 +16489,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             c_glyph_copy_null_inputs()
         }
+        "ftglyph.done_glyph" => c_done_glyph_runtime_output(case),
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -17107,6 +17115,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             wasm_glyph_copy_null_inputs()
         }
+        "ftglyph.done_glyph" => wasm_done_glyph_runtime_output(case),
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_outline_operation(handle, case);
@@ -19190,6 +19199,38 @@ fn wasm_get_glyph_null_inputs() -> Result<RunOutput, String> {
         get_glyph_error_row("null_aglyph", null_output_error, "null"),
     ];
     Ok(get_glyph_null_inputs_output(rows))
+}
+
+fn done_glyph_null_output() -> RunOutput {
+    ok(json!({
+        "void": true,
+        "null_glyph_noop": true,
+        "memory_touched": false
+    }))
+}
+
+fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        return Err(format!("unsupported done glyph case {}", case.case_id));
+    }
+    FT_Done_Glyph(false);
+    Ok(done_glyph_null_output())
+}
+
+fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        return Err(format!("unsupported done glyph case {}", case.case_id));
+    }
+    c_abi::FT_Done_Glyph(ptr::null_mut());
+    Ok(done_glyph_null_output())
+}
+
+fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        return Err(format!("unsupported done glyph case {}", case.case_id));
+    }
+    wasm_abi::fontdone_wasm_done_glyph(0);
+    Ok(done_glyph_null_output())
 }
 
 fn glyph_copy_error_row(probe: &str, error: FT_Error, target_pointer_class: &str) -> Value {
@@ -32726,6 +32767,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftlcdfil.set_lcd_filter"
             | "ftlcdfil.set_lcd_filter_weights"
             | "ftlcdfil.set_lcd_geometry"
+            | "ftglyph.done_glyph"
             | "ftmm.done_mm_var"
             | "ftmm.get_default_named_instance"
             | "ftmm.set_named_instance" => "api_object",

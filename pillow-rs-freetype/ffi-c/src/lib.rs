@@ -1913,6 +1913,11 @@ pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_E
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Done_Glyph(glyph: FT_Glyph) {
+    rust_ffi::FT_Done_Glyph(!glyph.is_null());
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Glyph_To_Bitmap(
     the_glyph: *mut FT_Glyph,
     _render_mode: FT_Render_Mode,
