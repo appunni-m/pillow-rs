@@ -3378,6 +3378,55 @@ pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt
     }
 }
 
+pub fn FT_Set_Var_Design_Coordinates(
+    face: Option<&mut FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&[FT_Fixed]>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(coords) = coords else {
+        return if num_coords == 0 {
+            FT_Err_Ok
+        } else {
+            FT_Err_Invalid_Argument as FT_Error
+        };
+    };
+    if coords.len() < num_coords {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let coords_i32 = coords[..num_coords]
+        .iter()
+        .copied()
+        .map(i32::try_from)
+        .collect::<Result<Vec<_>, _>>();
+    let Ok(coords_i32) = coords_i32 else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let result = face
+        .inner
+        .borrow_mut()
+        .set_var_design_coordinates(&coords_i32);
+    match result {
+        Ok(()) => {
+            let transform_matrix = face.transform_matrix;
+            let transform_delta = face.transform_delta;
+            let refcount = face.refcount;
+            let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
+            refreshed.transform_matrix = transform_matrix;
+            refreshed.transform_delta = transform_delta;
+            refreshed.refcount = refcount;
+            *face = refreshed;
+            FT_Err_Ok
+        }
+        Err(err) => error_to_ft(err) as FT_Error,
+    }
+}
+
 pub fn FT_Get_Default_Named_Instance(
     face: Option<&FT_Face>,
     instance_index: Option<&mut FT_UInt>,
@@ -3574,6 +3623,10 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .load_sfnt_table(0x76686561, 0, None)
         .ok()
         .and_then(|data| parse_tt_vertheader(&data))
+        .map(|mut header| {
+            apply_mvar_vertical_header_deltas(&mut header, font.mvar_vertical_header_deltas());
+            header
+        })
         .map(Box::new);
     let sfnt_post = font
         .load_sfnt_table(0x706F7374, 0, None)
@@ -3795,6 +3848,30 @@ fn parse_tt_vertheader(data: &[u8]) -> Option<TT_VertHeader> {
         long_metrics: ptr::null_mut(),
         short_metrics: ptr::null_mut(),
     })
+}
+
+fn apply_mvar_vertical_header_deltas(
+    header: &mut TT_VertHeader,
+    deltas: Option<crate::tt::mvar::VerticalHeaderDeltas>,
+) {
+    let Some(deltas) = deltas else {
+        return;
+    };
+    // FreeType `truetype/ttgxvar.c:1406-1472,1633-1755` maps these MVAR tags
+    // to `TT_VertHeader` scalar fields and casts the added delta back to
+    // FT_Short.
+    header.Ascender = header.Ascender.wrapping_add(deltas.ascender as FT_Short);
+    header.Descender = header.Descender.wrapping_add(deltas.descender as FT_Short);
+    header.Line_Gap = header.Line_Gap.wrapping_add(deltas.line_gap as FT_Short);
+    header.caret_Slope_Rise = header
+        .caret_Slope_Rise
+        .wrapping_add(deltas.caret_slope_rise as FT_Short);
+    header.caret_Slope_Run = header
+        .caret_Slope_Run
+        .wrapping_add(deltas.caret_slope_run as FT_Short);
+    header.caret_Offset = header
+        .caret_Offset
+        .wrapping_add(deltas.caret_offset as FT_Short);
 }
 
 fn parse_tt_postscript(data: &[u8]) -> Option<TT_Postscript> {
@@ -4693,6 +4770,11 @@ pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
     }
     // FT_SFNT_MAX or any unrecognised tag returns null.
     ptr::null_mut()
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Get_Sfnt_VertHeader_Copy(face: &FT_Face) -> Option<TT_VertHeader> {
+    face.sfnt_vhea.as_deref().copied()
 }
 
 pub fn FT_Load_Sfnt_Table(

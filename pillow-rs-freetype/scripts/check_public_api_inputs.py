@@ -1909,11 +1909,6 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
             "bitmap-slot behavior plus an executable embedded-bitmap strike route"
         )
     if (
-        row.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
-        and row.operation == "sfnt.get_sfnt_table.record"
-    ):
-        return "MVAR variation table behavior must be implemented before this SFNT table row can run"
-    if (
         row.operation == "ftsnames.get_sfnt_name"
         and row.expectation_status == "build_dependent"
         and lifecycle_handle(row, "face") == "non_sfnt"
@@ -3839,6 +3834,11 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
     if operation.startswith("sfnt.get_sfnt_table") and any(
         key in params for key in ("variation_sequence", "variation_calls")
     ):
+        if (
+            row.case_id
+            == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
+        ):
+            return None
         return "sfnt table variation sequence is not routed"
     if operation == "sfnt.load_sfnt_table" and not any(
         key in params for key in ("offset", "reads", "tags")

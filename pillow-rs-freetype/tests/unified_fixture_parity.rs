@@ -666,13 +666,6 @@ fn validation_flags_param(value: &Value) -> Result<FT_UInt, String> {
 }
 
 fn build_dependent_runtime_reason(case: &InputCase) -> Option<&'static str> {
-    if case.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation"
-        && case.operation == "sfnt.get_sfnt_table.record"
-    {
-        return Some(
-            "MVAR variation table behavior must be implemented before this SFNT table row can run",
-        );
-    }
     if case.expectation.is_build_dependent()
         && case.operation == "ftsnames.get_sfnt_name"
         && lifecycle_handle_param(&case.inputs.params, "face") == Some("non_sfnt")
@@ -9011,6 +9004,58 @@ fn rust_sfnt_get_table_output(face: &FT_Face, params: &Value) -> Result<RunOutpu
     Ok(ok(json!({"entries": entries})))
 }
 
+fn rust_sfnt_get_table_mvar_vhea_sequence_output(face: &mut FT_Face) -> Result<RunOutput, String> {
+    let default_ptr = FT_Get_Sfnt_Table(face, FT_SFNT_VHEA as FT_Sfnt_Tag);
+    let default_record = tt_vert_header_record_json(FT_Get_Sfnt_VertHeader_Copy(face));
+    let coords = mvar_vhea_changed_design_coords_16_16();
+    let set_status =
+        FT_Set_Var_Design_Coordinates(Some(face), coords.len() as FT_UInt, Some(&coords));
+    let changed_ptr = FT_Get_Sfnt_Table(face, FT_SFNT_VHEA as FT_Sfnt_Tag);
+    let changed_record = tt_vert_header_record_json(FT_Get_Sfnt_VertHeader_Copy(face));
+    Ok(ok(json!({
+        "default": {
+            "face_load_status": 0,
+            "pointer_null": default_ptr.is_null(),
+            "record": default_record,
+        },
+        "changed": {
+            "set_var_status": set_status,
+            "pointer_null": changed_ptr.is_null(),
+            "record": changed_record,
+        }
+    })))
+}
+
+fn mvar_vhea_changed_design_coords_16_16() -> [FT_Fixed; 2] {
+    [100 * 65_536, 800 * 65_536]
+}
+
+fn tt_vert_header_record_json(record: Option<TT_VertHeader>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "Version": record.Version,
+        "Ascender": record.Ascender,
+        "Descender": record.Descender,
+        "Line_Gap": record.Line_Gap,
+        "advance_Height_Max": record.advance_Height_Max,
+        "min_Top_Side_Bearing": record.min_Top_Side_Bearing,
+        "min_Bottom_Side_Bearing": record.min_Bottom_Side_Bearing,
+        "yMax_Extent": record.yMax_Extent,
+        "caret_Slope_Rise": record.caret_Slope_Rise,
+        "caret_Slope_Run": record.caret_Slope_Run,
+        "caret_Offset": record.caret_Offset,
+        "Reserved": record.Reserved,
+        "metric_Data_Format": record.metric_Data_Format,
+        "number_Of_VMetrics": record.number_Of_VMetrics,
+        "long_metrics_nullness": record.long_metrics.is_null(),
+        "short_metrics_nullness": record.short_metrics.is_null(),
+        "long_metrics_identity_class": if record.long_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+        "short_metrics_identity_class": if record.short_metrics.is_null() { "null" } else { "face_owned_vmtx" },
+    })
+}
+
 fn rust_sfnt_table_info_output(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
     let tag_ptr_state = sfnt_table_info_tag_ptr_arg(params)?;
     let length_ptr_state = sfnt_table_info_length_ptr_arg(params)?;
@@ -14811,6 +14856,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation" => {
+            if case.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" {
+                let mut args = vec!["--get-sfnt-vhea-mvar-sequence".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                let coords = mvar_vhea_changed_design_coords_16_16();
+                args.push(coords[0].to_string());
+                args.push(coords[1].to_string());
+                return Ok(args);
+            }
             if params.get("variation_sequence").is_some() || params.get("variation_calls").is_some()
             {
                 return oracle_fallback_args(case);
@@ -15926,6 +15980,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         | "sfnt.get_sfnt_table.maxp"
         | "sfnt.get_sfnt_table.hhea"
         | "sfnt.get_sfnt_table.hhea.after_variation" => {
+            if case.case_id == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" {
+                let mut face = open_face(case)?;
+                return rust_sfnt_get_table_mvar_vhea_sequence_output(&mut face);
+            }
             let face = open_face(case)?;
             rust_sfnt_get_table_output(&face, &case.inputs.params)
         }

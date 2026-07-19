@@ -3483,6 +3483,40 @@ static void print_json_bool(int value) {
     printf(value ? "true" : "false");
 }
 
+static void print_tt_vert_header_record(const TT_VertHeader* record) {
+    if (!record) {
+        printf("null");
+        return;
+    }
+    printf("{\"Version\":%ld", (long)record->Version);
+    printf(",\"Ascender\":%d", (int)record->Ascender);
+    printf(",\"Descender\":%d", (int)record->Descender);
+    printf(",\"Line_Gap\":%d", (int)record->Line_Gap);
+    printf(",\"advance_Height_Max\":%u", (unsigned)record->advance_Height_Max);
+    printf(",\"min_Top_Side_Bearing\":%d", (int)record->min_Top_Side_Bearing);
+    printf(",\"min_Bottom_Side_Bearing\":%d", (int)record->min_Bottom_Side_Bearing);
+    printf(",\"yMax_Extent\":%d", (int)record->yMax_Extent);
+    printf(",\"caret_Slope_Rise\":%d", (int)record->caret_Slope_Rise);
+    printf(",\"caret_Slope_Run\":%d", (int)record->caret_Slope_Run);
+    printf(",\"caret_Offset\":%d", (int)record->caret_Offset);
+    printf(",\"Reserved\":[%d,%d,%d,%d]",
+           (int)record->Reserved[0],
+           (int)record->Reserved[1],
+           (int)record->Reserved[2],
+           (int)record->Reserved[3]);
+    printf(",\"metric_Data_Format\":%d", (int)record->metric_Data_Format);
+    printf(",\"number_Of_VMetrics\":%u", (unsigned)record->number_Of_VMetrics);
+    printf(",\"long_metrics_nullness\":");
+    print_json_bool(record->long_metrics == NULL);
+    printf(",\"short_metrics_nullness\":");
+    print_json_bool(record->short_metrics == NULL);
+    printf(",\"long_metrics_identity_class\":");
+    printf(record->long_metrics == NULL ? "\"null\"" : "\"face_owned_vmtx\"");
+    printf(",\"short_metrics_identity_class\":");
+    printf(record->short_metrics == NULL ? "\"null\"" : "\"face_owned_vmtx\"");
+    printf("}");
+}
+
 static void print_fstype_flags_result(FT_UShort flags, const char* symbol_name) {
     printf("{\"return\":%u,\"fs_type\":%u", (unsigned int)flags, (unsigned int)flags);
     if (symbol_name && symbol_name[0] && !streq(symbol_name, "-")) {
@@ -12452,6 +12486,35 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-sfnt-vhea-mvar-sequence")) {
+        FT_Error load_status = 0;
+        TT_VertHeader* initial = (TT_VertHeader*)FT_Get_Sfnt_Table(face, FT_SFNT_VHEA);
+        TT_VertHeader initial_copy;
+        int initial_present = initial != NULL;
+        if (initial_present) {
+            initial_copy = *initial;
+        }
+        FT_Fixed coords[2];
+        coords[0] = (FT_Fixed)strtol(argv[7], NULL, 0);
+        coords[1] = (FT_Fixed)strtol(argv[8], NULL, 0);
+        FT_Error set_status = FT_Set_Var_Design_Coordinates(face, 2, coords);
+        TT_VertHeader* changed = (TT_VertHeader*)FT_Get_Sfnt_Table(face, FT_SFNT_VHEA);
+        print_status(0);
+        printf(",\"output\":{\"default\":{\"face_load_status\":%d,\"pointer_null\":", (int)load_status);
+        print_json_bool(!initial_present);
+        printf(",\"record\":");
+        print_tt_vert_header_record(initial_present ? &initial_copy : NULL);
+        printf("},\"changed\":{\"set_var_status\":%d,\"pointer_null\":", (int)set_status);
+        print_json_bool(changed == NULL);
+        printf(",\"record\":");
+        print_tt_vert_header_record(changed);
+        printf("}}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--load-sfnt-table")) {
         FT_ULong tag = strtoul(argv[7], NULL, 16);
         FT_Long offset = atol(argv[8]);
@@ -14869,6 +14932,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-sfnt-table")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--get-sfnt-vhea-mvar-sequence")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 11 && streq(argv[1], "--load-sfnt-table")) {

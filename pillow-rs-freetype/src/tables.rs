@@ -20,6 +20,7 @@ use crate::tt::hmtx::HmtxTable;
 use crate::tt::hvar::HvarTable;
 use crate::tt::kern::KernTable;
 use crate::tt::maxp::MaxpTable;
+use crate::tt::mvar::{MvarTable, VerticalHeaderDeltas};
 use crate::tt::name::NameTable;
 use crate::tt::os2::Os2Table;
 use crate::tt::post::PostTable;
@@ -43,6 +44,7 @@ pub struct FontData {
     pub head: HeadTable,
     pub hhea: HheaTable,
     pub hvar: Option<HvarTable>,
+    pub mvar: Option<MvarTable>,
     pub hmtx: HmtxTable,
     pub maxp: MaxpTable,
     pub name: NameTable,
@@ -200,5 +202,11 @@ impl FontData {
             .copied()
             .unwrap_or_default();
         Ok(pp2_delta.0 - pp1_delta.0)
+    }
+
+    pub(crate) fn mvar_vertical_header_deltas(&self) -> Option<VerticalHeaderDeltas> {
+        self.mvar
+            .as_ref()
+            .map(|mvar| mvar.vertical_header_deltas(&self.normalized_variation_coords))
     }
 }
