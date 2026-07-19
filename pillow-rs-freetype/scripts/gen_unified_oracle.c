@@ -13931,6 +13931,9 @@ static int dispatch(int argc, char** argv) {
     if ((argc == 5 || argc == 10) && streq(argv[1], "--get-sfnt-name-variant")) {
         return emit_get_sfnt_name_variant(argc, argv);
     }
+    if (argc == 4 && streq(argv[1], "--get-renderer")) {
+        return emit_get_renderer(argc, argv);
+    }
     // Generic null-source handler: intercept commands with "null" in handle-level
     // parameters (source kind, source value, or face).
     // Do NOT intercept when "null" is in task-specific params (tag_ptr, length_ptr, etc.).
@@ -14292,9 +14295,6 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--inspect-module-flags")) {
         return emit_inspect_module_flags(argc, argv);
-    }
-    if (argc == 4 && streq(argv[1], "--get-renderer")) {
-        return emit_get_renderer(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--done-mm-var")) {
         return emit_done_mm_var(argc, argv);
