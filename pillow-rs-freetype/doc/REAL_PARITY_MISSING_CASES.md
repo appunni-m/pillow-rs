@@ -6257,6 +6257,25 @@ green-row opportunities:
 
 ## Candidate Conversion Buckets
 
+### Issue Set BH: FT_Outline lifecycle/mutation invalid matrices need exact error-output support
+
+The success rows for `FT_Outline_Copy`, `FT_Outline_New`,
+`FT_Outline_Done`, `FT_Outline_Embolden`, and `FT_Outline_EmboldenXY` now have
+real Rust/C-ABI/WASM/native-oracle routes.  Their multi-scenario invalid rows
+remain `pending-core`, not generic fallback, because the unified exact-error
+guard currently accepts only a top-level C error status while these manifest
+rows declare per-scenario error results:
+
+- `ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch`
+- `ftoutln.FT_Outline_Done.invalid_library_or_outline_errors`
+- `ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors`
+- `ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors`
+- `ftoutln.FT_Outline_New.invalid_arguments_and_limits`
+
+Do not mark these rows real by returning top-level generic errors or by
+weakening the exact-error guard.  They need maintained per-scenario
+exact-error output support in the unified harness.
+
 These are the highest-value route families to convert from placeholder success
 to real C/Rust/C-ABI/WASM parity. They are intentionally scoped as subagent
 units, not as a single monolithic implementation task.

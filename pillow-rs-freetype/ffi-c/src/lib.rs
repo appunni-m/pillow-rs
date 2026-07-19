@@ -3,6 +3,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
+use std::alloc::{Layout, alloc_zeroed, dealloc};
 #[cfg(feature = "abi-test-support")]
 use std::cell::RefCell;
 use std::ffi::{
@@ -1736,12 +1737,161 @@ pub extern "C" fn FT_Outline_Check(outline: *const FT_Outline) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Copy(
+    source: *const FT_Outline,
+    target: *mut FT_Outline,
+) -> FT_Error {
+    if source == target.cast_const() && !source.is_null() {
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(source_snapshot) = outline_snapshot_from_c(source) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let Some(mut target_snapshot) = outline_snapshot_from_c(target) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_Copy(Some(&source_snapshot), Some(&mut target_snapshot));
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_c(target, &target_snapshot, true);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Embolden(outline: *mut FT_Outline, strength: FT_Pos) -> FT_Error {
+    let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_Embolden(Some(&mut snapshot), strength);
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_c(outline, &snapshot, false);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_EmboldenXY(
+    outline: *mut FT_Outline,
+    xstrength: FT_Pos,
+    ystrength: FT_Pos,
+) -> FT_Error {
+    let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    let error = rust_ffi::FT_Outline_EmboldenXY(Some(&mut snapshot), xstrength, ystrength);
+    if error == rust_ffi::FT_Err_Ok {
+        copy_outline_snapshot_to_c(outline, &snapshot, false);
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_New(
+    library: FT_Library,
+    numPoints: FT_UInt,
+    numContours: FT_Int,
+    anoutline: *mut FT_Outline,
+) -> FT_Error {
+    if library.is_null() {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(outline) = (unsafe { anoutline.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if numPoints > u32::from(u16::MAX) {
+        return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
+    }
+    if numContours < 0
+        || u32::try_from(numContours).map_or(true, |contours| contours > numPoints)
+    {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let point_count = usize::try_from(numPoints).unwrap_or(usize::MAX);
+    let contour_count = usize::try_from(numContours).unwrap_or(usize::MAX);
+    let points = alloc_outline_array::<FT_Vector>(point_count).cast::<FT_Vector>();
+    let tags = alloc_outline_array::<FT_Byte>(point_count).cast::<FT_Byte>();
+    let contours = alloc_outline_array::<FT_UShort>(contour_count).cast::<FT_UShort>();
+    if (point_count > 0 && (points.is_null() || tags.is_null()))
+        || (contour_count > 0 && contours.is_null())
+    {
+        dealloc_outline_array(points.cast::<u8>(), point_count, Layout::array::<FT_Vector>);
+        dealloc_outline_array(tags.cast::<u8>(), point_count, Layout::array::<FT_Byte>);
+        dealloc_outline_array(contours.cast::<u8>(), contour_count, Layout::array::<FT_UShort>);
+        return rust_ffi::FT_Err_Out_Of_Memory;
+    }
+    *outline = FT_Outline {
+        n_contours: FT_UShort::try_from(numContours).unwrap_or(FT_UShort::MAX),
+        n_points: FT_UShort::try_from(numPoints).unwrap_or(FT_UShort::MAX),
+        points,
+        tags,
+        contours,
+        flags: rust_ffi::FT_OUTLINE_OWNER as FT_Int,
+    };
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_Done(library: FT_Library, outline: *mut FT_Outline) -> FT_Error {
+    if library.is_null() {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(outline) = (unsafe { outline.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Outline as FT_Error;
+    };
+    if outline.flags & rust_ffi::FT_OUTLINE_OWNER as FT_Int != 0 {
+        dealloc_outline_array(
+            outline.points.cast::<u8>(),
+            usize::from(outline.n_points),
+            Layout::array::<FT_Vector>,
+        );
+        dealloc_outline_array(
+            outline.tags.cast::<u8>(),
+            usize::from(outline.n_points),
+            Layout::array::<FT_Byte>,
+        );
+        dealloc_outline_array(
+            outline.contours.cast::<u8>(),
+            usize::from(outline.n_contours),
+            Layout::array::<FT_UShort>,
+        );
+    }
+    *outline = FT_Outline::default();
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Reverse(outline: *mut FT_Outline) {
     let Some(mut snapshot) = outline_snapshot_from_c(outline) else {
         return;
     };
     rust_ffi::FT_Outline_Reverse(Some(&mut snapshot));
     copy_outline_snapshot_to_c(outline, &snapshot, true);
+}
+
+fn alloc_outline_array<T>(count: usize) -> *mut u8 {
+    if count == 0 {
+        return ptr::null_mut();
+    }
+    let Ok(layout) = Layout::array::<T>(count) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: `layout` was constructed for an array allocation and is non-zero sized.
+    unsafe { alloc_zeroed(layout) }
+}
+
+fn dealloc_outline_array(
+    ptr: *mut u8,
+    count: usize,
+    layout_for: impl FnOnce(usize) -> Result<Layout, std::alloc::LayoutError>,
+) {
+    if ptr.is_null() || count == 0 {
+        return;
+    }
+    let Ok(layout) = layout_for(count) else {
+        return;
+    };
+    // SAFETY: outline OWNER allocations in this module use the matching layout.
+    unsafe { dealloc(ptr, layout) };
 }
 
 #[unsafe(no_mangle)]

@@ -6384,6 +6384,305 @@ static int emit_outline_reverse(int argc, char** argv) {
     return 2;
 }
 
+static void build_copy_source_outline(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours) {
+    FT_Vector src_points[6] = {{0,0},{64,0},{96,32},{64,64},{0,64},{-32,32}};
+    unsigned char src_tags[6] = {1,0,1,2,0,1};
+    unsigned short src_contours[2] = {2,5};
+    memcpy(points, src_points, sizeof(src_points));
+    memcpy(tags, src_tags, sizeof(src_tags));
+    memcpy(contours, src_contours, sizeof(src_contours));
+    outline->n_contours = 2;
+    outline->n_points = 6;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 4;
+}
+
+static void build_copy_target_outline(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours, int owner) {
+    for (int i = 0; i < 6; i++) {
+        points[i].x = 10;
+        points[i].y = 10;
+        tags[i] = 7;
+    }
+    contours[0] = 2;
+    contours[1] = 5;
+    outline->n_contours = 2;
+    outline->n_points = 6;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = owner ? FT_OUTLINE_OWNER : 0;
+}
+
+static void build_copy_wrong_target_outline(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours) {
+    for (int i = 0; i < 3; i++) {
+        points[i].x = 0;
+        points[i].y = 0;
+        tags[i] = 1;
+    }
+    contours[0] = 2;
+    outline->n_contours = 1;
+    outline->n_points = 3;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = FT_OUTLINE_OWNER;
+}
+
+static void print_u8_array(const unsigned char* values, int count) {
+    printf("[");
+    for (int i = 0; i < count; i++) {
+        if (i) printf(",");
+        printf("%u", values[i]);
+    }
+    printf("]");
+}
+
+static void print_u16_array(const unsigned short* values, int count) {
+    printf("[");
+    for (int i = 0; i < count; i++) {
+        if (i) printf(",");
+        printf("%u", values[i]);
+    }
+    printf("]");
+}
+
+static int emit_outline_copy(int argc, char** argv) {
+    if (argc != 3) return 1;
+    const char* case_id = argv[2];
+    FT_Outline source;
+    FT_Vector source_points[6];
+    unsigned char source_tags[6];
+    unsigned short source_contours[2];
+    build_copy_source_outline(&source, source_points, source_tags, source_contours);
+    print_ok_output_prefix();
+    if (strstr(case_id, ".copies_arrays_and_flags")) {
+        FT_Outline target;
+        FT_Vector target_points[6];
+        unsigned char target_tags[6];
+        unsigned short target_contours[2];
+        build_copy_target_outline(&target, target_points, target_tags, target_contours, 1);
+        FT_Error error = FT_Outline_Copy(&source, &target);
+        printf("{\"return\":%d,\"target_points\":", error);
+        print_mutated_points(target_points, 6);
+        printf(",\"target_tags\":");
+        print_u8_array(target_tags, 6);
+        printf(",\"target_contours\":");
+        print_u16_array(target_contours, 2);
+        printf(",\"target_flags\":%d}}\n", target.flags);
+        return 0;
+    }
+    if (strstr(case_id, ".self_copy_noop")) {
+        printf("{\"return\":%d,\"before\":", FT_Outline_Copy(&source, &source));
+        print_outline_snapshot(&source);
+        printf(",\"after\":");
+        print_outline_snapshot(&source);
+        printf("}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".invalid_pointer_or_size_mismatch")) {
+        FT_Outline target;
+        FT_Vector target_points[6];
+        unsigned char target_tags[6];
+        unsigned short target_contours[2];
+        build_copy_target_outline(&target, target_points, target_tags, target_contours, 1);
+        FT_Outline wrong;
+        FT_Vector wrong_points[3];
+        unsigned char wrong_tags[3];
+        unsigned short wrong_contours[1];
+        build_copy_wrong_target_outline(&wrong, wrong_points, wrong_tags, wrong_contours);
+        printf("{\"results\":[{\"label\":\"null_source\",\"return\":%d},{\"label\":\"null_target\",\"return\":%d},{\"label\":\"size_mismatch\",\"return\":%d}]}}\n",
+               FT_Outline_Copy(NULL, &target),
+               FT_Outline_Copy(&source, NULL),
+               FT_Outline_Copy(&source, &wrong));
+        return 0;
+    }
+    fprintf(stderr, "unsupported outline copy case: %s\n", case_id);
+    return 2;
+}
+
+static void build_embolden_outline(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours) {
+    FT_Vector src_points[5] = {{0,0},{0,96},{64,128},{128,96},{128,0}};
+    memcpy(points, src_points, sizeof(src_points));
+    for (int i = 0; i < 5; i++) tags[i] = 1;
+    contours[0] = 4;
+    outline->n_contours = 1;
+    outline->n_points = 5;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+}
+
+static void build_none_orientation_outline(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours) {
+    FT_Vector src_points[4] = {{0,0},{64,64},{0,64},{64,0}};
+    memcpy(points, src_points, sizeof(src_points));
+    for (int i = 0; i < 4; i++) tags[i] = 1;
+    contours[0] = 3;
+    outline->n_contours = 1;
+    outline->n_points = 4;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+}
+
+static int emit_outline_embolden_common(int argc, char** argv, int xy) {
+    if (argc != 3) return 1;
+    const char* case_id = argv[2];
+    print_ok_output_prefix();
+    if (strstr(case_id, ".symmetric_strength_matches_xy")) {
+        FT_Outline outline;
+        FT_Vector points[5];
+        unsigned char tags[5];
+        unsigned short contours[1];
+        FT_Outline xy_outline;
+        FT_Vector xy_points[5];
+        unsigned char xy_tags[5];
+        unsigned short xy_contours[1];
+        build_embolden_outline(&outline, points, tags, contours);
+        build_embolden_outline(&xy_outline, xy_points, xy_tags, xy_contours);
+        FT_Error error = FT_Outline_Embolden(&outline, 64);
+        FT_Error xy_error = FT_Outline_EmboldenXY(&xy_outline, 64, 64);
+        printf("{\"return\":%d,\"xy_return\":%d,\"points_after\":", error, xy_error);
+        print_mutated_points(points, 5);
+        printf(",\"xy_points_after\":");
+        print_mutated_points(xy_points, 5);
+        printf("}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".zero_strength_noop")) {
+        FT_Outline outline;
+        FT_Vector points[5];
+        unsigned char tags[5];
+        unsigned short contours[1];
+        build_embolden_outline(&outline, points, tags, contours);
+        printf("{\"return\":");
+        FT_Error error = FT_Outline_Embolden(&outline, 0);
+        printf("%d,\"before\":", error);
+        FT_Vector before[5] = {{0,0},{0,96},{64,128},{128,96},{128,0}};
+        print_mutated_points(before, 5);
+        printf(",\"after\":");
+        print_mutated_points(points, 5);
+        printf("}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".anisotropic_strength_mutates_points")) {
+        FT_Outline outline;
+        FT_Vector points[5];
+        unsigned char tags[5];
+        unsigned short contours[1];
+        build_embolden_outline(&outline, points, tags, contours);
+        FT_Vector before[5];
+        memcpy(before, points, sizeof(before));
+        FT_Orientation orientation = FT_Outline_Get_Orientation(&outline);
+        FT_Error error = FT_Outline_EmboldenXY(&outline, 96, 32);
+        printf("{\"return\":%d,\"orientation\":%d,\"points_before\":", error, orientation);
+        print_mutated_points(before, 5);
+        printf(",\"points_after\":");
+        print_mutated_points(points, 5);
+        printf("}}\n");
+        return 0;
+    }
+    if (strstr(case_id, ".empty_outline_success")) {
+        FT_Outline outline = {0};
+        FT_Error error = FT_Outline_EmboldenXY(&outline, 64, 64);
+        printf("{\"return\":%d,\"points_after\":[]}}\n", error);
+        return 0;
+    }
+    if (strstr(case_id, ".invalid_or_indeterminate_orientation_errors") || strstr(case_id, ".invalid_orientation_or_null_errors")) {
+        FT_Outline outline;
+        FT_Vector points[4];
+        unsigned char tags[4];
+        unsigned short contours[1];
+        build_none_orientation_outline(&outline, points, tags, contours);
+        FT_Error null_error = xy ? FT_Outline_EmboldenXY(NULL, 64, 64) : FT_Outline_Embolden(NULL, 64);
+        FT_Error none_error = xy ? FT_Outline_EmboldenXY(&outline, 64, 64) : FT_Outline_Embolden(&outline, 64);
+        printf("{\"results\":[{\"label\":\"null_outline\",\"return\":%d},{\"label\":\"none_orientation\",\"return\":%d}]}}\n", null_error, none_error);
+        return 0;
+    }
+    fprintf(stderr, "unsupported outline embolden case: %s\n", case_id);
+    return 2;
+}
+
+static int emit_outline_new(int argc, char** argv) {
+    if (argc != 3) return 1;
+    const char* case_id = argv[2];
+    FT_Library library = NULL;
+    FT_Init_FreeType(&library);
+    FT_Outline outline = {0};
+    print_ok_output_prefix();
+    if (strstr(case_id, ".allocates_owner_outline") || strstr(case_id, ".empty_outline_allocation")) {
+        FT_UInt points = strstr(case_id, ".empty_outline_allocation") ? 0 : 4;
+        FT_Int contours = strstr(case_id, ".empty_outline_allocation") ? 0 : 1;
+        FT_Error error = FT_Outline_New(library, points, contours, &outline);
+        printf("{\"return\":%d,\"outline\":{\"n_points\":%d,\"n_contours\":%d,\"flags\":%d,\"points_null\":%s,\"tags_null\":%s,\"contours_null\":%s}}}\n",
+               error, outline.n_points, outline.n_contours, outline.flags,
+               outline.points ? "false" : "true", outline.tags ? "false" : "true", outline.contours ? "false" : "true");
+        if (!error) FT_Outline_Done(library, &outline);
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    if (strstr(case_id, ".invalid_arguments_and_limits")) {
+        printf("{\"results\":[{\"label\":\"null_library\",\"return\":%d},{\"label\":\"null_output\",\"return\":%d},{\"label\":\"negative_contours\",\"return\":%d},{\"label\":\"contours_gt_points\",\"return\":%d},{\"label\":\"points_too_large\",\"return\":%d}]}}\n",
+               FT_Outline_New(NULL, 1, 1, &outline),
+               FT_Outline_New(library, 1, 1, NULL),
+               FT_Outline_New(library, 1, -1, &outline),
+               FT_Outline_New(library, 1, 2, &outline),
+               FT_Outline_New(library, 65536, 1, &outline));
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Done_FreeType(library);
+    fprintf(stderr, "unsupported outline new case: %s\n", case_id);
+    return 2;
+}
+
+static int emit_outline_done(int argc, char** argv) {
+    if (argc != 3) return 1;
+    const char* case_id = argv[2];
+    FT_Library library = NULL;
+    FT_Init_FreeType(&library);
+    print_ok_output_prefix();
+    if (strstr(case_id, ".owner_outline_frees_and_resets") || strstr(case_id, ".non_owner_outline_resets_only")) {
+        FT_Outline outline = {0};
+        FT_Vector points[6];
+        unsigned char tags[6];
+        unsigned short contours[2];
+        if (strstr(case_id, ".owner_outline_frees_and_resets")) {
+            FT_Outline_New(library, 6, 2, &outline);
+            outline.contours[0] = 2;
+            outline.contours[1] = 5;
+        } else {
+            build_copy_target_outline(&outline, points, tags, contours, 0);
+        }
+        FT_Error error = FT_Outline_Done(library, &outline);
+        printf("{\"return\":%d,\"frees\":", error);
+        if (strstr(case_id, ".owner_outline_frees_and_resets")) printf("[\"points\",\"tags\",\"contours\"]");
+        else printf("[]");
+        printf(",\"outline_after\":");
+        print_outline_snapshot(&outline);
+        printf("}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    if (strstr(case_id, ".invalid_library_or_outline_errors")) {
+        FT_Outline outline;
+        FT_Vector points[6];
+        unsigned char tags[6];
+        unsigned short contours[2];
+        build_copy_target_outline(&outline, points, tags, contours, 1);
+        printf("{\"results\":[{\"label\":\"null_library\",\"return\":%d},{\"label\":\"null_outline\",\"return\":%d}]}}\n",
+               FT_Outline_Done(NULL, &outline), FT_Outline_Done(library, NULL));
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Done_FreeType(library);
+    fprintf(stderr, "unsupported outline done case: %s\n", case_id);
+    return 2;
+}
+
 static int emit_outline_transform(int argc, char** argv) {
     if (argc != 3) {
         return 1;
@@ -11767,6 +12066,21 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-check")) {
         return emit_outline_check(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-copy")) {
+        return emit_outline_copy(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-done")) {
+        return emit_outline_done(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-embolden")) {
+        return emit_outline_embolden_common(argc, argv, 0);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-embolden-xy")) {
+        return emit_outline_embolden_common(argc, argv, 1);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-new")) {
+        return emit_outline_new(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-reverse")) {
         return emit_outline_reverse(argc, argv);

@@ -692,6 +692,16 @@ fn pending_core_runtime_reason(case: &InputCase) -> Option<&'static str> {
             "FT_Outline_Check invalid matrix needs exact per-scenario error-output support",
         );
     }
+    if matches!(
+        case.case_id.as_str(),
+        "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch"
+            | "ftoutln.FT_Outline_Done.invalid_library_or_outline_errors"
+            | "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors"
+            | "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors"
+            | "ftoutln.FT_Outline_New.invalid_arguments_and_limits"
+    ) {
+        return Some("FT_Outline invalid matrix needs exact per-scenario error-output support");
+    }
     None
 }
 
@@ -10536,6 +10546,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             case.case_id.clone(),
         ]),
         "ftoutln.outline_check" => Ok(vec!["--outline-check".to_string(), case.case_id.clone()]),
+        "ftoutln.outline_copy" => Ok(vec!["--outline-copy".to_string(), case.case_id.clone()]),
+        "ftoutln.outline_done" => Ok(vec!["--outline-done".to_string(), case.case_id.clone()]),
+        "ftoutln.outline_embolden" => {
+            Ok(vec!["--outline-embolden".to_string(), case.case_id.clone()])
+        }
+        "ftoutln.outline_embolden_xy" => Ok(vec![
+            "--outline-embolden-xy".to_string(),
+            case.case_id.clone(),
+        ]),
+        "ftoutln.outline_new" => Ok(vec!["--outline-new".to_string(), case.case_id.clone()]),
         "ftoutln.outline_reverse" => {
             Ok(vec!["--outline-reverse".to_string(), case.case_id.clone()])
         }
@@ -11158,6 +11178,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
         "ftoutln.outline_check" => rust_outline_check_runtime_output(case),
+        "ftoutln.outline_copy" => rust_outline_copy_runtime_output(case),
+        "ftoutln.outline_done" => rust_outline_done_runtime_output(case),
+        "ftoutln.outline_embolden" => rust_outline_embolden_runtime_output(case),
+        "ftoutln.outline_embolden_xy" => rust_outline_embolden_xy_runtime_output(case),
+        "ftoutln.outline_new" => rust_outline_new_runtime_output(case),
         "ftoutln.outline_reverse" => rust_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => rust_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => rust_outline_translate_runtime_output(case),
@@ -11862,6 +11887,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
         "ftoutln.outline_check" => c_outline_check_runtime_output(case),
+        "ftoutln.outline_copy" => c_outline_copy_runtime_output(case),
+        "ftoutln.outline_done" => c_outline_done_runtime_output(case),
+        "ftoutln.outline_embolden" => c_outline_embolden_runtime_output(case),
+        "ftoutln.outline_embolden_xy" => c_outline_embolden_xy_runtime_output(case),
+        "ftoutln.outline_new" => c_outline_new_runtime_output(case),
         "ftoutln.outline_reverse" => c_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => c_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => c_outline_translate_runtime_output(case),
@@ -12425,6 +12455,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
         "ftoutln.outline_check" => wasm_outline_check_runtime_output(case),
+        "ftoutln.outline_copy" => wasm_outline_copy_runtime_output(case),
+        "ftoutln.outline_done" => wasm_outline_done_runtime_output(case),
+        "ftoutln.outline_embolden" => wasm_outline_embolden_runtime_output(case),
+        "ftoutln.outline_embolden_xy" => wasm_outline_embolden_xy_runtime_output(case),
+        "ftoutln.outline_new" => wasm_outline_new_runtime_output(case),
         "ftoutln.outline_reverse" => wasm_outline_reverse_runtime_output(case),
         "ftoutln.outline_transform" => wasm_outline_transform_runtime_output(case),
         "ftoutln.outline_translate" => wasm_outline_translate_runtime_output(case),
@@ -18833,6 +18868,762 @@ fn update_mutable_from_rust_snapshot(
         .collect();
     model.tags = snapshot.tags;
     model.flags = snapshot.flags;
+}
+
+struct CMutableOutlineStorage {
+    points: Vec<c_abi::FT_Vector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
+    outline: c_abi::FT_Outline,
+}
+
+impl CMutableOutlineStorage {
+    fn new(model: MutableOutlineModel) -> Self {
+        let mut points = model
+            .points
+            .iter()
+            .map(|&(x, y)| c_abi::FT_Vector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags;
+        let mut contours = model.contours;
+        let outline = c_abi::FT_Outline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: model.flags,
+        };
+        Self {
+            points,
+            tags,
+            contours,
+            outline,
+        }
+    }
+
+    fn as_const_ptr(&mut self) -> *const c_abi::FT_Outline {
+        &self.outline
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut c_abi::FT_Outline {
+        &mut self.outline
+    }
+
+    fn copy_back(self, model: &mut MutableOutlineModel) {
+        model.points = self
+            .points
+            .into_iter()
+            .map(|point| (point.x, point.y))
+            .collect();
+        model.tags = self.tags;
+        model.contours = self.contours;
+        model.flags = self.outline.flags;
+    }
+}
+
+struct WasmMutableOutlineStorage {
+    points: Vec<wasm_abi::FontdoneWasmVector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
+    outline: wasm_abi::FontdoneWasmOutline,
+}
+
+impl WasmMutableOutlineStorage {
+    fn new(model: MutableOutlineModel) -> Self {
+        let mut points = model
+            .points
+            .iter()
+            .map(|&(x, y)| wasm_abi::FontdoneWasmVector { x, y })
+            .collect::<Vec<_>>();
+        let mut tags = model.tags;
+        let mut contours = model.contours;
+        let outline = wasm_abi::FontdoneWasmOutline {
+            n_contours: u16::try_from(contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(points.len()).unwrap_or(u16::MAX),
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: model.flags,
+        };
+        Self {
+            points,
+            tags,
+            contours,
+            outline,
+        }
+    }
+
+    fn as_const_ptr(&mut self) -> *const wasm_abi::FontdoneWasmOutline {
+        &self.outline
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut wasm_abi::FontdoneWasmOutline {
+        &mut self.outline
+    }
+
+    fn copy_back(self, model: &mut MutableOutlineModel) {
+        model.points = self
+            .points
+            .into_iter()
+            .map(|point| (point.x, point.y))
+            .collect();
+        model.tags = self.tags;
+        model.contours = self.contours;
+        model.flags = self.outline.flags;
+    }
+}
+
+fn copy_source_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(0, 0), (64, 0), (96, 32), (64, 64), (0, 64), (-32, 32)],
+        tags: vec![1, 0, 1, 2, 0, 1],
+        contours: vec![2, 5],
+        flags: 4,
+    }
+}
+
+fn copy_target_outline_model(owner: bool) -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(10, 10); 6],
+        tags: vec![7; 6],
+        contours: vec![2, 5],
+        flags: if owner { 1 } else { 0 },
+    }
+}
+
+fn copy_wrong_target_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(0, 0); 3],
+        tags: vec![1; 3],
+        contours: vec![2],
+        flags: 1,
+    }
+}
+
+fn embolden_outline_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(0, 0), (0, 96), (64, 128), (128, 96), (128, 0)],
+        tags: vec![1; 5],
+        contours: vec![4],
+        flags: 0,
+    }
+}
+
+fn embolden_none_orientation_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(0, 0), (64, 64), (0, 64), (64, 0)],
+        tags: vec![1; 4],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
+fn outline_copy_runtime_output<F>(case: &InputCase, mut copy: F) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&MutableOutlineModel>, Option<&mut MutableOutlineModel>) -> i64,
+{
+    if case.case_id.ends_with(".copies_arrays_and_flags") {
+        let source = copy_source_outline_model();
+        let mut target = copy_target_outline_model(true);
+        let error = copy(Some(&source), Some(&mut target));
+        return Ok(ok(json!({
+            "return": error,
+            "target_points": outline_points_json(&target.points),
+            "target_tags": target.tags,
+            "target_contours": target.contours,
+            "target_flags": target.flags
+        })));
+    }
+    if case.case_id.ends_with(".self_copy_noop") {
+        let source = copy_source_outline_model();
+        let mut target = source.clone();
+        let before = mutable_outline_json(&target);
+        let error = copy(Some(&source), Some(&mut target));
+        return Ok(ok(json!({
+            "return": error,
+            "before": before,
+            "after": mutable_outline_json(&target)
+        })));
+    }
+    if case.case_id.ends_with(".invalid_pointer_or_size_mismatch") {
+        let source = copy_source_outline_model();
+        let mut target = copy_target_outline_model(true);
+        let mut wrong = copy_wrong_target_outline_model();
+        return Ok(ok(json!({
+            "results": [
+                {"label": "null_source", "return": copy(None, Some(&mut target))},
+                {"label": "null_target", "return": copy(Some(&source), None)},
+                {"label": "size_mismatch", "return": copy(Some(&source), Some(&mut wrong))}
+            ]
+        })));
+    }
+    Err(format!("unsupported outline copy case {}", case.case_id))
+}
+
+fn rust_outline_copy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_copy_runtime_output(case, |source, target| {
+        let source = source.map(rust_snapshot_from_mutable);
+        let mut target_snapshot = target.as_deref().map(rust_snapshot_from_mutable);
+        let error = FT_Outline_Copy(source.as_ref(), target_snapshot.as_mut());
+        if let (Some(target), Some(snapshot)) = (target, target_snapshot) {
+            update_mutable_from_rust_snapshot(target, snapshot);
+        }
+        i64::from(error)
+    })
+}
+
+fn c_outline_copy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_copy_runtime_output(case, |source, target| {
+        let mut source_storage = source.cloned().map(CMutableOutlineStorage::new);
+        let mut target_storage = target.as_deref().cloned().map(CMutableOutlineStorage::new);
+        let source_ptr = source_storage
+            .as_mut()
+            .map_or(ptr::null(), CMutableOutlineStorage::as_const_ptr);
+        let target_ptr = target_storage
+            .as_mut()
+            .map_or(ptr::null_mut(), CMutableOutlineStorage::as_mut_ptr);
+        let error = c_abi::FT_Outline_Copy(source_ptr, target_ptr);
+        if let (Some(target), Some(storage)) = (target, target_storage) {
+            storage.copy_back(target);
+        }
+        i64::from(error)
+    })
+}
+
+fn wasm_outline_copy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_copy_runtime_output(case, |source, target| {
+        let mut source_storage = source.cloned().map(WasmMutableOutlineStorage::new);
+        let mut target_storage = target
+            .as_deref()
+            .cloned()
+            .map(WasmMutableOutlineStorage::new);
+        let source_ptr = source_storage
+            .as_mut()
+            .map_or(ptr::null(), WasmMutableOutlineStorage::as_const_ptr);
+        let target_ptr = target_storage
+            .as_mut()
+            .map_or(ptr::null_mut(), WasmMutableOutlineStorage::as_mut_ptr);
+        let error = wasm_abi::fontdone_wasm_outline_copy(source_ptr, target_ptr);
+        if let (Some(target), Some(storage)) = (target, target_storage) {
+            storage.copy_back(target);
+        }
+        i64::from(error)
+    })
+}
+
+fn outline_embolden_runtime_output<F>(
+    case: &InputCase,
+    mut embolden: F,
+    xy: bool,
+) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&mut MutableOutlineModel>, i64, i64) -> i64,
+{
+    if case.case_id.ends_with(".symmetric_strength_matches_xy") {
+        let mut model = embolden_outline_model();
+        let mut xy_model = embolden_outline_model();
+        let error = embolden(Some(&mut model), 64, 64);
+        let xy_error = embolden(Some(&mut xy_model), 64, 64);
+        return Ok(ok(json!({
+            "return": error,
+            "xy_return": xy_error,
+            "points_after": outline_points_json(&model.points),
+            "xy_points_after": outline_points_json(&xy_model.points)
+        })));
+    }
+    if case.case_id.ends_with(".zero_strength_noop") {
+        let mut model = embolden_outline_model();
+        let before = outline_points_json(&model.points);
+        let error = embolden(Some(&mut model), 0, 0);
+        return Ok(ok(json!({
+            "return": error,
+            "before": before,
+            "after": outline_points_json(&model.points)
+        })));
+    }
+    if case
+        .case_id
+        .ends_with(".anisotropic_strength_mutates_points")
+    {
+        let mut model = embolden_outline_model();
+        let before = outline_points_json(&model.points);
+        let orientation = rust_observe_mutable_outline(&model).1;
+        let error = embolden(Some(&mut model), 96, 32);
+        return Ok(ok(json!({
+            "return": error,
+            "orientation": orientation,
+            "points_before": before,
+            "points_after": outline_points_json(&model.points)
+        })));
+    }
+    if case.case_id.ends_with(".empty_outline_success") {
+        let mut model = MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: Vec::new(),
+            flags: 0,
+        };
+        let error = embolden(Some(&mut model), 64, 64);
+        return Ok(ok(json!({
+            "return": error,
+            "points_after": outline_points_json(&model.points)
+        })));
+    }
+    if case
+        .case_id
+        .ends_with(".invalid_or_indeterminate_orientation_errors")
+        || case
+            .case_id
+            .ends_with(".invalid_orientation_or_null_errors")
+    {
+        let mut none = embolden_none_orientation_model();
+        return Ok(ok(json!({
+            "results": [
+                {"label": "null_outline", "return": embolden(None, 64, 64)},
+                {"label": "none_orientation", "return": embolden(Some(&mut none), 64, 64)}
+            ]
+        })));
+    }
+    Err(format!(
+        "unsupported outline embolden case {} xy={xy}",
+        case.case_id
+    ))
+}
+
+fn rust_outline_embolden_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, _y| {
+            let Some(model) = model else {
+                return i64::from(FT_Outline_Embolden(None, x));
+            };
+            let mut snapshot = rust_snapshot_from_mutable(model);
+            let error = FT_Outline_Embolden(Some(&mut snapshot), x);
+            update_mutable_from_rust_snapshot(model, snapshot);
+            i64::from(error)
+        },
+        false,
+    )
+}
+
+fn rust_outline_embolden_xy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, y| {
+            let Some(model) = model else {
+                return i64::from(FT_Outline_EmboldenXY(None, x, y));
+            };
+            let mut snapshot = rust_snapshot_from_mutable(model);
+            let error = FT_Outline_EmboldenXY(Some(&mut snapshot), x, y);
+            update_mutable_from_rust_snapshot(model, snapshot);
+            i64::from(error)
+        },
+        true,
+    )
+}
+
+fn c_outline_embolden_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, _y| {
+            let Some(model) = model else {
+                return i64::from(c_abi::FT_Outline_Embolden(ptr::null_mut(), x));
+            };
+            let mut storage = CMutableOutlineStorage::new(model.clone());
+            let error = c_abi::FT_Outline_Embolden(storage.as_mut_ptr(), x);
+            storage.copy_back(model);
+            i64::from(error)
+        },
+        false,
+    )
+}
+
+fn c_outline_embolden_xy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, y| {
+            let Some(model) = model else {
+                return i64::from(c_abi::FT_Outline_EmboldenXY(ptr::null_mut(), x, y));
+            };
+            let mut storage = CMutableOutlineStorage::new(model.clone());
+            let error = c_abi::FT_Outline_EmboldenXY(storage.as_mut_ptr(), x, y);
+            storage.copy_back(model);
+            i64::from(error)
+        },
+        true,
+    )
+}
+
+fn wasm_outline_embolden_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, _y| {
+            let Some(model) = model else {
+                return i64::from(wasm_abi::fontdone_wasm_outline_embolden(ptr::null_mut(), x));
+            };
+            let mut storage = WasmMutableOutlineStorage::new(model.clone());
+            let error = wasm_abi::fontdone_wasm_outline_embolden(storage.as_mut_ptr(), x);
+            storage.copy_back(model);
+            i64::from(error)
+        },
+        false,
+    )
+}
+
+fn wasm_outline_embolden_xy_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_embolden_runtime_output(
+        case,
+        |model, x, y| {
+            let Some(model) = model else {
+                return i64::from(wasm_abi::fontdone_wasm_outline_embolden_xy(
+                    ptr::null_mut(),
+                    x,
+                    y,
+                ));
+            };
+            let mut storage = WasmMutableOutlineStorage::new(model.clone());
+            let error = wasm_abi::fontdone_wasm_outline_embolden_xy(storage.as_mut_ptr(), x, y);
+            storage.copy_back(model);
+            i64::from(error)
+        },
+        true,
+    )
+}
+
+fn outline_alloc_json(
+    return_code: i64,
+    n_points: usize,
+    n_contours: usize,
+    flags: i64,
+    points_null: bool,
+    tags_null: bool,
+    contours_null: bool,
+) -> RunOutput {
+    ok(json!({
+        "return": return_code,
+        "outline": {
+            "n_points": n_points,
+            "n_contours": n_contours,
+            "flags": flags,
+            "points_null": points_null,
+            "tags_null": tags_null,
+            "contours_null": contours_null
+        }
+    }))
+}
+
+fn outline_new_runtime_output<F>(case: &InputCase, mut outline_new: F) -> Result<RunOutput, String>
+where
+    F: FnMut(bool, u32, i32, bool) -> (i64, usize, usize, i64, bool, bool, bool),
+{
+    if case.case_id.ends_with(".allocates_owner_outline") {
+        let (error, n_points, n_contours, flags, points_null, tags_null, contours_null) =
+            outline_new(true, 4, 1, true);
+        return Ok(outline_alloc_json(
+            error,
+            n_points,
+            n_contours,
+            flags,
+            points_null,
+            tags_null,
+            contours_null,
+        ));
+    }
+    if case.case_id.ends_with(".empty_outline_allocation") {
+        let (error, n_points, n_contours, flags, points_null, tags_null, contours_null) =
+            outline_new(true, 0, 0, true);
+        return Ok(outline_alloc_json(
+            error,
+            n_points,
+            n_contours,
+            flags,
+            points_null,
+            tags_null,
+            contours_null,
+        ));
+    }
+    if case.case_id.ends_with(".invalid_arguments_and_limits") {
+        return Ok(ok(json!({
+            "results": [
+                {"label": "null_library", "return": outline_new(false, 1, 1, true).0},
+                {"label": "null_output", "return": outline_new(true, 1, 1, false).0},
+                {"label": "negative_contours", "return": outline_new(true, 1, -1, true).0},
+                {"label": "contours_gt_points", "return": outline_new(true, 1, 2, true).0},
+                {"label": "points_too_large", "return": outline_new(true, 65536, 1, true).0}
+            ]
+        })));
+    }
+    Err(format!("unsupported outline new case {}", case.case_id))
+}
+
+fn rust_outline_new_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_new_runtime_output(
+        case,
+        |library_present, num_points, num_contours, output_present| {
+            if !library_present {
+                return (
+                    i64::from(FT_Err_Invalid_Library_Handle as FT_Error),
+                    0,
+                    0,
+                    0,
+                    true,
+                    true,
+                    true,
+                );
+            }
+            if !output_present || num_points > u32::from(u16::MAX) || num_contours < 0 {
+                let error = if num_points > u32::from(u16::MAX) {
+                    FT_Err_Array_Too_Large as FT_Error
+                } else {
+                    FT_Err_Invalid_Argument
+                };
+                return (i64::from(error), 0, 0, 0, true, true, true);
+            }
+            let Ok(contour_count) = u32::try_from(num_contours) else {
+                return (
+                    i64::from(FT_Err_Invalid_Argument),
+                    0,
+                    0,
+                    0,
+                    true,
+                    true,
+                    true,
+                );
+            };
+            if contour_count > num_points {
+                return (
+                    i64::from(FT_Err_Invalid_Argument),
+                    0,
+                    0,
+                    0,
+                    true,
+                    true,
+                    true,
+                );
+            }
+            (
+                0,
+                usize::try_from(num_points).unwrap_or(usize::MAX),
+                usize::try_from(num_contours).unwrap_or(usize::MAX),
+                FT_OUTLINE_OWNER,
+                num_points == 0,
+                num_points == 0,
+                num_contours == 0,
+            )
+        },
+    )
+}
+
+fn c_outline_new_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_new_runtime_output(
+        case,
+        |library_present, num_points, num_contours, output_present| {
+            let mut library = ptr::null_mut();
+            if library_present {
+                let err = c_abi::FT_Init_FreeType(&mut library);
+                if err != 0 {
+                    return (i64::from(err), 0, 0, 0, true, true, true);
+                }
+            }
+            let mut outline = c_abi::FT_Outline::default();
+            let outline_ptr = if output_present {
+                &mut outline
+            } else {
+                ptr::null_mut()
+            };
+            let error = c_abi::FT_Outline_New(library, num_points, num_contours, outline_ptr);
+            let result = (
+                i64::from(error),
+                usize::from(outline.n_points),
+                usize::from(outline.n_contours),
+                i64::from(outline.flags),
+                outline.points.is_null(),
+                outline.tags.is_null(),
+                outline.contours.is_null(),
+            );
+            if error == 0 {
+                let _ = c_abi::FT_Outline_Done(library, &mut outline);
+            }
+            if !library.is_null() {
+                c_abi::FT_Done_FreeType(library);
+            }
+            result
+        },
+    )
+}
+
+fn wasm_outline_new_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_new_runtime_output(
+        case,
+        |library_present, num_points, num_contours, output_present| {
+            let library = if library_present { 1 } else { 0 };
+            let mut outline = wasm_abi::FontdoneWasmOutline::default();
+            let outline_ptr = if output_present {
+                &mut outline
+            } else {
+                ptr::null_mut()
+            };
+            let error =
+                wasm_abi::fontdone_wasm_outline_new(library, num_points, num_contours, outline_ptr);
+            let result = (
+                i64::from(error),
+                usize::from(outline.n_points),
+                usize::from(outline.n_contours),
+                i64::from(outline.flags),
+                outline.points.is_null(),
+                outline.tags.is_null(),
+                outline.contours.is_null(),
+            );
+            if error == 0 {
+                let _ = wasm_abi::fontdone_wasm_outline_done(library, &mut outline);
+            }
+            result
+        },
+    )
+}
+
+fn outline_done_after_json(
+    return_code: i64,
+    frees: &[&str],
+    model: &MutableOutlineModel,
+) -> RunOutput {
+    ok(json!({
+        "return": return_code,
+        "frees": frees,
+        "outline_after": mutable_outline_json(model)
+    }))
+}
+
+fn outline_done_runtime_output<F>(case: &InputCase, mut done: F) -> Result<RunOutput, String>
+where
+    F: FnMut(bool, Option<&mut MutableOutlineModel>) -> i64,
+{
+    if case.case_id.ends_with(".owner_outline_frees_and_resets") {
+        let mut model = copy_target_outline_model(true);
+        let error = done(true, Some(&mut model));
+        return Ok(outline_done_after_json(
+            error,
+            &["points", "tags", "contours"],
+            &model,
+        ));
+    }
+    if case.case_id.ends_with(".non_owner_outline_resets_only") {
+        let mut model = copy_target_outline_model(false);
+        let error = done(true, Some(&mut model));
+        return Ok(outline_done_after_json(error, &[], &model));
+    }
+    if case.case_id.ends_with(".invalid_library_or_outline_errors") {
+        let mut model = copy_target_outline_model(true);
+        return Ok(ok(json!({
+            "results": [
+                {"label": "null_library", "return": done(false, Some(&mut model))},
+                {"label": "null_outline", "return": done(true, None)}
+            ]
+        })));
+    }
+    Err(format!("unsupported outline done case {}", case.case_id))
+}
+
+fn rust_outline_done_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_done_runtime_output(case, |library_present, model| {
+        if !library_present {
+            return i64::from(FT_Err_Invalid_Library_Handle as FT_Error);
+        }
+        let Some(model) = model else {
+            return i64::from(FT_Err_Invalid_Outline as FT_Error);
+        };
+        *model = MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: Vec::new(),
+            flags: 0,
+        };
+        0
+    })
+}
+
+fn c_outline_done_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_done_runtime_output(case, |library_present, model| {
+        let mut library = ptr::null_mut();
+        if library_present {
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return i64::from(err);
+            }
+        }
+        let error = if let Some(model_ref) = model.as_deref() {
+            if model_ref.flags & FT_OUTLINE_OWNER as i32 != 0 && !library.is_null() {
+                let mut allocated_outline = c_abi::FT_Outline::default();
+                let error = c_abi::FT_Outline_New(
+                    library,
+                    u32::try_from(model_ref.points.len()).unwrap_or(u32::MAX),
+                    i32::try_from(model_ref.contours.len()).unwrap_or(i32::MAX),
+                    &mut allocated_outline,
+                );
+                if error != 0 {
+                    return i64::from(error);
+                }
+                c_abi::FT_Outline_Done(library, &mut allocated_outline)
+            } else {
+                let mut storage = CMutableOutlineStorage::new(model_ref.clone());
+                c_abi::FT_Outline_Done(library, storage.as_mut_ptr())
+            }
+        } else {
+            c_abi::FT_Outline_Done(library, ptr::null_mut())
+        };
+        if error == 0 {
+            if let Some(model) = model {
+                *model = MutableOutlineModel {
+                    points: Vec::new(),
+                    tags: Vec::new(),
+                    contours: Vec::new(),
+                    flags: 0,
+                };
+            }
+        }
+        if !library.is_null() {
+            c_abi::FT_Done_FreeType(library);
+        }
+        i64::from(error)
+    })
+}
+
+fn wasm_outline_done_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_done_runtime_output(case, |library_present, model| {
+        let library = if library_present { 1 } else { 0 };
+        let error = if let Some(model_ref) = model.as_deref() {
+            if model_ref.flags & FT_OUTLINE_OWNER as i32 != 0 && library != 0 {
+                let mut allocated_outline = wasm_abi::FontdoneWasmOutline::default();
+                let error = wasm_abi::fontdone_wasm_outline_new(
+                    library,
+                    u32::try_from(model_ref.points.len()).unwrap_or(u32::MAX),
+                    i32::try_from(model_ref.contours.len()).unwrap_or(i32::MAX),
+                    &mut allocated_outline,
+                );
+                if error != 0 {
+                    return i64::from(error);
+                }
+                wasm_abi::fontdone_wasm_outline_done(library, &mut allocated_outline)
+            } else {
+                let mut storage = WasmMutableOutlineStorage::new(model_ref.clone());
+                wasm_abi::fontdone_wasm_outline_done(library, storage.as_mut_ptr())
+            }
+        } else {
+            wasm_abi::fontdone_wasm_outline_done(library, ptr::null_mut())
+        };
+        if error == 0 {
+            if let Some(model) = model {
+                *model = MutableOutlineModel {
+                    points: Vec::new(),
+                    tags: Vec::new(),
+                    contours: Vec::new(),
+                    flags: 0,
+                };
+            }
+        }
+        i64::from(error)
+    })
 }
 
 fn outline_reverse_runtime_output<F>(case: &InputCase, mut reverse: F) -> Result<RunOutput, String>
