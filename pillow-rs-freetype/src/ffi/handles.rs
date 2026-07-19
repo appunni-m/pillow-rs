@@ -4321,6 +4321,15 @@ pub fn FT_Empty_GlyphSlot(face: &FT_Face) -> FT_GlyphSlot {
     slot_to_ffi(face, api::GlyphSlot::empty(), api::LoadFlags::DEFAULT)
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn FT_Unsupported_GlyphSlot(face: &FT_Face) -> FT_GlyphSlot {
+    let mut slot = FT_Empty_GlyphSlot(face);
+    slot.glyph_index = 77;
+    slot.advance = FT_Vector { x: 11, y: 22 };
+    slot.format = 0x1234_5678;
+    slot
+}
+
 pub fn FT_Load_Glyph(
     face: &FT_Face,
     glyph_index: FT_UInt,
@@ -4452,6 +4461,16 @@ pub fn FT_Render_Glyph(
     render_mode: FT_Render_Mode,
 ) -> Result<FT_GlyphSlot, FT_Error> {
     let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
+    if !matches!(
+        slot.format,
+        FT_GLYPH_FORMAT_OUTLINE | FT_GLYPH_FORMAT_BITMAP
+    ) {
+        // C FreeType `src/base/ftobjs.c` renderer lookup rejects unloaded
+        // (`FT_GLYPH_FORMAT_NONE`) and unknown public slot formats before any
+        // renderer mutates the slot; callers observe Cannot_Render_Glyph and
+        // the original slot fields stay intact.
+        return Err(FT_Err_Cannot_Render_Glyph);
+    }
     let was_bitmap = slot.format == FT_GLYPH_FORMAT_BITMAP;
     let source_face = slot.source_face.clone();
     let load_flags = slot.load_flags;

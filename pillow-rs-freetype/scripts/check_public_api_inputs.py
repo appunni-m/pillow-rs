@@ -1906,11 +1906,6 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
             "and WASM ABI"
         )
     if (
-        row.case_id
-        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
-    ):
-        return "unloaded and unsupported synthetic glyph-slot states need explicit public runner support"
-    if (
         row.operation
         in {
             "ftsynth.glyphslot_adjust_weight_after_load",
@@ -3267,6 +3262,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Render_Glyph composite/unsupported slot-format errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "render_glyph"
+        and row.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+    ):
+        return "FT_Render_Glyph unloaded and unsupported synthetic slot-state errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "render_glyph"
         and row.case_id == "freetype.FT_RENDER_MODE_MAX.render_glyph_rejects_sentinel"
     ):
         return "FT_RENDER_MODE_MAX render rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -3803,6 +3804,11 @@ def list_value(value: object) -> list[object]:
 def shape_fallback_reason(row: ConcreteInput) -> str | None:
     params = row.params
     operation = row.operation
+    if (
+        row.case_id
+        == "freetype.FT_Render_Glyph.error_unloaded_or_unsupported_slot_format.unrouted_slot_states"
+    ):
+        return None
     if operation == "load_char" and "char_code" not in params:
         return "load_char lacks char_code"
     if operation == "load_glyph" and "glyph_index" not in params and "glyph_selector" not in params:

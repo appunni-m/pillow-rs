@@ -1069,6 +1069,18 @@ pub fn abi_render_glyph_from_face(face: FT_Face, render_mode: FT_Render_Mode) ->
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_set_unsupported_glyph_slot(face: FT_Face) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    store_slot(
+        face,
+        rust_ffi::FT_Unsupported_GlyphSlot(&state.inner),
+        rust_ffi::FT_LOAD_DEFAULT,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_glyphslot_slant_from_face(
     face: FT_Face,
     xslant: FT_Fixed,

@@ -3149,6 +3149,15 @@ pub extern "C" fn fontdone_wasm_render_glyph(handle: usize, render_mode: i32) ->
     }
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_set_unsupported_glyph_slot(handle: usize) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    face.slot = Some(rust_ffi::FT_Unsupported_GlyphSlot(&face.face));
+    rust_ffi::FT_Err_Ok
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyphslot_oblique(handle: usize) -> FT_Error {
     fontdone_wasm_glyphslot_slant(handle, 0x0366A, 0)
