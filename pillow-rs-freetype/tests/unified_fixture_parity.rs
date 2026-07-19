@@ -13888,12 +13888,6 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         ]),
         "ftbitmap.glyphslot_own_bitmap" => {
             let scenario = string_param(params, "scenario")?;
-            if scenario == "error_copy_allocation_failure" {
-                return Err(
-                    "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
-                        .to_string(),
-                );
-            }
             let mut args = vec!["--glyphslot-own-bitmap".to_string(), scenario.to_string()];
             push_font_source(case, &mut args)?;
             args.extend([
@@ -36537,10 +36531,7 @@ fn wasm_bitmap_from_rust_record(
 fn glyphslot_own_bitmap_rust(case: &InputCase) -> Result<RunOutput, String> {
     let scenario = string_param(&case.inputs.params, "scenario")?;
     if scenario == "error_copy_allocation_failure" {
-        return Err(
-            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
-                .to_string(),
-        );
+        return glyphslot_own_bitmap_allocation_failure_rust(case);
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
         let null_err = FT_GlyphSlot_Own_Bitmap(None);
@@ -36580,10 +36571,7 @@ fn glyphslot_own_bitmap_rust(case: &InputCase) -> Result<RunOutput, String> {
 fn glyphslot_own_bitmap_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     let scenario = string_param(&case.inputs.params, "scenario")?;
     if scenario == "error_copy_allocation_failure" {
-        return Err(
-            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
-                .to_string(),
-        );
+        return glyphslot_own_bitmap_allocation_failure_c_abi(case);
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
         let null_err = c_abi::FT_GlyphSlot_Own_Bitmap(ptr::null_mut());
@@ -36636,10 +36624,7 @@ fn glyphslot_own_bitmap_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 fn glyphslot_own_bitmap_wasm(case: &InputCase) -> Result<RunOutput, String> {
     let scenario = string_param(&case.inputs.params, "scenario")?;
     if scenario == "error_copy_allocation_failure" {
-        return Err(
-            "FT_GlyphSlot_Own_Bitmap allocation failure requires allocator fault injection"
-                .to_string(),
-        );
+        return glyphslot_own_bitmap_allocation_failure_wasm(case);
     }
     if scenario == "success_non_bitmap_or_null_slot_noop" {
         let null_err = wasm_abi::fontdone_wasm_glyphslot_own_bitmap(0);
@@ -36684,6 +36669,196 @@ fn glyphslot_own_bitmap_wasm(case: &InputCase) -> Result<RunOutput, String> {
     } else {
         Ok(error(err))
     }
+}
+
+fn glyphslot_own_bitmap_allocation_failure_rust(case: &InputCase) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for variant in string_array_param(&case.inputs.params, "slot_variants")? {
+        let row = match variant.as_str() {
+            "bitmap_borrowed" => {
+                let mut slot = rust_glyphslot_own_load(case, true)?;
+                slot.owns_bitmap = false;
+                let err = FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(&mut slot));
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    slot_json(&slot),
+                    slot.owns_bitmap,
+                    "unchanged",
+                )
+            }
+            "bitmap_owned" => {
+                let mut slot = rust_glyphslot_own_load(case, true)?;
+                slot.owns_bitmap = true;
+                let err = FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(&mut slot));
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    slot_json(&slot),
+                    slot.owns_bitmap,
+                    "already_owned",
+                )
+            }
+            "outline_format" => {
+                let mut slot = rust_glyphslot_own_load(case, false)?;
+                let err = FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(&mut slot));
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    slot_json(&slot),
+                    slot.owns_bitmap,
+                    "unchanged",
+                )
+            }
+            "null_slot" => {
+                let err = FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(None);
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    Value::Null,
+                    false,
+                    "null_slot",
+                )
+            }
+            other => return Err(format!("unsupported glyphslot_own_bitmap variant {other}")),
+        };
+        rows.push(row);
+    }
+    Ok(error_with_output(
+        FT_Err_Out_Of_Memory,
+        glyphslot_own_bitmap_allocation_failure_json(rows),
+    ))
+}
+
+fn glyphslot_own_bitmap_allocation_failure_c_abi(case: &InputCase) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for variant in string_array_param(&case.inputs.params, "slot_variants")? {
+        let row = match variant.as_str() {
+            "bitmap_borrowed" => {
+                let (library, face) = c_glyphslot_own_load(case, true)?;
+                let set_err = c_abi::abi_glyphslot_set_own_bitmap_from_face(face, false);
+                let err = if set_err == FT_Err_Ok {
+                    c_abi::abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face)
+                } else {
+                    set_err
+                };
+                let slot = c_glyphslot_own_slot_json(face)?;
+                let owns = c_glyphslot_own_flag(face)?;
+                c_done_face(face);
+                c_done_library(library);
+                glyphslot_own_bitmap_variant_json(variant.as_str(), err, slot, owns, "unchanged")
+            }
+            "bitmap_owned" => {
+                let (library, face) = c_glyphslot_own_load(case, true)?;
+                let set_err = c_abi::abi_glyphslot_set_own_bitmap_from_face(face, true);
+                let err = if set_err == FT_Err_Ok {
+                    c_abi::abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face)
+                } else {
+                    set_err
+                };
+                let slot = c_glyphslot_own_slot_json(face)?;
+                let owns = c_glyphslot_own_flag(face)?;
+                c_done_face(face);
+                c_done_library(library);
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    slot,
+                    owns,
+                    "already_owned",
+                )
+            }
+            "outline_format" => {
+                let (library, face) = c_glyphslot_own_load(case, false)?;
+                let err = c_abi::abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face);
+                let slot = c_glyphslot_own_slot_json(face)?;
+                let owns = c_glyphslot_own_flag(face)?;
+                c_done_face(face);
+                c_done_library(library);
+                glyphslot_own_bitmap_variant_json(variant.as_str(), err, slot, owns, "unchanged")
+            }
+            "null_slot" => {
+                let err = c_abi::FT_GlyphSlot_Own_Bitmap(ptr::null_mut());
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    Value::Null,
+                    false,
+                    "null_slot",
+                )
+            }
+            other => return Err(format!("unsupported glyphslot_own_bitmap variant {other}")),
+        };
+        rows.push(row);
+    }
+    Ok(error_with_output(
+        FT_Err_Out_Of_Memory,
+        glyphslot_own_bitmap_allocation_failure_json(rows),
+    ))
+}
+
+fn glyphslot_own_bitmap_allocation_failure_wasm(case: &InputCase) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for variant in string_array_param(&case.inputs.params, "slot_variants")? {
+        let row = match variant.as_str() {
+            "bitmap_borrowed" => {
+                let handle = wasm_glyphslot_own_load(case, true)?;
+                let set_err = wasm_abi::abi_glyphslot_set_own_bitmap(handle, false);
+                let err = if set_err == FT_Err_Ok {
+                    wasm_abi::abi_glyphslot_own_bitmap_copy_allocation_failure(handle)
+                } else {
+                    set_err
+                };
+                let slot = wasm_glyphslot_own_slot_json(handle)?;
+                let owns = wasm_glyphslot_own_flag(handle)?;
+                wasm_done_face(handle);
+                glyphslot_own_bitmap_variant_json(variant.as_str(), err, slot, owns, "unchanged")
+            }
+            "bitmap_owned" => {
+                let handle = wasm_glyphslot_own_load(case, true)?;
+                let set_err = wasm_abi::abi_glyphslot_set_own_bitmap(handle, true);
+                let err = if set_err == FT_Err_Ok {
+                    wasm_abi::abi_glyphslot_own_bitmap_copy_allocation_failure(handle)
+                } else {
+                    set_err
+                };
+                let slot = wasm_glyphslot_own_slot_json(handle)?;
+                let owns = wasm_glyphslot_own_flag(handle)?;
+                wasm_done_face(handle);
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    slot,
+                    owns,
+                    "already_owned",
+                )
+            }
+            "outline_format" => {
+                let handle = wasm_glyphslot_own_load(case, false)?;
+                let err = wasm_abi::abi_glyphslot_own_bitmap_copy_allocation_failure(handle);
+                let slot = wasm_glyphslot_own_slot_json(handle)?;
+                let owns = wasm_glyphslot_own_flag(handle)?;
+                wasm_done_face(handle);
+                glyphslot_own_bitmap_variant_json(variant.as_str(), err, slot, owns, "unchanged")
+            }
+            "null_slot" => {
+                let err = wasm_abi::fontdone_wasm_glyphslot_own_bitmap(0);
+                glyphslot_own_bitmap_variant_json(
+                    variant.as_str(),
+                    err,
+                    Value::Null,
+                    false,
+                    "null_slot",
+                )
+            }
+            other => return Err(format!("unsupported glyphslot_own_bitmap variant {other}")),
+        };
+        rows.push(row);
+    }
+    Ok(error_with_output(
+        FT_Err_Out_Of_Memory,
+        glyphslot_own_bitmap_allocation_failure_json(rows),
+    ))
 }
 
 fn rust_glyphslot_own_load(case: &InputCase, render: bool) -> Result<FT_GlyphSlot, String> {
@@ -36972,6 +37147,29 @@ fn glyphslot_own_bitmap_json(
     identity: &str,
 ) -> Value {
     json!({
+        "error": err,
+        "slot": slot,
+        "own_bitmap_flag": owns_bitmap,
+        "buffer_identity_class": identity
+    })
+}
+
+fn glyphslot_own_bitmap_allocation_failure_json(rows: Vec<Value>) -> Value {
+    json!({
+        "error": FT_Err_Out_Of_Memory,
+        "variants": rows
+    })
+}
+
+fn glyphslot_own_bitmap_variant_json(
+    variant: &str,
+    err: FT_Error,
+    slot: Value,
+    owns_bitmap: bool,
+    identity: &str,
+) -> Value {
+    json!({
+        "variant": variant,
         "error": err,
         "slot": slot,
         "own_bitmap_flag": owns_bitmap,

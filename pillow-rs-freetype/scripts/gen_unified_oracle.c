@@ -58,6 +58,43 @@ static void* oracle_realloc(FT_Memory memory, long cur_size, long new_size, void
     return realloc(block, (size_t)new_size);
 }
 
+typedef struct FailAfterMemoryState_ {
+    int enabled;
+    int fail_after;
+    int allocation_count;
+} FailAfterMemoryState;
+
+static int fail_after_memory_should_fail(FT_Memory memory) {
+    FailAfterMemoryState* state = memory ? (FailAfterMemoryState*)memory->user : NULL;
+    if (!state || !state->enabled) {
+        return 0;
+    }
+    if (state->allocation_count++ >= state->fail_after) {
+        return 1;
+    }
+    return 0;
+}
+
+static void* fail_after_alloc(FT_Memory memory, long size) {
+    if (fail_after_memory_should_fail(memory)) {
+        return NULL;
+    }
+    return malloc((size_t)size);
+}
+
+static void fail_after_free(FT_Memory memory, void* block) {
+    (void)memory;
+    free(block);
+}
+
+static void* fail_after_realloc(FT_Memory memory, long cur_size, long new_size, void* block) {
+    (void)cur_size;
+    if (fail_after_memory_should_fail(memory)) {
+        return NULL;
+    }
+    return realloc(block, (size_t)new_size);
+}
+
 static FT_Error debug_hook_a(void* arg) {
     (void)arg;
     return FT_Err_Ok;
@@ -1689,6 +1726,33 @@ static void print_glyphslot_own_bitmap_output(FT_Error err,
     printf(",\"buffer_identity_class\":\"%s\"}}\n", identity);
 }
 
+static void print_glyphslot_own_bitmap_variant(const char* variant,
+                                               FT_Error err,
+                                               FT_GlyphSlot slot,
+                                               const unsigned char* before_buffer,
+                                               const char* no_slot_identity) {
+    const char* identity = no_slot_identity;
+    int owns_bitmap = 0;
+    printf("{\"variant\":\"%s\",\"error\":%d,\"slot\":", variant, err);
+    if (!slot) {
+        printf("null");
+    } else {
+        identity = "unchanged";
+        owns_bitmap = slot->internal && (slot->internal->flags & FT_GLYPH_OWN_BITMAP);
+        if (slot->bitmap.buffer && before_buffer && slot->bitmap.buffer != before_buffer) {
+            identity = "owned_copy";
+        } else if (owns_bitmap) {
+            identity = "already_owned";
+        }
+        printf("{");
+        print_slot_body(slot, slot->glyph_index);
+        printf("}");
+    }
+    printf(",\"own_bitmap_flag\":");
+    print_json_bool(owns_bitmap);
+    printf(",\"buffer_identity_class\":\"%s\"}", identity);
+}
+
 static int emit_glyphslot_own_bitmap(int argc, char** argv) {
     if (argc != 9) {
         fprintf(stderr, "--glyphslot-own-bitmap requires SCENARIO SOURCE_KIND SOURCE FACE_INDEX PX GID FLAGS\n");
@@ -1701,11 +1765,6 @@ static int emit_glyphslot_own_bitmap(int argc, char** argv) {
     FT_UInt px = (FT_UInt)strtoul(argv[6], NULL, 10);
     FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
     FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
-
-    if (streq(scenario, "error_copy_allocation_failure")) {
-        fprintf(stderr, "glyphslot-own-bitmap allocation failure requires allocator fault injection\n");
-        return 2;
-    }
 
     FT_Error null_err = FT_GlyphSlot_Own_Bitmap(NULL);
     if (streq(scenario, "success_non_bitmap_or_null_slot_noop") && null_err) {
@@ -1732,9 +1791,15 @@ static int emit_glyphslot_own_bitmap(int argc, char** argv) {
         return 2;
     }
 
+    FailAfterMemoryState fail_state = {0, 0, 0};
+    struct FT_MemoryRec_ fail_memory = {&fail_state, fail_after_alloc, fail_after_free, fail_after_realloc};
     FT_Library library = NULL;
     FT_Face face = NULL;
-    FT_Error err = FT_Init_FreeType(&library);
+    int custom_memory = streq(scenario, "error_copy_allocation_failure");
+    FT_Error err = custom_memory ? FT_New_Library(&fail_memory, &library) : FT_Init_FreeType(&library);
+    if (!err && custom_memory) {
+        FT_Add_Default_Modules(library);
+    }
     if (!err) {
         err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
     }
@@ -1758,14 +1823,43 @@ static int emit_glyphslot_own_bitmap(int argc, char** argv) {
             FT_Done_Face(face);
         }
         if (library) {
-            FT_Done_FreeType(library);
+            if (custom_memory) {
+                FT_Done_Library(library);
+            } else {
+                FT_Done_FreeType(library);
+            }
         }
         free(data);
         return 0;
     }
 
     unsigned char* before_buffer = face->glyph->bitmap.buffer;
-    if (streq(scenario, "success_borrowed_bitmap_copied_and_flagged")) {
+    if (streq(scenario, "error_copy_allocation_failure")) {
+        printf("{");
+        print_status(FT_Err_Out_Of_Memory);
+        printf(",\"output\":{\"error\":%d,\"variants\":[", FT_Err_Out_Of_Memory);
+
+        face->glyph->internal->flags &= ~FT_GLYPH_OWN_BITMAP;
+        fail_state.enabled = 1;
+        fail_state.fail_after = 0;
+        fail_state.allocation_count = 0;
+        err = FT_GlyphSlot_Own_Bitmap(face->glyph);
+        fail_state.enabled = 0;
+        print_glyphslot_own_bitmap_variant("bitmap_borrowed", err, face->glyph, before_buffer, "null_slot");
+
+        face->glyph->internal->flags |= FT_GLYPH_OWN_BITMAP;
+        printf(",");
+        err = FT_GlyphSlot_Own_Bitmap(face->glyph);
+        print_glyphslot_own_bitmap_variant("bitmap_owned", err, face->glyph, face->glyph->bitmap.buffer, "null_slot");
+
+        err = FT_Load_Glyph(face, glyph_index, load_flags & ~FT_LOAD_RENDER);
+        printf(",");
+        print_glyphslot_own_bitmap_variant("outline_format", err ? err : FT_GlyphSlot_Own_Bitmap(face->glyph), face->glyph, face->glyph->bitmap.buffer, "null_slot");
+
+        printf(",");
+        print_glyphslot_own_bitmap_variant("null_slot", FT_GlyphSlot_Own_Bitmap(NULL), NULL, NULL, "null_slot");
+        printf("]}}\n");
+    } else if (streq(scenario, "success_borrowed_bitmap_copied_and_flagged")) {
         face->glyph->internal->flags &= ~FT_GLYPH_OWN_BITMAP;
         err = FT_GlyphSlot_Own_Bitmap(face->glyph);
         print_glyphslot_own_bitmap_output(err, face->glyph, before_buffer, "null_slot");
@@ -1785,13 +1879,21 @@ static int emit_glyphslot_own_bitmap(int argc, char** argv) {
     } else {
         fprintf(stderr, "unsupported glyphslot own bitmap scenario: %s\n", scenario);
         FT_Done_Face(face);
-        FT_Done_FreeType(library);
+        if (custom_memory) {
+            FT_Done_Library(library);
+        } else {
+            FT_Done_FreeType(library);
+        }
         free(data);
         return 2;
     }
 
     FT_Done_Face(face);
-    FT_Done_FreeType(library);
+    if (custom_memory) {
+        FT_Done_Library(library);
+    } else {
+        FT_Done_FreeType(library);
+    }
     free(data);
     return 0;
 }

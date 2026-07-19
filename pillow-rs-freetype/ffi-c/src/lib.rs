@@ -1124,6 +1124,27 @@ pub fn abi_glyphslot_own_bitmap_from_face(face: FT_Face) -> FT_Error {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face: FT_Face) -> FT_Error {
+    let Some(slot_ptr) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Ok;
+    };
+    // SAFETY: `slot_ptr` is produced from a live face-owned slot allocated by this crate.
+    unsafe {
+        let slot_ref = &mut *slot_ptr.as_ptr();
+        let err =
+            rust_ffi::FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(&mut slot_ref.rust_slot));
+        if err != rust_ffi::FT_Err_Ok {
+            return err;
+        }
+        let source_face = slot_ref.source_face;
+        let load_flags = slot_ref.load_flags;
+        let rust_slot = slot_ref.rust_slot.clone();
+        *slot_ref = rust_slot_to_abi(rust_slot, source_face, load_flags);
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_glyphslot_set_own_bitmap_from_face(face: FT_Face, owns_bitmap: bool) -> FT_Error {
     let Some(mut slot) = abi_glyph_slot(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;

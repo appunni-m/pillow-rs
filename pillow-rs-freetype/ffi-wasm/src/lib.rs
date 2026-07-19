@@ -3182,6 +3182,20 @@ pub extern "C" fn fontdone_wasm_glyphslot_own_bitmap(handle: usize) -> FT_Error 
     rust_ffi::FT_GlyphSlot_Own_Bitmap(Some(slot))
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyphslot_own_bitmap_copy_allocation_failure(handle: usize) -> FT_Error {
+    if handle == 0 {
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(slot) = face.slot.as_mut() else {
+        return rust_ffi::FT_Err_Ok;
+    };
+    rust_ffi::FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(slot))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyphslot_adjust_weight(
     handle: usize,
