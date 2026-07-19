@@ -8421,6 +8421,17 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftwinfnt.FT_Get_WinFNT_Header.non_winfnt_face_returns_invalid_argument"
             || case.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
+            || case.case_id == "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error"
+            || case.case_id == "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure"
+            || case.case_id == "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
+            || case.case_id == "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
+            || case.case_id == "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error"
+            || case.case_id == "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
