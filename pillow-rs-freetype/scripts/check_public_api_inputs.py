@@ -880,12 +880,19 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Invalid_Driver_Handle.module_driver_handle_validation",
         "fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping",
         "fterrdef.FT_Err_Invalid_PPem.tt_size_reset_zero_ppem",
+        "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected",
+        "fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected",
+        "fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected",
+        "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure",
         "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name",
         "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation",
         "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch",
         "fterrdef.FT_Err_Nested_Frame_Access.stream_nested_frame_guard",
         "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error",
+        "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",
         "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
+        "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
+        "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
         "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
@@ -894,7 +901,11 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors",
         "ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors",
         "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
+        "ftoutln.FT_Orientation.geometry_fixture_matrix",
         "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored",
+        "ftimage.FT_Raster_New_Func.renderer_new_error_propagates",
+        "ftimage.FT_Raster_Span_Func.missing_span_callback_errors",
+        "ftincrem.FT_Incremental_FuncsRec.callback_error_propagates",
         "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
         "ftlcdfil.FT_Library_SetLcdFilterWeights.unimplemented_without_subpixel_filtering",
@@ -904,6 +915,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftsnames.FT_Get_Sfnt_LangTag.format0_invalid_table_error",
         "tttables.FT_Sfnt_Table_Info.invalid_face_error",
         "tttables.TT_Postscript.invalid_post_format_error_runtime",
+        "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1202,6 +1215,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         ): "FT_Stream_OpenBzip2 disabled optional-module error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "FT_New_Memory_Face_or_FT_New_Open_Face",
+            "fterrdef.FT_Err_Invalid_Stream_Skip.pcf_table_skip_failure",
+        ): "PCF table stream-skip failure validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "FT_Property_Get",
             "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         ): "FT_Property_Get glyph-to-script-map invalid-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -1225,6 +1242,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "allocation_failure_harness.fail_after_n",
             "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
         ): "allocator fail-after-N out-of-memory error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "FTC_cache_lookup",
+            "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
+        ): "FTC cache flush-then-OOM error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ffi_error_mapping",
             "fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping",
@@ -1269,6 +1290,50 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "glyphdict.name_index_lookup",
             "fterrdef.FT_Err_Invalid_Character_Code.char_index_name_lookup_invalid_code",
         ): "glyph name-index lookup invalid-character-code error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftimage.custom_renderer_lifecycle",
+            "ftimage.FT_Raster_New_Func.renderer_new_error_propagates",
+        ): "FT_Raster_New custom renderer error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftincrem.load_incremental_glyph",
+            "ftincrem.FT_Incremental_FuncsRec.callback_error_propagates",
+        ): "FT_Incremental glyph callback error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_geometry",
+            "ftoutln.FT_Orientation.geometry_fixture_matrix",
+        ): "FT_Outline orientation geometry fixture errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_render_direct",
+            "ftimage.FT_Raster_Span_Func.missing_span_callback_errors",
+        ): "FT_Outline_Render direct missing-span-callback error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "raster.module_error_probe",
+            "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base",
+        ): "Raster module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sdf.render_error_probe",
+            "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base",
+        ): "SDF module prefixed error base validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sfnt.load_glyph_or_color_table",
+            "fterrdef.FT_Err_Invalid_Offset.table_offset_bounds_rejected",
+        ): "SFNT glyph/color table invalid-offset error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sfnt.load_glyph_or_metrics",
+            "fterrdef.FT_Err_Invalid_Horiz_Metrics.sfnt_hmtx_metrics_rejected",
+        ): "SFNT horizontal metrics rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sfnt.load_sfnt_table",
+            "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
+        ): "FT_Load_Sfnt_Table required-table-missing error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "sfnt.new_memory_face_then_charmap_lookup",
+            "fterrdef.FT_Err_Invalid_CharMap_Format.sfnt_cmap_format_rejected",
+        ): "SFNT charmap format rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "svg.preset_slot",
+            "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",
+        ): "SVG preset-slot bad-argument error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftlcdfil.set_lcd_filter",
             "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
