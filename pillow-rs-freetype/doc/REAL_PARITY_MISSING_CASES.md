@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Open_Face` invalid source-flag route
+Current verified result after `FT_RASTER_FLAG_AA` mono target exact-error
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3851`
+  - `real-parity`: `3852`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `344`
+  - `generic-error-fallback`: `343`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -83,6 +83,49 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Face.error_invalid_so
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3851`, `generic-error-fallback` `344`.
+
+### Issue Set Current: `FT_RASTER_FLAG_AA` mono target exact-error route
+
+Previous blocker:
+
+- `ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa` was classified as
+  `generic-error-fallback`.
+- Enabling exact comparison exposed a real Rust FFI divergence: pinned C
+  returned `FT_Err_Invalid_Argument` for AA rendering into an
+  `FT_PIXEL_MODE_MONO` target, while the Rust FFI path returned
+  `FT_Err_Cannot_Render_Glyph` and reported a synthetic preserved bitmap
+  payload.
+
+Fix plan:
+
+1. Promote only the concrete mono-AA row to exact-error comparison.
+2. Match pinned C FreeType's `ftgrays.c:2014-2016` validation result:
+   non-gray AA targets return `FT_Err_Invalid_Argument` before writing caller
+   storage.
+3. Do not fabricate an error-output bitmap when the C oracle exposes no output
+   payload for this validation failure.
+4. Verify the same input through Rust FFI, thin C ABI `FT_Outline_Render`, and
+   WASM ABI.
+
+Verified progress:
+
+- Rust FFI now returns `FT_Err_Invalid_Argument` for AA outline rendering into
+  a mono target, with a C-reference comment at the implementation site.
+- The unified Rust/C/WASM runners now preserve the absence of an error-output
+  payload for this C validation failure instead of turning the sentinel buffer
+  into an apparent public output.
+- Focused exact comparison passes for
+  `ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa`.
+- Route audit classifies the row as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_RASTER_FLAG_AA.mono_rejects_aa
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3852`, `generic-error-fallback` `343`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 

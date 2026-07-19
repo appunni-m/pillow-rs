@@ -1635,10 +1635,10 @@ pub fn FT_Outline_Render(
         });
     }
     if i32::from(target.pixel_mode) != FT_PIXEL_MODE_GRAY {
-        // FreeType 2.14.3 `src/smooth/ftgrays.c:gray_raster_render` is the
-        // AA bitmap renderer used by FT_Outline_Render here; it rejects target
-        // bitmaps whose pixel mode is not gray before writing caller storage.
-        return Err(FT_Err_Cannot_Render_Glyph as FT_Error);
+        // FreeType 2.14.3 `src/smooth/ftgrays.c:2014-2016` rejects AA
+        // `FT_Outline_Render` targets whose pixel mode is not gray with
+        // `Invalid_Argument` before writing caller storage.
+        return Err(FT_Err_Invalid_Argument as FT_Error);
     }
     if empty_outline {
         return Ok(FT_Bitmap {
