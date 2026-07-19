@@ -1224,6 +1224,28 @@ pub extern "C" fn fontdone_wasm_get_glyph(slot_present: i32, aglyph: *mut usize)
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_copy(
+    source: *const FontdoneWasmGlyph,
+    target: *mut usize,
+) -> FT_Error {
+    let source_has_class = if target.is_null() || source.is_null() {
+        false
+    } else {
+        // SAFETY: `source` is non-null and this thin wrapper reads only the
+        // class pointer needed for FreeType's early argument validation.
+        unsafe { !(*source).clazz.is_null() }
+    };
+    let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = 0;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,
     abbox: *mut FontdoneWasmBBox,

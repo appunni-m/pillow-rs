@@ -401,6 +401,7 @@ FT_Bool FT_Face_SetUnpatentedHinting(FT_Face face, FT_Bool value);
 void FT_Outline_Get_CBox(const FT_Outline* outline, FT_BBox* acbox);
 void FT_Glyph_Get_CBox(FT_Glyph glyph, FT_UInt bbox_mode, FT_BBox* acbox);
 FT_Error FT_Get_Glyph(FT_GlyphSlot slot, FT_Glyph* aglyph);
+FT_Error FT_Glyph_Copy(FT_Glyph source, FT_Glyph* target);
 FT_Error FT_Outline_Get_BBox(const FT_Outline* outline, FT_BBox* abbox);
 FT_Error FT_Outline_Get_Bitmap(FT_Library library, const FT_Outline* outline, FT_Bitmap* abitmap);
 FT_Error FT_Outline_Render(FT_Library library, FT_Outline* outline, FT_Raster_Params* params);

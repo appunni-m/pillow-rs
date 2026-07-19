@@ -1894,6 +1894,25 @@ pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_Error {
+    let source_has_class = if target.is_null() || source.is_null() {
+        false
+    } else {
+        // SAFETY: `source` is non-null and this thin wrapper reads only the
+        // class pointer needed for FreeType's early argument validation.
+        unsafe { !(*source).clazz.is_null() }
+    };
+    let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = ptr::null_mut();
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_BBox(outline: *const FT_Outline, abbox: *mut FT_BBox) -> FT_Error {
     if abbox.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
