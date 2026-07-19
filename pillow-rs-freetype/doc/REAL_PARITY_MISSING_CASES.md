@@ -8206,3 +8206,61 @@ Verification for the classification batch:
 ```bash
 make -C pillow-rs-freetype route-audit
 ```
+
+### Issue Set Current: `FTC_*` cache subsystem success/lifecycle route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `cd06d9a3c`: `real-parity=4465`,
+  `generic-fallback=429`, `pending-route=85`, `pending-core=7`.
+
+Finding:
+
+- The route audit already has exact real parity for selected FTC cache null/error
+  rows and the existing maintained `FTC_Manager_Reset` and
+  `FTC_SBitCache_Lookup` success routes.
+- The remaining cache manager, image cache, cmap cache, sbit scaler, node,
+  scaler descriptor, face-id, and type-contract rows had stayed in
+  `generic-fallback` with the reason `no explicit maintained route
+  classification`.
+- Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  cache subsystem route that constructs a real `FTC_Manager`, installs image,
+  cmap, and sbit caches, exercises requester callbacks and `FTC_FaceID`
+  identity, performs repeated lookup/removal/reset/unref/done sequences, and
+  compares exact public outputs and lifecycle side effects.
+
+Classification change:
+
+- 90 `ftcache.*` rows moved from `generic-fallback` to `pending-route`.
+- 37 existing exact `ftcache` rows remain `real-parity`.
+- The pre-existing
+  `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer` row remains
+  `pending-route` for its specific non-C-openable bitmap fixture reason.
+- New route audit counts: `real-parity=4465`, `generic-fallback=339`,
+  `pending-route=175`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained FTC cache route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement the pure-Rust cache manager/cache/node/requester state first. The
+   C and WASM ABI layers may only own handle validation, record copying, and
+   lifetime bookkeeping.
+3. Compare exact return codes, glyph/index outputs, cache-owned descriptor
+   nullness and stability, node reference behavior, requester invocation counts,
+   reset/remove-face-id/done effects, scaler size interpretation, and load flag
+   truncation.
+4. Keep the already-routed FTC null/error rows, `FTC_Manager_Reset`, and
+   maintained `FTC_SBitCache_Lookup` rows real; do not demote them while
+   building the broader cache route.
+5. Promote rows only after focused `ftcache` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
