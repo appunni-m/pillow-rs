@@ -10,21 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Get_CID_Registry_Ordering_Supplement`
-non-CID/null-output
+Current verified result after `FT_Get_BDF_Charset_ID` non-BDF-face
 exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3963`
+  - `real-parity`: `3964`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `232`
+  - `generic-error-fallback`: `231`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -524,6 +523,45 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_null
 
 Result: failed before parity comparison with missing asset
 `input/fonts/bdf/charset-registry.bdf`; row remains `generic-error-fallback`.
+
+### Issue Set Current: `FT_Get_BDF_Charset_ID` non-BDF-face exact-error route
+
+Previous blocker:
+
+- `ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face` had a concrete BDF public
+  error row classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete `FT_Get_BDF_Charset_ID` non-BDF-face row to
+   exact-error comparison.
+2. Keep the existing non-BDF font input unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_Get_BDF_Charset_ID`, and WASM ABI before counting the row as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for the concrete BDF charset non-BDF-face row.
+- The previously fallback-classified error row now validates exact
+  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+- No runtime Rust behavior change was needed for this row.
+- The broader `ftbdf.get_bdf_charset_id` operation lane still fails before
+  parity comparison because
+  `ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs` references missing
+  fixture `input/fonts/bdf/charset-registry.bdf`. That blocker remains tracked
+  separately above and is not promoted by this row.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3964`, `generic-error-fallback` `231`.
 
 ### Issue Set Current: `FT_Get_BDF_Property` missing-property exact-error route
 

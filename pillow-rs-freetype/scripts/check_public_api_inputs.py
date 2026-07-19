@@ -802,6 +802,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
         "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
         "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
+        "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
@@ -1151,6 +1152,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
     ):
         return "FT_Get_BDF_Property unsupported-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbdf.get_bdf_charset_id"
+        and row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
+    ):
+        return "FT_Get_BDF_Charset_ID non-BDF-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id
