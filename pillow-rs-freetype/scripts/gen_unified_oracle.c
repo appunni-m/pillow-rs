@@ -4623,6 +4623,16 @@ static void setup_outline_get_bitmap_target(FT_Bitmap* bitmap, unsigned char* bu
     bitmap->pixel_mode = pixel_mode;
 }
 
+static void setup_outline_get_bitmap_empty_target(FT_Bitmap* bitmap) {
+    memset(bitmap, 0, sizeof(*bitmap));
+    bitmap->rows = 0;
+    bitmap->width = 0;
+    bitmap->pitch = 0;
+    bitmap->buffer = NULL;
+    bitmap->num_grays = 256;
+    bitmap->pixel_mode = FT_PIXEL_MODE_GRAY;
+}
+
 static void print_outline_get_bitmap_success(const FT_Bitmap* bitmap, int raster_flags) {
     printf("\"raster_flags\":%d,", raster_flags);
     print_outline_bitmap_object(bitmap);
@@ -4691,6 +4701,31 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
             printf(",\"output\":{");
             printf("\"return\":0,");
             print_outline_get_bitmap_success(&bitmap, 0);
+            printf("}}\n");
+        }
+    } else if (streq(mode, "empty")) {
+        FT_Vector empty_points[1];
+        unsigned char empty_tags[1];
+        unsigned short empty_contours[1];
+        FT_Outline empty_outline;
+        FT_Bitmap bitmap;
+        setup_outline_get_bitmap_empty_target(&bitmap);
+        memset(&empty_outline, 0, sizeof(empty_outline));
+        empty_outline.n_contours = 0;
+        empty_outline.n_points = 0;
+        empty_outline.points = empty_points;
+        empty_outline.tags = empty_tags;
+        empty_outline.contours = empty_contours;
+        empty_outline.flags = 0;
+        err = FT_Outline_Get_Bitmap(library, &empty_outline, &bitmap);
+        printf("{");
+        print_status(err);
+        if (err) {
+            printf(",\"output\":null}\n");
+        } else {
+            printf(",\"output\":{");
+            printf("\"return\":0,");
+            print_outline_get_bitmap_success(&bitmap, FT_RASTER_FLAG_AA);
             printf("}}\n");
         }
     } else if (streq(mode, "errors")) {

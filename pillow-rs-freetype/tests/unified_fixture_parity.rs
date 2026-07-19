@@ -22017,14 +22017,24 @@ fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
     case.subject == "ftoutln.FT_Outline_Get_Bitmap"
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
             && case.case == "invalid_render_target_errors")
-        || (case.subject == "ftimage.FT_Bitmap" && case.case == "invalid_target_buffer_errors")
+        || (case.subject == "ftimage.FT_Bitmap"
+            && matches!(
+                case.case.as_str(),
+                "empty_bitmap_is_valid" | "invalid_target_buffer_errors"
+            ))
+        || (case.subject == "ftimage.FT_RASTER_FLAG_DEFAULT"
+            && case.case == "default_monochrome_target_path")
 }
 
 fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
     match case.case.as_str() {
         "gray_lcd_modes_select_aa_flag" => "modes",
         "mono_target_uses_default_raster" => "mono",
+        "default_monochrome_target_path" if case.subject == "ftimage.FT_RASTER_FLAG_DEFAULT" => {
+            "mono"
+        }
         "null_bitmap_and_delegate_errors" => "errors",
+        "empty_bitmap_is_valid" if case.subject == "ftimage.FT_Bitmap" => "empty",
         "invalid_render_target_errors" if case.subject == "ftimage.FT_PIXEL_MODE_NONE" => {
             "invalid-none"
         }
@@ -22065,6 +22075,19 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
             );
             match FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target)) {
                 Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(0, 0, &rendered))),
+                Err(err) => Ok(error(err)),
+            }
+        }
+        "empty" => {
+            let library = FT_Init_FreeType();
+            let outline = rust_outline_get_bitmap_empty();
+            let target = rust_outline_get_bitmap_empty_target();
+            match FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target)) {
+                Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(
+                    0,
+                    FT_RASTER_FLAG_AA,
+                    &rendered,
+                ))),
                 Err(err) => Ok(error(err)),
             }
         }
@@ -22163,6 +22186,27 @@ fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "empty" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut outline = c_outline_get_bitmap_empty();
+            let mut bitmap = c_outline_get_bitmap_empty_target();
+            let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+            c_done_library(library);
+            if err == 0 {
+                Ok(ok(c_outline_get_bitmap_result_json(
+                    err,
+                    FT_RASTER_FLAG_AA,
+                    &bitmap,
+                    &[],
+                )))
+            } else {
+                Ok(error(err))
+            }
+        }
         "errors" => {
             let mut library = ptr::null_mut();
             let err = c_abi::FT_Init_FreeType(&mut library);
@@ -22251,6 +22295,21 @@ fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "empty" => {
+            let mut outline = wasm_outline_get_bitmap_empty();
+            let mut bitmap = wasm_outline_get_bitmap_empty_target();
+            let err = wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+            if err == 0 {
+                Ok(ok(wasm_outline_get_bitmap_result_json(
+                    err,
+                    FT_RASTER_FLAG_AA,
+                    &bitmap,
+                    &[],
+                )))
+            } else {
+                Ok(error(err))
+            }
+        }
         "errors" => {
             let mut outline = wasm_outline_get_bitmap_square(false);
             let mut oversized = wasm_outline_get_bitmap_square(true);
@@ -22313,6 +22372,15 @@ fn rust_outline_get_bitmap_square(oversized: bool) -> FT_OutlineSnapshot {
     }
 }
 
+fn rust_outline_get_bitmap_empty() -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: Vec::new(),
+        tags: Vec::new(),
+        contours: Vec::new(),
+        flags: 0,
+    }
+}
+
 fn rust_outline_get_bitmap_target(pixel_mode: u8) -> FT_Bitmap_C {
     rust_outline_get_bitmap_target_with_buffer(pixel_mode, ptr::null_mut())
 }
@@ -22325,6 +22393,19 @@ fn rust_outline_get_bitmap_target_with_buffer(pixel_mode: u8, buffer: *mut u8) -
         buffer,
         num_grays: 256,
         pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
+fn rust_outline_get_bitmap_empty_target() -> FT_Bitmap_C {
+    FT_Bitmap_C {
+        rows: 0,
+        width: 0,
+        pitch: 0,
+        buffer: ptr::null_mut(),
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY as u8,
         palette_mode: 0,
         palette: ptr::null_mut(),
     }
@@ -22406,6 +22487,26 @@ fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
         ],
         tags: [1, 1, 1, 1],
         contours: [3],
+        n_contours: 1,
+        n_points: 4,
+        outline: c_abi::FT_Outline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn c_outline_get_bitmap_empty() -> COutlineStorage {
+    let mut storage = COutlineStorage {
+        points: [
+            c_abi::FT_Vector { x: 0, y: 0 },
+            c_abi::FT_Vector { x: 0, y: 0 },
+            c_abi::FT_Vector { x: 0, y: 0 },
+            c_abi::FT_Vector { x: 0, y: 0 },
+        ],
+        tags: [0; 4],
+        contours: [0],
+        n_contours: 0,
+        n_points: 0,
         outline: c_abi::FT_Outline::default(),
     };
     storage.refresh();
@@ -22416,14 +22517,16 @@ struct COutlineStorage {
     points: [c_abi::FT_Vector; 4],
     tags: [u8; 4],
     contours: [u16; 1],
+    n_contours: u16,
+    n_points: u16,
     outline: c_abi::FT_Outline,
 }
 
 impl COutlineStorage {
     fn refresh(&mut self) {
         self.outline = c_abi::FT_Outline {
-            n_contours: 1,
-            n_points: 4,
+            n_contours: self.n_contours,
+            n_points: self.n_points,
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
@@ -22445,6 +22548,19 @@ fn c_outline_get_bitmap_target(pixel_mode: i32, buffer: &mut [u8]) -> c_abi::FT_
         buffer: buffer.as_mut_ptr(),
         num_grays: 256,
         pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null_mut(),
+    }
+}
+
+fn c_outline_get_bitmap_empty_target() -> c_abi::FT_Bitmap {
+    c_abi::FT_Bitmap {
+        rows: 0,
+        width: 0,
+        pitch: 0,
+        buffer: ptr::null_mut(),
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY,
         palette_mode: 0,
         palette: ptr::null_mut(),
     }
@@ -22526,6 +22642,26 @@ fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
         ],
         tags: [1, 1, 1, 1],
         contours: [3],
+        n_contours: 1,
+        n_points: 4,
+        outline: wasm_abi::FontdoneWasmOutline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn wasm_outline_get_bitmap_empty() -> WasmOutlineStorage {
+    let mut storage = WasmOutlineStorage {
+        points: [
+            wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
+            wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
+            wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
+            wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
+        ],
+        tags: [0; 4],
+        contours: [0],
+        n_contours: 0,
+        n_points: 0,
         outline: wasm_abi::FontdoneWasmOutline::default(),
     };
     storage.refresh();
@@ -22536,14 +22672,16 @@ struct WasmOutlineStorage {
     points: [wasm_abi::FontdoneWasmVector; 4],
     tags: [u8; 4],
     contours: [u16; 1],
+    n_contours: u16,
+    n_points: u16,
     outline: wasm_abi::FontdoneWasmOutline,
 }
 
 impl WasmOutlineStorage {
     fn refresh(&mut self) {
         self.outline = wasm_abi::FontdoneWasmOutline {
-            n_contours: 1,
-            n_points: 4,
+            n_contours: self.n_contours,
+            n_points: self.n_points,
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
@@ -22569,6 +22707,20 @@ fn wasm_outline_get_bitmap_target(
         buffer_len: buffer.len(),
         num_grays: 256,
         pixel_mode,
+        palette_mode: 0,
+        palette: ptr::null(),
+    }
+}
+
+fn wasm_outline_get_bitmap_empty_target() -> wasm_abi::FontdoneWasmBitmap {
+    wasm_abi::FontdoneWasmBitmap {
+        rows: 0,
+        width: 0,
+        pitch: 0,
+        buffer: ptr::null(),
+        buffer_len: 0,
+        num_grays: 256,
+        pixel_mode: FT_PIXEL_MODE_GRAY,
         palette_mode: 0,
         palette: ptr::null(),
     }
