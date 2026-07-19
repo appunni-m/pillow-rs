@@ -12,6 +12,7 @@ from fontTools.ttLib.tables._g_l_y_f import Glyph
 ROOT = Path(__file__).resolve().parents[1]
 BASE_FONT = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "metadata"
+GENERATED_SFNT_OUT_DIR = ROOT / "tests" / "fixtures" / "generated" / "sfnt"
 
 
 def save_font(path: Path, font: TTFont) -> None:
@@ -77,6 +78,12 @@ def write_missing_post() -> None:
 
 def write_malformed_controls() -> None:
     write_post_payload("post-format-unsupported.ttf", 0x0004_0000, b"")
+    write_post_payload(
+        "invalid-post-format.ttf",
+        0x0004_0000,
+        b"",
+        out_dir=GENERATED_SFNT_OUT_DIR,
+    )
     write_post_payload("post-format-20-short.ttf", 0x0002_0000, b"", table_len=32)
     write_post_payload("post-format-20-zero.ttf", 0x0002_0000, (0).to_bytes(2, "big"))
     write_post_payload(
@@ -90,11 +97,15 @@ def write_malformed_controls() -> None:
 
 
 def write_post_payload(
-    name: str, format_type: int, payload_after_header: bytes, table_len: int | None = None
+    name: str,
+    format_type: int,
+    payload_after_header: bytes,
+    table_len: int | None = None,
+    out_dir: Path = OUT_DIR,
 ) -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     font["post"].formatType = 3.0
-    path = OUT_DIR / name
+    path = out_dir / name
     save_font(path, font)
 
     data = bytearray(path.read_bytes())
