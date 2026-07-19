@@ -40,6 +40,7 @@ help:
 	@printf "  make font-fixture-sbit Rebuild compact embedded bitmap/SBIT fixtures\n"
 	@printf "  make font-fixture-sfnt Rebuild compact SFNT table fixtures\n"
 	@printf "  make font-fixture-type1 Rebuild compact Type 1 fixtures\n"
+	@printf "  make font-fixture-winfnt Rebuild compact Windows FNT fixtures\n"
 	@printf "\nBuild:\n"
 	@printf "  make build            Build the crate\n"
 	@printf "  make doc              Build crate documentation\n"
@@ -324,6 +325,10 @@ font-fixture-cff:
 .PHONY: font-fixture-type1
 font-fixture-type1:
 	$(PYTHON) scripts/build_type1_fixtures.py
+
+.PHONY: font-fixture-winfnt
+font-fixture-winfnt:
+	$(PYTHON) scripts/generate_winfnt_fixtures.py
 
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter
