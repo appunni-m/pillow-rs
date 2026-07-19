@@ -205,6 +205,20 @@ pub struct FontdoneWasmOutline {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmGlyphClass {
+    pub glyph_bbox_present: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmGlyph {
+    pub clazz: *const FontdoneWasmGlyphClass,
+    pub format: i32,
+    pub advance: FontdoneWasmVector,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_UnitVector {
     pub x: FT_F2Dot14,
     pub y: FT_F2Dot14,
@@ -1153,6 +1167,48 @@ pub extern "C" fn fontdone_wasm_outline_get_cbox(
             yMax: bbox.yMax,
         };
     }
+}
+
+fn wasm_glyph_cbox_snapshot(
+    glyph: *const FontdoneWasmGlyph,
+) -> Option<rust_ffi::FT_GlyphCBoxSnapshot> {
+    let glyph = unsafe { glyph.as_ref() }?;
+    if glyph.clazz.is_null() {
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: false,
+            has_bbox_hook: false,
+            cbox: None,
+        });
+    }
+    // SAFETY: `glyph->clazz` is non-null.  This thin WASM ABI wrapper reads
+    // only the class facade's bbox-hook presence and delegates FreeType's
+    // zero-first `FT_Glyph_Get_CBox` contract to safe Rust.
+    let clazz = unsafe { &*glyph.clazz };
+    Some(rust_ffi::FT_GlyphCBoxSnapshot {
+        has_class: true,
+        has_bbox_hook: clazz.glyph_bbox_present != 0,
+        cbox: None,
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_get_cbox(
+    glyph: *const FontdoneWasmGlyph,
+    bbox_mode: FT_UInt,
+    acbox: *mut FontdoneWasmBBox,
+) {
+    let Some(acbox) = (unsafe { acbox.as_mut() }) else {
+        return;
+    };
+    let snapshot = wasm_glyph_cbox_snapshot(glyph);
+    let mut bbox = rust_ffi::FT_BBox::default();
+    rust_ffi::FT_Glyph_Get_CBox(snapshot, bbox_mode, Some(&mut bbox));
+    *acbox = FontdoneWasmBBox {
+        xMin: bbox.xMin,
+        yMin: bbox.yMin,
+        xMax: bbox.xMax,
+        yMax: bbox.yMax,
+    };
 }
 
 #[unsafe(no_mangle)]

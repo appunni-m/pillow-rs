@@ -17,7 +17,7 @@ semantic layer, not ABI proof.
 | `FT_Glyph_Copy(FT_Glyph, FT_Glyph*)` | `ftglyph.h` | Deep-copy glyph object and return independently owned handle. | No mapping. | Implement clone for owned outline/bitmap glyphs; preserve format and advance. |
 | `FT_Glyph_Transform(FT_Glyph, FT_Matrix*, FT_Vector*)` | `ftglyph.h` | Transform outline glyph coordinates and advance; translate bitmap glyph origin as C does. | No mapping. | Add transform operations for owned glyphs. Compare transformed cbox/bbox and advance to C. |
 | `FT_Glyph_To_Bitmap(FT_Glyph*, FT_Render_Mode, FT_Vector*, FT_Bool)` | `ftglyph.h` | Convert outline glyph object to bitmap glyph in requested render mode; optionally destroy original. | No mapping. | Reuse the split render path for owned glyphs; preserve destroy semantics and translation origin. |
-| `FT_Glyph_Get_CBox(FT_Glyph, FT_UInt, FT_BBox*)` | `ftglyph.h` | Support exact bbox modes and rounding rules. | Scaler has cbox/bbox-style values; no glyph-object API. | Add bbox mode constants and fixture comparisons for all supported owned glyph formats. |
+| `FT_Glyph_Get_CBox(FT_Glyph, FT_UInt, FT_BBox*)` | `ftglyph.h` | Support exact bbox modes and rounding rules; zero non-null `acbox` before null glyph/class/bbox-hook exits and treat null `acbox` as no-op. | Safe Rust now preserves the null/no-bbox public contract through Rust FFI, C ABI, WASM ABI, and oracle fixtures; full heap glyph-object cbox support remains incomplete. | Add owned glyph snapshots for outline/bitmap/SVG bbox hooks and fixture comparisons for all supported glyph formats and bbox modes. |
 | `FT_GlyphSlotRec` | `freetype.h` | `#[repr(C)]` field order, public field names, pointer ownership, bitmap/outline union semantics, `advance`, deltas, and format. | `GlyphSlot { glyph_index, metrics, advance, format, bitmap, bitmap_left, bitmap_top }`. | Keep safe snapshot; add C ABI record with exact `FT_GlyphSlotRec` layout and stable storage owned by face. |
 | `FT_Glyph_Metrics` | `freetype.h` | Eight `FT_Pos` fields in C order, all 26.6 pixel units unless no-scale semantics apply. | `GlyphSlotMetrics` has the same semantic fields, not proven ABI layout. | Add `#[repr(C)] FT_Glyph_Metrics` and exact field-order tests. |
 | `FT_Bitmap` | `ftimage.h` | Exact rows, width, pitch, buffer pointer, num_grays, pixel_mode, palette fields. | `RenderedBitmap { width, rows, pitch, pixel_mode, num_grays, left, top, buffer }`. | Add ABI bitmap record separate from Rust-owned buffer and verify pointer/lifetime rules. |
@@ -93,6 +93,10 @@ against C FreeType rather than silently normalized.
 `FT_GLYPH_BBOX_UNSCALED = 0`, `FT_GLYPH_BBOX_SUBPIXELS = 0`,
 `FT_GLYPH_BBOX_GRIDFIT = 1`, `FT_GLYPH_BBOX_TRUNCATE = 2`, and
 `FT_GLYPH_BBOX_PIXELS = 3`.
+Pinned FreeType `src/base/ftglyph.c` zeroes non-null `acbox` before checking
+`glyph`, `glyph->clazz`, or `clazz->glyph_bbox`; this null/no-bbox behavior is
+now a real parity route.  The remaining gap is bbox-hook-backed glyph objects,
+where each class must produce the exact C cbox before mode rounding.
 
 ## Current Fontdone Behavior To Preserve As Inputs
 
@@ -126,7 +130,7 @@ Every promoted symbol must have exact comparisons against the pinned C oracle.
 | Render modes | For normal/light/mono/LCD/LCD_V/SDF: exact mode dispatch, output pixel mode, dimensions, bearings, pitch, byte buffer/hash, and errors for unsupported modes. LIGHT must compare both direct render and load-target behavior. |
 | Load flags | Exact behavior for individual flags and meaningful combinations: default, render, no hinting, force autohint, target modes, monochrome, no bitmap, no recurse, vertical layout, linear design, no scale, color/SVG flags, and invalid combinations. |
 | Heap glyph objects | `FT_Get_Glyph` copy from slot, deep copy identity for `FT_Glyph_Copy`, transform matrix/delta effects, `FT_Glyph_To_Bitmap` conversion bytes and origin, `destroy` ownership behavior, and `FT_Done_Glyph` lifetime/error safety. |
-| CBox/BBox | Exact `FT_Glyph_Get_CBox` results for unscaled/subpixels, gridfit, truncate, and pixels modes across outline and bitmap glyphs, including negative coordinates and empty glyphs. |
+| CBox/BBox | Exact `FT_Glyph_Get_CBox` results for unscaled/subpixels, gridfit, truncate, and pixels modes across outline and bitmap glyphs, including negative coordinates and empty glyphs. Null glyph, null class, no bbox hook, and null output pointer are already covered by the public null/no-bbox route. |
 
 Do not promote a semantic wrapper result as ABI compatibility unless the exact
 C record layout, numeric constants, side effects, and output bytes have a

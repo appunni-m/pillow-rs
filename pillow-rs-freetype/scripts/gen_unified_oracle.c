@@ -4984,6 +4984,50 @@ static void print_glyph_cbox_payload(FT_GlyphSlot slot, const char* modes_csv) {
     FT_Done_Glyph(glyph);
 }
 
+static FT_BBox parse_bbox_arg(const char* arg) {
+    FT_BBox bbox = {0, 0, 0, 0};
+    sscanf(arg, "%ld,%ld,%ld,%ld", &bbox.xMin, &bbox.yMin, &bbox.xMax, &bbox.yMax);
+    return bbox;
+}
+
+static void print_glyph_cbox_probe_row(const char* probe, FT_BBox bbox) {
+    printf("{\"probe\":\"%s\",", probe);
+    print_bbox_named("bbox", bbox);
+    printf("}");
+}
+
+static int emit_glyph_cbox_null_or_no_bbox(const char* sentinel_arg, FT_UInt bbox_mode) {
+    FT_BBox bbox;
+    FT_GlyphRec glyph;
+    FT_Glyph_Class clazz;
+    memset(&glyph, 0, sizeof(glyph));
+    memset(&clazz, 0, sizeof(clazz));
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+
+    bbox = parse_bbox_arg(sentinel_arg);
+    FT_Glyph_Get_CBox(NULL, bbox_mode, &bbox);
+    print_glyph_cbox_probe_row("null_glyph", bbox);
+
+    bbox = parse_bbox_arg(sentinel_arg);
+    FT_Glyph_Get_CBox(&glyph, bbox_mode, &bbox);
+    printf(",");
+    print_glyph_cbox_probe_row("null_clazz", bbox);
+
+    bbox = parse_bbox_arg(sentinel_arg);
+    glyph.clazz = &clazz;
+    FT_Glyph_Get_CBox(&glyph, bbox_mode, &bbox);
+    printf(",");
+    print_glyph_cbox_probe_row("no_bbox_hook", bbox);
+
+    FT_Glyph_Get_CBox(&glyph, bbox_mode, NULL);
+    printf(",{\"probe\":\"null_acbox\",\"bbox\":null}");
+    printf("],\"write_classification\":\"non-null acbox zeroed before glyph/class/bbox-hook checks\"}}\n");
+    return 0;
+}
+
 static void print_bitmap_glyph_payload(FT_BitmapGlyph glyph, int destroy) {
     FT_Bitmap* bitmap = &glyph->bitmap;
     long len = 0;
@@ -14272,6 +14316,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-cbox-null-inputs")) {
         return emit_outline_get_cbox_null_inputs(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--glyph-get-cbox-null-or-no-bbox")) {
+        return emit_glyph_cbox_null_or_no_bbox(argv[2], (FT_UInt)strtoul(argv[3], NULL, 10));
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);

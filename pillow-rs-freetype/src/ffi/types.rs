@@ -808,6 +808,13 @@ pub struct FT_GlyphRec {
     pub advance: FT_Vector,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FT_GlyphCBoxSnapshot {
+    pub has_class: bool,
+    pub has_bbox_hook: bool,
+    pub cbox: Option<FT_BBox>,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_BitmapGlyphRec {

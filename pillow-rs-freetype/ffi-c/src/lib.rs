@@ -74,6 +74,7 @@ pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
 pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
+pub type FT_Glyph = *mut FT_GlyphRec;
 pub type FT_CharMap = *mut FT_CharMapRec;
 
 #[repr(C)]
@@ -154,6 +155,28 @@ pub struct FT_Outline {
     pub tags: *mut FT_Byte,
     pub contours: *mut FT_UShort,
     pub flags: FT_Int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Glyph_Class {
+    pub glyph_size: FT_Long,
+    pub glyph_format: FT_Glyph_Format,
+    pub glyph_init: FT_Pointer,
+    pub glyph_done: FT_Pointer,
+    pub glyph_copy: FT_Pointer,
+    pub glyph_transform: FT_Pointer,
+    pub glyph_bbox: FT_Pointer,
+    pub glyph_prepare: FT_Pointer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_GlyphRec {
+    pub library: FT_Pointer,
+    pub clazz: *const FT_Glyph_Class,
+    pub format: FT_Glyph_Format,
+    pub advance: FT_Vector,
 }
 
 #[repr(C)]
@@ -1807,6 +1830,49 @@ pub extern "C" fn FT_Outline_Get_CBox(outline: *const FT_Outline, acbox: *mut FT
     // SAFETY: `acbox` is non-null and the caller provides writable `FT_BBox` storage.
     unsafe {
         *acbox = FT_BBox {
+            xMin: bbox.xMin,
+            yMin: bbox.yMin,
+            xMax: bbox.xMax,
+            yMax: bbox.yMax,
+        };
+    }
+}
+
+fn c_glyph_cbox_snapshot(glyph: FT_Glyph) -> Option<rust_ffi::FT_GlyphCBoxSnapshot> {
+    let glyph = non_null_mut(glyph)?;
+    // SAFETY: the public C ABI accepts caller-owned `FT_Glyph` records; this
+    // thin wrapper reads only the root record and the class pointer nullness
+    // needed to reproduce FreeType's `FT_Glyph_Get_CBox` early-return order.
+    let glyph = unsafe { glyph.as_ref() };
+    if glyph.clazz.is_null() {
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: false,
+            has_bbox_hook: false,
+            cbox: None,
+        });
+    }
+    // SAFETY: `glyph->clazz` is non-null.  The wrapper reads the public-sized
+    // class facade to observe whether `glyph_bbox` is present, then delegates
+    // the zero/no-bbox behavior to safe Rust.
+    let clazz = unsafe { &*glyph.clazz };
+    Some(rust_ffi::FT_GlyphCBoxSnapshot {
+        has_class: true,
+        has_bbox_hook: !clazz.glyph_bbox.is_null(),
+        cbox: None,
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Glyph_Get_CBox(glyph: FT_Glyph, bbox_mode: FT_UInt, acbox: *mut FT_BBox) {
+    let Some(acbox) = non_null_mut(acbox) else {
+        return;
+    };
+    let snapshot = c_glyph_cbox_snapshot(glyph);
+    let mut bbox = rust_ffi::FT_BBox::default();
+    rust_ffi::FT_Glyph_Get_CBox(snapshot, bbox_mode, Some(&mut bbox));
+    // SAFETY: `acbox` is non-null and the caller provides writable `FT_BBox` storage.
+    unsafe {
+        *acbox.as_ptr() = FT_BBox {
             xMin: bbox.xMin,
             yMin: bbox.yMin,
             xMax: bbox.xMax,

@@ -22,10 +22,10 @@ use super::convert::{
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor,
-    FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix, FT_Memory,
-    FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode,
-    FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int, FT_Int32, FT_LcdFilter,
+    FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix,
+    FT_Memory, FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos,
+    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType,
     FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
     TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
@@ -1522,6 +1522,60 @@ pub fn FT_Outline_Get_CBox(outline: Option<&FT_OutlineSnapshot>, acbox: Option<&
         xMax: x_max,
         yMax: y_max,
     };
+}
+
+fn ft_pix_floor(value: FT_Pos) -> FT_Pos {
+    value & !63
+}
+
+fn ft_pix_ceil(value: FT_Pos) -> FT_Pos {
+    (value + 63) & !63
+}
+
+fn ft_glyph_bbox_mode(cbox: FT_BBox, bbox_mode: FT_UInt) -> FT_BBox {
+    match bbox_mode {
+        1 => FT_BBox {
+            xMin: ft_pix_floor(cbox.xMin),
+            yMin: ft_pix_floor(cbox.yMin),
+            xMax: ft_pix_ceil(cbox.xMax),
+            yMax: ft_pix_ceil(cbox.yMax),
+        },
+        2 => FT_BBox {
+            xMin: cbox.xMin >> 6,
+            yMin: cbox.yMin >> 6,
+            xMax: cbox.xMax >> 6,
+            yMax: cbox.yMax >> 6,
+        },
+        3 => FT_BBox {
+            xMin: ft_pix_floor(cbox.xMin) >> 6,
+            yMin: ft_pix_floor(cbox.yMin) >> 6,
+            xMax: ft_pix_ceil(cbox.xMax) >> 6,
+            yMax: ft_pix_ceil(cbox.yMax) >> 6,
+        },
+        _ => cbox,
+    }
+}
+
+pub fn FT_Glyph_Get_CBox(
+    glyph: Option<FT_GlyphCBoxSnapshot>,
+    bbox_mode: FT_UInt,
+    acbox: Option<&mut FT_BBox>,
+) {
+    let Some(acbox) = acbox else {
+        return;
+    };
+    // FreeType `src/base/ftglyph.c` zeroes `acbox` before checking `glyph`,
+    // `glyph->clazz`, or `clazz->glyph_bbox`; only a NULL `acbox` is a no-op.
+    *acbox = FT_BBox::default();
+    let Some(glyph) = glyph else {
+        return;
+    };
+    if !glyph.has_class || !glyph.has_bbox_hook {
+        return;
+    }
+    if let Some(cbox) = glyph.cbox {
+        *acbox = ft_glyph_bbox_mode(cbox, bbox_mode);
+    }
 }
 
 pub fn FT_Outline_Get_BBox(
