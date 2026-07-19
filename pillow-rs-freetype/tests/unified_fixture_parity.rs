@@ -11532,6 +11532,116 @@ fn wasm_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
     })?))
 }
 
+fn renderer_format_value(value: &Value) -> Result<FT_Glyph_Format, String> {
+    if let Some(text) = value.as_str() {
+        return match text {
+            "FT_GLYPH_FORMAT_OUTLINE" => Ok(FT_GLYPH_FORMAT_OUTLINE),
+            "FT_GLYPH_FORMAT_BITMAP" => Ok(FT_GLYPH_FORMAT_BITMAP),
+            "FT_GLYPH_FORMAT_SVG" => Ok(FT_GLYPH_FORMAT_SVG),
+            "FT_GLYPH_FORMAT_NONE" => Ok(FT_GLYPH_FORMAT_NONE),
+            "FT_MAKE_TAG('?', '?', '?', '?')" => Ok(0x3f3f_3f3f),
+            other => {
+                i64_value(&Value::String(other.to_string()), "renderer format").and_then(|format| {
+                    FT_Glyph_Format::try_from(format).map_err(|err| {
+                        format!("renderer format does not fit FT_Glyph_Format: {err}")
+                    })
+                })
+            }
+        };
+    }
+    let format = i64_value(value, "renderer format")?;
+    FT_Glyph_Format::try_from(format)
+        .map_err(|err| format!("renderer format does not fit FT_Glyph_Format: {err}"))
+}
+
+fn renderer_formats_param(params: &Value) -> Result<Vec<FT_Glyph_Format>, String> {
+    if let Some(values) = params.get("formats").and_then(Value::as_array) {
+        return values.iter().map(renderer_format_value).collect();
+    }
+    let value = params
+        .get("format")
+        .ok_or_else(|| "FT_Get_Renderer requires format or formats".to_string())?;
+    Ok(vec![renderer_format_value(value)?])
+}
+
+fn renderer_formats_arg(params: &Value) -> Result<String, String> {
+    Ok(renderer_formats_param(params)?
+        .into_iter()
+        .map(|format| format.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn renderer_class_rows<F>(params: &Value, mut lookup: F) -> Result<Value, String>
+where
+    F: FnMut(FT_Glyph_Format) -> Option<(&'static str, FT_Glyph_Format, bool, bool)>,
+{
+    let rows = renderer_formats_param(params)?
+        .into_iter()
+        .map(|format| {
+            if let Some((module_name, glyph_format, has_render_glyph, has_raster_class)) =
+                lookup(format)
+            {
+                json!({
+                    "format": format,
+                    "renderer_present": true,
+                    "renderer_class": {
+                        "module_name": module_name,
+                        "glyph_format": glyph_format,
+                        "has_render_glyph": has_render_glyph,
+                        "has_raster_class": has_raster_class,
+                    },
+                })
+            } else {
+                json!({
+                    "format": format,
+                    "renderer_present": false,
+                    "renderer_class": null,
+                })
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "format_results": rows }))
+}
+
+fn rust_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let library = if lifecycle_handle_param_is_null(&case.inputs.params, "library") {
+        None
+    } else {
+        Some(FT_Init_FreeType())
+    };
+    Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
+        FT_Library_Renderer_Class(library.as_ref(), format)
+    })?))
+}
+
+fn c_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    let use_null = lifecycle_handle_param_is_null(&case.inputs.params, "library");
+    if !use_null {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let output = renderer_class_rows(&case.inputs.params, |format| {
+        c_abi::abi_support_library_renderer_class(library, format)
+    })?;
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let use_null = lifecycle_handle_param_is_null(&case.inputs.params, "library");
+    Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
+        if use_null {
+            wasm_abi::abi_support_null_renderer_class(format)
+        } else {
+            wasm_abi::abi_support_default_renderer_class(format)
+        }
+    })?))
+}
+
 fn done_mm_var_library_present(params: &Value) -> i32 {
     i32::from(!param_is_null(params, "library"))
 }
@@ -14633,6 +14743,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             string_param(params, "flag")?.to_string(),
             module_flag_names_arg(params)?,
         ]),
+        "ftrender.get_renderer" => Ok(vec![
+            "--get-renderer".to_string(),
+            if lifecycle_handle_param_is_null(params, "library") {
+                "null".to_string()
+            } else {
+                "initialized".to_string()
+            },
+            renderer_formats_arg(params)?,
+        ]),
         "ftmm.done_mm_var" => Ok(vec![
             "--done-mm-var".to_string(),
             done_mm_var_library_present(params).to_string(),
@@ -15563,6 +15682,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
+        "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
@@ -16250,6 +16370,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
+        "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
@@ -16855,6 +16976,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
+        "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),

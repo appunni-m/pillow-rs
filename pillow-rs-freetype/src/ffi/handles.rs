@@ -2835,6 +2835,30 @@ pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Opti
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Renderer_Class(
+    library: Option<&FT_Library>,
+    format: FT_Glyph_Format,
+) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
+    let library = library?;
+    // FreeType 2.14.3 `FT_Get_Renderer` (`src/base/ftrender.c`) returns the
+    // first registered renderer whose `glyph_format` matches the requested
+    // format.  Keep only class metadata observable through public renderer
+    // handles; callers must not depend on raw pointer identity.
+    for name in library.module_names {
+        let (observable_name, renderer_format, has_raster_class) = match *name {
+            "smooth" | "raster1" | "sdf" => (*name, FT_GLYPH_FORMAT_OUTLINE, true),
+            "bsdf" => ("bsdf", FT_GLYPH_FORMAT_BITMAP, true),
+            "svg" => ("ot-svg", FT_GLYPH_FORMAT_SVG, false),
+            _ => continue,
+        };
+        if renderer_format == format {
+            return Some((observable_name, renderer_format, true, has_raster_class));
+        }
+    }
+    None
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Default_Module_Names(library: Option<&FT_Library>) -> &'static [&'static str] {
     library.map_or(&[], |library| library.module_names)
 }

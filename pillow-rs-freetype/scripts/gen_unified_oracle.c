@@ -10483,6 +10483,58 @@ static int emit_inspect_module_flags(int argc, char** argv) {
     return 0;
 }
 
+static void print_renderer_row(FT_Library library, long format) {
+    FT_Renderer renderer = FT_Get_Renderer(library, (FT_Glyph_Format)format);
+    printf("{\"format\":%ld,\"renderer_present\":%s,\"renderer_class\":",
+           format,
+           renderer ? "true" : "false");
+    if (!renderer || !renderer->clazz) {
+        printf("null}");
+        return;
+    }
+    FT_Renderer_Class* clazz = renderer->clazz;
+    const char* module_name = NULL;
+    if (renderer->root.clazz && renderer->root.clazz->module_name) {
+        module_name = renderer->root.clazz->module_name;
+    } else if (clazz->root.module_name) {
+        module_name = clazz->root.module_name;
+    } else {
+        module_name = "";
+    }
+    printf("{\"module_name\":\"%s\",\"glyph_format\":%ld,\"has_render_glyph\":%s,\"has_raster_class\":%s}}",
+           module_name,
+           (long)clazz->glyph_format,
+           clazz->render_glyph ? "true" : "false",
+           clazz->raster_class ? "true" : "false");
+}
+
+static int emit_get_renderer(int argc, char** argv) {
+    if (argc != 4) return 2;
+    FT_Library library = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (!streq(argv[2], "null")) {
+        err = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"format_results\":[");
+    const char* cursor = argv[3];
+    int first = 1;
+    while (*cursor) {
+        char* endptr = NULL;
+        long format = strtol(cursor, &endptr, 10);
+        if (endptr == cursor) break;
+        if (!first) printf(",");
+        first = 0;
+        print_renderer_row(library, format);
+        if (*endptr != ',') break;
+        cursor = endptr + 1;
+    }
+    printf("]}}\n");
+    if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_add_default_modules(int argc, char** argv) {
     int action = atoi(argv[2]);
     if (action == 1) {
@@ -14029,6 +14081,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--inspect-module-flags")) {
         return emit_inspect_module_flags(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--get-renderer")) {
+        return emit_get_renderer(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--done-mm-var")) {
         return emit_done_mm_var(argc, argv);

@@ -1196,6 +1196,12 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
+    if row.case_id == "ftrender.FT_Get_Renderer.null_library_returns_null":
+        return (
+            "pinned FreeType 2.14.3 FT_Get_Renderer(NULL, ...) returns "
+            "FT_Err_Invalid_Library_Handle (35), not the fixture's declared "
+            "success/null observation; exact success would be a green placeholder"
+        )
     if not operation_is_real_parity(row.operation):
         return None
     unresolved_future_asset_cases = {
@@ -1626,6 +1632,8 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot": "FT_TrueTypeGX_Validate bsln output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot": "FT_TrueTypeGX_Validate feat table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftrender.FT_Get_Renderer.outline_renderer_lookup_success": "FT_Get_Renderer outline renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftrender.FT_Get_Renderer.bitmap_svg_and_unknown_formats": "FT_Get_Renderer bitmap/SVG/outline/unknown renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_just.validates_just_table_slot": "FT_TrueTypeGX_Validate just table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot": "FT_TrueTypeGX_Validate just output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_kern.validates_gx_kern_table_slot": "FT_TrueTypeGX_Validate kern table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

@@ -1334,6 +1334,14 @@ pub fn abi_support_library_module_flags(library: FT_Library, name: &str) -> Opti
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_renderer_class(
+    library: FT_Library,
+    format: FT_Glyph_Format,
+) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
+    rust_ffi::FT_Library_Renderer_Class(library_ref(library), format)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_default_module_names(library: FT_Library) -> &'static [&'static str] {
     rust_ffi::FT_Library_Default_Module_Names(library_ref(library))
 }
