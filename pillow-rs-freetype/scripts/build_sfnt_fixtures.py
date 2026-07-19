@@ -13,6 +13,7 @@ from fontTools.ttLib.tables.DefaultTable import DefaultTable
 ROOT = Path(__file__).resolve().parents[1]
 BASE_FONT = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "sfnt"
+LEGACY_SYNTHETIC_SFNT_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "synthetic" / "sfnt"
 GENERATED_OUT_DIR = ROOT / "tests" / "fixtures" / "generated" / "sfnt"
 MALFORMED_TTC_OUT_DIR = ROOT / "tests" / "fixtures" / "malformed" / "ttc"
 
@@ -31,6 +32,14 @@ def save_generated_font(name: str, font: TTFont) -> None:
     if out.exists() or out.is_symlink():
         out.unlink()
     font.save(out, reorderTables=True)
+
+
+def save_synthetic_sfnt(name: str, data: bytes) -> None:
+    LEGACY_SYNTHETIC_SFNT_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = LEGACY_SYNTHETIC_SFNT_OUT_DIR / name
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    out.write_bytes(data)
 
 
 def save_malformed_ttc(name: str, data: bytes) -> None:
@@ -151,6 +160,18 @@ def write_missing_hmtx() -> None:
     save_generated_font("missing-hmtx.ttf", font)
 
 
+def write_recognized_broken_sfnt() -> None:
+    # FreeType's SFNT driver recognizes the 0x00010000 scaler type before it
+    # validates the table directory.  A directory declaring zero tables is a
+    # reproducible future-route control; pinned C currently reports public
+    # error 85 for this input, so exact Invalid_File_Format parity remains
+    # pending until a better C-observable fixture is found.
+    save_synthetic_sfnt(
+        "recognized-broken-sfnt.ttf",
+        b"\x00\x01\x00\x00" + b"\x00\x00" + b"\x00\x00" + b"\x00\x00" + b"\x00\x00",
+    )
+
+
 def write_ttc_count_overflow() -> None:
     # FreeType 2.14.3 sfnt/sfobjs.c rejects this TTC header as
     # FT_Err_Array_Too_Large because the declared face-count makes the offset
@@ -171,6 +192,7 @@ def main() -> None:
     write_vertical_present()
     write_no_os2()
     write_missing_hmtx()
+    write_recognized_broken_sfnt()
     write_ttc_count_overflow()
 
 

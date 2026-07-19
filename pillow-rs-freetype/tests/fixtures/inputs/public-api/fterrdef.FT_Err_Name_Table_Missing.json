@@ -98,6 +98,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",
@@ -153,6 +154,7 @@
         },
         "compare": {
           "mode": "exact_error",
+          "compare_error_output": true,
           "paths": [
             "error",
             "error_symbol",

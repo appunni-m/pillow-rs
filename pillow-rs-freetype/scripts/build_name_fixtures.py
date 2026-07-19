@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE_STATIC = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 BASE_VARIABLE = ROOT / "tests" / "fixtures" / "fonts" / "variable" / "compact-variable.ttf"
 NAME_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "names"
+LEGACY_ASSET_FONT_OUT_DIR = ROOT / "tests" / "fixtures" / "fixtures" / "assets" / "fonts"
 VARIABLE_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "variable"
 
 
@@ -291,6 +292,28 @@ def write_missing_name_table() -> None:
     if path.exists() or path.is_symlink():
         path.unlink()
     font.save(path, reorderTables=True)
+    input_path = LEGACY_ASSET_FONT_OUT_DIR / "name_table_missing.ttf"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    if input_path.exists() or input_path.is_symlink():
+        input_path.unlink()
+    font.save(input_path, reorderTables=True)
+
+
+def write_bad_storage_name_table() -> None:
+    # This intentionally malformed name table documents the future
+    # Name_Table_Missing route gap.  Pinned FreeType 2.14.3 currently exposes
+    # public error 3 for this generated face-open input, so the corresponding
+    # public row remains pending until a C-observable 0x91 fixture is found.
+    payload = (
+        (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (6).to_bytes(2, "big")
+    )
+    write_name_payload(
+        BASE_STATIC,
+        LEGACY_ASSET_FONT_OUT_DIR / "name_table_bad_storage.ttf",
+        payload,
+    )
 
 
 def write_preferred_family_distinct() -> None:
@@ -705,6 +728,7 @@ def main() -> None:
     write_format1_invalid_langtag_references()
     write_format1_prestorage_strings()
     write_missing_name_table()
+    write_bad_storage_name_table()
     write_preferred_family_distinct()
     write_preferred_subfamily_distinct()
     write_preferred_family_subfamily_distinct()

@@ -8015,3 +8015,45 @@ runtime_parity: passed=0 failed=1 total=1
 failure_buckets=rust ffi:value:1
 rust ffi: fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected requires an exact C error, but the oracle returned ok (backend=Status { kind: Ok, error_code: 0 })
 ```
+
+### Issue Set Current: generated SFNT future-asset batch
+
+Baseline before this batch:
+
+- Route audit at `02dd868a1`: `real-parity=4462`,
+  `pending-route=16`, `pending-core=7`, `generic-fallback=501`.
+
+Maintained generators now emit reproducible assets for these previously missing
+paths:
+
+- `generated/sfnt/invalid-post-format.ttf`
+- `fixtures/assets/fonts/name_table_bad_storage.ttf`
+- `fixtures/assets/fonts/name_table_missing.ttf`
+- `fonts/synthetic/sfnt/recognized-broken-sfnt.ttf`
+
+Exact promotion findings:
+
+- `fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected`:
+  generated unsupported-post-format SFNT opens successfully in pinned C
+  (`FT_Err_Ok`), so this face-open row remains pending.
+- `fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds`:
+  generated bad-storage `name` table returns pinned-C public error `3`, not
+  `FT_Err_Name_Table_Missing`.
+- `fterrdef.FT_Err_Name_Table_Missing.sfnt_without_name_table`: generated
+  no-name-table SFNT opens successfully in pinned C (`FT_Err_Ok`).
+- `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`:
+  generated zero-table SFNT makes pinned C return public error `85`, while
+  Rust returns `3`.
+
+The route audit intentionally keeps these as `pending-route` until a fixture
+hits the declared pinned-C public error path, or the fixture rows are moved to
+the public endpoint that actually observes the condition. Counting these as
+`generic-error-fallback` or `real-parity` would be a green placeholder.
+
+Rejected exact checks:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Name_Table_Missing
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt
+```
