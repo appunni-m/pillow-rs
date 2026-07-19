@@ -13,11 +13,20 @@ from fontTools.ttLib.tables.DefaultTable import DefaultTable
 ROOT = Path(__file__).resolve().parents[1]
 BASE_FONT = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "sfnt"
+GENERATED_OUT_DIR = ROOT / "tests" / "fixtures" / "generated" / "sfnt"
 
 
 def save_font(name: str, font: TTFont) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / name
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
+def save_generated_font(name: str, font: TTFont) -> None:
+    GENERATED_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = GENERATED_OUT_DIR / name
     if out.exists() or out.is_symlink():
         out.unlink()
     font.save(out, reorderTables=True)
@@ -125,6 +134,14 @@ def write_no_os2() -> None:
     save_font("no-os2.ttf", font)
 
 
+def write_missing_hmtx() -> None:
+    font = base_font()
+    # FreeType 2.14.3 sfnt/sfobjs.c reports FT_Err_Hmtx_Table_Missing when
+    # opening a TrueType SFNT with `hhea` present but no `hmtx` metrics table.
+    del font["hmtx"]
+    save_generated_font("missing-hmtx.ttf", font)
+
+
 def main() -> None:
     write_basic()
     write_basic_alias("pclt-missing.ttf")
@@ -134,6 +151,7 @@ def main() -> None:
     write_pclt_version_zero()
     write_vertical_present()
     write_no_os2()
+    write_missing_hmtx()
 
 
 if __name__ == "__main__":
