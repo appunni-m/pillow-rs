@@ -8350,6 +8350,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmodapi.FT_Property_Set.rejects_null_arguments"
             || case.case_id == "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
             || case.case_id == "ftmodapi.FT_Property_Set.invalid_property_or_value"
+            || case.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_library"
+            || case.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_weights"
             || case.case_id == "ftmodapi.FT_Reference_Library.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_missing_or_foreign_module"
