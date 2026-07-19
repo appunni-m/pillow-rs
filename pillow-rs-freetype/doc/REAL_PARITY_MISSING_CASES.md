@@ -6372,6 +6372,55 @@ green-row opportunities:
 
 ## Candidate Conversion Buckets
 
+### Issue Set BI: `ftimage` `FT_Outline_Get_Bitmap` route audit batch
+
+Plan:
+
+1. Limit the batch to rows sharing `operation=ftoutln.outline_get_bitmap`.
+2. Run every candidate row through the focused unified parity target before
+   changing route-audit classification.
+3. Promote only rows that already compare through pinned C oracle, Rust FFI,
+   C ABI, and WASM ABI.
+4. Keep unrelated bytecode, BDF, and `FT_Outline_Render` rows out of this
+   batch until their runner dependencies are fixed.
+
+Promoted rows:
+
+- `ftimage.FT_Bitmap.empty_bitmap_is_valid`
+- `ftimage.FT_RASTER_FLAG_DEFAULT.default_monochrome_target_path`
+
+Focused verification before promotion:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_Bitmap.empty_bitmap_is_valid
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_RASTER_FLAG_DEFAULT.default_monochrome_target_path
+```
+
+Each focused row passed exact runtime parity with `passed=1 failed=0 total=1`.
+
+Rejected probes:
+
+- Bytecode `load_glyph` error rows for invalid jump, jump past range, divide by
+  zero, invalid opcode, stack overflow, too few arguments, and nested
+  `FDEF`/`IDEF` were not promoted.  The current oracle argument resolver maps
+  symbolic `glyph_index=fixture_defined_error_glyph` to glyph `0`, so the C
+  oracle returns top-level success.  These need maintained fixture-defined
+  glyph-index resolution before exact-error classification can be real.
+- BDF success rows were not promoted.  The route-audit classifier has real
+  handling for BDF error rows only; success rows still need explicit runtime
+  runner/oracle support.
+- Dropout rows were not promoted:
+  `ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior`,
+  `ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior`, and
+  `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior` still
+  reference missing future fixtures
+  `outlines/synthetic/dropout-thin-stems-scantype.json` and
+  `outlines/synthetic/dropout-stubs-scantype.json`.  Mapping them to the
+  generic square route would be a green placeholder, not real dropout parity.
+- `FT_Outline_Render` rows with missing render fixtures were not promoted.
+  They need fixture loading plus runtime support for the specific render case,
+  not just route-audit metadata.
+
 ### Issue Set BH: FT_Outline lifecycle/mutation invalid matrices need exact error-output support
 
 The success rows for `FT_Outline_Copy`, `FT_Outline_New`,

@@ -1258,6 +1258,10 @@ def font_format_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
+    ftimage_outline_get_bitmap_cases = {
+        ("ftimage.FT_Bitmap", "empty_bitmap_is_valid"),
+        ("ftimage.FT_RASTER_FLAG_DEFAULT", "default_monochrome_target_path"),
+    }
     if (
         row.subject == "ftoutln.FT_Outline_Get_Bitmap"
         and row.operation == "ftoutln.outline_get_bitmap"
@@ -1269,6 +1273,11 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.operation == "ftoutln.outline_get_bitmap"
     ):
         return "FT_PIXEL_MODE_NONE invalid FT_Outline_Get_Bitmap target validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        (row.subject, row.case) in ftimage_outline_get_bitmap_cases
+        and row.operation == "ftoutln.outline_get_bitmap"
+    ):
+        return "ftimage FT_Outline_Get_Bitmap behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 
