@@ -2120,6 +2120,26 @@ pub fn FT_Outline_EmboldenXY(
     FT_Err_Ok
 }
 
+pub fn FT_Outline_GetInsideBorder(outline: Option<&FT_OutlineSnapshot>) -> FT_Int {
+    // FreeType `src/base/ftstroke.c:35-42` delegates entirely to
+    // `FT_Outline_Get_Orientation`.
+    if FT_Outline_Get_Orientation(outline) == FT_ORIENTATION_TRUETYPE as FT_Orientation {
+        FT_STROKER_BORDER_RIGHT as FT_Int
+    } else {
+        FT_STROKER_BORDER_LEFT as FT_Int
+    }
+}
+
+pub fn FT_Outline_GetOutsideBorder(outline: Option<&FT_OutlineSnapshot>) -> FT_Int {
+    // FreeType `src/base/ftstroke.c:48-55` delegates entirely to
+    // `FT_Outline_Get_Orientation`.
+    if FT_Outline_Get_Orientation(outline) == FT_ORIENTATION_TRUETYPE as FT_Orientation {
+        FT_STROKER_BORDER_LEFT as FT_Int
+    } else {
+        FT_STROKER_BORDER_RIGHT as FT_Int
+    }
+}
+
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
     let Some(outline) = outline else {
         return;

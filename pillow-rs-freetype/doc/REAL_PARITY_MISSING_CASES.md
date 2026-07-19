@@ -42,6 +42,73 @@ Parity-only rule for this phase:
   against pinned C FreeType through Rust FFI, thin C ABI, and WASM ABI, or when
   the row is explicitly documented as a real unsupported/pending public surface.
 
+### Issue Set Current: outline orientation mutation plus stroker border helpers
+
+Previous blockers:
+
+- `ftoutln.FT_Outline_Get_Orientation.transformed_and_reversed_outlines` was
+  classified through generic fallback even though the public behavior is
+  deterministic: FreeType mutates outline point order/flags through
+  `FT_Outline_Reverse` and matrix sign through `FT_Outline_Transform`, then
+  reports orientation from the mutated outline.
+- `FT_Outline_GetInsideBorder` and `FT_Outline_GetOutsideBorder` rows were
+  generic fallback or stale `required_future_asset` rows. Their native C
+  behavior is a thin delegation to `FT_Outline_Get_Orientation` in
+  `freetype/src/base/ftstroke.c`.
+- The shared `ftstroke.outline_border_orientation_pair` parity helper initially
+  selected the inside-border endpoint from the operation name; the outside
+  delegation row uses the same shared operation name, so endpoint dispatch must
+  use the subject/case id as well.
+
+Promoted rows:
+
+- `ftoutln.FT_Outline_Get_Orientation.transformed_and_reversed_outlines`
+- `ftstroke.FT_Outline_GetInsideBorder.truetype_orientation_returns_right`
+- `ftstroke.FT_Outline_GetInsideBorder.non_truetype_orientation_returns_left`
+- `ftstroke.FT_Outline_GetInsideBorder.orientation_delegation`
+- `ftstroke.FT_Outline_GetOutsideBorder.truetype_orientation_returns_left`
+- `ftstroke.FT_Outline_GetOutsideBorder.non_truetype_orientation_returns_right`
+- `ftstroke.FT_Outline_GetOutsideBorder.orientation_delegation`
+
+Verified progress:
+
+- Exact parity passed for all seven promoted rows through Rust FFI, thin C ABI,
+  WASM ABI, and pinned C FreeType.
+- Route audit moved seven rows from `generic-fallback` to `real-parity`.
+- Current route audit after the change: `real-parity` `4191`,
+  `generic-fallback` `674`, `pending-route` `63`, `pending-core` `13`.
+- Full refreshed parity remains green: `7157 / 7157` runnable rows passed with
+  `77` pending. The runtime total did not increase because these rows were
+  already runnable as generic fallback; this change makes them exact maintained
+  real-parity routes.
+
+Focused non-coverage results:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_Outline_Get_Orientation.transformed_and_reversed_outlines
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Outline_GetInsideBorder
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Outline_GetOutsideBorder
+```
+
+Results:
+
+- `FT_Outline_Get_Orientation.transformed_and_reversed_outlines`: `1 / 1`
+  focused runtime row passed, `0` failed, `0` pending.
+- `FT_Outline_GetInsideBorder`: `3 / 3` focused runtime rows passed, `0`
+  failed, `0` pending.
+- `FT_Outline_GetOutsideBorder`: `3 / 3` focused runtime rows passed, `0`
+  failed, `0` pending.
+
+Rejected related probe:
+
+- `ftlist` list mutation routes were not promoted in this batch. Exact
+  `FT_List_Add`, `FT_List_Remove`, and `FT_List_Find` parity requires
+  dereferencing and mutating caller-owned raw `FT_ListRec` / `FT_ListNodeRec`
+  topology. That would put pointer-topology logic in the safe `fontdone` core,
+  which is blocked by the project invariant that `fontdone` remains
+  `#![deny(unsafe_code)]`. Keep those rows pending until a design preserves
+  the thin-wrapper/core-safety boundary.
+
 ### Issue Set Current: named-instance memory-face stale route plus rejected exact-error batch
 
 Previous blocker:

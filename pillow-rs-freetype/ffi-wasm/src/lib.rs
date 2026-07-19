@@ -33,6 +33,7 @@ pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
 pub type FT_TrueTypeEngineType = i32;
 pub type FT_Orientation = i32;
+pub type FT_StrokerBorder = i32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -1128,6 +1129,22 @@ pub extern "C" fn fontdone_wasm_outline_embolden_xy(
         copy_outline_snapshot_to_wasm(outline, &snapshot, false);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_inside_border(
+    outline: *const FontdoneWasmOutline,
+) -> FT_StrokerBorder {
+    let snapshot = outline_snapshot_from_wasm(outline);
+    rust_ffi::FT_Outline_GetInsideBorder(snapshot.as_ref()) as FT_StrokerBorder
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_outline_get_outside_border(
+    outline: *const FontdoneWasmOutline,
+) -> FT_StrokerBorder {
+    let snapshot = outline_snapshot_from_wasm(outline);
+    rust_ffi::FT_Outline_GetOutsideBorder(snapshot.as_ref()) as FT_StrokerBorder
 }
 
 #[unsafe(no_mangle)]
