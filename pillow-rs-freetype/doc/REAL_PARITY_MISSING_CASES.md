@@ -10,19 +10,19 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after second public API error-route exact classification:
+Current verified result after outline/allocator public API exact classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `4091`
+  - `real-parity`: `4103`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `104`
+  - `generic-error-fallback`: `92`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -136,6 +136,60 @@ make -C pillow-rs-freetype test-case CASE=ftdriver.FT_Prop_IncreaseXHeight.inval
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `4091`, `generic-error-fallback` `104`.
+
+### Issue Set Current: outline/allocator public API exact error routes
+
+Previous blocker:
+
+- Singleton public error rows across size/load setup, optional bzip2 streams,
+  allocator failure harnesses, FFI error mapping, PostScript table loading,
+  face properties, and outline lifecycle/utilities were still classified as
+  `generic-error-fallback`.
+- These rows had runnable pinned C, Rust FFI, thin C ABI, and WASM ABI coverage,
+  but fallback classification accepted any error instead of requiring exact
+  public status/output equality.
+
+Promoted rows:
+
+- `fterrdef.FT_Err_Invalid_PPem.tt_size_reset_zero_ppem`
+- `fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled`
+- `fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error`
+- `fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection`
+- `fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping`
+- `tttables.TT_Postscript.invalid_post_format_error_runtime`
+- `ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.face_property_ignored`
+- `ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch`
+- `ftoutln.FT_Outline_Done.invalid_library_or_outline_errors`
+- `ftoutln.FT_Outline_New.invalid_arguments_and_limits`
+- `ftoutln.FT_Outline_Embolden.invalid_or_indeterminate_orientation_errors`
+- `ftoutln.FT_Outline_EmboldenXY.invalid_orientation_or_null_errors`
+
+Rejected or deferred candidates:
+
+- `freetype.FT_New_Face.error_null_library_or_aface`: exact-error promotion
+  failed because pinned C returned `Ok`. The row remains a
+  value-contract/oracle-policy issue, not an exact-error row.
+- `ftimage.FT_Outline_MoveTo_Func.decompose_propagates_callback_error`:
+  focused probe produced no runnable row because the callback trace route is
+  still pending-core. It was not promoted.
+
+Verified progress:
+
+- Exact comparison passed for all twelve promoted rows after the rejected
+  `FT_New_Face` row was removed from exact-error enforcement.
+- No runtime behavior change was needed; the existing pure-Rust implementation,
+  C ABI, and WASM ABI outputs already matched pinned C FreeType for the
+  promoted rows once the fallback guard was removed.
+- Route audit classifies all twelve promoted rows as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_PPem.tt_size_reset_zero_ppem
+```
+
+Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
+audit: `real-parity` `4103`, `generic-error-fallback` `92`.
 
 ### Issue Set Current: `FT_Open_Face` invalid source-flag exact-error route
 
