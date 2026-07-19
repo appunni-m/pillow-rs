@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_RASTER_FLAG_AA` mono target exact-error
-classification:
+Current verified result after `FT_New_Memory_Face` bad-size/unknown-format
+exact-error classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3852`
+  - `real-parity`: `3868`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `343`
+  - `generic-error-fallback`: `327`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -126,6 +126,42 @@ make -C pillow-rs-freetype test-case CASE=ftimage.FT_RASTER_FLAG_AA.mono_rejects
 
 Result: `1 / 1` runtime parity row passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3852`, `generic-error-fallback` `343`.
+
+### Issue Set Current: `FT_New_Memory_Face` bad-size/unknown-format exact-error route
+
+Previous blocker:
+
+- `freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format` was
+  classified as `generic-error-fallback` across 17 concrete public inputs.
+- The row family already ran through pinned C FreeType, Rust FFI, thin C ABI,
+  and WASM ABI, but fallback classification only proved that an error happened,
+  not that the exact public status/output matched C for the same input.
+
+Fix plan:
+
+1. Promote only the concrete bad-size/unknown-format family to exact-error
+   comparison.
+2. Keep the existing generated fixture inputs unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI
+   `FT_New_Memory_Face`, and WASM ABI before counting the route as
+   `real-parity`.
+
+Verified progress:
+
+- Exact comparison passed for all 17 concrete bad-size/unknown-format rows.
+- No runtime Rust behavior change was needed; the existing Rust FFI, C ABI, and
+  WASM ABI outputs already matched pinned C FreeType once the fallback guard was
+  removed.
+- Route audit classifies the row family as `real-parity`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format
+```
+
+Result: `17 / 17` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3868`, `generic-error-fallback` `327`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 

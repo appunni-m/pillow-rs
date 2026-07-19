@@ -8337,6 +8337,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "freetype.FT_LOAD_TARGET_MODE.render_rejects_invalid_target_mode"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_file_base"
             || case.case_id == "freetype.FT_New_Memory_Face.error_null_library_or_aface"
+            || case.case_id == "freetype.FT_New_Memory_Face.error_bad_size_or_unknown_format"
             || case.case_id == "freetype.FT_Open_Face.error_invalid_source_flags"
             || case.case_id == "freetype.FT_Open_Face.error_null_library_args_or_aface"
             || case.case_id == "freetype.FT_Render_Glyph.invalid_render_mode"
