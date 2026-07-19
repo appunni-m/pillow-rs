@@ -10,20 +10,21 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_Set_MM_WeightVector` null-weightvector route
+Current verified result after `FT_Set_MM_WeightVector` unsupported variation
+route
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3839`
+  - `real-parity`: `3840`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `356`
+  - `generic-error-fallback`: `355`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -3692,6 +3693,41 @@ Verified command:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len
+```
+
+### Issue Set CK: `FT_Set_MM_WeightVector` unsupported variation route
+
+Previous blocker:
+
+- `ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations`
+  stayed in `generic-error-fallback`.
+- The fixture requires exact behavior from `freetype/src/base/ftmm.c:212-231`:
+  after the null-pointer precheck, the public wrapper asks for the
+  multiple-master service, initializes the result to `FT_Err_Invalid_Argument`,
+  and only calls `service->set_mm_weightvector` when that legacy Adobe MM
+  setter exists. TrueType/OpenType variation faces expose variation
+  coordinates but do not provide the Adobe MM weight-vector setter.
+
+Plan:
+
+1. Keep the fixture intact; it exercises the public `FT_Set_MM_WeightVector`
+   wrapper against a real TrueType/OpenType variation face.
+2. Require exact error comparison for the return status on the same input.
+3. Classify the row as real parity only after focused same-input parity passes
+   through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+
+Verified progress:
+
+- The focused unsupported-variation row passes exact comparison against pinned
+  C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The route audit now classifies
+  `ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations` as
+  `real-parity`.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations
 ```
 
 ### Issue Set BE: `FT_Outline_Get_BBox` null probe route blocker
