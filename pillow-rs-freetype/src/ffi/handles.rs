@@ -2808,6 +2808,33 @@ pub fn FT_Library_Has_Module(library: Option<&FT_Library>, name: &str) -> bool {
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Option<FT_ULong> {
+    if !FT_Library_Has_Module(library, name) {
+        return None;
+    }
+    // FreeType default module flags are static module-class metadata declared
+    // by each driver/renderer module (`src/*/*drivr.c`, `src/*/ftsmooth.c`,
+    // and `src/autofit/afmodule.c`).  The pure-Rust library keeps the same
+    // observable metadata for ABI/parity inspection without dynamic modules.
+    let flags = match name {
+        "truetype" | "type1" | "cid" | "type42" => {
+            FT_MODULE_FONT_DRIVER | FT_MODULE_DRIVER_SCALABLE | FT_MODULE_DRIVER_HAS_HINTER
+        }
+        "cff" => {
+            FT_MODULE_FONT_DRIVER
+                | FT_MODULE_DRIVER_SCALABLE
+                | FT_MODULE_DRIVER_HAS_HINTER
+                | FT_MODULE_DRIVER_HINTS_LIGHTLY
+        }
+        "bdf" | "pcf" | "winfonts" => FT_MODULE_FONT_DRIVER | FT_MODULE_DRIVER_NO_OUTLINES,
+        "autofitter" => FT_MODULE_HINTER,
+        "smooth" | "raster1" | "sdf" | "bsdf" | "svg" => FT_MODULE_RENDERER,
+        _ => 0,
+    };
+    Some(flags as FT_ULong)
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Default_Module_Names(library: Option<&FT_Library>) -> &'static [&'static str] {
     library.map_or(&[], |library| library.module_names)
 }

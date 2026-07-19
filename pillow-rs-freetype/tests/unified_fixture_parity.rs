@@ -11444,6 +11444,94 @@ fn add_default_module_probe_names_arg(params: &Value) -> Result<String, String> 
     Ok(add_default_module_probe_names(params)?.join(","))
 }
 
+fn module_flag_value(symbol: &str) -> Result<FT_ULong, String> {
+    let value = match symbol {
+        "FT_MODULE_FONT_DRIVER" => FT_MODULE_FONT_DRIVER,
+        "FT_MODULE_RENDERER" => FT_MODULE_RENDERER,
+        "FT_MODULE_HINTER" => FT_MODULE_HINTER,
+        "FT_MODULE_STYLER" => FT_MODULE_STYLER,
+        "FT_MODULE_DRIVER_SCALABLE" => FT_MODULE_DRIVER_SCALABLE,
+        "FT_MODULE_DRIVER_NO_OUTLINES" => FT_MODULE_DRIVER_NO_OUTLINES,
+        "FT_MODULE_DRIVER_HAS_HINTER" => FT_MODULE_DRIVER_HAS_HINTER,
+        "FT_MODULE_DRIVER_HINTS_LIGHTLY" => FT_MODULE_DRIVER_HINTS_LIGHTLY,
+        other => return Err(format!("unsupported module flag {other}")),
+    };
+    Ok(value as FT_ULong)
+}
+
+fn module_flag_names(params: &Value) -> Result<Vec<String>, String> {
+    if let Some(value) = params.get("module_names") {
+        return value
+            .as_array()
+            .ok_or_else(|| "module_names must be an array".to_string())?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| format!("module name must be a string, got {value}"))
+            })
+            .collect();
+    }
+    Ok(vec![string_param(params, "module_name")?.to_string()])
+}
+
+fn module_flag_output<F>(params: &Value, mut flags_for: F) -> Result<Value, String>
+where
+    F: FnMut(&str) -> Option<FT_ULong>,
+{
+    let flag_symbol = string_param(params, "flag")?;
+    let flag = module_flag_value(flag_symbol)?;
+    let rows = module_flag_names(params)?
+        .into_iter()
+        .map(|module| {
+            let flags = flags_for(&module);
+            let flags_value = flags.unwrap_or(0);
+            json!({
+                "module": module,
+                "present": flags.is_some(),
+                "flags": flags_value,
+                "has_flag": flags.is_some_and(|flags| flags & flag != 0),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "flag": flag_symbol,
+        "flag_value": flag,
+        "modules": rows,
+    }))
+}
+
+fn module_flag_names_arg(params: &Value) -> Result<String, String> {
+    Ok(module_flag_names(params)?.join(","))
+}
+
+fn rust_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
+    let library = FT_Init_FreeType();
+    Ok(ok(module_flag_output(&case.inputs.params, |name| {
+        FT_Library_Module_Flags(Some(&library), name)
+    })?))
+}
+
+fn c_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let output = module_flag_output(&case.inputs.params, |name| {
+        c_abi::abi_support_library_module_flags(library, name)
+    })?;
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
+    Ok(ok(module_flag_output(&case.inputs.params, |name| {
+        wasm_abi::abi_support_default_module_flags(name)
+    })?))
+}
+
 fn done_mm_var_library_present(params: &Value) -> i32 {
     i32::from(!param_is_null(params, "library"))
 }
@@ -14540,6 +14628,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "ftmodapi.inspect_module_flags" => Ok(vec![
+            "--inspect-module-flags".to_string(),
+            string_param(params, "flag")?.to_string(),
+            module_flag_names_arg(params)?,
+        ]),
         "ftmm.done_mm_var" => Ok(vec![
             "--done-mm-var".to_string(),
             done_mm_var_library_present(params).to_string(),
@@ -15469,6 +15562,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
+        "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
@@ -16155,6 +16249,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
+        "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
@@ -16759,6 +16854,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
+        "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),

@@ -113,6 +113,13 @@ Promoted rows:
   before invoking the iterator callback, so removing the current node, moving
   it to the head, finding its data, or finalizing a side list inside the
   callback does not change the main traversal order.
+- `ftmodapi.FT_MODULE_FONT_DRIVER.font_driver_modules_set_bit`: `1 / 1`
+  module-class flag row now compares exact pinned-C FreeType, Rust FFI, thin
+  C ABI, and WASM ABI output. The proof records default module presence and
+  `module_flags` values for driver and non-driver modules. The same exact route
+  code can inspect other module flags, but the five asset-backed
+  `ftmodapi.inspect_module_flags` rows remain generic/pending until their
+  runtime font assets resolve; they are not counted as real parity.
 
 Focused non-coverage proof before promotion:
 
@@ -126,6 +133,7 @@ make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
 make -C pillow-rs-freetype test-op OP=new_memory_face
 make -C pillow-rs-freetype test-op OP=freetype.init_free_type
 make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
+make -C pillow-rs-freetype test-op OP=ftmodapi.inspect_module_flags
 make -C pillow-rs-freetype test-op OP=ftmm.done_mm_var
 make -C pillow-rs-freetype test-case CASE=ftlist
 ```
@@ -152,6 +160,8 @@ Results:
   promoting the ten `FT_List_Insert`, `FT_List_Remove`, and `FT_List_Up`
   topology rows, the four `FT_List_Finalize` callback/free rows, and the
   two `FT_List_Iterate` traversal/mutation rows.
+- `ftmodapi.inspect_module_flags`: `1 / 1` focused runtime row passed with
+  five unresolved asset-backed rows left pending.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
@@ -167,6 +177,13 @@ Latest route proof after the FT_List follow-up:
   `432` pending. The global runnable total did not increase; these rows are
   now maintained exact routes instead of fallback-classified/pending focused
   list rows.
+
+Latest route proof after the module-flag follow-up:
+
+- Route audit moved one `ftmodapi.inspect_module_flags` row from
+  `generic-fallback` to `real-parity`.
+- Current route audit after the change: `real-parity` `4335`,
+  `generic-fallback` `595`, `pending-route` `49`, `pending-core` `7`.
 
 ## 2026-07-18 Parity-Only Fix Plan
 
