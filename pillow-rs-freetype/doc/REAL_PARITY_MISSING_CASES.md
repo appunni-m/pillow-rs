@@ -31,10 +31,23 @@ Rejected future-asset probes:
   fallback classification. After exact promotion, the refreshed C oracle
   returned error `7` for the success rows, so they remain generic fallback
   until the stroker success route is fixed at the public endpoint.
+- `ftmodapi.FT_Add_Default_Modules.installs_default_module_table`: exact
+  promotion failed with C error `7`; keep fallback-classified until the
+  success route proves the default module table mutation through all ABI lanes.
+- `ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior`,
+  `ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior`, and
+  `ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: exact
+  promotion failed with C error `7`; keep fallback-classified until the
+  outline-bitmap dropout route is made public-exact.
+- `ftmm.FT_Done_MM_Var.null_descriptor_success`: exact promotion failed with C
+  error `7`; keep fallback-classified until the null-descriptor success route
+  is proven against the pinned C endpoint.
 
 Promoted rows:
 
 - `ftotval.FT_OpenType_Validate.selected_tables_success`
+- `ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success`
+- `ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file`
 
 Focused non-coverage proof before promotion:
 
@@ -44,11 +57,14 @@ make -C pillow-rs-freetype test-op OP=ftstroke.conic_to
 make -C pillow-rs-freetype test-op OP=ftstroke.cubic_to
 make -C pillow-rs-freetype test-op OP=ftstroke.line_to
 make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
+make -C pillow-rs-freetype test-op OP=ftwinfnt.get_winfnt_header
 ```
 
 Results:
 
 - `ftotval.open_type_validate`: `11 / 11` runnable rows passed, with nine
+  existing asset-pending rows left visible.
+- `ftwinfnt.get_winfnt_header`: `5 / 5` runnable rows passed, with two
   existing asset-pending rows left visible.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.

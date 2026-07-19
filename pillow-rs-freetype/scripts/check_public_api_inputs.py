@@ -2231,6 +2231,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Get_WinFNT_Header non-WinFNT-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftwinfnt.get_winfnt_header"
+        and row.case_id
+        in {
+            "ftwinfnt.FT_Get_WinFNT_Header.winfnt_face_copies_header_success",
+            "ftwinfnt.FT_WinFNT_HeaderRec.copied_header_values_match_file",
+        }
+    ):
+        return "FT_Get_WinFNT_Header success header copy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftoutln.outline_check"
         and row.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
     ):
