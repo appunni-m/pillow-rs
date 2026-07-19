@@ -8365,6 +8365,10 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id
                 == "ftmm.FT_Set_Var_Blend_Coordinates.error_null_coords_with_nonzero_count"
+            || case.case_id
+                == "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count"
+            || case.case_id
+                == "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count"
             || case.case_id == "ftmodapi.FT_Reference_Library.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
             || case.case_id == "ftmodapi.FT_Remove_Module.rejects_missing_or_foreign_module"
