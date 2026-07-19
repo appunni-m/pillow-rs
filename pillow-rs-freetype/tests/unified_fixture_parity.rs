@@ -707,6 +707,11 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
             reason: format!("{operation}:{reason}"),
         };
     }
+    if !case.expect_error && !has_no_font_assets(case) && !assets_are_runtime_resolved(case) {
+        return RuntimeReadiness::Pending {
+            reason: format!("{operation}:declared runtime font asset is unresolved"),
+        };
+    }
     if operation == "ftoutln.outline_decompose"
         && !outline_decompose_runtime_case_supported(&case.case_id)
     {
