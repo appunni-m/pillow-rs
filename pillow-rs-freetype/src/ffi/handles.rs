@@ -1170,6 +1170,7 @@ pub fn FT_Bitmap_Blend(
 pub struct FT_Library {
     inner: api::Library,
     module_names: &'static [&'static str],
+    truetype_interpreter_version: FT_UInt,
     debug_hooks: [FT_DebugHook_Func; 4],
     _lcd_geometry: [FT_Vector; 3],
 }
@@ -1447,6 +1448,7 @@ pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
         module_names: DEFAULT_MODULE_NAMES,
+        truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
         debug_hooks: [None; 4],
         _lcd_geometry: [
             FT_Vector { x: -21, y: 0 },
@@ -2922,6 +2924,95 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
         FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
     } else {
         FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
+    }
+}
+
+fn property_lookup_error<'a>(
+    library: Option<&'a FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+) -> Result<&'a FT_Library, FT_Error> {
+    let Some(library) = library else {
+        return Err(FT_Err_Invalid_Library_Handle as FT_Error);
+    };
+    let Some(module_name) = module_name else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    let Some(property_name) = property_name else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    if !library.module_names.contains(&module_name) {
+        return Err(FT_Err_Missing_Module as FT_Error);
+    }
+    if module_name != "truetype" {
+        return Err(FT_Err_Unimplemented_Feature);
+    }
+    if property_name != "interpreter-version" {
+        return Err(FT_Err_Missing_Property as FT_Error);
+    }
+    Ok(library)
+}
+
+pub fn FT_Property_Get(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+    value: Option<&mut FT_UInt>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/base/ftobjs.c:ft_property_do` validates library,
+    // module name, property name, and value before dispatching to
+    // `src/truetype/ttdriver.c:tt_property_get`.
+    let Some(value) = value else {
+        return if library.is_none() {
+            FT_Err_Invalid_Library_Handle as FT_Error
+        } else {
+            FT_Err_Invalid_Argument
+        };
+    };
+    match property_lookup_error(library, module_name, property_name) {
+        Ok(library) => {
+            *value = library.truetype_interpreter_version;
+            FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+pub fn FT_Property_Set(
+    library: Option<&mut FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+    value: Option<FT_UInt>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/truetype/ttdriver.c:tt_property_set` accepts
+    // interpreter versions 35, 38, and 40.  With the pinned minimal subpixel
+    // build, 38 is normalized to 40; invalid values preserve the old value.
+    let Some(value) = value else {
+        return if library.is_none() {
+            FT_Err_Invalid_Library_Handle as FT_Error
+        } else {
+            FT_Err_Invalid_Argument
+        };
+    };
+    let lookup = property_lookup_error(library.as_deref(), module_name, property_name);
+    match lookup {
+        Ok(_) => {
+            let Some(library) = library else {
+                return FT_Err_Invalid_Library_Handle as FT_Error;
+            };
+            match i64::from(value) {
+                TT_INTERPRETER_VERSION_35 => {
+                    library.truetype_interpreter_version = TT_INTERPRETER_VERSION_35 as FT_UInt;
+                    FT_Err_Ok
+                }
+                TT_INTERPRETER_VERSION_38 | TT_INTERPRETER_VERSION_40 => {
+                    library.truetype_interpreter_version = TT_INTERPRETER_VERSION_40 as FT_UInt;
+                    FT_Err_Ok
+                }
+                _ => FT_Err_Unimplemented_Feature,
+            }
+        }
+        Err(error) => error,
     }
 }
 

@@ -2276,6 +2276,11 @@ impl BackendComparisonWorker {
                     | "ftbitmap.bitmap_blend"
                     | "freetype.init_free_type"
                     | "ftmodapi.get_truetype_engine_type"
+                    | "ftmodapi.property_get"
+                    | "ftmodapi.property_set"
+                    | "ftmodapi.property_set_then_get"
+                    | "ftdriver.interpreter_version_default"
+                    | "FT_Property_Get"
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
@@ -2466,6 +2471,12 @@ impl BackendComparisonWorker {
                 } else {
                     Ok(ok(nullable_c_string_json(FT_Get_X11_Font_Format(None))))
                 }
+            }
+            "ftmodapi.property_get"
+            | "ftdriver.interpreter_version_default"
+            | "FT_Property_Get" => property_get_case_output(case, PropertyBackend::Rust),
+            "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+                property_set_case_output(case, PropertyBackend::Rust)
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "freetype.get_kerning" => {
@@ -11540,6 +11551,445 @@ fn wasm_truetype_engine_output(params: &Value) -> Result<Value, String> {
     }))
 }
 
+const PROPERTY_SENTINEL: FT_UInt = 0xDEAD_BEEF;
+
+#[derive(Clone, Copy)]
+enum PropertyBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn property_get_case_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_Property_Get.gets_supported_property"
+        | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version" => {
+            let mut value = PROPERTY_SENTINEL;
+            let error = property_get_call(backend, 1, 1, 1, Some(&mut value));
+            Ok(ok(json!({
+                "status": error,
+                "value": value,
+                "module_service": error == FT_Err_Ok
+            })))
+        }
+        "ftmodapi.FT_Property_Get.rejects_null_arguments" => {
+            let mut library_value = PROPERTY_SENTINEL;
+            let mut module_value = PROPERTY_SENTINEL;
+            let mut property_value = PROPERTY_SENTINEL;
+            let rows = [
+                (
+                    "library",
+                    property_get_call(backend, 0, 1, 1, Some(&mut library_value)),
+                    Some(library_value),
+                ),
+                (
+                    "module_name",
+                    property_get_call(backend, 1, 0, 1, Some(&mut module_value)),
+                    Some(module_value),
+                ),
+                (
+                    "property_name",
+                    property_get_call(backend, 1, 1, 0, Some(&mut property_value)),
+                    Some(property_value),
+                ),
+                ("value", property_get_call(backend, 1, 1, 1, None), None),
+            ];
+            Ok(ok(json!({
+                "error": rows[0].1,
+                "rows": rows.into_iter().map(|(field, error, value_after)| json!({
+                    "field": field,
+                    "error": error,
+                    "value_after": value_after
+                })).collect::<Vec<_>>()
+            })))
+        }
+        "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service" => {
+            let mut missing_value = PROPERTY_SENTINEL;
+            let missing = property_get_call(backend, 1, 3, 1, Some(&mut missing_value));
+            let mut unsupported_value = PROPERTY_SENTINEL;
+            let unsupported = property_get_call(backend, 1, 2, 1, Some(&mut unsupported_value));
+            Ok(ok(json!({
+                "error": missing,
+                "rows": [
+                    {"module": "fixture_missing", "error": missing, "value_after": missing_value},
+                    {"module": "sfnt", "error": unsupported, "value_after": unsupported_value}
+                ]
+            })))
+        }
+        "ftmodapi.FT_Property_Get.invalid_property_name"
+        | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name" => {
+            let mut value = PROPERTY_SENTINEL;
+            let error = property_get_call(backend, 1, 1, 2, Some(&mut value));
+            Ok(ok(json!({
+                "error": error,
+                "rows": [{"property": "fixture-missing-property", "error": error, "value_after": value}]
+            })))
+        }
+        other => Err(format!("unsupported property get case {other}")),
+    }
+}
+
+fn property_set_case_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_Property_Set.sets_supported_property" => {
+            let rows = [
+                TT_INTERPRETER_VERSION_35,
+                TT_INTERPRETER_VERSION_38,
+                TT_INTERPRETER_VERSION_40,
+            ]
+            .into_iter()
+            .map(|value| {
+                let (set_status, get_status, value_after_get) =
+                    property_set_then_get_call(backend, 1, 1, Some(value as FT_UInt));
+                json!({
+                    "input": value,
+                    "set_status": set_status,
+                    "get_status": get_status,
+                    "value_after_get": value_after_get
+                })
+            })
+            .collect::<Vec<_>>();
+            Ok(ok(json!({ "rows": rows })))
+        }
+        "ftmodapi.FT_Property_Set.rejects_null_arguments" => {
+            let rows = [
+                (
+                    "library",
+                    property_set_call(backend, 0, 1, Some(TT_INTERPRETER_VERSION_40 as FT_UInt)),
+                ),
+                (
+                    "module_name",
+                    property_set_call(backend, 1, 0, Some(TT_INTERPRETER_VERSION_40 as FT_UInt)),
+                ),
+                ("property_name", property_set_call(backend, 1, 1, None)),
+                ("value", property_set_call(backend, 1, 1, None)),
+            ];
+            Ok(ok(json!({
+                "error": rows[0].1,
+                "rows": rows.into_iter().map(|(field, error)| json!({
+                    "field": field,
+                    "error": error
+                })).collect::<Vec<_>>()
+            })))
+        }
+        "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service" => {
+            let missing =
+                property_set_call(backend, 1, 3, Some(TT_INTERPRETER_VERSION_40 as FT_UInt));
+            let unsupported =
+                property_set_call(backend, 1, 2, Some(TT_INTERPRETER_VERSION_40 as FT_UInt));
+            Ok(ok(json!({
+                "error": missing,
+                "rows": [
+                    {"module": "fixture_missing", "error": missing, "property_after": PROPERTY_SENTINEL},
+                    {"module": "sfnt", "error": unsupported, "property_after": PROPERTY_SENTINEL}
+                ]
+            })))
+        }
+        "ftmodapi.FT_Property_Set.invalid_property_or_value" => {
+            let (missing_error, missing_after) = property_rejected_set_preservation(
+                backend,
+                1,
+                2,
+                TT_INTERPRETER_VERSION_40 as FT_UInt,
+            );
+            let (value_error, value_after) =
+                property_rejected_set_preservation(backend, 1, 1, 9999);
+            Ok(ok(json!({
+                "error": missing_error,
+                "rows": [
+                    {
+                        "scenario": "invalid_property",
+                        "error": missing_error,
+                        "previous_property_value": TT_INTERPRETER_VERSION_40,
+                        "property_after": missing_after
+                    },
+                    {
+                        "scenario": "invalid_value",
+                        "error": value_error,
+                        "previous_property_value": TT_INTERPRETER_VERSION_40,
+                        "property_after": value_after
+                    }
+                ]
+            })))
+        }
+        other => Err(format!("unsupported property set case {other}")),
+    }
+}
+
+fn property_get_call(
+    backend: PropertyBackend,
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    value: Option<&mut FT_UInt>,
+) -> FT_Error {
+    match backend {
+        PropertyBackend::Rust => {
+            let library = if library_present == 0 {
+                None
+            } else {
+                Some(FT_Init_FreeType())
+            };
+            FT_Property_Get(
+                library.as_ref(),
+                property_module_selector(module_selector),
+                property_name_selector(property_selector),
+                value,
+            )
+        }
+        PropertyBackend::CAbi => {
+            c_property_get_call(library_present, module_selector, property_selector, value)
+        }
+        PropertyBackend::Wasm => wasm_abi::fontdone_wasm_property_get(
+            library_present,
+            module_selector,
+            property_selector,
+            value.map_or(std::ptr::null_mut(), |value| value as *mut FT_UInt),
+        ),
+    }
+}
+
+fn property_set_call(
+    backend: PropertyBackend,
+    library_present: i32,
+    module_selector: i32,
+    value: Option<FT_UInt>,
+) -> FT_Error {
+    match backend {
+        PropertyBackend::Rust => {
+            let mut library = if library_present == 0 {
+                None
+            } else {
+                Some(FT_Init_FreeType())
+            };
+            FT_Property_Set(
+                library.as_mut(),
+                property_module_selector(module_selector),
+                Some("interpreter-version"),
+                value,
+            )
+        }
+        PropertyBackend::CAbi => {
+            let value_storage = value.unwrap_or_default();
+            c_property_set_call(
+                library_present,
+                module_selector,
+                1,
+                value.map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt),
+            )
+        }
+        PropertyBackend::Wasm => {
+            let value_storage = value.unwrap_or_default();
+            let mut out = PROPERTY_SENTINEL;
+            wasm_abi::fontdone_wasm_property_set_then_get(
+                library_present,
+                module_selector,
+                1,
+                value.map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt),
+                &mut out,
+            )
+        }
+    }
+}
+
+fn property_set_then_get_call(
+    backend: PropertyBackend,
+    module_selector: i32,
+    property_selector: i32,
+    value: Option<FT_UInt>,
+) -> (FT_Error, FT_Error, FT_UInt) {
+    match backend {
+        PropertyBackend::Rust => {
+            let mut library = FT_Init_FreeType();
+            let set_status = FT_Property_Set(
+                Some(&mut library),
+                property_module_selector(module_selector),
+                property_name_selector(property_selector),
+                value,
+            );
+            let mut out = PROPERTY_SENTINEL;
+            let get_status = FT_Property_Get(
+                Some(&library),
+                property_module_selector(1),
+                property_name_selector(1),
+                Some(&mut out),
+            );
+            (set_status, get_status, out)
+        }
+        PropertyBackend::CAbi => {
+            c_property_set_then_get_call(module_selector, property_selector, value)
+        }
+        PropertyBackend::Wasm => {
+            let value_storage = value.unwrap_or_default();
+            let mut out = PROPERTY_SENTINEL;
+            let set_status = wasm_abi::fontdone_wasm_property_set_then_get(
+                1,
+                module_selector,
+                property_selector,
+                value.map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt),
+                &mut out,
+            );
+            let get_status = if set_status == FT_Err_Ok {
+                FT_Err_Ok
+            } else {
+                set_status
+            };
+            (set_status, get_status, out)
+        }
+    }
+}
+
+fn property_rejected_set_preservation(
+    backend: PropertyBackend,
+    module_selector: i32,
+    property_selector: i32,
+    rejected_value: FT_UInt,
+) -> (FT_Error, FT_UInt) {
+    if let PropertyBackend::Wasm = backend {
+        let value_storage = rejected_value;
+        let mut ignored = PROPERTY_SENTINEL;
+        let set_status = wasm_abi::fontdone_wasm_property_set_then_get(
+            1,
+            module_selector,
+            property_selector,
+            &value_storage,
+            &mut ignored,
+        );
+        let mut value_after = PROPERTY_SENTINEL;
+        let _ = wasm_abi::fontdone_wasm_property_get(1, 1, 1, &mut value_after);
+        return (set_status, value_after);
+    }
+    let (set_status, get_status, value_after) = property_set_then_get_call(
+        backend,
+        module_selector,
+        property_selector,
+        Some(rejected_value),
+    );
+    let _ = get_status;
+    (set_status, value_after)
+}
+
+fn property_module_selector(selector: i32) -> Option<&'static str> {
+    match selector {
+        0 => None,
+        1 => Some("truetype"),
+        2 => Some("sfnt"),
+        3 => Some("fixture_missing"),
+        _ => Some("fixture_missing"),
+    }
+}
+
+fn property_name_selector(selector: i32) -> Option<&'static str> {
+    match selector {
+        0 => None,
+        1 => Some("interpreter-version"),
+        2 => Some("fixture-missing-property"),
+        _ => Some("fixture-missing-property"),
+    }
+}
+
+fn c_property_get_call(
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    value: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let mut library = std::ptr::null_mut();
+    if library_present != 0 && c_abi::FT_Init_FreeType(&mut library) != FT_Err_Ok {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let error = c_abi::FT_Property_Get(
+        library,
+        property_module_cstr(module_selector),
+        property_name_cstr(property_selector),
+        value.map_or(std::ptr::null_mut(), |value| (value as *mut FT_UInt).cast()),
+    );
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    error
+}
+
+fn c_property_set_call(
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    value: *const FT_UInt,
+) -> FT_Error {
+    let mut library = std::ptr::null_mut();
+    if library_present != 0 && c_abi::FT_Init_FreeType(&mut library) != FT_Err_Ok {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let error = c_abi::FT_Property_Set(
+        library,
+        property_module_cstr(module_selector),
+        property_name_cstr(property_selector),
+        value.cast(),
+    );
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    error
+}
+
+fn c_property_set_then_get_call(
+    module_selector: i32,
+    property_selector: i32,
+    value: Option<FT_UInt>,
+) -> (FT_Error, FT_Error, FT_UInt) {
+    let mut library = std::ptr::null_mut();
+    if c_abi::FT_Init_FreeType(&mut library) != FT_Err_Ok {
+        return (
+            FT_Err_Invalid_Library_Handle as FT_Error,
+            FT_Err_Invalid_Library_Handle as FT_Error,
+            PROPERTY_SENTINEL,
+        );
+    }
+    let value_storage = value.unwrap_or_default();
+    let set_status = c_abi::FT_Property_Set(
+        library,
+        property_module_cstr(module_selector),
+        property_name_cstr(property_selector),
+        value
+            .map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt)
+            .cast(),
+    );
+    let mut out = PROPERTY_SENTINEL;
+    let get_status = c_abi::FT_Property_Get(
+        library,
+        property_module_cstr(1),
+        property_name_cstr(1),
+        (&mut out as *mut FT_UInt).cast(),
+    );
+    c_done_library(library);
+    (set_status, get_status, out)
+}
+
+fn property_module_cstr(selector: i32) -> *const std::ffi::c_char {
+    match selector {
+        0 => std::ptr::null(),
+        1 => c"truetype".as_ptr(),
+        2 => c"sfnt".as_ptr(),
+        3 => c"fixture_missing".as_ptr(),
+        _ => c"fixture_missing".as_ptr(),
+    }
+}
+
+fn property_name_cstr(selector: i32) -> *const std::ffi::c_char {
+    match selector {
+        0 => std::ptr::null(),
+        1 => c"interpreter-version".as_ptr(),
+        2 => c"fixture-missing-property".as_ptr(),
+        _ => c"fixture-missing-property".as_ptr(),
+    }
+}
+
 fn debug_hook_action(case: &InputCase) -> Result<i32, String> {
     if case.case_id.contains(".stores_valid_hook") {
         Ok(1)
@@ -14143,9 +14593,27 @@ fn property_service_route_pending(operation: &str) -> bool {
     )
 }
 
+fn property_scalar_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftmodapi.FT_Property_Get.gets_supported_property"
+            | "ftmodapi.FT_Property_Get.rejects_null_arguments"
+            | "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service"
+            | "ftmodapi.FT_Property_Get.invalid_property_name"
+            | "ftmodapi.FT_Property_Set.sets_supported_property"
+            | "ftmodapi.FT_Property_Set.rejects_null_arguments"
+            | "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
+            | "ftmodapi.FT_Property_Set.invalid_property_or_value"
+            | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
+            | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
+    )
+}
+
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
-    if property_service_route_pending(case.operation.as_str()) {
+    if property_service_route_pending(case.operation.as_str())
+        && !property_scalar_route_supported(case)
+    {
         return Err(
             "FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI property APIs; generic fallback would be a green placeholder"
                 .to_string(),
@@ -14193,6 +14661,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
+        "ftmodapi.property_get"
+        | "ftmodapi.property_set"
+        | "ftmodapi.property_set_then_get"
+        | "ftdriver.interpreter_version_default"
+        | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
         "face_macro_flags" => Ok(vec![
             "--face-macro-flags".to_string(),
             face_macro_param(case)?.to_string(),
@@ -15857,6 +16330,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftbitmap.bitmap_blend"
                 | "freetype.init_free_type"
                 | "ftmodapi.get_truetype_engine_type"
+                | "ftmodapi.property_get"
+                | "ftmodapi.property_set"
+                | "ftmodapi.property_set_then_get"
+                | "ftdriver.interpreter_version_default"
+                | "FT_Property_Get"
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
@@ -16137,6 +16615,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.library_version" => Ok(ok(rust_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(rust_truetype_engine_output(&case.inputs.params)?))
+        }
+        "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
+            property_get_case_output(case, PropertyBackend::Rust)
+        }
+        "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+            property_set_case_output(case, PropertyBackend::Rust)
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
@@ -16864,6 +17348,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(c_truetype_engine_output(&case.inputs.params)?))
         }
+        "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
+            property_get_case_output(case, PropertyBackend::CAbi)
+        }
+        "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+            property_set_case_output(case, PropertyBackend::CAbi)
+        }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
@@ -17515,6 +18005,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.library_version" => Ok(ok(wasm_library_version_output(&case.inputs.params)?)),
         "ftmodapi.get_truetype_engine_type" => {
             Ok(ok(wasm_truetype_engine_output(&case.inputs.params)?))
+        }
+        "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
+            property_get_case_output(case, PropertyBackend::Wasm)
+        }
+        "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
+            property_set_case_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),

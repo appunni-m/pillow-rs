@@ -1779,6 +1779,93 @@ pub extern "C" fn fontdone_wasm_get_truetype_engine_type(
     rust_ffi::FT_Get_TrueType_Engine_Type(library.as_ref())
 }
 
+fn wasm_property_module(selector: i32) -> Option<&'static str> {
+    match selector {
+        0 => None,
+        1 => Some("truetype"),
+        2 => Some("sfnt"),
+        3 => Some("fixture_missing"),
+        _ => Some("fixture_missing"),
+    }
+}
+
+fn wasm_property_name(selector: i32) -> Option<&'static str> {
+    match selector {
+        0 => None,
+        1 => Some("interpreter-version"),
+        2 => Some("fixture-missing-property"),
+        _ => Some("fixture-missing-property"),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_property_get(
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    value: *mut FT_UInt,
+) -> FT_Error {
+    let library = if library_present == 0 {
+        None
+    } else {
+        Some(rust_ffi::FT_Init_FreeType())
+    };
+    let value = if value.is_null() {
+        None
+    } else {
+        // SAFETY: the WASM ABI caller supplied an `FT_UInt*` output slot.
+        Some(unsafe { &mut *value })
+    };
+    rust_ffi::FT_Property_Get(
+        library.as_ref(),
+        wasm_property_module(module_selector),
+        wasm_property_name(property_selector),
+        value,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_property_set_then_get(
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    set_value: *const FT_UInt,
+    get_value: *mut FT_UInt,
+) -> FT_Error {
+    let mut library = if library_present == 0 {
+        None
+    } else {
+        Some(rust_ffi::FT_Init_FreeType())
+    };
+    let set_value = if set_value.is_null() {
+        None
+    } else {
+        // SAFETY: the WASM ABI caller supplied an `FT_UInt*` input slot.
+        Some(unsafe { *set_value })
+    };
+    let set_error = rust_ffi::FT_Property_Set(
+        library.as_mut(),
+        wasm_property_module(module_selector),
+        wasm_property_name(property_selector),
+        set_value,
+    );
+    if set_error != rust_ffi::FT_Err_Ok {
+        return set_error;
+    }
+    let get_value = if get_value.is_null() {
+        None
+    } else {
+        // SAFETY: the WASM ABI caller supplied an `FT_UInt*` output slot.
+        Some(unsafe { &mut *get_value })
+    };
+    rust_ffi::FT_Property_Get(
+        library.as_ref(),
+        wasm_property_module(module_selector),
+        wasm_property_name(property_selector),
+        get_value,
+    )
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_truetype_engine_observation(library_present: i32) -> (i32, bool, bool) {
     let library = match library_present {

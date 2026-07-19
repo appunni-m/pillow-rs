@@ -49,6 +49,7 @@ pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
+pub type FT_String = c_char;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
@@ -1403,6 +1404,63 @@ pub extern "C" fn FT_Library_SetLcdGeometry(
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_TrueType_Engine_Type(library: FT_Library) -> FT_TrueTypeEngineType {
     rust_ffi::FT_Get_TrueType_Engine_Type(library_ref(library))
+}
+
+fn property_name_arg(ptr: *const FT_String) -> Option<String> {
+    if ptr.is_null() {
+        return None;
+    }
+    // SAFETY: FreeType string arguments are nul-terminated `const char*`
+    // values owned by the caller for the duration of the call.
+    unsafe { CStr::from_ptr(ptr).to_str().ok().map(ToOwned::to_owned) }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Property_Get(
+    library: FT_Library,
+    module_name: *const FT_String,
+    property_name: *const FT_String,
+    value: *mut c_void,
+) -> FT_Error {
+    let value = if value.is_null() {
+        None
+    } else {
+        // SAFETY: For the implemented TrueType property the public C contract
+        // requires an `FT_UInt*`; null was handled above.
+        Some(unsafe { &mut *value.cast::<FT_UInt>() })
+    };
+    let module_name = property_name_arg(module_name);
+    let property_name = property_name_arg(property_name);
+    rust_ffi::FT_Property_Get(
+        library_ref(library),
+        module_name.as_deref(),
+        property_name.as_deref(),
+        value,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Property_Set(
+    library: FT_Library,
+    module_name: *const FT_String,
+    property_name: *const FT_String,
+    value: *const c_void,
+) -> FT_Error {
+    let value = if value.is_null() {
+        None
+    } else {
+        // SAFETY: For the implemented TrueType property the public C contract
+        // requires an `FT_UInt*`; null was handled above.
+        Some(unsafe { *value.cast::<FT_UInt>() })
+    };
+    let module_name = property_name_arg(module_name);
+    let property_name = property_name_arg(property_name);
+    rust_ffi::FT_Property_Set(
+        library_mut(library),
+        module_name.as_deref(),
+        property_name.as_deref(),
+        value,
+    )
 }
 
 #[unsafe(no_mangle)]

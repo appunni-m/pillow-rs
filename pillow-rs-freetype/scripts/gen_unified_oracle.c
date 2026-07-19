@@ -11000,6 +11000,218 @@ static int emit_truetype_engine_type(int argc, char** argv) {
     return 0;
 }
 
+static const FT_UInt PROPERTY_SENTINEL = 0xDEADBEEF;
+
+static const char* property_module_name(int selector) {
+    switch (selector) {
+    case 0:
+        return NULL;
+    case 1:
+        return "truetype";
+    case 2:
+        return "sfnt";
+    case 3:
+        return "fixture_missing";
+    default:
+        return "fixture_missing";
+    }
+}
+
+static const char* property_name_value(int selector) {
+    switch (selector) {
+    case 0:
+        return NULL;
+    case 1:
+        return "interpreter-version";
+    case 2:
+        return "fixture-missing-property";
+    default:
+        return "fixture-missing-property";
+    }
+}
+
+static FT_Error oracle_property_get(int library_present,
+                                    int module_selector,
+                                    int property_selector,
+                                    FT_UInt* value) {
+    FT_Library library = NULL;
+    if (library_present && FT_Init_FreeType(&library)) {
+        return FT_Err_Invalid_Library_Handle;
+    }
+    FT_Error error = FT_Property_Get(
+        library,
+        property_module_name(module_selector),
+        property_name_value(property_selector),
+        value);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return error;
+}
+
+static FT_Error oracle_property_set(int library_present,
+                                    int module_selector,
+                                    int property_selector,
+                                    const FT_UInt* value) {
+    FT_Library library = NULL;
+    if (library_present && FT_Init_FreeType(&library)) {
+        return FT_Err_Invalid_Library_Handle;
+    }
+    FT_Error error = FT_Property_Set(
+        library,
+        property_module_name(module_selector),
+        property_name_value(property_selector),
+        (void*)value);
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    return error;
+}
+
+static void oracle_property_set_then_get(int module_selector,
+                                         int property_selector,
+                                         const FT_UInt* value,
+                                         FT_Error* set_status,
+                                         FT_Error* get_status,
+                                         FT_UInt* out) {
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        *set_status = init_error;
+        *get_status = init_error;
+        return;
+    }
+    *set_status = FT_Property_Set(
+        library,
+        property_module_name(module_selector),
+        property_name_value(property_selector),
+        (void*)value);
+    *get_status = FT_Property_Get(library, "truetype", "interpreter-version", out);
+    FT_Done_FreeType(library);
+}
+
+static int emit_property_case(int argc, char** argv) {
+    (void)argc;
+    const char* case_id = argv[2];
+    printf("{");
+    print_status(FT_Err_Ok);
+    if (streq(case_id, "ftmodapi.FT_Property_Get.gets_supported_property") ||
+        streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version")) {
+        FT_UInt value = PROPERTY_SENTINEL;
+        FT_Error error = oracle_property_get(1, 1, 1, &value);
+        printf(",\"output\":{\"status\":%d,\"value\":%u,\"module_service\":%s}}\n",
+               error,
+               value,
+               error == FT_Err_Ok ? "true" : "false");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Get.rejects_null_arguments")) {
+        FT_UInt library_value = PROPERTY_SENTINEL;
+        FT_UInt module_value = PROPERTY_SENTINEL;
+        FT_UInt property_value = PROPERTY_SENTINEL;
+        FT_Error library_error = oracle_property_get(0, 1, 1, &library_value);
+        FT_Error module_error = oracle_property_get(1, 0, 1, &module_value);
+        FT_Error property_error = oracle_property_get(1, 1, 0, &property_value);
+        FT_Error value_error = oracle_property_get(1, 1, 1, NULL);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", library_error);
+        printf("{\"field\":\"library\",\"error\":%d,\"value_after\":%u},", library_error, library_value);
+        printf("{\"field\":\"module_name\",\"error\":%d,\"value_after\":%u},", module_error, module_value);
+        printf("{\"field\":\"property_name\",\"error\":%d,\"value_after\":%u},", property_error, property_value);
+        printf("{\"field\":\"value\",\"error\":%d,\"value_after\":null}", value_error);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Get.missing_or_unsupported_property_service")) {
+        FT_UInt missing_value = PROPERTY_SENTINEL;
+        FT_UInt unsupported_value = PROPERTY_SENTINEL;
+        FT_Error missing = oracle_property_get(1, 3, 1, &missing_value);
+        FT_Error unsupported = oracle_property_get(1, 2, 1, &unsupported_value);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", missing);
+        printf("{\"module\":\"fixture_missing\",\"error\":%d,\"value_after\":%u},", missing, missing_value);
+        printf("{\"module\":\"sfnt\",\"error\":%d,\"value_after\":%u}", unsupported, unsupported_value);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Get.invalid_property_name") ||
+        streq(case_id, "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name")) {
+        FT_UInt value = PROPERTY_SENTINEL;
+        FT_Error error = oracle_property_get(1, 1, 2, &value);
+        printf(",\"output\":{\"error\":%d,\"rows\":[{\"property\":\"fixture-missing-property\",\"error\":%d,\"value_after\":%u}]}}\n",
+               error,
+               error,
+               value);
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Set.sets_supported_property")) {
+        const FT_UInt values[] = {TT_INTERPRETER_VERSION_35, TT_INTERPRETER_VERSION_38, TT_INTERPRETER_VERSION_40};
+        printf(",\"output\":{\"rows\":[");
+        for (int i = 0; i < 3; i++) {
+            FT_Error set_status = FT_Err_Ok;
+            FT_Error get_status = FT_Err_Ok;
+            FT_UInt out = PROPERTY_SENTINEL;
+            oracle_property_set_then_get(1, 1, &values[i], &set_status, &get_status, &out);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"input\":%u,\"set_status\":%d,\"get_status\":%d,\"value_after_get\":%u}",
+                   values[i],
+                   set_status,
+                   get_status,
+                   out);
+        }
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Set.rejects_null_arguments")) {
+        FT_UInt value = TT_INTERPRETER_VERSION_40;
+        FT_Error library_error = oracle_property_set(0, 1, 1, &value);
+        FT_Error module_error = oracle_property_set(1, 0, 1, &value);
+        FT_Error property_error = oracle_property_set(1, 1, 0, &value);
+        FT_Error value_error = oracle_property_set(1, 1, 1, NULL);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", library_error);
+        printf("{\"field\":\"library\",\"error\":%d},", library_error);
+        printf("{\"field\":\"module_name\",\"error\":%d},", module_error);
+        printf("{\"field\":\"property_name\",\"error\":%d},", property_error);
+        printf("{\"field\":\"value\",\"error\":%d}", value_error);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service")) {
+        FT_UInt value = TT_INTERPRETER_VERSION_40;
+        FT_Error missing = oracle_property_set(1, 3, 1, &value);
+        FT_Error unsupported = oracle_property_set(1, 2, 1, &value);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", missing);
+        printf("{\"module\":\"fixture_missing\",\"error\":%d,\"property_after\":%u},", missing, PROPERTY_SENTINEL);
+        printf("{\"module\":\"sfnt\",\"error\":%d,\"property_after\":%u}", unsupported, PROPERTY_SENTINEL);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftmodapi.FT_Property_Set.invalid_property_or_value")) {
+        FT_UInt good = TT_INTERPRETER_VERSION_40;
+        FT_UInt bad = 9999;
+        FT_Error set_status = FT_Err_Ok;
+        FT_Error get_status = FT_Err_Ok;
+        FT_UInt missing_after = PROPERTY_SENTINEL;
+        oracle_property_set_then_get(1, 2, &good, &set_status, &get_status, &missing_after);
+        FT_Error missing_error = set_status;
+        FT_UInt value_after = PROPERTY_SENTINEL;
+        oracle_property_set_then_get(1, 1, &bad, &set_status, &get_status, &value_after);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", missing_error);
+        printf("{\"scenario\":\"invalid_property\",\"error\":%d,\"previous_property_value\":%d,\"property_after\":%u},",
+               missing_error,
+               TT_INTERPRETER_VERSION_40,
+               missing_after);
+        printf("{\"scenario\":\"invalid_value\",\"error\":%d,\"previous_property_value\":%d,\"property_after\":%u}",
+               set_status,
+               TT_INTERPRETER_VERSION_40,
+               value_after);
+        printf("]}}\n");
+        return 0;
+    }
+    printf(",\"output\":{\"unsupported_case\":\"%s\"}}\n", case_id);
+    return 0;
+}
+
 static const char* debug_hook_class_name(FT_DebugHook_Func hook) {
     if (hook == debug_hook_a) {
         return "hook_a";
@@ -14818,6 +15030,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--property-case")) {
+        return emit_property_case(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
