@@ -10,20 +10,20 @@ Current non-coverage parity command:
 make -C pillow-rs-freetype test
 ```
 
-Current verified result after `FT_LOAD_FORCE_AUTOHINT` load-glyph exact-error
+Current verified result after `FT_LOAD_PEDANTIC` load-glyph exact-error
 classification:
 
 - Runnable public parity rows: `7144 / 7144` pass.
 - Pending runtime rows: `90`.
 - Route audit concrete rows: `7234`.
 - Route audit categories:
-  - `real-parity`: `3956`
+  - `real-parity`: `3957`
   - `real-null-validation`: `8`
   - `raw-slot-null-validation`: `4`
   - `wrapper-null-validation`: `1`
   - `compile-contract`: `2229`
   - `generic-fallback`: `696`
-  - `generic-error-fallback`: `239`
+  - `generic-error-fallback`: `238`
   - `pending-route`: `82`
   - `pending-core`: `7`
   - `null-error-fallback`: `6`
@@ -364,6 +364,41 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_FORCE_AUTOHINT.load_g
 
 Result: `6 / 6` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3956`, `generic-error-fallback` `239`.
+
+### Issue Set Current: `FT_LOAD_PEDANTIC` load-glyph exact-error route
+
+Previous blocker:
+
+- `freetype.FT_LOAD_PEDANTIC.pedantic_error_behavior` had a concrete error row
+  classified as `generic-error-fallback`.
+- The row already ran through pinned C FreeType, Rust FFI, thin C ABI, and WASM
+  ABI, but fallback classification only proved that an error happened.
+
+Fix plan:
+
+1. Promote only the concrete pedantic load-glyph row to exact-error comparison.
+2. Keep the generated pedantic input row unchanged.
+3. Verify exact status/output through Rust FFI, thin C ABI `FT_Load_Glyph`, and
+   WASM ABI before counting the row as `real-parity`.
+
+Verified progress:
+
+- Rust now matches FreeType `Compute_Point_Displacement` validation for
+  pedantic SHP/SHC/SHZ movement. When `rp1`/`rp2` references an empty or
+  out-of-range zone, non-pedantic execution ignores the movement and
+  `FT_LOAD_PEDANTIC` returns `FT_Err_Invalid_Reference`.
+- Exact comparison passed for the concrete row.
+- The previously fallback-classified error row now validates exact status/output
+  against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_PEDANTIC.pedantic_error_behavior
+```
+
+Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
+audit: `real-parity` `3957`, `generic-error-fallback` `238`.
 
 ### Issue Set A: `ftoutln.outline_render` pending outline fixtures
 
