@@ -8428,10 +8428,26 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Character_Code.char_index_name_lookup_invalid_code"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Driver_Handle.module_driver_handle_validation"
             || case.case_id == "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Pixel_Size.bitmap_strike_mismatch"
+            || case.case_id == "fterrdef.FT_Err_Nested_Frame_Access.stream_nested_frame_guard"
             || case.case_id == "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
+            || case.case_id == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c"
+            || case.case_id == "ftcolor.FT_Palette_Select.error_color_layers_disabled"
+            || case.case_id
+                == "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering"
+            || case.case_id
+                == "ftlcdfil.FT_Library_SetLcdFilterWeights.unimplemented_without_subpixel_filtering"
+            || case.case_id == "ftmm.FT_Get_Multi_Master.null_output_error"
             || case.case_id == "ftmm.FT_Get_Var_Axis_Flags.null_master_or_flags_error"
             || case.case_id == "ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error"
+            || case.case_id == "ftsnames.FT_Get_Sfnt_LangTag.format0_invalid_table_error"
+            || case.case_id == "tttables.FT_Sfnt_Table_Info.invalid_face_error"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
