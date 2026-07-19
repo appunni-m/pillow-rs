@@ -8374,6 +8374,17 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "ftcache.FTC_ImageCache_Lookup.error_invalid_cache_type_face_or_glyph"
             || case.case_id == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"
+            || case.case_id == "ftcache.FTC_ImageCache_New.error_null_manager_or_output"
+            || case.case_id == "ftcache.FTC_ImageCache_New.error_too_many_caches"
+            || case.case_id == "ftcache.FTC_Manager_LookupFace.error_null_output_or_manager"
+            || case.case_id == "ftcache.FTC_Manager_LookupFace.error_requester_failure"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Cache_Handle.cache_lookup_rejects_null_manager"
+            || case.case_id == "ftcache.FTC_Manager_LookupSize.error_null_scaler_output_or_manager"
+            || case.case_id
+                == "ftcache.FTC_Manager_LookupSize.error_requester_or_size_selection_failure"
+            || case.case_id == "ftcache.FTC_Manager_New.error_null_library"
+            || case.case_id == "ftcache.FTC_Manager_New.error_null_requester_or_output"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
             || case.case_id == "ftpfr.FT_Get_PFR_Advance.null_face_or_output_errors"
             || case.case_id == "ftpfr.FT_Get_PFR_Kerning.null_face_or_vector_errors"
