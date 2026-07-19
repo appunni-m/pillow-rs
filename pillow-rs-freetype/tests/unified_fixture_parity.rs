@@ -8424,13 +8424,21 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error"
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error"
             || case.case_id == "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error"
+            || case.case_id
+                == "fterrdef.FT_Err_Cannot_Open_Stream.resource_fork_stream_failure_returns_error"
             || case.case_id
                 == "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error"
             || case.case_id
                 == "fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required"
             || case.case_id
+                == "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c"
+            || case.case_id == "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table"
+            || case.case_id
                 == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
+            || case.case_id == "fterrdef.FT_Err_Invalid_Frame_Read.stream_frame_bounds_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure"
             || case.case_id == "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure"
@@ -8454,6 +8462,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error"
             || case.case_id == "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument"
+            || case.case_id == "fterrdef.FT_Err_Missing_Module.no_driver_matches_face"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection"
             || case.case_id == "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom"
             || case.case_id == "fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted"
@@ -8462,6 +8471,9 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
                 == "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height"
             || case.case_id == "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool"
             || case.case_id == "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing"
+            || case.case_id == "fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format"
+            || case.case_id
+                == "fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown"
             || case.case_id
                 == "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled"
             || case.case_id == "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
@@ -8496,6 +8508,7 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base"
+            || case.case_id == "ftmoderr.FT_Mod_Err_Smooth.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_Type1.prefixed_error_base"
             || case.case_id == "ftmoderr.FT_Mod_Err_Type42.prefixed_error_base"

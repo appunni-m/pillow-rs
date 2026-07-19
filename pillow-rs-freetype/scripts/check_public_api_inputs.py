@@ -872,10 +872,15 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch",
         "fterrdef.FT_Err_Cannot_Render_Glyph.outline_raster_unsupported_mode_returns_error",
         "fterrdef.FT_Err_Cannot_Open_Resource.missing_path_returns_error",
+        "fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error",
         "fterrdef.FT_Err_Cannot_Open_Stream.zero_length_file_returns_error",
+        "fterrdef.FT_Err_Cannot_Open_Stream.resource_fork_stream_failure_returns_error",
         "fterrdef.FT_Err_Cannot_Render_Glyph.unsupported_render_mode_returns_error",
         "fterrdef.FT_Err_CMap_Table_Missing.sfnt_without_cmap_returns_error_where_required",
+        "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c",
+        "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table",
         "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence",
+        "fterrdef.FT_Err_Invalid_Frame_Read.stream_frame_bounds_rejected",
         "fterrdef.FT_Err_Invalid_Stream_Handle.null_stream_rejected",
         "fterrdef.FT_Err_Invalid_Stream_Operation.stream_operation_failure",
         "fterrdef.FT_Err_Invalid_Stream_Seek.stream_seek_failure",
@@ -896,6 +901,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Nested_Frame_Access.stream_nested_frame_guard",
         "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error",
         "fterrdef.FT_Err_Bad_Argument.svg_preset_slot_bad_argument",
+        "fterrdef.FT_Err_Missing_Module.no_driver_matches_face",
         "fterrdef.FT_Err_Out_Of_Memory.allocator_failure_injection",
         "fterrdef.FT_Err_Out_Of_Memory.cache_flush_then_oom",
         "fterrdef.FT_Err_Raster_Corrupted.bsdf_empty_contours_corrupted",
@@ -903,6 +909,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Raster_Negative_Height.monochrome_raster_negative_height",
         "fterrdef.FT_Err_Raster_Uninitialized.raster_render_without_pool",
         "fterrdef.FT_Err_Table_Missing.sfnt_required_table_missing",
+        "fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format",
+        "fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown",
         "fterrdef.FT_Err_Unimplemented_Feature.optional_module_feature_disabled",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
@@ -933,6 +941,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmoderr.FT_Mod_Err_Raster.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_Sdf.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_SFNT.prefixed_error_base",
+        "ftmoderr.FT_Mod_Err_Smooth.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_TrueType.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_Type1.prefixed_error_base",
         "ftmoderr.FT_Mod_Err_Type42.prefixed_error_base",
@@ -1509,6 +1518,38 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_Open_Face.error_invalid_source_flags"
     ):
         return "FT_Open_Face invalid source-flag errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    face_table_error_cases = {
+        (
+            "FT_Open_Face",
+            "fterrdef.FT_Err_Cannot_Open_Resource.resource_fork_open_failure_returns_error",
+        ),
+        (
+            "FT_Open_Face",
+            "fterrdef.FT_Err_Cannot_Open_Stream.resource_fork_stream_failure_returns_error",
+        ),
+        (
+            "FT_Open_Face",
+            "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c",
+        ),
+        ("FT_Open_Face", "fterrdef.FT_Err_Missing_Module.no_driver_matches_face"),
+        (
+            "FT_Open_Face",
+            "fterrdef.FT_Err_Unknown_File_Format.malformed_container_probe_unknown",
+        ),
+        ("new_memory_face", "fterrdef.FT_Err_Unknown_File_Format.face_open_unknown_format"),
+        ("sfnt.new_memory_face", "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table"),
+        (
+            "sfnt.new_memory_face",
+            "fterrdef.FT_Err_Invalid_Frame_Read.stream_frame_bounds_rejected",
+        ),
+    }
+    if (row.operation, row.case_id) in face_table_error_cases:
+        return "face/table opening public error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "smooth.render_error_probe"
+        and row.case_id == "ftmoderr.FT_Mod_Err_Smooth.prefixed_error_base"
+    ):
+        return "Smooth renderer module-prefixed error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "load_glyph"
         and row.case_id == "freetype.FT_Load_Glyph.matrix_load"
