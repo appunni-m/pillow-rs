@@ -5888,6 +5888,8 @@ typedef enum OrientationOutlineKind_ {
     ORIENTATION_OUTLINE_ZERO_AREA,
 } OrientationOutlineKind;
 
+static void print_mutated_points(const FT_Vector* points, unsigned int count);
+
 static void build_orientation_outline(
     OrientationOutlineKind kind,
     FT_Outline* outline,
@@ -6105,6 +6107,95 @@ static int emit_outline_get_orientation(int argc, char** argv) {
         print_orientation_observation("oversized", ORIENTATION_OUTLINE_OVERSIZED, &emitted);
     } else {
         fprintf(stderr, "unsupported outline orientation case: %s\n", case_id);
+        return 2;
+    }
+    printf("]}}\n");
+    return 0;
+}
+
+static int emit_outline_get_orientation_mutated(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    if (!strstr(case_id, "FT_Outline_Get_Orientation.transformed_and_reversed_outlines")) {
+        fprintf(stderr, "unsupported outline orientation mutation case: %s\n", case_id);
+        return 2;
+    }
+    print_ok_output_prefix();
+    FT_Outline reversed;
+    FT_Vector reversed_points[4];
+    char reversed_tags[4];
+    short reversed_contours[1];
+    build_orientation_outline(ORIENTATION_OUTLINE_NEGATIVE, &reversed, reversed_points, reversed_tags, reversed_contours);
+    FT_Outline_Reverse(&reversed);
+    FT_Orientation reversed_orientation = FT_Outline_Get_Orientation(&reversed);
+
+    FT_Outline transformed;
+    FT_Vector transformed_points[4];
+    char transformed_tags[4];
+    short transformed_contours[1];
+    build_orientation_outline(ORIENTATION_OUTLINE_NEGATIVE, &transformed, transformed_points, transformed_tags, transformed_contours);
+    FT_Matrix matrix = {-0x10000L, 0, 0, 0x10000L};
+    FT_Outline_Transform(&transformed, &matrix);
+    FT_Orientation transformed_orientation = FT_Outline_Get_Orientation(&transformed);
+
+    printf("{\"results\":[{\"label\":\"reverse\",\"return\":%d,\"points_after\":", reversed_orientation);
+    print_mutated_points(reversed_points, 4);
+    printf(",\"flags_after\":%d},{\"label\":\"transform\",\"return\":%d,\"points_after\":", reversed.flags, transformed_orientation);
+    print_mutated_points(transformed_points, 4);
+    printf(",\"flags_after\":%d}]}}\n", transformed.flags);
+    return 0;
+}
+
+static void print_outline_border_row(
+    const char* label,
+    OrientationOutlineKind kind,
+    int outside,
+    int* emitted
+) {
+    if (*emitted) {
+        printf(",");
+    }
+    *emitted = 1;
+    FT_Outline outline;
+    FT_Vector points[4];
+    char tags[4];
+    short contours[1];
+    FT_Outline* outline_ptr = NULL;
+    if (kind != ORIENTATION_OUTLINE_NULL) {
+        build_orientation_outline(kind, &outline, points, tags, contours);
+        outline_ptr = &outline;
+    }
+    FT_Orientation orientation = FT_Outline_Get_Orientation(outline_ptr);
+    FT_StrokerBorder border = outside
+                                ? FT_Outline_GetOutsideBorder(outline_ptr)
+                                : FT_Outline_GetInsideBorder(outline_ptr);
+    printf("{\"label\":\"%s\",\"orientation\":%d,\"border\":%d}", label, orientation, border);
+}
+
+static int emit_outline_border(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    int outside = strstr(case_id, "FT_Outline_GetOutsideBorder") != NULL;
+    print_ok_output_prefix();
+    printf("{\"rows\":[");
+    int emitted = 0;
+    if (strstr(case_id, ".truetype_orientation_returns_")) {
+        print_outline_border_row("null", ORIENTATION_OUTLINE_NULL, outside, &emitted);
+        print_outline_border_row("empty", ORIENTATION_OUTLINE_EMPTY, outside, &emitted);
+        print_outline_border_row("truetype", ORIENTATION_OUTLINE_NEGATIVE, outside, &emitted);
+    } else if (strstr(case_id, ".non_truetype_orientation_returns_")) {
+        print_outline_border_row("postscript", ORIENTATION_OUTLINE_POSITIVE, outside, &emitted);
+    } else if (strstr(case_id, ".orientation_delegation")) {
+        print_outline_border_row("null", ORIENTATION_OUTLINE_NULL, outside, &emitted);
+        print_outline_border_row("empty", ORIENTATION_OUTLINE_EMPTY, outside, &emitted);
+        print_outline_border_row("truetype", ORIENTATION_OUTLINE_NEGATIVE, outside, &emitted);
+        print_outline_border_row("postscript", ORIENTATION_OUTLINE_POSITIVE, outside, &emitted);
+    } else {
+        fprintf(stderr, "unsupported outline border case: %s\n", case_id);
         return 2;
     }
     printf("]}}\n");
@@ -12063,6 +12154,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-orientation")) {
         return emit_outline_get_orientation(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-get-orientation-mutated")) {
+        return emit_outline_get_orientation_mutated(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-border")) {
+        return emit_outline_border(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-check")) {
         return emit_outline_check(argc, argv);

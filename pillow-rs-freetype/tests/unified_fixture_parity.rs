@@ -10545,6 +10545,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-get-orientation".to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.get_orientation_after_mutation" => Ok(vec![
+            "--outline-get-orientation-mutated".to_string(),
+            case.case_id.clone(),
+        ]),
         "ftoutln.outline_check" => Ok(vec!["--outline-check".to_string(), case.case_id.clone()]),
         "ftoutln.outline_copy" => Ok(vec!["--outline-copy".to_string(), case.case_id.clone()]),
         "ftoutln.outline_done" => Ok(vec!["--outline-done".to_string(), case.case_id.clone()]),
@@ -10567,6 +10571,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-translate".to_string(),
             case.case_id.clone(),
         ]),
+        "ftstroke.outline_get_inside_border"
+        | "ftstroke.outline_get_outside_border"
+        | "ftstroke.outline_border_orientation_pair" => {
+            Ok(vec!["--outline-border".to_string(), case.case_id.clone()])
+        }
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => Ok(vec![
             "--outline-render".to_string(),
             if case.subject == "ftoutln.FT_Outline_Render"
@@ -11177,6 +11186,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => rust_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation_after_mutation" => {
+            rust_outline_orientation_after_mutation_runtime_output(case)
+        }
         "ftoutln.outline_check" => rust_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => rust_outline_copy_runtime_output(case),
         "ftoutln.outline_done" => rust_outline_done_runtime_output(case),
@@ -11189,6 +11201,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_render" => rust_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => rust_outline_decompose_runtime_output(case),
+        "ftstroke.outline_get_inside_border"
+        | "ftstroke.outline_get_outside_border"
+        | "ftstroke.outline_border_orientation_pair" => rust_outline_border_runtime_output(case),
         "ftadvanc.get_advance" => {
             let face = if advance_preserve_probe_face(case)? {
                 rust_new_face_without_size(case)?
@@ -11886,6 +11901,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => c_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation_after_mutation" => {
+            c_outline_orientation_after_mutation_runtime_output(case)
+        }
         "ftoutln.outline_check" => c_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => c_outline_copy_runtime_output(case),
         "ftoutln.outline_done" => c_outline_done_runtime_output(case),
@@ -11898,6 +11916,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_render" => c_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => c_outline_decompose_runtime_output(case),
+        "ftstroke.outline_get_inside_border"
+        | "ftstroke.outline_get_outside_border"
+        | "ftstroke.outline_border_orientation_pair" => c_outline_border_runtime_output(case),
         "ftadvanc.get_advance" => {
             let (library, face) = if advance_preserve_probe_face(case)? {
                 c_new_face_without_size(case)?
@@ -12454,6 +12475,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" => wasm_outline_orientation_runtime_output(case),
+        "ftoutln.get_orientation_after_mutation" => {
+            wasm_outline_orientation_after_mutation_runtime_output(case)
+        }
         "ftoutln.outline_check" => wasm_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => wasm_outline_copy_runtime_output(case),
         "ftoutln.outline_done" => wasm_outline_done_runtime_output(case),
@@ -12466,6 +12490,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_render" => wasm_outline_render_runtime_output(case),
         "ftoutln.outline_render_direct" => outline_render_direct_fallback_runtime_output(case),
         "ftoutln.outline_decompose" => wasm_outline_decompose_runtime_output(case),
+        "ftstroke.outline_get_inside_border"
+        | "ftstroke.outline_get_outside_border"
+        | "ftstroke.outline_border_orientation_pair" => wasm_outline_border_runtime_output(case),
         "ftadvanc.get_advance" => {
             let handle = if advance_preserve_probe_face(case)? {
                 wasm_new_face_without_size(case)?
@@ -19993,6 +20020,224 @@ fn wasm_outline_transform_runtime_output(case: &InputCase) -> Result<RunOutput, 
         wasm_transform_mutable_outline,
         wasm_observe_mutable_outline,
     )
+}
+
+fn orientation_mutation_base_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![(0, 0), (64, 0), (64, 64), (0, 64)],
+        tags: vec![1; 4],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
+fn outline_orientation_after_mutation_runtime_output<F, G>(
+    case: &InputCase,
+    mut reverse: F,
+    mut transform: G,
+    mut observe: impl FnMut(&MutableOutlineModel) -> i64,
+) -> Result<RunOutput, String>
+where
+    F: FnMut(&mut MutableOutlineModel),
+    G: FnMut(&mut MutableOutlineModel, (i64, i64, i64, i64)),
+{
+    if !case.case_id.ends_with(".transformed_and_reversed_outlines") {
+        return Err(format!(
+            "unsupported outline orientation mutation case {}",
+            case.case_id
+        ));
+    }
+    let mut reversed = orientation_mutation_base_model();
+    reverse(&mut reversed);
+    let reversed_orientation = observe(&reversed);
+
+    let mut transformed = orientation_mutation_base_model();
+    transform(&mut transformed, (-0x10000, 0, 0, 0x10000));
+    let transformed_orientation = observe(&transformed);
+
+    Ok(ok(json!({
+        "results": [
+            {
+                "label": "reverse",
+                "return": reversed_orientation,
+                "points_after": outline_points_json(&reversed.points),
+                "flags_after": reversed.flags
+            },
+            {
+                "label": "transform",
+                "return": transformed_orientation,
+                "points_after": outline_points_json(&transformed.points),
+                "flags_after": transformed.flags
+            }
+        ]
+    })))
+}
+
+fn rust_outline_orientation_after_mutation_runtime_output(
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    outline_orientation_after_mutation_runtime_output(
+        case,
+        |model| {
+            let mut snapshot = rust_snapshot_from_mutable(model);
+            FT_Outline_Reverse(Some(&mut snapshot));
+            update_mutable_from_rust_snapshot(model, snapshot);
+        },
+        |model, matrix| {
+            rust_transform_mutable_outline(OutlineTransformScenario::Outline, Some(model), matrix);
+        },
+        |model| rust_observe_mutable_outline(model).1,
+    )
+}
+
+fn c_outline_orientation_after_mutation_runtime_output(
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    outline_orientation_after_mutation_runtime_output(
+        case,
+        |model| c_reverse_mutable_outline(Some(model)),
+        |model, matrix| {
+            c_transform_mutable_outline(OutlineTransformScenario::Outline, Some(model), matrix);
+        },
+        |model| c_observe_mutable_outline(model).1,
+    )
+}
+
+fn wasm_outline_orientation_after_mutation_runtime_output(
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    outline_orientation_after_mutation_runtime_output(
+        case,
+        |model| wasm_reverse_mutable_outline(Some(model)),
+        |model, matrix| {
+            wasm_transform_mutable_outline(OutlineTransformScenario::Outline, Some(model), matrix);
+        },
+        |model| wasm_observe_mutable_outline(model).1,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum BorderOutlineKind {
+    Null,
+    Empty,
+    TrueType,
+    PostScript,
+}
+
+fn outline_border_rows(case_id: &str) -> Result<Vec<(&'static str, BorderOutlineKind)>, String> {
+    if case_id.contains(".truetype_orientation_returns_") {
+        return Ok(vec![
+            ("null", BorderOutlineKind::Null),
+            ("empty", BorderOutlineKind::Empty),
+            ("truetype", BorderOutlineKind::TrueType),
+        ]);
+    }
+    if case_id.contains(".non_truetype_orientation_returns_") {
+        return Ok(vec![("postscript", BorderOutlineKind::PostScript)]);
+    }
+    if case_id.contains(".orientation_delegation") {
+        return Ok(vec![
+            ("null", BorderOutlineKind::Null),
+            ("empty", BorderOutlineKind::Empty),
+            ("truetype", BorderOutlineKind::TrueType),
+            ("postscript", BorderOutlineKind::PostScript),
+        ]);
+    }
+    Err(format!("unsupported outline border case {case_id}"))
+}
+
+fn border_outline_model(kind: BorderOutlineKind) -> Option<MutableOutlineModel> {
+    match kind {
+        BorderOutlineKind::Null => None,
+        BorderOutlineKind::Empty => Some(MutableOutlineModel {
+            points: Vec::new(),
+            tags: Vec::new(),
+            contours: Vec::new(),
+            flags: 0,
+        }),
+        BorderOutlineKind::TrueType => Some(MutableOutlineModel {
+            points: vec![(0, 0), (64, 0), (64, 64), (0, 64)],
+            tags: vec![1; 4],
+            contours: vec![3],
+            flags: 0,
+        }),
+        BorderOutlineKind::PostScript => Some(MutableOutlineModel {
+            points: vec![(0, 0), (0, 64), (64, 64), (64, 0)],
+            tags: vec![1; 4],
+            contours: vec![3],
+            flags: 0,
+        }),
+    }
+}
+
+fn outline_border_runtime_output<F>(case: &InputCase, mut observe: F) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&MutableOutlineModel>) -> (i64, i64),
+{
+    let rows = outline_border_rows(&case.case_id)?
+        .into_iter()
+        .map(|(label, kind)| {
+            let model = border_outline_model(kind);
+            let (orientation, border) = observe(model.as_ref());
+            json!({
+                "label": label,
+                "orientation": orientation,
+                "border": border
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_outline_border_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_border_runtime_output(case, |model| {
+        let snapshot = model.map(rust_snapshot_from_mutable);
+        let orientation = i64::from(FT_Outline_Get_Orientation(snapshot.as_ref()));
+        let border = if outline_border_case_is_outside(case) {
+            i64::from(FT_Outline_GetOutsideBorder(snapshot.as_ref()))
+        } else {
+            i64::from(FT_Outline_GetInsideBorder(snapshot.as_ref()))
+        };
+        (orientation, border)
+    })
+}
+
+fn c_outline_border_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_border_runtime_output(case, |model| {
+        let mut storage = model.cloned().map(CMutableOutlineStorage::new);
+        let ptr = storage
+            .as_mut()
+            .map_or(ptr::null(), CMutableOutlineStorage::as_const_ptr);
+        let orientation = i64::from(c_abi::FT_Outline_Get_Orientation(ptr));
+        let border = if outline_border_case_is_outside(case) {
+            i64::from(c_abi::FT_Outline_GetOutsideBorder(ptr))
+        } else {
+            i64::from(c_abi::FT_Outline_GetInsideBorder(ptr))
+        };
+        (orientation, border)
+    })
+}
+
+fn wasm_outline_border_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_border_runtime_output(case, |model| {
+        let mut storage = model.cloned().map(WasmMutableOutlineStorage::new);
+        let ptr = storage
+            .as_mut()
+            .map_or(ptr::null(), WasmMutableOutlineStorage::as_const_ptr);
+        let orientation = i64::from(wasm_abi::fontdone_wasm_outline_get_orientation(ptr));
+        let border = if outline_border_case_is_outside(case) {
+            i64::from(wasm_abi::fontdone_wasm_outline_get_outside_border(ptr))
+        } else {
+            i64::from(wasm_abi::fontdone_wasm_outline_get_inside_border(ptr))
+        };
+        (orientation, border)
+    })
+}
+
+fn outline_border_case_is_outside(case: &InputCase) -> bool {
+    case.subject == "ftstroke.FT_Outline_GetOutsideBorder"
+        || case.case_id.contains("FT_Outline_GetOutsideBorder")
+        || case.operation == "ftstroke.outline_get_outside_border"
 }
 
 fn outline_translate_offsets(case: &InputCase) -> (i64, i64) {

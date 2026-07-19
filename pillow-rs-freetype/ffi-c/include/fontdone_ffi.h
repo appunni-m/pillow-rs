@@ -33,6 +33,7 @@ typedef int FT_Encoding;
 typedef unsigned int FT_Sfnt_Tag;
 typedef int FT_LcdFilter;
 typedef int FT_TrueTypeEngineType;
+typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
 
 typedef struct FT_LibraryRec_* FT_Library;
@@ -294,6 +295,8 @@ FT_Error FT_Outline_New(FT_Library library, FT_UInt numPoints, FT_Int numContour
 FT_Error FT_Outline_Done(FT_Library library, FT_Outline* outline);
 FT_Error FT_Outline_Embolden(FT_Outline* outline, FT_Pos strength);
 FT_Error FT_Outline_EmboldenXY(FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength);
+FT_StrokerBorder FT_Outline_GetInsideBorder(const FT_Outline* outline);
+FT_StrokerBorder FT_Outline_GetOutsideBorder(const FT_Outline* outline);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 void FT_Outline_Reverse(FT_Outline* outline);
 void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);

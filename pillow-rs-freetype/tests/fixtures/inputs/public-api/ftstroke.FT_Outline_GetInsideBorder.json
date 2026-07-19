@@ -25,8 +25,7 @@
           "outlines": {
             "kind": "ref",
             "id": "outlines/orientation/clockwise-and-empty.json",
-            "asset_kind": "outline_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_records"
           }
         },
         "params": {
@@ -81,8 +80,7 @@
           "outlines": {
             "kind": "ref",
             "id": "outlines/orientation/counter-clockwise.json",
-            "asset_kind": "outline_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_records"
           }
         },
         "params": {
@@ -134,8 +132,7 @@
           "outlines": {
             "kind": "ref",
             "id": "outlines/orientation/mixed-orientations.json",
-            "asset_kind": "outline_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_records"
           }
         },
         "params": {

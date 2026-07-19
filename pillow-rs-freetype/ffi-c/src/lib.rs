@@ -48,6 +48,7 @@ pub type FT_Sfnt_Tag = c_uint;
 pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
+pub type FT_StrokerBorder = c_int;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
@@ -1783,6 +1784,18 @@ pub extern "C" fn FT_Outline_EmboldenXY(
         copy_outline_snapshot_to_c(outline, &snapshot, false);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_GetInsideBorder(outline: *const FT_Outline) -> FT_StrokerBorder {
+    let snapshot = outline_snapshot_from_c(outline);
+    rust_ffi::FT_Outline_GetInsideBorder(snapshot.as_ref()) as FT_StrokerBorder
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Outline_GetOutsideBorder(outline: *const FT_Outline) -> FT_StrokerBorder {
+    let snapshot = outline_snapshot_from_c(outline);
+    rust_ffi::FT_Outline_GetOutsideBorder(snapshot.as_ref()) as FT_StrokerBorder
 }
 
 #[unsafe(no_mangle)]

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "kind": "outline_model_set",
+  "models": {
+    "empty_outline": {
+      "points": [],
+      "tags": [],
+      "contours": [],
+      "flags": 0
+    },
+    "truetype_clockwise": {
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 64, "y": 0},
+        {"x": 64, "y": 64},
+        {"x": 0, "y": 64}
+      ],
+      "tags": [1, 1, 1, 1],
+      "contours": [3],
+      "flags": 0
+    },
+    "postscript_counter_clockwise": {
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 64},
+        {"x": 64, "y": 64},
+        {"x": 64, "y": 0}
+      ],
+      "tags": [1, 1, 1, 1],
+      "contours": [3],
+      "flags": 0
+    }
+  }
+}
