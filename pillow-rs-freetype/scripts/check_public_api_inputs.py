@@ -1178,6 +1178,42 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for the cache subsystem that do not have a maintained success route."""
+    cache_operations_without_success_route = {
+        "ftcache.cmap_cache_lookup",
+        "ftcache.cmap_cache_new",
+        "ftcache.face_id_identity",
+        "ftcache.image_cache_lookup",
+        "ftcache.image_cache_lookup_scaler",
+        "ftcache.image_cache_new",
+        "ftcache.image_type_descriptor_lifetime",
+        "ftcache.image_type_lookup_probe",
+        "ftcache.manager_done",
+        "ftcache.manager_lifecycle",
+        "ftcache.manager_lookup_face",
+        "ftcache.manager_lookup_size",
+        "ftcache.manager_new",
+        "ftcache.manager_ownership",
+        "ftcache.manager_remove_face_id",
+        "ftcache.node_lifecycle",
+        "ftcache.node_unref",
+        "ftcache.sbit_cache_lookup_scaler",
+        "ftcache.sbit_cache_new",
+        "ftcache.scaler_descriptor_lifetime",
+        "ftcache.type_contract",
+    }
+    if row.operation not in cache_operations_without_success_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "FTC cache manager/image/cmap/sbit/node success and lifecycle behavior "
+        "requires a maintained cache subsystem route; keeping it generic would "
+        "be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3474,6 +3510,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_pending = ftstroke_stroker_pending_reason(row)
     if ftstroke_pending:
         return ("pending-route", ftstroke_pending)
+    ftcache_pending = ftcache_subsystem_pending_reason(row)
+    if ftcache_pending:
+        return ("pending-route", ftcache_pending)
     shape_reason = shape_fallback_reason(row)
     if shape_reason:
         if row.expect_error and not has_runtime_asset(row):
