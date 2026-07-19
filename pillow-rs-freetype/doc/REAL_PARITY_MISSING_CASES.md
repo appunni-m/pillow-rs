@@ -1,5 +1,66 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftmm` MM/variation descriptor route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `3ac19a70e`: `real-parity=4465`,
+  `generic-fallback=182`, `pending-route=332`, `pending-core=7`.
+
+Finding:
+
+- Existing FTMM exact error rows and runtime-asset success rows are already
+  classified separately as real parity when they have pinned C/Rust/C-ABI/WASM
+  proof.
+- The remaining FTMM rows cover `FT_Get_MM_Var`, `FT_Done_MM_Var`,
+  `FT_Get_MM_Blend_Coordinates`, `FT_Get_MM_WeightVector`,
+  `FT_Get_Multi_Master`, `FT_Get_Var_Axis_Flags`,
+  `FT_Get_Default_Named_Instance`, `FT_Multi_Master`, `T1_MAX_MM_*`, and
+  related ABI/import/layout-capacity contracts.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  MM/variation route that opens the required variable and Adobe MM faces,
+  reads descriptor records, axis flags, design/blend coordinates, named style
+  defaults, and Type1 MM layout capacities, and then compares exact public
+  fields and lifecycle side effects across all ABI lanes.
+
+Classification change:
+
+- 22 `ftmm.*` rows moved from `generic-fallback` to `pending-route`.
+- Existing exact FTMM error rows and runtime-asset success rows remain
+  `real-parity`; the classifier is intentionally applied after those real
+  promotions.
+- New route audit counts: `real-parity=4465`, `generic-fallback=160`,
+  `pending-route=354`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained MM/variation descriptor route instead of per-row expected
+   output shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust support for the missing descriptor and coordinate
+   surfaces first: `FT_MM_Var`, Adobe `FT_Multi_Master`, axis maps, hidden-axis
+   flags, default named instance, design/blend coordinate conversion, and
+   descriptor ownership/free behavior.
+3. Compare exact return codes, descriptor counts, axis names/tags/min/default/max
+   values, hidden flags, named-style defaults, coordinate arrays, partial/excess
+   count behavior, Type1 MM capacity constants, and post-`FT_Done_MM_Var`
+   lifecycle state.
+4. Keep the already-routed FTMM exact error and runtime success rows real; do
+   not demote them while building the broader MM route.
+5. Promote rows only after focused `ftmm` runtime proves exact C oracle, Rust
+   FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftmm
+```
+
 ### Issue Set Current: `ftgxval` GX/classic kern validation route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.

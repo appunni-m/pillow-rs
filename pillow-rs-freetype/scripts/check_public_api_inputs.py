@@ -1253,6 +1253,43 @@ def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for MM/variation runtime data that do not have a maintained route."""
+    ftmm_rows_without_maintained_route = {
+        "ftmm.FT_Done_MM_Var.import_contract",
+        "ftmm.FT_Done_MM_Var.frees_descriptor_success",
+        "ftmm.FT_Get_Default_Named_Instance.import_contract",
+        "ftmm.FT_Get_MM_Blend_Coordinates.import_contract",
+        "ftmm.FT_Get_MM_Blend_Coordinates.default_blend_coordinates",
+        "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
+        "ftmm.FT_Get_MM_Blend_Coordinates.partial_or_excess_count",
+        "ftmm.FT_Get_MM_Var.import_contract",
+        "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
+        "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success",
+        "ftmm.FT_Get_MM_WeightVector.import_contract",
+        "ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success",
+        "ftmm.FT_Get_Multi_Master.import_contract",
+        "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success",
+        "ftmm.FT_Get_Var_Axis_Flags.import_contract",
+        "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
+        "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
+        "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
+        "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
+        "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
+        "ftmm.T1_MAX_MM_DESIGNS.record_design_capacity",
+        "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
+    }
+    if row.case_id not in ftmm_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Multiple Master and variation descriptor, coordinate, axis-flag, and "
+        "layout success behavior requires a maintained MM route; keeping it "
+        "generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3579,6 +3616,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     future_batch_real_reason = future_batch_real_parity_reason(row)
     if future_batch_real_reason:
         return ("real-parity", future_batch_real_reason)
+    ftmm_pending = ftmm_subsystem_pending_reason(row)
+    if ftmm_pending:
+        return ("pending-route", ftmm_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",
