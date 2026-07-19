@@ -707,7 +707,11 @@ fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness 
             reason: format!("{operation}:{reason}"),
         };
     }
-    if !case.expect_error && !has_no_font_assets(case) && !assets_are_runtime_resolved(case) {
+    if !case.expect_error
+        && runtime_operation_requires_resolved_declared_asset(operation)
+        && !has_no_font_assets(case)
+        && !assets_are_runtime_resolved(case)
+    {
         return RuntimeReadiness::Pending {
             reason: format!("{operation}:declared runtime font asset is unresolved"),
         };
@@ -781,6 +785,22 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
 fn is_supported_runtime_operation(_case: &InputCase, _operation: &str) -> bool {
     // Accept ALL operations. oracle_args is the sole gating mechanism.
     true
+}
+
+fn runtime_operation_requires_resolved_declared_asset(operation: &str) -> bool {
+    !matches!(
+        operation,
+        "constant"
+            | "constant_map"
+            | "record_layout"
+            | "abi_type_probe"
+            | "abi_type_map_probe"
+            | "abi_function_probe"
+            | "abi.compile_alias_probe"
+            | "abi.value_echo"
+            | "macro_eval"
+            | "macro_compile_probe"
+    )
 }
 
 fn first_glyph_index_arg(params: &Value) -> Result<u32, String> {

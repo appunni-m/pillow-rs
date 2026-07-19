@@ -6832,8 +6832,27 @@ Fix:
 - Non-error runtime cases that declare a font-like asset but have no resolved
   runtime font source are now selected as pending instead of falling back to
   DejaVuSans.
+- Header/scalar compile-contract operations are exempt from this guard.  Their
+  public comparison is constant/layout/macro output, not runtime font data.
+  This prevents module-error `constant_map` compile-contract rows from being
+  incorrectly moved to pending only because they also document future public
+  route assets.
 - This keeps the full parity metric honest: missing declared validation/table
   assets are not counted as green runtime parity.
+
+Verified compile-contract refinement:
+
+```bash
+FONTDONE_UNIFIED_OPERATION_FILTER=constant_map \
+  FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+  cargo test --manifest-path pillow-rs-freetype/Cargo.toml \
+    --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+```
+
+Result: `constant_map` passed `46/46` with `0` pending rows.  Full selection
+after the refinement moved from `6754` runnable / `480` pending to `6766`
+runnable / `468` pending while preserving unresolved asset-backed rows as
+pending.
 
 Rejected promotion probes:
 
