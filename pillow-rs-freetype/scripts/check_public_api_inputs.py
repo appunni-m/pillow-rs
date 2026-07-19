@@ -1383,6 +1383,34 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows for glyph object behavior that do not have a maintained route."""
+    ftglyph_rows_without_maintained_route = {
+        "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record",
+        "ftglyph.FT_Glyph.caller_owned_lifetime",
+        "ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header",
+        "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
+        "ftglyph.FT_Glyph_Class.opaque_class_identity_only",
+        "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta",
+        "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only",
+        "ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates",
+        "ftglyph.FT_New_Glyph.success_renderer_supported_custom_format",
+        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record",
+        "ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled",
+        "ftglyph.FT_SvgGlyph.feature_availability_recorded",
+        "ftglyph.FT_SvgGlyphRec.svg_feature_disabled_classification",
+    }
+    if row.case_id not in ftglyph_rows_without_maintained_route:
+        return None
+    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        return None
+    return (
+        "Glyph object type, transform, bbox-mode, new-glyph, and SVG glyph "
+        "success behavior requires a maintained glyph-object route; keeping it "
+        "generic would be a green placeholder"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -3721,6 +3749,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftincrem_pending = ftincrem_subsystem_pending_reason(row)
     if ftincrem_pending:
         return ("pending-route", ftincrem_pending)
+    ftglyph_pending = ftglyph_subsystem_pending_reason(row)
+    if ftglyph_pending:
+        return ("pending-route", ftglyph_pending)
     if row.expect_error and not row.compare_error_output:
         return (
             "generic-error-fallback",

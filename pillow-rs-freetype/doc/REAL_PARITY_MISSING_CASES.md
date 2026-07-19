@@ -1,5 +1,61 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `ftglyph` glyph-object route placeholders
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `438e6ce12`: `real-parity=4465`,
+  `generic-fallback=111`, `pending-route=403`, `pending-core=7`.
+
+Finding:
+
+- Existing glyph exact-error and null-lifecycle rows are classified separately
+  as real parity when they have pinned C/Rust/C-ABI/WASM proof.
+- The remaining `ftglyph` rows cover glyph object pointer aliases, caller-owned
+  glyph lifetime, glyph class identity, bbox mode constants and lowercase
+  aliases, `FT_Glyph_Transform` for outline/SVG glyphs, `FT_New_Glyph` with a
+  renderer-supported custom format, and SVG glyph feature availability records.
+- Those rows had stayed in `generic-fallback` with the reason
+  `no explicit maintained route classification`.
+- They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
+  glyph-object route that allocates glyph objects, proves ownership and alias
+  semantics, applies matrix/delta transforms, checks bbox mode public constants,
+  and handles SVG glyph feature availability consistently across all ABI lanes.
+
+Classification change:
+
+- 13 `ftglyph` rows moved from `generic-fallback` to `pending-route`.
+- Existing exact glyph rows remain separately classified; this classifier is
+  exact-case scoped.
+- New route audit counts: `real-parity=4465`, `generic-fallback=98`,
+  `pending-route=416`, `pending-core=7`.
+
+Required fix plan:
+
+1. Add a maintained glyph-object route instead of per-row expected output
+   shortcuts. It must run the same operation sequence through pinned C
+   FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Implement pure-Rust glyph object state first: glyph allocation, class/type
+   identity, caller-owned lifetime, bitmap/outline/SVG alias records, matrix
+   and delta transform accumulation, bbox mode constants, and custom-format
+   renderer support.
+3. Compare exact return codes, pointer/nullness behavior, class identity,
+   transform output, bbox mode values and aliases, SVG feature availability,
+   ownership/free behavior, and unsupported/build-dependent classifications.
+4. Keep already-routed glyph exact-error and null-lifecycle rows real; do not
+   demote them while building the broader glyph-object route.
+5. Promote rows only after focused `ftglyph` runtime proves exact C oracle,
+   Rust FFI, C ABI, and WASM ABI output for the same input.
+
+Verification for the classification batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftglyph
+```
+
 ### Issue Set Current: `ftincrem` incremental-font callback route placeholders
 
 Status: classified as explicit pending-route on 2026-07-20.
