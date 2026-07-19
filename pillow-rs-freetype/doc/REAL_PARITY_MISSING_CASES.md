@@ -7221,3 +7221,43 @@ Observed failure during attempted promotion:
 runtime oracle comparison failed: exit=signal: 11 (SIGSEGV)
 runtime_parity: passed=0 failed=1 total=1
 ```
+
+### Issue Set Current: `FT_ENCODING_NONE` representative BDF fixture
+
+Problem:
+
+- `freetype.FT_ENCODING_NONE.representative_runtime_observation` still marks
+  `fonts/no-encoding/bdf-or-pcf-encoding-none.bdf` as `required_future_asset`.
+- The file exists in the repository, but existence alone is not sufficient for
+  parity because the row requires a C-openable face whose charmap reports
+  `FT_ENCODING_NONE`.
+
+Finding:
+
+- Temporarily removing the `required_future_asset` marker made the row runnable
+  and moved the route audit as if it were real parity.
+- Focused runtime comparison failed because the pinned C oracle returned error
+  `23` for the row instead of the expected successful charmap observation.
+- The marker was restored. Promoting this row based only on the existing file
+  would be a green placeholder.
+
+Required fix:
+
+1. Generate or select a deterministic BDF/PCF fixture that the pinned C oracle
+   opens successfully for this operation.
+2. Verify the selected charmap reports `FT_ENCODING_NONE` through pinned C,
+   Rust FFI, C ABI, and WASM ABI.
+3. Only then remove `required_future_asset`.
+
+Rejected verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_ENCODING_NONE.representative_runtime_observation
+```
+
+Observed failure during attempted promotion:
+
+```text
+runtime_parity: passed=0 failed=1 total=1
+rust ffi: freetype.FT_ENCODING_NONE.representative_runtime_observation oracle returned unexpected error 23
+```
