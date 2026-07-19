@@ -851,6 +851,16 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table",
         "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table",
         "ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c",
+        "ftglyph.FT_New_Glyph.error_null_library_or_output",
+        "ftglyph.FT_New_Glyph.error_unsupported_format",
+        "ftglyph.FT_New_Glyph.error_allocation_failure",
+        "ftglyph.FT_Glyph_Transform.error_null_or_bad_glyph",
+        "ftglyph.FT_Glyph_Transform.error_non_scalable_bitmap",
+        "ftlist.FT_List_Iterate.stops_on_callback_error",
+        "ftlist.FT_List_Iterate.null_list_or_iterator_error",
+        "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params",
+        "ftrender.FT_Set_Renderer.set_mode_parameter_error_propagates",
+        "ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
@@ -1501,6 +1511,56 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftgxval.FT_VALIDATE_CKERN.malformed_table_error_matches_c"
     ):
         return "FT_VALIDATE_CKERN malformed-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.new_glyph"
+        and row.case_id == "ftglyph.FT_New_Glyph.error_null_library_or_output"
+    ):
+        return "FT_New_Glyph null-library/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.new_glyph"
+        and row.case_id == "ftglyph.FT_New_Glyph.error_unsupported_format"
+    ):
+        return "FT_New_Glyph unsupported-format errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.new_glyph"
+        and row.case_id == "ftglyph.FT_New_Glyph.error_allocation_failure"
+    ):
+        return "FT_New_Glyph allocation-failure errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_transform"
+        and row.case_id == "ftglyph.FT_Glyph_Transform.error_null_or_bad_glyph"
+    ):
+        return "FT_Glyph_Transform null/bad-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_transform"
+        and row.case_id == "ftglyph.FT_Glyph_Transform.error_non_scalable_bitmap"
+    ):
+        return "FT_Glyph_Transform non-scalable bitmap errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlist.list_iterate"
+        and row.case_id == "ftlist.FT_List_Iterate.stops_on_callback_error"
+    ):
+        return "FT_List_Iterate callback-error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftlist.list_iterate"
+        and row.case_id == "ftlist.FT_List_Iterate.null_list_or_iterator_error"
+    ):
+        return "FT_List_Iterate null-list/iterator errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftrender.set_renderer"
+        and row.case_id == "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params"
+    ):
+        return "FT_Set_Renderer invalid-library/renderer/params errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftrender.set_renderer"
+        and row.case_id == "ftrender.FT_Set_Renderer.set_mode_parameter_error_propagates"
+    ):
+        return "FT_Set_Renderer set-mode parameter-error propagation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftsnames.get_sfnt_lang_tag"
+        and row.case_id == "ftsnames.FT_Get_Sfnt_LangTag.invalid_argument_errors"
+    ):
+        return "FT_Get_Sfnt_LangTag invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.truetype_gx_validate"
         and row.case_id == "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments"
