@@ -2535,15 +2535,38 @@ Failed probes:
 - A mixed thirteen-row batch across `FT_Outline_Get_Bitmap`, `FT_List_Iterate`,
   `FT_New_Glyph`, `FT_Add_Module`, and module lifecycle produced twelve strict
   failures for the same C-oracle fallback reason.
+- A broader case-specific strict probe then temporarily classified 56
+  runtime-referenced `generic-fallback` rows.  Full strict parity rejected 36
+  rows with pinned C `FT_Err_Invalid_File_Format` (`7`); those rows remain
+  generic fallback and must not be promoted by operation.
 
 Verified progress:
 
-- Only `ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph` survived
-  strict full parity in that mixed batch.  The route audit now classifies that
-  row as real parity through the existing pinned C oracle, Rust FFI, C ABI, and
-  WASM ABI routes.
-- Route audit moved one row from `generic-fallback` to `real-parity`:
-  `real-parity` `4291 -> 4292`, `generic-fallback` `639 -> 638`, with
+- Twenty case-specific rows survived strict full parity and are now classified
+  as real parity through pinned C oracle, Rust FFI, C ABI, and WASM ABI routes:
+  `ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph`,
+  `ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map`,
+  `ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract`, and
+  seventeen GX/classic-kern validation rows:
+  `ftgxval.FT_VALIDATE_GX.validates_all_requested_tables`,
+  `ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization`,
+  `ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern`,
+  `ftgxval.FT_VALIDATE_bsln.validates_bsln_table_slot`,
+  `ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot`,
+  `ftgxval.FT_VALIDATE_feat.validates_feat_table_slot`,
+  `ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot`,
+  `ftgxval.FT_VALIDATE_just.validates_just_table_slot`,
+  `ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot`,
+  `ftgxval.FT_VALIDATE_kern.validates_gx_kern_table_slot`,
+  `ftgxval.FT_VALIDATE_kern_INDEX.indexes_kern_output_slot`,
+  `ftgxval.FT_VALIDATE_lcar.validates_lcar_table_slot`,
+  `ftgxval.FT_VALIDATE_lcar_INDEX.indexes_lcar_output_slot`,
+  `ftgxval.FT_VALIDATE_mort.validates_mort_table_slot`,
+  `ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot`,
+  `ftgxval.FT_VALIDATE_morx.validates_morx_table_slot`, and
+  `ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot`.
+- Route audit moved twenty rows from `generic-fallback` to `real-parity`:
+  `real-parity` `4291 -> 4311`, `generic-fallback` `639 -> 619`, with
   `pending-route` unchanged at `49`.
 - Full non-coverage parity passes with `6802 / 6802` runtime rows and `432`
   pending rows.

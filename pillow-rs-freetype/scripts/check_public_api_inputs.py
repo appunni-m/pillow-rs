@@ -1444,6 +1444,25 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
 def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     case_reasons = {
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern": "FT_ClassicKern_Validate MS/classic-kern output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_bsln.validates_bsln_table_slot": "FT_TrueTypeGX_Validate bsln table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot": "FT_TrueTypeGX_Validate bsln output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot": "FT_TrueTypeGX_Validate feat table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_just.validates_just_table_slot": "FT_TrueTypeGX_Validate just table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot": "FT_TrueTypeGX_Validate just output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_kern.validates_gx_kern_table_slot": "FT_TrueTypeGX_Validate kern table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_kern_INDEX.indexes_kern_output_slot": "FT_TrueTypeGX_Validate kern output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_lcar.validates_lcar_table_slot": "FT_TrueTypeGX_Validate lcar table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_lcar_INDEX.indexes_lcar_output_slot": "FT_TrueTypeGX_Validate lcar output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_mort.validates_mort_table_slot": "FT_TrueTypeGX_Validate mort table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot": "FT_TrueTypeGX_Validate mort output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot": "FT_TrueTypeGX_Validate morx table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot": "FT_TrueTypeGX_Validate morx output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract": "FT_Set_Debug_Hook TrueType hook index contract validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 
