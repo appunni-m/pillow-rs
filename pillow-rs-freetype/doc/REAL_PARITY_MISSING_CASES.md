@@ -120,6 +120,11 @@ Promoted rows:
   code can inspect other module flags, but the five asset-backed
   `ftmodapi.inspect_module_flags` rows remain generic/pending until their
   runtime font assets resolve; they are not counted as real parity.
+- `ftbdf.FT_Get_BDF_Property.*` success rows: `3 / 3` runnable rows now compare
+  exact pinned-C FreeType, Rust FFI, thin C ABI, and WASM ABI output for BDF
+  string/integer/cardinal properties, PCF signed properties, and SFNT embedded
+  BDF strike properties. Three additional BDF-property error rows were already
+  exact; three unresolved asset-backed rows remain pending.
 
 Focused non-coverage proof before promotion:
 
@@ -136,6 +141,7 @@ make -C pillow-rs-freetype test-op OP=ftmodapi.add_default_modules
 make -C pillow-rs-freetype test-op OP=ftmodapi.inspect_module_flags
 make -C pillow-rs-freetype test-op OP=ftmm.done_mm_var
 make -C pillow-rs-freetype test-case CASE=ftlist
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_property
 ```
 
 Results:
@@ -162,6 +168,12 @@ Results:
   two `FT_List_Iterate` traversal/mutation rows.
 - `ftmodapi.inspect_module_flags`: `1 / 1` focused runtime row passed with
   five unresolved asset-backed rows left pending.
+- `ftbdf.get_bdf_property`: `3 / 3` focused runtime rows passed with three
+  unresolved asset-backed rows left pending. A broader probe also checked
+  `freetype.attach_file`, `freetype.attach_stream`,
+  `freetype.active_size_handle`, and `freetype.size_record_state`; those rows
+  passed only in the narrow operation filter but failed full strict parity with
+  pinned C error `7`, so they were not promoted.
 - Each selected stroker operation passed `4 / 4` only while fallback-classified;
   exact promotion failed with C error `7`, so those rows were not retained.
 - No fixture input, oracle output, expected value, threshold, or runtime logic
@@ -184,6 +196,13 @@ Latest route proof after the module-flag follow-up:
   `generic-fallback` to `real-parity`.
 - Current route audit after the change: `real-parity` `4335`,
   `generic-fallback` `595`, `pending-route` `49`, `pending-core` `7`.
+
+Latest route proof after the BDF-property follow-up:
+
+- Route audit moved three `ftbdf.get_bdf_property` rows from
+  `generic-fallback` to `real-parity`.
+- Current route audit after the change: `real-parity` `4338`,
+  `generic-fallback` `592`, `pending-route` `49`, `pending-core` `7`.
 
 ## 2026-07-18 Parity-Only Fix Plan
 

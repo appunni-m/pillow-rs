@@ -1471,6 +1471,15 @@ def inspect_module_flags_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
+    case_reasons = {
+        "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties": "FT_Get_BDF_Property BDF string/integer/cardinal values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only": "FT_Get_BDF_Property PCF property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Property SFNT embedded bitmap property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+    }
+    return case_reasons.get(row.case_id)
+
+
 def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
         row.operation == "ftmm.done_mm_var"
@@ -3268,6 +3277,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     inspect_module_flags_real_reason = inspect_module_flags_real_parity_reason(row)
     if inspect_module_flags_real_reason:
         return ("real-parity", inspect_module_flags_real_reason)
+    focused_success_real_reason = focused_success_real_parity_reason(row)
+    if focused_success_real_reason:
+        return ("real-parity", focused_success_real_reason)
     done_mm_var_real_reason = done_mm_var_real_parity_reason(row)
     if done_mm_var_real_reason:
         return ("real-parity", done_mm_var_real_reason)
