@@ -353,6 +353,92 @@ pub struct FT_Size_RequestRec {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FT_WinFNT_HeaderRec {
+    pub version: FT_UShort,
+    pub file_size: FT_ULong,
+    pub copyright: [FT_Byte; 60],
+    pub file_type: FT_UShort,
+    pub nominal_point_size: FT_UShort,
+    pub vertical_resolution: FT_UShort,
+    pub horizontal_resolution: FT_UShort,
+    pub ascent: FT_UShort,
+    pub internal_leading: FT_UShort,
+    pub external_leading: FT_UShort,
+    pub italic: FT_Byte,
+    pub underline: FT_Byte,
+    pub strike_out: FT_Byte,
+    pub weight: FT_UShort,
+    pub charset: FT_Byte,
+    pub pixel_width: FT_UShort,
+    pub pixel_height: FT_UShort,
+    pub pitch_and_family: FT_Byte,
+    pub avg_width: FT_UShort,
+    pub max_width: FT_UShort,
+    pub first_char: FT_Byte,
+    pub last_char: FT_Byte,
+    pub default_char: FT_Byte,
+    pub break_char: FT_Byte,
+    pub bytes_per_row: FT_UShort,
+    pub device_offset: FT_ULong,
+    pub face_name_offset: FT_ULong,
+    pub bits_pointer: FT_ULong,
+    pub bits_offset: FT_ULong,
+    pub reserved: FT_Byte,
+    pub flags: FT_ULong,
+    pub A_space: FT_UShort,
+    pub B_space: FT_UShort,
+    pub C_space: FT_UShort,
+    pub color_table_offset: FT_UShort,
+    pub reserved1: [FT_ULong; 4],
+}
+
+pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
+
+impl Default for FT_WinFNT_HeaderRec {
+    fn default() -> Self {
+        Self {
+            version: 0,
+            file_size: 0,
+            copyright: [0; 60],
+            file_type: 0,
+            nominal_point_size: 0,
+            vertical_resolution: 0,
+            horizontal_resolution: 0,
+            ascent: 0,
+            internal_leading: 0,
+            external_leading: 0,
+            italic: 0,
+            underline: 0,
+            strike_out: 0,
+            weight: 0,
+            charset: 0,
+            pixel_width: 0,
+            pixel_height: 0,
+            pitch_and_family: 0,
+            avg_width: 0,
+            max_width: 0,
+            first_char: 0,
+            last_char: 0,
+            default_char: 0,
+            break_char: 0,
+            bytes_per_row: 0,
+            device_offset: 0,
+            face_name_offset: 0,
+            bits_pointer: 0,
+            bits_offset: 0,
+            reserved: 0,
+            flags: 0,
+            A_space: 0,
+            B_space: 0,
+            C_space: 0,
+            color_table_offset: 0,
+            reserved1: [0; 4],
+        }
+    }
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_SizeRecPublic {
     pub face: FT_Pointer,

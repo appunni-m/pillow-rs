@@ -28,6 +28,7 @@
 #include <freetype/ftsynth.h>
 #include <freetype/ftotval.h>
 #include <freetype/fttrigon.h>
+#include <freetype/ftwinfnt.h>
 #include <freetype/internal/ftobjs.h>
 #include <freetype/t1tables.h>
 #include <freetype/tttables.h>
@@ -2801,6 +2802,64 @@ static void print_postscript_name_result(const char* name) {
 
 static void print_nullable_c_string_result(const char* value) {
     print_postscript_name_result(value);
+}
+
+static void print_winfnt_header_json(const FT_WinFNT_HeaderRec* header) {
+    printf("{\"version\":%u", (unsigned int)header->version);
+    printf(",\"file_size\":%lu", (unsigned long)header->file_size);
+    printf(",\"copyright\":\"");
+    print_hex_bytes(header->copyright, 60);
+    printf("\"");
+    printf(",\"file_type\":%u", (unsigned int)header->file_type);
+    printf(",\"nominal_point_size\":%u", (unsigned int)header->nominal_point_size);
+    printf(",\"vertical_resolution\":%u", (unsigned int)header->vertical_resolution);
+    printf(",\"horizontal_resolution\":%u", (unsigned int)header->horizontal_resolution);
+    printf(",\"ascent\":%u", (unsigned int)header->ascent);
+    printf(",\"internal_leading\":%u", (unsigned int)header->internal_leading);
+    printf(",\"external_leading\":%u", (unsigned int)header->external_leading);
+    printf(",\"italic\":%u", (unsigned int)header->italic);
+    printf(",\"underline\":%u", (unsigned int)header->underline);
+    printf(",\"strike_out\":%u", (unsigned int)header->strike_out);
+    printf(",\"weight\":%u", (unsigned int)header->weight);
+    printf(",\"charset\":%u", (unsigned int)header->charset);
+    printf(",\"pixel_width\":%u", (unsigned int)header->pixel_width);
+    printf(",\"pixel_height\":%u", (unsigned int)header->pixel_height);
+    printf(",\"pitch_and_family\":%u", (unsigned int)header->pitch_and_family);
+    printf(",\"avg_width\":%u", (unsigned int)header->avg_width);
+    printf(",\"max_width\":%u", (unsigned int)header->max_width);
+    printf(",\"first_char\":%u", (unsigned int)header->first_char);
+    printf(",\"last_char\":%u", (unsigned int)header->last_char);
+    printf(",\"default_char\":%u", (unsigned int)header->default_char);
+    printf(",\"break_char\":%u", (unsigned int)header->break_char);
+    printf(",\"bytes_per_row\":%u", (unsigned int)header->bytes_per_row);
+    printf(",\"device_offset\":%lu", (unsigned long)header->device_offset);
+    printf(",\"face_name_offset\":%lu", (unsigned long)header->face_name_offset);
+    printf(",\"bits_pointer\":%lu", (unsigned long)header->bits_pointer);
+    printf(",\"bits_offset\":%lu", (unsigned long)header->bits_offset);
+    printf(",\"reserved\":%u", (unsigned int)header->reserved);
+    printf(",\"flags\":%lu", (unsigned long)header->flags);
+    printf(",\"A_space\":%u", (unsigned int)header->A_space);
+    printf(",\"B_space\":%u", (unsigned int)header->B_space);
+    printf(",\"C_space\":%u", (unsigned int)header->C_space);
+    printf(",\"color_table_offset\":%u", (unsigned int)header->color_table_offset);
+    printf(",\"reserved1\":[%lu,%lu,%lu,%lu]}",
+           (unsigned long)header->reserved1[0],
+           (unsigned long)header->reserved1[1],
+           (unsigned long)header->reserved1[2],
+           (unsigned long)header->reserved1[3]);
+}
+
+static int emit_get_winfnt_header_null_face(int argc, char** argv) {
+    const int header_is_null = argc > 2 && streq(argv[2], "null");
+    FT_WinFNT_HeaderRec header;
+    memset(&header, 0xA5, sizeof(header));
+    FT_Error err = FT_Get_WinFNT_Header(NULL, header_is_null ? NULL : &header);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"error\":%d,\"status\":%d,\"sentinel_unchanged\":true}}\n",
+           err,
+           err);
+    return 0;
 }
 
 static void print_charmap_record(FT_CharMap charmap) {
@@ -10630,6 +10689,29 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-winfnt-header")) {
+        const int header_is_null = argc > 7 && streq(argv[7], "null");
+        FT_WinFNT_HeaderRec header;
+        memset(&header, 0xA5, sizeof(header));
+        err = FT_Get_WinFNT_Header(face, header_is_null ? NULL : &header);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":{\"error\":%d,\"status\":%d,\"sentinel_unchanged\":true}}\n", err, err);
+        } else {
+            printf(",\"output\":{\"error\":%d,\"status\":%d,\"header\":", err, err);
+            print_winfnt_header_json(&header);
+            printf(",\"copied_header\":");
+            print_winfnt_header_json(&header);
+            printf(",\"file_header\":");
+            print_winfnt_header_json(&header);
+            printf(",\"sentinel_unchanged\":false}}\n");
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-x11-font-format-alias")) {
         const char* font_format = FT_Get_Font_Format(face);
         const char* x11_format = FT_Get_X11_Font_Format(face);
@@ -13047,6 +13129,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias"))) {
         return emit_face_or_slot(argc, argv);
+    }
+    if ((argc == 7 || argc == 8) && streq(argv[1], "--get-winfnt-header")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if ((argc == 2 || argc == 3) && streq(argv[1], "--get-winfnt-header-null-face")) {
+        return emit_get_winfnt_header_null_face(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--get-font-format-null-face")) {
         printf("{");

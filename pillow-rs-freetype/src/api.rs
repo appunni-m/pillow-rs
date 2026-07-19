@@ -395,6 +395,11 @@ impl Face {
         self.font.get_gasp(ppem)
     }
 
+    /// Return the parsed Windows FNT header, equivalent to `FT_Get_WinFNT_Header`.
+    pub fn winfnt_header(&self) -> Option<&crate::font::WinFntHeader> {
+        self.font.winfnt_header()
+    }
+
     /// Return kerning vector for two glyph indexes, equivalent to `FT_Get_Kerning`.
     pub fn kerning_by_glyphs(&self, left: u32, right: u32, mode: KerningMode) -> Vector {
         let (x, y) = self.font.kerning_by_glyphs(left, right, mode);

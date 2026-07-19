@@ -10,6 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::casts::usize_from_i32;
 use crate::font::{
     ActiveSizeState, KerningMode, SelectSizeError, SizeRequest, SizeRequestError, SizeRequestType,
+    WinFntHeader,
 };
 use crate::{api, grays, render};
 
@@ -25,8 +26,8 @@ use super::types::{
     FT_Matrix, FT_Orientation, FT_OutlineSnapshot, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
     FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
     FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
-    FT_Vector, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
-    TT_VertHeader,
+    FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
+    TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -2259,6 +2260,70 @@ pub fn FT_OpenType_Validate(
         return FT_Err_Invalid_Argument as FT_Error;
     }
     FT_Err_Unimplemented_Feature as FT_Error
+}
+
+fn winfnt_header_to_ffi(header: &WinFntHeader) -> FT_WinFNT_HeaderRec {
+    FT_WinFNT_HeaderRec {
+        version: header.version,
+        file_size: FT_ULong::from(header.file_size),
+        copyright: header.copyright,
+        file_type: header.file_type,
+        nominal_point_size: header.nominal_point_size,
+        vertical_resolution: header.vertical_resolution,
+        horizontal_resolution: header.horizontal_resolution,
+        ascent: header.ascent,
+        internal_leading: header.internal_leading,
+        external_leading: header.external_leading,
+        italic: header.italic,
+        underline: header.underline,
+        strike_out: header.strike_out,
+        weight: header.weight,
+        charset: header.charset,
+        pixel_width: header.pixel_width,
+        pixel_height: header.pixel_height,
+        pitch_and_family: header.pitch_and_family,
+        avg_width: header.avg_width,
+        max_width: header.max_width,
+        first_char: header.first_char,
+        last_char: header.last_char,
+        default_char: header.default_char,
+        break_char: header.break_char,
+        bytes_per_row: header.bytes_per_row,
+        device_offset: FT_ULong::from(header.device_offset),
+        face_name_offset: FT_ULong::from(header.face_name_offset),
+        bits_pointer: FT_ULong::from(header.bits_pointer),
+        bits_offset: FT_ULong::from(header.bits_offset),
+        reserved: header.reserved,
+        flags: FT_ULong::from(header.flags),
+        A_space: header.a_space,
+        B_space: header.b_space,
+        C_space: header.c_space,
+        color_table_offset: header.color_table_offset as FT_UShort,
+        reserved1: [
+            FT_ULong::from(header.reserved1[0]),
+            FT_ULong::from(header.reserved1[1]),
+            FT_ULong::from(header.reserved1[2]),
+            FT_ULong::from(header.reserved1[3]),
+        ],
+    }
+}
+
+pub fn FT_Get_WinFNT_Header(
+    face: Option<&FT_Face>,
+    header: Option<&mut FT_WinFNT_HeaderRec>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(output) = header else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let Some(header) = inner.winfnt_header() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *output = winfnt_header_to_ffi(header);
+    FT_Err_Ok
 }
 
 pub fn FT_GlyphSlot_AdjustWeight(

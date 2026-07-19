@@ -68,6 +68,90 @@ pub struct FontdoneWasmBBox {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FontdoneWasmWinFNTHeader {
+    pub version: FT_UShort,
+    pub file_size: FT_ULong,
+    pub copyright: [FT_Byte; 60],
+    pub file_type: FT_UShort,
+    pub nominal_point_size: FT_UShort,
+    pub vertical_resolution: FT_UShort,
+    pub horizontal_resolution: FT_UShort,
+    pub ascent: FT_UShort,
+    pub internal_leading: FT_UShort,
+    pub external_leading: FT_UShort,
+    pub italic: FT_Byte,
+    pub underline: FT_Byte,
+    pub strike_out: FT_Byte,
+    pub weight: FT_UShort,
+    pub charset: FT_Byte,
+    pub pixel_width: FT_UShort,
+    pub pixel_height: FT_UShort,
+    pub pitch_and_family: FT_Byte,
+    pub avg_width: FT_UShort,
+    pub max_width: FT_UShort,
+    pub first_char: FT_Byte,
+    pub last_char: FT_Byte,
+    pub default_char: FT_Byte,
+    pub break_char: FT_Byte,
+    pub bytes_per_row: FT_UShort,
+    pub device_offset: FT_ULong,
+    pub face_name_offset: FT_ULong,
+    pub bits_pointer: FT_ULong,
+    pub bits_offset: FT_ULong,
+    pub reserved: FT_Byte,
+    pub flags: FT_ULong,
+    pub A_space: FT_UShort,
+    pub B_space: FT_UShort,
+    pub C_space: FT_UShort,
+    pub color_table_offset: FT_UShort,
+    pub reserved1: [FT_ULong; 4],
+}
+
+impl Default for FontdoneWasmWinFNTHeader {
+    fn default() -> Self {
+        Self {
+            version: 0,
+            file_size: 0,
+            copyright: [0; 60],
+            file_type: 0,
+            nominal_point_size: 0,
+            vertical_resolution: 0,
+            horizontal_resolution: 0,
+            ascent: 0,
+            internal_leading: 0,
+            external_leading: 0,
+            italic: 0,
+            underline: 0,
+            strike_out: 0,
+            weight: 0,
+            charset: 0,
+            pixel_width: 0,
+            pixel_height: 0,
+            pitch_and_family: 0,
+            avg_width: 0,
+            max_width: 0,
+            first_char: 0,
+            last_char: 0,
+            default_char: 0,
+            break_char: 0,
+            bytes_per_row: 0,
+            device_offset: 0,
+            face_name_offset: 0,
+            bits_pointer: 0,
+            bits_offset: 0,
+            reserved: 0,
+            flags: 0,
+            A_space: 0,
+            B_space: 0,
+            C_space: 0,
+            color_table_offset: 0,
+            reserved1: [0; 4],
+        }
+    }
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmOutline {
     pub n_contours: FT_UShort,
@@ -2182,6 +2266,62 @@ pub extern "C" fn fontdone_wasm_get_default_named_instance(
     // SAFETY: the caller provides writable storage for the scalar output or null.
     let instance_index = unsafe { instance_index.as_mut() };
     rust_ffi::FT_Get_Default_Named_Instance(face_ref(handle).map(|face| &face.face), instance_index)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_winfnt_header(
+    handle: usize,
+    header: *mut FontdoneWasmWinFNTHeader,
+) -> FT_Error {
+    let mut rust_header = rust_ffi::FT_WinFNT_HeaderRec::default();
+    let err = rust_ffi::FT_Get_WinFNT_Header(
+        face_ref(handle).map(|face| &face.face),
+        (!header.is_null()).then_some(&mut rust_header),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: null was checked before requesting the core output.
+        unsafe {
+            *header = FontdoneWasmWinFNTHeader {
+                version: rust_header.version,
+                file_size: rust_header.file_size,
+                copyright: rust_header.copyright,
+                file_type: rust_header.file_type,
+                nominal_point_size: rust_header.nominal_point_size,
+                vertical_resolution: rust_header.vertical_resolution,
+                horizontal_resolution: rust_header.horizontal_resolution,
+                ascent: rust_header.ascent,
+                internal_leading: rust_header.internal_leading,
+                external_leading: rust_header.external_leading,
+                italic: rust_header.italic,
+                underline: rust_header.underline,
+                strike_out: rust_header.strike_out,
+                weight: rust_header.weight,
+                charset: rust_header.charset,
+                pixel_width: rust_header.pixel_width,
+                pixel_height: rust_header.pixel_height,
+                pitch_and_family: rust_header.pitch_and_family,
+                avg_width: rust_header.avg_width,
+                max_width: rust_header.max_width,
+                first_char: rust_header.first_char,
+                last_char: rust_header.last_char,
+                default_char: rust_header.default_char,
+                break_char: rust_header.break_char,
+                bytes_per_row: rust_header.bytes_per_row,
+                device_offset: rust_header.device_offset,
+                face_name_offset: rust_header.face_name_offset,
+                bits_pointer: rust_header.bits_pointer,
+                bits_offset: rust_header.bits_offset,
+                reserved: rust_header.reserved,
+                flags: rust_header.flags,
+                A_space: rust_header.A_space,
+                B_space: rust_header.B_space,
+                C_space: rust_header.C_space,
+                color_table_offset: rust_header.color_table_offset,
+                reserved1: rust_header.reserved1,
+            };
+        }
+    }
+    err
 }
 
 #[unsafe(no_mangle)]

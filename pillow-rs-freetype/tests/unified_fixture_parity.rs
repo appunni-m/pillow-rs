@@ -1410,6 +1410,7 @@ fn classify_null_operation(op: &str) -> Result<i32, String> {
         | "load_glyph"
         | "load_char"
         | "freetype.request_size"
+        | "winfnt.get_header"
         | "ftwinfnt.get_winfnt_header"
         | "ftsizes.new_size"
         | "ftotval.open_type_validate" => {
@@ -2285,6 +2286,8 @@ impl BackendComparisonWorker {
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
+                    | "winfnt.get_header"
+                    | "ftwinfnt.get_winfnt_header"
                     | "ftmm.done_mm_var"
                     | "ftmm.get_default_named_instance"
                     | "ftmm.set_named_instance"
@@ -2471,6 +2474,7 @@ impl BackendComparisonWorker {
                     Ok(ok(nullable_c_string_json(FT_Get_X11_Font_Format(None))))
                 }
             }
+            "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
@@ -2623,6 +2627,9 @@ impl BackendComparisonWorker {
                     std::ptr::null_mut(),
                     &case.inputs.params,
                 )?)),
+                "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+                    c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params)
+                }
                 "ftsizes.new_size" => return c_new_size(case),
                 "ftsizes.done_size" => return c_done_size(case),
                 "ftsizes.activate_size" => return c_activate_size(case),
@@ -2729,6 +2736,16 @@ impl BackendComparisonWorker {
                 } else {
                     Ok(ok(c_font_format_alias_json(face)))
                 }
+            }
+            "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+                if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+                    return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
+                }
+                let (library, face) = c_new_face_without_size(case)?;
+                let output = c_get_winfnt_header(face, &case.inputs.params);
+                c_done_face(face);
+                c_done_library(library);
+                output
             }
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
@@ -2876,6 +2893,9 @@ impl BackendComparisonWorker {
                 "freetype.set_transform" => return run_rust_ffi(case),
                 "freetype.get_first_char" => Ok(ok(wasm_first_char_output(0, &case.inputs.params))),
                 "freetype.get_next_char" => Ok(ok(wasm_next_char_output(0, &case.inputs.params)?)),
+                "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+                    wasm_get_winfnt_header(0, &case.inputs.params)
+                }
                 "ftsizes.new_size" => return wasm_new_size(case),
                 "ftsizes.done_size" => return wasm_done_size(case),
                 "ftsizes.activate_size" => return wasm_activate_size(case),
@@ -2981,6 +3001,15 @@ impl BackendComparisonWorker {
                 } else {
                     Ok(ok(wasm_font_format_alias_json(handle)))
                 }
+            }
+            "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+                if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+                    return wasm_get_winfnt_header(0, &case.inputs.params);
+                }
+                let handle = wasm_new_face_without_size(case)?;
+                let output = wasm_get_winfnt_header(handle, &case.inputs.params);
+                wasm_done_face(handle);
+                output
             }
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
@@ -3143,6 +3172,174 @@ fn fstype_flags_json(flags: u16, params: &Value) -> Result<Value, String> {
         );
     }
     Ok(Value::Object(output))
+}
+
+fn bytes_hex(bytes: &[u8]) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    hex
+}
+
+fn winfnt_header_json(header: &FT_WinFNT_HeaderRec) -> Value {
+    json!({
+        "version": header.version,
+        "file_size": header.file_size,
+        "copyright": bytes_hex(&header.copyright),
+        "file_type": header.file_type,
+        "nominal_point_size": header.nominal_point_size,
+        "vertical_resolution": header.vertical_resolution,
+        "horizontal_resolution": header.horizontal_resolution,
+        "ascent": header.ascent,
+        "internal_leading": header.internal_leading,
+        "external_leading": header.external_leading,
+        "italic": header.italic,
+        "underline": header.underline,
+        "strike_out": header.strike_out,
+        "weight": header.weight,
+        "charset": header.charset,
+        "pixel_width": header.pixel_width,
+        "pixel_height": header.pixel_height,
+        "pitch_and_family": header.pitch_and_family,
+        "avg_width": header.avg_width,
+        "max_width": header.max_width,
+        "first_char": header.first_char,
+        "last_char": header.last_char,
+        "default_char": header.default_char,
+        "break_char": header.break_char,
+        "bytes_per_row": header.bytes_per_row,
+        "device_offset": header.device_offset,
+        "face_name_offset": header.face_name_offset,
+        "bits_pointer": header.bits_pointer,
+        "bits_offset": header.bits_offset,
+        "reserved": header.reserved,
+        "flags": header.flags,
+        "A_space": header.A_space,
+        "B_space": header.B_space,
+        "C_space": header.C_space,
+        "color_table_offset": header.color_table_offset,
+        "reserved1": header.reserved1,
+    })
+}
+
+fn c_winfnt_header_json(header: &c_abi::FT_WinFNT_HeaderRec) -> Value {
+    winfnt_header_json(header)
+}
+
+fn wasm_winfnt_header_json(header: &wasm_abi::FontdoneWasmWinFNTHeader) -> Value {
+    json!({
+        "version": header.version,
+        "file_size": header.file_size,
+        "copyright": bytes_hex(&header.copyright),
+        "file_type": header.file_type,
+        "nominal_point_size": header.nominal_point_size,
+        "vertical_resolution": header.vertical_resolution,
+        "horizontal_resolution": header.horizontal_resolution,
+        "ascent": header.ascent,
+        "internal_leading": header.internal_leading,
+        "external_leading": header.external_leading,
+        "italic": header.italic,
+        "underline": header.underline,
+        "strike_out": header.strike_out,
+        "weight": header.weight,
+        "charset": header.charset,
+        "pixel_width": header.pixel_width,
+        "pixel_height": header.pixel_height,
+        "pitch_and_family": header.pitch_and_family,
+        "avg_width": header.avg_width,
+        "max_width": header.max_width,
+        "first_char": header.first_char,
+        "last_char": header.last_char,
+        "default_char": header.default_char,
+        "break_char": header.break_char,
+        "bytes_per_row": header.bytes_per_row,
+        "device_offset": header.device_offset,
+        "face_name_offset": header.face_name_offset,
+        "bits_pointer": header.bits_pointer,
+        "bits_offset": header.bits_offset,
+        "reserved": header.reserved,
+        "flags": header.flags,
+        "A_space": header.A_space,
+        "B_space": header.B_space,
+        "C_space": header.C_space,
+        "color_table_offset": header.color_table_offset,
+        "reserved1": header.reserved1,
+    })
+}
+
+fn winfnt_header_output(
+    err: FT_Error,
+    header: Option<Value>,
+    sentinel_unchanged: bool,
+) -> RunOutput {
+    let output = match header {
+        Some(header) => json!({
+            "error": err,
+            "status": err,
+            "header": header,
+            "copied_header": header,
+            "file_header": header,
+            "sentinel_unchanged": sentinel_unchanged,
+        }),
+        None => json!({
+            "error": err,
+            "status": err,
+            "sentinel_unchanged": sentinel_unchanged,
+        }),
+    };
+    if err == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(err, output)
+    }
+}
+
+fn rust_get_winfnt_header(case: &InputCase) -> Result<RunOutput, String> {
+    let header_is_null =
+        lifecycle_handle_param(&case.inputs.params, "header_pointer_mode") == Some("null");
+    let mut header = FT_WinFNT_HeaderRec::default();
+    let sentinel = header;
+    let err = if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        FT_Get_WinFNT_Header(None, (!header_is_null).then_some(&mut header))
+    } else {
+        let face = rust_new_face_without_size(case)?;
+        FT_Get_WinFNT_Header(Some(&face), (!header_is_null).then_some(&mut header))
+    };
+    let header_json = (err == FT_Err_Ok).then(|| winfnt_header_json(&header));
+    Ok(winfnt_header_output(err, header_json, header == sentinel))
+}
+
+fn c_get_winfnt_header(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let header_is_null = lifecycle_handle_param(params, "header_pointer_mode") == Some("null");
+    let mut header = c_abi::FT_WinFNT_HeaderRec::default();
+    let sentinel = header;
+    let err = c_abi::FT_Get_WinFNT_Header(
+        face,
+        if header_is_null {
+            ptr::null_mut()
+        } else {
+            &mut header
+        },
+    );
+    let header_json = (err == FT_Err_Ok).then(|| c_winfnt_header_json(&header));
+    Ok(winfnt_header_output(err, header_json, header == sentinel))
+}
+
+fn wasm_get_winfnt_header(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let header_is_null = lifecycle_handle_param(params, "header_pointer_mode") == Some("null");
+    let mut header = wasm_abi::FontdoneWasmWinFNTHeader::default();
+    let err = wasm_abi::fontdone_wasm_get_winfnt_header(
+        handle,
+        if header_is_null {
+            ptr::null_mut()
+        } else {
+            &mut header
+        },
+    );
+    let header_json = (err == FT_Err_Ok).then(|| wasm_winfnt_header_json(&header));
+    Ok(winfnt_header_output(err, header_json, err != FT_Err_Ok))
 }
 
 fn rust_fstype_flags_output(face: Option<&FT_Face>, params: &Value) -> Result<Value, String> {
@@ -11053,6 +11250,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(u32_param(params, "ppem")?.to_string());
             Ok(args)
         }
+        "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+            let header_mode = lifecycle_handle_param(params, "header_pointer_mode")
+                .unwrap_or("caller_owned_record");
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                return Ok(vec![
+                    "--get-winfnt-header-null-face".to_string(),
+                    header_mode.to_string(),
+                ]);
+            }
+            let mut args = vec!["--get-winfnt-header".to_string()];
+            if push_font_source(case, &mut args).is_err() {
+                return oracle_fallback_args(case);
+            }
+            args.push(face_index_param(params)?.to_string());
+            args.push("none".to_string());
+            args.push("0".to_string());
+            args.push(header_mode.to_string());
+            Ok(args)
+        }
         "tttables.get_cmap_format" => {
             let mut args = vec!["--get-cmap-format".to_string()];
             push_font_source(case, &mut args)?;
@@ -11244,6 +11460,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
+                | "winfnt.get_header"
+                | "ftwinfnt.get_winfnt_header"
                 | "ftmm.done_mm_var"
                 | "ftmm.get_default_named_instance"
                 | "ftmm.set_named_instance"
@@ -11658,6 +11876,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 FT_Get_X11_Font_Format(Some(&face)),
             )))
         }
+        "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
         "ftmm.get_default_named_instance" => rust_get_default_named_instance(case),
         "ftmm.set_named_instance" => rust_set_named_instance(case),
         "freetype.get_glyph_name" => rust_get_glyph_name(case),
@@ -12098,6 +12317,16 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_face(face);
             c_done_library(library);
             Ok(ok(output))
+        }
+        "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+            if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+                return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
+            }
+            let (library, face) = c_open_face(case)?;
+            let output = c_get_winfnt_header(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
         }
         "ftmm.get_default_named_instance" => c_get_default_named_instance(case),
         "ftmm.set_named_instance" => c_set_named_instance(case),
@@ -12698,6 +12927,15 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_font_format_alias_json(handle);
             wasm_done_face(handle);
             Ok(ok(output))
+        }
+        "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
+            if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+                return wasm_get_winfnt_header(0, &case.inputs.params);
+            }
+            let handle = wasm_open_face(case)?;
+            let output = wasm_get_winfnt_header(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
         }
         "ftmm.get_default_named_instance" => wasm_get_default_named_instance(case),
         "ftmm.set_named_instance" => wasm_set_named_instance(case),

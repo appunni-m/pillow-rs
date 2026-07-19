@@ -68,6 +68,48 @@ pub struct Font {
 enum FaceKind {
     Sfnt,
     Type1 { is_fixed_pitch: bool },
+    WinFnt { header: WinFntHeader },
+}
+
+/// Parsed Windows FNT header returned by `FT_Get_WinFNT_Header`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WinFntHeader {
+    pub version: u16,
+    pub file_size: u32,
+    pub copyright: [u8; 60],
+    pub file_type: u16,
+    pub nominal_point_size: u16,
+    pub vertical_resolution: u16,
+    pub horizontal_resolution: u16,
+    pub ascent: u16,
+    pub internal_leading: u16,
+    pub external_leading: u16,
+    pub italic: u8,
+    pub underline: u8,
+    pub strike_out: u8,
+    pub weight: u16,
+    pub charset: u8,
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+    pub pitch_and_family: u8,
+    pub avg_width: u16,
+    pub max_width: u16,
+    pub first_char: u8,
+    pub last_char: u8,
+    pub default_char: u8,
+    pub break_char: u8,
+    pub bytes_per_row: u16,
+    pub device_offset: u32,
+    pub face_name_offset: u32,
+    pub bits_pointer: u32,
+    pub bits_offset: u32,
+    pub reserved: u8,
+    pub flags: u32,
+    pub a_space: u16,
+    pub b_space: u16,
+    pub c_space: u16,
+    pub color_table_offset: u32,
+    pub reserved1: [u64; 4],
 }
 
 struct Type1Metadata {
@@ -79,6 +121,252 @@ struct Type1Metadata {
     underline_position: i16,
     underline_thickness: i16,
     bbox: BBox,
+}
+
+fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
+    let bytes = data.get(offset..offset + 2)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
+    let bytes = data.get(offset..offset + 4)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn parse_winfnt_header(data: &[u8]) -> Result<WinFntHeader, FontError> {
+    const WINFNT_V2_HEADER_SIZE: usize = 118;
+    const WINFNT_V3_HEADER_SIZE: usize = 148;
+
+    if data.len() < WINFNT_V2_HEADER_SIZE {
+        return Err(FontError::InvalidFont("not a Windows FNT file".into()));
+    }
+    let version =
+        read_u16_le(data, 0).ok_or_else(|| FontError::InvalidFont("short FNT header".into()))?;
+    if version != 0x0200 && version != 0x0300 {
+        return Err(FontError::InvalidFont("not a Windows FNT file".into()));
+    }
+    let required_size = if version == 0x0300 {
+        WINFNT_V3_HEADER_SIZE
+    } else {
+        WINFNT_V2_HEADER_SIZE
+    };
+    if data.len() < required_size {
+        return Err(FontError::InvalidFont("short Windows FNT header".into()));
+    }
+    let file_size = read_u32_le(data, 2)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT file size".into()))?;
+    let declared_size = usize::try_from(file_size)
+        .map_err(|_| FontError::InvalidFont("Windows FNT file size out of range".into()))?;
+    // FreeType winfnt.c:fnt_font_load reads `file_size` bytes into the FNT
+    // frame after accepting versions 0x200/0x300; a truncated stream fails
+    // before the WINFNT service can expose the copied header.
+    if file_size < required_size as u32 || declared_size > data.len() {
+        return Err(FontError::InvalidFont(
+            "invalid Windows FNT file size".into(),
+        ));
+    }
+    let file_type = read_u16_le(data, 66)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT file type".into()))?;
+    if file_type & 1 != 0 {
+        return Err(FontError::InvalidFont(
+            "Windows FNT vector fonts are unsupported".into(),
+        ));
+    }
+
+    let pixel_height = read_u16_le(data, 88)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT pixel height".into()))?;
+    let first_char = *data
+        .get(95)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT first char".into()))?;
+    let last_char = *data
+        .get(96)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT last char".into()))?;
+    let face_name_offset = read_u32_le(data, 105)
+        .ok_or_else(|| FontError::InvalidFont("missing Windows FNT face name offset".into()))?;
+    if pixel_height == 0
+        || last_char < first_char
+        || usize::try_from(face_name_offset).map_or(true, |offset| offset >= declared_size)
+    {
+        return Err(FontError::InvalidFont(
+            "invalid Windows FNT face metadata".into(),
+        ));
+    }
+
+    let mut copyright = [0u8; 60];
+    copyright.copy_from_slice(&data[6..66]);
+    Ok(WinFntHeader {
+        version,
+        file_size,
+        copyright,
+        file_type,
+        nominal_point_size: read_u16_le(data, 68).unwrap_or(0),
+        vertical_resolution: read_u16_le(data, 70).unwrap_or(0),
+        horizontal_resolution: read_u16_le(data, 72).unwrap_or(0),
+        ascent: read_u16_le(data, 74).unwrap_or(0),
+        internal_leading: read_u16_le(data, 76).unwrap_or(0),
+        external_leading: read_u16_le(data, 78).unwrap_or(0),
+        italic: data[80],
+        underline: data[81],
+        strike_out: data[82],
+        weight: read_u16_le(data, 83).unwrap_or(0),
+        charset: data[85],
+        pixel_width: read_u16_le(data, 86).unwrap_or(0),
+        pixel_height,
+        pitch_and_family: data[90],
+        avg_width: read_u16_le(data, 91).unwrap_or(0),
+        max_width: read_u16_le(data, 93).unwrap_or(0),
+        first_char,
+        last_char,
+        default_char: data[97],
+        break_char: data[98],
+        bytes_per_row: read_u16_le(data, 99).unwrap_or(0),
+        device_offset: read_u32_le(data, 101).unwrap_or(0),
+        face_name_offset,
+        bits_pointer: read_u32_le(data, 109).unwrap_or(0),
+        bits_offset: read_u32_le(data, 113).unwrap_or(0),
+        reserved: data[117],
+        flags: if version == 0x0300 {
+            read_u32_le(data, 118).unwrap_or(0)
+        } else {
+            0
+        },
+        a_space: if version == 0x0300 {
+            read_u16_le(data, 122).unwrap_or(0)
+        } else {
+            0
+        },
+        b_space: if version == 0x0300 {
+            read_u16_le(data, 124).unwrap_or(0)
+        } else {
+            0
+        },
+        c_space: if version == 0x0300 {
+            read_u16_le(data, 126).unwrap_or(0)
+        } else {
+            0
+        },
+        color_table_offset: if version == 0x0300 {
+            read_u32_le(data, 128).unwrap_or(0)
+        } else {
+            0
+        },
+        reserved1: if version == 0x0300 {
+            // FreeType winfnt.c reads 16 raw bytes into FT_ULong reserved1[4].
+            // On the maintained LP64 ABI that fills the first two 64-bit
+            // elements and leaves the remaining elements zeroed.
+            [
+                u64::from_le_bytes([
+                    data[132], data[133], data[134], data[135], data[136], data[137], data[138],
+                    data[139],
+                ]),
+                u64::from_le_bytes([
+                    data[140], data[141], data[142], data[143], data[144], data[145], data[146],
+                    data[147],
+                ]),
+                0,
+                0,
+            ]
+        } else {
+            [0; 4]
+        },
+    })
+}
+
+fn winfnt_family_name(data: &[u8], header: &WinFntHeader) -> String {
+    let start = usize::try_from(header.face_name_offset).unwrap_or(data.len());
+    let bytes = data.get(start..usize::try_from(header.file_size).unwrap_or(data.len()));
+    let Some(bytes) = bytes else {
+        return "Windows FNT".into();
+    };
+    let end = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(bytes.len());
+    String::from_utf8_lossy(&bytes[..end]).into_owned()
+}
+
+fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<FontData> {
+    #[allow(clippy::arc_with_non_send_sync)]
+    let font_data = Arc::new(FontData {
+        raw_data: data.to_vec(),
+        face_offset: 0,
+        face_index: 0,
+        num_faces: 1,
+        table_directory: tt::TableDirectory {
+            records: Vec::new(),
+        },
+        cmap: tt::cmap::CmapTable::default(),
+        fvar: None,
+        gasp: None,
+        head: tt::head::HeadTable {
+            units_per_em: header.pixel_height.max(1),
+            x_min: 0,
+            y_min: 0,
+            x_max: i16_from_i32(i32::from(header.max_width)),
+            y_max: i16_from_i32(i32::from(header.pixel_height)),
+            index_to_loc_format: 0,
+            flags: 0,
+            mac_style: u16::from(header.italic != 0) << 1,
+            lowest_rec_ppem: 0,
+        },
+        hhea: tt::hhea::HheaTable {
+            ascent: i16_from_i32(i32::from(header.ascent)),
+            descent: i16_from_i32(i32::from(header.ascent) - i32::from(header.pixel_height)),
+            line_gap: i16_from_i32(i32::from(header.external_leading)),
+            advance_width_max: header.max_width,
+            num_hmetrics: 1,
+        },
+        hmtx: tt::hmtx::HmtxTable {
+            h_metrics: vec![tt::hmtx::LongHorMetric {
+                advance_width: header.avg_width.max(header.max_width),
+                lsb: 0,
+            }],
+            left_side_bearings: Vec::new(),
+        },
+        maxp: tt::maxp::MaxpTable {
+            num_glyphs: u16::from(header.last_char - header.first_char) + 1,
+            ..tt::maxp::MaxpTable::default()
+        },
+        name: tt::name::NameTable {
+            format: 0,
+            family: winfnt_family_name(data, header),
+            subfamily: "Regular".into(),
+            postscript_name: None,
+            records: Vec::new(),
+            lang_tags: Vec::new(),
+        },
+        os2: None,
+        post: None,
+        vhea: None,
+        vmtx: None,
+        hdmx: None,
+        kern: None,
+        sbit: None,
+        cff: None,
+        loca_data: Vec::new(),
+        glyf_data: Vec::new(),
+        size_pt: std::cell::Cell::new(size_pt),
+        size_x_scale: std::cell::Cell::new(0),
+        size_y_scale: std::cell::Cell::new(0),
+        size_tt_scale: std::cell::Cell::new(0),
+        size_tt_ppem: std::cell::Cell::new(0),
+        size_tt_x_ratio: std::cell::Cell::new(0x1_0000),
+        size_tt_y_ratio: std::cell::Cell::new(0x1_0000),
+        size_tt_point_size: std::cell::Cell::new(0),
+        transform_xx: std::cell::Cell::new(0x1_0000),
+        transform_xy: std::cell::Cell::new(0),
+        transform_yx: std::cell::Cell::new(0),
+        transform_yy: std::cell::Cell::new(0x1_0000),
+        transform_dx: std::cell::Cell::new(0),
+        transform_dy: std::cell::Cell::new(0),
+        fpgm: None,
+        prep: None,
+        cvt: None,
+        glyph_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        self_arc: std::sync::OnceLock::new(),
+    });
+    let _ = font_data.self_arc.set(font_data.clone());
+    font_data
 }
 
 fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
@@ -510,6 +798,9 @@ impl Font {
         face_index: usize,
         size_pt: f32,
     ) -> Result<Self, FontError> {
+        if matches!(read_u16_le(data, 0), Some(0x0200 | 0x0300)) {
+            return Self::winfnt_face(data, face_index, size_pt);
+        }
         if type1_cleartext(data).is_some() {
             return Self::type1_face(data, face_index, size_pt);
         }
@@ -583,6 +874,39 @@ impl Font {
             face_kind: FaceKind::Type1 {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
+            face_globals,
+            is_italic,
+            size_metrics,
+            selected_charmap: 0,
+            bytecode_context: BytecodeContextCache::default(),
+            raster_scratch: std::cell::RefCell::new(crate::grays::RasterScratch::new()),
+        })
+    }
+
+    fn winfnt_face(data: &[u8], face_index: usize, size_pt: f32) -> Result<Self, FontError> {
+        if face_index != 0 {
+            return Err(FontError::InvalidFont(format!(
+                "face index {face_index} out of range for 1 face(s)"
+            )));
+        }
+        let header = parse_winfnt_header(data)?;
+        let font_data = winfnt_font_data(data, size_pt, &header);
+        let is_italic = header.italic != 0;
+        let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
+        let size_metrics = SizeMetrics::from_char_size(
+            i32_from_f32((size_pt * 64.0).round()),
+            i32_from_f32((size_pt * 64.0).round()),
+            72,
+            72,
+            font_data.as_ref(),
+        );
+        sync_active_size_metrics(&font_data, size_metrics);
+
+        Ok(Font {
+            data: font_data,
+            size_pt,
+            load_mode: LoadMode::Default,
+            face_kind: FaceKind::WinFnt { header },
             face_globals,
             is_italic,
             size_metrics,
@@ -846,6 +1170,14 @@ impl Font {
         self.face_kind == FaceKind::Sfnt
     }
 
+    /// Return the parsed Windows FNT header for WinFNT faces.
+    pub fn winfnt_header(&self) -> Option<&WinFntHeader> {
+        match &self.face_kind {
+            FaceKind::WinFnt { header } => Some(header),
+            _ => None,
+        }
+    }
+
     /// Return scalar face metadata.
     pub fn face_info(&self) -> FaceInfo {
         let (ascender, descender, height) = face_metric_values(&self.data);
@@ -892,8 +1224,10 @@ impl Font {
 
     /// Equivalent to `FT_Get_Font_Format` for the supported SFNT wrappers.
     pub fn font_format(&self) -> &'static str {
-        if matches!(self.face_kind, FaceKind::Type1 { .. }) {
-            return "Type 1";
+        match self.face_kind {
+            FaceKind::Type1 { .. } => return "Type 1",
+            FaceKind::WinFnt { .. } => return "Windows FNT",
+            FaceKind::Sfnt => {}
         }
         let tag = u32::from_be_bytes([
             self.data.raw_data[self.data.face_offset],
@@ -1018,6 +1352,16 @@ impl Font {
         const FT_FACE_FLAG_MULTIPLE_MASTERS: u32 = 1 << 8;
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
         const FT_FACE_FLAG_HINTER: u32 = 1 << 11;
+
+        if let FaceKind::WinFnt { header } = self.face_kind {
+            // FreeType winfnt.c:fnt_size_select exposes fixed bitmap sizes
+            // rather than scalable outlines for Windows FNT faces.
+            let mut flags = FT_FACE_FLAG_FIXED_SIZES | FT_FACE_FLAG_HORIZONTAL;
+            if header.pixel_width != 0 || header.avg_width == header.max_width {
+                flags |= FT_FACE_FLAG_FIXED_WIDTH;
+            }
+            return flags;
+        }
 
         if let FaceKind::Type1 { is_fixed_pitch } = self.face_kind {
             // FreeType `src/type1/t1objs.c:383-389` sets these flags for a
