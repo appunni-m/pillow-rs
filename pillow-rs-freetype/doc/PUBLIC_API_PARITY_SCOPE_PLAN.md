@@ -137,14 +137,11 @@ Recommended first buckets:
 
 Full route/core pending rows:
 
-1. `ftmm.FT_Set_Named_Instance.output_changes_to_named_instance`
-2. `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
-3. `tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation`
+1. `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
 
-The two runtime pending rows are `ftmm.set_named_instance`; the MVAR vertical
-header row is audit-visible route/core pending work. The earlier render
-slot-state and `FT_Var_Named_Style.selected_instance_matches_descriptor` rows
-are already real parity and must not be re-counted as pending work.
+The named-instance output row and MVAR vertical-header row are already real
+parity and must not be re-counted as pending work. The remaining core row
+requires real Adobe Multiple Master reset semantics.
 
 ### Variation Implementation Scope
 

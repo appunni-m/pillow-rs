@@ -44,13 +44,13 @@ pub use handles::{
     FT_Outline_Render_Error_Output, FT_Outline_Reverse, FT_Outline_Transform, FT_Outline_Translate,
     FT_Reference_Face, FT_Render_Glyph, FT_Request_Size, FT_RoundFix, FT_Select_Charmap,
     FT_Select_Size, FT_Set_Char_Size, FT_Set_Charmap, FT_Set_Debug_Hook, FT_Set_Named_Instance,
-    FT_Set_Pixel_Sizes, FT_Set_Transform, FT_Sfnt_Table_Info, FT_Sin, FT_Tan, FT_Vector_From_Polar,
-    FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit,
-    FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
+    FT_Set_Pixel_Sizes, FT_Set_Transform, FT_Set_Var_Design_Coordinates, FT_Sfnt_Table_Info,
+    FT_Sin, FT_Tan, FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate,
+    FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
 };
 #[cfg(any(test, feature = "abi-test-support"))]
 pub use handles::{
-    FT_Empty_GlyphSlot, FT_Fvar_Named_Style_Coords,
+    FT_Empty_GlyphSlot, FT_Fvar_Named_Style_Coords, FT_Get_Sfnt_VertHeader_Copy,
     FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure, FT_Library_Debug_Hook_Classes,
     FT_Library_Default_Module_Names, FT_Library_Has_Module, FT_Library_Has_TrueType_Engine_Service,
     FT_Library_Has_TrueType_Module, FT_Library_Module_Flags, FT_Library_Renderer_Class,

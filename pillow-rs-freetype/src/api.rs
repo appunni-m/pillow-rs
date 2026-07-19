@@ -454,6 +454,14 @@ impl Face {
         Ok(())
     }
 
+    /// Set explicit OpenType design coordinates, equivalent to
+    /// `FT_Set_Var_Design_Coordinates`.
+    pub(crate) fn set_var_design_coordinates(&mut self, coords: &[i32]) -> Result<(), FontError> {
+        self.font.set_var_design_coordinates(coords)?;
+        self.render_fonts.clear();
+        Ok(())
+    }
+
     /// Return a glyph's PostScript name when the face exposes glyph names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         self.font.glyph_name(glyph_index)

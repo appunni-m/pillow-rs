@@ -321,6 +321,7 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
             num_hmetrics: 1,
         },
         hvar: None,
+        mvar: None,
         hmtx: tt::hmtx::HmtxTable {
             h_metrics: vec![tt::hmtx::LongHorMetric {
                 advance_width: header.avg_width.max(header.max_width),
@@ -609,6 +610,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
             num_hmetrics: 1,
         },
         hvar: None,
+        mvar: None,
         hmtx: tt::hmtx::HmtxTable {
             h_metrics: vec![tt::hmtx::LongHorMetric {
                 advance_width: u16::try_from(metadata.bbox.x_max.max(0)).unwrap_or(u16::MAX),
@@ -1105,6 +1107,18 @@ impl Font {
         size_pt: f32,
         load_mode: LoadMode,
     ) -> Result<Self, FontError> {
+        Self::truetype_face_with_load_mode_and_design_coords(
+            data, face_index, size_pt, load_mode, None,
+        )
+    }
+
+    fn truetype_face_with_load_mode_and_design_coords(
+        data: &[u8],
+        face_index: usize,
+        size_pt: f32,
+        load_mode: LoadMode,
+        design_coords: Option<&[i32]>,
+    ) -> Result<Self, FontError> {
         // FreeType stores a 1-based named-instance selector in bits 16..30;
         // the low 16 bits still select the collection face (ftobjs.c).
         let collection_face_index = face_index & 0xFFFF;
@@ -1201,11 +1215,18 @@ impl Font {
         let gvar = dir
             .find(data, tag(b"gvar"))
             .and_then(|d| tt::gvar::parse_gvar(d, maxp.num_glyphs).ok());
-        let normalized_variation_coords =
-            normalized_variation_coords_for_named_instance(&fvar, named_instance);
+        let normalized_variation_coords = if let Some(coords) = design_coords {
+            normalized_variation_coords_for_design_coords(&fvar, coords)
+        } else {
+            normalized_variation_coords_for_named_instance(&fvar, named_instance)
+        };
         let hvar = dir.find(data, tag(b"HVAR")).and_then(|d| {
             fvar.as_ref()
                 .and_then(|fvar| tt::hvar::HvarTable::parse(d, fvar.axes.len()).ok())
+        });
+        let mvar = dir.find(data, tag(b"MVAR")).and_then(|d| {
+            fvar.as_ref()
+                .and_then(|fvar| tt::mvar::MvarTable::parse(d, fvar.axes.len()).ok())
         });
         let kern = dir
             .find(data, tag(b"kern"))
@@ -1258,6 +1279,7 @@ impl Font {
             head,
             hhea,
             hvar,
+            mvar,
             hmtx,
             maxp,
             name,
@@ -1356,6 +1378,34 @@ impl Font {
             .map_or(0, |last| self.selected_charmap.min(last));
         *self = next;
         Ok(())
+    }
+
+    /// Set explicit OpenType design coordinates, equivalent to
+    /// `FT_Set_Var_Design_Coordinates` for TrueType/OpenType variation faces.
+    pub(crate) fn set_var_design_coordinates(&mut self, coords: &[i32]) -> Result<(), FontError> {
+        let base_face_index = self.data.face_index & 0xFFFF;
+        let mut next = Self::truetype_face_with_load_mode_and_design_coords(
+            &self.data.raw_data,
+            base_face_index,
+            self.size_pt,
+            self.load_mode,
+            Some(coords),
+        )?;
+        next.selected_charmap = next
+            .data
+            .cmap
+            .charmaps
+            .len()
+            .checked_sub(1)
+            .map_or(0, |last| self.selected_charmap.min(last));
+        *self = next;
+        Ok(())
+    }
+
+    pub(crate) fn mvar_vertical_header_deltas(
+        &self,
+    ) -> Option<crate::tt::mvar::VerticalHeaderDeltas> {
+        self.data.mvar_vertical_header_deltas()
     }
 
     /// Return the number of faces in the original font resource.
@@ -3683,6 +3733,32 @@ fn normalized_variation_coords_for_named_instance(
         .map(|(axis, coord)| {
             tt::gvar::normalize_axis_coord(
                 *coord,
+                axis.min_value,
+                axis.default_value,
+                axis.max_value,
+            )
+        })
+        .collect()
+}
+
+fn normalized_variation_coords_for_design_coords(
+    fvar: &Option<tt::fvar::FvarTable>,
+    design_coords: &[i32],
+) -> Vec<i16> {
+    let Some(fvar) = fvar else {
+        return Vec::new();
+    };
+    fvar.axes
+        .iter()
+        .enumerate()
+        .map(|(index, axis)| {
+            let coord = design_coords
+                .get(index)
+                .copied()
+                .unwrap_or(axis.default_value)
+                .clamp(axis.min_value, axis.max_value);
+            tt::gvar::normalize_axis_coord(
+                coord,
                 axis.min_value,
                 axis.default_value,
                 axis.max_value,
