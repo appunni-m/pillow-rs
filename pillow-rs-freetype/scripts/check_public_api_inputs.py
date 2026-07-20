@@ -1609,8 +1609,11 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return (
             "FT_Pos coordinate endpoint parity declares synthetic outline "
             "outlines/synthetic/negative-and-large-coordinates.json, but that "
-            "maintained outline asset is absent; keeping this generic would be "
-            "a green placeholder"
+            "maintained outline asset is absent; exact same-input parity also "
+            "requires a coordinate endpoint route for FT_Load_Glyph outline "
+            "points, FT_Outline_Get_CBox, FT_Vector_Transform, and "
+            "FT_Outline_Decompose across Rust FFI, C ABI, and WASM ABI; "
+            "keeping this generic would be a green placeholder"
         )
 
     ftimage_rows_without_maintained_route = {
