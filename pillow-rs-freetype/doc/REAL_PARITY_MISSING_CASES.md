@@ -1502,6 +1502,23 @@ Required fix plan:
 6. Promote rows only after focused `ftlist`, `ftlogging`, and `ftrender`
    runtime proves exact C oracle, Rust FFI, C ABI, and WASM ABI output.
 
+Renderer-specific blocker detail:
+
+- `ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks` is not
+  proven by `FT_Renderer_Class` layout or `FT_Get_Renderer` class metadata. A
+  maintained renderer-behavior route must select each public renderer class and
+  compare `FT_Render_Glyph` return codes plus bitmap descriptor/byte output for
+  `NORMAL`, `LIGHT`, `MONO`, `LCD`, `LCD_V`, SDF, and SVG modes through pinned
+  C, Rust FFI, thin C ABI, and WASM.
+- `ftrender.FT_Set_Renderer.set_outline_renderer_success` is not proven by the
+  current invalid-library/invalid-renderer or set-mode-error rows. Pinned
+  FreeType 2.14.3 `freetype/src/base/ftobjs.c:4676-4732` validates that the
+  renderer belongs to `library->renderers`, moves that list node with
+  `FT_List_Up`, updates `cur_renderer` only for outline renderers, and calls
+  `clazz->set_mode` for each supplied parameter until the first error. Exact
+  parity requires a route that compares those state transitions and the
+  subsequent rendered output across pinned C, Rust FFI, C ABI, and WASM.
+
 Verification for the classification batch:
 
 ```bash

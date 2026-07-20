@@ -1819,19 +1819,31 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for callback/provider ABI behavior without a maintained route."""
-    callback_provider_rows_without_maintained_route = {
-        "ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks",
-        "ftrender.FT_Set_Renderer.set_outline_renderer_success",
-    }
-    if row.case_id not in callback_provider_rows_without_maintained_route:
-        return None
-    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
-        return None
-    return (
-        "List mutation, logging callback, trace-level, and renderer provider "
-        "behavior requires maintained callback/provider routes; keeping it "
-        "generic would be a green placeholder"
-    )
+    if row.case_id == "ftrender.FT_Renderer_Class.render_mode_acceptance_matches_callbacks":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Renderer_Class render-mode acceptance requires a maintained "
+            "renderer-behavior route that selects each public renderer class "
+            "and compares FT_Render_Glyph errors plus bitmap descriptors/bytes "
+            "for NORMAL, LIGHT, MONO, LCD, LCD_V, SDF, and SVG modes across "
+            "pinned C, Rust FFI, C ABI, and WASM; class layout and "
+            "FT_Get_Renderer metadata alone would be a green placeholder"
+        )
+    if row.case_id == "ftrender.FT_Set_Renderer.set_outline_renderer_success":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Set_Renderer success requires a maintained renderer-list route "
+            "matching freetype/src/base/ftobjs.c:4676-4732: validate the "
+            "renderer belongs to library->renderers, move its node with "
+            "FT_List_Up, update cur_renderer only for outline format, invoke "
+            "clazz->set_mode for each parameter until first error, and compare "
+            "renderer identity plus rendered output across pinned C, Rust FFI, "
+            "C ABI, and WASM; treating existing invalid-argument/set-mode-error "
+            "rows as success parity would be a green placeholder"
+        )
+    return None
 
 
 def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
