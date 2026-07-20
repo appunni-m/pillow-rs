@@ -18195,11 +18195,8 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
     )
 }
 
-fn wasm_backend_applies(case: &InputCase) -> bool {
-    // The WASM ABI exposes glyph-slot synthesis through face handles, not raw
-    // `FT_GlyphSlot` pointers. Null raw-slot no-op parity is therefore covered
-    // by pinned C, Rust FFI, and the C ABI only.
-    case.operation != "ftsynth.glyphslot_null_noop"
+fn wasm_backend_applies(_case: &InputCase) -> bool {
+    true
 }
 
 fn case_requires_asset_validation(_case: &InputCase) -> bool {
@@ -24350,6 +24347,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output
         }
+        "ftsynth.glyphslot_null_noop" => wasm_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_glyph_record(handle, case);
@@ -27336,6 +27334,24 @@ fn c_ftsynth_null_noop(case: &InputCase) -> Result<RunOutput, String> {
         FtsynthNullNoopFunction::Slant => {
             c_abi::FT_GlyphSlot_Slant(ptr::null_mut(), row.first, row.second);
         }
+    }
+    Ok(ftsynth_null_noop_output(row))
+}
+
+fn wasm_ftsynth_null_noop(case: &InputCase) -> Result<RunOutput, String> {
+    let row = ftsynth_null_noop_param(&case.inputs.params)?;
+    let err = match row.function {
+        FtsynthNullNoopFunction::AdjustWeight => {
+            wasm_abi::fontdone_wasm_glyphslot_adjust_weight(0, row.first, row.second)
+        }
+        FtsynthNullNoopFunction::Embolden => wasm_abi::fontdone_wasm_glyphslot_embolden(0),
+        FtsynthNullNoopFunction::Oblique => wasm_abi::fontdone_wasm_glyphslot_oblique(0),
+        FtsynthNullNoopFunction::Slant => {
+            wasm_abi::fontdone_wasm_glyphslot_slant(0, row.first, row.second)
+        }
+    };
+    if err != FT_Err_Ok {
+        return Ok(error(err));
     }
     Ok(ftsynth_null_noop_output(row))
 }
@@ -30421,6 +30437,7 @@ fn c_open_face_with_ignored_params(
 ) -> Result<(FT_Error, c_abi::FT_Face), String> {
     let parameter_rows = fixture_params
         .get("parameters")
+        .or_else(|| fixture_params.get("test_parameters"))
         .and_then(Value::as_array)
         .ok_or_else(|| "missing ignored FT_Open_Face parameter rows".to_string())?;
     let mut non_null_values = vec![1 as c_abi::FT_Bool; parameter_rows.len()];

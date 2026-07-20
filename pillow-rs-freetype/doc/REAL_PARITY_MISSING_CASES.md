@@ -10445,7 +10445,8 @@ make -C pillow-rs-freetype route-audit
 
 ### Issue Set Current: remove placeholder-style validation categories
 
-Status: de-placeholdered on 2026-07-20.
+Status: ftsynth null-slot rows promoted to real parity on 2026-07-20; one
+wrapper-null row remains pending.
 
 Finding:
 
@@ -10454,7 +10455,7 @@ Finding:
 - The five rows were split into side categories:
   `raw-slot-null-validation=4` and `wrapper-null-validation=1`.
 - Those categories validated useful partial behavior, but they did not prove
-  full same-input C/Rust/C-ABI/WASM parity:
+  full same-input C/Rust/C-ABI/WASM parity at the time:
   - `ftsynth.FT_GlyphSlot_AdjustWeight.null_slot_noop`
   - `ftsynth.FT_GlyphSlot_Embolden.null_slot_noop`
   - `ftsynth.FT_GlyphSlot_Oblique.null_slot_noop`
@@ -10463,29 +10464,36 @@ Finding:
 
 Classification change:
 
-- The five rows now classify as `pending-route` with explicit reasons instead
-  of side validation categories.
+- The five rows initially classified as `pending-route` with explicit reasons
+  instead of side validation categories.
 - The generated audit now reports `green_placeholder_style_rows=0`.
-- `real-parity` did not increase.
 - Route audit counts changed from:
   `real-parity=4532`, `pending-route=424`,
   `raw-slot-null-validation=4`, `wrapper-null-validation=1`
   to `real-parity=4532`, `pending-route=429`.
+- The four ftsynth null-slot rows were then promoted to `real-parity` after the
+  WASM ABI gained an explicit null-handle no-op route and focused runtime
+  comparison proved matching pinned C, Rust FFI, C ABI, and WASM output.
+- `freetype.FT_Get_SubGlyph_Info.error_null_outputs` remains pending because
+  native C dereferences valid-slot output pointers and still needs a same-input
+  public route.
 
 Required fix plan:
 
-1. For the four `ftsynth` raw slot null rows, add a public route that proves
-   the exact behavior available through Rust FFI, thin C ABI, and the JS/WASM
-   ABI surface. If WASM intentionally has no raw-slot pointer surface, keep the
-   rows pending and document the ABI-surface gap explicitly.
-2. For `FT_Get_SubGlyph_Info.error_null_outputs`, add a same-input public C
+1. For `FT_Get_SubGlyph_Info.error_null_outputs`, add a same-input public C
    oracle route for valid composite slot setup plus null-output handling that
    is comparable across Rust FFI, C ABI, and WASM. Do not count wrapper-only
    null policy as full parity.
+2. Keep the ftsynth null-slot rows real only while focused runtime continues to
+   prove exact C/Rust/C-ABI/WASM output for handle/null-slot no-op behavior.
 
 Verified command:
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftsynth.FT_GlyphSlot_AdjustWeight.null_slot_noop
+make -C pillow-rs-freetype test-case CASE=ftsynth.FT_GlyphSlot_Embolden.null_slot_noop
+make -C pillow-rs-freetype test-case CASE=ftsynth.FT_GlyphSlot_Oblique.null_slot_noop
+make -C pillow-rs-freetype test-case CASE=ftsynth.FT_GlyphSlot_Slant.null_slot_noop
 make -C pillow-rs-freetype route-audit
 ```
 

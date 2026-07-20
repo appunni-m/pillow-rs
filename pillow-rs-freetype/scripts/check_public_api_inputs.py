@@ -4326,8 +4326,8 @@ def wrapper_null_validation_reason(row: ConcreteInput) -> str | None:
 def raw_slot_null_validation_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftsynth.glyphslot_null_noop":
         return (
-            "raw FT_GlyphSlot null no-op validates pinned C, Rust FFI, and C ABI; "
-            "the WASM handle ABI has no raw glyph-slot pointer surface"
+            "raw FT_GlyphSlot null no-op validates pinned C, Rust FFI, C ABI, "
+            "and WASM ABI via the explicit null handle route"
         )
     return None
 
@@ -4639,10 +4639,7 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         )
     raw_slot_null_reason = raw_slot_null_validation_reason(row)
     if raw_slot_null_reason:
-        return (
-            "pending-route",
-            f"{raw_slot_null_reason}; full same-input public C/Rust/C-ABI/WASM parity route is still required",
-        )
+        return ("real-parity", raw_slot_null_reason)
     if operation_is_real_parity(row.operation):
         return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
     if row.expect_error and not has_runtime_asset(row):
