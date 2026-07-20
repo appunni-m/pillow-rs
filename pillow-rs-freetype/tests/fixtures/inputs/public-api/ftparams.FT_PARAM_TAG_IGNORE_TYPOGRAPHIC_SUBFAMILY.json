@@ -65,20 +65,26 @@
       "inputs": {
         "assets": {
           "font": {
-            "kind": "ref",
+            "kind": "file",
             "role": "font",
-            "path": "input/fonts/names/ot14-preferred-family.ttf",
-            "status": "required_future_asset",
-            "requires": "OpenType name table with distinct name IDs 2 and 17"
+            "path": "input/fonts/names/ot14-preferred-family.ttf"
           }
         },
         "params": {
           "face_index": 0,
-          "control_parameters": [],
-          "test_parameters": [
+          "scenarios": [
             {
-              "tag": "FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY",
-              "data": "NULL"
+              "num_params": 0,
+              "params": []
+            },
+            {
+              "num_params": 1,
+              "params": [
+                {
+                  "tag": "FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY",
+                  "data": null
+                }
+              ]
             }
           ],
           "observe": [
@@ -96,22 +102,28 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "open_error": "FT_Error",
-          "family_name": "string|null",
-          "style_name": "string|null",
-          "control_style_name": "string|null"
+          "results": [
+            {
+              "return": "FT_Error",
+              "family_name": "string|null",
+              "style_name": "string|null"
+            }
+          ]
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "open_error",
-            "family_name",
-            "style_name",
-            "control_style_name"
+            "results[*].return",
+            "results[*].family_name",
+            "results[*].style_name"
           ]
         },
+        "source_refs": [
+          "freetype/include/freetype/ftparams.h:80-98",
+          "freetype/src/sfnt/sfobjs.c:829-843"
+        ],
         "fixture_requirements": [
-          "Add font with legacy and typographic subfamily names that differ."
+          "SFNT font with legacy and typographic subfamily names that differ."
         ]
       }
     },

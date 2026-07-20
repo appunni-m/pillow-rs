@@ -1489,6 +1489,9 @@ impl Font {
         }
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
+        let is_wws_only = os2.as_ref().is_some_and(tt::os2::Os2Table::is_wws_only);
+        name.family = tt::name::family_name(&name, false, is_wws_only);
+        name.subfamily = tt::name::subfamily_name(&name, false, is_wws_only);
         let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
         // `tt_face_load_gasp` calls `goto_table` with a null length pointer and
         // then reads frames from the stream, so the SFNT table record length
@@ -2638,9 +2641,15 @@ impl Font {
         // (freetype/src/sfnt/sfobjs.c:829-843).  The parsed SFNT name table
         // stays shared and immutable; only this opened face's public names
         // change.
-        self.family_name = tt::name::family_name(&self.data.name, ignore_typographic_family);
+        let is_wws_only = self
+            .data
+            .os2
+            .as_ref()
+            .is_some_and(tt::os2::Os2Table::is_wws_only);
+        self.family_name =
+            tt::name::family_name(&self.data.name, ignore_typographic_family, is_wws_only);
         self.subfamily_name =
-            tt::name::subfamily_name(&self.data.name, ignore_typographic_subfamily);
+            tt::name::subfamily_name(&self.data.name, ignore_typographic_subfamily, is_wws_only);
     }
 
     /// `getmetrics()` → `(ascent, descent)` in pixels.

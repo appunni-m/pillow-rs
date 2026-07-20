@@ -1530,9 +1530,7 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftparams_rows_without_maintained_route = {
         "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix",
         "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure",
-        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
-        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
         "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load",
         "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c",
@@ -1547,17 +1545,19 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
     return (
-        "FT_Open_Args parameter tag behavior for sbix, typographic names, "
-        "incremental loading, random seed, stem darkening, and unpatented "
-        "hinting requires a maintained parameter route; keeping it generic "
-        "would be a green placeholder"
+        "FT_Open_Args parameter tag behavior for sbix, incremental loading, "
+        "random seed, stem darkening, and unpatented hinting requires a "
+        "maintained parameter route; keeping it generic would be a green "
+        "placeholder"
     )
 
 
 def ftparams_name_option_real_parity_reason(row: ConcreteInput) -> str | None:
     """Contained FT_Open_Args name-option rows with null data and maintained routes."""
     if row.case_id in {
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
+        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
     }:
         return (

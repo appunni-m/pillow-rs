@@ -29734,9 +29734,11 @@ fn open_face_name_options_runtime_supported(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.open_face_ignores_typographic_family"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_FAMILY.absent_or_unknown_param_uses_default_family"
+            | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.open_face_ignores_typographic_subfamily"
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params"
+            | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
