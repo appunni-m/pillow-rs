@@ -10384,6 +10384,54 @@ make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_VALIDATE_BASE` absent-table expectation mismatch
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Finding:
+
+- `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output` declares an
+  `ok` expectation for `FT_OpenType_Validate` on DejaVuSans with
+  `FT_VALIDATE_BASE`, expecting `BASE_table` to become null when the table is
+  absent.
+- FreeType source has an absent-table success path in
+  `src/otvalid/otvmod.c:41-56,105-149,209-213` when the OpenType validation
+  service is present.
+- The pinned oracle build used by this harness returns
+  `FT_Err_Unimplemented_Feature` (`7`) before the absent-table path is
+  observable. A focused attempted maintained route failed with:
+  `oracle returned unexpected error 7`.
+- Rust FFI’s current `FT_OpenType_Validate` also returns
+  `FT_Err_Unimplemented_Feature` for non-null faces, which matches this pinned
+  oracle build. Promoting the fixture’s declared `ok/null` expectation would be
+  a green placeholder.
+
+Classification change:
+
+- The row remains `pending-route`, but the route-audit reason now names the
+  exact expectation/oracle-build mismatch instead of the generic residual
+  public-surface bucket.
+
+Required fix plan:
+
+1. Decide whether the maintained oracle contract should include the `otvalid`
+   module for OpenType validation success/absence routes.
+2. If yes, make the oracle build contract explicit and then implement the
+   pure-Rust absent-table and present-table validation behavior needed for
+   same-input Rust FFI, C ABI, and WASM ABI parity.
+3. If no, update the fixture expectation to exact
+   `FT_Err_Unimplemented_Feature` for this pinned build, without treating it as
+   a success/null-output route.
+4. Promote only after focused runtime compares the same input across pinned C,
+   Rust FFI, C ABI, and WASM ABI with no oracle error mismatch.
+
+Verification for this clarification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: remove placeholder-style validation categories
 
 Status: de-placeholdered on 2026-07-20.

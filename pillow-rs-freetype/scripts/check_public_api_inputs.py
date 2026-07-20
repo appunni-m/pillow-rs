@@ -1733,6 +1733,19 @@ def malformed_maxp_fixture_pending_reason(row: ConcreteInput) -> str | None:
     )
 
 
+def otvalid_expectation_mismatch_pending_reason(row: ConcreteInput) -> str | None:
+    """OpenType validation rows whose fixture expectation disagrees with pinned C."""
+    if row.case_id != "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output":
+        return None
+    return (
+        "Fixture expects FT_VALIDATE_BASE absent-table success/null output, but "
+        "the pinned FreeType oracle used by this harness returns "
+        "FT_Err_Unimplemented_Feature (7) before table absence can be observed; "
+        "do not promote without updating the fixture expectation or oracle build "
+        "contract"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -4519,6 +4532,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     malformed_maxp_fixture_pending = malformed_maxp_fixture_pending_reason(row)
     if malformed_maxp_fixture_pending:
         return ("pending-route", malformed_maxp_fixture_pending)
+    otvalid_expectation_mismatch_pending = otvalid_expectation_mismatch_pending_reason(row)
+    if otvalid_expectation_mismatch_pending:
+        return ("pending-route", otvalid_expectation_mismatch_pending)
     residual_public_pending = residual_public_surface_pending_reason(row)
     if residual_public_pending:
         return ("pending-route", residual_public_pending)
