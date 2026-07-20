@@ -10570,6 +10570,67 @@ fn ftmm_mm_blend_invalid_matrix_output(
     }))
 }
 
+fn ftmm_mm_blend_count_rows<F>(axis_count: FT_UInt, mut get: F) -> Vec<Value>
+where
+    F: FnMut(FT_UInt, &mut [FT_Fixed]) -> FT_Error,
+{
+    [0, 1, axis_count, axis_count.saturating_add(2)]
+        .into_iter()
+        .map(|count| {
+            let mut coords = (0..usize::try_from(count).unwrap_or(0))
+                .map(|index| {
+                    FT_Fixed::from(0x1111_0000u32) + FT_Fixed::try_from(index).unwrap_or(0)
+                })
+                .collect::<Vec<_>>();
+            let status = get(count, &mut coords);
+            json!({
+                "num_coords": count,
+                "return": status,
+                "coords_after": coords,
+            })
+        })
+        .collect()
+}
+
+fn rust_ftmm_mm_blend_count_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let axis_count = sfnt_fvar_axis_count(bytes.as_ref())?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    Ok(ok(json!({
+        "rows": ftmm_mm_blend_count_rows(axis_count, |count, coords| {
+            FT_Get_MM_Blend_Coordinates(Some(&face), count, Some(coords))
+        })
+    })))
+}
+
+fn c_ftmm_mm_blend_count_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let axis_count = sfnt_fvar_axis_count(bytes.as_ref())?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = ok(json!({
+        "rows": ftmm_mm_blend_count_rows(axis_count, |count, coords| {
+            c_abi::FT_Get_MM_Blend_Coordinates(face, count, coords.as_mut_ptr())
+        })
+    }));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_ftmm_mm_blend_count_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let axis_count = sfnt_fvar_axis_count(bytes.as_ref())?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = ok(json!({
+        "rows": ftmm_mm_blend_count_rows(axis_count, |count, coords| {
+            wasm_abi::fontdone_wasm_get_mm_blend_coordinates(handle, count, coords.as_mut_ptr())
+        })
+    }));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn rust_ftmm_mm_blend_invalid_matrix(case: &InputCase) -> Result<RunOutput, String> {
     let variable_bytes = required_asset_bytes(case, "variable_font")?;
     let variable_face = rust_new_face_from_bytes(variable_bytes.as_ref(), 0)?;
@@ -17116,6 +17177,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 args.push(ftmm_num_coords(params)?.to_string());
                 return Ok(args);
             }
+            if case.operation == "ftmm.get_mm_blend_coordinates"
+                && params.get("num_coords_rows").is_some()
+            {
+                let axis_count = sfnt_fvar_axis_count(ftmm_blend_font_bytes(case)?.as_ref())?;
+                let mut args = vec!["--ftmm-mm-blend-count-matrix".to_string()];
+                push_ftmm_blend_font_source(case, &mut args)?;
+                args.push(axis_count.to_string());
+                return Ok(args);
+            }
             let mode = match case.operation.as_str() {
                 "ftmm.get_mm_blend_coordinates" => "get-mm",
                 "ftmm.set_var_blend_coordinates" => "set-var",
@@ -18162,6 +18232,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.get_mm_blend_coordinates" => {
             if case.inputs.params.get("argument_matrix").is_some() {
                 rust_ftmm_mm_blend_invalid_matrix(case)
+            } else if case.inputs.params.get("num_coords_rows").is_some() {
+                rust_ftmm_mm_blend_count_matrix(case)
             } else {
                 rust_ftmm_blend_coordinates(case, "get-mm")
             }
@@ -18925,6 +18997,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.get_mm_blend_coordinates" => {
             if case.inputs.params.get("argument_matrix").is_some() {
                 c_ftmm_mm_blend_invalid_matrix(case)
+            } else if case.inputs.params.get("num_coords_rows").is_some() {
+                c_ftmm_mm_blend_count_matrix(case)
             } else {
                 c_ftmm_blend_coordinates(case, "get-mm")
             }
@@ -19613,6 +19687,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.get_mm_blend_coordinates" => {
             if case.inputs.params.get("argument_matrix").is_some() {
                 wasm_ftmm_mm_blend_invalid_matrix(case)
+            } else if case.inputs.params.get("num_coords_rows").is_some() {
+                wasm_ftmm_mm_blend_count_matrix(case)
             } else {
                 wasm_ftmm_blend_coordinates(case, "get-mm")
             }
