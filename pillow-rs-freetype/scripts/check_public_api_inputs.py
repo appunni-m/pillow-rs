@@ -69,6 +69,7 @@ FTMM_SUCCESS_OPERATIONS = {
     "ftmm.get_var_axis_flags",
     "ftmm.get_var_blend_coordinates",
     "ftmm.get_var_design_coordinates",
+    "ftmm.set_then_get_mm_blend_coordinates",
     "ftmm.set_mm_blend_coordinates",
     "ftmm.set_mm_design_coordinates",
     "ftmm.set_mm_weight_vector",
@@ -1369,7 +1370,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for MM/variation runtime data that do not have a maintained route."""
     ftmm_rows_without_maintained_route = {
         "ftmm.FT_Done_MM_Var.import_contract",
-        "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
@@ -3966,6 +3966,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count"
     ):
         return "FT_Set_MM_Blend_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_then_get_mm_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates"
+    ):
+        return "FT_Get_MM_Blend_Coordinates after FT_Set_Var_Blend_Coordinates validates active normalized blend state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_mm_design_coordinates"
         and row.case_id
