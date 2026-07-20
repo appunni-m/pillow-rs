@@ -1414,7 +1414,7 @@ impl Font {
     /// `FT_Get_Var_Design_Coordinates` for TrueType/OpenType variation faces.
     pub(crate) fn var_design_coordinates(&self) -> Result<&[i32], FontError> {
         if self.data.fvar.is_none() {
-            return Err(FontError::InvalidFont(
+            return Err(FontError::InvalidArgument(
                 "face has no variation design coordinates".into(),
             ));
         }
@@ -1425,7 +1425,7 @@ impl Font {
     /// representation, equivalent to `FT_Get_MM_Blend_Coordinates`.
     pub(crate) fn var_blend_coordinates_16_16(&self) -> Result<Vec<i32>, FontError> {
         if self.data.fvar.is_none() {
-            return Err(FontError::InvalidFont(
+            return Err(FontError::InvalidArgument(
                 "face has no variation blend coordinates".into(),
             ));
         }
@@ -1444,7 +1444,7 @@ impl Font {
         coords_16_16: &[i32],
     ) -> Result<(), FontError> {
         let Some(fvar) = &self.data.fvar else {
-            return Err(FontError::InvalidFont(
+            return Err(FontError::InvalidArgument(
                 "face has no variation blend coordinates".into(),
             ));
         };

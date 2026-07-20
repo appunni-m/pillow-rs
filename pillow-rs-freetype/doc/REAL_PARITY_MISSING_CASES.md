@@ -10021,6 +10021,27 @@ Follow-up finding:
   deterministic fixture or the manifest expectation is corrected from C
   evidence.
 
+Follow-up finding for blend-coordinate state rows:
+
+- A maintained `FT_Get_Var_Blend_Coordinates` runner now validates the default
+  single-axis blend-coordinate row against pinned FreeType, Rust FFI, C ABI, and
+  WASM ABI.  The same runner preserves the existing null-output and
+  non-variable-face error rows; non-variable FTMM service absence must map to
+  `FT_Err_Invalid_Argument`, not invalid font format.
+- Setter rows were probed but are not promoted.  On the current
+  `fonts/variable/inter-wght.ttf` fixture, pinned FreeType 2.14.3 returned
+  `FT_Err_Invalid_Argument` (`6`) for
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates` and
+  `ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter`.
+- Pinned C also exposed the public-wrapper distinction in
+  `freetype/src/base/ftmm.c`: `FT_Set_MM_Blend_Coordinates` does not translate
+  internal service return `-2` to OK, while `FT_Set_Var_Blend_Coordinates`
+  does.  The current MM reset probe saw `-2`, so promoting it as a success row
+  would be a green placeholder.
+- Keep MM/Var blend setter rows pending until the same concrete fixture and
+  parameters return success in pinned C and the maintained runner compares
+  exact active coordinates, variation flag, and any declared glyph output.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.
