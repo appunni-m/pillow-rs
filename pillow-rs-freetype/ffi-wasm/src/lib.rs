@@ -674,7 +674,8 @@ pub extern "C" fn fontdone_wasm_palette_data_get(
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let mut rust_out = rust_ffi::FT_Palette_Data::default();
-    let err = rust_ffi::FT_Palette_Data_Get(face_ref(handle).map(|face| &face.face), Some(&mut rust_out));
+    let err =
+        rust_ffi::FT_Palette_Data_Get(face_ref(handle).map(|face| &face.face), Some(&mut rust_out));
     if err == rust_ffi::FT_Err_Ok {
         copy_rust_palette_data_to_wasm(out, rust_out);
     }
@@ -1979,7 +1980,10 @@ pub extern "C" fn fontdone_wasm_property_set_then_get(
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_set_default_properties(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+pub fn abi_support_set_default_properties(
+    library_present: i32,
+    env: Option<&str>,
+) -> Option<FT_UInt> {
     let mut library = if library_present == 0 {
         None
     } else {
@@ -2001,7 +2005,11 @@ pub fn abi_support_set_default_properties(library_present: i32, env: Option<&str
     }
 }
 
-fn wasm_face_property(tag_selector: i32, value_kind: i32, value: i32) -> rust_ffi::FT_Face_Property {
+fn wasm_face_property(
+    tag_selector: i32,
+    value_kind: i32,
+    value: i32,
+) -> rust_ffi::FT_Face_Property {
     let tag = match tag_selector {
         1 => rust_ffi::FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
         2 => rust_ffi::FT_PARAM_TAG_RANDOM_SEED as FT_ULong,
@@ -2009,7 +2017,9 @@ fn wasm_face_property(tag_selector: i32, value_kind: i32, value: i32) -> rust_ff
         _ => 0x6261_6421,
     };
     let value = match value_kind {
-        1 => Some(rust_ffi::FT_Face_Property_Value::Bool(FT_Bool::from(value != 0))),
+        1 => Some(rust_ffi::FT_Face_Property_Value::Bool(FT_Bool::from(
+            value != 0,
+        ))),
         2 => Some(rust_ffi::FT_Face_Property_Value::Int32(value)),
         _ => None,
     };
@@ -2783,6 +2793,34 @@ pub extern "C" fn fontdone_wasm_get_kerning(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_pfr_kerning(
+    handle: usize,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    out: *mut FontdoneWasmVector,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    }
+    let mut vector = rust_ffi::FT_Vector::default();
+    let err =
+        rust_ffi::FT_Get_PFR_Kerning(Some(&face.face), left_glyph, right_glyph, Some(&mut vector));
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out = FontdoneWasmVector {
+                x: vector.x,
+                y: vector.y,
+            };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_select_charmap(handle: usize, encoding: FT_Encoding) -> FT_Error {
     rust_ffi::FT_Select_Charmap(face_mut(handle).map(|face| &mut face.face), encoding)
 }
@@ -3120,8 +3158,7 @@ pub extern "C" fn fontdone_wasm_get_mm_var(
         // SAFETY: caller provides `axis_capacity` writable FT_Var_Axis records.
         Some(unsafe { slice::from_raw_parts_mut(axis, axis_capacity as usize) })
     };
-    let mut namedstyle =
-        vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
+    let mut namedstyle = vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
     let mut namedstyle_coords = vec![rust_ffi::FT_Fixed::default(); 64 * 256].into_boxed_slice();
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Get_MM_Var(None, amaster, axis, None, None);
@@ -3214,7 +3251,11 @@ pub extern "C" fn fontdone_wasm_get_mm_weight_vector(
         // SAFETY: caller provides `*len` writable FT_Fixed values.
         Some(unsafe { slice::from_raw_parts_mut(weightvector, capacity) })
     };
-    rust_ffi::FT_Get_MM_WeightVector(face_ref(handle).map(|face| &face.face), len_ref, weightvector)
+    rust_ffi::FT_Get_MM_WeightVector(
+        face_ref(handle).map(|face| &face.face),
+        len_ref,
+        weightvector,
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -3797,7 +3838,10 @@ pub fn abi_glyphslot_own_bitmap_copy_allocation_failure(handle: usize) -> FT_Err
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_fvar_namedstyle_coords(handle: usize, namedstyle_index: FT_UInt) -> Option<Vec<FT_Fixed>> {
+pub fn abi_fvar_namedstyle_coords(
+    handle: usize,
+    namedstyle_index: FT_UInt,
+) -> Option<Vec<FT_Fixed>> {
     let face = face_ref(handle)?;
     rust_ffi::FT_Fvar_Named_Style_Coords(Some(&face.face), namedstyle_index).ok()
 }

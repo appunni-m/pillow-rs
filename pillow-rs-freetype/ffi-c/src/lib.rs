@@ -694,7 +694,10 @@ pub extern "C" fn FT_Palette_Data_Get(
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let mut rust_out = rust_ffi::FT_Palette_Data::default();
-    let err = rust_ffi::FT_Palette_Data_Get(face_state(face).map(|state| &state.inner), Some(&mut rust_out));
+    let err = rust_ffi::FT_Palette_Data_Get(
+        face_state(face).map(|state| &state.inner),
+        Some(&mut rust_out),
+    );
     if err == rust_ffi::FT_Err_Ok {
         copy_palette_data_to_c(out, rust_out);
     }
@@ -1333,8 +1336,9 @@ pub fn abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face: FT_Face)
     // SAFETY: `slot_ptr` is produced from a live face-owned slot allocated by this crate.
     unsafe {
         let slot_ref = &mut *slot_ptr.as_ptr();
-        let err =
-            rust_ffi::FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(&mut slot_ref.rust_slot));
+        let err = rust_ffi::FT_GlyphSlot_Own_Bitmap_Copy_Allocation_Failure(Some(
+            &mut slot_ref.rust_slot,
+        ));
         if err != rust_ffi::FT_Err_Ok {
             return err;
         }
@@ -1347,7 +1351,10 @@ pub fn abi_glyphslot_own_bitmap_copy_allocation_failure_from_face(face: FT_Face)
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_fvar_namedstyle_coords(face: FT_Face, namedstyle_index: FT_UInt) -> Option<Vec<FT_Fixed>> {
+pub fn abi_fvar_namedstyle_coords(
+    face: FT_Face,
+    namedstyle_index: FT_UInt,
+) -> Option<Vec<FT_Fixed>> {
     let state = face_state(face)?;
     rust_ffi::FT_Fvar_Named_Style_Coords(Some(&state.inner), namedstyle_index).ok()
 }
@@ -1533,10 +1540,7 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Get_MM_Var(
-    face: FT_Face,
-    amaster: *mut *mut FT_MM_Var,
-) -> FT_Error {
+pub extern "C" fn FT_Get_MM_Var(face: FT_Face, amaster: *mut *mut FT_MM_Var) -> FT_Error {
     let Some(amaster) = non_null_mut(amaster) else {
         return rust_ffi::FT_Get_MM_Var(None, None, None, None, None);
     };
@@ -1545,8 +1549,7 @@ pub extern "C" fn FT_Get_MM_Var(
         return rust_ffi::FT_Get_MM_Var(None, Some(&mut out), None, None, None);
     };
     let mut axis = vec![FT_Var_Axis::default(); 64].into_boxed_slice();
-    let mut namedstyle =
-        vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
+    let mut namedstyle = vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
     let mut namedstyle_coords = vec![rust_ffi::FT_Fixed::default(); 64 * 256].into_boxed_slice();
     let mut master = Box::new(FT_MM_Var::default());
     let err = rust_ffi::FT_Get_MM_Var(
@@ -1721,7 +1724,10 @@ pub extern "C" fn FT_Set_Default_Properties(library: FT_Library) {
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_set_default_properties(library_present: i32, env: Option<&str>) -> Option<FT_UInt> {
+pub fn abi_support_set_default_properties(
+    library_present: i32,
+    env: Option<&str>,
+) -> Option<FT_UInt> {
     let mut library = if library_present == 0 {
         None
     } else {
@@ -3202,6 +3208,38 @@ pub extern "C" fn FT_Get_Kerning(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_PFR_Kerning(
+    face: FT_Face,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    avector: *mut FT_Vector,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(out) = NonNull::new(avector) else {
+        return rust_ffi::FT_Err_Invalid_Argument as FT_Error;
+    };
+    let mut vector = rust_ffi::FT_Vector::default();
+    let err = rust_ffi::FT_Get_PFR_Kerning(
+        Some(&state.inner),
+        left_glyph,
+        right_glyph,
+        Some(&mut vector),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and caller provides writable storage.
+        unsafe {
+            *out.as_ptr() = FT_Vector {
+                x: vector.x,
+                y: vector.y,
+            };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Select_Charmap(face: FT_Face, encoding: FT_Encoding) -> FT_Error {
     let Some(state) = face_state_mut(face) else {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
@@ -3382,11 +3420,7 @@ pub extern "C" fn FT_Set_Var_Design_Coordinates(
         // SAFETY: caller provides `num_coords` readable FT_Fixed values.
         Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
     };
-    let err = rust_ffi::FT_Set_Var_Design_Coordinates(
-        Some(&mut state.inner),
-        num_coords,
-        coords,
-    );
+    let err = rust_ffi::FT_Set_Var_Design_Coordinates(Some(&mut state.inner), num_coords, coords);
     if err == rust_ffi::FT_Err_Ok {
         state.refresh_charmaps(face);
         state.refresh_postscript_name();
@@ -3440,10 +3474,7 @@ pub extern "C" fn FT_Get_MM_Blend_Coordinates(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Get_Multi_Master(
-    face: FT_Face,
-    amaster: *mut FT_Multi_Master,
-) -> FT_Error {
+pub extern "C" fn FT_Get_Multi_Master(face: FT_Face, amaster: *mut FT_Multi_Master) -> FT_Error {
     // SAFETY: the caller provides writable storage for the public descriptor or null.
     let amaster = unsafe { amaster.as_mut() };
     rust_ffi::FT_Get_Multi_Master(face_state(face).map(|state| &state.inner), amaster)
@@ -3504,7 +3535,11 @@ pub extern "C" fn FT_Get_MM_WeightVector(
         // SAFETY: caller provides `*len` writable FT_Fixed values.
         Some(unsafe { slice::from_raw_parts_mut(weightvector, capacity) })
     };
-    rust_ffi::FT_Get_MM_WeightVector(face_state(face).map(|state| &state.inner), len_ref, weightvector)
+    rust_ffi::FT_Get_MM_WeightVector(
+        face_state(face).map(|state| &state.inner),
+        len_ref,
+        weightvector,
+    )
 }
 
 #[unsafe(no_mangle)]

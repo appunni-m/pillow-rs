@@ -22,6 +22,7 @@
 #include <freetype/ftmm.h>
 #include <freetype/ftmodapi.h>
 #include <freetype/ftoutln.h>
+#include <freetype/ftpfr.h>
 #include <freetype/ftrender.h>
 #include <freetype/ftsnames.h>
 #include <freetype/ftsystem.h>
@@ -14321,6 +14322,127 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-pfr-kerning")) {
+        const char* rows_arg = argv[7];
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        FT_Error first_error = FT_Err_Ok;
+        char* token = strtok(rows, ",");
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            if (right) {
+                *right = '\0';
+                right++;
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_PFR_Kerning(
+                    face,
+                    glyph_selector_index(face, left),
+                    glyph_selector_index(face, right),
+                    &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+            }
+            token = strtok(NULL, ",");
+        }
+        free(rows);
+
+        rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"status\":%d,\"fallback_return\":%d,\"kerning_vectors\":[",
+               first_error,
+               first_error);
+        token = strtok(rows, ",");
+        int first = 1;
+        int have_first_vector = 0;
+        FT_Vector first_vector;
+        first_vector.x = 0;
+        first_vector.y = 0;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            if (right) {
+                *right = '\0';
+                right++;
+                FT_UInt left_glyph = glyph_selector_index(face, left);
+                FT_UInt right_glyph = glyph_selector_index(face, right);
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_PFR_Kerning(face, left_glyph, right_glyph, &kerning);
+                if (!have_first_vector) {
+                    first_vector = kerning;
+                    have_first_vector = 1;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld},\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}",
+                       left,
+                       right,
+                       (unsigned int)FT_KERNING_UNSCALED,
+                       left_glyph,
+                       right_glyph,
+                       err,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning_units(FT_KERNING_UNSCALED));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"glyph_indexes\":[");
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        token = strtok(rows, ",");
+        first = 1;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            if (right) {
+                *right = '\0';
+                right++;
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":%u,\"right\":%u}",
+                       glyph_selector_index(face, left),
+                       glyph_selector_index(face, right));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld}}}\n",
+               first_vector.x,
+               first_vector.y,
+               first_vector.x,
+               first_vector.y);
+        free(rows);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-kerning-null-output")) {
         const char* left = argv[7];
         const char* right = argv[8];
@@ -17255,6 +17377,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--get-pfr-kerning")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--get-kerning-null-face")) {

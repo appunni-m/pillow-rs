@@ -1844,9 +1844,9 @@ Rejected or blocked during the same pass:
 - `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature`
   reported pinned C error `7` under strict focused parity; only the runtime
   `success_cid_keyed_face` row was promoted.
-- `ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning` reported
-  pinned C error `7` under strict focused parity; only the PFR-pair success row
-  was promoted.
+- `ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning` has since
+  been promoted through the maintained non-PFR fallback route.  The remaining
+  PFR kerning success fixture with a true PFR service font remains unresolved.
 - Other `generated/sfnt/*` future rows are still missing generated assets:
   `missing-cmap.ttf`, `missing-hmtx-incremental.ttf`,
   `invalid-post-format.ttf`, `truncated-png-bitmap.ttf`, and
@@ -3813,6 +3813,41 @@ make -C pillow-rs-freetype test-case CASE=<each listed case id>
 
 Result: all ten focused exact rows passed. Route audit:
 `real-parity` `3979`, `generic-error-fallback` `216`.
+
+### Issue Set Current: `FT_Get_PFR_Kerning` non-PFR fallback route
+
+Previous blocker:
+
+- `ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning` was in
+  `pending-route` because the harness had no maintained route for the
+  `ftpfr.c` fallback path.
+- Pinned FreeType 2.14.3 `src/base/ftpfr.c:98-120` validates face/vector, then
+  calls `FT_Get_Kerning(face, left, right, FT_KERNING_UNSCALED, avector)` when
+  no PFR metrics service is present.
+
+Fix plan:
+
+1. Implement pure-Rust `FT_Get_PFR_Kerning` as the exact non-PFR fallback,
+   without adding PFR service support or changing fixture expectations.
+2. Expose the same behavior through thin C ABI and WASM ABI wrappers.
+3. Route the existing `kern_font` fixture through the pinned C oracle, Rust
+   FFI, C ABI, and WASM ABI exact comparison.
+
+Verified progress:
+
+- Focused row passed exact parity: `1 / 1`, `0` failed, `0` pending.
+- `ftpfr` filter passed `7 / 7`, with `6` rows still pending for unresolved
+  true-PFR assets/metrics routes.
+- Full parity passed `6718 / 6718`, pending `516`.
+- Route audit moved `real-parity` `4513 -> 4514` and
+  `pending-route` `443 -> 442`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning
+make -C pillow-rs-freetype test-case CASE=ftpfr
+```
 
 ### Issue Set Current: batched ftcolor iterator, paint, and palette exact-error routes
 
