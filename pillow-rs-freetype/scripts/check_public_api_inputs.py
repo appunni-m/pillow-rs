@@ -1715,9 +1715,29 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "gzip/zlib success route instead of the current exact-error-only "
             "gzip routing"
         )
+    if row.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Stream_OpenGzip success declares "
+            "compressed/gzip/small-and-large-streams.json, but that "
+            "maintained gzip stream manifest is absent; exact same-input "
+            "C/Rust/C-ABI/WASM stream parity also requires a pure-Rust gzip "
+            "route that matches FreeType's below/above-40KiB in-memory versus "
+            "callback stream behavior from freetype/src/gzip/ftgzip.c:608-708"
+        )
+    if row.case_id == "ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Stream_OpenLZW success declares streams/lzw/small-valid-pcf.Z "
+            "and facades/stream/memory-ft-stream.json, but those maintained "
+            "LZW byte/facade fixtures are absent; exact same-input "
+            "C/Rust/C-ABI/WASM stream parity also requires a pure-Rust LZW "
+            "route that matches open/read/backward-seek/close behavior from "
+            "freetype/src/lzw/ftlzw.c:221-308 and 337-383"
+        )
     stream_rows_without_maintained_route = {
-        "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream",
-        "ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream",
         "ftsystem.FT_Memory.custom_allocator_runtime_events",
         "ftsystem.FT_Stream.external_stream_runtime_contract",
         "ftsystem.FT_StreamRec.callback_stream_field_contract",
