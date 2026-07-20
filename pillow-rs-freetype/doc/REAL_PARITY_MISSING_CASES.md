@@ -1720,6 +1720,15 @@ Finding:
   a future requirement for negative and large coordinates. Promoting this row
   before adding the asset/generator and a real coordinate route would be a
   green placeholder, not same-input C/Rust/C-ABI/WASM parity.
+- Follow-up on 2026-07-20: the fixture tree already has several maintained
+  `outlines/synthetic/*.json` assets, but there is still no maintained
+  `coordinate_endpoint_parity` runtime branch in the unified runner. Adding
+  only `negative-and-large-coordinates.json` would change the blocker without
+  proving parity. The row needs both the synthetic outline asset/generator and
+  a runner that compares `FT_Load_Glyph` outline points,
+  `FT_Outline_Get_CBox`, `FT_Vector_Transform`, and
+  `FT_Outline_Decompose` callback coordinates through pinned C, Rust FFI, thin
+  C ABI, and WASM ABI.
 
 Classification change:
 
