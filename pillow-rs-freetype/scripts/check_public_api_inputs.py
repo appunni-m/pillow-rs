@@ -1394,7 +1394,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftmodapi_rows_without_maintained_route = {
         "ftmodapi.FT_Add_Module.add_minimal_module_success",
         "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
-        "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name",
         "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format",
         "ftmodapi.FT_MODULE_DRIVER_HAS_HINTER.present_on_native_hinter_drivers",
         "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c",
@@ -3656,6 +3655,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Done_Library.decrements_reference_without_destroying"
     ):
         return "FT_Done_Library refcount decrement without destruction validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.face_driver_name"
+        and row.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name"
+    ):
+        return "FT_FACE_DRIVER_NAME TrueType driver module name validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.property_get"
         and row.case_id == "ftmodapi.FT_Property_Get.rejects_null_arguments"

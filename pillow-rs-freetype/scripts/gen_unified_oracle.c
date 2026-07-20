@@ -3706,6 +3706,17 @@ static void print_nullable_c_string_result(const char* value) {
     print_postscript_name_result(value);
 }
 
+static void print_face_driver_name_result(const char* name) {
+    if (!name) {
+        printf("{\"driver_name\":null,\"string_bytes\":\"\",\"nul_terminated\":false}");
+        return;
+    }
+    size_t len = strlen(name);
+    printf("{\"driver_name\":\"%s\",\"string_bytes\":\"", name);
+    print_hex_bytes((const unsigned char*)name, (long)len);
+    printf("\",\"nul_terminated\":true}");
+}
+
 static void print_winfnt_header_json(const FT_WinFNT_HeaderRec* header) {
     printf("{\"version\":%u", (unsigned int)header->version);
     printf(",\"file_size\":%lu", (unsigned long)header->file_size);
@@ -14849,6 +14860,18 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--face-driver-name")) {
+        const char* name = FT_FACE_DRIVER_NAME(face);
+        print_status(0);
+        printf(",\"output\":");
+        print_face_driver_name_result(name);
+        printf("}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-winfnt-header")) {
         const int header_is_null = argc > 7 && streq(argv[7], "null");
         FT_WinFNT_HeaderRec header;
@@ -17670,7 +17693,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 7 && streq(argv[1], "--get-postscript-name")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias"))) {
+    if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias") || streq(argv[1], "--face-driver-name"))) {
         return emit_face_or_slot(argc, argv);
     }
     if ((argc == 7 || argc == 8) && streq(argv[1], "--get-winfnt-header")) {

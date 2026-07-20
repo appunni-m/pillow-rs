@@ -3754,6 +3754,20 @@ pub fn FT_Get_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
     face.map(|face| face.inner.borrow().font().font_format())
 }
 
+pub fn FT_FACE_DRIVER_NAME(face: Option<&FT_Face>) -> Option<&'static str> {
+    // FreeType 2.14.3 `include/freetype/ftmodapi.h:FT_FACE_DRIVER_NAME`
+    // expands to the face driver's module class name, not the FONT_FORMAT
+    // service string.  For the currently supported core drivers this maps the
+    // parsed driver identity to the same public module names C exposes.
+    match FT_Get_Font_Format(face)? {
+        "TrueType" => Some("truetype"),
+        "CFF" => Some("cff"),
+        "Type 1" => Some("type1"),
+        "Windows FNT" => Some("winfonts"),
+        _ => None,
+    }
+}
+
 pub fn FT_Get_Multi_Master(
     face: Option<&FT_Face>,
     amaster: Option<&mut FT_Multi_Master>,

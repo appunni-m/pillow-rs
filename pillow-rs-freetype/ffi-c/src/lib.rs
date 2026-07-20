@@ -916,6 +916,7 @@ struct FaceState {
     style_name: Option<CString>,
     postscript_name: Option<CString>,
     font_format: Option<CString>,
+    face_driver_name: Option<CString>,
     variant_list: Vec<FT_UInt32>,
 }
 
@@ -931,6 +932,7 @@ impl FaceState {
             .and_then(|name| CString::new(name.as_str()).ok());
         let postscript_name = postscript_name_cstring(&inner);
         let font_format = font_format_cstring(Some(&inner));
+        let face_driver_name = face_driver_name_cstring(Some(&inner));
         Self {
             inner,
             size_records: Vec::new(),
@@ -940,6 +942,7 @@ impl FaceState {
             style_name,
             postscript_name,
             font_format,
+            face_driver_name,
             variant_list: Vec::new(),
         }
     }
@@ -1031,6 +1034,14 @@ fn font_format_cstring(inner: Option<&rust_ffi::FT_Face>) -> Option<CString> {
     rust_ffi::FT_Get_Font_Format(inner).and_then(|format| {
         // FreeType exposes the driver-owned FONT_FORMAT service string.
         CString::new(format).ok()
+    })
+}
+
+fn face_driver_name_cstring(inner: Option<&rust_ffi::FT_Face>) -> Option<CString> {
+    rust_ffi::FT_FACE_DRIVER_NAME(inner).and_then(|name| {
+        // FreeType exposes the driver module class name as a borrowed
+        // NUL-terminated C string owned by the driver's module class.
+        CString::new(name).ok()
     })
 }
 
@@ -2406,8 +2417,9 @@ fn ft_new_memory_face_with_name_options(
     };
     // SAFETY: `file_base` is non-null and the caller promises `file_size` readable bytes.
     let data = unsafe { slice::from_raw_parts(file_base, file_len) };
-    // SAFETY: `library` is a live handle returned by `FT_Init_FreeType`.
-    let rust_library = unsafe { &*((*library.as_ptr()).internal.cast::<rust_ffi::FT_Library>()) };
+    let Some(rust_library) = library_ref(library.as_ptr()) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
     match rust_ffi::FT_New_Memory_Face_With_Name_Options(
         rust_library,
         data,
@@ -3568,6 +3580,13 @@ pub extern "C" fn FT_Get_Font_Format(face: FT_Face) -> *const c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_X11_Font_Format(face: FT_Face) -> *const c_char {
     FT_Get_Font_Format(face)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_face_driver_name(face: FT_Face) -> *const c_char {
+    face_state(face)
+        .and_then(|state| state.face_driver_name.as_deref())
+        .map_or(ptr::null(), CStr::as_ptr)
 }
 
 #[unsafe(no_mangle)]
