@@ -2376,11 +2376,6 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "proving successful palette metadata output for a C-openable color "
             "font matches pinned C"
         ),
-        "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data": (
-            "FT_Palette_Data_Get non-SFNT parity needs a maintained route "
-            "proving non-color faces return the same success/null-data behavior "
-            "and output preservation as pinned C"
-        ),
         "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries": (
             "FT_Palette_Select entry parity needs a maintained route proving "
             "selected palette pointer, entry values, and active palette state "
@@ -2396,18 +2391,10 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "proving user-modified palette entries are reset on reselection "
             "exactly like pinned C"
         ),
-        "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette": (
-            "FT_Palette_Select non-SFNT parity needs a maintained route proving "
-            "non-color faces return the same null palette behavior as pinned C"
-        ),
         "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
             "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
             "route proving foreground color mutation affects subsequent COLR "
             "foreground paint output like pinned C"
-        ),
-        "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop": (
-            "FT_Palette_Set_Foreground_Color non-SFNT parity needs a maintained "
-            "route proving non-color faces keep pinned C no-op behavior"
         ),
         "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy": (
             "FT_Palette_Set_Foreground_Color default policy parity needs a "
@@ -5196,11 +5183,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Palette_Data_Get disabled-color-layers rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcolor.palette_data_get"
+        and row.case_id == "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"
+    ):
+        return "FT_Palette_Data_Get non-SFNT null palette data validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftcolor.palette_select"
         and row.case_id
         == "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index"
     ):
         return "FT_Palette_Select null-face/invalid-index rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_select"
+        and row.case_id == "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette"
+    ):
+        return "FT_Palette_Select non-SFNT null palette output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_set_foreground_color"
         and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face"
@@ -5212,6 +5209,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled"
     ):
         return "FT_Palette_Set_Foreground_Color disabled-color-layers errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop"
+    ):
+        return "FT_Palette_Set_Foreground_Color non-SFNT no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id
