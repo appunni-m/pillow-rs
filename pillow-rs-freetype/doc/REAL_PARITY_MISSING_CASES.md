@@ -9959,6 +9959,60 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set: `FT_Get_Multi_Master` generated Adobe MM descriptor route
+
+Status: two real descriptor rows implemented on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `760d707f9`: `real-parity=4466`,
+  `pending-route=489`, `pending-core=1`.
+
+Finding:
+
+- The generated Type 1 MM fixture opens in pinned C FreeType and exposes the
+  Adobe Multiple Master service with `num_axis=2`, `num_designs=4`, axis names
+  `Weight` and `Width`, and design-map extrema `400..900` and `100..200`.
+- Rust parsed only basic Type 1 face metadata, so the Rust FFI, C ABI, and WASM
+  ABI had no maintained `FT_Get_Multi_Master` descriptor route.
+- FreeType `src/type1/t1load.c:T1_Get_Multi_Master` writes only
+  `num_axis`, `num_designs`, and the populated `FT_MM_Axis` slots; unused
+  caller slots retain their incoming sentinel values.
+
+Implementation:
+
+- Added pure-Rust parsing for the generated Type 1 MM descriptor keys:
+  `BlendAxisTypes`, `BlendDesignPositions`, `BlendDesignMap`, and
+  `WeightVector`.
+- Added Rust FFI `FT_Get_Multi_Master`, thin C ABI `FT_Get_Multi_Master`, and
+  thin WASM `fontdone_wasm_get_multi_master`.
+- Added unified oracle/runtime comparison for the descriptor record, including
+  axis name bytes, design minima/maxima, counts, and unused-slot sentinel
+  preservation.
+- Promoted only fixture-backed rows:
+  `ftmm.FT_MM_Axis.populated_by_get_multi_master` and
+  `ftmm.FT_Multi_Master.populated_by_adobe_mm_service`.
+- Left `ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success` pending because
+  its declared legacy `fonts/mm/adobe-multiple-master.pfb` asset remains
+  unresolved; it was not counted as real parity.
+
+Result:
+
+- Route audit after this batch: `real-parity=4468`, `pending-route=487`,
+  `pending-core=1`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_MM_Axis.populated_by_get_multi_master
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Multi_Master.populated_by_adobe_mm_service
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype lint
+```
+
 ### Issue Set Current: Adobe Type 1 MM fixture and false-green route guard
 
 Status: fixture added and false-green route promotion blocked on 2026-07-20.

@@ -227,6 +227,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_x11_font_format",
     "fontdone_wasm_set_named_instance",
     "fontdone_wasm_get_mm_blend_coordinates",
+    "fontdone_wasm_get_multi_master",
     "fontdone_wasm_get_var_blend_coordinates",
     "fontdone_wasm_get_var_design_coordinates",
     "fontdone_wasm_set_mm_blend_coordinates",
@@ -1376,8 +1377,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_MM_Var.ownership_matches_c",
         "ftmm.FT_MM_Var.populated_for_adobe_mm",
-        "ftmm.FT_MM_Axis.populated_by_get_multi_master",
-        "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
@@ -3776,6 +3775,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_WeightVector.unsupported_face_error"
     ):
         return "FT_Get_MM_WeightVector unsupported-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_multi_master"
+        and row.case_id == "ftmm.FT_MM_Axis.populated_by_get_multi_master"
+    ):
+        return "FT_MM_Axis populated slots validate through FT_Get_Multi_Master across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_multi_master"
+        and row.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service"
+    ):
+        return "FT_Multi_Master Adobe MM service descriptor validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_multi_master"
         and row.case_id

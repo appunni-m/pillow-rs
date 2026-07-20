@@ -10195,6 +10195,95 @@ static int emit_ftmm_mm_blend_count_matrix(int argc, char** argv) {
     return 0;
 }
 
+static void init_multi_master_sentinel(FT_Multi_Master* master) {
+    master->num_axis = 0xA5A5;
+    master->num_designs = 0x5A5A;
+    for (FT_UInt i = 0; i < 4; i++) {
+        master->axis[i].name = NULL;
+    }
+    master->axis[0].minimum = -101;
+    master->axis[0].maximum = 101;
+    master->axis[1].minimum = -202;
+    master->axis[1].maximum = 202;
+    master->axis[2].minimum = -303;
+    master->axis[2].maximum = 303;
+    master->axis[3].minimum = -404;
+    master->axis[3].maximum = 404;
+}
+
+static int multi_master_unused_slots_preserved(const FT_Multi_Master* master) {
+    FT_Multi_Master sentinel;
+    init_multi_master_sentinel(&sentinel);
+    FT_UInt populated = master->num_axis;
+    if (populated > 4) {
+        populated = 4;
+    }
+    for (FT_UInt i = populated; i < 4; i++) {
+        if (master->axis[i].name != NULL ||
+            master->axis[i].minimum != sentinel.axis[i].minimum ||
+            master->axis[i].maximum != sentinel.axis[i].maximum) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void print_multi_master_descriptor(const FT_Multi_Master* master) {
+    printf("{\"num_axis\":%u,\"num_designs\":%u,\"axis\":[",
+           (unsigned)master->num_axis,
+           (unsigned)master->num_designs);
+    for (FT_UInt i = 0; i < 4; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"name\":");
+        print_postscript_name_result(master->axis[i].name);
+        printf(",\"minimum\":%ld,\"maximum\":%ld}",
+               (long)master->axis[i].minimum,
+               (long)master->axis[i].maximum);
+    }
+    printf("],\"unused_axis_sentinels\":");
+    print_json_bool(multi_master_unused_slots_preserved(master));
+    printf("}");
+}
+
+static void print_ftmm_get_multi_master_output(FT_Error err, const FT_Multi_Master* master) {
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"return\":%d,", err);
+    if (err) {
+        printf("\"descriptor_after\":");
+    } else {
+        printf("\"descriptor\":");
+    }
+    print_multi_master_descriptor(master);
+    printf("}}\n");
+}
+
+static int emit_ftmm_get_multi_master(int argc, char** argv) {
+    FT_Multi_Master master;
+    init_multi_master_sentinel(&master);
+    FT_Error err;
+    if (argc == 6 && streq(argv[2], "null")) {
+        err = FT_Get_Multi_Master(NULL, streq(argv[5], "null") ? NULL : &master);
+        print_ftmm_get_multi_master_output(err, &master);
+        return 0;
+    }
+    if (argc != 7 || !streq(argv[2], "face")) {
+        fprintf(stderr, "invalid --ftmm-get-multi-master args\n");
+        return 2;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    err = FT_Get_Multi_Master(face.face, streq(argv[6], "null") ? NULL : &master);
+    print_ftmm_get_multi_master_output(err, &master);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -15932,6 +16021,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
+    }
+    if ((argc == 6 || argc == 7) && streq(argv[1], "--ftmm-get-multi-master")) {
+        return emit_ftmm_get_multi_master(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--ftmm-var-blend-alias")) {
         return emit_ftmm_var_blend_alias(argc, argv);

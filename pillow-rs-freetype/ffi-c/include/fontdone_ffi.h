@@ -97,6 +97,18 @@ typedef struct FT_Parameter_ {
   void* data;
 } FT_Parameter;
 
+typedef struct FT_MM_Axis_ {
+  char* name;
+  FT_Long minimum;
+  FT_Long maximum;
+} FT_MM_Axis;
+
+typedef struct FT_Multi_Master_ {
+  FT_UInt num_axis;
+  FT_UInt num_designs;
+  FT_MM_Axis axis[4];
+} FT_Multi_Master;
+
 typedef struct FT_Var_Axis_ {
   char* name;
   FT_Fixed minimum;
@@ -492,6 +504,7 @@ const char* FT_Get_Font_Format(FT_Face face);
 const char* FT_Get_X11_Font_Format(FT_Face face);
 FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index);
 FT_Error FT_Get_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
+FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster);
 FT_Error FT_Get_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
 FT_Error FT_Get_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
 FT_Error FT_Set_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
