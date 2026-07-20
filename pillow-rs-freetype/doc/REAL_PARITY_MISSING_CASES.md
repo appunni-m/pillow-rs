@@ -10557,6 +10557,21 @@ Follow-up finding for blend-coordinate state rows:
   deterministic zero-filled blend vector for the single-axis fixture when four
   coordinates are requested, and the maintained runner compares that exact
   output through Rust FFI, C ABI, and WASM ABI.
+- Follow-up on 2026-07-20: the missing
+  `fonts/variable/avar-wght-wdth.ttf` asset is now a documented semantic alias
+  of the maintained compact variable fixture (`c7ed80798946`) so the
+  `ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates`
+  row has a C-openable two-axis avar/gvar/HVAR fixture.  Pinned C preserves the
+  caller's normalized 16.16 blend vector after
+  `FT_Set_Var_Blend_Coordinates`, returning `[32768, -32768]` for the row.
+  Rust previously converted blend coordinates to design coordinates, then
+  recomputed public blend output from design state; on the degenerate `wdth`
+  axis (`default == max`) this collapsed the first coordinate to `0`.  Rust now
+  stores public blend-coordinate state separately from the internal F2Dot14
+  variation coordinates used for glyph and metric deltas.
+
+Latest route audit after this follow-up: `real-parity=4492`,
+`pending-route=464`, `pending-core=0`.
 
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
