@@ -10184,6 +10184,41 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Follow-up: `FT_FACE_DRIVER_NAME` TrueType driver-name route
+
+Status: one C-openable row promoted to real parity on 2026-07-20.
+
+Implemented:
+
+- Added core `FT_FACE_DRIVER_NAME` macro-equivalent behavior for supported
+  face drivers.  The current C-openable row validates that a TrueType face
+  returns the driver module class name `truetype`, not the font-format service
+  string `TrueType`.
+- Added C ABI and WASM ABI test-support helpers only.  No public C export or
+  public WASM export was added because `FT_FACE_DRIVER_NAME` is a C macro and
+  the thin-wrapper export gate must remain strict.
+- Added a pinned C oracle route and unified harness comparison for
+  `ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name`.
+
+Route audit impact:
+
+- `real-parity=4522 -> 4523`
+- `pending-route=434 -> 433`
+
+Remaining:
+
+- `ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format` remains
+  `pending-route` because its input references
+  `future/fonts/cff_or_type1_outline_font.otf`.  Promoting it before adding a
+  C-openable CFF or Type1 shared fixture would be a green placeholder.
+
+Verification for this follow-up:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: route-audit snapshot after FTMM and size-record promotions
 
 Status: current planning snapshot recorded on 2026-07-20 at `2eb49c8a8`.

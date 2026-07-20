@@ -3165,6 +3165,25 @@ pub extern "C" fn fontdone_wasm_get_x11_font_format(
     fontdone_wasm_get_font_format(handle, out)
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_face_driver_name(
+    handle: usize,
+    out: *mut FontdoneWasmString,
+) -> FT_Bool {
+    // SAFETY: the caller provides writable storage for the output record or null.
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        return 0;
+    };
+    let Some(name) = face_ref(handle).and_then(|face| rust_ffi::FT_FACE_DRIVER_NAME(Some(&face.face)))
+    else {
+        *out = FontdoneWasmString::default();
+        return 0;
+    };
+    out.string = name.as_ptr();
+    out.string_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
+    1
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_named_instance(
     handle: usize,
