@@ -10408,6 +10408,41 @@ Classification change:
 - New route audit counts: `real-parity=4465`, `generic-fallback=429`,
   `pending-route=85`, `pending-core=7`.
 
+Current route-audit breakdown:
+
+- Current route audit has 60 `ftstroke` pending rows in this bucket. Later
+  exact-error and null/no-op promotions reduced the remaining set from the
+  original 65-row classification batch; do not use the old count as the
+  implementation target.
+
+| Operation | Count | Pending case IDs |
+| --- | ---: | --- |
+| `ftstroke.begin_subpath` | 2 | `ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state`<br>`ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state` |
+| `ftstroke.begin_subpath_wide_stroke` | 1 | `ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join` |
+| `ftstroke.conic_to` | 3 | `ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop`<br>`ftstroke.FT_Stroker_ConicTo.conic_curve_success`<br>`ftstroke.FT_Stroker_ConicTo.first_segment_starts_subpath` |
+| `ftstroke.cubic_to` | 3 | `ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop`<br>`ftstroke.FT_Stroker_CubicTo.cubic_curve_success`<br>`ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath` |
+| `ftstroke.end_subpath` | 2 | `ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders`<br>`ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border` |
+| `ftstroke.export` | 3 | `ftstroke.FT_Stroker_Export.append_to_existing_outline`<br>`ftstroke.FT_Stroker_Export.exports_left_then_right`<br>`ftstroke.FT_Stroker_Export.invalid_inputs_noop` |
+| `ftstroke.export_border` | 7 | `ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry`<br>`ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry`<br>`ftstroke.FT_StrokerBorder.border_selection_runtime_shape`<br>`ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline`<br>`ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop`<br>`ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty`<br>`ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export` |
+| `ftstroke.get_border_counts` | 3 | `ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts`<br>`ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts`<br>`ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers` |
+| `ftstroke.get_counts` | 3 | `ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts`<br>`ftstroke.FT_Stroker_GetCounts.combined_open_path_counts`<br>`ftstroke.FT_Stroker_GetCounts.optional_output_pointers` |
+| `ftstroke.glyph_stroke` | 2 | `ftstroke.FT_Glyph_Stroke.destroy_original_option`<br>`ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success` |
+| `ftstroke.glyph_stroke_border` | 3 | `ftstroke.FT_Glyph_StrokeBorder.destroy_original_option`<br>`ftstroke.FT_Glyph_StrokeBorder.inside_border_success`<br>`ftstroke.FT_Glyph_StrokeBorder.outside_border_success` |
+| `ftstroke.join_geometry` | 4 | `ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry`<br>`ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry`<br>`ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry`<br>`ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit` |
+| `ftstroke.join_geometry_alias` | 1 | `ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry` |
+| `ftstroke.line_to` | 3 | `ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath`<br>`ftstroke.FT_Stroker_LineTo.line_segment_success`<br>`ftstroke.FT_Stroker_LineTo.zero_length_line_noop` |
+| `ftstroke.open_path_geometry` | 4 | `ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry`<br>`ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry`<br>`ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry`<br>`ftstroke.FT_Stroker_LineCap.open_path_cap_geometry` |
+| `ftstroke.parse_outline` | 4 | `ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin`<br>`ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped`<br>`ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success`<br>`ftstroke.FT_Stroker_ParseOutline.opened_outline_success` |
+| `ftstroke.rewind` | 2 | `ftstroke.FT_Stroker_Rewind.attributes_preserved`<br>`ftstroke.FT_Stroker_Rewind.clears_previous_path` |
+| `ftstroke.set` | 3 | `ftstroke.FT_Stroker_Set.attributes_affect_geometry`<br>`ftstroke.FT_Stroker_Set.clears_existing_path`<br>`ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one` |
+| `ftstroke.set_then_rewind_observed` | 1 | `ftstroke.FT_Stroker_Rewind.set_calls_rewind` |
+| `ftstroke.stroke_manual_path` | 1 | `ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry` |
+| `ftstroke.stroke_wide_curve` | 1 | `ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration` |
+| `ftstroke.stroker_done` | 1 | `ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers` |
+| `ftstroke.stroker_done_after_export` | 1 | `ftstroke.FT_Stroker_Done.after_export_cleanup` |
+| `ftstroke.stroker_lifecycle` | 1 | `ftstroke.FT_Stroker.lifecycle_contract` |
+| `ftstroke.stroker_new` | 1 | `ftstroke.FT_Stroker_New.valid_library_allocates_stroker` |
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
