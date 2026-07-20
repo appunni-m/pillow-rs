@@ -2261,6 +2261,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Face_Properties.error_invalid_property_tag_or_value",
         "ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights",
         "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors",
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error",
     }
     if row.operation == "freetype.face_properties" and row.case_id in face_properties_rows:
         return "FT_Face_Properties scalar tags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

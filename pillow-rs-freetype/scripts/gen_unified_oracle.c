@@ -13252,6 +13252,9 @@ static int emit_face_properties_case(int argc, char** argv) {
     } else if (streq(case_id, "ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors")) {
         FT_Parameter property = {FT_PARAM_TAG_RANDOM_SEED, NULL};
         error = FT_Face_Properties(face.face, 1, &property);
+    } else if (streq(case_id, "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error")) {
+        FT_Parameter property = {FT_PARAM_TAG_STEM_DARKENING, NULL};
+        error = FT_Face_Properties(face.face, 1, &property);
     } else {
         fprintf(stderr, "unsupported face properties case: %s\n", case_id);
         close_oracle_face(&face);
