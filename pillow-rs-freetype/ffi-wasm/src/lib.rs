@@ -963,6 +963,12 @@ pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_available_sizes(handle: usize) -> Option<Vec<rust_ffi::FT_Bitmap_Size>> {
+    let face = face_ref(handle)?;
+    Some(face.face.available_sizes.to_vec())
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_face_names(handle: usize) -> Option<(Option<String>, Option<String>)> {
     let face = face_ref(handle)?;
     Some((face.face.family_name.clone(), face.face.style_name.clone()))
@@ -4012,6 +4018,12 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         face_flags: face.face_flags,
         style_flags: face.style_flags,
         num_glyphs: face.num_glyphs,
+        num_fixed_sizes: face.num_fixed_sizes,
+        available_sizes: if face.available_sizes.is_empty() {
+            ptr::null_mut()
+        } else {
+            face.available_sizes.as_ptr().cast_mut()
+        },
         bbox: face.bbox,
         units_per_EM: face.units_per_EM,
         ascender: face.ascender,

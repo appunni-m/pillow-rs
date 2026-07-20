@@ -20,16 +20,16 @@ use super::convert::{
     load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
-    FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
-    FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int, FT_Int32, FT_LcdFilter,
-    FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var,
-    FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation, FT_OutlineSnapshot,
-    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName,
-    FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span,
-    FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
-    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile,
-    TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte, FT_Bytes, FT_Char,
+    FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error,
+    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int,
+    FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long,
+    FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation,
+    FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
+    FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
+    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1226,6 +1226,8 @@ pub struct FT_Face {
     pub max_advance_height: FT_Short,
     pub underline_position: FT_Short,
     pub underline_thickness: FT_Short,
+    pub num_fixed_sizes: FT_Int,
+    pub available_sizes: Box<[FT_Bitmap_Size]>,
     pub size: FT_Size,
     pub size_metrics: FT_Size_MetricsRec,
     pub active_charmap_index: FT_Int,
@@ -4649,6 +4651,8 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_pclt(&data))
         .map(Box::new);
+    let available_sizes = available_sizes_to_ffi(font);
+    let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
     let inner = Rc::new(RefCell::new(inner));
     // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
@@ -4686,6 +4690,8 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         max_advance_height: info.max_advance_height as FT_Short,
         underline_position: info.underline_position,
         underline_thickness: info.underline_thickness,
+        num_fixed_sizes,
+        available_sizes,
         size: active_size,
         size_metrics,
         active_charmap_index,
@@ -4959,6 +4965,49 @@ fn parse_tt_pclt(data: &[u8]) -> Option<TT_PCLT> {
         SerifStyle: data[52],
         Reserved: data[53],
     })
+}
+
+fn available_sizes_to_ffi(font: &crate::font::Font) -> Box<[FT_Bitmap_Size]> {
+    let Some(header) = font.winfnt_header() else {
+        return Box::new([]);
+    };
+
+    // FreeType `src/winfonts/winfnt.c:fnt_face_get_dll_font` fills exactly one
+    // `FT_Bitmap_Size` for WinFNT faces from header metrics, then derives ppem
+    // with `FT_MulDiv` + `FT_PIX_ROUND` and clamps oversized nominal y ppem.
+    let mut size = FT_Pos::from(header.nominal_point_size) << 6;
+    let x_res = if header.horizontal_resolution == 0 {
+        72
+    } else {
+        header.horizontal_resolution
+    };
+    let y_res = if header.vertical_resolution == 0 {
+        72
+    } else {
+        header.vertical_resolution
+    };
+    let mut y_ppem =
+        crate::scaler::ft_pix_round(crate::fixed::ft_mul_div(size as i32, i32::from(y_res), 72))
+            as FT_Pos;
+    let pixel_height = FT_Pos::from(header.pixel_height) << 6;
+    if y_ppem > pixel_height {
+        y_ppem = pixel_height;
+        size = crate::fixed::ft_mul_div(y_ppem as i32, 72, i32::from(y_res)) as FT_Pos;
+    }
+    let x_ppem =
+        crate::scaler::ft_pix_round(crate::fixed::ft_mul_div(size as i32, i32::from(x_res), 72))
+            as FT_Pos;
+
+    Box::new([FT_Bitmap_Size {
+        height: FT_Short::try_from(
+            u32::from(header.pixel_height) + u32::from(header.external_leading),
+        )
+        .unwrap_or(FT_Short::MAX),
+        width: FT_Short::try_from(header.avg_width).unwrap_or(FT_Short::MAX),
+        size,
+        x_ppem,
+        y_ppem,
+    }])
 }
 
 fn charmaps_to_ffi(face: &api::Face) -> FaceCharmapRecords {

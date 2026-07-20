@@ -2385,6 +2385,7 @@ impl BackendComparisonWorker {
             return run_rust_ffi(case);
         }
         match case.operation.as_str() {
+            "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
                 Ok(ok(size_metrics_json(&(face).size_metrics)))
@@ -2688,6 +2689,7 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
             {
@@ -3004,6 +3006,7 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
             {
@@ -19961,6 +19964,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "freetype.inspect_available_sizes" => {
+            let mut args = vec!["--inspect-available-sizes".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            push_required_asset_source(case, "control_font", &mut args)?;
+            Ok(args)
+        }
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
@@ -28161,6 +28171,12 @@ fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
         face_flags: face.face_flags,
         style_flags: face.style_flags,
         num_glyphs: face.num_glyphs,
+        num_fixed_sizes: face.num_fixed_sizes,
+        available_sizes: if face.available_sizes.is_empty() {
+            ptr::null_mut()
+        } else {
+            face.available_sizes.as_ptr().cast_mut()
+        },
         bbox: face.bbox,
         units_per_EM: face.units_per_EM,
         ascender: face.ascender,
@@ -28173,6 +28189,102 @@ fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
         size: face.size,
         ..FT_FaceRecPublic::default()
     }
+}
+
+fn bitmap_sizes_json(sizes: &[FT_Bitmap_Size]) -> Vec<Value> {
+    sizes
+        .iter()
+        .map(|size| {
+            json!({
+                "height": size.height,
+                "width": size.width,
+                "size": size.size,
+                "x_ppem": size.x_ppem,
+                "y_ppem": size.y_ppem
+            })
+        })
+        .collect()
+}
+
+fn checked_available_sizes<'a>(
+    info: &FT_FaceRecPublic,
+    sizes: &'a [FT_Bitmap_Size],
+) -> Result<&'a [FT_Bitmap_Size], String> {
+    let count = usize::try_from(info.num_fixed_sizes)
+        .map_err(|err| format!("num_fixed_sizes does not fit usize: {err}"))?;
+    if count != sizes.len() {
+        return Err(format!(
+            "num_fixed_sizes {} does not match copied available_sizes length {}",
+            info.num_fixed_sizes,
+            sizes.len()
+        ));
+    }
+    if count > 0 && info.available_sizes.is_null() {
+        return Err("available_sizes is null while num_fixed_sizes is positive".to_string());
+    }
+    Ok(sizes)
+}
+
+fn available_sizes_output(
+    face: &FT_FaceRecPublic,
+    face_sizes: &[FT_Bitmap_Size],
+    control: &FT_FaceRecPublic,
+) -> Result<Value, String> {
+    let sizes = checked_available_sizes(face, face_sizes)?;
+    Ok(json!({
+        "num_fixed_sizes": face.num_fixed_sizes,
+        "available_sizes": bitmap_sizes_json(sizes),
+        "control_num_fixed_sizes": control.num_fixed_sizes,
+        "control_available_sizes_nullness": if control.available_sizes.is_null() {
+            "null"
+        } else {
+            "non-null"
+        }
+    }))
+}
+
+fn rust_inspect_available_sizes(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    let control_bytes = required_asset_bytes(case, "control_font")?;
+    let control = rust_new_face_from_bytes(control_bytes.as_ref(), 0)?;
+    Ok(ok(available_sizes_output(
+        &rust_face_info(&face),
+        &face.available_sizes,
+        &rust_face_info(&control),
+    )?))
+}
+
+fn c_inspect_available_sizes(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let control_bytes = required_asset_bytes(case, "control_font")?;
+    let (control_library, control_face) = c_new_face_from_bytes(control_bytes.as_ref(), 0)?;
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    let sizes = c_abi::abi_face_available_sizes(face)
+        .ok_or_else(|| "missing c available sizes".to_string())?;
+    let control_info = c_abi::abi_face_info(control_face)
+        .ok_or_else(|| "missing c control face info".to_string())?;
+    let output = available_sizes_output(&info, &sizes, &control_info);
+    c_done_face(control_face);
+    c_done_library(control_library);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output?))
+}
+
+fn wasm_inspect_available_sizes(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let control_bytes = required_asset_bytes(case, "control_font")?;
+    let control_handle = wasm_new_face_from_bytes(control_bytes.as_ref(), 0)?;
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    let sizes = wasm_abi::abi_face_available_sizes(handle)
+        .ok_or_else(|| "missing wasm available sizes".to_string())?;
+    let control_info = wasm_abi::abi_face_info(control_handle)
+        .ok_or_else(|| "missing wasm control face info".to_string())?;
+    let output = available_sizes_output(&info, &sizes, &control_info);
+    wasm_done_face(control_handle);
+    wasm_done_face(handle);
+    Ok(ok(output?))
 }
 
 fn face_flags_json(info: &FT_FaceRecPublic, flag_name: &str) -> Result<Value, String> {
@@ -40780,6 +40892,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "sfnt.get_sfnt_table.hhea.after_variation"
             | "sfnt.load_sfnt_table"
             | "sfnt.table_info"
+            | "freetype.inspect_available_sizes"
             | "freetype.inspect_charmaps"
             | "freetype.charmap_ownership"
             | "freetype.get_charmap_index"

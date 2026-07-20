@@ -72,7 +72,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/bitmap/embedded-strikes.ttf"
+            "id": "fonts/winfnt/bitmap-header.fnt"
           },
           "control_font": {
             "kind": "ref",
