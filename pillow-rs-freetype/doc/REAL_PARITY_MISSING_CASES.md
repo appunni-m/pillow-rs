@@ -12531,9 +12531,27 @@ Classification change:
 
 Current blocker families:
 
-- Palette and foreground color: CPAL data, light/dark flags, BGRA entry order,
-  palette selection/reselection, null-output selection, foreground color, and
-  non-SFNT behavior.
+- Palette and foreground-color rows are split by exact obligation instead of
+  sharing a broad palette blocker:
+  - `FT_Color.palette_entries_preserve_bgra_order`: BGRA byte order, alpha, and
+    palette entry indexing.
+  - `FT_PALETTE_FOR_DARK_BACKGROUND` and `FT_PALETTE_FOR_LIGHT_BACKGROUND`:
+    CPAL palette flag bits.
+  - `FT_Palette_Data.palette_data_get_values` and
+    `FT_Palette_Data_Get.success_sfnt_cpal_palette_data`: palette counts, entry
+    counts, name IDs, flag arrays, and SFNT CPAL metadata.
+  - `FT_Palette_Data_Get.success_non_sfnt_null_palette_data`: non-SFNT success
+    plus null-data/output preservation behavior.
+  - `FT_Palette_Select.success_selects_palette_and_returns_entries`,
+    `success_null_output_selects_without_return`,
+    `success_reselect_resets_user_modifications`, and
+    `success_non_sfnt_returns_null_palette`: selected palette pointers, entry
+    values, active palette state, null-output selection, reselection reset, and
+    non-SFNT null palette behavior.
+  - `FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`,
+    `success_non_sfnt_noop`, and `default_foreground_color_policy`: foreground
+    color mutation, non-SFNT no-op behavior, default policy, and later
+    overrides.
 - Layer iteration: COLR v0/v1 layer iteration, foreground color indexes,
   terminal false output preservation, and iterator state.
 - Root paint and root transform rows are split by exact obligation instead of

@@ -1822,6 +1822,77 @@ def ftcolor_root_paint_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR/CPAL palette rows needing real routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_Color.palette_entries_preserve_bgra_order": (
+            "FT_Color palette entry parity needs a maintained CPAL route "
+            "proving BGRA byte order, alpha, and entry indexing match pinned C"
+        ),
+        "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime": (
+            "FT_PALETTE_FOR_DARK_BACKGROUND parity needs a maintained "
+            "FT_Palette_Data_Get route proving dark-background flag bits match "
+            "pinned C CPAL palette metadata"
+        ),
+        "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime": (
+            "FT_PALETTE_FOR_LIGHT_BACKGROUND parity needs a maintained "
+            "FT_Palette_Data_Get route proving light-background flag bits match "
+            "pinned C CPAL palette metadata"
+        ),
+        "ftcolor.FT_Palette_Data.palette_data_get_values": (
+            "FT_Palette_Data parity needs a maintained FT_Palette_Data_Get "
+            "route proving palette counts, entry counts, name IDs, and flag "
+            "arrays match pinned C public record output"
+        ),
+        "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data": (
+            "FT_Palette_Data_Get SFNT parity needs a maintained CPAL route "
+            "proving successful palette metadata output for a C-openable color "
+            "font matches pinned C"
+        ),
+        "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data": (
+            "FT_Palette_Data_Get non-SFNT parity needs a maintained route "
+            "proving non-color faces return the same success/null-data behavior "
+            "and output preservation as pinned C"
+        ),
+        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries": (
+            "FT_Palette_Select entry parity needs a maintained route proving "
+            "selected palette pointer, entry values, and active palette state "
+            "match pinned C"
+        ),
+        "ftcolor.FT_Palette_Select.success_null_output_selects_without_return": (
+            "FT_Palette_Select null-output parity needs a maintained route "
+            "proving a null output pointer still selects the palette and "
+            "preserves output behavior like pinned C"
+        ),
+        "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications": (
+            "FT_Palette_Select reselection parity needs a maintained route "
+            "proving user-modified palette entries are reset on reselection "
+            "exactly like pinned C"
+        ),
+        "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette": (
+            "FT_Palette_Select non-SFNT parity needs a maintained route proving "
+            "non-color faces return the same null palette behavior as pinned C"
+        ),
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
+            "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
+            "route proving foreground color mutation affects subsequent COLR "
+            "foreground paint output like pinned C"
+        ),
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop": (
+            "FT_Palette_Set_Foreground_Color non-SFNT parity needs a maintained "
+            "route proving non-color faces keep pinned C no-op behavior"
+        ),
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy": (
+            "FT_Palette_Set_Foreground_Color default policy parity needs a "
+            "maintained route proving default foreground color and later "
+            "overrides match pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -1839,27 +1910,10 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     root_paint_pending = ftcolor_root_paint_pending_reason(row)
     if root_paint_pending:
         return root_paint_pending
+    palette_pending = ftcolor_palette_pending_reason(row)
+    if palette_pending:
+        return palette_pending
     pending_case_groups = {
-        (
-            "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
-            "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime",
-            "ftcolor.FT_Palette_Data.palette_data_get_values",
-            "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data",
-            "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data",
-            "ftcolor.FT_Color.palette_entries_preserve_bgra_order",
-            "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries",
-            "ftcolor.FT_Palette_Select.success_null_output_selects_without_return",
-            "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications",
-            "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette",
-            "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color",
-            "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop",
-            "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy",
-        ): (
-            "COLR/CPAL palette parity needs a maintained palette route proving "
-            "CPAL palette data, light/dark flags, BGRA entry order, palette "
-            "selection/reselection, null-output selection, foreground color, "
-            "and non-SFNT behavior across pinned C, Rust FFI, C ABI, and WASM ABI"
-        ),
         (
             "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
             "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
