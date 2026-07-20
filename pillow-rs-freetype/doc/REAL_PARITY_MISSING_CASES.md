@@ -2420,7 +2420,10 @@ Finding:
   `FT_ClassicKern_Free`, `FT_VALIDATE_*` selector constants, output slot
   indexes, and validation-buffer lifetime/free behavior.
 - Those rows had stayed in `generic-fallback` with the reason
-  `no explicit maintained route classification`.
+  `no explicit maintained route classification`, then under one broad
+  `ftgxval.*` pending reason.  The current classifier names each blocked row
+  explicitly so future `ftgxval` rows cannot be hidden by a subsystem-wide
+  placeholder.
 - They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained GX
   validation route that opens a real GX/classic-kern font, invokes the pinned C
   validator and the Rust implementation with the same validation flags, compares
@@ -2429,11 +2432,54 @@ Finding:
 
 Classification change:
 
-- 18 `ftgxval.*` rows moved from `generic-fallback` to `pending-route`.
-- Existing exact `ftgxval` error rows remain real through the normal exact-error
-  route.
-- New route audit counts: `real-parity=4465`, `generic-fallback=182`,
-  `pending-route=332`, `pending-core=7`.
+- 16 `ftgxval.*` rows are explicit `pending-route` records with case-specific
+  blockers instead of a subsystem-wide pending reason.
+- Existing exact `ftgxval` error rows and already-promoted selector/index rows
+  remain real through their normal exact routes.
+- The route audit count remains stable for this refinement; it changes the
+  blocker granularity, not the number of accepted parity rows.
+
+Case-specific blockers:
+
+- `ftgxval.FT_ClassicKern_Free.frees_classic_kern_validation_buffer` needs a
+  maintained classic-kern validate-then-free route proving C allocation
+  ownership and free semantics for non-null validation buffers.
+- `ftgxval.FT_ClassicKern_Validate.validates_ms_classic_kern` needs a
+  C-openable Microsoft classic kern fixture and exact output pointer/length
+  bytes plus error comparison across all ABI lanes.
+- `ftgxval.FT_ClassicKern_Validate.validates_apple_classic_kern` needs a
+  C-openable Apple classic kern fixture and exact validation buffer, error, and
+  lifetime comparison; MS-kern success does not prove Apple selector behavior.
+- `ftgxval.FT_TrueTypeGX_Free.frees_gx_validation_buffer` needs a maintained GX
+  validate-then-free route proving ownership/free semantics for table buffers
+  returned by `FT_TrueTypeGX_Validate`.
+- `ftgxval.FT_TrueTypeGX_Validate.validates_selected_gx_tables` needs a
+  C-openable GX/AAT fixture and exact selected output slots across pinned C,
+  Rust FFI, C ABI, and WASM ABI.
+- `ftgxval.FT_TrueTypeGX_Validate.validates_all_gx_tables` needs the same
+  fixture with all requested output slots, errors, and lifetimes checked.
+- `ftgxval.FT_TrueTypeGX_Validate.respects_table_length` needs malformed or
+  truncated GX tables proving pinned C length validation and exact error/output
+  pointer handling.
+- `ftgxval.FT_VALIDATE_APPLE.runtime_selects_apple_classic_kern` needs a
+  classic-kern route proving the selector chooses Apple kern validation/output
+  rather than MS behavior.
+- `ftgxval.FT_VALIDATE_CKERN.runtime_accepts_ms_or_apple` needs a maintained
+  classic-kern route proving the selector accepts the correct MS/Apple variant
+  and returns exact buffer/error output.
+- `ftgxval.FT_VALIDATE_CKERN.output_table_lifetime` needs a validate/free route
+  proving returned table buffers stay valid until `FT_ClassicKern_Free` and are
+  freed exactly once.
+- `ftgxval.FT_VALIDATE_opbd.gx_validate_selects_opbd_table`,
+  `ftgxval.FT_VALIDATE_prop.gx_validate_selects_prop_table`, and
+  `ftgxval.FT_VALIDATE_trak.gx_validate_selects_trak_table` each need a GX/AAT
+  fixture with the named table and exact selected-table output slot/error
+  comparison.
+- `ftgxval.FT_VALIDATE_opbd_INDEX.indexes_gx_validate_output_slot`,
+  `ftgxval.FT_VALIDATE_prop_INDEX.indexes_gx_validate_output_slot`, and
+  `ftgxval.FT_VALIDATE_trak_INDEX.indexes_gx_validate_output_slot` each need
+  maintained proof that the public index maps to the same
+  `FT_TrueTypeGX_Validate` output slot as pinned C.
 
 Required fix plan:
 
