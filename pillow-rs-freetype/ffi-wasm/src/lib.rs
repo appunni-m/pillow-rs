@@ -306,6 +306,135 @@ fn copy_rust_palette_data_to_wasm(
     out.palette_entry_name_ids = value.palette_entry_name_ids;
 }
 
+#[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiPaletteDataSnapshot {
+    pub error: FT_Error,
+    pub num_palettes: FT_UShort,
+    pub num_palette_entries: FT_UShort,
+    pub palette_name_ids_is_null: bool,
+    pub palette_flags_is_null: bool,
+    pub palette_entry_name_ids_is_null: bool,
+    pub palette_name_ids: Vec<FT_UShort>,
+    pub palette_flags: Vec<FT_UShort>,
+    pub palette_entry_name_ids: Vec<FT_UShort>,
+}
+
+#[cfg(feature = "abi-test-support")]
+fn abi_ushort_slice(ptr: *const FT_UShort, len: FT_UShort) -> Vec<FT_UShort> {
+    if ptr.is_null() || len == 0 {
+        return Vec::new();
+    }
+    // SAFETY: test callers pass live FreeType-shaped array pointers returned
+    // by `fontdone_wasm_palette_data_get`; this helper immediately copies
+    // `len` elements while the handle is live.
+    unsafe { slice::from_raw_parts(ptr, usize::from(len)).to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_palette_data_snapshot(handle: usize) -> AbiPaletteDataSnapshot {
+    let mut data = FontdoneWasmPaletteData::default();
+    let error = fontdone_wasm_palette_data_get(handle, &mut data);
+    AbiPaletteDataSnapshot {
+        error,
+        num_palettes: data.num_palettes,
+        num_palette_entries: data.num_palette_entries,
+        palette_name_ids_is_null: data.palette_name_ids.is_null(),
+        palette_flags_is_null: data.palette_flags.is_null(),
+        palette_entry_name_ids_is_null: data.palette_entry_name_ids.is_null(),
+        palette_name_ids: if error == rust_ffi::FT_Err_Ok {
+            abi_ushort_slice(data.palette_name_ids, data.num_palettes)
+        } else {
+            Vec::new()
+        },
+        palette_flags: if error == rust_ffi::FT_Err_Ok {
+            abi_ushort_slice(data.palette_flags, data.num_palettes)
+        } else {
+            Vec::new()
+        },
+        palette_entry_name_ids: if error == rust_ffi::FT_Err_Ok {
+            abi_ushort_slice(data.palette_entry_name_ids, data.num_palette_entries)
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+#[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiPaletteSelectSnapshot {
+    pub error: FT_Error,
+    pub palette_is_null: bool,
+    pub entries: Vec<FontdoneWasmColor>,
+}
+
+#[cfg(feature = "abi-test-support")]
+fn abi_palette_entries_from_ptr(
+    handle: usize,
+    palette: *mut FontdoneWasmColor,
+) -> Vec<FontdoneWasmColor> {
+    if palette.is_null() {
+        return Vec::new();
+    }
+    let mut data = FontdoneWasmPaletteData::default();
+    if fontdone_wasm_palette_data_get(handle, &mut data) != rust_ffi::FT_Err_Ok {
+        return Vec::new();
+    }
+    let len = usize::from(data.num_palette_entries);
+    // SAFETY: this test-support helper copies the palette pointer returned by
+    // `fontdone_wasm_palette_select` while the owning handle is still live.
+    unsafe { slice::from_raw_parts(palette, len).to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_palette_select_snapshot(
+    handle: usize,
+    palette_index: FT_UShort,
+) -> AbiPaletteSelectSnapshot {
+    let mut palette = ptr::null_mut();
+    let error = fontdone_wasm_palette_select(handle, palette_index, &mut palette);
+    AbiPaletteSelectSnapshot {
+        error,
+        palette_is_null: palette.is_null(),
+        entries: if error == rust_ffi::FT_Err_Ok {
+            abi_palette_entries_from_ptr(handle, palette)
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_palette_select_without_output(handle: usize, palette_index: FT_UShort) -> FT_Error {
+    fontdone_wasm_palette_select(handle, palette_index, ptr::null_mut())
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_palette_mutate_entry(
+    handle: usize,
+    palette_index: FT_UShort,
+    entry_index: usize,
+    color: FontdoneWasmColor,
+) -> AbiPaletteSelectSnapshot {
+    let mut snapshot = abi_palette_select_snapshot(handle, palette_index);
+    if entry_index < snapshot.entries.len() {
+        let mut palette = ptr::null_mut();
+        let error = fontdone_wasm_palette_select(handle, palette_index, &mut palette);
+        if error == rust_ffi::FT_Err_Ok && !palette.is_null() {
+            // SAFETY: this feature-gated helper mutates an entry through the
+            // public WASM ABI palette pointer while the handle is live,
+            // matching the FreeType caller-observable behavior under test.
+            unsafe { *palette.add(entry_index) = color };
+            snapshot = AbiPaletteSelectSnapshot {
+                error,
+                palette_is_null: palette.is_null(),
+                entries: abi_palette_entries_from_ptr(handle, palette),
+            };
+        }
+    }
+    snapshot
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_list_add(list: FT_List, node: FT_ListNode) {
     let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })

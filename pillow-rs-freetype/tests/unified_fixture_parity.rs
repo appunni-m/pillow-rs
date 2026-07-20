@@ -9106,6 +9106,288 @@ fn palette_data_json(
     })
 }
 
+fn rust_palette_data_values_json(snapshot: FT_Palette_Data_Snapshot) -> Value {
+    json!({
+        "error": snapshot.error,
+        "palette_data": {
+            "num_palettes": snapshot.num_palettes,
+            "num_palette_entries": snapshot.num_palette_entries,
+            "palette_name_ids": {
+                "nullness": snapshot.palette_name_ids_is_null,
+                "values": snapshot.palette_name_ids
+            },
+            "palette_flags": {
+                "nullness": snapshot.palette_flags_is_null,
+                "values": snapshot.palette_flags
+            },
+            "palette_entry_name_ids": {
+                "nullness": snapshot.palette_entry_name_ids_is_null,
+                "values": snapshot.palette_entry_name_ids
+            }
+        }
+    })
+}
+
+fn c_palette_data_values_json(snapshot: c_abi::AbiPaletteDataSnapshot) -> Value {
+    json!({
+        "error": snapshot.error,
+        "palette_data": {
+            "num_palettes": snapshot.num_palettes,
+            "num_palette_entries": snapshot.num_palette_entries,
+            "palette_name_ids": {
+                "nullness": snapshot.palette_name_ids_is_null,
+                "values": snapshot.palette_name_ids
+            },
+            "palette_flags": {
+                "nullness": snapshot.palette_flags_is_null,
+                "values": snapshot.palette_flags
+            },
+            "palette_entry_name_ids": {
+                "nullness": snapshot.palette_entry_name_ids_is_null,
+                "values": snapshot.palette_entry_name_ids
+            }
+        }
+    })
+}
+
+fn wasm_palette_data_values_json(snapshot: wasm_abi::AbiPaletteDataSnapshot) -> Value {
+    json!({
+        "error": snapshot.error,
+        "palette_data": {
+            "num_palettes": snapshot.num_palettes,
+            "num_palette_entries": snapshot.num_palette_entries,
+            "palette_name_ids": {
+                "nullness": snapshot.palette_name_ids_is_null,
+                "values": snapshot.palette_name_ids
+            },
+            "palette_flags": {
+                "nullness": snapshot.palette_flags_is_null,
+                "values": snapshot.palette_flags
+            },
+            "palette_entry_name_ids": {
+                "nullness": snapshot.palette_entry_name_ids_is_null,
+                "values": snapshot.palette_entry_name_ids
+            }
+        }
+    })
+}
+
+fn ft_color_entries_json(entries: &[FT_Color]) -> Value {
+    Value::Array(
+        entries
+            .iter()
+            .map(|entry| {
+                json!({
+                    "blue": entry.blue,
+                    "green": entry.green,
+                    "red": entry.red,
+                    "alpha": entry.alpha
+                })
+            })
+            .collect(),
+    )
+}
+
+fn c_color_entries_json(entries: &[c_abi::FT_Color]) -> Value {
+    Value::Array(
+        entries
+            .iter()
+            .map(|entry| {
+                json!({
+                    "blue": entry.blue,
+                    "green": entry.green,
+                    "red": entry.red,
+                    "alpha": entry.alpha
+                })
+            })
+            .collect(),
+    )
+}
+
+fn wasm_color_entries_json(entries: &[wasm_abi::FontdoneWasmColor]) -> Value {
+    Value::Array(
+        entries
+            .iter()
+            .map(|entry| {
+                json!({
+                    "blue": entry.blue,
+                    "green": entry.green,
+                    "red": entry.red,
+                    "alpha": entry.alpha
+                })
+            })
+            .collect(),
+    )
+}
+
+fn rust_palette_select_runs_json(face: &FT_Face) -> Value {
+    let runs: Vec<Value> = [0, 1]
+        .into_iter()
+        .map(|palette_index| {
+            let snapshot = FT_Palette_Select_Copy(Some(face), palette_index, true);
+            json!({
+                "error": snapshot.error,
+                "active_palette_index": if snapshot.error == FT_Err_Ok { i64::from(palette_index) } else { -1 },
+                "palette_is_null": snapshot.palette_is_null,
+                "entries": ft_color_entries_json(&snapshot.entries)
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+fn c_palette_select_runs_json(face: c_abi::FT_Face) -> Value {
+    let runs: Vec<Value> = [0, 1]
+        .into_iter()
+        .map(|palette_index| {
+            let snapshot = c_abi::abi_palette_select_snapshot(face, palette_index);
+            json!({
+                "error": snapshot.error,
+                "active_palette_index": if snapshot.error == FT_Err_Ok { i64::from(palette_index) } else { -1 },
+                "palette_is_null": snapshot.palette_is_null,
+                "entries": c_color_entries_json(&snapshot.entries)
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+fn wasm_palette_select_runs_json(handle: usize) -> Value {
+    let runs: Vec<Value> = [0, 1]
+        .into_iter()
+        .map(|palette_index| {
+            let snapshot = wasm_abi::abi_palette_select_snapshot(handle, palette_index);
+            json!({
+                "error": snapshot.error,
+                "active_palette_index": if snapshot.error == FT_Err_Ok { i64::from(palette_index) } else { -1 },
+                "palette_is_null": snapshot.palette_is_null,
+                "entries": wasm_color_entries_json(&snapshot.entries)
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+fn rust_palette_select_null_output_json(face: &FT_Face) -> Value {
+    let err = FT_Palette_Select_Copy(Some(face), 1, false).error;
+    let followup = FT_Palette_Select_Copy(Some(face), 1, true);
+    json!({
+        "error": err,
+        "active_palette_index": if err == FT_Err_Ok { 1 } else { -1 },
+        "followup_error": followup.error,
+        "followup_palette_is_null": followup.palette_is_null,
+        "followup_entries": ft_color_entries_json(&followup.entries)
+    })
+}
+
+fn c_palette_select_null_output_json(face: c_abi::FT_Face) -> Value {
+    let err = c_abi::abi_palette_select_without_output(face, 1);
+    let followup = c_abi::abi_palette_select_snapshot(face, 1);
+    json!({
+        "error": err,
+        "active_palette_index": if err == FT_Err_Ok { 1 } else { -1 },
+        "followup_error": followup.error,
+        "followup_palette_is_null": followup.palette_is_null,
+        "followup_entries": c_color_entries_json(&followup.entries)
+    })
+}
+
+fn wasm_palette_select_null_output_json(handle: usize) -> Value {
+    let err = wasm_abi::abi_palette_select_without_output(handle, 1);
+    let followup = wasm_abi::abi_palette_select_snapshot(handle, 1);
+    json!({
+        "error": err,
+        "active_palette_index": if err == FT_Err_Ok { 1 } else { -1 },
+        "followup_error": followup.error,
+        "followup_palette_is_null": followup.palette_is_null,
+        "followup_entries": wasm_color_entries_json(&followup.entries)
+    })
+}
+
+fn rust_palette_reselect_json(face: &FT_Face) -> Value {
+    let first = FT_Palette_Select_Copy(Some(face), 0, true);
+    let mutate_err = FT_Palette_Set_Active_Entry_For_Test(
+        Some(face),
+        0,
+        FT_Color {
+            blue: 1,
+            green: 2,
+            red: 3,
+            alpha: 4,
+        },
+    );
+    let mutated = FT_Palette_Active_Entries_Copy(Some(face));
+    let second = FT_Palette_Select_Copy(Some(face), 0, true);
+    json!({
+        "first_select": {
+            "palette_is_null": first.palette_is_null,
+            "entries": ft_color_entries_json(&first.entries)
+        },
+        "mutated_entries": ft_color_entries_json(&mutated),
+        "second_select": {
+            "palette_is_null": second.palette_is_null,
+            "entries": ft_color_entries_json(&second.entries)
+        },
+        "error_sequence": [first.error, if mutate_err == FT_Err_Ok { second.error } else { mutate_err }]
+    })
+}
+
+fn c_palette_reselect_json(face: c_abi::FT_Face) -> Value {
+    let first = c_abi::abi_palette_select_snapshot(face, 0);
+    let mutated = c_abi::abi_palette_mutate_entry(
+        face,
+        0,
+        0,
+        c_abi::FT_Color {
+            blue: 1,
+            green: 2,
+            red: 3,
+            alpha: 4,
+        },
+    );
+    let second = c_abi::abi_palette_select_snapshot(face, 0);
+    json!({
+        "first_select": {
+            "palette_is_null": first.palette_is_null,
+            "entries": c_color_entries_json(&first.entries)
+        },
+        "mutated_entries": c_color_entries_json(&mutated.entries),
+        "second_select": {
+            "palette_is_null": second.palette_is_null,
+            "entries": c_color_entries_json(&second.entries)
+        },
+        "error_sequence": [first.error, second.error]
+    })
+}
+
+fn wasm_palette_reselect_json(handle: usize) -> Value {
+    let first = wasm_abi::abi_palette_select_snapshot(handle, 0);
+    let mutated = wasm_abi::abi_palette_mutate_entry(
+        handle,
+        0,
+        0,
+        wasm_abi::FontdoneWasmColor {
+            blue: 1,
+            green: 2,
+            red: 3,
+            alpha: 4,
+        },
+    );
+    let second = wasm_abi::abi_palette_select_snapshot(handle, 0);
+    json!({
+        "first_select": {
+            "palette_is_null": first.palette_is_null,
+            "entries": wasm_color_entries_json(&first.entries)
+        },
+        "mutated_entries": wasm_color_entries_json(&mutated.entries),
+        "second_select": {
+            "palette_is_null": second.palette_is_null,
+            "entries": wasm_color_entries_json(&second.entries)
+        },
+        "error_sequence": [first.error, second.error]
+    })
+}
+
 fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
@@ -9129,6 +9411,14 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data.palette_data_get_values"
+        | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
+        | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_palette_data_values_json(FT_Palette_Data_Copy(
+                Some(&face),
+            ))))
+        }
         "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
             let face = open_face(case)?;
             let mut palette = ptr::dangling::<FT_Color>();
@@ -9137,6 +9427,19 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
+        | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_palette_select_runs_json(&face)))
+        }
+        "ftcolor.FT_Palette_Select.success_null_output_selects_without_return" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_palette_select_null_output_json(&face)))
+        }
+        "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications" => {
+            let face = open_face(case)?;
+            Ok(ok(rust_palette_reselect_json(&face)))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
             let face = open_face(case)?;
@@ -9182,6 +9485,15 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data.palette_data_get_values"
+        | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
+        | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_data_values_json(c_abi::abi_palette_data_snapshot(face));
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
         "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
             let (library, face) = c_open_face(case)?;
             let mut palette = ptr::dangling_mut::<c_abi::FT_Color>();
@@ -9192,6 +9504,28 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
+        | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_select_runs_json(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Select.success_null_output_selects_without_return" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_select_null_output_json(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_reselect_json(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
             let (library, face) = c_open_face(case)?;
@@ -9238,6 +9572,14 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data.palette_data_get_values"
+        | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
+        | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_data_values_json(wasm_abi::abi_palette_data_snapshot(handle));
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
         "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette" => {
             let handle = wasm_open_face(case)?;
             let mut palette = ptr::dangling_mut::<wasm_abi::FontdoneWasmColor>();
@@ -9247,6 +9589,25 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
+        | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_select_runs_json(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Select.success_null_output_selects_without_return" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_select_null_output_json(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_reselect_json(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop" => {
             let handle = wasm_open_face(case)?;

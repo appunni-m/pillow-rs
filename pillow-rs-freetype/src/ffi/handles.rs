@@ -1264,6 +1264,29 @@ struct CpalState {
     palette_entry_name_ids: Vec<FT_UShort>,
     palettes: Vec<Vec<FT_Color>>,
     active_palette: Vec<FT_Color>,
+    active_palette_index: FT_UShort,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_Palette_Select_Snapshot {
+    pub error: FT_Error,
+    pub palette_is_null: bool,
+    pub entries: Vec<FT_Color>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_Palette_Data_Snapshot {
+    pub error: FT_Error,
+    pub num_palettes: FT_UShort,
+    pub num_palette_entries: FT_UShort,
+    pub palette_name_ids_is_null: bool,
+    pub palette_flags_is_null: bool,
+    pub palette_entry_name_ids_is_null: bool,
+    pub palette_name_ids: Vec<FT_UShort>,
+    pub palette_flags: Vec<FT_UShort>,
+    pub palette_entry_name_ids: Vec<FT_UShort>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2796,8 +2819,12 @@ fn parse_cpal_table(data: &[u8]) -> Option<CpalState> {
             .filter(|offset| *offset != 0)
         {
             for (index, out) in palette_flags.iter_mut().enumerate() {
-                let offset = types_offset.checked_add(index.checked_mul(4)?)?;
-                *out = (read_u32_be(data, offset)? & 0xFFFF) as FT_UShort;
+                // FreeType 2.14.3 `src/sfnt/ttcpal.c:158-164` copies
+                // palette flags with `FT_NEXT_USHORT`; although CPAL v1 calls
+                // this palette types data, the public `FT_Palette_Data`
+                // surface exposes 16-bit flag values.
+                let offset = types_offset.checked_add(index.checked_mul(2)?)?;
+                *out = read_u16_be(data, offset)?;
             }
         }
         if let Some(labels_offset) = read_u32_be(data, extensions_offset + 4)
@@ -2828,6 +2855,7 @@ fn parse_cpal_table(data: &[u8]) -> Option<CpalState> {
         palette_entry_name_ids,
         palettes,
         active_palette,
+        active_palette_index: 0,
     })
 }
 
@@ -2873,6 +2901,37 @@ pub fn FT_Palette_Data_Get(
     FT_Err_Ok
 }
 
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Data_Copy(face: Option<&FT_Face>) -> FT_Palette_Data_Snapshot {
+    let mut data = FT_Palette_Data::default();
+    let error = FT_Palette_Data_Get(face, Some(&mut data));
+    let (palette_name_ids, palette_flags, palette_entry_name_ids) = if error == FT_Err_Ok {
+        face.and_then(|face| face.cpal.as_ref())
+            .map(|cpal| {
+                let cpal = cpal.borrow();
+                (
+                    cpal.palette_name_ids.clone(),
+                    cpal.palette_flags.clone(),
+                    cpal.palette_entry_name_ids.clone(),
+                )
+            })
+            .unwrap_or_default()
+    } else {
+        Default::default()
+    };
+    FT_Palette_Data_Snapshot {
+        error,
+        num_palettes: data.num_palettes,
+        num_palette_entries: data.num_palette_entries,
+        palette_name_ids_is_null: data.palette_name_ids.is_null(),
+        palette_flags_is_null: data.palette_flags.is_null(),
+        palette_entry_name_ids_is_null: data.palette_entry_name_ids.is_null(),
+        palette_name_ids,
+        palette_flags,
+        palette_entry_name_ids,
+    }
+}
+
 pub fn FT_Palette_Select(
     face: Option<&FT_Face>,
     palette_index: FT_UShort,
@@ -2893,13 +2952,69 @@ pub fn FT_Palette_Select(
         return FT_Err_Invalid_Table as FT_Error;
     };
     let mut cpal = cpal.borrow_mut();
-    let Some(palette) = cpal.palettes.get(usize::from(palette_index)).cloned() else {
+    if cpal.palettes.get(usize::from(palette_index)).is_none() {
         return FT_Err_Invalid_Argument as FT_Error;
     };
-    cpal.active_palette = palette;
+    if cpal.active_palette_index != palette_index {
+        // FreeType 2.14.3 `src/base/ftcolor.c:54-112` only reloads CPAL
+        // colors when changing palette indexes. Reselecting the same index
+        // preserves caller mutations made through the returned palette.
+        cpal.active_palette = cpal.palettes[usize::from(palette_index)].clone();
+        cpal.active_palette_index = palette_index;
+    }
     if let Some(apalette) = apalette {
         *apalette = cpal.active_palette.as_ptr();
     }
+    FT_Err_Ok
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Select_Copy(
+    face: Option<&FT_Face>,
+    palette_index: FT_UShort,
+    write_output_pointer: bool,
+) -> FT_Palette_Select_Snapshot {
+    let mut palette = ptr::null();
+    let err = FT_Palette_Select(
+        face,
+        palette_index,
+        write_output_pointer.then_some(&mut palette),
+    );
+    let entries = if err == FT_Err_Ok && (write_output_pointer || !palette.is_null()) {
+        face.and_then(|face| face.cpal.as_ref())
+            .map(|cpal| cpal.borrow().active_palette.clone())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    FT_Palette_Select_Snapshot {
+        error: err,
+        palette_is_null: palette.is_null(),
+        entries,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Active_Entries_Copy(face: Option<&FT_Face>) -> Vec<FT_Color> {
+    face.and_then(|face| face.cpal.as_ref())
+        .map(|cpal| cpal.borrow().active_palette.clone())
+        .unwrap_or_default()
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Set_Active_Entry_For_Test(
+    face: Option<&FT_Face>,
+    entry_index: usize,
+    color: FT_Color,
+) -> FT_Error {
+    let Some(cpal) = face.and_then(|face| face.cpal.as_ref()) else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let mut cpal = cpal.borrow_mut();
+    let Some(entry) = cpal.active_palette.get_mut(entry_index) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *entry = color;
     FT_Err_Ok
 }
 
