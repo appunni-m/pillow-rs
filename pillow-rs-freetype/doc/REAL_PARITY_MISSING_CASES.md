@@ -10344,6 +10344,16 @@ Follow-up finding for blend-coordinate state rows:
   fixture and parameters return success in pinned C and the maintained runner
   compares exact active coordinates, variation flag, and any declared glyph
   output.
+- Follow-up on 2026-07-20: do not promote
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates` or
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default` from the current
+  manifest text.  Temporarily lifting each route guard and running the focused
+  parity row proved pinned FreeType 2.14.3 returns the public-wrapper sentinel
+  `-2`, while the manifest declares `status: ok`.  The reset row inherits the
+  same issue because its prior non-default `FT_Set_MM_Blend_Coordinates` call
+  returns `-2` before the zero-count reset path.  Keep both rows pending until
+  their expected behavior is corrected from C evidence or a different
+  C-success fixture/parameter set is introduced.
 - A maintained `FT_Get_MM_Blend_Coordinates` default-row route now validates the
   concrete OpenType variable-font row through pinned C, Rust FFI, C ABI, and
   WASM ABI.  The row's optional Adobe MM asset remains unresolved and is not
