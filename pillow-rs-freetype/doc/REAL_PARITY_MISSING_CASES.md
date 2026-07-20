@@ -10071,7 +10071,8 @@ git diff --check
 
 ### Issue Set: `FT_Get_MM_Var` maintained OpenType descriptor route
 
-Status: one real OpenType `fvar` descriptor row implemented on 2026-07-20.
+Status: three real OpenType `fvar` descriptor/namedstyle rows implemented on
+2026-07-20.
 
 Baseline before this batch:
 
@@ -10089,6 +10090,9 @@ Finding:
   min/default/max values are already 16.16 `FT_Fixed`, axis `strid` stores the
   fvar name ID, axis flags are stored in the adjacent `FT_UShort` array, and
   namedstyle records store one design coordinate per axis.
+- FreeType `FT_Var_Named_Style::coords` points to exactly one 16.16 design
+  coordinate per variation axis; rows must compare the coordinate arrays, not
+  only the pointer class.
 - The first runtime mismatch after routing was the missing PostScript-name ID
   sentinel: C `TT_Get_MM_Var` stores `0xFFFF`, while Rust initially used
   `~0U` (`4294967295`).
@@ -10109,16 +10113,20 @@ Implementation:
 - Promoted only the fixture-backed row proven through pinned C oracle, Rust
   FFI, C ABI, and WASM ABI:
   - `ftmm.FT_Get_MM_Var.variable_font_descriptor_success`
+  - `ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count`
+  - `ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c`
 
 Result:
 
-- Route audit after this batch: `real-parity=4483`,
-  `pending-route=473`, `pending-core=0`.
+- Route audit after this batch: `real-parity=4485`,
+  `pending-route=471`, `pending-core=0`.
 
 Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.variable_font_descriptor_success
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c
 make -C pillow-rs-freetype route-audit
 ```
 
