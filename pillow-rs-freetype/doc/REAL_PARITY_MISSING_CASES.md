@@ -1034,6 +1034,17 @@ Required fix plan:
    `ftpfr`, and `tttables` runtime proves exact C oracle, Rust FFI, C ABI, and
    WASM ABI output.
 
+Follow-up promoted rows:
+
+- `fterrdef.FT_Err_Ok.successful_face_lifecycle`
+- `fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output`
+
+These rows now use the maintained `FT_Load_Glyph` + `FT_Render_Glyph` slot
+route instead of status-only output.  The route compares the same DejaVu input
+through pinned FreeType 2.14.3, Rust FFI, thin C ABI, and WASM ABI, including
+full glyph slot metrics and bitmap bytes.  Other residual status/property rows
+remain pending until they have similarly maintained public-output routes.
+
 Verification for the classification batch:
 
 ```bash
