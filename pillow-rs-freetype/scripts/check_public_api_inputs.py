@@ -2138,17 +2138,45 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
             "and allocator facade; treating it as generic would be a green placeholder"
         )
-    malformed_glyph_rows_without_maintained_route = {
-        "ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload",
-        "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range",
-        "ftglyph.FT_GlyphRec.clazz_is_private_identity_only",
-        "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original",
-    }
-    if row.case_id in malformed_glyph_rows_without_maintained_route:
+    if row.case_id == "ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload":
         return (
-            "malformed glyph slot/class behavior requires maintained synthetic "
-            "slot, class-hook, cleanup, and renderer-failure routes; accepting "
-            "generic errors or record identity would be a green placeholder"
+            "FT_Get_Glyph unsupported-format/bad-slot payload requires a "
+            "maintained synthetic FT_GlyphSlot route matching "
+            "freetype/src/base/ftglyph.c:633-682: construct slot->library, "
+            "slot->format, and payload fields, call FT_New_Glyph plus the "
+            "selected class glyph_init hook, then compare FT_Error and "
+            "*aglyph null/preservation across pinned C, Rust FFI, C ABI, and "
+            "WASM; accepting a generic slot error would be a green placeholder"
+        )
+    if row.case_id == "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range":
+        return (
+            "FT_Get_Glyph advance overflow requires a maintained synthetic "
+            "slot route with slot->advance.x/y at the exact >= 0x8000*64 and "
+            "<= -0x8000*64 boundaries from freetype/src/base/ftglyph.c:651-"
+            "667, proving allocation cleanup and *aglyph=NULL across pinned C, "
+            "Rust FFI, C ABI, and WASM; existing null-slot error coverage "
+            "does not exercise the 26.6-to-16.16 overflow path"
+        )
+    if row.case_id == "ftglyph.FT_GlyphRec.clazz_is_private_identity_only":
+        return (
+            "FT_GlyphRec clazz identity requires a maintained record-inspection "
+            "route that creates outline, bitmap, and SVG glyphs through public "
+            "C-observable operations and classifies the private clazz pointer "
+            "only by public behavior and glyph format, matching "
+            "freetype/include/freetype/ftglyph.h:93-120 across Rust FFI, C ABI, "
+            "and WASM; raw pointer identity or layout-only checks would be a "
+            "green placeholder"
+        )
+    if row.case_id == "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original":
+        return (
+            "FT_Glyph_To_Bitmap render-failure preservation requires a "
+            "maintained glyph_prepare/renderer-failure route matching "
+            "freetype/src/base/ftglyph.c:771-874: create the dummy slot, "
+            "allocate the bitmap glyph, apply and restore origin when "
+            "destroy=false, free the partial bitmap on render error, and leave "
+            "*the_glyph pointing at the original even when destroy=true across "
+            "pinned C, Rust FFI, C ABI, and WASM; early invalid-argument "
+            "coverage is not this path"
         )
     if (
         (row.operation, row.case_id) in exact_error_route_gaps
