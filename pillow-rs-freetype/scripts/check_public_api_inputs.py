@@ -1400,27 +1400,85 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for module/library lifecycle data that do not have a maintained route."""
-    ftmodapi_rows_without_maintained_route = {
-        "ftmodapi.FT_Add_Module.add_minimal_module_success",
-        "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
-        "ftmodapi.FT_MODULE_DRIVER_HAS_HINTER.present_on_native_hinter_drivers",
-        "ftmodapi.FT_MODULE_DRIVER_NO_OUTLINES.bitmap_driver_flags_match_c",
-        "ftmodapi.FT_MODULE_DRIVER_SCALABLE.scalable_driver_flags_match_c",
-        "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration",
-        "ftmodapi.FT_MODULE_STYLER.styler_module_registration",
-        "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle",
-        "ftmodapi.FT_Module_Interface.requester_return_type",
-        "ftmodapi.FT_Remove_Module.removes_installed_module",
-    }
-    if row.case_id not in ftmodapi_rows_without_maintained_route:
-        return None
-    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
-        return None
-    return (
-        "Module class, library reference, driver metadata, module lookup, and "
-        "default-property success behavior requires a maintained module API "
-        "route; keeping it generic would be a green placeholder"
-    )
+    if row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Add_Module success requires a maintained synthetic module-class "
+            "route matching freetype/src/base/ftobjs.c:5058-5168: version/name "
+            "checks, allocation, module->library/memory initialization, optional "
+            "renderer/hinter/driver side effects, module_init callback, module "
+            "table insertion, and FT_Get_Module lookup across pinned C, Rust "
+            "FFI, C ABI, and WASM; null/future-version/duplicate error rows "
+            "do not prove success installation"
+        )
+    if row.case_id == "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Done_Library final-destroy success requires a maintained "
+            "library lifecycle route matching freetype/src/base/ftobjs.c:5542-"
+            "5620: refcount reaches zero, driver-owned faces are closed in C "
+            "order, modules are removed in reverse table order, destructors run, "
+            "and the library becomes unusable across Rust FFI, C ABI, and WASM; "
+            "null-library and non-final refcount rows are not final destruction"
+        )
+    if row.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_MODULE_RENDERER registration requires a maintained renderer "
+            "module-class route through FT_Add_Module that proves ft_add_renderer "
+            "runs before module_init, updates the renderer list/current renderer, "
+            "cleans raster state on init failure, and preserves lookup/removal "
+            "behavior across pinned C, Rust FFI, C ABI, and WASM; the header "
+            "constant value alone would be a green placeholder"
+        )
+    if row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_MODULE_STYLER registration requires a maintained synthetic "
+            "module-class route proving the styler flag is stored in the module "
+            "class and does not trigger renderer, hinter, or driver side effects "
+            "while remaining observable through module lookup across pinned C, "
+            "Rust FFI, C ABI, and WASM; constant-value parity is not lifecycle "
+            "parity"
+        )
+    if row.case_id == "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Module_Class lifecycle parity requires a maintained class-field "
+            "facade that exercises module_name/version/requires/flags/size, "
+            "module_interface, module_init, and module_done through "
+            "FT_Add_Module, FT_Get_Module_Interface, FT_Remove_Module, and "
+            "FT_Done_Library across pinned C, Rust FFI, C ABI, and WASM; layout "
+            "or import-contract checks alone do not prove field-driven behavior"
+        )
+    if row.case_id == "ftmodapi.FT_Module_Interface.requester_return_type":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Module_Interface requester behavior requires a maintained "
+            "module_interface route matching FT_Get_Module_Interface in "
+            "freetype/src/base/ftobjs.c:5199-5207: look up the named module and "
+            "return clazz->module_interface exactly, including null library/name "
+            "and missing-module cases, across Rust FFI, C ABI, and WASM; generic "
+            "module lookup does not prove the opaque interface payload"
+        )
+    if row.case_id == "ftmodapi.FT_Remove_Module.removes_installed_module":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Remove_Module success requires a maintained add-get-remove route "
+            "matching freetype/src/base/ftobjs.c:5261-5298: find the exact "
+            "module pointer in the table, compact following entries, null the "
+            "tail slot, call Destroy_Module/module_done, and prove later lookup "
+            "failure across pinned C, Rust FFI, C ABI, and WASM; null or foreign "
+            "module error rows are not removal success"
+        )
+    return None
 
 
 def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
