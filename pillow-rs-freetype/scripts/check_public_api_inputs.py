@@ -1530,6 +1530,51 @@ def ftcache_cmap_lookup_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcache_manager_lookup_size_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Manager_LookupSize/Scaler pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_Manager_LookupSize planning parity needs a maintained "
+            "same-input cache manager route instead of treating scaler-based "
+            "size lookup as out of scope"
+        ),
+        "ftcache.FTC_Manager_LookupSize.success_pixel_size_scaler": (
+            "FTC_Manager_LookupSize pixel-scaler parity needs a maintained "
+            "route proving width/height pixel sizes select the same FT_Size "
+            "metrics and cached size handle as pinned C"
+        ),
+        "ftcache.FTC_Manager_LookupSize.success_point_size_resolution_scaler": (
+            "FTC_Manager_LookupSize point-scaler parity needs a maintained "
+            "route proving 26.6 point sizes plus x/y resolution select the "
+            "same FT_Size metrics and cached size handle as pinned C"
+        ),
+        "ftcache.FTC_Manager_LookupSize.success_repeat_lookup_cached_size": (
+            "FTC_Manager_LookupSize repeat-lookup parity needs a maintained "
+            "route proving repeated scaler lookup returns the same cached size "
+            "identity and output fields as pinned C"
+        ),
+        "ftcache.FTC_ScalerRec.pixel_scaler_uses_integer_pixels": (
+            "FTC_ScalerRec pixel parity needs a maintained route proving "
+            "pixel=1 interprets width/height as integer pixel sizes exactly "
+            "like pinned C"
+        ),
+        "ftcache.FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution": (
+            "FTC_ScalerRec point parity needs a maintained route proving "
+            "pixel=0 interprets width/height as 26.6 point sizes with x/y "
+            "resolution exactly like pinned C"
+        ),
+        "ftcache.FTC_Scaler.points_to_call_owned_scaler": (
+            "FTC_Scaler pointer-lifetime parity needs a maintained route "
+            "proving the public FTC_Scaler argument is a call-owned descriptor "
+            "whose pointed fields are copied or consumed with pinned C lifetime "
+            "semantics"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1549,6 +1594,9 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     cmap_lookup_pending = ftcache_cmap_lookup_pending_reason(row)
     if cmap_lookup_pending:
         return cmap_lookup_pending
+    manager_lookup_size_pending = ftcache_manager_lookup_size_pending_reason(row)
+    if manager_lookup_size_pending:
+        return manager_lookup_size_pending
     cache_creation_exact_cases = {
         "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
             "FTC_CMapCache opaque-handle parity needs a maintained cache route "
@@ -1645,19 +1693,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FTC_Manager_LookupFace parity needs a maintained requester route "
             "proving FTC_FaceID pointer identity, first requester callback, "
             "cached repeat lookup, and face current-size behavior"
-        ),
-        (
-            "ftcache.FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_Manager_LookupSize.success_pixel_size_scaler",
-            "ftcache.FTC_Manager_LookupSize.success_point_size_resolution_scaler",
-            "ftcache.FTC_Manager_LookupSize.success_repeat_lookup_cached_size",
-            "ftcache.FTC_ScalerRec.pixel_scaler_uses_integer_pixels",
-            "ftcache.FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution",
-            "ftcache.FTC_Scaler.points_to_call_owned_scaler",
-        ): (
-            "FTC_Manager_LookupSize/Scaler parity needs a maintained scaler "
-            "route proving pixel versus 26.6 point sizing, x/y resolution, "
-            "call-owned descriptor lifetime, and cached size identity"
         ),
         (
             "ftcache.FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope",

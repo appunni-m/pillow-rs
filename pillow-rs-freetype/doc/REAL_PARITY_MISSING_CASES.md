@@ -12780,8 +12780,25 @@ Current blocker families:
   and null/foreign-library behavior.
 - `FTC_Manager_LookupFace` / `FTC_FaceID`: pointer identity, first requester
   callback, cached repeat lookup, and current-size behavior.
-- `FTC_Manager_LookupSize` / `FTC_Scaler`: pixel versus 26.6 point sizing,
-  resolution handling, call-owned scaler lifetime, and cached size identity.
+- `FTC_Manager_LookupSize` / `FTC_Scaler` rows are split by exact obligation
+  instead of sharing a broad scaler blocker:
+  - `FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope`:
+    maintained same-input cache manager route for scaler-based size lookup, not
+    an out-of-scope placeholder.
+  - `FTC_Manager_LookupSize.success_pixel_size_scaler`: width/height pixel
+    sizes selecting the same `FT_Size` metrics and cached size handle.
+  - `FTC_Manager_LookupSize.success_point_size_resolution_scaler`: 26.6 point
+    sizes plus x/y resolution selecting the same `FT_Size` metrics and cached
+    size handle.
+  - `FTC_Manager_LookupSize.success_repeat_lookup_cached_size`: repeated scaler
+    lookup returning the same cached size identity and output fields.
+  - `FTC_ScalerRec.pixel_scaler_uses_integer_pixels`: `pixel=1` interpreting
+    width/height as integer pixel sizes.
+  - `FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution`: `pixel=0`
+    interpreting width/height as 26.6 point sizes with x/y resolution.
+  - `FTC_Scaler.points_to_call_owned_scaler`: public `FTC_Scaler` argument as a
+    call-owned descriptor whose pointed fields follow pinned-C copy/consume
+    lifetime semantics.
 - `FTC_Manager_RemoveFaceID`: unreferenced removal, referenced-node hiding until
   unref, unchanged other face IDs, and null/unknown inputs.
 - CMap/Image/SBit cache creation rows are split by exact obligation instead of
