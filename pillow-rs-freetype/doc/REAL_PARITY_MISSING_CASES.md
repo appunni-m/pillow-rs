@@ -10085,12 +10085,15 @@ git diff --check
 
 ### Issue Set: Type 1 MM design-coordinate and named-instance reset state route
 
-Status: two real Type 1 MM design/reset state rows implemented on 2026-07-20.
+Status: three real Type 1 MM design/reset state rows implemented on
+2026-07-20.
 
 Baseline before this batch:
 
 - Route audit at `859026680`: `real-parity=4471`,
   `pending-route=484`, `pending-core=1`.
+- Follow-up baseline at `35ee3bc44`: `real-parity=4473`,
+  `pending-route=483`, `pending-core=0`.
 
 Finding:
 
@@ -10121,24 +10124,27 @@ Implementation:
   wrappers.
 - Added pinned C oracle/runtime routes for direct MM design-coordinate state
   and Adobe MM named-instance reset after a prior design-coordinate mutation.
+- Added an explicit same-face multi-scenario route for partial coordinates,
+  ignored extra coordinates, and `num_coords == 0 && coords == NULL` reset
+  behavior.
 - Promoted only state rows proven through pinned C oracle, Rust FFI, C ABI,
   and WASM ABI:
   - `ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates`
+  - `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
   - `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
-- Left `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
-  pending because it needs an explicit multi-scenario row-list route.
 - Left `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
   pending because glyph-output parity requires real Type 1 MM interpolation.
 
 Result:
 
-- Route audit after this batch: `real-parity=4473`, `pending-route=483`,
+- Route audit after this batch: `real-parity=4474`, `pending-route=482`,
   `pending-core=0`.
 
 Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default
 make -C pillow-rs-freetype route-audit
 make -C pillow-rs-freetype test-ffi-compat
@@ -10175,7 +10181,6 @@ Classification change:
 
 - Keep these rows as `pending-route` until exact same-input C/Rust/C-ABI/WASM
   routes exist and pass focused parity:
-  - `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
   - `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
   - `ftmm.FT_MM_Var.populated_for_adobe_mm`
   - `ftmm.FT_Var_Axis.adobe_mm_axis_values`

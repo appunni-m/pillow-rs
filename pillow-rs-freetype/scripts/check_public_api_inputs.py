@@ -1384,7 +1384,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
-        "ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
         "ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
@@ -3820,6 +3819,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates"
     ):
         return "FT_Set_MM_Design_Coordinates validates generated Type 1 MM design-coordinate state and follow-up design/blend getters through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset"
+    ):
+        return "FT_Set_MM_Design_Coordinates partial, extra, and reset scenarios validate generated Type 1 MM design-coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_named_instance"
         and row.case_id == "ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default"

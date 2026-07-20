@@ -10499,6 +10499,133 @@ static int emit_ftmm_set_mm_design_coordinates(int argc, char** argv) {
     return 0;
 }
 
+typedef struct FtmmMmDesignScenarioRow_ {
+    FT_Error set_err;
+    FT_Error get_design_err;
+    FT_Error get_blend_err;
+    FT_Long face_flags;
+    FT_Fixed design_coords[16];
+    FT_Fixed blend_coords[16];
+} FtmmMmDesignScenarioRow;
+
+static void print_ftmm_mm_design_scenario_row(
+    const FtmmMmDesignScenarioRow* row,
+    FT_UInt output_count) {
+    printf("{\"set_return\":%d,\"get_design_return\":%d,\"get_blend_return\":%d,"
+           "\"design_coords\":",
+           row->set_err,
+           row->get_design_err,
+           row->get_blend_err);
+    print_fixed_coord_array((FT_Fixed*)row->design_coords, output_count);
+    printf(",\"blend_coords\":");
+    print_fixed_coord_array((FT_Fixed*)row->blend_coords, output_count);
+    printf(",\"face_flags\":%ld,\"variation_bit_set\":", (long)row->face_flags);
+    print_json_bool((row->face_flags & FT_FACE_FLAG_VARIATION) != 0);
+    printf("}");
+}
+
+static int emit_ftmm_set_mm_design_scenarios(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    char* scenarios = (char*)malloc(strlen(argv[5]) + 1);
+    if (!scenarios) {
+        close_oracle_face(&face);
+        return 2;
+    }
+    strcpy(scenarios, argv[5]);
+
+    FT_UInt output_count = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FtmmMmDesignScenarioRow rows[16];
+    FT_UInt row_count = 0;
+    FT_Error status = FT_Err_Ok;
+    char* cursor = scenarios;
+    while (cursor && *cursor) {
+        char* end = cursor;
+        while (*end && *end != ';') {
+            end++;
+        }
+        char saved_end = *end;
+        *end = '\0';
+
+        char* colon = cursor;
+        while (*colon && *colon != ':') {
+            colon++;
+        }
+        if (*colon != ':') {
+            free(scenarios);
+            close_oracle_face(&face);
+            return 2;
+        }
+        *colon = '\0';
+        FT_UInt set_count = (FT_UInt)strtoul(cursor, NULL, 10);
+        const char* csv = colon + 1;
+        FT_Long set_coords[16] = {0};
+        parse_long_coord_csv(csv, set_coords, set_count < 16 ? set_count : 16);
+
+        FT_Error set_err = FT_Set_MM_Design_Coordinates(
+            face.face,
+            set_count,
+            streq(csv, "null") ? NULL : set_coords);
+        FT_Fixed design_coords[16] = {0};
+        FT_Fixed blend_coords[16] = {0};
+        FT_Error get_design_err = FT_Err_Ok;
+        FT_Error get_blend_err = FT_Err_Ok;
+        if (!set_err) {
+            get_design_err = FT_Get_Var_Design_Coordinates(
+                face.face,
+                output_count,
+                design_coords);
+        }
+        if (!set_err && !get_design_err) {
+            get_blend_err = FT_Get_Var_Blend_Coordinates(
+                face.face,
+                output_count,
+                blend_coords);
+        }
+        if (!status) {
+            status = set_err ? set_err : (get_design_err ? get_design_err : get_blend_err);
+        }
+        if (row_count < 16) {
+            rows[row_count].set_err = set_err;
+            rows[row_count].get_design_err = get_design_err;
+            rows[row_count].get_blend_err = get_blend_err;
+            rows[row_count].face_flags = face.face ? face.face->face_flags : 0;
+            for (FT_UInt i = 0; i < 16; i++) {
+                rows[row_count].design_coords[i] = design_coords[i];
+                rows[row_count].blend_coords[i] = blend_coords[i];
+            }
+            row_count++;
+        }
+
+        *end = saved_end;
+        if (saved_end == ';') {
+            cursor = end + 1;
+        } else {
+            break;
+        }
+    }
+
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"rows\":[");
+    for (FT_UInt i = 0; i < row_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_ftmm_mm_design_scenario_row(rows + i, output_count);
+    }
+    printf("]}}\n");
+
+    free(scenarios);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_named_instance_null_face_observation(FT_Error error) {
     printf("{\"return\":%d,\"face_index\":null,\"face_flags\":null,"
            "\"variation_bit_set\":null,\"postscript_name\":",
@@ -16220,6 +16347,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--ftmm-set-mm-design-coordinates")) {
         return emit_ftmm_set_mm_design_coordinates(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--ftmm-set-mm-design-scenarios")) {
+        return emit_ftmm_set_mm_design_scenarios(argc, argv);
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
