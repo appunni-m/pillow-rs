@@ -1384,7 +1384,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c",
         "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
-        "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates",
         "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
