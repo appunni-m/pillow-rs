@@ -340,10 +340,12 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_cff_fixtures.py
 |   |   |-- build_cmap_fixtures.py
 |   |   |-- build_ft.sh
+|   |   |-- build_ftmm_future_variable_fixtures.py
 |   |   |-- build_fvar_fixtures.py
 |   |   |-- build_gasp_fixtures.py
 |   |   |-- build_hinter_edge_fixtures.py
 |   |   |-- build_metric_fixtures.py
+|   |   |-- build_mvar_fixtures.py
 |   |   |-- build_name_fixtures.py
 |   |   |-- build_post_fixtures.py
 |   |   |-- build_render_fixtures.py
@@ -355,7 +357,9 @@ generated reports, build outputs, and package installs.
 |   |   |-- extract_blues.py
 |   |   |-- fetch_ft.sh
 |   |   |-- gen_unified_oracle.c
-|   |   `-- generate_public_constants.py
+|   |   |-- generate_malformed_bdf_fixtures.py
+|   |   |-- generate_public_constants.py
+|   |   `-- generate_winfnt_fixtures.py
 |   |-- src/
 |   |   |-- api.rs
 |   |   |-- autohint/
@@ -393,6 +397,7 @@ generated reports, build outputs, and package installs.
 |   |       |-- fvar.rs
 |   |       |-- gasp.rs
 |   |       |-- glyf.rs
+|   |       |-- gvar.rs
 |   |       |-- hdmx.rs
 |   |       |-- head.rs
 |   |       |-- hhea.rs
@@ -404,14 +409,17 @@ generated reports, build outputs, and package installs.
 |   |       |   |-- tables.rs
 |   |       |   `-- zone.rs
 |   |       |-- hmtx.rs
+|   |       |-- hvar.rs
 |   |       |-- kern.rs
 |   |       |-- loca.rs
 |   |       |-- maxp.rs
 |   |       |-- mod.rs
+|   |       |-- mvar.rs
 |   |       |-- name.rs
 |   |       |-- os2.rs
 |   |       |-- post.rs
 |   |       |-- sbit.rs
+|   |       |-- varstore.rs
 |   |       |-- vhea.rs
 |   |       `-- vmtx.rs
 |   `-- tests/
