@@ -478,9 +478,7 @@ PLACEHOLDER_STYLE_CATEGORIES = {
     "generic-error-fallback",
     "null-error-fallback",
     "explicit-unsupported",
-    "raw-slot-null-validation",
     "void-fallback",
-    "wrapper-null-validation",
 }
 
 SUPPLEMENTARY_SAFE_API_FLAGS = {
@@ -4551,10 +4549,16 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("real-parity", done_mm_var_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
-        return ("wrapper-null-validation", wrapper_null_reason)
+        return (
+            "pending-route",
+            f"{wrapper_null_reason}; full same-input public C/Rust/C-ABI/WASM parity route is still required",
+        )
     raw_slot_null_reason = raw_slot_null_validation_reason(row)
     if raw_slot_null_reason:
-        return ("raw-slot-null-validation", raw_slot_null_reason)
+        return (
+            "pending-route",
+            f"{raw_slot_null_reason}; full same-input public C/Rust/C-ABI/WASM parity route is still required",
+        )
     if operation_is_real_parity(row.operation):
         return ("real-parity", "explicit C oracle, Rust FFI, C ABI, and WASM route")
     if row.expect_error and not has_runtime_asset(row):
