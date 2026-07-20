@@ -72,9 +72,8 @@
         "assets": {
           "variable_font": {
             "kind": "ref",
-            "id": "fonts/variable/multi-axis-visible.ttf",
-            "asset_kind": "font",
-            "status": "required_future_asset"
+            "id": "fonts/variable/hidden-axis.ttf",
+            "asset_kind": "font"
           },
           "adobe_mm_font": {
             "kind": "ref",

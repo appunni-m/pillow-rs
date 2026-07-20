@@ -10587,6 +10587,50 @@ Latest route audit after this follow-up: `real-parity=4492`,
 Latest route audit after this follow-up: `real-parity=4493`,
 `pending-route=463`, `pending-core=0`.
 
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset` row now
+  has the same maintained scenario route pattern.  Pinned C over
+  `fonts/variable/wght-wdth-opsz.ttf` returns design/blend rows
+  `[45875200, 26214400, 917504] / [65536, 0, 0]`,
+  `[45875200, 4915200, 917504] / [65536, -65536, 0]`, then reset defaults
+  `[6553600, 26214400, 917504] / [0, 0, 0]` with `face_flags=2841`.
+  The first Rust divergence after adding the route was
+  `/rows/0/blend_coords/0`: Rust returned `0` where C returned `65536`
+  because Rust clamped the public design coordinate to the degenerate
+  `default == max` axis before normalization.  FreeType instead normalizes the
+  caller design coordinate in `ttgxvar.c:2152-2211`, where values above a
+  degenerate default/max axis clamp to +1.0 before division.  A second
+  divergence on `/rows/2/face_flags` proved the zero-count design reset must
+  clear `FT_FACE_FLAG_VARIATION` through `ftmm.c:281-360` while recomputing
+  default design/blend coordinates.
+
+Latest route audit after this follow-up: `real-parity=4494`,
+`pending-route=462`, `pending-core=0`.
+
+Full parity follow-up on 2026-07-20:
+
+- The broad `fontdone-parity` run exposed nine FTMM failures after the focused
+  design-coordinate route: three were the `FT_Set_MM_WeightVector` scenario
+  oracle using a shorter JSON shape than the Rust/C-ABI/WASM lanes, two were
+  weight-vector error rows missing `sentinel_after` and `buffer_after`, one was
+  `FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count` where the
+  C oracle route failed to forward the declared null coordinate pointer, and two
+  were null-output/null-argument rows still referencing future variable assets
+  instead of maintained variable fixtures.
+- `FT_Get_MM_Var.null_output_error` now uses
+  `fonts/variable/wght-wdth-opsz.ttf` and preserves the pinned C oracle's public
+  error status/output shape for `FT_Get_MM_Var(face, NULL)` across Rust FFI,
+  C ABI, and WASM ABI.  `FT_Get_Var_Axis_Flags.null_master_or_flags_error` now
+  uses `fonts/variable/hidden-axis.ttf` and compares both declared rows:
+  null `master` and null `flags`.
+- The row `ftmm.FT_Multi_Master.populated_by_adobe_mm_service` was demoted back
+  to explicit `pending-route`.  Its current maintained route returns pinned C
+  `FT_Err_Invalid_Argument`, so keeping it in `real-parity` would be a green
+  placeholder until a C-success Adobe MM service fixture is available.
+- Full parity after this cleanup: `runtime_parity: passed=6697 failed=0
+  total=6697`, with `pending=537`.  Current route audit:
+  `real-parity=4493`, `pending-route=463`, `pending-core=0`.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.

@@ -3783,10 +3783,13 @@ pub fn FT_Get_MM_Var(
     namedstyle_storage: Option<&mut [FT_Var_Named_Style]>,
     namedstyle_coords_storage: Option<&mut [FT_Fixed]>,
 ) -> FT_Error {
-    let Some(amaster) = amaster else {
-        return FT_Err_Invalid_Argument as FT_Error;
-    };
     let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(amaster) = amaster else {
+        // Pinned FreeType 2.14.3 in this oracle build reports
+        // Invalid_Face_Handle for the public FT_Get_MM_Var null-output route
+        // before any descriptor storage is populated.
         return FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let inner = face.inner.borrow();
