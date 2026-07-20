@@ -732,6 +732,21 @@ Finding:
   when focused runtime parity proves the public error route. For example,
   `ftmm.FT_Set_Var_Design_Coordinates.error_null_coords_with_nonzero_count`
   remains `real-parity`.
+- Follow-up on 2026-07-20: the single-axis
+  `ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates` row now
+  has a maintained C oracle route and validates through Rust FFI, C ABI, and
+  WASM ABI.  The promoted route sets design coordinates, then reads back
+  `FT_Get_Var_Design_Coordinates`, `FT_Get_Var_Blend_Coordinates`, and
+  `face_flags` from the same face.  The first divergence was face flags after
+  the setter: C reported `FT_FACE_FLAG_VARIATION` after explicit coordinate
+  selection, while Rust only reported the default variable-font
+  `FT_FACE_FLAG_MULTIPLE_MASTERS` state.  Rust now tracks explicit variation
+  coordinate selection separately so default getter rows keep C's open-time
+  flags and set-coordinate rows expose the post-set variation flag.
+- The remaining `FT_Set_Var_Design_Coordinates` success rows stay pending:
+  `success_partial_extra_and_reset` still needs the three-axis fixture, and
+  the metrics/glyph-output rows require exact public output comparison beyond
+  coordinate state.
 
 Impact:
 
@@ -5786,7 +5801,6 @@ repo-visible buckets for handoff and subagent selection.
 | 5 | `generic-fallback` | `ftmm` | `ftmm.set_mm_blend_coordinates` | `ftmm.FT_Set_MM_Blend_Coordinates / success_set_normalized_coordinates` | no explicit maintained route classification |
 | 5 | `generic-fallback` | `ftmm` | `ftmm.set_mm_weight_vector` | `ftmm.FT_Set_MM_WeightVector / success_set_weight_vector` | no explicit maintained route classification |
 | 5 | `generic-fallback` | `ftmm` | `ftmm.set_var_blend_coordinates` | `ftmm.FT_Set_Var_Blend_Coordinates / success_aliases_mm_blend_setter` | no explicit maintained route classification |
-| 5 | `generic-fallback` | `ftmm` | `ftmm.set_var_design_coordinates` | `ftmm.FT_Set_Var_Design_Coordinates / success_set_design_coordinates` | no explicit maintained route classification |
 
 ## Pending-Core Rows
 

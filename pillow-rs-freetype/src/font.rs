@@ -302,6 +302,7 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
         gvar: None,
         design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
+        variation_coordinates_set: false,
         gasp: None,
         head: tt::head::HeadTable {
             units_per_em: header.pixel_height.max(1),
@@ -590,6 +591,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         gvar: None,
         design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
+        variation_coordinates_set: false,
         gasp: None,
         head: tt::head::HeadTable {
             units_per_em: 1000,
@@ -1284,6 +1286,7 @@ impl Font {
             gvar,
             design_variation_coords,
             normalized_variation_coords,
+            variation_coordinates_set: design_coords.is_some(),
             head,
             hhea,
             hvar,
@@ -1658,6 +1661,7 @@ impl Font {
         const FT_FACE_FLAG_MULTIPLE_MASTERS: u32 = 1 << 8;
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
         const FT_FACE_FLAG_HINTER: u32 = 1 << 11;
+        const FT_FACE_FLAG_VARIATION: u32 = 1 << 15;
 
         if let FaceKind::WinFnt { header } = self.face_kind {
             // FreeType winfnt.c:fnt_size_select exposes fixed bitmap sizes
@@ -1716,7 +1720,7 @@ impl Font {
             flags |= FT_FACE_FLAG_KERNING;
         }
         // sfobjs.c:642-657 rejects zero-axis `fvar` tables before setting
-        // TT_FACE_FLAG_VAR_FVAR; sfobjs.c:1141-1144 derives the public flag.
+        // TT_FACE_FLAG_VAR_FVAR; sfobjs.c:1141-1144 derives the public MM flag.
         if self
             .data
             .fvar
@@ -1724,6 +1728,11 @@ impl Font {
             .is_some_and(|fvar| fvar.axis_count != 0)
         {
             flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
+        }
+        // FreeType exposes FT_FACE_FLAG_VARIATION after explicit variation
+        // coordinate selection, observed through ftmm.c's set-coordinate path.
+        if self.data.variation_coordinates_set {
+            flags |= FT_FACE_FLAG_VARIATION;
         }
         if self.data.table_directory.record(tag(b"glyf")).is_some() {
             flags |= FT_FACE_FLAG_HINTER;

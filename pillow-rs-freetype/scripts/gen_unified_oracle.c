@@ -9917,6 +9917,29 @@ static void print_ftmm_blend_output(
     printf("}\n");
 }
 
+static void print_ftmm_set_var_design_output(
+    FT_Error error,
+    FT_Face face,
+    FT_Fixed* design_coords,
+    FT_Fixed* blend_coords,
+    FT_UInt count) {
+    printf("{");
+    print_status(error);
+    printf(",\"output\":");
+    if (error) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"design_coords\":", error);
+        print_fixed_coord_array(design_coords, count);
+        printf(",\"blend_coords\":");
+        print_fixed_coord_array(blend_coords, count);
+        printf(",\"face_flags\":%ld,\"variation_bit_set\":", (long)face->face_flags);
+        print_json_bool((face->face_flags & FT_FACE_FLAG_VARIATION) != 0);
+        printf("}");
+    }
+    printf("}\n");
+}
+
 static FT_Error apply_ftmm_blend_prior(FT_Face face, const char* kind, FT_UInt count, const char* csv) {
     FT_Fixed coords[16] = {0};
     parse_fixed_coord_csv(csv, coords, count < 16 ? count : 16);
@@ -10083,6 +10106,33 @@ static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
             streq(argv[10], "null") ? NULL : coords);
     }
     print_ftmm_var_design_output(err, face.face, coords, count);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_set_var_design_coordinates(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_Error err = FT_Set_Var_Design_Coordinates(face.face, set_count, set_coords);
+
+    FT_UInt output_count = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_Fixed design_coords[16] = {0};
+    FT_Fixed blend_coords[16] = {0};
+    if (!err) {
+        err = FT_Get_Var_Design_Coordinates(face.face, output_count, design_coords);
+    }
+    if (!err) {
+        err = FT_Get_Var_Blend_Coordinates(face.face, output_count, blend_coords);
+    }
+    print_ftmm_set_var_design_output(err, face.face, design_coords, blend_coords, output_count);
     close_oracle_face(&face);
     return 0;
 }
@@ -15755,6 +15805,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 11 && streq(argv[1], "--ftmm-get-var-design-coordinates")) {
         return emit_ftmm_get_var_design_coordinates(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--ftmm-set-var-design-coordinates")) {
+        return emit_ftmm_set_var_design_coordinates(argc, argv);
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
