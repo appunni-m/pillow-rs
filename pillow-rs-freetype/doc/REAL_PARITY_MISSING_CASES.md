@@ -12500,7 +12500,8 @@ Finding:
 - The remaining COLR/CPAL paint graph, composite mode, transform, clipbox,
   layer iterator, colorline, palette data/select/foreground-color, and paint
   record success rows had stayed in `generic-fallback` with the reason
-  `no explicit maintained route classification`.
+  `no explicit maintained route classification`, then under one broad color
+  subsystem pending reason.
 - Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
   color subsystem route that opens COLR/CPAL fixtures, walks
   `FT_Get_Color_Glyph_Paint`, `FT_Get_Paint`, `FT_Get_Paint_Layers`,
@@ -12510,10 +12511,32 @@ Finding:
 
 Classification change:
 
-- 108 `ftcolor.*` rows moved from `generic-fallback` to `pending-route`.
-- 22 existing exact `ftcolor` rows remain `real-parity`.
-- New route audit counts: `real-parity=4465`, `generic-fallback=231`,
-  `pending-route=283`, `pending-core=7`.
+- Current route audit has 107 `ftcolor.*` pending rows. They now use explicit
+  case-set blockers grouped by behavior surface instead of a subsystem-wide
+  color reason.
+- The route audit count remains stable for this refinement; it changes blocker
+  granularity, not the number of accepted parity rows.
+
+Current blocker families:
+
+- Palette and foreground color: CPAL data, light/dark flags, BGRA entry order,
+  palette selection/reselection, null-output selection, foreground color, and
+  non-SFNT behavior.
+- Layer iteration: COLR v0/v1 layer iteration, foreground color indexes,
+  terminal false output preservation, and iterator state.
+- Root paint and root transforms: include/no-root-transform behavior, inserted
+  transforms, affine values, downstream opaque paint use, and size variants.
+- Paint resolution: opaque paint handles, supported paint-format dispatch,
+  glyph/colr-glyph/solid payloads, color indexes, and public union shape.
+- Colorline and gradients: colorline records, color stop iterator
+  initialization/advance/end, static and variable stops, linear/radial/sweep
+  payloads, and pad/reflect/repeat extend modes.
+- Transform paints: rotate, scale, skew, translate, explicit affine transform,
+  and FreeType normalization behavior.
+- Composite paint graph: composite payload shape, all public composite modes,
+  graph traversal, and sentinel non-emission.
+- Clipbox: scaled/transformed box values for size variants and false-with-output
+  preservation when no clipbox exists.
 
 Required fix plan:
 

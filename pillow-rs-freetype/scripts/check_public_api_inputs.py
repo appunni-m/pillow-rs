@@ -1539,11 +1539,166 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "COLR/CPAL paint graph, palette, layer, colorline, and clipbox success "
-        "behavior requires a maintained color subsystem route; keeping it "
-        "generic would be a green placeholder"
-    )
+    pending_case_groups = {
+        (
+            "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
+            "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime",
+            "ftcolor.FT_Palette_Data.palette_data_get_values",
+            "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data",
+            "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data",
+            "ftcolor.FT_Color.palette_entries_preserve_bgra_order",
+            "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries",
+            "ftcolor.FT_Palette_Select.success_null_output_selects_without_return",
+            "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications",
+            "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette",
+            "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color",
+            "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop",
+            "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy",
+        ): (
+            "COLR/CPAL palette parity needs a maintained palette route proving "
+            "CPAL palette data, light/dark flags, BGRA entry order, palette "
+            "selection/reselection, null-output selection, foreground color, "
+            "and non-SFNT behavior across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        (
+            "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
+            "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
+            "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+            "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers",
+            "ftcolor.FT_Get_Paint_Layers.end_of_iteration",
+            "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis",
+            "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload",
+            "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
+        ): (
+            "COLR layer iterator parity needs a maintained layer route proving "
+            "COLR v0/v1 layer iteration, foreground color indexes, terminal "
+            "false output preservation, and iterator state across all ABI lanes"
+        ),
+        (
+            "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform",
+            "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform",
+            "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract",
+            "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",
+            "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime",
+            "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint",
+            "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload",
+            "ftcolor.FT_Get_Paint.success_inserts_root_transform",
+            "ftcolor.FT_Affine23.root_transform_values",
+        ): (
+            "COLR root-paint parity needs a maintained FT_Get_Color_Glyph_Paint "
+            "route proving include/no-root-transform behavior, inserted root "
+            "transforms, affine values, downstream opaque paint use, and size "
+            "variant output against pinned C"
+        ),
+        (
+            "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",
+            "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis",
+            "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
+            "ftcolor.FT_PaintGlyph.get_paint_glyph_values",
+            "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime",
+            "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index",
+            "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
+            "ftcolor.FT_PaintSolid.get_paint_solid_values",
+            "ftcolor.FT_PaintFormat.paint_union_shape_runtime",
+        ): (
+            "COLR paint resolution parity needs a maintained FT_Get_Paint route "
+            "proving opaque paint handles, supported paint-format dispatch, "
+            "glyph/colr-glyph/solid payloads, color indexes, and public union "
+            "shape output"
+        ),
+        (
+            "ftcolor.FT_ColorLine.gradient_colorline_values",
+            "ftcolor.FT_ColorStop.iterator_output_values",
+            "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
+            "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops",
+            "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops",
+            "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
+            "ftcolor.FT_Get_Colorline_Stops.end_of_iteration",
+            "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values",
+            "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",
+            "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values",
+            "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
+            "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad",
+            "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect",
+            "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat",
+            "ftcolor.FT_PaintExtend.gradient_extend_runtime",
+        ): (
+            "COLR colorline/gradient parity needs a maintained route proving "
+            "colorline records, color stop iterator initialization/advance/end, "
+            "static and variable stops, linear/radial/sweep payloads, and "
+            "pad/reflect/repeat extend modes"
+        ),
+        (
+            "ftcolor.FT_PaintRotate.get_paint_rotate_values",
+            "ftcolor.FT_PaintScale.get_paint_scale_values",
+            "ftcolor.FT_PaintSkew.get_paint_skew_values",
+            "ftcolor.FT_PaintTransform.get_paint_transform_values",
+            "ftcolor.FT_PaintTranslate.get_paint_translate_values",
+            "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload",
+            "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload",
+        ): (
+            "COLR transform paint parity needs a maintained route proving "
+            "rotate, scale, skew, translate, and explicit affine transform "
+            "payloads plus FreeType normalization behavior"
+        ),
+        (
+            "ftcolor.FT_PaintComposite.get_paint_composite_values",
+            "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload",
+            "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_CLEAR.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_COLOR_BURN.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_COLOR_DODGE.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DARKEN.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DEST.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DEST_ATOP.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DEST_IN.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DEST_OUT.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DEST_OVER.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_DIFFERENCE.paint_composite_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_EXCLUSION.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_HARD_LIGHT.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_HSL_COLOR.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_HSL_HUE.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_HSL_LUMINOSITY.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_HSL_SATURATION.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_LIGHTEN.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
+            "ftcolor.FT_COLR_COMPOSITE_MULTIPLY.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_OVERLAY.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_PLUS.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SCREEN.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SOFT_LIGHT.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SRC.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SRC_ATOP.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SRC_IN.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SRC_OUT.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_SRC_OVER.paint_composite_mode_runtime",
+            "ftcolor.FT_COLR_COMPOSITE_XOR.paint_composite_mode_runtime",
+        ): (
+            "COLR composite paint parity needs a maintained paint-graph route "
+            "proving composite payload shape, all public composite modes, valid "
+            "graph traversal, and sentinel non-emission against pinned C"
+        ),
+        (
+            "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
+            "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed",
+            "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output",
+        ): (
+            "COLR clipbox parity needs a maintained FT_Get_Color_Glyph_ClipBox "
+            "route proving scaled/transformed box values for size variants and "
+            "false-with-output-preservation behavior when no clipbox exists"
+        ),
+    }
+    for case_ids, reason in pending_case_groups.items():
+        if row.case_id in case_ids:
+            return reason
+    return None
 
 
 def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
