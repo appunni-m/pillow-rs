@@ -10048,6 +10048,11 @@ Follow-up finding for blend-coordinate state rows:
 - The MM invalid argument-matrix row stays exact by comparing all three public
   C scenarios explicitly: variable face with null coords, null face with valid
   coords, and non-variable face with valid coords.
+- The `FT_Get_MM_Blend_Coordinates.partial_or_excess_count` OpenType
+  variable-font row now compares the maintained count matrix
+  `0, 1, axis_count, axis_count + 2` through pinned C, Rust FFI, C ABI, and
+  WASM ABI.  The optional Adobe MM half of the manifest row remains unresolved
+  and is not counted by this route.
 
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 

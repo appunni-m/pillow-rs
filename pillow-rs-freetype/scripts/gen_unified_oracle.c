@@ -10018,6 +10018,39 @@ static int emit_ftmm_mm_blend_invalid_matrix(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ftmm_mm_blend_count_matrix(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], 0, &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt axis_count = (FT_UInt)strtoul(argv[4], NULL, 10);
+    FT_UInt counts[4] = {0, 1, axis_count, axis_count + 2};
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    for (FT_UInt row = 0; row < 4; row++) {
+        FT_UInt count = counts[row];
+        FT_Fixed coords[16];
+        for (FT_UInt i = 0; i < 16; i++) {
+            coords[i] = (FT_Fixed)(0x11110000 + i);
+        }
+        FT_Error err = FT_Get_MM_Blend_Coordinates(face.face, count, coords);
+        if (row) {
+            printf(",");
+        }
+        printf("{\"num_coords\":%u,\"return\":%d,\"coords_after\":", count, err);
+        print_fixed_coord_array(coords, count);
+        printf("}");
+    }
+    printf("]}}\n");
+
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -15728,6 +15761,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--ftmm-mm-blend-invalid-matrix")) {
         return emit_ftmm_mm_blend_invalid_matrix(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ftmm-mm-blend-count-matrix")) {
+        return emit_ftmm_mm_blend_count_matrix(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);
