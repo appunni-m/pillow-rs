@@ -3302,7 +3302,21 @@ pub extern "C" fn FT_Set_MM_Blend_Coordinates(
     num_coords: FT_UInt,
     coords: *const FT_Fixed,
 ) -> FT_Error {
-    FT_Set_Var_Blend_Coordinates(face, num_coords, coords)
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    let err = rust_ffi::FT_Set_MM_Blend_Coordinates(Some(&mut state.inner), num_coords, coords);
+    if err == rust_ffi::FT_Err_Ok {
+        state.refresh_charmaps(face);
+        state.refresh_postscript_name();
+    }
+    err
 }
 
 #[unsafe(no_mangle)]

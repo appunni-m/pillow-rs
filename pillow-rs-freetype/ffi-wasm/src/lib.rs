@@ -2897,7 +2897,16 @@ pub extern "C" fn fontdone_wasm_set_mm_blend_coordinates(
     num_coords: FT_UInt,
     coords: *const FT_Fixed,
 ) -> FT_Error {
-    fontdone_wasm_set_var_blend_coordinates(handle, num_coords, coords)
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values in linear memory.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Set_MM_Blend_Coordinates(Some(&mut face.face), num_coords, coords)
 }
 
 #[unsafe(no_mangle)]

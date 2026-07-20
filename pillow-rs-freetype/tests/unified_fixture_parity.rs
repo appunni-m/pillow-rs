@@ -10410,6 +10410,50 @@ fn ftmm_optional_coords_from_params(params: &Value) -> Result<Vec<FT_Fixed>, Str
     }
 }
 
+struct FtmmBlendScenario {
+    count: FT_UInt,
+    coords: Vec<FT_Fixed>,
+    pointer_null: bool,
+}
+
+fn ftmm_blend_scenarios(params: &Value) -> Result<Vec<FtmmBlendScenario>, String> {
+    array_param(params, "scenarios")?
+        .iter()
+        .map(|scenario| {
+            let count_value = u64_param(scenario, "num_coords")?;
+            let count = FT_UInt::try_from(count_value)
+                .map_err(|err| format!("scenario num_coords {count_value} invalid: {err}"))?;
+            Ok(FtmmBlendScenario {
+                count,
+                coords: if scenario.get("coords_16_16").is_some() {
+                    ftmm_coords_from_value(scenario, "coords_16_16")?
+                } else {
+                    Vec::new()
+                },
+                pointer_null: ftmm_coords_pointer_is_null(scenario),
+            })
+        })
+        .collect()
+}
+
+fn ftmm_blend_scenarios_arg(params: &Value) -> Result<String, String> {
+    Ok(ftmm_blend_scenarios(params)?
+        .into_iter()
+        .map(|scenario| {
+            format!(
+                "{}:{}",
+                scenario.count,
+                if scenario.pointer_null {
+                    "null".to_string()
+                } else {
+                    ftmm_coords_csv(&scenario.coords)
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
 fn ftmm_blend_font_asset(case: &InputCase) -> Result<&Asset, String> {
     for key in ["font", "variable_font", "static_font"] {
         if let Some(asset) = case.inputs.assets.get(key) {
@@ -10554,6 +10598,31 @@ fn ftmm_blend_output(status: FT_Error, coords: &[FT_Fixed], face_flags: FT_Long)
     } else {
         error(status)
     }
+}
+
+fn ftmm_var_blend_alias_output(
+    status: FT_Error,
+    coords: &[FT_Fixed],
+    matches_control_call: bool,
+) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(json!({
+            "return": status,
+            "active_blend_coords": coords,
+            "matches_control_call": matches_control_call,
+        }))
+    } else {
+        error(status)
+    }
+}
+
+fn ftmm_var_blend_flag_row(status: FT_Error, count: FT_UInt, face_flags: FT_Long) -> Value {
+    json!({
+        "num_coords": count,
+        "return": status,
+        "face_flags": face_flags,
+        "is_variation": (face_flags & FT_FACE_FLAG_VARIATION) != 0,
+    })
 }
 
 fn ftmm_set_var_design_output(
@@ -10907,6 +10976,174 @@ fn wasm_ftmm_blend_coordinates(case: &InputCase, mode: &str) -> Result<RunOutput
         .face_flags;
     wasm_done_face(handle);
     Ok(ftmm_blend_output(status, &coords, face_flags))
+}
+
+fn rust_ftmm_var_blend_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let mut control = rust_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
+    let set_count = ftmm_num_coords(params)?;
+
+    let mut status = FT_Set_Var_Blend_Coordinates(Some(&mut face), set_count, Some(&set_coords));
+    let mut coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = FT_Get_Var_Blend_Coordinates(Some(&face), output_count, Some(&mut coords));
+    }
+
+    let mut control_status =
+        FT_Set_MM_Blend_Coordinates(Some(&mut control), set_count, Some(&set_coords));
+    let mut control_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if control_status == FT_Err_Ok {
+        control_status =
+            FT_Get_Var_Blend_Coordinates(Some(&control), output_count, Some(&mut control_coords));
+    }
+
+    Ok(ftmm_var_blend_alias_output(
+        status,
+        &coords,
+        control_status == status && control_coords == coords,
+    ))
+}
+
+fn c_ftmm_var_blend_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let (control_library, control) = c_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
+    let set_count = ftmm_num_coords(params)?;
+
+    let mut status = c_abi::FT_Set_Var_Blend_Coordinates(face, set_count, set_coords.as_ptr());
+    let mut coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = c_abi::FT_Get_Var_Blend_Coordinates(face, output_count, coords.as_mut_ptr());
+    }
+
+    let mut control_status =
+        c_abi::FT_Set_MM_Blend_Coordinates(control, set_count, set_coords.as_ptr());
+    let mut control_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if control_status == FT_Err_Ok {
+        control_status =
+            c_abi::FT_Get_Var_Blend_Coordinates(control, output_count, control_coords.as_mut_ptr());
+    }
+
+    c_done_face(control);
+    c_done_library(control_library);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_var_blend_alias_output(
+        status,
+        &coords,
+        control_status == status && control_coords == coords,
+    ))
+}
+
+fn wasm_ftmm_var_blend_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let control = wasm_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
+    let set_count = ftmm_num_coords(params)?;
+
+    let mut status =
+        wasm_abi::fontdone_wasm_set_var_blend_coordinates(handle, set_count, set_coords.as_ptr());
+    let mut coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_var_blend_coordinates(
+            handle,
+            output_count,
+            coords.as_mut_ptr(),
+        );
+    }
+
+    let mut control_status =
+        wasm_abi::fontdone_wasm_set_mm_blend_coordinates(control, set_count, set_coords.as_ptr());
+    let mut control_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if control_status == FT_Err_Ok {
+        control_status = wasm_abi::fontdone_wasm_get_var_blend_coordinates(
+            control,
+            output_count,
+            control_coords.as_mut_ptr(),
+        );
+    }
+
+    wasm_done_face(control);
+    wasm_done_face(handle);
+    Ok(ftmm_var_blend_alias_output(
+        status,
+        &coords,
+        control_status == status && control_coords == coords,
+    ))
+}
+
+fn rust_ftmm_var_blend_flag_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(&case.inputs.params)? {
+        let status = FT_Set_Var_Blend_Coordinates(
+            Some(&mut face),
+            scenario.count,
+            if scenario.pointer_null {
+                None
+            } else {
+                Some(&scenario.coords)
+            },
+        );
+        rows.push(ftmm_var_blend_flag_row(
+            status,
+            scenario.count,
+            face.face_flags,
+        ));
+    }
+    Ok(ok(json!({ "results": rows })))
+}
+
+fn c_ftmm_var_blend_flag_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(&case.inputs.params)? {
+        let status = c_abi::FT_Set_Var_Blend_Coordinates(
+            face,
+            scenario.count,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.coords.as_ptr()
+            },
+        );
+        let face_flags = c_abi::abi_face_info(face)
+            .ok_or_else(|| "missing C ABI face info".to_string())?
+            .face_flags;
+        rows.push(ftmm_var_blend_flag_row(status, scenario.count, face_flags));
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(json!({ "results": rows })))
+}
+
+fn wasm_ftmm_var_blend_flag_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(&case.inputs.params)? {
+        let status = wasm_abi::fontdone_wasm_set_var_blend_coordinates(
+            handle,
+            scenario.count,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.coords.as_ptr()
+            },
+        );
+        let face_flags = wasm_abi::abi_face_info(handle)
+            .ok_or_else(|| "missing WASM face info".to_string())?
+            .face_flags;
+        rows.push(ftmm_var_blend_flag_row(status, scenario.count, face_flags));
+    }
+    wasm_done_face(handle);
+    Ok(ok(json!({ "results": rows })))
 }
 
 fn rust_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
@@ -16230,6 +16467,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(output_count.to_string());
         return Ok(args);
     }
+    if case.case_id == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" {
+        let set_coords = ftmm_optional_coords_from_params(params)?;
+        let output_count =
+            ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
+        let mut args = vec!["--ftmm-var-blend-alias".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(ftmm_num_coords(params)?.to_string());
+        args.push(ftmm_coords_csv(&set_coords));
+        args.push(output_count.to_string());
+        return Ok(args);
+    }
+    if case.case_id == "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c" {
+        let mut args = vec!["--ftmm-var-blend-flag-matrix".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(ftmm_blend_scenarios_arg(params)?);
+        return Ok(args);
+    }
     match case.operation.as_str() {
         "constant" => Ok(vec![
             "--constant".to_string(),
@@ -18382,6 +18638,18 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 rust_ftmm_blend_coordinates(case, "get-mm")
             }
         }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>
+        {
+            rust_ftmm_var_blend_alias(case)
+        }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c" =>
+        {
+            rust_ftmm_var_blend_flag_matrix(case)
+        }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
         "freetype.done_freetype" => rust_done_freetype(case),
@@ -19153,6 +19421,18 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 c_ftmm_blend_coordinates(case, "get-mm")
             }
         }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>
+        {
+            c_ftmm_var_blend_alias(case)
+        }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c" =>
+        {
+            c_ftmm_var_blend_flag_matrix(case)
+        }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
         "freetype.done_freetype" => c_done_freetype_output(case),
@@ -19848,6 +20128,18 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 wasm_ftmm_blend_coordinates(case, "get-mm")
             }
+        }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>
+        {
+            wasm_ftmm_var_blend_alias(case)
+        }
+        "ftmm.set_var_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c" =>
+        {
+            wasm_ftmm_var_blend_flag_matrix(case)
         }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
