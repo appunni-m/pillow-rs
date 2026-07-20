@@ -1883,6 +1883,79 @@ def ftcache_image_lookup_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcache_manager_done_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Manager_Done pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_Manager_Done planning parity needs a maintained same-input "
+            "manager teardown route instead of treating FTC manager destruction "
+            "as out of scope"
+        ),
+        "ftcache.FTC_Manager_Done.success_destroy_empty_manager": (
+            "FTC_Manager_Done empty-manager parity needs a maintained route "
+            "proving an empty manager releases ownership and returns/no-ops "
+            "exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_Done.success_destroy_populated_manager": (
+            "FTC_Manager_Done populated-manager parity needs a maintained "
+            "route proving cached faces, sizes, caches, and nodes are destroyed "
+            "in the same observable order and ownership state as pinned C"
+        ),
+        "ftcache.FTC_Manager_Done.success_null_or_invalid_library_noop": (
+            "FTC_Manager_Done null/foreign-library parity needs a maintained "
+            "route proving null managers and foreign-library ownership cases "
+            "return or no-op exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_Done.node_reference_lifecycle_on_done": (
+            "FTC_Manager_Done referenced-node parity needs a maintained route "
+            "proving referenced nodes during manager teardown keep or release "
+            "observable cache ownership exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftcache_manager_remove_faceid_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Manager_RemoveFaceID pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_Manager_RemoveFaceID planning parity needs a maintained "
+            "same-input face-id eviction route instead of treating cache "
+            "eviction as out of scope"
+        ),
+        "ftcache.FTC_Manager_RemoveFaceID.success_removes_unreferenced_face_size_and_nodes": (
+            "FTC_Manager_RemoveFaceID unreferenced eviction parity needs a "
+            "maintained route proving unreferenced face, size, and node entries "
+            "for the face ID are removed exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_RemoveFaceID.success_referenced_nodes_hidden_until_unref": (
+            "FTC_Manager_RemoveFaceID referenced-node parity needs a maintained "
+            "route proving referenced nodes are hidden from future lookup until "
+            "FTC_Node_Unref releases them exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_RemoveFaceID.success_other_face_ids_unchanged": (
+            "FTC_Manager_RemoveFaceID isolation parity needs a maintained route "
+            "proving eviction of one face ID preserves cached faces, sizes, and "
+            "nodes for other face IDs exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_RemoveFaceID.success_null_manager_noop": (
+            "FTC_Manager_RemoveFaceID null-manager parity needs a maintained "
+            "route proving a null manager returns or no-ops exactly like "
+            "pinned C"
+        ),
+        "ftcache.FTC_Manager_RemoveFaceID.success_null_or_unknown_face_id": (
+            "FTC_Manager_RemoveFaceID null/unknown-face parity needs a "
+            "maintained route proving null or unknown face IDs leave cache "
+            "state unchanged exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1911,6 +1984,12 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     image_lookup_pending = ftcache_image_lookup_pending_reason(row)
     if image_lookup_pending:
         return image_lookup_pending
+    manager_done_pending = ftcache_manager_done_pending_reason(row)
+    if manager_done_pending:
+        return manager_done_pending
+    remove_faceid_pending = ftcache_manager_remove_faceid_pending_reason(row)
+    if remove_faceid_pending:
+        return remove_faceid_pending
     cache_creation_exact_cases = {
         "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
             "FTC_CMapCache opaque-handle parity needs a maintained cache route "
@@ -1974,17 +2053,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return cache_creation_exact_cases[row.case_id]
     pending_case_groups = {
         (
-            "ftcache.FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_Manager_Done.success_destroy_empty_manager",
-            "ftcache.FTC_Manager_Done.success_destroy_populated_manager",
-            "ftcache.FTC_Manager_Done.success_null_or_invalid_library_noop",
-            "ftcache.FTC_Manager_Done.node_reference_lifecycle_on_done",
-        ): (
-            "FTC_Manager_Done parity needs a maintained manager teardown route "
-            "proving empty/populated destruction, referenced-node handling, "
-            "and null/foreign-library behavior against pinned C"
-        ),
-        (
             "ftcache.FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope",
             "ftcache.FTC_Manager_LookupFace.success_first_lookup_invokes_requester",
             "ftcache.FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face",
@@ -1994,19 +2062,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FTC_Manager_LookupFace parity needs a maintained requester route "
             "proving FTC_FaceID pointer identity, first requester callback, "
             "cached repeat lookup, and face current-size behavior"
-        ),
-        (
-            "ftcache.FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_Manager_RemoveFaceID.success_removes_unreferenced_face_size_and_nodes",
-            "ftcache.FTC_Manager_RemoveFaceID.success_referenced_nodes_hidden_until_unref",
-            "ftcache.FTC_Manager_RemoveFaceID.success_other_face_ids_unchanged",
-            "ftcache.FTC_Manager_RemoveFaceID.success_null_manager_noop",
-            "ftcache.FTC_Manager_RemoveFaceID.success_null_or_unknown_face_id",
-        ): (
-            "FTC_Manager_RemoveFaceID parity needs a maintained face-id "
-            "eviction route proving unreferenced removal, referenced-node "
-            "hiding until unref, unchanged other face IDs, and null/unknown "
-            "input behavior"
         ),
         (
             "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
