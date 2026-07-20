@@ -1387,7 +1387,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
         "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
-        "ftmm.FT_Var_Axis.variable_font_axis_values",
         "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
@@ -3789,6 +3788,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Var_Axis.adobe_mm_axis_values"
     ):
         return "FT_Var_Axis Adobe MM axis fields validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Var_Axis.variable_font_axis_values"
+    ):
+        return "FT_Var_Axis OpenType wght/wdth/opsz axis fields validate through the generated three-axis fvar fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_var_then_axis_flags"
         and row.case_id == "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags"

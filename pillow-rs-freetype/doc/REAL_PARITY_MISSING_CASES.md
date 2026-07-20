@@ -10071,7 +10071,7 @@ git diff --check
 
 ### Issue Set: `FT_Get_MM_Var` maintained OpenType descriptor route
 
-Status: three real OpenType `fvar` descriptor/namedstyle rows implemented on
+Status: four real OpenType `fvar` descriptor/namedstyle rows implemented on
 2026-07-20.
 
 Baseline before this batch:
@@ -10115,11 +10115,16 @@ Implementation:
   - `ftmm.FT_Get_MM_Var.variable_font_descriptor_success`
   - `ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count`
   - `ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c`
+  - `ftmm.FT_Var_Axis.variable_font_axis_values`
+- Added `fonts/variable/wght-wdth-opsz.ttf` through
+  `scripts/build_fvar_fixtures.py`.  The fixture extends the compact variable
+  font with an `opsz` axis (8/14/72 design values) while retaining `wght` and
+  `wdth`, giving the descriptor route a maintained three-axis OpenType input.
 
 Result:
 
-- Route audit after this batch: `real-parity=4485`,
-  `pending-route=471`, `pending-core=0`.
+- Route audit after this batch: `real-parity=4486`,
+  `pending-route=470`, `pending-core=0`.
 
 Verification:
 
@@ -10127,6 +10132,7 @@ Verification:
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.variable_font_descriptor_success
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.variable_font_axis_values
 make -C pillow-rs-freetype route-audit
 ```
 

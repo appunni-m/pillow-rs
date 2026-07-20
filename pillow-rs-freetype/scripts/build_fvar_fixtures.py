@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables._f_v_a_r import Axis
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +103,28 @@ def write_instance_postscript_name() -> None:
     for instance in font["fvar"].instances:
         instance.postscriptNameID = 6
     save_font(OUT_DIR / "fvar-instance-postscript-name.ttf", font)
+
+
+def write_three_axis_opsz_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    fvar = font["fvar"]
+
+    axis = Axis()
+    axis.axisTag = "opsz"
+    axis.minValue = 8.0
+    axis.defaultValue = 14.0
+    axis.maxValue = 72.0
+    axis.flags = 0
+    axis.axisNameID = 271
+    fvar.axes.append(axis)
+
+    name = font["name"]
+    name.setName("Optical Size", axis.axisNameID, 3, 1, 0x0409)
+    name.setName("Optical Size", axis.axisNameID, 1, 0, 0)
+    for instance in fvar.instances:
+        instance.coordinates[axis.axisTag] = axis.defaultValue
+
+    save_font(OUT_DIR / "wght-wdth-opsz.ttf", font)
 
 
 def write_zero_axis() -> None:
@@ -240,6 +263,7 @@ def main() -> None:
     write_axis_count_limit()
     write_instance_count_limit()
     write_instance_postscript_name()
+    write_three_axis_opsz_font()
     write_zero_axis()
 
 
