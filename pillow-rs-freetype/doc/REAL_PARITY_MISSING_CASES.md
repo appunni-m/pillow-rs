@@ -2764,6 +2764,13 @@ Rejected probes:
   or route is corrected against C behavior.
 - `freetype.FT_HAS_HORIZONTAL.no_horizontal_metrics_control`: exact probe
   failed because pinned C returned error `85`; keep pending.
+- Rechecked on 2026-07-20 by scanning every local fixture font with the pinned
+  C `--face-macro ... FT_HAS_HORIZONTAL` oracle.  The scan found 755
+  C-openable font files across `.ttf`, `.otf`, `.ttc`, `.otb`, `.pfb`, `.pfa`,
+  `.bdf`, `.pcf`, and `.fnt`; all 755 returned `FT_HAS_HORIZONTAL=true`.
+  There is currently no maintained local replacement for the invalid 8-byte
+  `input/fonts/no-horizontal/no-hhea-metrics.pcf` placeholder.  Keep the row
+  pending until a purpose-built C-openable no-horizontal control face exists.
 - `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: exact probe failed
   because pinned C returned error `85`; keep pending.
 - `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: exact probe
