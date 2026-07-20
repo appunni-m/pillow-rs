@@ -1967,6 +1967,14 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if not operation_is_real_parity(row.operation):
         return None
+    if row.case_id == "ftglyph.FT_Glyph_Copy.error_copy_hook_failure_cleans_target":
+        return (
+            "FT_Glyph_Copy copy-hook failure cleanup requires a maintained "
+            "allocation-failure facade and malformed glyph-class hook route; "
+            "the existing null source/target/class route does not exercise "
+            "partial target allocation, copy-hook failure, target destruction, "
+            "or cleanup-event parity across pinned C, Rust FFI, C ABI, and WASM ABI"
+        )
     unresolved = unresolved_assets_reason(row)
     if unresolved and not exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return f"{unresolved}; exact runtime parity would be a green placeholder"
