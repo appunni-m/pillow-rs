@@ -1484,34 +1484,85 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for driver/autohinter properties that do not have a maintained route."""
     ftdriver_rows_without_maintained_route = {
-        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip",
-        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime",
-        "ftdriver.FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime",
-        "ftdriver.FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime",
-        "ftdriver.FT_HINTING_ADOBE.hinting_engine_property_runtime",
-        "ftdriver.FT_HINTING_FREETYPE.hinting_engine_property_runtime",
-        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
-        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
-        "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
-        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
-        "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
-        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip": (
+            "autofitter:fallback-script CJK parity needs maintained "
+            "FT_Property_Set/Get routing plus a C-openable CJK-control font "
+            "that proves pinned C acceptance/readback and invalid-script "
+            "preservation across Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime": (
+            "CJK glyph-to-script-map runtime parity needs a maintained "
+            "FT_Prop_GlyphToScriptMap route with CJK cmap coverage, "
+            "per-glyph script values before/after auto-hinted load, and exact "
+            "pinned C/Rust/C-ABI/WASM comparison"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation": (
+            "autofitter:fallback-script Indic parity needs maintained "
+            "FT_Property_Set/Get routing plus an Indic-control font that "
+            "proves FreeType's build-dependent acceptance or Invalid_Argument "
+            "behavior across Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime": (
+            "Indic glyph-to-script-map runtime parity needs a maintained "
+            "FT_Prop_GlyphToScriptMap route with Indic cmap coverage and exact "
+            "C/Rust/C-ABI/WASM script-map and auto-hinted glyph-output "
+            "comparison"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip": (
+            "autofitter:default-script Latin parity needs maintained "
+            "FT_Property_Set/Get routing for the autofitter module; reusing "
+            "the scalar truetype interpreter-version route would be a "
+            "different public input and a green placeholder"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime": (
+            "Latin glyph-to-script-map runtime parity needs maintained "
+            "FT_Prop_GlyphToScriptMap routing, Basic Latin/Greek/Cyrillic cmap "
+            "coverage, and exact script-map plus auto-hinted glyph-output "
+            "comparison across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip": (
+            "autofitter script NONE parity needs maintained default-script and "
+            "fallback-script property routes that prove readback, invalid "
+            "controls, and output preservation through pinned C, Rust FFI, "
+            "C ABI, and WASM ABI"
+        ),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime": (
+            "script NONE glyph-to-script-map runtime parity needs a maintained "
+            "map-mutation route that compares before/after map entries and "
+            "auto-hinted glyph output across pinned C, Rust FFI, C ABI, and "
+            "WASM ABI"
+        ),
+        "ftdriver.FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime": (
+            "CFF Adobe hinting-engine runtime parity needs maintained "
+            "FT_Property_Set/Get routing for the CFF driver and a C-openable "
+            "CFF fixture where the selected engine's public metrics, outline, "
+            "or bitmap behavior is compared across all ABI lanes"
+        ),
+        "ftdriver.FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime": (
+            "CFF FreeType hinting-engine runtime parity needs maintained "
+            "FT_Property_Set/Get routing for the CFF driver and the same "
+            "C-openable CFF output comparison; scalar macro values alone do "
+            "not prove runtime behavior"
+        ),
+        "ftdriver.FT_HINTING_ADOBE.hinting_engine_property_runtime": (
+            "TrueType Adobe hinting-engine runtime parity needs maintained "
+            "driver property routing and a bytecode-sensitive TrueType fixture "
+            "that compares public hinted output across pinned C, Rust FFI, "
+            "C ABI, and WASM ABI"
+        ),
+        "ftdriver.FT_HINTING_FREETYPE.hinting_engine_property_runtime": (
+            "TrueType FreeType hinting-engine runtime parity needs maintained "
+            "driver property routing and the matching bytecode-sensitive "
+            "output comparison; accepting a property-set no-op would be a "
+            "green placeholder"
+        ),
     }
-    if row.case_id not in ftdriver_rows_without_maintained_route:
+    reason = ftdriver_rows_without_maintained_route.get(row.case_id)
+    if reason is None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Driver property, autohinter script, glyph-to-script map, x-height, "
-        "and hinting-engine success behavior requires a maintained driver "
-        "route; keeping it generic would be a green placeholder"
-    )
+    return reason
 
 
 def property_service_pending_reason(row: ConcreteInput) -> str | None:

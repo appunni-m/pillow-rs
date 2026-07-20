@@ -2101,6 +2101,42 @@ Required fix plan:
 5. Promote rows only after focused `ftdriver` runtime proves exact C oracle,
    Rust FFI, C ABI, and WASM ABI output for the same input.
 
+Current exact broad-driver pending split:
+
+- `FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip`: implement
+  `autofitter:fallback-script` `FT_Property_Set/Get` routing and verify CJK
+  acceptance/readback plus invalid-script preservation against pinned C.
+- `FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime`: add a CJK-control
+  font and maintained `FT_Prop_GlyphToScriptMap` route that compares per-glyph
+  script values before/after auto-hinted load.
+- `FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation`: prove the
+  pinned build's Indic fallback-script acceptance or `Invalid_Argument`
+  behavior through the same property route.
+- `FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime`: add Indic cmap
+  coverage and compare script-map plus auto-hinted glyph output across
+  C/Rust/C-ABI/WASM.
+- `FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip`: implement
+  `autofitter:default-script` directly. Do not reuse the scalar
+  `truetype:interpreter-version` property route because that is a different
+  public input.
+- `FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime`: compare Basic
+  Latin, Greek, and Cyrillic script-map values and subsequent auto-hinted glyph
+  output through the maintained map route.
+- `FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip`: prove
+  default-script and fallback-script NONE readback, invalid controls, and
+  output preservation through all ABI lanes.
+- `FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime`: compare map mutation
+  side effects and before/after auto-hinted glyph output.
+- `FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime` and
+  `FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime`: route CFF driver
+  hinting-engine property set/get and compare metrics, outline, or bitmap
+  behavior on a C-openable CFF fixture. Macro values alone are not runtime
+  parity.
+- `FT_HINTING_ADOBE.hinting_engine_property_runtime` and
+  `FT_HINTING_FREETYPE.hinting_engine_property_runtime`: route TrueType driver
+  hinting-engine property set/get and compare bytecode-sensitive hinted output.
+  A property-set no-op must stay pending.
+
 Verification for the classification batch:
 
 ```bash
