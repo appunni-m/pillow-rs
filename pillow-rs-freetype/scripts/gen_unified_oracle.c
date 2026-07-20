@@ -9336,6 +9336,49 @@ static int emit_active_size_handle(int argc, char** argv) {
     return 0;
 }
 
+static FT_Error first_non_ok3(FT_Error a, FT_Error b, FT_Error c) {
+    if (a) {
+        return a;
+    }
+    if (b) {
+        return b;
+    }
+    return c;
+}
+
+static int emit_face_owned_handles(int argc, char** argv) {
+    if (argc != 5) {
+        return 1;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Error set_size_error = FT_Set_Pixel_Sizes(face.face, 0, 20);
+    FT_Error select_error = FT_Select_Charmap(face.face, FT_ENCODING_UNICODE);
+    FT_Error load_error = FT_Load_Glyph(face.face, 36, FT_LOAD_DEFAULT);
+    FT_Error status = first_non_ok3(set_size_error, select_error, load_error);
+
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"opened\":true,\"status\":%d,", status);
+    printf("\"glyph\":{\"owner\":\"%s\"},", load_error ? "none" : "same_face");
+    printf("\"size\":{\"owner\":\"%s\"},", face.face->size ? "same_face" : "none");
+    printf("\"charmaps\":[");
+    for (FT_Int i = 0; face.face && face.face->charmaps && i < face.face->num_charmaps; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"index\":%d,\"owner\":\"same_face\"}", i);
+    }
+    printf("],\"handles_after_done\":{\"policy\":\"invalid_after_done_face\"}}}\n");
+
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_size_metrics_named_value(const char* name, FT_Size_Metrics* metrics) {
     printf("\"%s\":", name);
     if (!metrics) {
@@ -17493,6 +17536,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--active-size-handle")) {
         return emit_active_size_handle(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--face-owned-handles")) {
+        return emit_face_owned_handles(argc, argv);
     }
     if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
         return emit_face_or_slot(argc, argv);
