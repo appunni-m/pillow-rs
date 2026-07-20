@@ -1379,6 +1379,64 @@ def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
+    """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
+    if row.operation != "ftcache.image_cache_lookup_scaler":
+        return None
+    variant = row.variant_id or "single"
+    load_flags = row.params.get("load_flags", "unspecified")
+    variant_detail = f"variant {variant} load_flags={load_flags}"
+    if (
+        row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.planned_cache_subsystem_not_out_of_scope"
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler planned-cache route is in scope but "
+            f"pending for {variant_detail}; exact parity needs a maintained "
+            "manager-owned image cache, scaler lookup, and same-input oracle "
+            "comparison instead of treating cache lookup as out of scope"
+        )
+    if (
+        row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.success_pixel_and_point_scalers"
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler pixel/point scaler parity needs a "
+            f"maintained route for {variant_detail} proving integer pixel "
+            "sizes and 26.6 point sizes with x/y resolution select the same "
+            "FT_Size metrics and glyph output as pinned C"
+        )
+    if (
+        row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.success_lookup_hit_miss_and_repeated"
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler hit/miss/repeat parity needs a "
+            f"maintained route for {variant_detail} proving first lookup, "
+            "repeat lookup, and missing glyph behavior match pinned C cache "
+            "node identity and glyph output"
+        )
+    if (
+        row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.success_node_acquire_and_unref"
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler node lifecycle parity needs a "
+            f"maintained route for {variant_detail} proving anode acquisition, "
+            "FTC_Node_Unref release, and post-unref cache state match pinned C"
+        )
+    if (
+        row.case_id
+        == "ftcache.FTC_ImageCache_LookupScaler.load_flags_truncation_policy"
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler load-flag truncation parity needs a "
+            f"maintained route for {variant_detail} proving FT_ULong input is "
+            "truncated to the pinned C signed load_flags path before lookup"
+        )
+    return None
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1392,6 +1450,9 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         )
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
+    image_lookup_scaler_pending = ftcache_image_lookup_scaler_pending_reason(row)
+    if image_lookup_scaler_pending:
+        return image_lookup_scaler_pending
     pending_case_groups = {
         (
             "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
@@ -1494,18 +1555,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FTC_ImageCache_Lookup parity needs a maintained image-type route "
             "proving call-owned descriptor lifetime, lookup output, hit/repeat "
             "behavior, node acquisition/unref, and null-anode ephemeral glyphs"
-        ),
-        (
-            "ftcache.FTC_ImageCache_LookupScaler.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_ImageCache_LookupScaler.success_pixel_and_point_scalers",
-            "ftcache.FTC_ImageCache_LookupScaler.success_lookup_hit_miss_and_repeated",
-            "ftcache.FTC_ImageCache_LookupScaler.success_node_acquire_and_unref",
-            "ftcache.FTC_ImageCache_LookupScaler.load_flags_truncation_policy",
-        ): (
-            "FTC_ImageCache_LookupScaler parity needs a maintained scaler-image "
-            "route proving pixel/point scaler output, hit/miss/repeat behavior, "
-            "node acquisition/unref, and pinned C load-flag truncation for all "
-            "font variants"
         ),
         (
             "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
