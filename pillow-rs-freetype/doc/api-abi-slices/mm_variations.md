@@ -206,8 +206,12 @@ divergences:
 
 ## Current Risk
 
-This slice is entirely unimplemented in `fontdone` today.  Returning successful
-ABI stubs before table parsing, state mutation, allocation ownership, and
-oracle-backed dynamic tests exist would create false compatibility.  Until
-variable-font fixtures are added, even adjacent glyph/metrics parity lanes only
-prove static TrueType behavior.
+This slice is partially implemented for OpenType variation state, but Adobe
+Type 1 Multiple Master success APIs remain pending.  A compact generated
+`fonts/type1-mm/adobe-mm-two-axis.pfb` fixture now exists and pinned C FreeType
+opens it as a two-axis/four-design MM face.  Returning successful ABI stubs
+before pure-Rust Type 1 MM parsing, state mutation, allocation ownership, and
+oracle-backed dynamic tests exist would create false compatibility.  Descriptor
+and state rows must stay pending until the same input passes through pinned C
+FreeType, Rust FFI, thin C ABI, and WASM ABI with exact output; glyph-output
+rows additionally require real Type 1 MM interpolation.

@@ -12,6 +12,7 @@ from fontTools.t1Lib import StandardEncoding, T1Font, write
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 OUT_DIR = FIXTURE_ROOT / "fonts" / "type1"
+MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "type1-mm"
 INPUT_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1"
 
 
@@ -118,6 +119,35 @@ def invalidate_first_pfb_segment(path: Path) -> None:
     path.write_bytes(data)
 
 
+def build_adobe_mm_two_axis(path: Path) -> None:
+    """Build a compact Adobe Type 1 Multiple Master descriptor fixture.
+
+    FreeType's Type 1 MM parser reads these top-level dictionary keys in
+    `src/type1/t1load.c`: `BlendAxisTypes`, `BlendDesignPositions`,
+    `BlendDesignMap`, and `WeightVector`.  The glyph program is intentionally
+    minimal; this fixture exists first to make Adobe MM descriptor, design
+    coordinate, weight-vector, and named-instance reset API state reproducible
+    through pinned C FreeType.
+    """
+
+    build_simple_type1(
+        path,
+        "AdobeMMTwoAxis",
+        "Adobe MM Two Axis",
+        "Generated for fontdone Type 1 Multiple Master API parity",
+        cleartext_replacements=[
+            (
+                b"/FontBBox {0 0 500 700} def",
+                b"/FontBBox {0 0 500 700} def\n"
+                b"/BlendAxisTypes [/Weight /Width] def\n"
+                b"/BlendDesignPositions [[400 100] [900 100] [400 200] [900 200]] def\n"
+                b"/BlendDesignMap [[[400 0] [900 1]] [[100 0] [200 1]]] def\n"
+                b"/WeightVector [0.25 0.25 0.25 0.25] def",
+            )
+        ],
+    )
+
+
 def main() -> None:
     build_simple_type1(
         OUT_DIR / "simple-type1.pfb",
@@ -163,6 +193,7 @@ def main() -> None:
         "Attach AFM Base",
         "Generated for fontdone Type 1 attach/patent coverage",
     )
+    build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
 
 
 if __name__ == "__main__":

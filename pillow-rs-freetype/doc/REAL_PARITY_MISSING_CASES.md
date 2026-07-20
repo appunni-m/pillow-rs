@@ -9959,6 +9959,71 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: Adobe Type 1 MM fixture and false-green route guard
+
+Status: fixture added and false-green route promotion blocked on 2026-07-20.
+
+Finding:
+
+- The remaining Adobe MM rows previously referenced
+  `fonts/type1-mm/adobe-mm-two-axis.pfb`, but no maintained fixture existed.
+- A compact synthetic Type 1 Multiple Master fixture can be generated
+  reproducibly with `scripts/build_type1_fixtures.py`.  The fixture declares
+  FreeType's Type 1 MM parser keys from `src/type1/t1load.c`:
+  `BlendAxisTypes`, `BlendDesignPositions`, `BlendDesignMap`, and
+  `WeightVector`.
+- Pinned C FreeType opens the generated fixture and returns:
+  `FT_Get_Multi_Master -> Ok, num_axis=2, num_designs=4`, axis names
+  `Weight` and `Width`, ranges `400..900` and `100..200`;
+  `FT_Set_MM_Design_Coordinates(face, [700,150]) -> Ok`; and
+  `FT_Set_Named_Instance(face, 0) -> Ok`.
+- Adding the fixture exposed a route-audit bug: Adobe MM success rows were
+  promoted to `real-parity` because the asset was present even though the
+  unified harness has no explicit Rust FFI, C ABI, and WASM ABI route for those
+  success operations.  Focused parity failed with `unexpected error 7` for
+  `FT_Set_MM_Design_Coordinates` and `FT_Var_Axis.adobe_mm_axis_values`.
+
+Classification change:
+
+- Keep these rows as `pending-route` until exact same-input C/Rust/C-ABI/WASM
+  routes exist and pass focused parity:
+  - `ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates`
+  - `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
+  - `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
+  - `ftmm.FT_Set_MM_WeightVector.success_set_weight_vector`
+  - `ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset`
+  - `ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum`
+  - `ftmm.FT_MM_Axis.populated_by_get_multi_master`
+  - `ftmm.FT_MM_Var.populated_for_adobe_mm`
+  - `ftmm.FT_Var_Axis.adobe_mm_axis_values`
+
+Required fix plan:
+
+1. Parse the Type 1 MM top-level fields in pure Rust for Type 1 faces:
+   axis names, design positions, design maps, and default/current weight vector.
+2. Add safe core methods for Adobe MM descriptor, design-coordinate set/reset,
+   weight-vector set/get, and named-instance reset-to-default semantics.  C
+   reference: `src/type1/t1load.c:489-643` and public dispatch in
+   `src/base/ftmm.c`.
+3. Add explicit unified routes for `FT_Get_Multi_Master`,
+   `FT_Set_MM_Design_Coordinates`, `FT_Set_MM_WeightVector`,
+   `FT_Get_MM_WeightVector`, and `FT_Set_Named_Instance(0)` on the generated
+   Adobe MM fixture.  The C and WASM ABI layers must stay thin record/pointer
+   wrappers over core state.
+4. Keep glyph-output rows pending until Type 1 MM charstring interpolation is
+   implemented; descriptor and state APIs alone are not glyph parity.
+5. Promote one row at a time only after focused `make -C pillow-rs-freetype
+   test-case CASE=...` proves exact pinned C, Rust FFI, C ABI, and WASM ABI
+   output.
+
+Verification for this guard batch:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.adobe_mm_axis_values
+```
+
 ### Issue Set Current: `FTMM` future variable-font fixture substitutions rejected
 
 Status: investigated and left pending on 2026-07-20.
