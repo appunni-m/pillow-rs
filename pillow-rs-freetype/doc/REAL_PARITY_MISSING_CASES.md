@@ -10053,6 +10053,11 @@ Follow-up finding for blend-coordinate state rows:
   `0, 1, axis_count, axis_count + 2` through pinned C, Rust FFI, C ABI, and
   WASM ABI.  The optional Adobe MM half of the manifest row remains unresolved
   and is not counted by this route.
+- The `FT_Get_Var_Blend_Coordinates.excess_output_coordinates_zero_filled`
+  row is distinct from the design-coordinate excess row: pinned C returns a
+  deterministic zero-filled blend vector for the single-axis fixture when four
+  coordinates are requested, and the maintained runner compares that exact
+  output through Rust FFI, C ABI, and WASM ABI.
 
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
