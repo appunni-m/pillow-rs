@@ -10843,6 +10843,43 @@ Current route-audit breakdown:
   - `FT_Stroker_ExportBorder.append_to_existing_outline`: border export
     appending to existing outline contents with exact contour-index offsets.
 
+2026-07-21 conic/cubic curve blocker split:
+
+- Conic, cubic, and wide-curve stroker rows are split by exact obligation
+  instead of sharing a broad curve blocker:
+  - `FT_Stroker_ConicTo.conic_curve_success`: quadratic curve subdivision and
+    generated border points, tags, and contours matching pinned C.
+  - `FT_Stroker_ConicTo.first_segment_starts_subpath`: a conic segment
+    initializing an otherwise empty subpath with the same border state and
+    output geometry.
+  - `FT_Stroker_ConicTo.coincident_control_and_end_noop`: a control point equal
+    to the current point and end point preserving state or no-oping exactly
+    like pinned C.
+  - `FT_Stroker_CubicTo.cubic_curve_success`: cubic curve subdivision and
+    generated border points, tags, and contours matching pinned C.
+  - `FT_Stroker_CubicTo.first_segment_starts_subpath`: a cubic segment
+    initializing an otherwise empty subpath with the same border state and
+    output geometry.
+  - `FT_Stroker_CubicTo.coincident_controls_and_end_noop`: both controls and
+    end point equal to the current point preserving state or no-oping exactly
+    like pinned C.
+  - `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration`: FreeType's
+    wide-curve join restoration emitting the same round-join geometry after
+    curve subdivision.
+
+2026-07-21 line-cap blocker split:
+
+- Open-path line-cap rows are split by exact obligation instead of sharing a
+  broad cap-geometry blocker:
+  - `FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry`: butt caps
+    terminating at the endpoint with exact border geometry, tags, and contours.
+  - `FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry`: round cap arc
+    subdivision and emitted outline geometry matching pinned C.
+  - `FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry`: square cap
+    endpoint extension and emitted outline geometry matching pinned C.
+  - `FT_Stroker_LineCap.open_path_cap_geometry`: public cap enum selection for
+    butt, round, and square geometry exactly matching pinned C.
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
