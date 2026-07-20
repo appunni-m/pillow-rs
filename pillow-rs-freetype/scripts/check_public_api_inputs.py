@@ -1624,29 +1624,78 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for glyph object behavior that do not have a maintained route."""
     ftglyph_rows_without_maintained_route = {
-        "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record",
-        "ftglyph.FT_Glyph.caller_owned_lifetime",
-        "ftglyph.FT_Glyph_BBox_Mode.enum_variants_match_header",
-        "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
-        "ftglyph.FT_Glyph_Class.opaque_class_identity_only",
-        "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta",
-        "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only",
-        "ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates",
-        "ftglyph.FT_New_Glyph.success_renderer_supported_custom_format",
-        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record",
-        "ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled",
-        "ftglyph.FT_SvgGlyph.feature_availability_recorded",
-        "ftglyph.FT_SvgGlyphRec.svg_feature_disabled_classification",
+        "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record": (
+            "FT_BitmapGlyph alias parity needs a maintained FT_Get_Glyph or "
+            "FT_Glyph_To_Bitmap route that creates a real bitmap glyph, casts "
+            "it to FT_BitmapGlyph, and compares root fields plus "
+            "FT_BitmapGlyphRec payload across pinned C, Rust FFI, C ABI, and "
+            "WASM ABI"
+        ),
+        "ftglyph.FT_Glyph.caller_owned_lifetime": (
+            "FT_Glyph caller-owned lifetime parity needs a maintained "
+            "allocation/free event route for FT_New_Glyph, FT_Get_Glyph, "
+            "FT_Glyph_Copy, FT_Glyph_To_Bitmap, and FT_Done_Glyph; treating "
+            "the handle as an opaque non-null pointer would be a green placeholder"
+        ),
+        "ftglyph.FT_Glyph_Class.opaque_class_identity_only": (
+            "FT_Glyph_Class identity parity must create outline, bitmap, and "
+            "SVG glyphs through public operations and classify the private "
+            "class pointer only by stable public behavior; raw private pointer "
+            "or field comparison is not portable C/Rust/C-ABI/WASM parity"
+        ),
+        "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta": (
+            "FT_Glyph_Transform outline matrix+delta success parity needs a "
+            "maintained outline glyph route comparing fixed-point matrix math, "
+            "delta application, root advance, and transformed outline arrays "
+            "against pinned C across all ABI lanes"
+        ),
+        "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only": (
+            "FT_Glyph_Transform delta-only and matrix-only parity needs the "
+            "same maintained outline glyph route, including null matrix/null "
+            "delta public inputs and exact C/Rust/C-ABI/WASM output comparison"
+        ),
+        "ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates": (
+            "FT_Glyph_Transform SVG parity needs an SVG-enabled glyph route "
+            "that accumulates transform and delta into FT_SvgGlyphRec exactly "
+            "like pinned C; outline transform success does not prove SVG record "
+            "mutation"
+        ),
+        "ftglyph.FT_New_Glyph.success_renderer_supported_custom_format": (
+            "FT_New_Glyph custom-format success parity needs a maintained "
+            "synthetic renderer registration route where pinned C accepts the "
+            "format, initializes the glyph class payload, and exposes matching "
+            "root fields and ownership across Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record": (
+            "FT_OutlineGlyph alias parity needs a maintained FT_Get_Glyph route "
+            "for real outline glyphs that compares the root record and "
+            "FT_OutlineGlyphRec outline arrays after cast across all ABI lanes"
+        ),
+        "ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled": (
+            "FT_SvgGlyph alias parity needs an SVG-enabled fixture where "
+            "FT_Get_Glyph returns FT_GLYPH_FORMAT_SVG and the cast record "
+            "matches pinned C FT_SvgGlyphRec fields through Rust FFI, C ABI, "
+            "and WASM ABI"
+        ),
+        "ftglyph.FT_SvgGlyph.feature_availability_recorded": (
+            "FT_SvgGlyph feature availability parity needs a maintained build "
+            "feature probe that distinguishes enabled SVG glyph records from "
+            "unsupported builds for the same public SVG glyph input across all "
+            "ABI lanes"
+        ),
+        "ftglyph.FT_SvgGlyphRec.svg_feature_disabled_classification": (
+            "FT_SvgGlyphRec disabled-feature parity needs an exact same-input "
+            "unsupported-SVG route that compares pinned C, Rust FFI, C ABI, "
+            "and WASM ABI error/record classification; generic unsupported "
+            "format handling is not sufficient"
+        ),
     }
-    if row.case_id not in ftglyph_rows_without_maintained_route:
+    reason = ftglyph_rows_without_maintained_route.get(row.case_id)
+    if reason is None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Glyph object type, transform, bbox-mode, new-glyph, and SVG glyph "
-        "success behavior requires a maintained glyph-object route; keeping it "
-        "generic would be a green placeholder"
-    )
+    return reason
 
 
 def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
