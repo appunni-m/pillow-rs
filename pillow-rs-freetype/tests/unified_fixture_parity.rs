@@ -18950,7 +18950,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(ftmm_blend_scenario_output_count(case)?.to_string());
         return Ok(args);
     }
-    if case.case_id == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" {
+    if matches!(
+        case.case_id.as_str(),
+        "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates"
+            | "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default"
+    ) {
         let mut args = vec!["--ftmm-set-mm-blend-scenarios".to_string()];
         push_font_source(case, &mut args)?;
         args.push(face_index_param(params)?.to_string());
@@ -21301,8 +21305,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates"
-            if case.case_id
-                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+            if matches!(
+                case.case_id.as_str(),
+                "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates"
+                    | "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default"
+            ) =>
         {
             rust_ftmm_mm_blend_scenarios(case)
         }
@@ -22136,8 +22143,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates"
-            if case.case_id
-                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+            if matches!(
+                case.case_id.as_str(),
+                "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates"
+                    | "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default"
+            ) =>
         {
             c_ftmm_mm_blend_scenarios(case)
         }
@@ -22896,8 +22906,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates"
-            if case.case_id
-                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+            if matches!(
+                case.case_id.as_str(),
+                "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates"
+                    | "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default"
+            ) =>
         {
             wasm_ftmm_mm_blend_scenarios(case)
         }
