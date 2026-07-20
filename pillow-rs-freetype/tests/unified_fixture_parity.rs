@@ -19009,6 +19009,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             string_param(params, "signature")?.to_string(),
         ]),
         "abi.value_echo" => abi_value_echo_oracle_args(params),
+        "freetype.open_face_pair"
+            if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
+        {
+            let mut args = vec!["--face-style-flags".to_string()];
+            push_required_asset_source(case, "bold_font", &mut args)?;
+            push_required_asset_source(case, "regular_font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.load_target_mode"
             if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" =>
         {
@@ -20997,6 +21006,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "abi.compile_alias_probe" => Ok(ok(compile_alias_probe(case)?)),
         "abi.value_echo" => Ok(ok(abi_value_echo(case)?)),
         "macro_eval" | "macro_compile_probe" => Ok(ok(rust_macro_eval(case)?)),
+        "freetype.open_face_pair"
+            if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
+        {
+            rust_face_style_flags(case)
+        }
         "freetype.load_target_mode"
             if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" =>
         {
@@ -21674,6 +21688,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.new_face" => run_rust_ffi(case),
+        "freetype.open_face_pair"
+            if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
+        {
+            c_face_style_flags(case)
+        }
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
@@ -22495,6 +22514,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "freetype.get_transform"
         | "freetype.reference_face"
         | "freetype.new_face" => run_rust_ffi(case),
+        "freetype.open_face_pair"
+            if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
+        {
+            wasm_face_style_flags(case)
+        }
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
@@ -28416,6 +28440,99 @@ fn wasm_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(status.handle);
     }
     Ok(open_face_name_run_output(results))
+}
+
+fn face_style_flag_output(
+    status: FT_Error,
+    family_name: Value,
+    style_name: Value,
+    style_flags: FT_Long,
+) -> Value {
+    json!({
+        "status": status,
+        "family_name": family_name,
+        "style_name": style_name,
+        "style_flags": style_flags,
+        "has_bold_flag": (style_flags & FT_STYLE_FLAG_BOLD) != 0
+    })
+}
+
+fn rust_face_style_flags(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let bold_bytes = required_asset_bytes(case, "bold_font")?;
+    let regular_bytes = required_asset_bytes(case, "regular_font")?;
+    let bold = rust_new_face_from_bytes(bold_bytes.as_ref(), face_index)?;
+    let regular = rust_new_face_from_bytes(regular_bytes.as_ref(), face_index)?;
+    Ok(ok(json!({
+        "bold_face": face_style_flag_output(
+            FT_Err_Ok,
+            nullable_c_string_json(bold.family_name.as_deref()),
+            nullable_c_string_json(bold.style_name.as_deref()),
+            FT_Long::from(bold.style_flags),
+        ),
+        "regular_face": face_style_flag_output(
+            FT_Err_Ok,
+            nullable_c_string_json(regular.family_name.as_deref()),
+            nullable_c_string_json(regular.style_name.as_deref()),
+            FT_Long::from(regular.style_flags),
+        )
+    })))
+}
+
+fn c_face_style_flag_row(face: c_abi::FT_Face) -> Result<Value, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    Ok(face_style_flag_output(
+        FT_Err_Ok,
+        c_nullable_c_string_json(info.family_name),
+        c_nullable_c_string_json(info.style_name),
+        info.style_flags,
+    ))
+}
+
+fn c_face_style_flags(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let bold_bytes = required_asset_bytes(case, "bold_font")?;
+    let regular_bytes = required_asset_bytes(case, "regular_font")?;
+    let (bold_library, bold_face) = c_new_face_from_bytes(bold_bytes.as_ref(), face_index)?;
+    let (regular_library, regular_face) =
+        c_new_face_from_bytes(regular_bytes.as_ref(), face_index)?;
+    let output = ok(json!({
+        "bold_face": c_face_style_flag_row(bold_face)?,
+        "regular_face": c_face_style_flag_row(regular_face)?
+    }));
+    c_done_face(regular_face);
+    c_done_library(regular_library);
+    c_done_face(bold_face);
+    c_done_library(bold_library);
+    Ok(output)
+}
+
+fn wasm_face_style_flag_row(handle: usize) -> Result<Value, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    let (family, style) =
+        wasm_abi::abi_face_names(handle).ok_or_else(|| "missing wasm face names".to_string())?;
+    Ok(face_style_flag_output(
+        FT_Err_Ok,
+        nullable_c_string_json(family.as_deref()),
+        nullable_c_string_json(style.as_deref()),
+        info.style_flags,
+    ))
+}
+
+fn wasm_face_style_flags(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let bold_bytes = required_asset_bytes(case, "bold_font")?;
+    let regular_bytes = required_asset_bytes(case, "regular_font")?;
+    let bold = wasm_new_face_from_bytes(bold_bytes.as_ref(), face_index)?;
+    let regular = wasm_new_face_from_bytes(regular_bytes.as_ref(), face_index)?;
+    let output = ok(json!({
+        "bold_face": wasm_face_style_flag_row(bold)?,
+        "regular_face": wasm_face_style_flag_row(regular)?
+    }));
+    wasm_done_face(regular);
+    wasm_done_face(bold);
+    Ok(output)
 }
 
 fn open_face_ignored_params_runtime_supported(case: &InputCase) -> bool {
@@ -39014,6 +39131,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         return "api_object";
     }
     if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" {
+        return "api_object";
+    }
+    if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" {
         return "api_object";
     }
     if case.case_id
