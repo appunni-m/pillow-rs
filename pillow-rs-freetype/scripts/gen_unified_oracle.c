@@ -9866,6 +9866,19 @@ static void print_fixed_coord_array(FT_Fixed* coords, FT_UInt count) {
     printf("]");
 }
 
+static void parse_fixed_coord_csv(const char* text, FT_Fixed* coords, FT_UInt count) {
+    if (!text || streq(text, "-")) {
+        return;
+    }
+    char* cursor = (char*)text;
+    for (FT_UInt i = 0; i < count; i++) {
+        coords[i] = strtol(cursor, &cursor, 10);
+        if (*cursor == ',') {
+            cursor++;
+        }
+    }
+}
+
 static void print_ftmm_var_design_output(
     FT_Error error,
     FT_Face face,
@@ -9884,6 +9897,91 @@ static void print_ftmm_var_design_output(
     printf("}\n");
 }
 
+static void print_ftmm_blend_output(
+    FT_Error error,
+    FT_Face face,
+    FT_Fixed* coords,
+    FT_UInt count) {
+    printf("{");
+    print_status(error);
+    printf(",\"output\":");
+    if (error) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"active_blend_coords\":", error);
+        print_fixed_coord_array(coords, count);
+        printf(",\"face_flags\":%ld,\"variation_bit_set\":", (long)face->face_flags);
+        print_json_bool((face->face_flags & FT_FACE_FLAG_VARIATION) != 0);
+        printf("}");
+    }
+    printf("}\n");
+}
+
+static FT_Error apply_ftmm_blend_prior(FT_Face face, const char* kind, FT_UInt count, const char* csv) {
+    FT_Fixed coords[16] = {0};
+    parse_fixed_coord_csv(csv, coords, count < 16 ? count : 16);
+    if (streq(kind, "set_var_blend")) {
+        return FT_Set_Var_Blend_Coordinates(face, count, coords);
+    }
+    if (streq(kind, "set_mm_blend")) {
+        return FT_Set_MM_Blend_Coordinates(face, count, coords);
+    }
+    return FT_Err_Ok;
+}
+
+static int emit_ftmm_blend_coordinates(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    const char* mode = argv[2];
+    FT_Error err = apply_ftmm_blend_prior(
+        face.face,
+        argv[6],
+        (FT_UInt)strtoul(argv[7], NULL, 10),
+        argv[8]);
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[10], set_coords, set_count < 16 ? set_count : 16);
+    if (!err && streq(mode, "set-var")) {
+        err = FT_Set_Var_Blend_Coordinates(
+            face.face,
+            set_count,
+            streq(argv[11], "null") ? NULL : set_coords);
+    } else if (!err && streq(mode, "set-mm")) {
+        err = FT_Set_MM_Blend_Coordinates(
+            face.face,
+            set_count,
+            streq(argv[11], "null") ? NULL : set_coords);
+    }
+
+    FT_UInt output_count = (FT_UInt)strtoul(argv[12], NULL, 10);
+    FT_Fixed coords[16];
+    for (FT_UInt i = 0; i < 16; i++) {
+        coords[i] = streq(argv[11], "nonzero") ? (FT_Fixed)(0x11110000 + i) : 0;
+    }
+    if (!err) {
+        if (streq(mode, "get-mm")) {
+            err = FT_Get_MM_Blend_Coordinates(
+                face.face,
+                output_count,
+                streq(argv[11], "null") ? NULL : coords);
+        } else {
+            err = FT_Get_Var_Blend_Coordinates(
+                face.face,
+                output_count,
+                streq(argv[11], "null") ? NULL : coords);
+        }
+    }
+    print_ftmm_blend_output(err, face.face, coords, output_count);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -9897,13 +9995,7 @@ static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     if (streq(prior_kind, "set_var_design")) {
         FT_UInt prior_count = (FT_UInt)strtoul(argv[6], NULL, 10);
         FT_Fixed prior_coords[8] = {0};
-        char* cursor = argv[7];
-        for (FT_UInt i = 0; i < prior_count && i < 8; i++) {
-            prior_coords[i] = strtol(cursor, &cursor, 10);
-            if (*cursor == ',') {
-                cursor++;
-            }
-        }
+        parse_fixed_coord_csv(argv[7], prior_coords, prior_count < 8 ? prior_count : 8);
         err = FT_Set_Var_Design_Coordinates(face.face, prior_count, prior_coords);
     } else if (streq(prior_kind, "set_named_instance")) {
         FT_UInt instance_index = (FT_UInt)strtoul(argv[8], NULL, 10);
@@ -15594,6 +15686,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 11 && streq(argv[1], "--ftmm-get-var-design-coordinates")) {
         return emit_ftmm_get_var_design_coordinates(argc, argv);
+    }
+    if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
+        return emit_ftmm_blend_coordinates(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);

@@ -1373,7 +1373,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success",
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
-        "ftmm.FT_Get_Var_Blend_Coordinates.success_default_blend_coordinates",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
         "ftmm.FT_Get_Var_Blend_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
