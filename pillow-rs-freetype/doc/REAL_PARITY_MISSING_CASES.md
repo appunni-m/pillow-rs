@@ -2111,6 +2111,44 @@ Required fix plan:
 5. Promote rows only after focused `ftincrem` runtime proves exact C oracle,
    Rust FFI, C ABI, and WASM ABI output for the same input.
 
+Current exact incremental-font pending split:
+
+- `FT_Incremental.handle_passed_without_deref`: pass a client object through
+  `FT_PARAM_TAG_INCREMENTAL` and prove pinned C forwards the opaque handle to
+  callbacks without dereferencing it.
+- `FT_Incremental.lifetime_owned_by_client`: prove FreeType stores only the
+  client-owned interface/object for the face lifetime and does not free it.
+- `FT_Incremental_FuncsRec.required_and_optional_callbacks`: compare required
+  `get_glyph_data` and `get_glyph_metrics`, optional `free_glyph_data`, null
+  entries, and open/load error timing.
+- `FT_Incremental_FuncsRec.glyph_data_success_and_release`: record
+  `get_glyph_data`, glyph-byte ownership, release callback ordering, and public
+  glyph output for success rows.
+- `FT_Incremental_Interface.parameter_data_cast_shape`: prove
+  `FT_Parameter.data` is interpreted as `FT_Incremental_InterfaceRec*` with
+  exact null/bad-shape behavior.
+- `FT_Incremental_Interface.null_or_absent_interface_behavior`: compare null
+  data, missing parameter, and incomplete interface without fabricating
+  callbacks.
+- `FT_Incremental_InterfaceRec.open_face_stores_interface`: prove
+  `FT_Open_Face` stores the interface on the face and uses it during glyph
+  loading.
+- `FT_Incremental_InterfaceRec.object_round_trips_to_callbacks`: compare
+  callback event logs showing client object identity round-trips into glyph-data
+  and metrics callbacks.
+- `FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data`: prove the
+  same face uses embedded font data and does not call incremental callbacks when
+  `FT_PARAM_TAG_INCREMENTAL` is absent.
+- `FT_Incremental_Metrics.null_not_passed_by_c`: prove C never passes a null
+  metrics pointer when requesting overrides.
+- `FT_Incremental_MetricsRec.input_metrics_seed_matches_c`: capture callback
+  input metrics before mutation and compare horizontal/vertical seed values.
+- `FT_Incremental_MetricsRec.horizontal_override_applied`: compare public
+  advance/bearing output after callback-written horizontal metrics.
+- `FT_Incremental_MetricsRec.vertical_override_applied_where_c_calls_it`: use a
+  fixture where pinned C requests vertical metrics and compare public vertical
+  advances/bearings.
+
 Verification for the classification batch:
 
 ```bash

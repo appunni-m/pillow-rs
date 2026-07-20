@@ -1596,29 +1596,88 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
 def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for incremental font callbacks that do not have a maintained route."""
     ftincrem_rows_without_maintained_route = {
-        "ftincrem.FT_Incremental.handle_passed_without_deref",
-        "ftincrem.FT_Incremental.lifetime_owned_by_client",
-        "ftincrem.FT_Incremental_FuncsRec.required_and_optional_callbacks",
-        "ftincrem.FT_Incremental_FuncsRec.glyph_data_success_and_release",
-        "ftincrem.FT_Incremental_Interface.parameter_data_cast_shape",
-        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior",
-        "ftincrem.FT_Incremental_InterfaceRec.open_face_stores_interface",
-        "ftincrem.FT_Incremental_InterfaceRec.object_round_trips_to_callbacks",
-        "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data",
-        "ftincrem.FT_Incremental_Metrics.null_not_passed_by_c",
-        "ftincrem.FT_Incremental_MetricsRec.input_metrics_seed_matches_c",
-        "ftincrem.FT_Incremental_MetricsRec.horizontal_override_applied",
-        "ftincrem.FT_Incremental_MetricsRec.vertical_override_applied_where_c_calls_it",
+        "ftincrem.FT_Incremental.handle_passed_without_deref": (
+            "FT_Incremental handle identity parity needs a maintained "
+            "incremental-font route that passes the client object through "
+            "FT_PARAM_TAG_INCREMENTAL and proves pinned C forwards the opaque "
+            "handle to callbacks without dereferencing it, then compares Rust "
+            "FFI, C ABI, and WASM ABI event logs"
+        ),
+        "ftincrem.FT_Incremental.lifetime_owned_by_client": (
+            "FT_Incremental client lifetime parity needs a maintained route "
+            "that proves FreeType stores only the client-owned interface/object "
+            "for the face lifetime and does not free it; generic handle "
+            "non-nullness would be a green placeholder"
+        ),
+        "ftincrem.FT_Incremental_FuncsRec.required_and_optional_callbacks": (
+            "FT_Incremental_FuncsRec validation parity needs exact pinned C "
+            "behavior for required get_glyph_data and get_glyph_metrics "
+            "callbacks, optional free_glyph_data, null entries, and open/load "
+            "error timing across Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftincrem.FT_Incremental_FuncsRec.glyph_data_success_and_release": (
+            "FT_Incremental_FuncsRec glyph-data parity needs a maintained "
+            "incremental glyph-load fixture that records get_glyph_data, "
+            "glyph-byte ownership, release callback ordering, and public glyph "
+            "output across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftincrem.FT_Incremental_Interface.parameter_data_cast_shape": (
+            "FT_Incremental_Interface parameter-cast parity needs a maintained "
+            "FT_Open_Face FT_Parameter route proving the data pointer is "
+            "interpreted as FT_Incremental_InterfaceRec* with exact null/bad "
+            "shape handling across all ABI lanes"
+        ),
+        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior": (
+            "FT_Incremental_Interface null/absent parity needs a maintained "
+            "open-face incremental route that compares pinned C behavior for "
+            "null data, missing parameter, and incomplete interface without "
+            "fabricating callbacks"
+        ),
+        "ftincrem.FT_Incremental_InterfaceRec.open_face_stores_interface": (
+            "FT_Incremental_InterfaceRec storage parity needs a maintained "
+            "FT_Open_Face route proving FreeType stores the interface on the "
+            "face and later uses it during glyph load across Rust FFI, C ABI, "
+            "and WASM ABI"
+        ),
+        "ftincrem.FT_Incremental_InterfaceRec.object_round_trips_to_callbacks": (
+            "FT_Incremental_InterfaceRec object parity needs callback event "
+            "logs proving the client object pointer/value round-trips into "
+            "glyph-data and metrics callbacks exactly like pinned C"
+        ),
+        "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data": (
+            "absent FT_PARAM_TAG_INCREMENTAL parity needs the same open-face "
+            "fixture proving pinned C uses embedded font data and does not call "
+            "incremental callbacks, with matching Rust FFI, C ABI, and WASM "
+            "glyph output"
+        ),
+        "ftincrem.FT_Incremental_Metrics.null_not_passed_by_c": (
+            "FT_Incremental_Metrics nullness parity needs a maintained metrics "
+            "callback route proving pinned C never passes a null metrics "
+            "pointer for glyphs where it requests overrides"
+        ),
+        "ftincrem.FT_Incremental_MetricsRec.input_metrics_seed_matches_c": (
+            "FT_Incremental_MetricsRec seed parity needs exact callback-input "
+            "metrics captured before mutation and compared with pinned C "
+            "horizontal and vertical seed values"
+        ),
+        "ftincrem.FT_Incremental_MetricsRec.horizontal_override_applied": (
+            "FT_Incremental_MetricsRec horizontal override parity needs a "
+            "glyph-load route where callback-written metrics alter public "
+            "advance/bearing output exactly like pinned C across all ABI lanes"
+        ),
+        "ftincrem.FT_Incremental_MetricsRec.vertical_override_applied_where_c_calls_it": (
+            "FT_Incremental_MetricsRec vertical override parity needs a "
+            "fixture where pinned C calls the metrics callback for vertical "
+            "metrics and public vertical advances/bearings are compared "
+            "exactly across Rust FFI, C ABI, and WASM ABI"
+        ),
     }
-    if row.case_id not in ftincrem_rows_without_maintained_route:
+    reason = ftincrem_rows_without_maintained_route.get(row.case_id)
+    if reason is None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Incremental font interface, callback lifetime, glyph-data release, "
-        "and metrics override behavior requires a maintained incremental-font "
-        "route; keeping it generic would be a green placeholder"
-    )
+    return reason
 
 
 def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
