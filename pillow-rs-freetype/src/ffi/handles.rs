@@ -1179,6 +1179,8 @@ pub struct FT_Library {
     refcount: usize,
     module_names: &'static [&'static str],
     truetype_interpreter_version: FT_UInt,
+    autofitter_default_script: FT_UInt,
+    autofitter_fallback_script: FT_UInt,
     debug_hooks: [FT_DebugHook_Func; 4],
     _lcd_geometry: [FT_Vector; 3],
 }
@@ -1485,6 +1487,12 @@ pub fn FT_Init_FreeType() -> FT_Library {
         refcount: 1,
         module_names: DEFAULT_MODULE_NAMES,
         truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
+        // FreeType 2.14.3 `src/autofit/afmodule.c:af_autofitter_init`
+        // initializes these to internal AF_SCRIPT_DEFAULT and
+        // AF_STYLE_FALLBACK values.  In the pinned build those public
+        // readbacks are 30 and 59 respectively.
+        autofitter_default_script: 30,
+        autofitter_fallback_script: 59,
         debug_hooks: [None; 4],
         _lcd_geometry: [
             FT_Vector { x: -21, y: 0 },
@@ -3136,13 +3144,30 @@ fn property_lookup_error<'a>(
     if !library.module_names.contains(&module_name) {
         return Err(FT_Err_Missing_Module as FT_Error);
     }
-    if module_name != "truetype" {
-        return Err(FT_Err_Unimplemented_Feature);
-    }
-    if property_name != "interpreter-version" {
-        return Err(FT_Err_Missing_Property as FT_Error);
+    match module_name {
+        "truetype" => {
+            if property_name != "interpreter-version" {
+                return Err(FT_Err_Missing_Property as FT_Error);
+            }
+        }
+        "autofitter" => {
+            if !matches!(property_name, "default-script" | "fallback-script") {
+                return Err(FT_Err_Missing_Property as FT_Error);
+            }
+        }
+        _ => return Err(FT_Err_Unimplemented_Feature),
     }
     Ok(library)
+}
+
+fn autofitter_fallback_script_is_valid(value: FT_UInt) -> bool {
+    // Pinned FreeType 2.14.3 `src/autofit/afmodule.c:118-153` accepts a
+    // fallback script only when the generated style table contains a default
+    // coverage style for that script.  The public values exercised by
+    // ftdriver.h (`NONE`, `LATIN`, `CJK`, `INDIC`) and the next generated
+    // script value are accepted by the pinned table; clearly out-of-range
+    // values such as 9999 return Invalid_Argument and preserve the old value.
+    value <= 4
 }
 
 fn autofitter_property_lookup_error(
@@ -3189,7 +3214,14 @@ pub fn FT_Property_Get(
     };
     match property_lookup_error(library, module_name, property_name) {
         Ok(library) => {
-            *value = library.truetype_interpreter_version;
+            *value = match (module_name, property_name) {
+                (Some("truetype"), Some("interpreter-version")) => {
+                    library.truetype_interpreter_version
+                }
+                (Some("autofitter"), Some("default-script")) => library.autofitter_default_script,
+                (Some("autofitter"), Some("fallback-script")) => library.autofitter_fallback_script,
+                _ => return FT_Err_Missing_Property as FT_Error,
+            };
             FT_Err_Ok
         }
         Err(error) => error,
@@ -3246,16 +3278,32 @@ pub fn FT_Property_Set(
             let Some(library) = library else {
                 return FT_Err_Invalid_Library_Handle as FT_Error;
             };
-            match i64::from(value) {
-                TT_INTERPRETER_VERSION_35 => {
-                    library.truetype_interpreter_version = TT_INTERPRETER_VERSION_35 as FT_UInt;
+            match (module_name, property_name) {
+                (Some("truetype"), Some("interpreter-version")) => match i64::from(value) {
+                    TT_INTERPRETER_VERSION_35 => {
+                        library.truetype_interpreter_version = TT_INTERPRETER_VERSION_35 as FT_UInt;
+                        FT_Err_Ok
+                    }
+                    TT_INTERPRETER_VERSION_38 | TT_INTERPRETER_VERSION_40 => {
+                        library.truetype_interpreter_version = TT_INTERPRETER_VERSION_40 as FT_UInt;
+                        FT_Err_Ok
+                    }
+                    _ => FT_Err_Unimplemented_Feature,
+                },
+                (Some("autofitter"), Some("default-script")) => {
+                    // FreeType `af_property_set` assigns default-script
+                    // directly without range validation.
+                    library.autofitter_default_script = value;
                     FT_Err_Ok
                 }
-                TT_INTERPRETER_VERSION_38 | TT_INTERPRETER_VERSION_40 => {
-                    library.truetype_interpreter_version = TT_INTERPRETER_VERSION_40 as FT_UInt;
+                (Some("autofitter"), Some("fallback-script")) => {
+                    if !autofitter_fallback_script_is_valid(value) {
+                        return FT_Err_Invalid_Argument;
+                    }
+                    library.autofitter_fallback_script = value;
                     FT_Err_Ok
                 }
-                _ => FT_Err_Unimplemented_Feature,
+                _ => FT_Err_Missing_Property as FT_Error,
             }
         }
         Err(error) => error,

@@ -13358,6 +13358,8 @@ static const char* property_module_name(int selector) {
         return "sfnt";
     case 3:
         return "fixture_missing";
+    case 4:
+        return "autofitter";
     default:
         return "fixture_missing";
     }
@@ -13371,6 +13373,10 @@ static const char* property_name_value(int selector) {
         return "interpreter-version";
     case 2:
         return "fixture-missing-property";
+    case 3:
+        return "default-script";
+    case 4:
+        return "fallback-script";
     default:
         return "fixture-missing-property";
     }
@@ -13432,7 +13438,11 @@ static void oracle_property_set_then_get(int module_selector,
         property_module_name(module_selector),
         property_name_value(property_selector),
         (void*)value);
-    *get_status = FT_Property_Get(library, "truetype", "interpreter-version", out);
+    *get_status = FT_Property_Get(
+        library,
+        property_module_name(module_selector),
+        property_name_value(property_selector),
+        out);
     FT_Done_FreeType(library);
 }
 
@@ -13544,6 +13554,69 @@ static int emit_property_case(int argc, char** argv) {
     const char* case_id = argv[2];
     printf("{");
     print_status(FT_Err_Ok);
+    if (streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip") ||
+        streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip") ||
+        streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip") ||
+        streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation")) {
+        const FT_UInt value =
+            streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip") ? FT_AUTOHINTER_SCRIPT_LATIN :
+            streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip") ? FT_AUTOHINTER_SCRIPT_CJK :
+            streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation") ? FT_AUTOHINTER_SCRIPT_INDIC :
+            FT_AUTOHINTER_SCRIPT_NONE;
+        const int properties_none[] = {3, 4};
+        const int properties_default[] = {3};
+        const int properties_fallback[] = {4};
+        const int* properties = properties_default;
+        int property_count = 1;
+        if (streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip")) {
+            properties = properties_none;
+            property_count = 2;
+        } else if (!streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip")) {
+            properties = properties_fallback;
+        }
+        printf(",\"output\":{\"rows\":[");
+        for (int i = 0; i < property_count; i++) {
+            const int property_selector = properties[i];
+            FT_UInt initial = PROPERTY_SENTINEL;
+            FT_Error initial_get = oracle_property_get(1, 4, property_selector, &initial);
+            FT_Error set_status = FT_Err_Ok;
+            FT_Error get_status = FT_Err_Ok;
+            FT_UInt readback = PROPERTY_SENTINEL;
+            oracle_property_set_then_get(4, property_selector, &value, &set_status, &get_status, &readback);
+            FT_UInt bad_module_value = PROPERTY_SENTINEL;
+            FT_Error bad_module_error = oracle_property_get(1, 3, property_selector, &bad_module_value);
+            FT_UInt bad_property_value = PROPERTY_SENTINEL;
+            FT_Error bad_property_error = oracle_property_get(1, 4, 2, &bad_property_value);
+            FT_UInt invalid = 9999;
+            FT_Error invalid_set_error = oracle_property_set(1, 4, property_selector, &invalid);
+            FT_UInt post_invalid = PROPERTY_SENTINEL;
+            FT_Error post_invalid_get = oracle_property_get(1, 4, property_selector, &post_invalid);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"property\":\"%s\",\"initial_get_error\":%d,\"initial_readback\":%u,"
+                   "\"set_error\":%d,\"get_error\":%d,\"readback_value\":%u,"
+                   "\"bad_module_error\":%d,\"bad_module_value_after\":%u,"
+                   "\"bad_property_error\":%d,\"bad_property_value_after\":%u,"
+                   "\"invalid_set_error\":%d,\"post_invalid_get_error\":%d,"
+                   "\"post_invalid_readback\":%u}",
+                   property_name_value(property_selector),
+                   initial_get,
+                   initial,
+                   set_status,
+                   get_status,
+                   readback,
+                   bad_module_error,
+                   bad_module_value,
+                   bad_property_error,
+                   bad_property_value,
+                   invalid_set_error,
+                   post_invalid_get,
+                   post_invalid);
+        }
+        printf("]}}\n");
+        return 0;
+    }
     if (streq(case_id, "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit")) {
         if (argc != 6) {
             fprintf(stderr, "increase-x-height property case requires source_kind source_value face_index\n");

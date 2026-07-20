@@ -3041,35 +3041,17 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for driver/autohinter properties that do not have a maintained route."""
     ftdriver_rows_without_maintained_route = {
-        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip": (
-            "autofitter:fallback-script CJK parity needs maintained "
-            "FT_Property_Set/Get routing plus a C-openable CJK-control font "
-            "that proves pinned C acceptance/readback and invalid-script "
-            "preservation across Rust FFI, C ABI, and WASM ABI"
-        ),
         "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime": (
             "CJK glyph-to-script-map runtime parity needs a maintained "
             "FT_Prop_GlyphToScriptMap route with CJK cmap coverage, "
             "per-glyph script values before/after auto-hinted load, and exact "
             "pinned C/Rust/C-ABI/WASM comparison"
         ),
-        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation": (
-            "autofitter:fallback-script Indic parity needs maintained "
-            "FT_Property_Set/Get routing plus an Indic-control font that "
-            "proves FreeType's build-dependent acceptance or Invalid_Argument "
-            "behavior across Rust FFI, C ABI, and WASM ABI"
-        ),
         "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime": (
             "Indic glyph-to-script-map runtime parity needs a maintained "
             "FT_Prop_GlyphToScriptMap route with Indic cmap coverage and exact "
             "C/Rust/C-ABI/WASM script-map and auto-hinted glyph-output "
             "comparison"
-        ),
-        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip": (
-            "autofitter:default-script Latin parity needs maintained "
-            "FT_Property_Set/Get routing for the autofitter module; reusing "
-            "the scalar truetype interpreter-version route would be a "
-            "different public input and a green placeholder"
         ),
         "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime": (
             "Latin glyph-to-script-map runtime parity needs maintained "
@@ -3078,10 +3060,10 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "comparison across pinned C, Rust FFI, C ABI, and WASM ABI"
         ),
         "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip": (
-            "autofitter script NONE parity needs maintained default-script and "
-            "fallback-script property routes that prove readback, invalid "
-            "controls, and output preservation through pinned C, Rust FFI, "
-            "C ABI, and WASM ABI"
+            "autofitter script NONE parity still needs a maintained typed "
+            "glyph-to-script-map route in addition to scalar default-script "
+            "and fallback-script readback; promoting only the scalar subset "
+            "would skip a declared public property input"
         ),
         "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime": (
             "script NONE glyph-to-script-map runtime parity needs a maintained "
@@ -4531,6 +4513,9 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     case_reasons = {
         "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftbdf.FT_Get_BDF_Charset_ID.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip": "FT_Property_Set/Get autofitter fallback-script CJK scalar roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation": "FT_Property_Set/Get autofitter fallback-script Indic scalar validation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip": "FT_Property_Set/Get autofitter default-script Latin scalar roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
