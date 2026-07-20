@@ -10136,6 +10136,70 @@ make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.variable_font_axis_va
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set: `FT_Get_Var_Axis_Flags` maintained OpenType hidden-axis route
+
+Status: four real OpenType hidden/visible axis-flag rows implemented on
+2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `69a52f6ab`: `real-parity=4486`,
+  `pending-route=470`, `pending-core=0`.
+
+Finding:
+
+- FreeType `src/base/ftmm.c:604-613` reads OpenType axis flags from the
+  `FT_UShort` array stored immediately after the aligned `FT_MM_Var`
+  allocation, not from `FT_Var_Axis` itself.
+- The test harness previously routed `ftmm.get_mm_var_then_axis_flags` only for
+  Adobe MM, so OpenType hidden-axis rows stayed pending.  It also had no
+  maintained fixtures for visible and hidden fvar axis flag combinations.
+- The first runtime mismatch after routing was in the C ABI test harness: it
+  tried to call `FT_Get_Var_Axis_Flags` on a copied `FT_MM_Var` after the live
+  C ABI allocation had been released.  The C ABI helper already snapshots flags
+  while the descriptor is live; token resolution and row output must use that
+  snapshot.
+- The exact-error row also exposed a harness shape issue: axis-flag row output
+  used `status`, while the exact-error matrix checker recognizes row-level
+  errors through an `error` field.
+
+Implementation:
+
+- Added generated compact fixtures through `scripts/build_fvar_fixtures.py`:
+  - `fonts/variable/multi-axis-visible.ttf`
+  - `fonts/variable/hidden-axis.ttf`
+  - `fonts/variable/named-instances-hidden-axis.ttf`
+- Extended the pinned C oracle and Rust runtime harness token resolution for
+  `axis_with_fvar_flags_hidden`, `hidden_axis`, and `visible_axis`.
+- Routed resolved OpenType `ftmm.get_mm_var_then_axis_flags` and
+  `ftmm.get_var_axis_flags` rows through the existing Rust FFI, C ABI, and WASM
+  comparator.
+- Kept C/WASM wrappers thin: the C ABI helper snapshots axis flags from the
+  live descriptor; no wrapper parses font data or infers fvar behavior.
+- Added row-level `error` output for axis-flag matrices so exact-error rows are
+  proven by output comparison instead of top-level placeholder status.
+- Promoted only rows proven through pinned C oracle, Rust FFI, C ABI, and WASM
+  ABI:
+  - `ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag`
+  - `ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error`
+  - `ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags`
+  - `ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage`
+
+Result:
+
+- Route audit after this batch: `real-parity=4490`,
+  `pending-route=466`, `pending-core=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Axis_Flags.out_of_range_axis_error
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set: `FT_Set_MM_WeightVector` generated Adobe MM state route
 
 Status: four real Type 1 MM weight-vector state/getter rows implemented on

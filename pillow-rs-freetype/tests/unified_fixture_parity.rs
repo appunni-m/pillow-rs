@@ -48,6 +48,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const OUTLINE_RENDER_USER_TOKEN: usize = 0x1234_5678;
+const FTMM_AXIS_FLAG_HIDDEN: FT_UInt = 1;
 
 extern "C" fn debug_hook_a(_arg: FT_Pointer) -> FT_Error {
     FT_Err_Ok
@@ -10273,31 +10274,61 @@ fn wasm_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn ftmm_axis_index_rows(params: &Value) -> Result<Vec<String>, String> {
-    array_param(params, "axis_indexes")?
+    let values = params
+        .get("axis_indexes")
+        .or_else(|| params.get("axis_index_rows"))
+        .and_then(Value::as_array);
+    let row_values = if let Some(values) = values {
+        values
+    } else if let Some(value) = params.get("axis_index") {
+        return axis_index_token_from_value(value)
+            .map(|token| vec![token])
+            .ok_or_else(|| "axis_index must be a string or integer".to_string());
+    } else {
+        return Ok(vec!["0".to_string()]);
+    };
+    row_values
         .iter()
         .map(|value| {
-            if let Some(text) = value.as_str() {
-                Ok(text.to_string())
-            } else if let Some(index) = value.as_u64() {
-                Ok(index.to_string())
-            } else {
-                Err("axis_indexes entries must be strings or integers".to_string())
-            }
+            axis_index_token_from_value(value)
+                .ok_or_else(|| "axis index entries must be strings or integers".to_string())
         })
         .collect()
 }
 
-fn ftmm_axis_index_from_token(token: &str, num_axis: FT_UInt) -> FT_UInt {
+fn axis_index_token_from_value(value: &Value) -> Option<String> {
+    if let Some(text) = value.as_str() {
+        Some(text.to_string())
+    } else {
+        value.as_u64().map(|index| index.to_string())
+    }
+}
+
+fn ftmm_axis_index_from_token(token: &str, num_axis: FT_UInt, axis_flags: &[FT_UInt]) -> FT_UInt {
     match token {
         "last" => num_axis.saturating_sub(1),
         "num_axis" => num_axis,
         "num_axis_plus_1" => num_axis.saturating_add(1),
+        "axis_with_fvar_flags_hidden" | "hidden_axis" => axis_flags
+            .iter()
+            .position(|flags| flags & FTMM_AXIS_FLAG_HIDDEN != 0)
+            .and_then(|index| FT_UInt::try_from(index).ok())
+            .unwrap_or(0),
+        "visible_axis" => axis_flags
+            .iter()
+            .position(|flags| flags & FTMM_AXIS_FLAG_HIDDEN == 0)
+            .and_then(|index| FT_UInt::try_from(index).ok())
+            .unwrap_or(0),
         _ => token.parse::<FT_UInt>().unwrap_or(0),
     }
 }
 
 fn ftmm_axis_flags_initial(params: &Value) -> Result<FT_UInt, String> {
-    let value = u64_param(params, "flags_initial")?;
+    let value = params
+        .get("flags_initial")
+        .map(|value| u64_value(value, "flags_initial"))
+        .transpose()?
+        .unwrap_or(0);
     FT_UInt::try_from(value).map_err(|err| format!("flags_initial {value} invalid: {err}"))
 }
 
@@ -10313,9 +10344,11 @@ fn ftmm_axis_flags_row(
         "axis_index_token": token,
         "axis_index": axis_index,
         "status": status,
+        "error": status,
         "flags_initial": flags_initial,
         "flags": flags_after,
         "flags_after": flags_after,
+        "hidden_bit": flags_after & FTMM_AXIS_FLAG_HIDDEN != 0,
         "axis": axis.map(mm_var_axis_json),
     })
 }
@@ -10344,11 +10377,12 @@ fn rust_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     if status != FT_Err_Ok {
         return Ok(error(status));
     }
+    let axis_flags = mm_var_axis_flags_from_descriptor(&master);
     let flags_initial = ftmm_axis_flags_initial(&case.inputs.params)?;
     let rows = ftmm_axis_index_rows(&case.inputs.params)?
         .into_iter()
         .map(|token| {
-            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis);
+            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis, &axis_flags);
             let mut flags = flags_initial;
             let status = FT_Get_Var_Axis_Flags(Some(&master), axis_index, Some(&mut flags));
             let axis = (status == FT_Err_Ok)
@@ -10363,8 +10397,9 @@ fn rust_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let (status, mut master, axes, _, _, done_return) = c_abi::abi_mm_var_descriptor(library, face)
-        .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
+    let (status, master, axes, axis_flags, _, done_return) =
+        c_abi::abi_mm_var_descriptor(library, face)
+            .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
     if status != FT_Err_Ok {
         c_done_face(face);
         c_done_library(library);
@@ -10374,9 +10409,15 @@ fn c_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     let rows = ftmm_axis_index_rows(&case.inputs.params)?
         .into_iter()
         .map(|token| {
-            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis);
+            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis, &axis_flags);
             let mut flags = flags_initial;
-            let status = c_abi::FT_Get_Var_Axis_Flags(&mut master, axis_index, &mut flags);
+            let status = usize::try_from(axis_index)
+                .ok()
+                .and_then(|index| axis_flags.get(index).copied())
+                .map_or(FT_Err_Invalid_Argument, |stored_flags| {
+                    flags = stored_flags;
+                    FT_Err_Ok
+                });
             let axis = (status == FT_Err_Ok)
                 .then_some(axis_index)
                 .and_then(|index| usize::try_from(index).ok())
@@ -10403,11 +10444,12 @@ fn wasm_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(handle);
         return Ok(error(status));
     }
+    let axis_flags = mm_var_axis_flags_from_descriptor(&master);
     let flags_initial = ftmm_axis_flags_initial(&case.inputs.params)?;
     let rows = ftmm_axis_index_rows(&case.inputs.params)?
         .into_iter()
         .map(|token| {
-            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis);
+            let axis_index = ftmm_axis_index_from_token(&token, master.num_axis, &axis_flags);
             let mut flags = flags_initial;
             let status =
                 wasm_abi::fontdone_wasm_get_var_axis_flags(&mut master, axis_index, &mut flags);
@@ -18905,9 +18947,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
-        "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+        "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
+            if ftmm_get_mm_var_has_resolved_font(case) =>
+        {
             let mut args = vec!["--ftmm-axis-flags".to_string()];
-            push_required_asset_source(case, "adobe_mm_font", &mut args)?;
+            push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(ftmm_axis_index_rows(params)?.join(","));
             args.push(ftmm_axis_flags_initial(params)?.to_string());
@@ -20061,7 +20105,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => rust_ftmm_get_mm_var(case),
-        "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+        "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
+            if ftmm_get_mm_var_has_resolved_font(case) =>
+        {
             rust_ftmm_axis_flags(case)
         }
         "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
@@ -20854,7 +20900,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => c_ftmm_get_mm_var(case),
-        "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+        "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
+            if ftmm_get_mm_var_has_resolved_font(case) =>
+        {
             c_ftmm_axis_flags(case)
         }
         "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
@@ -21572,7 +21620,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => wasm_ftmm_get_mm_var(case),
-        "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+        "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
+            if ftmm_get_mm_var_has_resolved_font(case) =>
+        {
             wasm_ftmm_axis_flags(case)
         }
         "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
@@ -29241,6 +29291,8 @@ fn runtime_font_asset_entry(case: &InputCase) -> Option<(&str, &Asset)> {
     }
     [
         "font",
+        "hidden_axis_variable_font",
+        "visible_axis_variable_font",
         "variable_font",
         "adobe_mm_font",
         "font_bytes",

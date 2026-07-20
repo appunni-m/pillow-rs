@@ -10369,6 +10369,7 @@ static int emit_ftmm_get_mm_var(int argc, char** argv) {
 }
 
 static FT_UInt ftmm_axis_index_from_token(const char* token, FT_MM_Var* master) {
+    size_t mmvar_size = (sizeof(FT_MM_Var) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
     if (streq(token, "last")) {
         return master && master->num_axis ? master->num_axis - 1 : 0;
     }
@@ -10378,6 +10379,32 @@ static FT_UInt ftmm_axis_index_from_token(const char* token, FT_MM_Var* master) 
     if (streq(token, "num_axis_plus_1")) {
         return master ? master->num_axis + 1 : 1;
     }
+    if (streq(token, "axis_with_fvar_flags_hidden") || streq(token, "hidden_axis")) {
+        FT_UShort* axis_flags = master
+            ? (FT_UShort*)((char*)master + mmvar_size)
+            : NULL;
+        if (axis_flags) {
+            for (FT_UInt i = 0; i < master->num_axis; i++) {
+                if (axis_flags[i] & FT_VAR_AXIS_FLAG_HIDDEN) {
+                    return i;
+                }
+            }
+        }
+        return 0;
+    }
+    if (streq(token, "visible_axis")) {
+        FT_UShort* axis_flags = master
+            ? (FT_UShort*)((char*)master + mmvar_size)
+            : NULL;
+        if (axis_flags) {
+            for (FT_UInt i = 0; i < master->num_axis; i++) {
+                if (!(axis_flags[i] & FT_VAR_AXIS_FLAG_HIDDEN)) {
+                    return i;
+                }
+            }
+        }
+        return 0;
+    }
     return (FT_UInt)strtoul(token, NULL, 10);
 }
 
@@ -10386,13 +10413,15 @@ static void print_ftmm_axis_flags_row(const char* token, FT_MM_Var* master, FT_U
     FT_UInt flags = flags_initial;
     FT_Error err = FT_Get_Var_Axis_Flags(master, axis_index, &flags);
     printf("{\"axis_index_token\":\"%s\",\"axis_index\":%u,\"status\":%d,"
-           "\"flags_initial\":%u,\"flags\":%u,\"flags_after\":%u,\"axis\":",
+           "\"error\":%d,\"flags_initial\":%u,\"flags\":%u,\"flags_after\":%u,",
            token,
            (unsigned)axis_index,
+           err,
            err,
            (unsigned)flags_initial,
            (unsigned)flags,
            (unsigned)flags);
+    printf("\"hidden_bit\":%s,\"axis\":", (flags & FT_VAR_AXIS_FLAG_HIDDEN) ? "true" : "false");
     if (!err && master && axis_index < master->num_axis) {
         print_ftmm_var_axis(&master->axis[axis_index]);
     } else {
