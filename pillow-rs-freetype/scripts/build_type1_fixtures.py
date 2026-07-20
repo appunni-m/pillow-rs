@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 OUT_DIR = FIXTURE_ROOT / "fonts" / "type1"
 MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "type1-mm"
+LEGACY_MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "mm"
 INPUT_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1"
 
 
@@ -194,6 +195,7 @@ def main() -> None:
         "Generated for fontdone Type 1 attach/patent coverage",
     )
     build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
+    build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
 
 
 if __name__ == "__main__":
