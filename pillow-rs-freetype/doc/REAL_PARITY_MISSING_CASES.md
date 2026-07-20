@@ -10274,10 +10274,13 @@ Rejected candidates from this snapshot:
   but returned `face->num_fixed_sizes == 0` and
   `face->available_sizes == NULL`.  These are not valid replacements for the
   declared row because they cannot exercise the public
-  `FT_FaceRec.available_sizes[]` contract.  Required next fix: add or generate
-  a C-openable SFNT bitmap-strike fixture whose pinned C face exposes at least
-  one `FT_Bitmap_Size`, then add the Rust FFI/C ABI/WASM ABI runtime route for
-  exact `num_fixed_sizes` and `available_sizes[]` comparison.
+  `FT_FaceRec.available_sizes[]` contract.
+  Follow-up on 2026-07-20: the row can use the maintained generated WinFNT
+  fixture `fonts/winfnt/bitmap-header.fnt` because the manifest requirement
+  allows Windows FNT and pinned FreeType exposes one fixed-size public record
+  for it.  The route should compare exact `num_fixed_sizes` and
+  `available_sizes[]` values across pinned C oracle, Rust FFI, C ABI, and WASM
+  ABI.
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` and
   `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` still require the
   declared Type1 PFB plus AFM/PFM auxiliary assets.

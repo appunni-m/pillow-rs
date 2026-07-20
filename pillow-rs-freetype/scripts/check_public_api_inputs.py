@@ -336,6 +336,7 @@ REAL_PARITY_OPERATIONS = {
     "charmap.get_char_index",
     "freetype.select_charmap",
     "freetype.set_charmap",
+    "freetype.inspect_available_sizes",
     "freetype.inspect_charmaps",
     "freetype.charmap_ownership",
     "freetype.get_charmap_index",
@@ -1616,7 +1617,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     freetype_rows_without_maintained_route = {
         "freetype.FT_Attach_File.success_attach_auxiliary_file",
         "freetype.FT_Attach_Stream.success_attach_auxiliary_stream",
-        "freetype.FT_Bitmap_Size.available_sizes_values_match_c",
         "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership",
         "freetype.FT_FaceRec.populated_public_fields_match_c",
         "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success",
@@ -2207,6 +2207,7 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties": "FT_Get_BDF_Property BDF string/integer/cardinal values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only": "FT_Get_BDF_Property PCF property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Property SFNT embedded bitmap property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 

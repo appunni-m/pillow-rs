@@ -15779,6 +15779,110 @@ static int emit_face_or_slot(int argc, char** argv) {
     return 0;
 }
 
+static void print_bitmap_sizes(FT_Face face) {
+    printf("[");
+    for (FT_Int i = 0; i < face->num_fixed_sizes; i++) {
+        FT_Bitmap_Size* size = &face->available_sizes[i];
+        if (i) {
+            printf(",");
+        }
+        printf("{\"height\":%d,\"width\":%d,\"size\":%ld,\"x_ppem\":%ld,\"y_ppem\":%ld}",
+               size->height,
+               size->width,
+               (long)size->size,
+               (long)size->x_ppem,
+               (long)size->y_ppem);
+    }
+    printf("]");
+}
+
+static int load_memory_face_arg(
+    FT_Library library,
+    const char* source_kind,
+    const char* source_value,
+    FT_Long face_index,
+    unsigned char** data,
+    long* data_len,
+    FT_Face* face
+) {
+    *data = NULL;
+    *data_len = 0;
+    *face = NULL;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+    FT_Error err = FT_New_Memory_Face(library, *data, *data_len, face_index, face);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        free(*data);
+        *data = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int emit_available_sizes(int argc, char** argv) {
+    (void)argc;
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    unsigned char* control_data = NULL;
+    long data_len = 0;
+    long control_data_len = 0;
+    FT_Face face = NULL;
+    FT_Face control = NULL;
+    FT_Long face_index = atol(argv[4]);
+    int status = load_memory_face_arg(
+        library, argv[2], argv[3], face_index, &data, &data_len, &face);
+    if (status) {
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+    status = load_memory_face_arg(
+        library, argv[5], argv[6], 0, &control_data, &control_data_len, &control);
+    if (status) {
+        FT_Done_Face(face);
+        free(data);
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"num_fixed_sizes\":%d,\"available_sizes\":", face->num_fixed_sizes);
+    print_bitmap_sizes(face);
+    printf(",\"control_num_fixed_sizes\":%d,", control->num_fixed_sizes);
+    printf("\"control_available_sizes_nullness\":\"%s\"}}\n",
+           control->available_sizes ? "non-null" : "null");
+
+    FT_Done_Face(control);
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(control_data);
+    free(data);
+    return 0;
+}
+
 typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
@@ -17879,6 +17983,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--get-sfnt-table")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--inspect-available-sizes")) {
+        return emit_available_sizes(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--get-sfnt-vhea-mvar-sequence")) {
         return emit_face_or_slot(argc, argv);

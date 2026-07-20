@@ -1183,6 +1183,17 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_available_sizes(face: FT_Face) -> Option<Vec<rust_ffi::FT_Bitmap_Size>> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let internal = unsafe { (*face.as_ptr()).internal };
+    let state = NonNull::new(internal.cast::<FaceState>())?;
+    // SAFETY: `state` is owned by the live face for the duration of this vector copy.
+    let state = unsafe { state.as_ref() };
+    Some(state.inner.available_sizes.to_vec())
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_mm_var_descriptor(
     library: FT_Library,
     face: FT_Face,
@@ -4272,6 +4283,12 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         face_flags: face.face_flags,
         style_flags: face.style_flags,
         num_glyphs: face.num_glyphs,
+        num_fixed_sizes: face.num_fixed_sizes,
+        available_sizes: if face.available_sizes.is_empty() {
+            ptr::null_mut()
+        } else {
+            face.available_sizes.as_ptr().cast_mut()
+        },
         bbox: face.bbox,
         units_per_EM: face.units_per_EM,
         ascender: face.ascender,
