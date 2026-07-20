@@ -10269,6 +10269,52 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: remove placeholder-style validation categories
+
+Status: de-placeholdered on 2026-07-20.
+
+Finding:
+
+- The route audit still reported `green_placeholder_style_rows=5` even though
+  those rows were not counted as `real-parity`.
+- The five rows were split into side categories:
+  `raw-slot-null-validation=4` and `wrapper-null-validation=1`.
+- Those categories validated useful partial behavior, but they did not prove
+  full same-input C/Rust/C-ABI/WASM parity:
+  - `ftsynth.FT_GlyphSlot_AdjustWeight.null_slot_noop`
+  - `ftsynth.FT_GlyphSlot_Embolden.null_slot_noop`
+  - `ftsynth.FT_GlyphSlot_Oblique.null_slot_noop`
+  - `ftsynth.FT_GlyphSlot_Slant.null_slot_noop`
+  - `freetype.FT_Get_SubGlyph_Info.error_null_outputs`
+
+Classification change:
+
+- The five rows now classify as `pending-route` with explicit reasons instead
+  of side validation categories.
+- The generated audit now reports `green_placeholder_style_rows=0`.
+- `real-parity` did not increase.
+- Route audit counts changed from:
+  `real-parity=4532`, `pending-route=424`,
+  `raw-slot-null-validation=4`, `wrapper-null-validation=1`
+  to `real-parity=4532`, `pending-route=429`.
+
+Required fix plan:
+
+1. For the four `ftsynth` raw slot null rows, add a public route that proves
+   the exact behavior available through Rust FFI, thin C ABI, and the JS/WASM
+   ABI surface. If WASM intentionally has no raw-slot pointer surface, keep the
+   rows pending and document the ABI-surface gap explicitly.
+2. For `FT_Get_SubGlyph_Info.error_null_outputs`, add a same-input public C
+   oracle route for valid composite slot setup plus null-output handling that
+   is comparable across Rust FFI, C ABI, and WASM. Do not count wrapper-only
+   null policy as full parity.
+
+Verified command:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: focused route probes rejected as non-runnable
 
 Status: focused probe batch on 2026-07-20.
