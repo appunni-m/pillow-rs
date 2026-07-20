@@ -4779,6 +4779,11 @@ Verified progress:
   `FT_Outline_Render` empty-outline route and the public
   `FT_Outline.empty_outline_success` row. The same synthetic fixture also
   keeps the `FT_PIXEL_MODE_NONE.empty_bitmap_state` route exact.
+- Follow-up route audit promotion: `ftimage.FT_PIXEL_MODE_NONE.empty_bitmap_state`
+  now explicitly reuses the maintained empty-outline `FT_Outline_Get_Bitmap`
+  route across pinned C oracle, Rust FFI, C ABI, and WASM ABI.  This compares
+  the real initialized empty bitmap fields instead of treating pixel-mode `0`
+  as a standalone constant or status-only shortcut.
 - Added real `outline_model` fixture
   `outlines/synthetic/clip-sensitive-rectangle.json`.
 - Pinned C oracle now emits the exact

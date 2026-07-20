@@ -1593,7 +1593,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior",
         "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior",
         "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior",
-        "ftimage.FT_PIXEL_MODE_NONE.empty_bitmap_state",
         "ftimage.FT_Pos.coordinate_outputs_use_ft_pos",
         "ftimage.FT_Raster.lifecycle_callback_contract",
         "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done",
@@ -2152,6 +2151,12 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.operation == "ftoutln.outline_get_bitmap"
     ):
         return "FT_PIXEL_MODE_NONE invalid FT_Outline_Get_Bitmap target validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.subject == "ftimage.FT_PIXEL_MODE_NONE"
+        and row.case == "empty_bitmap_state"
+        and row.operation == "ftbitmap.bitmap_init_and_empty_render"
+    ):
+        return "FT_PIXEL_MODE_NONE empty bitmap state validates through the maintained empty-outline FT_Outline_Get_Bitmap route across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         (row.subject, row.case) in ftimage_outline_get_bitmap_cases
         and row.operation == "ftoutln.outline_get_bitmap"

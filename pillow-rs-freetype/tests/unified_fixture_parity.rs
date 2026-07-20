@@ -20828,6 +20828,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             outline_get_bitmap_mode(case).to_string(),
             case.case_id.clone(),
         ]),
+        "ftbitmap.bitmap_init_and_empty_render" if outline_get_bitmap_runtime_supported(case) => {
+            Ok(vec![
+                "--outline-get-bitmap".to_string(),
+                outline_get_bitmap_mode(case).to_string(),
+                case.case_id.clone(),
+            ])
+        }
         "ftadvanc.get_advance" => {
             let mut args = vec!["--get-advance".to_string()];
             push_font_source(case, &mut args)?;
@@ -21625,6 +21632,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_outline_operation(&face, case)
         }
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
+            rust_outline_get_bitmap(case)
+        }
+        "ftbitmap.bitmap_init_and_empty_render" if outline_get_bitmap_runtime_supported(case) => {
             rust_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
@@ -22515,6 +22525,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             c_outline_get_bitmap(case)
         }
+        "ftbitmap.bitmap_init_and_empty_render" if outline_get_bitmap_runtime_supported(case) => {
+            c_outline_get_bitmap(case)
+        }
         "ftglyph.glyph_to_bitmap" => {
             if case.case_id
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
@@ -23305,6 +23318,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
+            wasm_outline_get_bitmap(case)
+        }
+        "ftbitmap.bitmap_init_and_empty_render" if outline_get_bitmap_runtime_supported(case) => {
             wasm_outline_get_bitmap(case)
         }
         "ftglyph.glyph_to_bitmap" => {
@@ -35269,6 +35285,7 @@ impl WasmRenderOutlineStorage {
 
 fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
     case.subject == "ftoutln.FT_Outline_Get_Bitmap"
+        || (case.subject == "ftimage.FT_PIXEL_MODE_NONE" && case.case == "empty_bitmap_state")
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
             && case.case == "invalid_render_target_errors")
         || (case.subject == "ftimage.FT_Bitmap"
@@ -35289,6 +35306,7 @@ fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
         }
         "null_bitmap_and_delegate_errors" => "errors",
         "empty_bitmap_is_valid" if case.subject == "ftimage.FT_Bitmap" => "empty",
+        "empty_bitmap_state" if case.subject == "ftimage.FT_PIXEL_MODE_NONE" => "empty",
         "invalid_render_target_errors" if case.subject == "ftimage.FT_PIXEL_MODE_NONE" => {
             "invalid-none"
         }
