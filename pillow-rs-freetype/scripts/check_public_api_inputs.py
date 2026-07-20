@@ -2371,11 +2371,6 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "route proving palette counts, entry counts, name IDs, and flag "
             "arrays match pinned C public record output"
         ),
-        "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data": (
-            "FT_Palette_Data_Get SFNT parity needs a maintained CPAL route "
-            "proving successful palette metadata output for a C-openable color "
-            "font matches pinned C"
-        ),
         "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries": (
             "FT_Palette_Select entry parity needs a maintained route proving "
             "selected palette pointer, entry values, and active palette state "
@@ -5182,6 +5177,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled"
     ):
         return "FT_Palette_Data_Get disabled-color-layers rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_data_get"
+        and row.case_id == "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data"
+    ):
+        return "FT_Palette_Data_Get CPAL palette counts and pointer nullness validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_data_get"
         and row.case_id == "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"

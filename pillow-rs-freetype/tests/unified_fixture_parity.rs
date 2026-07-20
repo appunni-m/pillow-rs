@@ -9109,7 +9109,8 @@ fn palette_data_json(
 fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
-        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"
+        | "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data" => {
             let face = open_face(case)?;
             let mut data = FT_Palette_Data {
                 num_palettes: 999,
@@ -9159,7 +9160,8 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
 fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
-        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"
+        | "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data" => {
             let (library, face) = c_open_face(case)?;
             let mut data = c_abi::FT_Palette_Data {
                 num_palettes: 999,
@@ -9215,7 +9217,8 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
-        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data" => {
+        | "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"
+        | "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data" => {
             let handle = wasm_open_face(case)?;
             let mut data = wasm_abi::FontdoneWasmPaletteData {
                 num_palettes: 999,

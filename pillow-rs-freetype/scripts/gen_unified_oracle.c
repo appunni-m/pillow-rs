@@ -10209,10 +10209,11 @@ static void print_palette_data_json(FT_Error err, FT_Palette_Data data) {
            err,
            data.num_palettes,
            data.num_palette_entries);
-    printf("\"pointer_nullness\":{\"palette_name_ids\":%s,\"palette_flags\":%s,\"palette_entry_name_ids\":%s}}",
+    printf("\"pointer_nullness\":{\"palette_name_ids\":%s,\"palette_flags\":%s,\"palette_entry_name_ids\":%s}",
            data.palette_name_ids ? "false" : "true",
            data.palette_flags ? "false" : "true",
            data.palette_entry_name_ids ? "false" : "true");
+    printf("}");
 }
 
 static int emit_color_palette_case(int argc, char** argv) {
@@ -10225,7 +10226,8 @@ static int emit_color_palette_case(int argc, char** argv) {
     printf("{");
     print_status(0);
     if (streq(case_id, "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal") ||
-        streq(case_id, "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data")) {
+        streq(case_id, "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data") ||
+        streq(case_id, "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data")) {
         FT_Palette_Data data = { 999, (const FT_UShort*)1, (const FT_UShort*)1, 999, (const FT_UShort*)1 };
         FT_Error err = FT_Palette_Data_Get(face.face, &data);
         printf(",\"output\":");
