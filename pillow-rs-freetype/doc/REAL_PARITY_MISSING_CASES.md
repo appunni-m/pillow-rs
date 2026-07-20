@@ -1462,6 +1462,22 @@ Finding:
   `freetype/src/bzip2/ftbzip2.c:471-515` open behavior, plus
   `freetype/src/bzip2/ftbzip2.c:371-466` read, seek-backwards reset, and close
   ownership behavior, against Rust FFI, C ABI, and WASM for the same bytes.
+- The gzip stream success row is also blocked by a concrete missing declared
+  stream manifest.  `ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream`
+  references `compressed/gzip/small-and-large-streams.json`, which must include
+  one stream below and one above FreeType's 40KiB in-memory threshold.  The
+  future route must compare pinned C `freetype/include/freetype/ftgzip.h:63-91`
+  and `freetype/src/gzip/ftgzip.c:608-708` stream field classes and
+  decompressed byte reads against Rust FFI, C ABI, and WASM for the same bytes.
+- The LZW stream success row is blocked by missing declared byte/facade
+  fixtures.  `ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream` references
+  `streams/lzw/small-valid-pcf.Z` and
+  `facades/stream/memory-ft-stream.json`; neither exists in the maintained
+  fixture tree.  The future route must compare pinned C
+  `freetype/include/freetype/ftlzw.h:47-82`,
+  `freetype/src/lzw/ftlzw.c:337-383`, and
+  `freetype/src/lzw/ftlzw.c:221-308` open/read/backward-seek/close behavior
+  against Rust FFI, C ABI, and WASM for the same bytes.
 
 Classification change:
 
