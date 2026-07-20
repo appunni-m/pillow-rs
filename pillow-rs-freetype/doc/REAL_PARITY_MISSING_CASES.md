@@ -10269,6 +10269,69 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: focused route probes rejected as non-runnable
+
+Status: focused probe batch on 2026-07-20.
+
+Baseline:
+
+- Route audit before and after the probes stayed at `real-parity=4532` and
+  `pending-route=424`.
+
+Finding:
+
+- `ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit` is not
+  a scalar TrueType `interpreter-version` property row.  The current maintained
+  property route only handles scalar `FT_UInt` property values; this row needs
+  the typed `FT_Prop_IncreaseXHeight { face, limit }` `void*` dispatch used by
+  pinned FreeType `src/autofit/afmodule.c:172-187,326-336`, plus face-handle
+  resolution through Rust FFI, thin C ABI, and WASM.  A strict diagnostic probe
+  that added this case to the scalar allow-list still stopped before runtime
+  execution, proving the blocker is the broader property route, not just a
+  missing classification string.
+- `ftstroke.FT_Stroker_LineTo.line_segment_success` is not covered by the
+  existing stroker null/no-op route.  It requires maintained `FT_Stroker_New`,
+  `FT_Stroker_BeginSubPath`, `FT_Stroker_LineTo`, `FT_Stroker_GetCounts`, and
+  export/cbox state across Rust FFI, C ABI, and WASM.  The declared path asset
+  `outlines/stroker/manual-paths.json` is still a required future asset.
+- `ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer` is not covered by
+  the existing gzip exact-error route.  It needs maintained compressed payload
+  fixtures under `compressed/gzip/` plus real stream/memory callback behavior
+  and byte-output comparison.  No `flate2`/gzip implementation dependency is
+  currently present in `pillow-rs-freetype`, so routing it to a generic
+  success or `Unimplemented_Feature` result would be a green placeholder.
+
+Rejected diagnostic path:
+
+- Do not promote `FT_Prop_IncreaseXHeight` by treating its `void*` value as an
+  `FT_UInt*`; pinned C uses a face-specific record and mutates
+  `AF_FaceGlobals.increase_x_height`.
+- Do not promote stroker success rows through the current null/no-op stroker
+  functions; they do not allocate or retain a real stroker object.
+- Do not promote gzip success rows until deterministic compressed input
+  fixtures and exact decompression output behavior exist.
+
+Required fix plan:
+
+1. For driver properties, add typed property dispatch in core first:
+   `interpreter-version` stays scalar, while `increase-x-height` and
+   `glyph-to-script-map` must consume/produce their public records and resolve
+   live face handles.  Then add thin C/WASM wrappers and focused oracle routes.
+2. For stroker, implement real pure-Rust `FT_Stroker` object/path state and
+   export geometry.  Only then expose allocation/lifetime/copying through C
+   and WASM.
+3. For gzip, add deterministic fixture generation for compressed payloads and
+   implement pure-Rust decompression/stream behavior, then compare exact output
+   bytes and stream fields against pinned C.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo.line_segment_success
+make -C pillow-rs-freetype test-case CASE=ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer
+```
+
 ### Issue Set Current: `FT_Get_Track_Kerning` Type1/AFM success route
 
 Status: blocked on required future assets on 2026-07-20.
