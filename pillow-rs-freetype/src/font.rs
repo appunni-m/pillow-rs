@@ -300,6 +300,7 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
         cmap: tt::cmap::CmapTable::default(),
         fvar: None,
         gvar: None,
+        design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
         gasp: None,
         head: tt::head::HeadTable {
@@ -587,6 +588,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         cmap: tt::cmap::CmapTable::default(),
         fvar: None,
         gvar: None,
+        design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
         gasp: None,
         head: tt::head::HeadTable {
@@ -1215,8 +1217,13 @@ impl Font {
         let gvar = dir
             .find(data, tag(b"gvar"))
             .and_then(|d| tt::gvar::parse_gvar(d, maxp.num_glyphs).ok());
-        let normalized_variation_coords = if let Some(coords) = design_coords {
-            normalized_variation_coords_for_design_coords(&fvar, coords)
+        let design_variation_coords = if let Some(coords) = design_coords {
+            design_variation_coords_for_design_coords(&fvar, coords)
+        } else {
+            design_variation_coords_for_named_instance(&fvar, named_instance)
+        };
+        let normalized_variation_coords = if design_coords.is_some() {
+            normalized_variation_coords_for_design_coords(&fvar, &design_variation_coords)
         } else {
             normalized_variation_coords_for_named_instance(&fvar, named_instance)
         };
@@ -1275,6 +1282,7 @@ impl Font {
             cmap,
             fvar,
             gvar,
+            design_variation_coords,
             normalized_variation_coords,
             head,
             hhea,
@@ -1400,6 +1408,56 @@ impl Font {
             .map_or(0, |last| self.selected_charmap.min(last));
         *self = next;
         Ok(())
+    }
+
+    /// Return active OpenType design coordinates, equivalent to
+    /// `FT_Get_Var_Design_Coordinates` for TrueType/OpenType variation faces.
+    pub(crate) fn var_design_coordinates(&self) -> Result<&[i32], FontError> {
+        if self.data.fvar.is_none() {
+            return Err(FontError::InvalidFont(
+                "face has no variation design coordinates".into(),
+            ));
+        }
+        Ok(&self.data.design_variation_coords)
+    }
+
+    /// Return active normalized blend coordinates in FreeType's 16.16 public
+    /// representation, equivalent to `FT_Get_MM_Blend_Coordinates`.
+    pub(crate) fn var_blend_coordinates_16_16(&self) -> Result<Vec<i32>, FontError> {
+        if self.data.fvar.is_none() {
+            return Err(FontError::InvalidFont(
+                "face has no variation blend coordinates".into(),
+            ));
+        }
+        Ok(self
+            .data
+            .normalized_variation_coords
+            .iter()
+            .map(|coord| i32::from(*coord) << 2)
+            .collect())
+    }
+
+    /// Set normalized blend coordinates, equivalent to
+    /// `FT_Set_MM_Blend_Coordinates` / `FT_Set_Var_Blend_Coordinates`.
+    pub(crate) fn set_var_blend_coordinates(
+        &mut self,
+        coords_16_16: &[i32],
+    ) -> Result<(), FontError> {
+        let Some(fvar) = &self.data.fvar else {
+            return Err(FontError::InvalidFont(
+                "face has no variation blend coordinates".into(),
+            ));
+        };
+        let design_coords = fvar
+            .axes
+            .iter()
+            .enumerate()
+            .map(|(index, axis)| {
+                let blend = coords_16_16.get(index).copied().unwrap_or(0);
+                design_coord_for_normalized_blend_16_16(blend, axis)
+            })
+            .collect::<Vec<_>>();
+        self.set_var_design_coordinates(&design_coords)
     }
 
     pub(crate) fn mvar_vertical_header_deltas(
@@ -3741,6 +3799,53 @@ fn normalized_variation_coords_for_named_instance(
         .collect()
 }
 
+fn design_variation_coords_for_named_instance(
+    fvar: &Option<tt::fvar::FvarTable>,
+    named_instance: usize,
+) -> Vec<i32> {
+    let Some(fvar) = fvar else {
+        return Vec::new();
+    };
+    let Some(instance) = named_instance
+        .checked_sub(1)
+        .and_then(|index| fvar.instances.get(index))
+    else {
+        return fvar.axes.iter().map(|axis| axis.default_value).collect();
+    };
+    fvar.axes
+        .iter()
+        .enumerate()
+        .map(|(index, axis)| {
+            instance
+                .coords
+                .get(index)
+                .copied()
+                .unwrap_or(axis.default_value)
+                .clamp(axis.min_value, axis.max_value)
+        })
+        .collect()
+}
+
+fn design_variation_coords_for_design_coords(
+    fvar: &Option<tt::fvar::FvarTable>,
+    design_coords: &[i32],
+) -> Vec<i32> {
+    let Some(fvar) = fvar else {
+        return Vec::new();
+    };
+    fvar.axes
+        .iter()
+        .enumerate()
+        .map(|(index, axis)| {
+            design_coords
+                .get(index)
+                .copied()
+                .unwrap_or(axis.default_value)
+                .clamp(axis.min_value, axis.max_value)
+        })
+        .collect()
+}
+
 fn normalized_variation_coords_for_design_coords(
     fvar: &Option<tt::fvar::FvarTable>,
     design_coords: &[i32],
@@ -3765,6 +3870,17 @@ fn normalized_variation_coords_for_design_coords(
             )
         })
         .collect()
+}
+
+fn design_coord_for_normalized_blend_16_16(blend_16_16: i32, axis: &tt::fvar::FvarAxis) -> i32 {
+    let blend = blend_16_16.clamp(-65_536, 65_536);
+    let extent = if blend < 0 {
+        axis.default_value - axis.min_value
+    } else {
+        axis.max_value - axis.default_value
+    };
+    let delta = ((i64::from(extent) * i64::from(blend)) / 65_536) as i32;
+    axis.default_value.saturating_add(delta)
 }
 
 const VARIATION_PS_NAME_MAX_LEN: usize = 127;

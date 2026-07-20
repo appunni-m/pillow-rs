@@ -39,6 +39,7 @@ pub struct FontData {
     pub cmap: CmapTable,
     pub fvar: Option<FvarTable>,
     pub gvar: Option<GvarTable>,
+    pub design_variation_coords: Vec<i32>,
     pub normalized_variation_coords: Vec<i16>,
     pub gasp: Option<GaspTable>,
     pub head: HeadTable,

@@ -3741,7 +3741,21 @@ pub fn FT_Set_Var_Design_Coordinates(
     };
     let Some(coords) = coords else {
         return if num_coords == 0 {
-            FT_Err_Ok
+            let result = face.inner.borrow_mut().set_var_design_coordinates(&[]);
+            match result {
+                Ok(()) => {
+                    let transform_matrix = face.transform_matrix;
+                    let transform_delta = face.transform_delta;
+                    let refcount = face.refcount;
+                    let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
+                    refreshed.transform_matrix = transform_matrix;
+                    refreshed.transform_delta = transform_delta;
+                    refreshed.refcount = refcount;
+                    *face = refreshed;
+                    FT_Err_Ok
+                }
+                Err(err) => error_to_ft(err) as FT_Error,
+            }
         } else {
             FT_Err_Invalid_Argument as FT_Error
         };
@@ -3775,6 +3789,123 @@ pub fn FT_Set_Var_Design_Coordinates(
         }
         Err(err) => error_to_ft(err) as FT_Error,
     }
+}
+
+pub fn FT_Get_Var_Design_Coordinates(
+    face: Option<&FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&mut [FT_Fixed]>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(coords) = coords else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if coords.len() < num_coords {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let inner = face.inner.borrow();
+    let design = match inner.var_design_coordinates() {
+        Ok(design) => design,
+        Err(err) => return error_to_ft(err) as FT_Error,
+    };
+    for (index, out) in coords.iter_mut().take(num_coords).enumerate() {
+        *out = FT_Fixed::from(design.get(index).copied().unwrap_or(0));
+    }
+    FT_Err_Ok
+}
+
+pub fn FT_Get_Var_Blend_Coordinates(
+    face: Option<&FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&mut [FT_Fixed]>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(coords) = coords else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if coords.len() < num_coords {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let inner = face.inner.borrow();
+    let blend = match inner.var_blend_coordinates_16_16() {
+        Ok(blend) => blend,
+        Err(err) => return error_to_ft(err) as FT_Error,
+    };
+    for (index, out) in coords.iter_mut().take(num_coords).enumerate() {
+        *out = FT_Fixed::from(blend.get(index).copied().unwrap_or(0));
+    }
+    FT_Err_Ok
+}
+
+pub fn FT_Get_MM_Blend_Coordinates(
+    face: Option<&FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&mut [FT_Fixed]>,
+) -> FT_Error {
+    FT_Get_Var_Blend_Coordinates(face, num_coords, coords)
+}
+
+pub fn FT_Set_Var_Blend_Coordinates(
+    face: Option<&mut FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&[FT_Fixed]>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let coords = match coords {
+        Some(coords) if coords.len() >= num_coords => &coords[..num_coords],
+        Some(_) => return FT_Err_Invalid_Argument as FT_Error,
+        None if num_coords == 0 => &[],
+        None => return FT_Err_Invalid_Argument as FT_Error,
+    };
+    let coords_i32 = coords
+        .iter()
+        .copied()
+        .map(i32::try_from)
+        .collect::<Result<Vec<_>, _>>();
+    let Ok(coords_i32) = coords_i32 else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let result = face
+        .inner
+        .borrow_mut()
+        .set_var_blend_coordinates(&coords_i32);
+    match result {
+        Ok(()) => {
+            let transform_matrix = face.transform_matrix;
+            let transform_delta = face.transform_delta;
+            let refcount = face.refcount;
+            let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
+            refreshed.transform_matrix = transform_matrix;
+            refreshed.transform_delta = transform_delta;
+            refreshed.refcount = refcount;
+            *face = refreshed;
+            FT_Err_Ok
+        }
+        Err(err) => error_to_ft(err) as FT_Error,
+    }
+}
+
+pub fn FT_Set_MM_Blend_Coordinates(
+    face: Option<&mut FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&[FT_Fixed]>,
+) -> FT_Error {
+    FT_Set_Var_Blend_Coordinates(face, num_coords, coords)
 }
 
 pub fn FT_Get_Default_Named_Instance(

@@ -2829,6 +2829,78 @@ pub extern "C" fn fontdone_wasm_set_var_design_coordinates(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_var_design_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` writable FT_Fixed values in linear memory.
+        Some(unsafe { slice::from_raw_parts_mut(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Get_Var_Design_Coordinates(Some(&face.face), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_var_blend_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` writable FT_Fixed values in linear memory.
+        Some(unsafe { slice::from_raw_parts_mut(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Get_Var_Blend_Coordinates(Some(&face.face), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_mm_blend_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    fontdone_wasm_get_var_blend_coordinates(handle, num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_var_blend_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values in linear memory.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Set_Var_Blend_Coordinates(Some(&mut face.face), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_mm_blend_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    fontdone_wasm_set_var_blend_coordinates(handle, num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
     rust_ffi::FT_Get_FSType_Flags(face_ref(handle).map(|face| &face.face))
 }

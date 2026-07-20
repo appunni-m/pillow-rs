@@ -462,6 +462,29 @@ impl Face {
         Ok(())
     }
 
+    /// Return active OpenType design coordinates, equivalent to
+    /// `FT_Get_Var_Design_Coordinates`.
+    pub(crate) fn var_design_coordinates(&self) -> Result<&[i32], FontError> {
+        self.font.var_design_coordinates()
+    }
+
+    /// Return active normalized blend coordinates in FreeType's 16.16 public
+    /// representation.
+    pub(crate) fn var_blend_coordinates_16_16(&self) -> Result<Vec<i32>, FontError> {
+        self.font.var_blend_coordinates_16_16()
+    }
+
+    /// Set normalized blend coordinates, equivalent to
+    /// `FT_Set_MM_Blend_Coordinates` / `FT_Set_Var_Blend_Coordinates`.
+    pub(crate) fn set_var_blend_coordinates(
+        &mut self,
+        coords_16_16: &[i32],
+    ) -> Result<(), FontError> {
+        self.font.set_var_blend_coordinates(coords_16_16)?;
+        self.render_fonts.clear();
+        Ok(())
+    }
+
     /// Return a glyph's PostScript name when the face exposes glyph names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         self.font.glyph_name(glyph_index)
