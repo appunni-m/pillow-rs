@@ -11786,6 +11786,25 @@ fn ftmm_var_blend_flag_row(status: FT_Error, count: FT_UInt, face_flags: FT_Long
     })
 }
 
+fn ftmm_mm_blend_row(
+    set_return: FT_Error,
+    get_blend_return: FT_Error,
+    blend_coords: &[FT_Fixed],
+    face_flags: FT_Long,
+) -> Value {
+    json!({
+        "set_return": set_return,
+        "get_blend_return": get_blend_return,
+        "blend_coords": blend_coords,
+        "face_flags": face_flags,
+        "variation_bit_set": (face_flags & FT_FACE_FLAG_VARIATION) != 0,
+    })
+}
+
+fn ftmm_mm_blend_scenarios_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
 fn ftmm_set_var_design_output(
     status: FT_Error,
     design_coords: &[FT_Fixed],
@@ -12465,6 +12484,121 @@ fn wasm_ftmm_var_blend_flag_matrix(case: &InputCase) -> Result<RunOutput, String
 
 fn ftmm_blend_scenario_output_count(case: &InputCase) -> Result<FT_UInt, String> {
     sfnt_fvar_axis_count(ftmm_blend_font_bytes(case)?.as_ref())
+}
+
+fn ftmm_mm_blend_scenario_output_count(case: &InputCase) -> Result<FT_UInt, String> {
+    ftmm_axis_count_hint(
+        case,
+        &case.inputs.params,
+        &ftmm_prior_call(&case.inputs.params)?,
+        &[],
+    )
+}
+
+fn rust_ftmm_mm_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let output_count = ftmm_mm_blend_scenario_output_count(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(params)? {
+        let set_return = FT_Set_MM_Blend_Coordinates(
+            Some(&mut face),
+            scenario.count,
+            if scenario.pointer_null {
+                None
+            } else {
+                Some(&scenario.coords)
+            },
+        );
+        let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+        let get_blend_return = if set_return == FT_Err_Ok {
+            FT_Get_MM_Blend_Coordinates(Some(&face), output_count, Some(&mut blend_coords))
+        } else {
+            FT_Err_Ok
+        };
+        rows.push(ftmm_mm_blend_row(
+            set_return,
+            get_blend_return,
+            &blend_coords,
+            face.face_flags,
+        ));
+    }
+    Ok(ftmm_mm_blend_scenarios_output(rows))
+}
+
+fn c_ftmm_mm_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let output_count = ftmm_mm_blend_scenario_output_count(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(params)? {
+        let set_return = c_abi::FT_Set_MM_Blend_Coordinates(
+            face,
+            scenario.count,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.coords.as_ptr()
+            },
+        );
+        let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+        let get_blend_return = if set_return == FT_Err_Ok {
+            c_abi::FT_Get_MM_Blend_Coordinates(face, output_count, blend_coords.as_mut_ptr())
+        } else {
+            FT_Err_Ok
+        };
+        let face_flags = c_abi::abi_face_info(face)
+            .ok_or_else(|| "missing C ABI face info".to_string())?
+            .face_flags;
+        rows.push(ftmm_mm_blend_row(
+            set_return,
+            get_blend_return,
+            &blend_coords,
+            face_flags,
+        ));
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_mm_blend_scenarios_output(rows))
+}
+
+fn wasm_ftmm_mm_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let output_count = ftmm_mm_blend_scenario_output_count(case)?;
+    let mut rows = Vec::new();
+    for scenario in ftmm_blend_scenarios(params)? {
+        let set_return = wasm_abi::fontdone_wasm_set_mm_blend_coordinates(
+            handle,
+            scenario.count,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.coords.as_ptr()
+            },
+        );
+        let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+        let get_blend_return = if set_return == FT_Err_Ok {
+            wasm_abi::fontdone_wasm_get_mm_blend_coordinates(
+                handle,
+                output_count,
+                blend_coords.as_mut_ptr(),
+            )
+        } else {
+            FT_Err_Ok
+        };
+        let face_flags = wasm_abi::abi_face_info(handle)
+            .ok_or_else(|| "missing WASM face info".to_string())?
+            .face_flags;
+        rows.push(ftmm_mm_blend_row(
+            set_return,
+            get_blend_return,
+            &blend_coords,
+            face_flags,
+        ));
+    }
+    wasm_done_face(handle);
+    Ok(ftmm_mm_blend_scenarios_output(rows))
 }
 
 fn rust_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
@@ -18816,6 +18950,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(ftmm_blend_scenario_output_count(case)?.to_string());
         return Ok(args);
     }
+    if case.case_id == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" {
+        let mut args = vec!["--ftmm-set-mm-blend-scenarios".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(ftmm_blend_scenarios_arg(params)?);
+        args.push(ftmm_mm_blend_scenario_output_count(case)?.to_string());
+        return Ok(args);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let mut args = vec!["--ftmm-set-var-blend-glyph-output".to_string()];
@@ -21158,6 +21300,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_ftmm_set_var_blend_glyph_output(case)
         }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
+        "ftmm.set_mm_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+        {
+            rust_ftmm_mm_blend_scenarios(case)
+        }
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             rust_ftmm_get_mm_weight_vector(case)
@@ -21987,6 +22135,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_ftmm_set_var_blend_glyph_output(case)
         }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
+        "ftmm.set_mm_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+        {
+            c_ftmm_mm_blend_scenarios(case)
+        }
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             c_ftmm_get_mm_weight_vector(case)
@@ -22741,6 +22895,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_ftmm_set_var_blend_glyph_output(case)
         }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
+        "ftmm.set_mm_blend_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates" =>
+        {
+            wasm_ftmm_mm_blend_scenarios(case)
+        }
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             wasm_ftmm_get_mm_weight_vector(case)

@@ -22,10 +22,10 @@
       "operation": "ftmm.set_mm_blend_coordinates",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/variable/wght-wdth-opsz.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "scenarios": [{"num_coords": 1, "coords_16_16": [16384]}, {"num_coords": 5, "coords_16_16": [16384, -16384, 32768, 65536, -65536]}], "follow_calls": ["FT_Get_Var_Blend_Coordinates"]}},
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/type1-mm/adobe-mm-two-axis.pfb", "asset_kind": "font"}}, "params": {"face_index": 0, "axis_tags": ["Weight", "Width"], "scenarios": [{"num_coords": 1, "coords_16_16": [16384]}, {"num_coords": 4, "coords_16_16": [16384, -16384, 32768, 65536]}], "follow_calls": ["FT_Get_MM_Blend_Coordinates"]}},
       "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "operation:variation-setter"],
-      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_MM_Blend_Coordinates", "kind": "function"}, "source_behavior": "Header contract says missing coordinates use defaults and extra coordinates are ignored."},
-      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "active_blend_coords": ["FT_Fixed"], "missing_axes": "defaults", "extra_axes": "ignored"}, "compare": {"mode": "exact", "paths": ["return", "active_blend_coords", "missing_axes", "extra_axes"]}, "source_refs": ["freetype/include/freetype/ftmm.h:500-512", "freetype/src/base/ftmm.c:390-463"], "fixture_requirements": ["Three-axis variable font."]}
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_MM_Blend_Coordinates", "kind": "function"}, "source_behavior": "Type 1 MM service uses default 0.5 for missing axes and ignores extra coordinates."},
+      "expectation": {"status": "ok", "output_shape": {"set_return": "FT_Error", "get_blend_return": "FT_Error", "blend_coords": ["FT_Fixed"], "face_flags": "FT_Long"}, "compare": {"mode": "exact", "paths": ["rows[*].set_return", "rows[*].get_blend_return", "rows[*].blend_coords", "rows[*].face_flags.FT_FACE_FLAG_VARIATION"]}, "source_refs": ["freetype/include/freetype/ftmm.h:500-512", "freetype/src/base/ftmm.c:390-463", "freetype/src/type1/t1load.c:383-455"], "fixture_requirements": ["Adobe Type 1 Multiple Master font with two axes."]}
     },
     {
       "case_id": "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",

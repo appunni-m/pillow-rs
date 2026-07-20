@@ -10544,6 +10544,15 @@ Follow-up finding for blend-coordinate state rows:
   weight vector using `src/type1/t1load.c:t1_set_mm_blend` semantics: clamp
   `num_coords` to `num_axis`, ignore extra coordinates, and use 0.5 for omitted
   axes.
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates` row
+  now validates the same Adobe Type 1 MM service with two same-face scenarios.
+  Pinned FreeType proves `num_coords=1, coords=[16384]` reads back
+  `[16384,32768]`, using the Type 1 MM default 0.5 for the omitted Width axis;
+  and `num_coords=4, coords=[16384,-16384,32768,65536]` reads back
+  `[16384,0]`, proving extra coordinates are ignored after the two real axes.
+  The maintained scenario route compares those rows through pinned C oracle,
+  Rust FFI, C ABI, and WASM ABI.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set
