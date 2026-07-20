@@ -1761,6 +1761,67 @@ def ftcolor_colorline_gradient_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcolor_root_paint_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR root paint and root transform rows needing real routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    variant = f" for variant {row.variant_id}" if row.variant_id else ""
+    exact_cases = {
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform": (
+            "FT_Get_Color_Glyph_Paint no-root-transform parity needs a "
+            "maintained root paint route proving initial opaque paint output "
+            "and output preservation match pinned C when transforms are omitted"
+        ),
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform": (
+            "FT_Get_Color_Glyph_Paint include-root-transform parity needs a "
+            "maintained root paint route proving pinned C inserts or exposes "
+            "the same root transform paint before downstream traversal"
+        ),
+        "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract": (
+            "FT_Get_Color_Glyph_Paint downstream contract parity needs a "
+            "maintained route proving opaque paint handles produced by root "
+            "lookup can be consumed by FT_Get_Paint and graph traversal exactly "
+            "like pinned C"
+        ),
+        "ftcolor.FT_Get_Paint.success_inserts_root_transform": (
+            "FT_Get_Paint inserted-root-transform parity needs a maintained "
+            "route proving the transform payload synthesized after root lookup "
+            "matches pinned C public union output"
+        ),
+        "ftcolor.FT_Affine23.root_transform_values": (
+            "FT_Affine23 root transform parity needs a maintained route proving "
+            "xx, xy, dx, yx, yy, and dy fields match pinned C 16.16/26.6 values"
+        ),
+    }
+    if row.case_id in exact_cases:
+        return exact_cases[row.case_id]
+    if row.case_id == "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime":
+        return (
+            "FT_COLOR_INCLUDE_ROOT_TRANSFORM parity needs a maintained root "
+            f"paint route{variant} proving include flag behavior and resulting "
+            "paint handle graph match pinned C"
+        )
+    if row.case_id == "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime":
+        return (
+            "FT_COLOR_NO_ROOT_TRANSFORM parity needs a maintained root paint "
+            f"route{variant} proving omitted-transform output and downstream "
+            "paint graph match pinned C"
+        )
+    if row.case_id == "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint":
+        return (
+            "FT_Color_Root_Transform parity needs a maintained root paint "
+            f"route{variant} proving enum control selects the same initial "
+            "paint and transform insertion behavior as pinned C"
+        )
+    if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload":
+        return (
+            "FT_COLR_PAINTFORMAT_TRANSFORM included-root payload parity needs "
+            f"a maintained route{variant} proving transform paint format, "
+            "affine fields, and nested paint handle match pinned C"
+        )
+    return None
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -1775,6 +1836,9 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     colorline_gradient_pending = ftcolor_colorline_gradient_pending_reason(row)
     if colorline_gradient_pending:
         return colorline_gradient_pending
+    root_paint_pending = ftcolor_root_paint_pending_reason(row)
+    if root_paint_pending:
+        return root_paint_pending
     pending_case_groups = {
         (
             "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
@@ -1809,22 +1873,6 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "COLR layer iterator parity needs a maintained layer route proving "
             "COLR v0/v1 layer iteration, foreground color indexes, terminal "
             "false output preservation, and iterator state across all ABI lanes"
-        ),
-        (
-            "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform",
-            "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform",
-            "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract",
-            "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",
-            "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime",
-            "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint",
-            "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload",
-            "ftcolor.FT_Get_Paint.success_inserts_root_transform",
-            "ftcolor.FT_Affine23.root_transform_values",
-        ): (
-            "COLR root-paint parity needs a maintained FT_Get_Color_Glyph_Paint "
-            "route proving include/no-root-transform behavior, inserted root "
-            "transforms, affine values, downstream opaque paint use, and size "
-            "variant output against pinned C"
         ),
         (
             "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",

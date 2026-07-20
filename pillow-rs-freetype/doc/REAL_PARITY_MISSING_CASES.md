@@ -12536,8 +12536,25 @@ Current blocker families:
   non-SFNT behavior.
 - Layer iteration: COLR v0/v1 layer iteration, foreground color indexes,
   terminal false output preservation, and iterator state.
-- Root paint and root transforms: include/no-root-transform behavior, inserted
-  transforms, affine values, downstream opaque paint use, and size variants.
+- Root paint and root transform rows are split by exact obligation instead of
+  sharing a broad root-paint blocker:
+  - `FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform`: initial
+    opaque paint output and output preservation when transforms are omitted.
+  - `FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform`: root
+    transform insertion/exposure before downstream traversal.
+  - `FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract`: opaque paint
+    handles produced by root lookup must be consumable by `FT_Get_Paint` and
+    graph traversal.
+  - `FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime` and
+    `FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime`: flag behavior for
+    `s12` and `s48` size variants.
+  - `FT_Color_Root_Transform.root_transform_controls_initial_paint`: enum
+    control of initial paint and transform insertion for `s12` and `s48`.
+  - `FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload`: transform
+    paint format, affine fields, and nested paint handle for `s16` and `s31`.
+  - `FT_Get_Paint.success_inserts_root_transform` and
+    `FT_Affine23.root_transform_values`: synthesized transform union output and
+    exact `xx`, `xy`, `dx`, `yx`, `yy`, `dy` values.
 - Paint resolution: opaque paint handles, supported paint-format dispatch,
   glyph/colr-glyph/solid payloads, color indexes, and public union shape.
 - Colorline and gradient rows are split by exact obligation instead of sharing
