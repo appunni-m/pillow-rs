@@ -1210,6 +1210,65 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
     }
 
 
+def ftstroke_export_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker export rows needing real outline routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry": (
+            "FT_STROKER_BORDER_LEFT export parity needs a maintained stroker "
+            "border route proving left-border outline points, tags, contours, "
+            "and orientation match pinned C"
+        ),
+        "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry": (
+            "FT_STROKER_BORDER_RIGHT export parity needs a maintained stroker "
+            "border route proving right-border outline points, tags, contours, "
+            "and orientation match pinned C"
+        ),
+        "ftstroke.FT_StrokerBorder.border_selection_runtime_shape": (
+            "FT_StrokerBorder selection parity needs a maintained route proving "
+            "public border enum values select the same left/right border "
+            "geometry and output shape as pinned C"
+        ),
+        "ftstroke.FT_Stroker_Export.exports_left_then_right": (
+            "FT_Stroker_Export combined export parity needs a maintained route "
+            "proving the combined outline appends left then right border "
+            "geometry in pinned C point/tag/contour order"
+        ),
+        "ftstroke.FT_Stroker_Export.append_to_existing_outline": (
+            "FT_Stroker_Export append parity needs a maintained route proving "
+            "export appends to existing outline contents with the same point, "
+            "tag, contour, and contour-index offsets as pinned C"
+        ),
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop": (
+            "FT_Stroker_Export invalid-input parity needs a maintained route "
+            "proving null stroker or null outline inputs preserve the existing "
+            "outline and return/no-op exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export": (
+            "FT_Stroker_ExportBorder valid export parity needs a maintained "
+            "route proving separate left and right border exports produce exact "
+            "pinned C outline geometry"
+        ),
+        "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty": (
+            "FT_Stroker_ExportBorder open-path parity needs a maintained route "
+            "proving the right border of an open path is empty or preserved "
+            "exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": (
+            "FT_Stroker_ExportBorder invalid-input parity needs a maintained "
+            "route proving invalid border values, null stroker, or null outline "
+            "preserve output and no-op exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline": (
+            "FT_Stroker_ExportBorder append parity needs a maintained route "
+            "proving border export appends to existing outline contents with "
+            "the same contour-index offset behavior as pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
@@ -1226,6 +1285,9 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
+    export_pending = ftstroke_export_pending_reason(row)
+    if export_pending:
+        return export_pending
     pending_case_groups = {
         (
             "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
@@ -1320,23 +1382,6 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Stroker count parity needs a maintained non-null stroker route "
             "that compares closed/open border counts, combined counts, and "
             "optional output-pointer preservation exactly against pinned C"
-        ),
-        (
-            "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry",
-            "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry",
-            "ftstroke.FT_StrokerBorder.border_selection_runtime_shape",
-            "ftstroke.FT_Stroker_Export.exports_left_then_right",
-            "ftstroke.FT_Stroker_Export.append_to_existing_outline",
-            "ftstroke.FT_Stroker_Export.invalid_inputs_noop",
-            "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
-            "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
-            "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop",
-            "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline",
-        ): (
-            "FT_Stroker export parity needs a maintained border/export route "
-            "proving left/right selection, open-path empty-border behavior, "
-            "append semantics, invalid-input no-op preservation, and exact "
-            "outline point/tag/contour output against pinned C"
         ),
         (
             "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",

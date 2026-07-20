@@ -10816,6 +10816,33 @@ Current route-audit breakdown:
 | `ftstroke.stroker_lifecycle` | 1 | `ftstroke.FT_Stroker.lifecycle_contract` |
 | `ftstroke.stroker_new` | 1 | `ftstroke.FT_Stroker_New.valid_library_allocates_stroker` |
 
+2026-07-21 export/export-border blocker split:
+
+- Export and export-border rows are split by exact obligation instead of
+  sharing a broad border/export blocker:
+  - `FT_STROKER_BORDER_LEFT.left_border_export_geometry`: left-border outline
+    points, tags, contours, and orientation.
+  - `FT_STROKER_BORDER_RIGHT.right_border_export_geometry`: right-border
+    outline points, tags, contours, and orientation.
+  - `FT_StrokerBorder.border_selection_runtime_shape`: public border enum
+    values selecting the same left/right border geometry and output shape as
+    pinned C.
+  - `FT_Stroker_Export.exports_left_then_right`: combined export appending left
+    then right border geometry in pinned-C point/tag/contour order.
+  - `FT_Stroker_Export.append_to_existing_outline`: combined export appending
+    to existing outline contents with exact point, tag, contour, and
+    contour-index offsets.
+  - `FT_Stroker_Export.invalid_inputs_noop`: null stroker or null outline
+    inputs preserving the existing outline and return/no-op behavior.
+  - `FT_Stroker_ExportBorder.valid_left_and_right_export`: separate left and
+    right border exports producing exact pinned-C outline geometry.
+  - `FT_Stroker_ExportBorder.open_path_right_border_empty`: right border of an
+    open path being empty or preserved exactly like pinned C.
+  - `FT_Stroker_ExportBorder.invalid_inputs_or_border_noop`: invalid border
+    values, null stroker, or null outline preserving output and no-op behavior.
+  - `FT_Stroker_ExportBorder.append_to_existing_outline`: border export
+    appending to existing outline contents with exact contour-index offsets.
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
