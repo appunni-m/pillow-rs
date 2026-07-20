@@ -1372,7 +1372,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
-        "ftmm.FT_Get_Var_Blend_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_MM_Var.ownership_matches_c",
