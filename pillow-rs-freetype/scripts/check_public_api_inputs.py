@@ -1390,38 +1390,145 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "same-input parity requires a maintained FTC node/manager layout "
             "facade instead of a generic no-op"
         )
-    cache_operations_without_success_route = {
-        "ftcache.cmap_cache_lookup",
-        "ftcache.cmap_cache_new",
-        "ftcache.face_id_identity",
-        "ftcache.image_cache_lookup",
-        "ftcache.image_cache_lookup_scaler",
-        "ftcache.image_cache_new",
-        "ftcache.image_type_descriptor_lifetime",
-        "ftcache.image_type_lookup_probe",
-        "ftcache.manager_done",
-        "ftcache.manager_lifecycle",
-        "ftcache.manager_lookup_face",
-        "ftcache.manager_lookup_size",
-        "ftcache.manager_new",
-        "ftcache.manager_ownership",
-        "ftcache.manager_remove_face_id",
-        "ftcache.node_lifecycle",
-        "ftcache.node_unref",
-        "ftcache.sbit_cache_lookup_scaler",
-        "ftcache.sbit_cache_new",
-        "ftcache.scaler_descriptor_lifetime",
-        "ftcache.type_contract",
-    }
-    if row.operation not in cache_operations_without_success_route:
-        return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "FTC cache manager/image/cmap/sbit/node success and lifecycle behavior "
-        "requires a maintained cache subsystem route; keeping it generic would "
-        "be a green placeholder"
-    )
+    pending_case_groups = {
+        (
+            "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_New.success_defaults_for_zero_limits",
+            "ftcache.FTC_Manager_New.success_custom_limits_and_req_data",
+            "ftcache.FTC_Manager_New.lifecycle_create_lookup_reset_done",
+            "ftcache.FTC_Manager.reset_and_done_lifecycle",
+            "ftcache.FTC_Manager.owns_faces_sizes_and_cache_nodes",
+        ): (
+            "FTC_Manager allocation/lifecycle parity needs a maintained manager "
+            "route proving default/custom limits, requester data, reset/done "
+            "ordering, and ownership of faces, sizes, caches, and nodes across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        (
+            "ftcache.FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_Done.success_destroy_empty_manager",
+            "ftcache.FTC_Manager_Done.success_destroy_populated_manager",
+            "ftcache.FTC_Manager_Done.success_null_or_invalid_library_noop",
+            "ftcache.FTC_Manager_Done.node_reference_lifecycle_on_done",
+        ): (
+            "FTC_Manager_Done parity needs a maintained manager teardown route "
+            "proving empty/populated destruction, referenced-node handling, "
+            "and null/foreign-library behavior against pinned C"
+        ),
+        (
+            "ftcache.FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_LookupFace.success_first_lookup_invokes_requester",
+            "ftcache.FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face",
+            "ftcache.FTC_Manager_LookupFace.success_face_has_no_required_current_size",
+            "ftcache.FTC_FaceID.pointer_identity_key",
+        ): (
+            "FTC_Manager_LookupFace parity needs a maintained requester route "
+            "proving FTC_FaceID pointer identity, first requester callback, "
+            "cached repeat lookup, and face current-size behavior"
+        ),
+        (
+            "ftcache.FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_LookupSize.success_pixel_size_scaler",
+            "ftcache.FTC_Manager_LookupSize.success_point_size_resolution_scaler",
+            "ftcache.FTC_Manager_LookupSize.success_repeat_lookup_cached_size",
+            "ftcache.FTC_ScalerRec.pixel_scaler_uses_integer_pixels",
+            "ftcache.FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution",
+            "ftcache.FTC_Scaler.points_to_call_owned_scaler",
+        ): (
+            "FTC_Manager_LookupSize/Scaler parity needs a maintained scaler "
+            "route proving pixel versus 26.6 point sizing, x/y resolution, "
+            "call-owned descriptor lifetime, and cached size identity"
+        ),
+        (
+            "ftcache.FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_RemoveFaceID.success_removes_unreferenced_face_size_and_nodes",
+            "ftcache.FTC_Manager_RemoveFaceID.success_referenced_nodes_hidden_until_unref",
+            "ftcache.FTC_Manager_RemoveFaceID.success_other_face_ids_unchanged",
+            "ftcache.FTC_Manager_RemoveFaceID.success_null_manager_noop",
+            "ftcache.FTC_Manager_RemoveFaceID.success_null_or_unknown_face_id",
+        ): (
+            "FTC_Manager_RemoveFaceID parity needs a maintained face-id "
+            "eviction route proving unreferenced removal, referenced-node "
+            "hiding until unref, unchanged other face IDs, and null/unknown "
+            "input behavior"
+        ),
+        (
+            "ftcache.FTC_CMapCache.manager_owned_opaque_cache",
+            "ftcache.FTC_ImageCache.manager_owned_opaque_cache",
+            "ftcache.FTC_SBitCache.manager_owned_sbit_cache",
+            "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager",
+            "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit",
+            "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset",
+            "ftcache.FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_New.success_create_lookup_destroy_lifecycle",
+            "ftcache.FTC_ImageCache_New.success_manager_reset_preserves_handle",
+            "ftcache.FTC_SBitCache_New.creates_manager_owned_cache",
+        ): (
+            "FTC cache creation parity needs a maintained manager-owned cache "
+            "route proving CMap/Image/SBit cache registration, opaque handle "
+            "ownership, manager reset interactions, and cache-limit behavior"
+        ),
+        (
+            "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit",
+            "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero",
+            "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap",
+            "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset",
+        ): (
+            "FTC_CMapCache_Lookup parity needs a maintained cmap-cache route "
+            "proving hit/repeat-hit, miss-to-zero, negative cmap index current "
+            "charmap selection, and remove-face/reset lifecycle effects for "
+            "all concrete codepoint variants"
+        ),
+        (
+            "ftcache.FTC_ImageType.points_to_call_owned_descriptor",
+            "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup",
+            "ftcache.FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_Lookup.success_lookup_hit_and_repeat_hit",
+            "ftcache.FTC_ImageCache_Lookup.success_node_acquire_and_unref",
+            "ftcache.FTC_ImageCache_Lookup.success_null_anode_ephemeral_glyph",
+        ): (
+            "FTC_ImageCache_Lookup parity needs a maintained image-type route "
+            "proving call-owned descriptor lifetime, lookup output, hit/repeat "
+            "behavior, node acquisition/unref, and null-anode ephemeral glyphs"
+        ),
+        (
+            "ftcache.FTC_ImageCache_LookupScaler.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_LookupScaler.success_pixel_and_point_scalers",
+            "ftcache.FTC_ImageCache_LookupScaler.success_lookup_hit_miss_and_repeated",
+            "ftcache.FTC_ImageCache_LookupScaler.success_node_acquire_and_unref",
+            "ftcache.FTC_ImageCache_LookupScaler.load_flags_truncation_policy",
+        ): (
+            "FTC_ImageCache_LookupScaler parity needs a maintained scaler-image "
+            "route proving pixel/point scaler output, hit/miss/repeat behavior, "
+            "node acquisition/unref, and pinned C load-flag truncation for all "
+            "font variants"
+        ),
+        (
+            "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
+            "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32",
+        ): (
+            "FTC_SBitCache_LookupScaler parity needs a maintained sbit-scaler "
+            "route proving scaler size semantics and int32 load-flag truncation "
+            "against pinned C for all concrete font variants"
+        ),
+        (
+            "ftcache.FTC_Node.reference_counted_cache_handle",
+            "ftcache.FTC_Node_Unref.releases_lookup_reference",
+            "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable",
+        ): (
+            "FTC_Node/FTC_Node_Unref parity needs a maintained node lifecycle "
+            "route proving cache handle identity, lookup references, unref "
+            "release, and flushability after the final reference"
+        ),
+    }
+    for case_ids, reason in pending_case_groups.items():
+        if row.case_id in case_ids:
+            return reason
+    return None
 
 
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
