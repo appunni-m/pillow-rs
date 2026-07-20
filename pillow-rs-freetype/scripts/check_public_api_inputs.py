@@ -1628,7 +1628,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior",
         "freetype.FT_Open_Args.open_face_consumes_args_like_c",
         "freetype.FT_Parameter.tag_data_parameters_match_c_behavior",
-        "freetype.FT_SizeRec.active_size_record_runtime",
     }
     if row.case_id not in freetype_rows_without_maintained_route:
         return None
@@ -2324,6 +2323,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face": "CID registry/ordering/supplement output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_SizeRec.active_size_record_runtime": "FT_SizeRec public face/generic/metrics/internal state validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

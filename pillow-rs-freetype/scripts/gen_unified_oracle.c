@@ -14162,10 +14162,18 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
 
     printf("{");
-    if (err || streq(command, "--new-memory-face") || streq(command, "--set-pixel-sizes") || streq(command, "--size-metrics")) {
+    if (err || streq(command, "--new-memory-face") || streq(command, "--set-pixel-sizes") || streq(command, "--size-metrics") || streq(command, "--size-record-state")) {
         print_status(err);
         if (err) {
             printf(",\"output\":null}\n");
+        } else if (streq(command, "--size-record-state")) {
+            face->size->generic.data = (void*)0x51;
+            printf(",\"output\":{\"status\":%d,\"size\":{", err);
+            printf("\"face_identity\":\"%s\",", face->size->face == face ? "same_as_parent_face" : "other");
+            printf("\"generic_identity\":\"%s\",", face->size->generic.data == (void*)0x51 ? "client_pointer" : "other");
+            printf("\"metrics\":{");
+            print_size_metrics_object(face->size->metrics);
+            printf("},\"internal_nullness\":\"%s\"}}}\n", face->size->internal ? "non_null" : "null");
         } else if (streq(command, "--set-pixel-sizes") || streq(command, "--size-metrics")) {
             printf(",");
             print_size_metrics(face->size->metrics);
@@ -17366,7 +17374,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--outline-translate")) {
         return emit_outline_translate(argc, argv);
     }
-    if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
+    if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics") || streq(argv[1], "--size-record-state"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--new-memory-face-variants")) {

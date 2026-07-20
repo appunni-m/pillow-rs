@@ -37,6 +37,7 @@ typedef char FT_String;
 typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
 typedef void* FT_Pointer;
+typedef FT_Pointer FT_Generic_Finalizer;
 
 typedef struct FT_LibraryRec_* FT_Library;
 typedef struct FT_FaceRec_* FT_Face;
@@ -59,6 +60,11 @@ typedef struct FT_ListRec_ {
   FT_ListNode head;
   FT_ListNode tail;
 } FT_ListRec;
+
+typedef struct FT_Generic_ {
+  FT_Pointer data;
+  FT_Generic_Finalizer finalizer;
+} FT_Generic;
 
 typedef FT_Error (*FT_List_Iterator)(FT_ListNode node, void* user);
 typedef void* (*FT_Alloc_Func)(FT_Memory memory, long size);
@@ -394,6 +400,8 @@ struct FT_GlyphSlotRec_ {
 };
 
 struct FT_SizeRec_ {
+  FT_Face face;
+  FT_Generic generic;
   FT_Size_Metrics metrics;
   void* internal;
 };
