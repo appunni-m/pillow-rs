@@ -1621,7 +1621,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Attach_Stream.success_attach_auxiliary_stream",
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c",
         "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership",
-        "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection",
         "freetype.FT_Face.owns_slot_size_and_charmaps",
         "freetype.FT_FaceRec.populated_public_fields_match_c",
         "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success",
@@ -4000,6 +3999,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior"
     ):
         return "FT_STYLE_FLAG_BOLD face-pair style flags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.face_flags_after_variation"
+        and row.case_id == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection"
+    ):
+        return "FT_FACE_FLAG_VARIATION set and declared named-instance reset probe validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"

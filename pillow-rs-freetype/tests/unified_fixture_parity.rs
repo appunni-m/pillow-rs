@@ -19045,6 +19045,18 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "freetype.face_flags_after_variation"
+            if case.case_id
+                == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
+        {
+            let coords = ftmm_coords_from_value(params, "design_coordinates")?;
+            let mut args = vec!["--face-flags-after-variation".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(coords.len().to_string());
+            args.push(ftmm_coords_csv(&coords));
+            Ok(args)
+        }
         "face_macro_flags" => Ok(vec![
             "--face-macro-flags".to_string(),
             face_macro_param(case)?.to_string(),
@@ -21011,6 +21023,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_face_style_flags(case)
         }
+        "freetype.face_flags_after_variation"
+            if case.case_id
+                == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
+        {
+            rust_face_flags_after_variation(case)
+        }
         "freetype.load_target_mode"
             if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" =>
         {
@@ -21692,6 +21710,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
         {
             c_face_style_flags(case)
+        }
+        "freetype.face_flags_after_variation"
+            if case.case_id
+                == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
+        {
+            c_face_flags_after_variation(case)
         }
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
@@ -22518,6 +22542,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" =>
         {
             wasm_face_style_flags(case)
+        }
+        "freetype.face_flags_after_variation"
+            if case.case_id
+                == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
+        {
+            wasm_face_flags_after_variation(case)
         }
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
@@ -28477,6 +28507,103 @@ fn rust_face_style_flags(case: &InputCase) -> Result<RunOutput, String> {
             FT_Long::from(regular.style_flags),
         )
     })))
+}
+
+fn face_flags_after_variation_output(
+    initial_face_flags: FT_Long,
+    after_set_face_flags: FT_Long,
+    after_reset_face_flags: FT_Long,
+    setter_status: FT_Error,
+    reset_status: FT_Error,
+) -> RunOutput {
+    let output = json!({
+        "initial_face_flags": initial_face_flags,
+        "after_set_face_flags": after_set_face_flags,
+        "after_reset_face_flags": after_reset_face_flags,
+        "setter_status": setter_status,
+        "reset_status": reset_status
+    });
+    if setter_status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(setter_status, output)
+    }
+}
+
+fn variation_design_coords(params: &Value) -> Result<Vec<FT_Fixed>, String> {
+    ftmm_coords_from_value(params, "design_coordinates")
+}
+
+fn rust_face_flags_after_variation(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let initial_face_flags = face.face_flags;
+    let coords = variation_design_coords(&case.inputs.params)?;
+    let setter_status =
+        FT_Set_Var_Design_Coordinates(Some(&mut face), coords.len() as FT_UInt, Some(&coords));
+    let after_set_face_flags = face.face_flags;
+    let reset_status = FT_Set_Named_Instance(Some(&mut face), FT_UInt::MAX);
+    let after_reset_face_flags = face.face_flags;
+    Ok(face_flags_after_variation_output(
+        initial_face_flags,
+        after_set_face_flags,
+        after_reset_face_flags,
+        setter_status,
+        reset_status,
+    ))
+}
+
+fn c_face_flags_after_variation(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let initial_face_flags = c_abi::abi_face_info(face)
+        .ok_or_else(|| "missing c face info".to_string())?
+        .face_flags;
+    let coords = variation_design_coords(&case.inputs.params)?;
+    let setter_status =
+        c_abi::FT_Set_Var_Design_Coordinates(face, coords.len() as FT_UInt, coords.as_ptr());
+    let after_set_face_flags = c_abi::abi_face_info(face)
+        .ok_or_else(|| "missing c face info after set".to_string())?
+        .face_flags;
+    let reset_status = c_abi::FT_Set_Named_Instance(face, FT_UInt::MAX);
+    let after_reset_face_flags = c_abi::abi_face_info(face)
+        .ok_or_else(|| "missing c face info after reset".to_string())?
+        .face_flags;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(face_flags_after_variation_output(
+        initial_face_flags,
+        after_set_face_flags,
+        after_reset_face_flags,
+        setter_status,
+        reset_status,
+    ))
+}
+
+fn wasm_face_flags_after_variation(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let initial_face_flags = wasm_abi::abi_face_info(handle)
+        .ok_or_else(|| "missing wasm face info".to_string())?
+        .face_flags;
+    let coords = variation_design_coords(&case.inputs.params)?;
+    let setter_status = wasm_abi::fontdone_wasm_set_var_design_coordinates(
+        handle,
+        coords.len() as FT_UInt,
+        coords.as_ptr(),
+    );
+    let after_set_face_flags = wasm_abi::abi_face_info(handle)
+        .ok_or_else(|| "missing wasm face info after set".to_string())?
+        .face_flags;
+    let reset_status = wasm_abi::fontdone_wasm_set_named_instance(handle, FT_UInt::MAX);
+    let after_reset_face_flags = wasm_abi::abi_face_info(handle)
+        .ok_or_else(|| "missing wasm face info after reset".to_string())?
+        .face_flags;
+    wasm_done_face(handle);
+    Ok(face_flags_after_variation_output(
+        initial_face_flags,
+        after_set_face_flags,
+        after_reset_face_flags,
+        setter_status,
+        reset_status,
+    ))
 }
 
 fn c_face_style_flag_row(face: c_abi::FT_Face) -> Result<Value, String> {
@@ -39134,6 +39261,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         return "api_object";
     }
     if case.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior" {
+        return "api_object";
+    }
+    if case.case_id == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" {
         return "api_object";
     }
     if case.case_id
