@@ -2128,6 +2128,42 @@ Required fix plan:
 5. Promote rows only after focused `ftmodapi` runtime proves exact C oracle,
    Rust FFI, C ABI, and WASM ABI output for the same input.
 
+Residual module-lifecycle blocker detail:
+
+- `ftmodapi.FT_Add_Module.add_minimal_module_success` requires a maintained
+  synthetic module-class route matching pinned FreeType 2.14.3
+  `freetype/src/base/ftobjs.c:5058-5168`: version/name checks, allocation,
+  `module->library`/`memory` initialization, renderer/hinter/driver side
+  effects, `module_init`, table insertion, and `FT_Get_Module` lookup.
+  Existing null/future-version/duplicate error rows do not prove success
+  installation.
+- `ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules` requires a
+  final-destroy route matching `freetype/src/base/ftobjs.c:5542-5620`:
+  refcount reaches zero, driver-owned faces are closed in C order, modules are
+  removed in reverse table order, destructors run, and the library becomes
+  unusable across Rust FFI, thin C ABI, and WASM.
+- `ftmodapi.FT_MODULE_RENDERER.renderer_module_registration` requires
+  `FT_Add_Module` coverage that proves `ft_add_renderer` runs before
+  `module_init`, mutates the renderer list/current renderer, and cleans raster
+  state on initialization failure. Header constant parity is insufficient.
+- `ftmodapi.FT_MODULE_STYLER.styler_module_registration` requires a synthetic
+  module-class route proving the styler bit is stored and observable while not
+  triggering renderer, hinter, or driver setup side effects.
+- `ftmodapi.FT_Module_Class.fields_drive_module_lifecycle` requires a
+  class-field facade that exercises name/version/requires/flags/size,
+  `module_interface`, `module_init`, and `module_done` through add, interface
+  lookup, remove, and final library destruction. Layout/import checks alone are
+  not lifecycle parity.
+- `ftmodapi.FT_Module_Interface.requester_return_type` requires a route matching
+  `FT_Get_Module_Interface` in `freetype/src/base/ftobjs.c:5199-5207`: named
+  module lookup returns exactly `clazz->module_interface`, with null and
+  missing-module cases still visible.
+- `ftmodapi.FT_Remove_Module.removes_installed_module` requires an
+  add-get-remove route matching `freetype/src/base/ftobjs.c:5261-5298`: exact
+  pointer lookup, table compaction, tail nulling, `Destroy_Module`/`module_done`,
+  and later lookup failure. Null or foreign module errors do not prove success
+  removal.
+
 Verification for the classification batch:
 
 ```bash
