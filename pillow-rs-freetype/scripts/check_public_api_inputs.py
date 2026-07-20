@@ -1329,11 +1329,88 @@ def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "TrueType GX and classic kern validation/free success behavior requires "
-        "a maintained validation subsystem route; keeping it generic would be "
-        "a green placeholder"
-    )
+    pending_cases = {
+        "ftgxval.FT_ClassicKern_Free.frees_classic_kern_validation_buffer": (
+            "FT_ClassicKern_Free parity needs a maintained validate-then-free "
+            "route proving C allocation ownership and free semantics for "
+            "non-null classic-kern validation buffers across Rust FFI, C ABI, "
+            "and WASM ABI; generic null/no-op free is not enough"
+        ),
+        "ftgxval.FT_ClassicKern_Validate.validates_ms_classic_kern": (
+            "FT_ClassicKern_Validate MS classic-kern parity needs a C-openable "
+            "fixture with Microsoft classic kern data and exact validation "
+            "output pointer/length bytes plus error code across all ABI lanes"
+        ),
+        "ftgxval.FT_ClassicKern_Validate.validates_apple_classic_kern": (
+            "FT_ClassicKern_Validate Apple classic-kern parity needs a "
+            "C-openable Apple classic kern fixture and exact validation "
+            "buffer/error/lifetime comparison; MS-kern success does not prove "
+            "Apple selector behavior"
+        ),
+        "ftgxval.FT_TrueTypeGX_Free.frees_gx_validation_buffer": (
+            "FT_TrueTypeGX_Free parity needs a maintained validate-then-free "
+            "route proving ownership/free semantics for table buffers returned "
+            "by FT_TrueTypeGX_Validate across all ABI lanes"
+        ),
+        "ftgxval.FT_TrueTypeGX_Validate.validates_selected_gx_tables": (
+            "FT_TrueTypeGX_Validate selected-table parity needs a C-openable "
+            "GX/AAT fixture and exact output slots for selected tables across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftgxval.FT_TrueTypeGX_Validate.validates_all_gx_tables": (
+            "FT_TrueTypeGX_Validate all-table parity needs a C-openable GX/AAT "
+            "fixture and exact output slots/errors/lifetimes for every "
+            "requested table; selected subset success is not enough"
+        ),
+        "ftgxval.FT_TrueTypeGX_Validate.respects_table_length": (
+            "FT_TrueTypeGX_Validate length parity needs malformed/truncated GX "
+            "tables proving pinned C length validation and exact error/output "
+            "pointer handling"
+        ),
+        "ftgxval.FT_VALIDATE_APPLE.runtime_selects_apple_classic_kern": (
+            "FT_VALIDATE_APPLE runtime parity needs a classic-kern route proving "
+            "the selector chooses Apple kern validation/output rather than MS "
+            "behavior"
+        ),
+        "ftgxval.FT_VALIDATE_CKERN.runtime_accepts_ms_or_apple": (
+            "FT_VALIDATE_CKERN parity needs a maintained classic-kern route "
+            "proving the selector accepts the correct MS/Apple classic kern "
+            "variant and returns exact buffer/error output"
+        ),
+        "ftgxval.FT_VALIDATE_CKERN.output_table_lifetime": (
+            "FT_VALIDATE_CKERN lifetime parity needs a validate/free route "
+            "proving returned table buffers remain valid until "
+            "FT_ClassicKern_Free and are freed exactly once"
+        ),
+        "ftgxval.FT_VALIDATE_opbd.gx_validate_selects_opbd_table": (
+            "FT_VALIDATE_opbd parity needs a GX/AAT fixture with an opbd table "
+            "and exact selected-table output slot/error comparison"
+        ),
+        "ftgxval.FT_VALIDATE_opbd_INDEX.indexes_gx_validate_output_slot": (
+            "FT_VALIDATE_opbd_INDEX parity needs maintained proof that the "
+            "public index maps to the same FT_TrueTypeGX_Validate output slot "
+            "as pinned C"
+        ),
+        "ftgxval.FT_VALIDATE_prop.gx_validate_selects_prop_table": (
+            "FT_VALIDATE_prop parity needs a GX/AAT fixture with a prop table "
+            "and exact selected-table output slot/error comparison"
+        ),
+        "ftgxval.FT_VALIDATE_prop_INDEX.indexes_gx_validate_output_slot": (
+            "FT_VALIDATE_prop_INDEX parity needs maintained proof that the "
+            "public index maps to the same FT_TrueTypeGX_Validate output slot "
+            "as pinned C"
+        ),
+        "ftgxval.FT_VALIDATE_trak.gx_validate_selects_trak_table": (
+            "FT_VALIDATE_trak parity needs a GX/AAT fixture with a trak table "
+            "and exact selected-table output slot/error comparison"
+        ),
+        "ftgxval.FT_VALIDATE_trak_INDEX.indexes_gx_validate_output_slot": (
+            "FT_VALIDATE_trak_INDEX parity needs maintained proof that the "
+            "public index maps to the same FT_TrueTypeGX_Validate output slot "
+            "as pinned C"
+        ),
+    }
+    return pending_cases.get(row.case_id)
 
 
 def absent_or_noop_surface_real_parity_reason(row: ConcreteInput) -> str | None:
