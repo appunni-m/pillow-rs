@@ -1623,6 +1623,12 @@ Finding:
   invokes outline bitmap/direct rendering and custom renderer lifecycle
   callbacks, observes SVG/build-dependent glyph formats, and compares exact
   public records and callback side effects across all ABI lanes.
+- The `ftimage.FT_Pos.coordinate_outputs_use_ft_pos` fixture specifically
+  declares `outlines/synthetic/negative-and-large-coordinates.json`, but that
+  maintained synthetic outline asset is absent. Its fixture also marks this as
+  a future requirement for negative and large coordinates. Promoting this row
+  before adding the asset/generator and a real coordinate route would be a
+  green placeholder, not same-input C/Rust/C-ABI/WASM parity.
 
 Classification change:
 
@@ -1643,6 +1649,11 @@ Required fix plan:
    owner destruction semantics, empty bitmap pixel mode, `FT_Pos` coordinate
    outputs, custom raster lifecycle callbacks, set-mode observability, and
    direct span emission.
+   - For `FT_Pos`, first add a maintained synthetic outline asset or generator
+     for negative, large-positive, large-negative, and transformed coordinate
+     cases, then route the same outline through `FT_Load_Glyph`/outline point
+     capture, `FT_Outline_Get_CBox`, `FT_Vector_Transform`, and
+     `FT_Outline_Decompose` callback capture across all ABI lanes.
 3. Compare exact return codes, glyph format values, outline flag effects,
    bitmap state, coordinate widths/signs, callback invocation counts/order,
    raster handles, set-mode results, emitted spans, and ownership/destruction
