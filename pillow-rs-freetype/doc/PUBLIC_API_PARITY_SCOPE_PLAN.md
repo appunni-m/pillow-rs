@@ -185,9 +185,14 @@ When a row depends on an external format or font family:
 5. If neither fixture nor reproducible sample is possible, mark the row
    untestable or pending with the exact missing dependency.
 
-Adobe MM is not just a fixture problem. It needs Type 1 MM parser behavior,
-design coordinates, blend/weight vector semantics, and named-instance reset
-behavior matching FreeType. Until those exist, the Adobe MM row remains pending.
+Adobe MM is not just a fixture problem.  A compact generated
+`fonts/type1-mm/adobe-mm-two-axis.pfb` fixture now exists and is produced by
+`scripts/build_type1_fixtures.py`; pinned C FreeType opens it and exposes two
+axes and four designs.  The remaining work is Type 1 MM parser behavior,
+design coordinates, blend/weight vector semantics, explicit unified
+Rust/C-ABI/WASM routes, and named-instance reset behavior matching FreeType.
+Until those exist and focused parity passes, the Adobe MM success rows remain
+pending.
 
 ## R4: Verification Gates
 
