@@ -1906,6 +1906,7 @@ fn wasm_property_module(selector: i32) -> Option<&'static str> {
         1 => Some("truetype"),
         2 => Some("sfnt"),
         3 => Some("fixture_missing"),
+        4 => Some("autofitter"),
         _ => Some("fixture_missing"),
     }
 }
@@ -1915,6 +1916,8 @@ fn wasm_property_name(selector: i32) -> Option<&'static str> {
         0 => None,
         1 => Some("interpreter-version"),
         2 => Some("fixture-missing-property"),
+        3 => Some("default-script"),
+        4 => Some("fallback-script"),
         _ => Some("fixture-missing-property"),
     }
 }

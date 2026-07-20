@@ -187,14 +187,11 @@ Findings:
   assert the build's actual unsupported-service behavior, or provide a
   C-openable build/asset path where BASE validation is supported.  Do not
   promote the current row as absent-table success.
-- `ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip` is
-  not equivalent to the existing `truetype:interpreter-version` scalar
-  property route.  Removing the row from the driver pending set only exposes
-  the generic property-service guard:
-  `FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI property APIs`.
-  Required next fix: implement `autofitter:default-script` and related
-  typed autohinter property storage in the Rust core, then expose only thin
-  C/WASM calls for the same public property surface.
+- `ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip` now
+  has a maintained scalar `autofitter:default-script` route through pinned C,
+  Rust FFI, C ABI, and WASM ABI.  This is intentionally separate from
+  `truetype:interpreter-version`; the core owns the autofitter module state and
+  the wrappers only pass the public scalar property value through.
 
 ### Issue Set Current: malformed SFNT constructor errors with stale declared expectations
 
@@ -2239,28 +2236,29 @@ Required fix plan:
 
 Current exact broad-driver pending split:
 
-- `FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip`: implement
-  `autofitter:fallback-script` `FT_Property_Set/Get` routing and verify CJK
-  acceptance/readback plus invalid-script preservation against pinned C.
+- `FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip`: verified
+  `autofitter:fallback-script` `FT_Property_Set/Get` routing, CJK
+  acceptance/readback, and invalid-script preservation against pinned C.
 - `FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime`: add a CJK-control
   font and maintained `FT_Prop_GlyphToScriptMap` route that compares per-glyph
   script values before/after auto-hinted load.
-- `FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation`: prove the
-  pinned build's Indic fallback-script acceptance or `Invalid_Argument`
-  behavior through the same property route.
+- `FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation`: verified
+  the pinned build's Indic fallback-script acceptance/readback and
+  invalid-script preservation through the same property route.
 - `FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime`: add Indic cmap
   coverage and compare script-map plus auto-hinted glyph output across
   C/Rust/C-ABI/WASM.
-- `FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip`: implement
-  `autofitter:default-script` directly. Do not reuse the scalar
+- `FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip`: verified
+  `autofitter:default-script` directly. This does not reuse the scalar
   `truetype:interpreter-version` property route because that is a different
   public input.
 - `FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime`: compare Basic
   Latin, Greek, and Cyrillic script-map values and subsequent auto-hinted glyph
   output through the maintained map route.
-- `FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip`: prove
-  default-script and fallback-script NONE readback, invalid controls, and
-  output preservation through all ABI lanes.
+- `FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip`: still
+  pending because the declared property list also includes
+  `glyph-to-script-map`; promoting only the scalar default/fallback subset
+  would skip a typed public property input.
 - `FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime`: compare map mutation
   side effects and before/after auto-hinted glyph output.
 - `FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime` and

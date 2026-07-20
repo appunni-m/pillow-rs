@@ -2512,6 +2512,9 @@ impl BackendComparisonWorker {
             {
                 property_increase_x_height_roundtrip_output(case, PropertyBackend::Rust)
             }
+            "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
+                property_autofitter_script_roundtrip_output(case, PropertyBackend::Rust)
+            }
             "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
                 property_set_case_output(case, PropertyBackend::Rust)
             }
@@ -16441,6 +16444,74 @@ fn property_increase_x_height_roundtrip_output(
     Ok(ok(json!({ "rows": rows })))
 }
 
+fn autofitter_script_property_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation"
+    )
+}
+
+fn autofitter_property_selector(property_name: &str) -> Result<i32, String> {
+    match property_name {
+        "default-script" => Ok(3),
+        "fallback-script" => Ok(4),
+        other => Err(format!("unsupported autofitter property {other}")),
+    }
+}
+
+fn property_autofitter_script_roundtrip_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    let value = u32_param(&case.inputs.params, "value")? as FT_UInt;
+    let property_names = string_array_param(&case.inputs.params, "property_names")?;
+    let rows = property_names
+        .iter()
+        .map(|property_name| {
+            let property_selector = autofitter_property_selector(property_name)?;
+            let mut initial = PROPERTY_SENTINEL;
+            let initial_get =
+                property_get_call(backend, 1, 4, property_selector, Some(&mut initial));
+            let (set_error, get_error, readback) =
+                property_set_then_get_call(backend, 4, property_selector, Some(value));
+            let mut bad_module_value = PROPERTY_SENTINEL;
+            let bad_module_error = property_get_call(
+                backend,
+                1,
+                3,
+                property_selector,
+                Some(&mut bad_module_value),
+            );
+            let mut bad_property_value = PROPERTY_SENTINEL;
+            let bad_property_error =
+                property_get_call(backend, 1, 4, 2, Some(&mut bad_property_value));
+            let invalid_set_error =
+                property_set_call_with_property(backend, 1, 4, property_selector, Some(9999));
+            let mut post_invalid = PROPERTY_SENTINEL;
+            let post_invalid_get =
+                property_get_call(backend, 1, 4, property_selector, Some(&mut post_invalid));
+            Ok(json!({
+                "property": property_name,
+                "initial_get_error": initial_get,
+                "initial_readback": initial,
+                "set_error": set_error,
+                "get_error": get_error,
+                "readback_value": readback,
+                "bad_module_error": bad_module_error,
+                "bad_module_value_after": bad_module_value,
+                "bad_property_error": bad_property_error,
+                "bad_property_value_after": bad_property_value,
+                "invalid_set_error": invalid_set_error,
+                "post_invalid_get_error": post_invalid_get,
+                "post_invalid_readback": post_invalid
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
 fn property_get_call(
     backend: PropertyBackend,
     library_present: i32,
@@ -16480,6 +16551,16 @@ fn property_set_call(
     module_selector: i32,
     value: Option<FT_UInt>,
 ) -> FT_Error {
+    property_set_call_with_property(backend, library_present, module_selector, 1, value)
+}
+
+fn property_set_call_with_property(
+    backend: PropertyBackend,
+    library_present: i32,
+    module_selector: i32,
+    property_selector: i32,
+    value: Option<FT_UInt>,
+) -> FT_Error {
     match backend {
         PropertyBackend::Rust => {
             let mut library = if library_present == 0 {
@@ -16490,7 +16571,7 @@ fn property_set_call(
             FT_Property_Set(
                 library.as_mut(),
                 property_module_selector(module_selector),
-                Some("interpreter-version"),
+                property_name_selector(property_selector),
                 value,
             )
         }
@@ -16499,7 +16580,7 @@ fn property_set_call(
             c_property_set_call(
                 library_present,
                 module_selector,
-                1,
+                property_selector,
                 value.map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt),
             )
         }
@@ -16509,7 +16590,7 @@ fn property_set_call(
             wasm_abi::fontdone_wasm_property_set_then_get(
                 library_present,
                 module_selector,
-                1,
+                property_selector,
                 value.map_or(std::ptr::null(), |_| &value_storage as *const FT_UInt),
                 &mut out,
             )
@@ -16535,8 +16616,8 @@ fn property_set_then_get_call(
             let mut out = PROPERTY_SENTINEL;
             let get_status = FT_Property_Get(
                 Some(&library),
-                property_module_selector(1),
-                property_name_selector(1),
+                property_module_selector(module_selector),
+                property_name_selector(property_selector),
                 Some(&mut out),
             );
             (set_status, get_status, out)
@@ -16678,6 +16759,7 @@ fn property_module_selector(selector: i32) -> Option<&'static str> {
         1 => Some("truetype"),
         2 => Some("sfnt"),
         3 => Some("fixture_missing"),
+        4 => Some("autofitter"),
         _ => Some("fixture_missing"),
     }
 }
@@ -16687,6 +16769,8 @@ fn property_name_selector(selector: i32) -> Option<&'static str> {
         0 => None,
         1 => Some("interpreter-version"),
         2 => Some("fixture-missing-property"),
+        3 => Some("default-script"),
+        4 => Some("fallback-script"),
         _ => Some("fixture-missing-property"),
     }
 }
@@ -16760,8 +16844,8 @@ fn c_property_set_then_get_call(
     let mut out = PROPERTY_SENTINEL;
     let get_status = c_abi::FT_Property_Get(
         library,
-        property_module_cstr(1),
-        property_name_cstr(1),
+        property_module_cstr(module_selector),
+        property_name_cstr(property_selector),
         (&mut out as *mut FT_UInt).cast(),
     );
     c_done_library(library);
@@ -16774,6 +16858,7 @@ fn property_module_cstr(selector: i32) -> *const std::ffi::c_char {
         1 => c"truetype".as_ptr(),
         2 => c"sfnt".as_ptr(),
         3 => c"fixture_missing".as_ptr(),
+        4 => c"autofitter".as_ptr(),
         _ => c"fixture_missing".as_ptr(),
     }
 }
@@ -16783,6 +16868,8 @@ fn property_name_cstr(selector: i32) -> *const std::ffi::c_char {
         0 => std::ptr::null(),
         1 => c"interpreter-version".as_ptr(),
         2 => c"fixture-missing-property".as_ptr(),
+        3 => c"default-script".as_ptr(),
+        4 => c"fallback-script".as_ptr(),
         _ => c"fixture-missing-property".as_ptr(),
     }
 }
@@ -19921,6 +20008,9 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
             | "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation"
     )
 }
 
@@ -20151,6 +20241,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
+        }
+        "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
+            Ok(vec!["--property-case".to_string(), case.case_id.clone()])
         }
         "ftmodapi.property_get"
         | "ftmodapi.property_set"
@@ -23427,6 +23520,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             property_increase_x_height_roundtrip_output(case, PropertyBackend::CAbi)
         }
+        "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
+            property_autofitter_script_roundtrip_output(case, PropertyBackend::CAbi)
+        }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
@@ -24267,6 +24363,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
         {
             property_increase_x_height_roundtrip_output(case, PropertyBackend::Wasm)
+        }
+        "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
+            property_autofitter_script_roundtrip_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::Wasm)
