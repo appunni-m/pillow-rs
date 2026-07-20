@@ -10665,6 +10665,20 @@ FTMM glyph-output route follow-up on 2026-07-20:
   the rows validate actual same-input C oracle output instead of an
   out-of-range placeholder.
 
+FTMM metrics-variation route follow-up on 2026-07-20:
+
+- `ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations`
+  now uses the maintained `fonts/variable/mvar-hvar-vvar.ttf` fixture with an
+  explicit valid `glyph_index=10`.  Pinned FreeType 2.14.3 accepts the
+  two-axis design coordinates `[45875200, 4915200]`, sets variation state, and
+  reports exact face metrics, active `FT_Size_Metrics`, and loaded glyph
+  advance after `FT_Set_Pixel_Sizes`, `FT_Set_Var_Design_Coordinates`, and
+  `FT_Load_Glyph`.
+- The maintained route compares those metrics through pinned C oracle, Rust
+  FFI, C ABI, and WASM ABI.  This route intentionally observes metrics and
+  advance only; rendered bitmap parity for the same fixture is covered by the
+  glyph-output rows above.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.
