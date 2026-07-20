@@ -19994,6 +19994,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftmm.get_var_blend_coordinates"
         | "ftmm.get_mm_blend_coordinates"
+        | "ftmm.set_then_get_mm_blend_coordinates"
         | "ftmm.set_var_blend_coordinates"
         | "ftmm.set_mm_blend_coordinates" => {
             if case.operation == "ftmm.get_mm_blend_coordinates"
@@ -20016,6 +20017,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             let mode = match case.operation.as_str() {
                 "ftmm.get_mm_blend_coordinates" => "get-mm",
+                "ftmm.set_then_get_mm_blend_coordinates" => "get-mm",
                 "ftmm.set_var_blend_coordinates" => "set-var",
                 "ftmm.set_mm_blend_coordinates" => "set-mm",
                 _ => "get-var",
@@ -21130,6 +21132,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 rust_ftmm_blend_coordinates(case, "get-mm")
             }
         }
+        "ftmm.set_then_get_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "get-mm"),
         "ftmm.set_var_blend_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>
@@ -21958,6 +21961,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 c_ftmm_blend_coordinates(case, "get-mm")
             }
         }
+        "ftmm.set_then_get_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "get-mm"),
         "ftmm.set_var_blend_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>
@@ -22711,6 +22715,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 wasm_ftmm_blend_coordinates(case, "get-mm")
             }
         }
+        "ftmm.set_then_get_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "get-mm"),
         "ftmm.set_var_blend_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter" =>

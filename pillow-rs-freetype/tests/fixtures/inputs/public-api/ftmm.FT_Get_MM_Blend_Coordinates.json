@@ -135,27 +135,17 @@
         "assets": {
           "variable_font": {
             "kind": "ref",
-            "id": "fonts/variable/avar-multi-axis.ttf",
-            "asset_kind": "font",
-            "status": "required_future_asset"
+            "id": "fonts/variable/inter-wght.ttf",
+            "asset_kind": "font"
           }
         },
         "params": {
-          "prior_set_operations": [
-            {
-              "operation": "FT_Set_MM_Blend_Coordinates",
-              "coords": [
-                -32768,
-                0,
-                32768
-              ]
-            },
+          "prior_calls": [
             {
               "operation": "FT_Set_Var_Blend_Coordinates",
-              "coords": [
-                -65536,
-                32768,
-                65536
+              "num_coords": 1,
+              "coords_16_16": [
+                32768
               ]
             }
           ],
@@ -170,17 +160,16 @@
       "expectation": {
         "status": "ok",
         "output_shape": {
-          "set_status": "FT_Error",
-          "get_status": "FT_Error",
-          "coords": "normalized FT_Fixed values after service normalization"
+          "return": "FT_Error",
+          "active_blend_coords": "normalized FT_Fixed values after service normalization",
+          "face_flags": "FT_Long"
         },
         "compare": {
           "mode": "exact",
           "paths": [
-            "rows[*].set_status",
-            "rows[*].get_status",
-            "rows[*].coords[*]",
-            "rows[*].face_flags_variation"
+            "return",
+            "active_blend_coords[*]",
+            "face_flags.FT_FACE_FLAG_VARIATION"
           ]
         },
         "source_refs": [

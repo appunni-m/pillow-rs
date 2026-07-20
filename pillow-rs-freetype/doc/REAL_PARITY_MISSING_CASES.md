@@ -10556,6 +10556,16 @@ Follow-up finding for blend-coordinate state rows:
   concrete OpenType variable-font row through pinned C, Rust FFI, C ABI, and
   WASM ABI.  The row's optional Adobe MM asset remains unresolved and is not
   counted by this route; only the C-openable `variable_font` row is promoted.
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates` row now uses
+  the maintained single-axis `fonts/variable/inter-wght.ttf` fixture instead
+  of the absent future `fonts/variable/avar-multi-axis.ttf` asset.  Pinned
+  FreeType 2.14.3 proves the concrete behavior:
+  `FT_Set_Var_Blend_Coordinates(face, [32768]) -> Ok`, then
+  `FT_Get_MM_Blend_Coordinates(face, axis_count) -> [32768]`, with
+  `face_flags=35609` and `FT_FACE_FLAG_VARIATION` set.  The unified route now
+  validates that same active normalized blend state through pinned C oracle,
+  Rust FFI, C ABI, and WASM ABI.
 - The MM invalid argument-matrix row stays exact by comparing all three public
   C scenarios explicitly: variable face with null coords, null face with valid
   coords, and non-variable face with valid coords.
