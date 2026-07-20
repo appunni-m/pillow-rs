@@ -10880,6 +10880,36 @@ Current route-audit breakdown:
   - `FT_Stroker_LineCap.open_path_cap_geometry`: public cap enum selection for
     butt, round, and square geometry exactly matching pinned C.
 
+2026-07-21 path-construction and line-join blocker split:
+
+- `BeginSubPath`, `LineTo`, and line-join rows are split by exact obligation
+  instead of sharing broad path-construction and join-geometry blockers:
+  - `FT_Stroker_BeginSubPath.closed_subpath_initial_state`: opened flag, first
+    point, and left/right border initial state for a closed path.
+  - `FT_Stroker_BeginSubPath.open_subpath_initial_state`: opened flag, first
+    point, and cap-dependent border initial state for an open path.
+  - `FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join`:
+    FreeType wide-stroke setup selected from cap and join attributes.
+  - `FT_Stroker_LineTo.line_segment_success`: line joins, emitted border
+    points, tags, contours, and current point advancement.
+  - `FT_Stroker_LineTo.first_segment_starts_subpath`: a line segment
+    initializing an otherwise empty subpath with the same border state and
+    output geometry.
+  - `FT_Stroker_LineTo.zero_length_line_noop`: a line to the current point
+    preserving state or no-oping exactly like pinned C.
+  - `FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry`: bevel join points, tags,
+    contours, and cutover behavior.
+  - `FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry`: public
+    miter alias selecting variable-miter geometry.
+  - `FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry`: fixed-miter
+    intersection, miter-limit fallback, and output geometry.
+  - `FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry`:
+    variable-miter intersection, miter-limit fallback, and output geometry.
+  - `FT_STROKER_LINEJOIN_ROUND.round_join_geometry`: round join arc
+    subdivision and emitted points, tags, and contours.
+  - `FT_Stroker_LineJoin.join_geometry_and_miter_limit`: public join enum
+    values and miter-limit inputs selecting the same output geometry.
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and

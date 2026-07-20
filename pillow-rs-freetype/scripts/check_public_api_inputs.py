@@ -1344,6 +1344,84 @@ def ftstroke_line_cap_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftstroke_path_construction_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker BeginSubPath/LineTo rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state": (
+            "FT_Stroker_BeginSubPath closed-subpath parity needs a maintained "
+            "route proving the opened flag, first point, and left/right border "
+            "initial state for a closed path match pinned C"
+        ),
+        "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state": (
+            "FT_Stroker_BeginSubPath open-subpath parity needs a maintained "
+            "route proving the opened flag, first point, and cap-dependent "
+            "border initial state for an open path match pinned C"
+        ),
+        "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join": (
+            "FT_Stroker_BeginSubPath wide-stroke parity needs a maintained "
+            "route proving FreeType selects wide-stroke setup from cap and "
+            "join attributes exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_LineTo.line_segment_success": (
+            "FT_Stroker_LineTo segment parity needs a maintained route proving "
+            "line joins, emitted border points, tags, contours, and current "
+            "point advancement match pinned C"
+        ),
+        "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath": (
+            "FT_Stroker_LineTo first-segment parity needs a maintained route "
+            "proving a line segment can initialize an otherwise empty subpath "
+            "with the same border state and output geometry as pinned C"
+        ),
+        "ftstroke.FT_Stroker_LineTo.zero_length_line_noop": (
+            "FT_Stroker_LineTo zero-length parity needs a maintained route "
+            "proving a line to the current point preserves state or no-ops "
+            "exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker line-join rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry": (
+            "FT_STROKER_LINEJOIN_BEVEL parity needs a maintained route proving "
+            "bevel join points, tags, contours, and cutover behavior match "
+            "pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry": (
+            "FT_STROKER_LINEJOIN_MITER alias parity needs a maintained route "
+            "proving the public alias selects variable-miter geometry exactly "
+            "like pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry": (
+            "FT_STROKER_LINEJOIN_MITER_FIXED parity needs a maintained route "
+            "proving fixed-miter intersection, miter-limit fallback, and output "
+            "geometry match pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry": (
+            "FT_STROKER_LINEJOIN_MITER_VARIABLE parity needs a maintained "
+            "route proving variable-miter intersection, miter-limit fallback, "
+            "and output geometry match pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry": (
+            "FT_STROKER_LINEJOIN_ROUND parity needs a maintained route proving "
+            "round join arc subdivision, emitted points, tags, and contours "
+            "match pinned C"
+        ),
+        "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit": (
+            "FT_Stroker_LineJoin runtime parity needs a maintained route "
+            "proving public join enum values and miter-limit inputs select the "
+            "same output geometry as pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
@@ -1369,6 +1447,12 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     line_cap_pending = ftstroke_line_cap_pending_reason(row)
     if line_cap_pending:
         return line_cap_pending
+    path_pending = ftstroke_path_construction_pending_reason(row)
+    if path_pending:
+        return path_pending
+    line_join_pending = ftstroke_line_join_pending_reason(row)
+    if line_join_pending:
+        return line_join_pending
     pending_case_groups = {
         (
             "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
@@ -1390,31 +1474,6 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Stroker_Set/Rewind parity needs a maintained non-null stroker "
             "state route proving radius, cap, join, miter-limit clamp, path "
             "clearing, and attribute preservation semantics against pinned C"
-        ),
-        (
-            "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state",
-            "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state",
-            "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join",
-            "ftstroke.FT_Stroker_LineTo.line_segment_success",
-            "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath",
-            "ftstroke.FT_Stroker_LineTo.zero_length_line_noop",
-        ): (
-            "FT_Stroker_BeginSubPath/LineTo parity needs a maintained path "
-            "construction route proving open/closed initial state, first-segment "
-            "behavior, zero-length handling, and resulting border geometry "
-            "against pinned C"
-        ),
-        (
-            "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry",
-            "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry",
-            "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry",
-            "ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry",
-            "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry",
-            "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit",
-        ): (
-            "FT_Stroker line-join parity needs a maintained join-geometry route "
-            "comparing bevel, round, fixed miter, variable miter, alias behavior, "
-            "and miter-limit output against pinned C"
         ),
         (
             "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders",
