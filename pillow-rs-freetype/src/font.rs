@@ -51,6 +51,8 @@ pub struct Font {
     pub load_mode: LoadMode,
     face_kind: FaceKind,
     type1_multi_master: Option<Arc<Type1MultiMaster>>,
+    type1_mm_weight_vector: Option<Vec<i32>>,
+    type1_mm_variation_active: bool,
     /// Face-level global hinting data: per-glyph script assignment,
     /// lazy-computed per-style metrics (Latin, Greek, etc.).
     /// Matches FreeType's AF_FaceGlobals.
@@ -130,6 +132,7 @@ struct Type1Metadata {
 pub(crate) struct Type1MultiMaster {
     pub axes: Vec<Type1MultiMasterAxis>,
     pub num_designs: usize,
+    pub default_weight_vector: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -592,7 +595,10 @@ fn parse_type1_multi_master(cleartext: &[u8]) -> Option<Type1MultiMaster> {
     }
     let design_positions = type1_nested_number_array(text, "BlendDesignPositions")?;
     let design_maps = type1_nested_number_array(text, "BlendDesignMap")?;
-    let weight_vector = type1_number_array(text, "WeightVector")?;
+    let weight_vector = type1_number_array(text, "WeightVector")?
+        .into_iter()
+        .map(type1_weight_to_fixed)
+        .collect::<Option<Vec<_>>>()?;
     let num_designs = 1usize.checked_shl(u32::try_from(axes.len()).ok()?)?;
     if design_positions.len() != num_designs
         || weight_vector.len() != num_designs
@@ -617,7 +623,11 @@ fn parse_type1_multi_master(cleartext: &[u8]) -> Option<Type1MultiMaster> {
             })
         })
         .collect::<Option<Vec<_>>>()?;
-    Some(Type1MultiMaster { axes, num_designs })
+    Some(Type1MultiMaster {
+        axes,
+        num_designs,
+        default_weight_vector: weight_vector,
+    })
 }
 
 fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<FontData> {
@@ -797,6 +807,17 @@ fn i32_from_f64(value: f64) -> Option<i32> {
         return None;
     }
     i32::try_from(value as i64).ok()
+}
+
+fn type1_weight_to_fixed(value: f64) -> Option<i32> {
+    if !value.is_finite() {
+        return None;
+    }
+    let fixed = (value * 65_536.0).round();
+    if (fixed - value * 65_536.0).abs() > f64::EPSILON {
+        return None;
+    }
+    i32::try_from(fixed as i64).ok()
 }
 
 fn type1_name_token(text: &str, key: &str) -> Option<String> {
@@ -1161,6 +1182,9 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing Type 1 clear-text dictionary".into()))?;
         let metadata = parse_type1_metadata(cleartext)?;
         let type1_multi_master = parse_type1_multi_master(cleartext).map(Arc::new);
+        let type1_mm_weight_vector = type1_multi_master
+            .as_ref()
+            .map(|master| master.default_weight_vector.clone());
         let font_data = type1_font_data(data, size_pt, &metadata);
         let is_italic = metadata.italic_angle != 0;
         let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
@@ -1183,6 +1207,8 @@ impl Font {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
             type1_multi_master,
+            type1_mm_weight_vector,
+            type1_mm_variation_active: false,
             face_globals,
             is_italic,
             family_name,
@@ -1221,6 +1247,8 @@ impl Font {
             load_mode: LoadMode::Default,
             face_kind: FaceKind::WinFnt { header },
             type1_multi_master: None,
+            type1_mm_weight_vector: None,
+            type1_mm_variation_active: false,
             face_globals,
             is_italic,
             family_name,
@@ -1479,6 +1507,8 @@ impl Font {
             load_mode,
             face_kind: FaceKind::Sfnt,
             type1_multi_master: None,
+            type1_mm_weight_vector: None,
+            type1_mm_variation_active: false,
             face_globals,
             is_italic,
             family_name,
@@ -1573,6 +1603,38 @@ impl Font {
 
     pub(crate) fn type1_multi_master(&self) -> Option<&Type1MultiMaster> {
         self.type1_multi_master.as_deref()
+    }
+
+    pub(crate) fn type1_mm_weight_vector(&self) -> Result<&[i32], FontError> {
+        self.type1_mm_weight_vector
+            .as_deref()
+            .ok_or_else(|| FontError::InvalidArgument("face has no Type 1 MM weight vector".into()))
+    }
+
+    pub(crate) fn set_type1_mm_weight_vector(
+        &mut self,
+        weightvector: Option<&[i32]>,
+    ) -> Result<(), FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM weight vector".into(),
+            ));
+        };
+        let next = match weightvector {
+            None => master.default_weight_vector.clone(),
+            Some(weightvector) => {
+                // C parity: src/type1/t1load.c:T1_Set_MM_WeightVector
+                // copies up to `num_designs`, zero-fills missing design weights,
+                // ignores excess values, and does not normalize the weight sum.
+                let mut next = vec![0; master.num_designs];
+                let copy_len = weightvector.len().min(master.num_designs);
+                next[..copy_len].copy_from_slice(&weightvector[..copy_len]);
+                next
+            }
+        };
+        self.type1_mm_weight_vector = Some(next);
+        self.type1_mm_variation_active = weightvector.is_some();
+        Ok(())
     }
 
     /// Set normalized blend coordinates, equivalent to
@@ -1835,6 +1897,9 @@ impl Font {
                 | FT_FACE_FLAG_HINTER;
             if self.type1_multi_master.is_some() {
                 flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
+            }
+            if self.type1_mm_variation_active {
+                flags |= FT_FACE_FLAG_VARIATION;
             }
             if is_fixed_pitch {
                 flags |= FT_FACE_FLAG_FIXED_WIDTH;

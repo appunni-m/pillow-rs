@@ -228,9 +228,11 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_named_instance",
     "fontdone_wasm_get_mm_blend_coordinates",
     "fontdone_wasm_get_multi_master",
+    "fontdone_wasm_get_mm_weight_vector",
     "fontdone_wasm_get_var_blend_coordinates",
     "fontdone_wasm_get_var_design_coordinates",
     "fontdone_wasm_set_mm_blend_coordinates",
+    "fontdone_wasm_set_mm_weight_vector",
     "fontdone_wasm_set_var_blend_coordinates",
     "fontdone_wasm_set_var_design_coordinates",
     "fontdone_wasm_get_default_named_instance",
@@ -1384,9 +1386,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates",
         "ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
-        "ftmm.FT_Set_MM_WeightVector.success_set_weight_vector",
-        "ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset",
-        "ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum",
         "ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
         "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset",
@@ -3808,6 +3807,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len"
     ):
         return "FT_Set_MM_WeightVector null-weightvector error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_weight_vector"
+        and row.case_id == "ftmm.FT_Set_MM_WeightVector.success_set_weight_vector"
+    ):
+        return "FT_Set_MM_WeightVector success validates Type 1 MM weight vector state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_weight_vector"
+        and row.case_id == "ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset"
+    ):
+        return "FT_Set_MM_WeightVector short, long, and reset scenarios validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_weight_vector"
+        and row.case_id == "ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum"
+    ):
+        return "FT_Set_MM_WeightVector unenforced weight sum behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_mm_weight_vector"
         and row.case_id

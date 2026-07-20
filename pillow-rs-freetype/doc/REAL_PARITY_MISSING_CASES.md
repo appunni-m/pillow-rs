@@ -10013,6 +10013,76 @@ make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype lint
 ```
 
+### Issue Set: `FT_Set_MM_WeightVector` generated Adobe MM state route
+
+Status: three real Type 1 MM weight-vector state rows implemented on
+2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `acc333be1`: `real-parity=4468`,
+  `pending-route=487`, `pending-core=1`.
+
+Finding:
+
+- Pinned FreeType 2.14.3 public dispatch in `src/base/ftmm.c` validates
+  `len != 0 && weightvector == NULL` before face service dispatch, calls the
+  Type 1 MM service when available, sets `FT_FACE_FLAG_VARIATION` after a
+  successful nonzero-length set, and clears it after a successful
+  zero-length reset.
+- The Type 1 service in `src/type1/t1load.c:T1_Set_MM_WeightVector` resets
+  to the default `WeightVector` when called with `len == 0 && weightvector ==
+  NULL`; otherwise it copies `min(len, num_designs)` entries, zero-fills the
+  remaining design weights, ignores extra entries, and does not enforce the
+  sum of weights.
+- `src/type1/t1load.c:T1_Get_MM_WeightVector` reports the required design
+  count through `*len`, returns `Invalid_Argument` when caller capacity is too
+  small, writes current design weights, and zero-fills caller capacity beyond
+  `num_designs`.
+- Rust previously retained only the parsed descriptor axes/counts for the
+  generated Type 1 MM fixture, so the first divergence was the generated
+  fixture accepting weight-vector mutation in C while Rust FFI/C ABI/WASM had
+  no mutable Type 1 MM weight-vector state.
+
+Implementation:
+
+- Added pure-Rust Type 1 MM default/current weight-vector state on `Font` and
+  exact set/reset/copy/zero-fill behavior for the generated Adobe MM fixture.
+- Added Rust FFI `FT_Set_MM_WeightVector` and
+  `FT_Get_MM_WeightVector`; C ABI and WASM ABI wrappers remain thin pointer
+  and handle adapters over the Rust FFI behavior.
+- Added a pinned C oracle/runtime route for `ftmm.set_mm_weight_vector` that
+  performs each set scenario and then observes `FT_Get_MM_WeightVector`,
+  face flags, `FT_FACE_FLAG_VARIATION`, returned length, and output buffer.
+- Promoted only the generated fixture-backed setter success rows:
+  - `ftmm.FT_Set_MM_WeightVector.success_set_weight_vector`
+  - `ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset`
+  - `ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum`
+- Left `ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success` pending
+  because its declared legacy `fonts/mm/adobe-multiple-master.pfb` asset is
+  still unresolved and was not tested through the generated fixture route.
+
+Result:
+
+- Route audit after this batch: `real-parity=4471`, `pending-route=484`,
+  `pending-core=1`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.success_set_weight_vector
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.len_without_buffer_error
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.unsupported_face_error
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype lint
+git diff --check
+```
+
 ### Issue Set Current: Adobe Type 1 MM fixture and false-green route guard
 
 Status: fixture added and false-green route promotion blocked on 2026-07-20.
@@ -10044,10 +10114,6 @@ Classification change:
   - `ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates`
   - `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
   - `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
-  - `ftmm.FT_Set_MM_WeightVector.success_set_weight_vector`
-  - `ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset`
-  - `ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum`
-  - `ftmm.FT_MM_Axis.populated_by_get_multi_master`
   - `ftmm.FT_MM_Var.populated_for_adobe_mm`
   - `ftmm.FT_Var_Axis.adobe_mm_axis_values`
 

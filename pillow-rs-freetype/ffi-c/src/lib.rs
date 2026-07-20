@@ -3286,6 +3286,41 @@ pub extern "C" fn FT_Get_Multi_Master(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_MM_WeightVector(
+    face: FT_Face,
+    len: FT_UInt,
+    weightvector: *const FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let weightvector = if weightvector.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `len` readable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts(weightvector, len as usize) })
+    };
+    rust_ffi::FT_Set_MM_WeightVector(Some(&mut state.inner), len, weightvector)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_MM_WeightVector(
+    face: FT_Face,
+    len: *mut FT_UInt,
+    weightvector: *mut FT_Fixed,
+) -> FT_Error {
+    let len_ref = unsafe { len.as_mut() };
+    let capacity = len_ref.as_ref().map_or(0, |len| **len as usize);
+    let weightvector = if weightvector.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `*len` writable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts_mut(weightvector, capacity) })
+    };
+    rust_ffi::FT_Get_MM_WeightVector(face_state(face).map(|state| &state.inner), len_ref, weightvector)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Var_Blend_Coordinates(
     face: FT_Face,
     num_coords: FT_UInt,

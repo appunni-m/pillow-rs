@@ -10138,6 +10138,218 @@ fn wasm_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ftmm_get_multi_master_output(err, &master))
 }
 
+#[derive(Debug, Clone)]
+struct FtmmWeightScenario {
+    len: FT_UInt,
+    weights: Vec<FT_Fixed>,
+    pointer_null: bool,
+}
+
+fn ftmm_weight_scenarios(params: &Value) -> Result<Vec<FtmmWeightScenario>, String> {
+    if let Some(scenarios) = params.get("scenarios").and_then(Value::as_array) {
+        return scenarios
+            .iter()
+            .map(|scenario| {
+                let len_value = u64_param(scenario, "len")?;
+                Ok(FtmmWeightScenario {
+                    len: FT_UInt::try_from(len_value)
+                        .map_err(|err| format!("scenario len {len_value} invalid: {err}"))?,
+                    weights: scenario
+                        .get("weightvector_16_16")
+                        .map(|_| ftmm_coords_from_value(scenario, "weightvector_16_16"))
+                        .transpose()?
+                        .unwrap_or_default(),
+                    pointer_null: scenario
+                        .get("weightvector_pointer")
+                        .is_some_and(Value::is_null),
+                })
+            })
+            .collect();
+    }
+    let len_value = u64_param(params, "len")?;
+    Ok(vec![FtmmWeightScenario {
+        len: FT_UInt::try_from(len_value)
+            .map_err(|err| format!("len {len_value} invalid: {err}"))?,
+        weights: params
+            .get("weightvector_16_16")
+            .map(|_| ftmm_coords_from_value(params, "weightvector_16_16"))
+            .transpose()?
+            .unwrap_or_default(),
+        pointer_null: params
+            .get("weightvector_pointer")
+            .is_some_and(Value::is_null),
+    }])
+}
+
+fn ftmm_weight_scenarios_arg(params: &Value) -> Result<String, String> {
+    Ok(ftmm_weight_scenarios(params)?
+        .into_iter()
+        .map(|scenario| {
+            format!(
+                "{}:{}",
+                scenario.len,
+                if scenario.pointer_null {
+                    "null".to_string()
+                } else {
+                    ftmm_coords_csv(&scenario.weights)
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn ftmm_weight_vector_json(values: &[FT_Fixed], len_after: FT_UInt, capacity: usize) -> Value {
+    json!({
+        "len_after": len_after,
+        "weightvector_after": values.iter().take(capacity).copied().collect::<Vec<_>>()
+    })
+}
+
+fn ftmm_weight_output(status: FT_Error, rows: Vec<Value>) -> RunOutput {
+    let output = json!({ "rows": rows });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_ftmm_set_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let scenarios = ftmm_weight_scenarios(&case.inputs.params)?;
+    let mut rows = Vec::with_capacity(scenarios.len());
+    let mut status = FT_Err_Ok;
+    for scenario in scenarios {
+        let set_err = FT_Set_MM_WeightVector(
+            Some(&mut face),
+            scenario.len,
+            if scenario.pointer_null {
+                None
+            } else {
+                Some(&scenario.weights)
+            },
+        );
+        let capacity = 6usize;
+        let mut get_len = FT_UInt::try_from(capacity).unwrap_or(6);
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let get_err = if set_err == FT_Err_Ok {
+            FT_Get_MM_WeightVector(Some(&face), Some(&mut get_len), Some(&mut values))
+        } else {
+            FT_Err_Ok
+        };
+        if status == FT_Err_Ok {
+            status = if set_err != FT_Err_Ok {
+                set_err
+            } else {
+                get_err
+            };
+        }
+        rows.push(json!({
+            "set_return": set_err,
+            "get_return": get_err,
+            "face_flags": rust_face_info(&face).face_flags,
+            "variation_bit_set": (rust_face_info(&face).face_flags & (1 << 15)) != 0,
+            "vector": ftmm_weight_vector_json(&values, get_len, capacity)
+        }));
+    }
+    Ok(ftmm_weight_output(status, rows))
+}
+
+fn c_ftmm_set_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let scenarios = ftmm_weight_scenarios(&case.inputs.params)?;
+    let mut rows = Vec::with_capacity(scenarios.len());
+    let mut status = FT_Err_Ok;
+    for scenario in scenarios {
+        let set_err = c_abi::FT_Set_MM_WeightVector(
+            face,
+            scenario.len,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.weights.as_ptr()
+            },
+        );
+        let capacity = 6usize;
+        let mut get_len = FT_UInt::try_from(capacity).unwrap_or(6);
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let get_err = if set_err == FT_Err_Ok {
+            c_abi::FT_Get_MM_WeightVector(face, &mut get_len, values.as_mut_ptr())
+        } else {
+            FT_Err_Ok
+        };
+        if status == FT_Err_Ok {
+            status = if set_err != FT_Err_Ok {
+                set_err
+            } else {
+                get_err
+            };
+        }
+        let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+        rows.push(json!({
+            "set_return": set_err,
+            "get_return": get_err,
+            "face_flags": info.face_flags,
+            "variation_bit_set": (info.face_flags & (1 << 15)) != 0,
+            "vector": ftmm_weight_vector_json(&values, get_len, capacity)
+        }));
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_weight_output(status, rows))
+}
+
+fn wasm_ftmm_set_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let scenarios = ftmm_weight_scenarios(&case.inputs.params)?;
+    let mut rows = Vec::with_capacity(scenarios.len());
+    let mut status = FT_Err_Ok;
+    for scenario in scenarios {
+        let set_err = wasm_abi::fontdone_wasm_set_mm_weight_vector(
+            handle,
+            scenario.len,
+            if scenario.pointer_null {
+                std::ptr::null()
+            } else {
+                scenario.weights.as_ptr()
+            },
+        );
+        let capacity = 6usize;
+        let mut get_len = FT_UInt::try_from(capacity).unwrap_or(6);
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let get_err = if set_err == FT_Err_Ok {
+            wasm_abi::fontdone_wasm_get_mm_weight_vector(handle, &mut get_len, values.as_mut_ptr())
+        } else {
+            FT_Err_Ok
+        };
+        if status == FT_Err_Ok {
+            status = if set_err != FT_Err_Ok {
+                set_err
+            } else {
+                get_err
+            };
+        }
+        let info =
+            wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+        rows.push(json!({
+            "set_return": set_err,
+            "get_return": get_err,
+            "face_flags": info.face_flags,
+            "variation_bit_set": (info.face_flags & (1 << 15)) != 0,
+            "vector": ftmm_weight_vector_json(&values, get_len, capacity)
+        }));
+    }
+    wasm_done_face(handle);
+    Ok(ftmm_weight_output(status, rows))
+}
+
 fn wasm_fontdone_string_json(
     f: impl FnOnce(*mut wasm_abi::FontdoneWasmString) -> FT_Bool,
 ) -> Value {
@@ -17785,6 +17997,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(output_count.to_string());
             Ok(args)
         }
+        "ftmm.set_mm_weight_vector" => {
+            let mut args = vec!["--ftmm-mm-weight-vector".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(ftmm_weight_scenarios_arg(params)?);
+            Ok(args)
+        }
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -18837,6 +19056,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.set_mm_weight_vector" => rust_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
         "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
@@ -19621,6 +19841,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.set_mm_weight_vector" => c_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
         "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
@@ -20330,6 +20551,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.set_mm_weight_vector" => wasm_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
         "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),

@@ -282,6 +282,10 @@ impl Face {
         &self.font
     }
 
+    pub(crate) fn font_mut(&mut self) -> &mut Font {
+        &mut self.font
+    }
+
     /// Return the active charmap index when the face has selectable charmaps.
     pub fn charmap_index(&self) -> Option<usize> {
         self.font.charmap_index()
