@@ -1448,8 +1448,16 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 
 def property_service_pending_reason(row: ConcreteInput) -> str | None:
+    if row.case_id == "fterrdef.FT_Err_Missing_Property.known_property_success":
+        return (
+            "FT_Err_Missing_Property known-property success fixture asks for "
+            'module_name="svg" property_name="svg-hooks", but pinned '
+            'FreeType exposes svg-hooks on module "ot-svg"; reusing the '
+            "maintained truetype interpreter-version route would be a "
+            "different input and a green placeholder"
+        )
+
     property_rows_without_maintained_route = {
-        "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
