@@ -10216,6 +10216,63 @@ static void print_palette_data_json(FT_Error err, FT_Palette_Data data) {
     printf("}");
 }
 
+static void print_ushort_array(const FT_UShort* values, FT_UShort count) {
+    if (!values) {
+        printf("[]");
+        return;
+    }
+    printf("[");
+    for (FT_UShort i = 0; i < count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("%u", values[i]);
+    }
+    printf("]");
+}
+
+static void print_palette_data_values_json(FT_Error err, FT_Palette_Data data) {
+    printf("{\"error\":%d,\"palette_data\":{\"num_palettes\":%u,\"num_palette_entries\":%u,",
+           err,
+           data.num_palettes,
+           data.num_palette_entries);
+    printf("\"palette_name_ids\":{\"nullness\":%s,\"values\":",
+           data.palette_name_ids ? "false" : "true");
+    print_ushort_array(data.palette_name_ids, data.num_palettes);
+    printf("},\"palette_flags\":{\"nullness\":%s,\"values\":",
+           data.palette_flags ? "false" : "true");
+    print_ushort_array(data.palette_flags, data.num_palettes);
+    printf("},\"palette_entry_name_ids\":{\"nullness\":%s,\"values\":",
+           data.palette_entry_name_ids ? "false" : "true");
+    print_ushort_array(data.palette_entry_name_ids, data.num_palette_entries);
+    printf("}}}");
+}
+
+static void print_color_entries(FT_Color* palette, FT_UShort count) {
+    if (!palette) {
+        printf("null");
+        return;
+    }
+    printf("[");
+    for (FT_UShort i = 0; i < count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"blue\":%u,\"green\":%u,\"red\":%u,\"alpha\":%u}",
+               palette[i].blue,
+               palette[i].green,
+               palette[i].red,
+               palette[i].alpha);
+    }
+    printf("]");
+}
+
+static FT_UShort palette_entry_count(FT_Face face) {
+    FT_Palette_Data data = {0};
+    FT_Error err = FT_Palette_Data_Get(face, &data);
+    return err ? 0 : data.num_palette_entries;
+}
+
 static int emit_color_palette_case(int argc, char** argv) {
     const char* case_id = argv[2];
     OracleFace face;
@@ -10233,6 +10290,65 @@ static int emit_color_palette_case(int argc, char** argv) {
         printf(",\"output\":");
         print_palette_data_json(err, data);
         printf("}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Data.palette_data_get_values") ||
+               streq(case_id, "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime") ||
+               streq(case_id, "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime")) {
+        FT_Palette_Data data = { 999, (const FT_UShort*)1, (const FT_UShort*)1, 999, (const FT_UShort*)1 };
+        FT_Error err = FT_Palette_Data_Get(face.face, &data);
+        printf(",\"output\":");
+        print_palette_data_values_json(err, data);
+        printf("}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries") ||
+               streq(case_id, "ftcolor.FT_Color.palette_entries_preserve_bgra_order")) {
+        FT_UShort count = palette_entry_count(face.face);
+        printf(",\"output\":{\"runs\":[");
+        for (FT_UShort i = 0; i < 2; i++) {
+            FT_Color* palette = NULL;
+            FT_Error err = FT_Palette_Select(face.face, i, &palette);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"error\":%d,\"active_palette_index\":%d,\"palette_is_null\":%s,\"entries\":",
+                   err,
+                   err ? -1 : i,
+                   palette ? "false" : "true");
+            print_color_entries(palette, count);
+            printf("}");
+        }
+        printf("]}}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Select.success_null_output_selects_without_return")) {
+        FT_Error err = FT_Palette_Select(face.face, 1, NULL);
+        FT_UShort count = palette_entry_count(face.face);
+        FT_Color* followup = NULL;
+        FT_Error followup_err = FT_Palette_Select(face.face, 1, &followup);
+        printf(",\"output\":{\"error\":%d,\"active_palette_index\":%d,\"followup_error\":%d,\"followup_palette_is_null\":%s,\"followup_entries\":",
+               err,
+               err ? -1 : 1,
+               followup_err,
+               followup ? "false" : "true");
+        print_color_entries(followup, count);
+        printf("}}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications")) {
+        FT_UShort count = palette_entry_count(face.face);
+        FT_Color* first = NULL;
+        FT_Error first_err = FT_Palette_Select(face.face, 0, &first);
+        printf(",\"output\":{\"first_select\":{\"palette_is_null\":%s,\"entries\":",
+               first ? "false" : "true");
+        print_color_entries(first, count);
+        printf("},\"mutated_entries\":");
+        if (!first_err && first) {
+            first[0].blue = 1;
+            first[0].green = 2;
+            first[0].red = 3;
+            first[0].alpha = 4;
+        }
+        print_color_entries(first, count);
+        FT_Color* second = NULL;
+        FT_Error second_err = FT_Palette_Select(face.face, 0, &second);
+        printf(",\"second_select\":{\"palette_is_null\":%s,\"entries\":",
+               second ? "false" : "true");
+        print_color_entries(second, count);
+        printf("},\"error_sequence\":[%d,%d]}}\n", first_err, second_err);
     } else if (streq(case_id, "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette")) {
         FT_Color* palette = (FT_Color*)1;
         FT_Error err = FT_Palette_Select(face.face, 0, &palette);

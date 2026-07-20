@@ -2352,40 +2352,6 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcolor."):
         return None
     exact_cases = {
-        "ftcolor.FT_Color.palette_entries_preserve_bgra_order": (
-            "FT_Color palette entry parity needs a maintained CPAL route "
-            "proving BGRA byte order, alpha, and entry indexing match pinned C"
-        ),
-        "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime": (
-            "FT_PALETTE_FOR_DARK_BACKGROUND parity needs a maintained "
-            "FT_Palette_Data_Get route proving dark-background flag bits match "
-            "pinned C CPAL palette metadata"
-        ),
-        "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime": (
-            "FT_PALETTE_FOR_LIGHT_BACKGROUND parity needs a maintained "
-            "FT_Palette_Data_Get route proving light-background flag bits match "
-            "pinned C CPAL palette metadata"
-        ),
-        "ftcolor.FT_Palette_Data.palette_data_get_values": (
-            "FT_Palette_Data parity needs a maintained FT_Palette_Data_Get "
-            "route proving palette counts, entry counts, name IDs, and flag "
-            "arrays match pinned C public record output"
-        ),
-        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries": (
-            "FT_Palette_Select entry parity needs a maintained route proving "
-            "selected palette pointer, entry values, and active palette state "
-            "match pinned C"
-        ),
-        "ftcolor.FT_Palette_Select.success_null_output_selects_without_return": (
-            "FT_Palette_Select null-output parity needs a maintained route "
-            "proving a null output pointer still selects the palette and "
-            "preserves output behavior like pinned C"
-        ),
-        "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications": (
-            "FT_Palette_Select reselection parity needs a maintained route "
-            "proving user-modified palette entries are reset on reselection "
-            "exactly like pinned C"
-        ),
         "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
             "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
             "route proving foreground color mutation affects subsequent COLR "
@@ -5187,6 +5153,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Palette_Data_Get.success_non_sfnt_null_palette_data"
     ):
         return "FT_Palette_Data_Get non-SFNT null palette data validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.case_id in {
+        "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
+        "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime",
+        "ftcolor.FT_Palette_Data.palette_data_get_values",
+    }:
+        return "FT_Palette_Data CPAL name-id, flag, and entry-label arrays validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_select"
         and row.case_id
@@ -5198,6 +5170,23 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Palette_Select.success_non_sfnt_returns_null_palette"
     ):
         return "FT_Palette_Select non-SFNT null palette output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.case_id in {
+        "ftcolor.FT_Color.palette_entries_preserve_bgra_order",
+        "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries",
+    }:
+        return "FT_Palette_Select CPAL palette entry BGRA output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_select"
+        and row.case_id
+        == "ftcolor.FT_Palette_Select.success_null_output_selects_without_return"
+    ):
+        return "FT_Palette_Select null-output CPAL selection side effect validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_select"
+        and row.case_id
+        == "ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications"
+    ):
+        return "FT_Palette_Select CPAL reselection reset behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_set_foreground_color"
         and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face"

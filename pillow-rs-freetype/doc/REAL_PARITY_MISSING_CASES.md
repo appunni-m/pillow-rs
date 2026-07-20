@@ -1,5 +1,52 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: CPAL palette data and select public routes
+
+Status: completed on 2026-07-21 for seven CPAL palette metadata/select rows.
+
+Implemented real parity rows:
+
+- `ftcolor.FT_Palette_Data.palette_data_get_values`
+- `ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime`
+- `ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime`
+- `ftcolor.FT_Color.palette_entries_preserve_bgra_order`
+- `ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries`
+- `ftcolor.FT_Palette_Select.success_null_output_selects_without_return`
+- `ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications`
+
+Findings:
+
+- FreeType 2.14.3 `src/sfnt/ttcpal.c` exposes CPAL palette flags through
+  `FT_Palette_Data.palette_flags` as `FT_UShort` entries read with
+  `FT_NEXT_USHORT`; the Rust parser must not treat those public flags as
+  four-byte records.
+- FreeType 2.14.3 `src/base/ftcolor.c` preserves caller mutations to the
+  active palette when `FT_Palette_Select` is called again with the same palette
+  index. Despite the existing fixture name saying "resets", the pinned C
+  behavior is mutation preservation for same-index reselection.
+- The route uses feature-gated, non-exported ABI snapshot helpers to copy
+  palette arrays and palette entries returned by the public ABI calls. No
+  public C header entries or exported symbols were added for those helpers.
+
+Impact:
+
+- `real-parity`: `4530 -> 4537`
+- `pending-route`: `431 -> 424`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `8`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Color.palette_entries_preserve_bgra_order
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Select.success_null_output_selects_without_return
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Select.success_reselect_resets_user_modifications
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Data.palette_data_get_values
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime
+```
+
 ### Issue Set Current: `FT_ORIENTATION_FILL_LEFT` reverse observation route
 
 Status: completed on 2026-07-20 for one composite outline reverse/orientation
