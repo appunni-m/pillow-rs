@@ -3706,6 +3706,21 @@ static void print_nullable_c_string_result(const char* value) {
     print_postscript_name_result(value);
 }
 
+static void print_json_c_string_or_null(const char* value) {
+    if (!value) {
+        printf("null");
+        return;
+    }
+    putchar('"');
+    for (const unsigned char* p = (const unsigned char*)value; *p; p++) {
+        if (*p == '"' || *p == '\\') {
+            putchar('\\');
+        }
+        putchar(*p);
+    }
+    putchar('"');
+}
+
 static void print_face_driver_name_result(const char* name) {
     if (!name) {
         printf("{\"driver_name\":null,\"string_bytes\":\"\",\"nul_terminated\":false}");
@@ -14872,6 +14887,21 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--face-driver-name-with-font-format")) {
+        const char* driver_name = FT_FACE_DRIVER_NAME(face);
+        const char* font_format = FT_Get_Font_Format(face);
+        print_status(0);
+        printf(",\"output\":{\"driver_name\":");
+        print_json_c_string_or_null(driver_name);
+        printf(",\"font_format\":");
+        print_json_c_string_or_null(font_format);
+        printf(",\"same_source\":false}}\n");
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-winfnt-header")) {
         const int header_is_null = argc > 7 && streq(argv[7], "null");
         FT_WinFNT_HeaderRec header;
@@ -17693,7 +17723,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 7 && streq(argv[1], "--get-postscript-name")) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias") || streq(argv[1], "--face-driver-name"))) {
+    if (argc == 7 && (streq(argv[1], "--get-font-format") || streq(argv[1], "--get-x11-font-format") || streq(argv[1], "--get-x11-font-format-alias") || streq(argv[1], "--face-driver-name") || streq(argv[1], "--face-driver-name-with-font-format"))) {
         return emit_face_or_slot(argc, argv);
     }
     if ((argc == 7 || argc == 8) && streq(argv[1], "--get-winfnt-header")) {
