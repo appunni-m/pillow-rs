@@ -12573,8 +12573,31 @@ Current blocker families:
   - `FT_Get_Paint.success_inserts_root_transform` and
     `FT_Affine23.root_transform_values`: synthesized transform union output and
     exact `xx`, `xy`, `dx`, `yx`, `yy`, `dy` values.
-- Paint resolution: opaque paint handles, supported paint-format dispatch,
-  glyph/colr-glyph/solid payloads, color indexes, and public union shape.
+- Paint resolution rows are split by exact obligation instead of sharing a
+  broad `FT_Get_Paint` blocker:
+  - `FT_Get_Paint.success_resolves_each_supported_paint_format`: supported
+    COLR paint format dispatch to the same public union tag and payload as
+    pinned C.
+  - `FT_OpaquePaint.produced_and_consumed_by_paint_apis`: root and nested
+    opaque paint handle production/consumption, lifetime, and identity
+    semantics.
+  - `FT_PaintColrGlyph.get_paint_colr_glyph_values`: nested glyph ID and nested
+    paint handle fields in the public union.
+  - `FT_PaintGlyph.get_paint_glyph_values`: glyph ID plus nested paint handle
+    fields in the public union.
+  - `FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime`: format tag
+    emission with the pinned-C `FT_PaintColrGlyph` payload shape.
+  - `FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload`: glyph format tag emission
+    with glyph ID plus nested paint handle payload.
+  - `FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index`: solid paint color
+    index, alpha, and palette-index semantics.
+  - `FT_ColorIndex.solid_and_color_stop_values`: solid paint and color-stop
+    palette index, alpha, and foreground sentinel behavior.
+  - `FT_PaintSolid.get_paint_solid_values`: color index and alpha fields in the
+    public union.
+  - `FT_PaintFormat.paint_union_shape_runtime`: public format tags selecting
+    the same `FT_COLR_Paint` union arm and record layout for each supported
+    paint node.
 - Colorline and gradient rows are split by exact obligation instead of sharing
   a broad colorline blocker:
   - `FT_ColorLine.gradient_colorline_values`: extend mode, stop count, and
