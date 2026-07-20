@@ -10911,6 +10911,15 @@ Follow-up finding:
   so the row must stay pending until the public C behavior is pinned with a
   deterministic fixture or the manifest expectation is corrected from C
   evidence.
+- Source audit on 2026-07-20: the public wrapper delegates to the service
+  (`src/base/ftmm.c:362-388`) and the TrueType service documents zero-fill but
+  advances `a` through the active axes before its excess loop
+  (`src/truetype/ttgxvar.c:3438-3488`).  For the one-axis `inter-wght.ttf`
+  fixture with `num_coords=4`, the oracle emitted a process-dependent
+  pointer-like `/coords/1` value while Rust returned deterministic zero-fill.
+  Do not change Rust to synthesize or preserve adjacent-memory values, and do
+  not promote this row until pinned C, Rust FFI, C ABI, and WASM ABI have exact
+  deterministic same-input output.
 
 Latest route audit after this follow-up: `real-parity=4491`,
 `pending-route=465`, `pending-core=0`.
