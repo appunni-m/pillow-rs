@@ -231,6 +231,7 @@ Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
 
 Implemented real parity rows:
 
+- `ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure`
 - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name`
 - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted`
 - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name`
@@ -253,11 +254,23 @@ Finding:
 Remaining related blockers:
 
 - Other `ftparams` rows remain pending because they require real sbix,
-  incremental font, random seed, stem-darkening, or unpatented-hinting
-  behavior rather than name-selection tag plumbing.
+  incremental font, random seed, or stem-darkening behavior rather than
+  name-selection tag plumbing.
+- Real SBIX-table behavior is still pending: existing `fonts/color/sbix-*`
+  files are symlinks to DejaVu, so they cannot prove `FT_PARAM_TAG_IGNORE_SBIX`
+  bitmap/outline selection. The non-SBIX no-spurious-failure row is now split
+  and verified; the bitmap-only SBIX branch remains visible as a pending
+  fixture/core task.
 - The `open_face_uses_legacy_*` rows were normalized on 2026-07-20 to the
   maintained `scenarios[]` route and now verify exact family/style strings
   through pinned C, Rust FFI, C ABI, and WASM ABI.
+
+Latest impact for the 2026-07-20 SBIX non-SBIX no-op route:
+
+- `real-parity`: `4527 -> 4528`
+- `pending-route`: stays `428` because
+  `ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture`
+  preserves the unresolved bitmap-only SBIX requirement.
 
 Latest impact for the 2026-07-20 legacy-name route normalization:
 
@@ -1548,10 +1561,9 @@ Baseline before this batch:
 
 Finding:
 
-- The remaining `ftparams` rows cover `FT_PARAM_TAG_IGNORE_SBIX`,
-  `FT_PARAM_TAG_INCREMENTAL`, `FT_PARAM_TAG_RANDOM_SEED`,
-  `FT_PARAM_TAG_STEM_DARKENING`, and
-  `FT_PARAM_TAG_UNPATENTED_HINTING`.
+- The remaining `ftparams` rows cover real SBIX bitmap/outline selection,
+  `FT_PARAM_TAG_INCREMENTAL`, `FT_PARAM_TAG_RANDOM_SEED`, and
+  `FT_PARAM_TAG_STEM_DARKENING`.
 - Those rows had stayed in `generic-fallback` with the reason
   `no explicit maintained route classification`.
 - They are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
@@ -1574,10 +1586,9 @@ Required fix plan:
 1. Add a maintained open-face parameter route instead of per-row expected output
    shortcuts. It must run the same operation sequence through pinned C
    FreeType, Rust FFI, thin C ABI, and WASM ABI.
-2. Implement pure-Rust parameter dispatch first: sbix ignore behavior,
+2. Implement pure-Rust parameter dispatch first: real sbix ignore behavior,
    incremental interface routing, random-seed face property effects,
-   stem-darkening toggles, unpatented hinting no-op/acceptance semantics, and
-   null-data handling.
+   stem-darkening toggles, and null-data handling.
 3. Compare exact return codes, face flags, family/subfamily strings, glyph-load
    outputs after parameter mutation, build-dependent support classifications,
    accepted null-data behavior, and preservation of unsupported inputs.
