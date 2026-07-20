@@ -11004,6 +11004,14 @@ Follow-up finding:
   Do not change Rust to synthesize or preserve adjacent-memory values, and do
   not promote this row until pinned C, Rust FFI, C ABI, and WASM ABI have exact
   deterministic same-input output.
+- Rechecked on 2026-07-20 from branch
+  `ftmm-route-audit-placeholder-parity` after `76b6832b5`: temporarily routing
+  this row as real parity produced a focused failure, not a pass.  Command:
+  `make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`.
+  Result: pinned C expected `/coords/1 = 105553139515584` for the sentinel-filled
+  output buffer while Rust returned `0`; runtime parity failed in bucket
+  `rust ffi:field:/coords/1`.  Keep the row `pending-route`; promoting it would
+  reward the manifest label rather than exact C behavior.
 
 Latest route audit after this follow-up: `real-parity=4491`,
 `pending-route=465`, `pending-core=0`.
