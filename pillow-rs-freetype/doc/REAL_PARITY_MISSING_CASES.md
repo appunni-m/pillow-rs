@@ -10623,10 +10623,15 @@ Finding:
   export/cbox state across Rust FFI, C ABI, and WASM.  The declared path asset
   `outlines/stroker/manual-paths.json` is still a required future asset.
 - `ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer` is not covered by
-  the existing gzip exact-error route.  It needs maintained compressed payload
-  fixtures under `compressed/gzip/` plus real stream/memory callback behavior
-  and byte-output comparison.  No `flate2`/gzip implementation dependency is
-  currently present in `pillow-rs-freetype`, so routing it to a generic
+  the existing gzip exact-error route.  Its public input manifest declares
+  `compressed/gzip/small-text-and-empty-payloads.json`, which is absent from
+  the maintained fixture tree; related gzip rows also reference missing
+  deterministic byte fixtures such as `compressed/gzip/small-valid.gz` and
+  `compressed/gzip/invalid-and-truncated-payloads.json`.  The success row
+  needs those maintained compressed payload fixtures plus exact byte-output
+  comparison against pinned C `freetype/include/freetype/ftgzip.h:98-137` and
+  `freetype/src/gzip/ftgzip.c:711-771`.  No pure-Rust gzip/zlib success route
+  is currently present in `pillow-rs-freetype`, so routing it to a generic
   success or `Unimplemented_Feature` result would be a green placeholder.
 
 Rejected diagnostic path:
