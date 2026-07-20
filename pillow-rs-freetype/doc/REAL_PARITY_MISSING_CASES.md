@@ -12660,8 +12660,21 @@ Current blocker families:
   unref, unchanged other face IDs, and null/unknown inputs.
 - CMap/Image/SBit cache creation: manager-owned opaque handles, cache
   registration, reset interactions, and cache-limit behavior.
-- `FTC_CMapCache_Lookup`: hit/repeat-hit, miss-to-zero, negative cmap index,
-  remove-face/reset lifecycle, and all concrete codepoint variants.
+- `FTC_CMapCache_Lookup` rows are split by exact scenario and codepoint variant
+  instead of sharing a broad cmap-cache blocker.  Each scenario must be proven
+  for `cp65`, `cp1114111`, and `cp57344`:
+  - `planned_cache_subsystem_not_out_of_scope`: prove the CMap cache subsystem
+    is implemented as a maintained same-input route, not excluded as out of
+    scope.
+  - `success_lookup_hit_and_repeat_hit`: prove first lookup, repeat lookup,
+    glyph index output, requester use, and cache identity.
+  - `success_lookup_miss_returns_zero`: prove a missing character lookup returns
+    exactly zero without corrupting cache state.
+  - `success_negative_cmap_index_uses_current_charmap`: prove `cmap_index=-1`
+    uses the face's current charmap.
+  - `lifecycle_remove_faceid_and_reset`: prove cache entries are evicted or
+    rebuilt after `FTC_Manager_RemoveFaceID` and manager reset exactly like
+    pinned C.
 - `FTC_ImageCache_Lookup` / `FTC_ImageType`: call-owned descriptor lifetime,
   lookup output, hit/repeat behavior, node acquisition/unref, and null-anode
   ephemeral glyphs.

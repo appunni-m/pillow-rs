@@ -1437,6 +1437,54 @@ def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None
     return None
 
 
+def ftcache_cmap_lookup_pending_reason(row: ConcreteInput) -> str | None:
+    """Case- and codepoint-specific FTC_CMapCache_Lookup pending rows."""
+    if row.operation != "ftcache.cmap_cache_lookup":
+        return None
+    variant = row.variant_id or "single"
+    codepoint = variant.removeprefix("cp") if variant.startswith("cp") else variant
+    variant_detail = f"variant {variant} codepoint={codepoint}"
+    if (
+        row.case_id
+        == "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope"
+    ):
+        return (
+            "FTC_CMapCache_Lookup planned-cache route is in scope but pending "
+            f"for {variant_detail}; exact parity needs a maintained manager-owned "
+            "CMap cache and same-input oracle comparison instead of treating "
+            "cache lookup as out of scope"
+        )
+    if row.case_id == "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit":
+        return (
+            "FTC_CMapCache_Lookup hit/repeat parity needs a maintained route "
+            f"for {variant_detail} proving first lookup, repeat lookup, glyph "
+            "index output, requester use, and cache identity match pinned C"
+        )
+    if row.case_id == "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero":
+        return (
+            "FTC_CMapCache_Lookup miss parity needs a maintained route for "
+            f"{variant_detail} proving missing character lookup returns exactly "
+            "zero without corrupting cache state like pinned C"
+        )
+    if (
+        row.case_id
+        == "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap"
+    ):
+        return (
+            "FTC_CMapCache_Lookup negative-cmap-index parity needs a maintained "
+            f"route for {variant_detail} proving cmap_index=-1 uses the face's "
+            "current charmap and matches pinned C glyph index output"
+        )
+    if row.case_id == "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset":
+        return (
+            "FTC_CMapCache_Lookup remove-face/reset lifecycle parity needs a "
+            f"maintained route for {variant_detail} proving cache entries are "
+            "evicted or rebuilt after FTC_Manager_RemoveFaceID and manager reset "
+            "exactly like pinned C"
+        )
+    return None
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1453,6 +1501,9 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     image_lookup_scaler_pending = ftcache_image_lookup_scaler_pending_reason(row)
     if image_lookup_scaler_pending:
         return image_lookup_scaler_pending
+    cmap_lookup_pending = ftcache_cmap_lookup_pending_reason(row)
+    if cmap_lookup_pending:
+        return cmap_lookup_pending
     pending_case_groups = {
         (
             "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
@@ -1531,18 +1582,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FTC cache creation parity needs a maintained manager-owned cache "
             "route proving CMap/Image/SBit cache registration, opaque handle "
             "ownership, manager reset interactions, and cache-limit behavior"
-        ),
-        (
-            "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit",
-            "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero",
-            "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap",
-            "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset",
-        ): (
-            "FTC_CMapCache_Lookup parity needs a maintained cmap-cache route "
-            "proving hit/repeat-hit, miss-to-zero, negative cmap index current "
-            "charmap selection, and remove-face/reset lifecycle effects for "
-            "all concrete codepoint variants"
         ),
         (
             "ftcache.FTC_ImageType.points_to_call_owned_descriptor",
