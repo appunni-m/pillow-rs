@@ -1478,6 +1478,24 @@ Finding:
   `freetype/src/lzw/ftlzw.c:337-383`, and
   `freetype/src/lzw/ftlzw.c:221-308` open/read/backward-seek/close behavior
   against Rust FFI, C ABI, and WASM for the same bytes.
+- The `ftsystem` external stream and custom allocator rows are blocked by
+  missing harness assets and missing callback-event routing.  The public input
+  manifests reference `memory/harnesses/custom-allocator-events.json`,
+  `streams/harnesses/external-stream-errors.json`, and
+  `streams/harnesses/external-stream-callbacks.json`; none exists in the
+  maintained fixture tree.  The future routes must compare pinned C
+  `freetype/src/base/ftobjs.c:5472` `FT_New_Library` custom-memory behavior,
+  `freetype/src/base/ftobjs.c:2514` `FT_Open_Face` with `FT_OPEN_STREAM`, and
+  public `FT_StreamRec` field/callback shape from
+  `freetype/include/freetype/ftsystem.h:325-340` against Rust FFI, C ABI, and
+  WASM for the same callback event sequences.
+- `ftsystem.FT_StreamRec.memory_stream_field_contract` uses the maintained
+  `input/fonts/DejaVuSans.ttf` font asset, but it is still not real runtime
+  parity.  It needs a maintained memory-stream probe that opens those same
+  bytes with `FT_New_Memory_Face`, observes `base`, `size`, `pos`, `cursor`,
+  `limit`, and frame-read events, and compares those outputs across pinned C,
+  Rust FFI, C ABI, and WASM.  Reusing the layout-only `FT_StreamRec` ABI route
+  would be a green placeholder.
 
 Classification change:
 

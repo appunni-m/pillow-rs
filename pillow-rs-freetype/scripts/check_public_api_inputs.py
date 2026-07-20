@@ -1737,21 +1737,53 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "route that matches open/read/backward-seek/close behavior from "
             "freetype/src/lzw/ftlzw.c:221-308 and 337-383"
         )
-    stream_rows_without_maintained_route = {
-        "ftsystem.FT_Memory.custom_allocator_runtime_events",
-        "ftsystem.FT_Stream.external_stream_runtime_contract",
-        "ftsystem.FT_StreamRec.callback_stream_field_contract",
-        "ftsystem.FT_StreamRec.memory_stream_field_contract",
-    }
-    if row.case_id not in stream_rows_without_maintained_route:
-        return None
-    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
-        return None
-    return (
-        "Compressed stream, external stream, stream record, and custom memory "
-        "callback behavior requires maintained stream subsystem routes; keeping "
-        "it generic would be a green placeholder"
-    )
+    if row.case_id == "ftsystem.FT_Memory.custom_allocator_runtime_events":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Memory custom allocator runtime parity declares "
+            "memory/harnesses/custom-allocator-events.json, but that "
+            "maintained allocator-event harness is absent; exact same-input "
+            "C/Rust/C-ABI/WASM parity also requires FT_New_Library, "
+            "FT_Add_Default_Modules, FT_New_Memory_Face, FT_Done_Face, and "
+            "FT_Done_Library to preserve callback order and FT_Memory pointer "
+            "identity from freetype/src/base/ftobjs.c:5472 and ftutil.c"
+        )
+    if row.case_id == "ftsystem.FT_Stream.external_stream_runtime_contract":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Stream external-stream runtime parity declares "
+            "streams/harnesses/external-stream-errors.json, but that "
+            "maintained read/seek-failure harness is absent; exact same-input "
+            "C/Rust/C-ABI/WASM parity also requires FT_Open_Face with "
+            "FT_OPEN_STREAM to preserve caller-owned stream identity and "
+            "read/close callback events from freetype/src/base/ftobjs.c:2514"
+        )
+    if row.case_id == "ftsystem.FT_StreamRec.callback_stream_field_contract":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_StreamRec callback-stream parity declares "
+            "streams/harnesses/external-stream-callbacks.json, but that "
+            "maintained callback-event harness is absent; exact same-input "
+            "C/Rust/C-ABI/WASM parity also requires public FT_StreamRec field "
+            "copying and read(count==0), read(count>0), and close-event "
+            "observation from freetype/include/freetype/ftsystem.h:325-340"
+        )
+    if row.case_id == "ftsystem.FT_StreamRec.memory_stream_field_contract":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_StreamRec memory-stream field parity uses the maintained "
+            "input/fonts/DejaVuSans.ttf asset, but still needs a maintained "
+            "memory-stream probe route that opens the same bytes with "
+            "FT_New_Memory_Face and compares base/size/pos/cursor/limit plus "
+            "frame-read events across Rust FFI, C ABI, and WASM; treating the "
+            "layout-only FT_StreamRec route as runtime parity would be a green "
+            "placeholder"
+        )
+    return None
 
 
 def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None:
