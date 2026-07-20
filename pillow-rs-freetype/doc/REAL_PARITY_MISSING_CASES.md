@@ -10269,6 +10269,44 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_Get_Track_Kerning` Type1/AFM success route
+
+Status: blocked on required future assets on 2026-07-20.
+
+Finding:
+
+- `freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success` is the only
+  remaining pending `FT_Get_Track_Kerning` row.  The null-face/null-output and
+  SFNT/no-track-data error rows are already exact real parity.
+- The success row declares `input/fonts/type1/track-kern-base.pfb` and
+  `input/aux/type1/track-kern-base.afm` as `required_future_asset`.  The row
+  needs a Type1 PFA/PFB face plus attached AFM track-kerning data for degree
+  `-1`, `0`, and `1` across several 16.16 point sizes.
+- Focused runtime parity therefore has no runnable same-input success case:
+  it reports `runnable=0 pending=1` with the maintained route reason for core
+  attach/open-face/track-kerning success behavior.  Promoting this row without
+  those assets and an exact C oracle observation would be a green placeholder.
+
+Required fix plan:
+
+1. Add or normalize a maintained C-openable Type1 fixture plus matching AFM
+   attachment that contains deterministic track-kerning data for negative,
+   zero, and positive degrees.
+2. Run pinned FreeType 2.14.3 first to record exact `FT_Get_Track_Kerning`
+   return codes and `akerning` values for every declared point-size/degree
+   pair after `FT_Attach_File`.
+3. Implement any missing pure-Rust Type1/AFM track-kerning behavior in core.
+   The C and WASM ABI layers must only expose the core result and must not
+   embed fixture-specific values.
+4. Promote the row only after focused runtime proves exact output through
+   Rust FFI, thin C ABI, and WASM ABI for the same Type1/AFM input pair.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success
+```
+
 ### Issue Set Follow-up: `FT_FACE_DRIVER_NAME` TrueType driver-name route
 
 Status: one C-openable row promoted to real parity on 2026-07-20.
