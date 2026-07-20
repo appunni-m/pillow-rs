@@ -138,12 +138,66 @@
       "expect_error": false,
       "inputs": {
         "assets": {
-          "non_sbix_font": {
+          "font": {
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
-          },
-          "sbix_bitmap_only_font": {
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "parameters": [
+            {
+              "tag": "FT_PARAM_TAG_IGNORE_SBIX",
+              "data": "NULL"
+            }
+          ],
+          "probe_glyph_index": 1,
+          "probe_load_flags": [
+            "FT_LOAD_DEFAULT"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ftparams",
+        "area:sfnt-params"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "open_error": "FT_Error",
+          "load_error": "FT_Error",
+          "face_flags": "FT_Long",
+          "glyph_slot": "public fields or null on load error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "open_error",
+            "load_error",
+            "face_flags",
+            "glyph_slot"
+          ]
+        },
+        "fixture_requirements": [
+          "Non-SBIX SFNT must open and load identically when the SBIX-ignore parameter is present."
+        ]
+      }
+    },
+    {
+      "case_id": "ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture",
+      "subject": "ftparams.FT_PARAM_TAG_IGNORE_SBIX",
+      "case": "unsupported_or_non_sbix_no_spurious_failure",
+      "covers_manifest_cases": [
+        "unsupported_or_non_sbix_no_spurious_failure"
+      ],
+      "operation": "freetype.open_face_with_params",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
             "kind": "ref",
             "role": "font",
             "path": "input/fonts/sbix/sbix-bitmap-only.ttf",
@@ -168,7 +222,8 @@
       "classifiers": [
         "kind:constant",
         "header:ftparams",
-        "area:sfnt-params"
+        "area:sfnt-params",
+        "requires:real-sbix-fixture"
       ],
       "expectation": {
         "status": "ok",

@@ -1529,7 +1529,7 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for FT_Open_Args parameters that do not have a maintained route."""
     ftparams_rows_without_maintained_route = {
         "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix",
-        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure",
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
         "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
         "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load",
@@ -1537,18 +1537,16 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property",
         "ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output",
         "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error",
-        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect",
-        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored",
     }
     if row.case_id not in ftparams_rows_without_maintained_route:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
     return (
-        "FT_Open_Args parameter tag behavior for sbix, incremental loading, "
-        "random seed, stem darkening, and unpatented hinting requires a "
-        "maintained parameter route; keeping it generic would be a green "
-        "placeholder"
+        "FT_Open_Args parameter tag behavior for real sbix bitmap/outline "
+        "selection, incremental loading, random seed, and stem darkening "
+        "requires a maintained parameter route; keeping it generic would be a "
+        "green placeholder"
     )
 
 
@@ -1570,9 +1568,16 @@ def ftparams_name_option_real_parity_reason(row: ConcreteInput) -> str | None:
 def ftparams_ignored_param_real_parity_reason(row: ConcreteInput) -> str | None:
     """Deprecated/no-effect FT_Open_Args parameter rows with maintained routes."""
     if row.case_id in {
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure",
         "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect",
         "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored",
     }:
+        if row.case_id.startswith("ftparams.FT_PARAM_TAG_IGNORE_SBIX."):
+            return (
+                "FT_Open_Args SBIX-ignore parameter validates as no-effect on "
+                "a non-SBIX SFNT through pinned C oracle, Rust FFI output, "
+                "C ABI FT_Open_Face params, and WASM ABI output"
+            )
         return (
             "FT_Open_Args deprecated unpatented-hinting parameter validates as "
             "no-effect through pinned C oracle, Rust FFI output, C ABI "

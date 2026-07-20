@@ -30143,7 +30143,8 @@ fn wasm_face_style_flags(case: &InputCase) -> Result<RunOutput, String> {
 fn open_face_ignored_params_runtime_supported(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
-        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure"
+            | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
             | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
@@ -30241,22 +30242,46 @@ fn rust_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> 
     }
 }
 
-fn c_open_face_with_unpatented_params(
+fn ft_param_tag_value(tag: &str) -> Option<c_abi::FT_ULong> {
+    match tag {
+        "FT_PARAM_TAG_IGNORE_SBIX" => Some(FT_PARAM_TAG_IGNORE_SBIX as c_abi::FT_ULong),
+        "FT_PARAM_TAG_UNPATENTED_HINTING" => {
+            Some(FT_PARAM_TAG_UNPATENTED_HINTING as c_abi::FT_ULong)
+        }
+        _ => None,
+    }
+}
+
+fn c_open_face_with_ignored_params(
     library: c_abi::FT_Library,
     bytes: &[u8],
     face_index: i64,
+    fixture_params: &Value,
 ) -> Result<(FT_Error, c_abi::FT_Face), String> {
-    let mut ignored_value: c_abi::FT_Bool = 1;
-    let mut params = [
-        c_abi::FT_Parameter {
-            tag: FT_PARAM_TAG_UNPATENTED_HINTING as c_abi::FT_ULong,
-            data: std::ptr::null_mut(),
-        },
-        c_abi::FT_Parameter {
-            tag: FT_PARAM_TAG_UNPATENTED_HINTING as c_abi::FT_ULong,
-            data: std::ptr::from_mut(&mut ignored_value).cast::<c_void>(),
-        },
-    ];
+    let parameter_rows = fixture_params
+        .get("parameters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing ignored FT_Open_Face parameter rows".to_string())?;
+    let mut non_null_values = vec![1 as c_abi::FT_Bool; parameter_rows.len()];
+    let mut params = Vec::with_capacity(parameter_rows.len());
+    for (index, row) in parameter_rows.iter().enumerate() {
+        let tag_name = row
+            .get("tag")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "missing ignored FT_Open_Face parameter tag".to_string())?;
+        let tag = ft_param_tag_value(tag_name)
+            .ok_or_else(|| format!("unsupported ignored FT_Open_Face parameter tag {tag_name}"))?;
+        let data = if row
+            .get("data_pointer_class")
+            .and_then(Value::as_str)
+            .is_some_and(|class| class == "non_null_ignored")
+        {
+            std::ptr::from_mut(&mut non_null_values[index]).cast::<c_void>()
+        } else {
+            std::ptr::null_mut()
+        };
+        params.push(c_abi::FT_Parameter { tag, data });
+    }
     let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
     let open_args = c_abi::FT_Open_Args {
         flags: (FT_OPEN_MEMORY | FT_OPEN_PARAMS) as c_abi::FT_UInt,
@@ -30319,8 +30344,12 @@ fn c_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> {
         } else {
             json!({"open_error": control_err, "face_flags": Value::Null, "glyph_slot": Value::Null})
         };
-        let (test_err, test) =
-            c_open_face_with_unpatented_params(library, bytes.as_ref(), face_index)?;
+        let (test_err, test) = c_open_face_with_ignored_params(
+            library,
+            bytes.as_ref(),
+            face_index,
+            &case.inputs.params,
+        )?;
         let test_output = if test_err == FT_Err_Ok {
             c_open_face_ignored_observation(test, &case.inputs.params)?
         } else {
@@ -30331,7 +30360,12 @@ fn c_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> {
         c_done_library(library);
         Ok(ok(json!({"control": control_output, "test": test_output})))
     } else {
-        let (err, face) = c_open_face_with_unpatented_params(library, bytes.as_ref(), face_index)?;
+        let (err, face) = c_open_face_with_ignored_params(
+            library,
+            bytes.as_ref(),
+            face_index,
+            &case.inputs.params,
+        )?;
         let output = if err == FT_Err_Ok {
             c_open_face_ignored_observation(face, &case.inputs.params)?
         } else {
