@@ -1586,6 +1586,16 @@ def ftparams_ignored_param_real_parity_reason(row: ConcreteInput) -> str | None:
 
 def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for image/raster public records that do not have a maintained route."""
+    if row.case_id == "ftimage.FT_Pos.coordinate_outputs_use_ft_pos":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Pos coordinate endpoint parity declares synthetic outline "
+            "outlines/synthetic/negative-and-large-coordinates.json, but that "
+            "maintained outline asset is absent; keeping this generic would be "
+            "a green placeholder"
+        )
+
     ftimage_rows_without_maintained_route = {
         "ftimage.FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory",
         "ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled",
@@ -1595,7 +1605,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior",
         "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior",
         "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior",
-        "ftimage.FT_Pos.coordinate_outputs_use_ft_pos",
         "ftimage.FT_Raster.lifecycle_callback_contract",
         "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done",
         "ftimage.FT_Raster_Funcs.callback_slots_match_registered_renderers",
