@@ -1770,6 +1770,30 @@ def otvalid_expectation_mismatch_pending_reason(row: ConcreteInput) -> str | Non
     )
 
 
+def otvalid_unresolved_asset_pending_reason(row: ConcreteInput) -> str | None:
+    """OpenType validation rows cannot be real parity without their declared fixture."""
+    if row.operation != "ftotval.open_type_validate":
+        return None
+    if (
+        row.case_id == "ftotval.FT_OpenType_Validate.selected_tables_success"
+        and not (FIXTURE_DIR / "fonts/opentype/valid-all-layout.otf").is_file()
+    ):
+        return (
+            "font references missing fixture fonts/opentype/valid-all-layout.otf; "
+            "FT_OpenType_Validate cannot be counted as real same-input "
+            "C/Rust/C-ABI/WASM parity until the declared OpenType validation "
+            "fixture exists"
+        )
+    unresolved = unresolved_assets_reason(row)
+    if not unresolved:
+        return None
+    return (
+        f"{unresolved}; FT_OpenType_Validate cannot be counted as real "
+        "same-input C/Rust/C-ABI/WASM parity until the declared OpenType "
+        "validation fixture exists"
+    )
+
+
 def operation_is_compile_contract(operation: str) -> bool:
     return operation in COMPILE_CONTRACT_OPERATIONS or operation.startswith(
         COMPILE_CONTRACT_PREFIXES
@@ -4421,6 +4445,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     pending = pending_core_reason(row)
     if pending:
         return ("pending-core", pending)
+    otvalid_unresolved_pending = otvalid_unresolved_asset_pending_reason(row)
+    if otvalid_unresolved_pending:
+        return ("pending-route", otvalid_unresolved_pending)
     null_error_real_reason = null_error_real_parity_reason(row)
     if null_error_real_reason:
         return ("real-parity", null_error_real_reason)

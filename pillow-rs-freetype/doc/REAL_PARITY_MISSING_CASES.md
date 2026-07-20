@@ -10489,6 +10489,56 @@ Verified command:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_OpenType_Validate` unresolved table fixtures
+
+Status: demoted from real-parity to explicit pending-route on 2026-07-20.
+
+Finding:
+
+- Several `ftotval.open_type_validate` table-selection and malformed/error rows
+  were classified as `real-parity` even though focused runtime execution
+  reported `runnable=0 pending=1` with an unresolved declared font asset.
+- The missing fixtures are:
+  - `fonts/opentype/valid-base.otf`
+  - `fonts/opentype/valid-gdef.otf`
+  - `fonts/opentype/valid-gpos.otf`
+  - `fonts/opentype/valid-gsub.otf`
+  - `fonts/opentype/valid-jstf.otf`
+  - `fonts/opentype/valid-math.otf`
+  - `fonts/opentype/valid-all-layout.otf`
+  - `fonts/opentype/malformed-selected-layout.otf`
+  - `fonts/opentype/malformed-gdef.otf`
+  - `fonts/opentype/malformed-gpos.otf`
+  - `fonts/opentype/malformed-gsub.otf`
+  - `fonts/opentype/malformed-jstf.otf`
+  - `fonts/opentype/malformed-math.otf`
+  - `fonts/opentype/partial-malformed-layout.otf`
+- Marking these rows real would be a green placeholder: there is no same input
+  to feed through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- The null face/output and missing-service OpenType validation rows are
+  separate: they remain real because they execute without the missing table
+  fixtures.
+
+Required fix plan:
+
+1. Add maintained fixture generators or checked-in fixtures for each declared
+   OpenType validation input. The generator must be reproducible from a clean
+   checkout and version-locked to pinned FreeType 2.14.3 oracle behavior.
+2. Keep `FT_OpenType_Validate` null face/output and service-missing rows real
+   only where they already execute against existing inputs.
+3. Promote table-selection or malformed/error rows only after focused runtime
+   proves `runnable>0` and exact C oracle, Rust FFI, C ABI, and WASM ABI output
+   match for the declared fixture.
+4. Do not substitute DejaVuSans, generic `Unimplemented_Feature`, or any
+   shared Rust fallback for missing OpenType validation fixtures.
+
+Verification for this classification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftotval.FT_VALIDATE_GDEF.validate_selects_gdef_table
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_OpenType_Free` non-null validation buffer route
 
 Status: classified as explicit pending-route on 2026-07-20.
