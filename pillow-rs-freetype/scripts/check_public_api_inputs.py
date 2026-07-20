@@ -1422,6 +1422,82 @@ def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker EndSubPath/ParseOutline rows needing routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders": (
+            "FT_Stroker_EndSubPath closed-path parity needs a maintained route "
+            "proving close emission joins left/right borders and preserves "
+            "contour order exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border": (
+            "FT_Stroker_EndSubPath open-path parity needs a maintained route "
+            "proving cap emission and single-border finalization match pinned C"
+        ),
+        "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin": (
+            "FT_Stroker_EndSubPath no-segment parity needs a maintained route "
+            "proving ending immediately after BeginSubPath preserves state or "
+            "no-ops exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success": (
+            "FT_Stroker_ParseOutline mixed-outline parity needs a maintained "
+            "route proving line, conic, and cubic contour decomposition feeds "
+            "the stroker and emits the same output geometry as pinned C"
+        ),
+        "ftstroke.FT_Stroker_ParseOutline.opened_outline_success": (
+            "FT_Stroker_ParseOutline opened-outline parity needs a maintained "
+            "route proving the opened flag selects cap/finalization behavior "
+            "exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped": (
+            "FT_Stroker_ParseOutline degenerate-contour parity needs a "
+            "maintained route proving zero-length or malformed contours are "
+            "skipped or preserved exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftstroke_count_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker border/count rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts": (
+            "FT_Stroker_GetBorderCounts closed-path parity needs a maintained "
+            "route proving left/right point and contour counts after closing "
+            "a path match pinned C"
+        ),
+        "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts": (
+            "FT_Stroker_GetBorderCounts open-path parity needs a maintained "
+            "route proving open paths report the same single-border or empty "
+            "border counts as pinned C"
+        ),
+        "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers": (
+            "FT_Stroker_GetBorderCounts optional-output parity needs a "
+            "maintained route proving null output pointers are preserved while "
+            "non-null outputs receive exactly the pinned-C counts"
+        ),
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts": (
+            "FT_Stroker_GetCounts closed-path parity needs a maintained route "
+            "proving combined left/right point and contour totals match pinned C"
+        ),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts": (
+            "FT_Stroker_GetCounts open-path parity needs a maintained route "
+            "proving combined open-path totals, including any empty-border "
+            "handling, match pinned C"
+        ),
+        "ftstroke.FT_Stroker_GetCounts.optional_output_pointers": (
+            "FT_Stroker_GetCounts optional-output parity needs a maintained "
+            "route proving null output pointers are preserved while non-null "
+            "outputs receive exactly the pinned-C combined counts"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
@@ -1453,6 +1529,12 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     line_join_pending = ftstroke_line_join_pending_reason(row)
     if line_join_pending:
         return line_join_pending
+    outline_parse_pending = ftstroke_outline_parse_pending_reason(row)
+    if outline_parse_pending:
+        return outline_parse_pending
+    count_pending = ftstroke_count_pending_reason(row)
+    if count_pending:
+        return count_pending
     pending_case_groups = {
         (
             "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
@@ -1474,31 +1556,6 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Stroker_Set/Rewind parity needs a maintained non-null stroker "
             "state route proving radius, cap, join, miter-limit clamp, path "
             "clearing, and attribute preservation semantics against pinned C"
-        ),
-        (
-            "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders",
-            "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border",
-            "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin",
-            "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success",
-            "ftstroke.FT_Stroker_ParseOutline.opened_outline_success",
-            "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped",
-        ): (
-            "FT_Stroker EndSubPath/ParseOutline parity needs a maintained "
-            "outline-to-stroker route proving contour opening, close/cap "
-            "emission, no-segment handling, and degenerate-contour skipping "
-            "against pinned C"
-        ),
-        (
-            "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts",
-            "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts",
-            "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers",
-            "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts",
-            "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts",
-            "ftstroke.FT_Stroker_GetCounts.optional_output_pointers",
-        ): (
-            "FT_Stroker count parity needs a maintained non-null stroker route "
-            "that compares closed/open border counts, combined counts, and "
-            "optional output-pointer preservation exactly against pinned C"
         ),
         (
             "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",

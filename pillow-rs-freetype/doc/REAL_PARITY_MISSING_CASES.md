@@ -10910,6 +10910,36 @@ Current route-audit breakdown:
   - `FT_Stroker_LineJoin.join_geometry_and_miter_limit`: public join enum
     values and miter-limit inputs selecting the same output geometry.
 
+2026-07-21 end-subpath, parse-outline, and count blocker split:
+
+- `EndSubPath`, `ParseOutline`, `GetBorderCounts`, and `GetCounts` rows are
+  split by exact obligation instead of sharing broad outline/finalization and
+  count blockers:
+  - `FT_Stroker_EndSubPath.closed_subpath_closes_two_borders`: close emission
+    joining left/right borders and preserving contour order.
+  - `FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border`: cap
+    emission and single-border finalization for open paths.
+  - `FT_Stroker_EndSubPath.no_segment_after_begin`: ending immediately after
+    `BeginSubPath` preserving state or no-oping exactly like pinned C.
+  - `FT_Stroker_ParseOutline.line_conic_cubic_success`: line, conic, and cubic
+    contour decomposition feeding the stroker and emitting exact geometry.
+  - `FT_Stroker_ParseOutline.opened_outline_success`: opened-outline flag
+    selecting cap/finalization behavior.
+  - `FT_Stroker_ParseOutline.degenerate_contours_skipped`: zero-length or
+    malformed contours being skipped or preserved exactly like pinned C.
+  - `FT_Stroker_GetBorderCounts.closed_path_border_counts`: left/right point
+    and contour counts after closing a path.
+  - `FT_Stroker_GetBorderCounts.open_path_single_border_counts`: open-path
+    single-border or empty-border counts.
+  - `FT_Stroker_GetBorderCounts.optional_output_pointers`: null output
+    pointers preserved while non-null outputs receive exact counts.
+  - `FT_Stroker_GetCounts.combined_closed_path_counts`: combined left/right
+    point and contour totals for closed paths.
+  - `FT_Stroker_GetCounts.combined_open_path_counts`: combined open-path totals
+    including empty-border handling.
+  - `FT_Stroker_GetCounts.optional_output_pointers`: null output pointers
+    preserved while non-null outputs receive exact combined counts.
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
