@@ -45,6 +45,11 @@ thread_local! {
     static OWNED_MM_VARS: RefCell<BTreeMap<usize, OwnedMmVar>> = const { RefCell::new(BTreeMap::new()) };
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_owned_mm_var_count() -> usize {
+    OWNED_MM_VARS.with(|vars| vars.borrow().len())
+}
+
 pub type FT_Error = c_int;
 pub type FT_Bool = c_uchar;
 pub type FT_Int = c_int;

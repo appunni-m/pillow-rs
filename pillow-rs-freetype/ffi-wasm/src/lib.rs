@@ -2171,6 +2171,30 @@ pub fn abi_support_done_mm_var(library_present: i32, descriptor_present: i32) ->
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_get_and_done_mm_var(
+    handle: usize,
+    amaster: *mut rust_ffi::FT_MM_Var,
+    axis: *mut rust_ffi::FT_Var_Axis,
+    axis_capacity: FT_UInt,
+) -> (FT_Error, FT_Error, usize, usize, usize) {
+    let before = face_ref(handle).map_or(0, |face| face.mm_vars.len());
+    let get_err = fontdone_wasm_get_mm_var(handle, amaster, axis, axis_capacity);
+    let after_get = face_ref(handle).map_or(0, |face| face.mm_vars.len());
+    let library = rust_ffi::FT_Init_FreeType();
+    let descriptor = unsafe { amaster.as_mut() };
+    let done_err = if get_err == rust_ffi::FT_Err_Ok {
+        if let Some(face) = face_mut(handle) {
+            face.mm_vars.remove(&(amaster as usize));
+        }
+        rust_ffi::FT_Done_MM_Var(Some(&library), descriptor)
+    } else {
+        rust_ffi::FT_Err_Ok
+    };
+    let after_done = face_ref(handle).map_or(0, |face| face.mm_vars.len());
+    (get_err, done_err, before, after_get, after_done)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_mm_var_namedstyles(
     master: &rust_ffi::FT_MM_Var,
 ) -> Option<Vec<(rust_ffi::FT_Var_Named_Style, Vec<rust_ffi::FT_Fixed>)>> {
