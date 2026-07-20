@@ -1,5 +1,94 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: property-route pending rows with fixture/input mismatches
+
+Status: classified on 2026-07-20; no route promoted.
+
+Rejected candidate:
+
+- `fterrdef.FT_Err_Missing_Property.known_property_success`
+
+Finding:
+
+- The fixture input currently says `module_name="svg"` and
+  `property_name="svg-hooks"`, with expected success.
+- FreeType 2.14.3 documents and implements SVG renderer hooks on module
+  `ot-svg`, not `svg`; see `include/freetype/ftdriver.h` `svg-hooks` example
+  and `src/svg/ftsvg.c:ft_svg_property_get`.
+- A pinned-build probe against this worktree's FreeType oracle returned:
+  - `FT_Property_Get(library, "svg", "svg-hooks", &hooks) -> 11`
+    (`FT_Err_Missing_Module`)
+  - `FT_Property_Get(library, "ot-svg", "svg-hooks", &hooks) -> 0`
+- Promoting the existing row through the scalar `truetype:interpreter-version`
+  helper would use a different public input and would be a green placeholder.
+
+Required fix plan:
+
+1. Add a maintained typed property route for `svg-hooks` that preserves the
+   public input module name and hook-record shape.
+2. Correct the public input row or add a replacement row that uses
+   `module_name="ot-svg"` for the SVG hook success control; keep the current
+   `module_name="svg"` behavior visible as an exact `Missing_Module` case if
+   the manifest intends to exercise that spelling.
+3. Implement the behavior in core Rust first, then expose it through thin C ABI
+   and WASM ABI helpers without parsing hook semantics in the wrappers.
+4. Promote only after the pinned C oracle, Rust FFI, C ABI, and WASM ABI all
+   compare the same module/property input and output.
+
+Related property rows still pending:
+
+- `ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit`
+- `ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height`
+- `ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script`
+
+Reason:
+
+- These are not scalar `FT_UInt` properties like
+  `truetype:interpreter-version`.  They require typed `FT_Prop_*` records,
+  face-specific autohinter globals, and observable glyph-load behavior owned by
+  the Rust core before the C/WASM ABI wrappers can be considered thin and exact.
+
+### Issue Set Current: malformed SFNT constructor errors with stale declared expectations
+
+Status: classified on 2026-07-20; no route promoted.
+
+Rejected candidate:
+
+- `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
+
+Finding:
+
+- The fixture asset `fonts/synthetic/sfnt/recognized-broken-sfnt.ttf` is a
+  12-byte SFNT header with version `0x00010000` and `numTables=0`.
+- The fixture metadata declares `FT_Err_Invalid_File_Format` (`3`), but the
+  route audit records pinned C FreeType returning `85`
+  (`FT_Err_Invalid_Stream_Operation`) for the exact asset.
+- The focused test keeps the row non-runnable:
+  `runtime_cases: runnable=0 pending=1` with the same C/Rust mismatch reason.
+- FreeType 2.14.3 `src/base/ftobjs.c:ft_open_face_internal` runs additional
+  Mac-font/resource-fork fallback handling when driver probing returns
+  `Unknown_File_Format` or `Invalid_Stream_Operation`; that public-open fallback
+  is part of the observed error path for very short streams.
+- The current Rust parser can parse the 12-byte SFNT directory as an empty
+  table directory and then reports missing required tables as
+  `FT_Err_Invalid_File_Format`.  Promoting the row as-is would either contradict
+  the pinned C oracle or hard-code one malformed asset without the public
+  open-face fallback route.
+
+Required fix plan:
+
+1. Decide whether this row is meant to prove `Invalid_File_Format` or the
+   actual pinned-C `Invalid_Stream_Operation` fallback behavior.
+2. If the intended surface is `Invalid_File_Format`, replace or add a
+   C-observable malformed SFNT fixture that actually returns `3` under the
+   pinned FreeType oracle.
+3. If the intended surface is the actual tiny-stream behavior, update the route
+   plan to compare `FT_Err_Invalid_Stream_Operation` (`85`) and implement a
+   maintained Rust open-face error path matching `ft_open_face_internal`,
+   including the relevant fallback ordering.
+4. Promote only after `FT_New_Memory_Face` exact-error output matches pinned C,
+   Rust FFI, C ABI, and WASM ABI for the same bytes.
+
 ### Issue Set Current: `FT_PARAM_TAG_UNPATENTED_HINTING` no-effect open params
 
 Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
