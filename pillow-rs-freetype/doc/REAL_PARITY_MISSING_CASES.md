@@ -12545,8 +12545,25 @@ Current blocker families:
   payloads, and pad/reflect/repeat extend modes.
 - Transform paints: rotate, scale, skew, translate, explicit affine transform,
   and FreeType normalization behavior.
-- Composite paint graph: composite payload shape, all public composite modes,
-  graph traversal, and sentinel non-emission.
+- Composite paint graph rows are split by exact obligation instead of sharing a
+  broad graph blocker:
+  - `FT_PaintComposite.get_paint_composite_values`: source paint, backdrop
+    paint, and composite mode fields from the public union.
+  - `FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload`: composite payload
+    shape and nested opaque paint handles.
+  - `FT_Composite_Mode.paint_composite_modes_runtime`: every public composite
+    enum value emitted from a valid graph with exact pinned-C numeric values.
+  - `FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph`: prove the
+    sentinel is not emitted for valid composite paints.
+  - `FT_COLR_COMPOSITE_CLEAR`, `COLOR_BURN`, `COLOR_DODGE`, `DARKEN`, `DEST`,
+    `DEST_ATOP`, `DEST_IN`, `DEST_OUT`, `DEST_OVER`, and `DIFFERENCE`: graph
+    traversal must emit each mode at the same graph position without skipping
+    nested source or backdrop paints.
+  - `FT_COLR_COMPOSITE_EXCLUSION`, `HARD_LIGHT`, `HSL_COLOR`, `HSL_HUE`,
+    `HSL_LUMINOSITY`, `HSL_SATURATION`, `LIGHTEN`, `MULTIPLY`, `OVERLAY`,
+    `PLUS`, `SCREEN`, `SOFT_LIGHT`, `SRC`, `SRC_ATOP`, `SRC_IN`, `SRC_OUT`,
+    `SRC_OVER`, and `XOR`: graph construction must expose each mode with exact
+    enum value and nested paint handles.
 - Clipbox: scaled/transformed box values for size variants and false-with-output
   preservation when no clipbox exists.
 
