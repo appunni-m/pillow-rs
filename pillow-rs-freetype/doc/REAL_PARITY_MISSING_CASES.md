@@ -769,6 +769,45 @@ Remaining related blockers:
   because they require typed face/global state, not scalar interpreter-version
   property plumbing.
 
+### Issue Set Current: TrueType interpreter-version glyph-output fixture blocker
+
+Status: still pending.  The scalar `truetype:interpreter-version` property
+routes are real parity, but the runtime glyph-output rows cannot be promoted
+from the current inputs.
+
+Case IDs:
+
+- `ftdriver.TT_INTERPRETER_VERSION_35.glyph_hinting_runtime_effect`
+- `ftdriver.TT_INTERPRETER_VERSION_38.glyph_hinting_runtime_effect`
+- `ftdriver.TT_INTERPRETER_VERSION_40.glyph_hinting_runtime_effect`
+
+Current blocker:
+
+- Each row references `fonts/truetype/backward-compat-phantom-points.ttf` as
+  the `control_font`, and that maintained fixture is not present.
+- The existing `fonts/truetype/bytecode-interpreter-version.ttf` scalar
+  property route is not a substitute.  It proves `FT_Property_Set/Get` state,
+  including FreeType's `38 -> 40` normalization in the pinned build, but it
+  does not prove that interpreter-version selection changes public glyph
+  loading, metrics, outlines, or rendered bytes.
+
+Required real-parity route:
+
+1. Add or generate a reproducible, C-openable TrueType control fixture whose
+   bytecode exercises `GETINFO`, backward-compatible phantom-point behavior,
+   component offsets, and a glyph with interpreter-version-sensitive public
+   output.
+2. For versions `35`, `38`, and `40`, set the pinned C FreeType TrueType
+   `interpreter-version` property, then run `FT_Load_Glyph` and
+   `FT_Render_Glyph` for the fixture's named probe glyphs at the declared ppem
+   sizes and load flags.
+3. Compare the same input through pinned C, Rust FFI, thin C ABI, and WASM ABI
+   for exact `property_error`, per-glyph load error, 26.6 metrics, outline
+   point/tag/contour hash, bitmap mode/placement/stride, and bitmap byte hash.
+4. Promote the rows only after the focused cases pass with those exact
+   comparisons.  A constant-value assertion or scalar property roundtrip is a
+   green placeholder for these rows.
+
 Verification:
 
 ```bash
