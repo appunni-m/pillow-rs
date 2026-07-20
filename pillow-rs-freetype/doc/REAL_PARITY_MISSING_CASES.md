@@ -10489,6 +10489,47 @@ Verified command:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_OpenType_Free` non-null validation buffer route
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Finding:
+
+- `ftotval.FT_OpenType_Free.null_face_noop` and
+  `ftotval.FT_OpenType_Free.null_table_noop` are already real null-validation
+  rows across pinned C oracle, Rust FFI, C ABI, and WASM ABI.
+- `ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory` is a
+  different public behavior. It requires `FT_OpenType_Validate` to return a
+  non-null table buffer allocated from `FT_FACE_MEMORY(face)`, then
+  `FT_OpenType_Free(face, table)` must release that exact buffer.
+- The current pure-Rust `FT_OpenType_Validate` implementation still returns
+  `FT_Err_Unimplemented_Feature` for non-null validation calls, and
+  `FT_OpenType_Free` is a no-op. Promoting this row through the existing null
+  no-op route would not prove ownership or freeing behavior and would be a
+  green placeholder.
+
+Required fix plan:
+
+1. Implement non-null OpenType validation table output in core Rust first for
+   the selected table fixture, preserving exact pinned-C errors and pointer
+   nullness for BASE/GDEF/GPOS/GSUB/JSTF outputs.
+2. Add owned validation-buffer state tied to the face memory model so
+   `FT_OpenType_Free(face, table)` can release a real tracked allocation while
+   retaining the already-real null face/table no-op behavior.
+3. Expose only thin C ABI and WASM ABI wrappers for the core behavior; wrappers
+   must not synthesize validation buffers or fake allocator events.
+4. Promote `ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory`
+   only after pinned C oracle, Rust FFI, C ABI, and WASM ABI all compare the
+   same validate error, non-null table pointer class, free event count, and
+   allocator identity.
+
+Verification for this classification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: focused route probes rejected as non-runnable
 
 Status: focused probe batch on 2026-07-20.
