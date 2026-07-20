@@ -1,5 +1,55 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_PARAM_TAG_UNPATENTED_HINTING` no-effect open params
+
+Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
+2.14.3 `FT_Open_Face` handling of deprecated
+`FT_PARAM_TAG_UNPATENTED_HINTING`.
+
+Implemented real parity rows:
+
+- `ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect`
+- `ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored`
+
+Finding:
+
+- Pinned FreeType exposes `FT_PARAM_TAG_UNPATENTED_HINTING` for historical
+  compatibility, but current `FT_Open_Face` source does not consume the tag.
+  The parameter is therefore accepted and ignored, including null `data`.
+- The new oracle route opens the same font through `FT_Open_Face` with
+  `FT_OPEN_PARAMS`, observes `open_error`, `face_flags`, size setup, glyph load
+  error, and public glyph-slot fields, and compares that output with Rust FFI,
+  thin C ABI, and WASM ABI.
+- The C ABI path passes two real `FT_Parameter` records through
+  `FT_Open_Face`: one with null `data`, one with non-null ignored `data`.
+  Rust FFI and WASM do not expose arbitrary `FT_Open_Args`; for this deprecated
+  ignored tag their exact observable output is normal face opening and glyph
+  observation.
+
+Rejected candidates:
+
+- `FT_PARAM_TAG_IGNORE_SBIX` remains pending until real sbix fixtures and sbix
+  outline/bitmap behavior are C-openable.
+- `FT_PARAM_TAG_INCREMENTAL` remains pending until incremental font callbacks
+  and metrics override behavior are routed.
+- `FT_PARAM_TAG_STEM_DARKENING` remains pending until the CFF/Type1
+  stem-darkening property path and output effects are implemented.
+
+Impact:
+
+- `real-parity`: `4455 -> 4457`
+- `compile-contract`: stays `2265`
+- `pending-route`: `500 -> 498`
+- `pending-core`: stays `1`
+- `generic-fallback`: stays `0`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=FT_PARAM_TAG_UNPATENTED_HINTING
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: FTC CMap null-cache exact-error route ordering
 
 Status: three-concrete-row audit cleanup completed on 2026-07-20 for pinned

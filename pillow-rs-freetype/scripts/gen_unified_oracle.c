@@ -13764,6 +13764,138 @@ static int emit_open_face_name_options(int argc, char** argv) {
     return 0;
 }
 
+static void print_open_face_ignored_params_observation(
+    FT_Error open_error,
+    FT_Face face,
+    FT_UInt glyph_index,
+    FT_Int32 load_flags,
+    FT_UInt size_ppem) {
+    printf("{\"open_error\":%d,\"face_flags\":", open_error);
+    if (open_error || !face) {
+        printf("null,\"glyph_slot\":null}");
+        return;
+    }
+    printf("%ld", face->face_flags);
+    FT_Error size_error = FT_Err_Ok;
+    if (size_ppem) {
+        size_error = FT_Set_Pixel_Sizes(face, size_ppem, size_ppem);
+    }
+    printf(",\"size_error\":%d", size_error);
+    if (size_error) {
+        printf(",\"load_error\":%d,\"glyph_slot\":null}", size_error);
+        return;
+    }
+    FT_Error load_error = FT_Load_Glyph(face, glyph_index, load_flags);
+    printf(",\"load_error\":%d,\"glyph_slot\":", load_error);
+    if (load_error) {
+        printf("null}");
+        return;
+    }
+    printf("{");
+    print_slot_body(face->glyph, glyph_index);
+    printf("}}");
+}
+
+static FT_Error open_face_with_unpatented_hinting_params(
+    FT_Library library,
+    const unsigned char* data,
+    long data_len,
+    FT_Long face_index,
+    int include_params,
+    FT_Face* face) {
+    FT_Parameter params[2];
+    FT_Bool ignored_value = 1;
+    FT_Int num_params = 0;
+    if (include_params) {
+        params[num_params].tag = FT_PARAM_TAG_UNPATENTED_HINTING;
+        params[num_params].data = NULL;
+        num_params++;
+        params[num_params].tag = FT_PARAM_TAG_UNPATENTED_HINTING;
+        params[num_params].data = &ignored_value;
+        num_params++;
+    }
+    FT_Open_Args args;
+    memset(&args, 0, sizeof(args));
+    args.flags = FT_OPEN_MEMORY | FT_OPEN_PARAMS;
+    args.memory_base = data;
+    args.memory_size = data_len;
+    args.num_params = num_params;
+    args.params = num_params ? params : NULL;
+    return FT_Open_Face(library, &args, face_index, face);
+}
+
+static int emit_open_face_ignored_params(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[6], NULL, 10);
+    FT_UInt size_ppem = (FT_UInt)strtoul(argv[7], NULL, 10);
+    int compare_control = atoi(argv[8]);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":");
+    if (compare_control) {
+        FT_Face control_face = NULL;
+        FT_Error control_error = open_face_with_unpatented_hinting_params(
+            library, data, data_len, face_index, 0, &control_face);
+        FT_Face test_face = NULL;
+        FT_Error test_error = open_face_with_unpatented_hinting_params(
+            library, data, data_len, face_index, 1, &test_face);
+        printf("{\"control\":");
+        print_open_face_ignored_params_observation(control_error, control_face, glyph_index, load_flags, size_ppem);
+        printf(",\"test\":");
+        print_open_face_ignored_params_observation(test_error, test_face, glyph_index, load_flags, size_ppem);
+        printf("}}\n");
+        if (control_face) {
+            FT_Done_Face(control_face);
+        }
+        if (test_face) {
+            FT_Done_Face(test_face);
+        }
+    } else {
+        FT_Face face = NULL;
+        FT_Error err = open_face_with_unpatented_hinting_params(
+            library, data, data_len, face_index, 1, &face);
+        print_open_face_ignored_params_observation(err, face, glyph_index, load_flags, size_ppem);
+        printf("}\n");
+        if (face) {
+            FT_Done_Face(face);
+        }
+    }
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_new_memory_face_variants(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -15164,6 +15296,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--open-face-name-options")) {
         return emit_open_face_name_options(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--open-face-ignored-params")) {
+        return emit_open_face_ignored_params(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--set-char-size")) {
         return emit_set_char_size(argc, argv);

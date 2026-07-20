@@ -15546,6 +15546,23 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(open_face_name_option_rows_arg(params)?);
             Ok(args)
         }
+        "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
+            let mut args = vec!["--open-face-ignored-params".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(open_face_ignored_params_glyph_index(params).to_string());
+            args.push(open_face_ignored_params_load_flags(params)?.to_string());
+            args.push(open_face_ignored_params_size_ppem(params)?.to_string());
+            args.push(
+                if open_face_ignored_params_compare_control(case) {
+                    "1"
+                } else {
+                    "0"
+                }
+                .to_string(),
+            );
+            Ok(args)
+        }
         "freetype.face_flags" => {
             let mut args = vec!["--face-flags".to_string()];
             push_font_source(case, &mut args)?;
@@ -17261,6 +17278,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
             rust_open_face_name_options(case)
         }
+        "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
+            rust_open_face_ignored_params(case)
+        }
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -17843,6 +17863,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
             c_open_face_name_options(case)
+        }
+        "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
+            c_open_face_ignored_params(case)
         }
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
@@ -18573,6 +18596,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.open_face_with_params" if open_face_name_options_runtime_supported(case) => {
             wasm_open_face_name_options(case)
+        }
+        "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
+            wasm_open_face_ignored_params(case)
         }
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
@@ -24356,6 +24382,275 @@ fn wasm_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(status.handle);
     }
     Ok(open_face_name_run_output(results))
+}
+
+fn open_face_ignored_params_runtime_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
+            | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored"
+    ) && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+}
+
+fn open_face_ignored_params_compare_control(case: &InputCase) -> bool {
+    case.case_id == "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
+}
+
+fn open_face_ignored_params_probe(params: &Value) -> &Value {
+    params.get("probe").unwrap_or(params)
+}
+
+fn open_face_ignored_params_glyph_index(params: &Value) -> u32 {
+    let probe = open_face_ignored_params_probe(params);
+    probe
+        .get("glyph_index")
+        .or_else(|| params.get("probe_glyph_index"))
+        .and_then(|value| u32_value(value, "glyph_index").ok())
+        .unwrap_or(0)
+}
+
+fn open_face_ignored_params_load_flags(params: &Value) -> Result<i32, String> {
+    load_flags_param(open_face_ignored_params_probe(params))
+}
+
+fn open_face_ignored_params_size_ppem(params: &Value) -> Result<u32, String> {
+    open_face_ignored_params_probe(params)
+        .get("size_ppem")
+        .map_or(Ok(0), |value| u32_value(value, "size_ppem"))
+}
+
+fn rust_open_face_ignored_observation(mut face: FT_Face, params: &Value) -> Result<Value, String> {
+    let mut size_error = FT_Err_Ok;
+    if let Some(size_ppem) = open_face_ignored_params_probe(params).get("size_ppem") {
+        let size = u32_value(size_ppem, "size_ppem")?;
+        size_error = FT_Set_Pixel_Sizes(&mut face, size, size);
+        if size_error != FT_Err_Ok {
+            return Ok(json!({
+                "open_error": FT_Err_Ok,
+                "face_flags": face.face_flags,
+                "size_error": size_error,
+                "load_error": size_error,
+                "glyph_slot": Value::Null
+            }));
+        }
+    }
+    let glyph_index = open_face_ignored_params_glyph_index(params);
+    let load_flags = open_face_ignored_params_load_flags(params)?;
+    match FT_Load_Glyph(&face, glyph_index, load_flags) {
+        Ok(slot) => Ok(json!({
+            "open_error": FT_Err_Ok,
+            "face_flags": face.face_flags,
+            "size_error": size_error,
+            "load_error": FT_Err_Ok,
+            "glyph_slot": slot_json(&slot)
+        })),
+        Err(err) => Ok(json!({
+            "open_error": FT_Err_Ok,
+            "face_flags": face.face_flags,
+            "size_error": size_error,
+            "load_error": err,
+            "glyph_slot": Value::Null
+        })),
+    }
+}
+
+fn rust_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let face_index = face_index_param(&case.inputs.params)?;
+    let open = || FT_New_Memory_Face(&library, data.as_ref(), face_index, 20.0);
+    if open_face_ignored_params_compare_control(case) {
+        let control = match open() {
+            Ok(face) => rust_open_face_ignored_observation(face, &case.inputs.params)?,
+            Err(err) => {
+                json!({"open_error": err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+            }
+        };
+        let test = match open() {
+            Ok(face) => rust_open_face_ignored_observation(face, &case.inputs.params)?,
+            Err(err) => {
+                json!({"open_error": err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+            }
+        };
+        Ok(ok(json!({"control": control, "test": test})))
+    } else {
+        let output = match open() {
+            Ok(face) => rust_open_face_ignored_observation(face, &case.inputs.params)?,
+            Err(err) => {
+                json!({"open_error": err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+            }
+        };
+        Ok(ok(output))
+    }
+}
+
+fn c_open_face_with_unpatented_params(
+    library: c_abi::FT_Library,
+    bytes: &[u8],
+    face_index: i64,
+) -> Result<(FT_Error, c_abi::FT_Face), String> {
+    let mut ignored_value: c_abi::FT_Bool = 1;
+    let mut params = [
+        c_abi::FT_Parameter {
+            tag: FT_PARAM_TAG_UNPATENTED_HINTING as c_abi::FT_ULong,
+            data: std::ptr::null_mut(),
+        },
+        c_abi::FT_Parameter {
+            tag: FT_PARAM_TAG_UNPATENTED_HINTING as c_abi::FT_ULong,
+            data: std::ptr::from_mut(&mut ignored_value).cast::<c_void>(),
+        },
+    ];
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: (FT_OPEN_MEMORY | FT_OPEN_PARAMS) as c_abi::FT_UInt,
+        memory_base: bytes.as_ptr(),
+        memory_size: file_size,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: params.len() as c_abi::FT_Int,
+        params: params.as_mut_ptr(),
+    };
+    let mut face = std::ptr::null_mut();
+    let err = c_abi::FT_Open_Face(library, &open_args, face_index, &mut face);
+    Ok((err, face))
+}
+
+fn c_open_face_ignored_observation(face: c_abi::FT_Face, params: &Value) -> Result<Value, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    let mut size_error = FT_Err_Ok;
+    if let Some(size_ppem) = open_face_ignored_params_probe(params).get("size_ppem") {
+        let size = u32_value(size_ppem, "size_ppem")?;
+        size_error = c_abi::FT_Set_Pixel_Sizes(face, size, size);
+        if size_error != FT_Err_Ok {
+            return Ok(json!({
+                "open_error": FT_Err_Ok,
+                "face_flags": info.face_flags,
+                "size_error": size_error,
+                "load_error": size_error,
+                "glyph_slot": Value::Null
+            }));
+        }
+    }
+    let glyph_index = open_face_ignored_params_glyph_index(params);
+    let load_flags = open_face_ignored_params_load_flags(params)?;
+    let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+    Ok(json!({
+        "open_error": FT_Err_Ok,
+        "face_flags": info.face_flags,
+        "size_error": size_error,
+        "load_error": err,
+        "glyph_slot": if err == FT_Err_Ok { c_slot_json(face)? } else { Value::Null }
+    }))
+}
+
+fn c_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(error(init_err));
+    }
+    let face_index = face_index_param(&case.inputs.params)?;
+    if open_face_ignored_params_compare_control(case) {
+        let mut control = std::ptr::null_mut();
+        let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+        let control_err =
+            c_abi::FT_New_Memory_Face(library, bytes.as_ptr(), file_size, face_index, &mut control);
+        let control_output = if control_err == FT_Err_Ok {
+            c_open_face_ignored_observation(control, &case.inputs.params)?
+        } else {
+            json!({"open_error": control_err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        let (test_err, test) =
+            c_open_face_with_unpatented_params(library, bytes.as_ref(), face_index)?;
+        let test_output = if test_err == FT_Err_Ok {
+            c_open_face_ignored_observation(test, &case.inputs.params)?
+        } else {
+            json!({"open_error": test_err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        c_done_face(control);
+        c_done_face(test);
+        c_done_library(library);
+        Ok(ok(json!({"control": control_output, "test": test_output})))
+    } else {
+        let (err, face) = c_open_face_with_unpatented_params(library, bytes.as_ref(), face_index)?;
+        let output = if err == FT_Err_Ok {
+            c_open_face_ignored_observation(face, &case.inputs.params)?
+        } else {
+            json!({"open_error": err, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        c_done_face(face);
+        c_done_library(library);
+        Ok(ok(output))
+    }
+}
+
+fn wasm_open_face_ignored_observation(handle: usize, params: &Value) -> Result<Value, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    let mut size_error = FT_Err_Ok;
+    if let Some(size_ppem) = open_face_ignored_params_probe(params).get("size_ppem") {
+        let size = u32_value(size_ppem, "size_ppem")?;
+        size_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, size, size);
+        if size_error != FT_Err_Ok {
+            return Ok(json!({
+                "open_error": FT_Err_Ok,
+                "face_flags": info.face_flags,
+                "size_error": size_error,
+                "load_error": size_error,
+                "glyph_slot": Value::Null
+            }));
+        }
+    }
+    let glyph_index = if handle == 0 {
+        open_face_ignored_params_glyph_index(params)
+    } else {
+        wasm_resolved_glyph_index(handle, open_face_ignored_params_probe(params))
+            .unwrap_or_else(|_| open_face_ignored_params_glyph_index(params))
+    };
+    let load_flags = open_face_ignored_params_load_flags(params)?;
+    let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+    Ok(json!({
+        "open_error": FT_Err_Ok,
+        "face_flags": info.face_flags,
+        "size_error": size_error,
+        "load_error": err,
+        "glyph_slot": if err == FT_Err_Ok { wasm_slot_json(handle)? } else { Value::Null }
+    }))
+}
+
+fn wasm_open_face_ignored_params(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let open = || wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
+    if open_face_ignored_params_compare_control(case) {
+        let control_status = open();
+        let control = if control_status.error == FT_Err_Ok {
+            wasm_open_face_ignored_observation(control_status.handle, &case.inputs.params)?
+        } else {
+            json!({"open_error": control_status.error, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        let test_status = open();
+        let test = if test_status.error == FT_Err_Ok {
+            wasm_open_face_ignored_observation(test_status.handle, &case.inputs.params)?
+        } else {
+            json!({"open_error": test_status.error, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        wasm_done_face(control_status.handle);
+        wasm_done_face(test_status.handle);
+        Ok(ok(json!({"control": control, "test": test})))
+    } else {
+        let status = open();
+        let output = if status.error == FT_Err_Ok {
+            wasm_open_face_ignored_observation(status.handle, &case.inputs.params)?
+        } else {
+            json!({"open_error": status.error, "face_flags": Value::Null, "glyph_slot": Value::Null})
+        };
+        wasm_done_face(status.handle);
+        Ok(ok(output))
+    }
 }
 
 fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
