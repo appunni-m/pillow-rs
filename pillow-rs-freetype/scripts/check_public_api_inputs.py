@@ -1371,7 +1371,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
-        "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
@@ -1791,6 +1790,8 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
             if reason:
                 return reason
     if value.get("kind") not in {"ref", "file"}:
+        return None
+    if value.get("optional") is True:
         return None
     if value.get("role") == "missing_path":
         return None
@@ -3760,6 +3761,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error"
     ):
         return "FT_Get_MM_Var invalid/non-variable-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Get_MM_Var.variable_font_descriptor_success"
+    ):
+        return "FT_Get_MM_Var OpenType variable descriptor validates fvar axes, namedstyles, axis flags, and FT_Done_MM_Var release through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_var"
         and row.case_id == "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success"

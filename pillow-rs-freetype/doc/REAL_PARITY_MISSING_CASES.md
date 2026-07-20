@@ -10069,6 +10069,59 @@ make fontdone-ffi
 git diff --check
 ```
 
+### Issue Set: `FT_Get_MM_Var` maintained OpenType descriptor route
+
+Status: one real OpenType `fvar` descriptor row implemented on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `890d3a31b`: `real-parity=4482`,
+  `pending-route=474`, `pending-core=0`.
+
+Finding:
+
+- The declared TrueType variable fixture
+  `fonts/variable/multi-axis-named-instances.ttf` is present and opens in the
+  pinned C oracle; the optional CFF2 fixture in the same manifest row remains
+  unresolved and must not block the maintained TrueType half.
+- FreeType `src/truetype/ttgxvar.c:2445-2906` constructs `FT_MM_Var` for
+  OpenType variations from the `fvar` table: `num_designs=~0U`, axis
+  min/default/max values are already 16.16 `FT_Fixed`, axis `strid` stores the
+  fvar name ID, axis flags are stored in the adjacent `FT_UShort` array, and
+  namedstyle records store one design coordinate per axis.
+- The first runtime mismatch after routing was the missing PostScript-name ID
+  sentinel: C `TT_Get_MM_Var` stores `0xFFFF`, while Rust initially used
+  `~0U` (`4294967295`).
+
+Implementation:
+
+- Extended the pure-Rust `fvar` parser to preserve axis flags and name IDs.
+- Added OpenType `FT_Get_MM_Var` descriptor filling in Rust FFI, including
+  standard axis names, fvar axis flags, namedstyle records, and coordinate
+  arrays.
+- Kept C and WASM layers as thin storage owners: wrappers provide descriptor
+  backing buffers and expose the core-filled public records without parsing
+  font data.
+- Extended the pinned C oracle and runtime comparison to include namedstyle
+  records and axis flags.
+- Tightened route audit unresolved-asset handling so optional future assets do
+  not block a row when the required maintained fixture is present.
+- Promoted only the fixture-backed row proven through pinned C oracle, Rust
+  FFI, C ABI, and WASM ABI:
+  - `ftmm.FT_Get_MM_Var.variable_font_descriptor_success`
+
+Result:
+
+- Route audit after this batch: `real-parity=4483`,
+  `pending-route=473`, `pending-core=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.variable_font_descriptor_success
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set: `FT_Set_MM_WeightVector` generated Adobe MM state route
 
 Status: four real Type 1 MM weight-vector state/getter rows implemented on

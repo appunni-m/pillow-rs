@@ -858,6 +858,12 @@ struct WasmFaceState {
     size_metrics: BTreeMap<usize, rust_ffi::FT_Size_Metrics>,
     slot: Option<rust_ffi::FT_GlyphSlot>,
     variant_list: Vec<FT_UInt32>,
+    mm_vars: BTreeMap<usize, WasmMmVarStorage>,
+}
+
+struct WasmMmVarStorage {
+    _namedstyle: Box<[rust_ffi::FT_Var_Named_Style]>,
+    _namedstyle_coords: Box<[rust_ffi::FT_Fixed]>,
 }
 
 thread_local! {
@@ -901,6 +907,7 @@ fn make_wasm_face_state(face: rust_ffi::FT_Face) -> Box<WasmFaceState> {
         size_metrics,
         slot: Some(initial_slot),
         variant_list: Vec::new(),
+        mm_vars: BTreeMap::new(),
     })
 }
 
@@ -2164,6 +2171,36 @@ pub fn abi_support_done_mm_var(library_present: i32, descriptor_present: i32) ->
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_mm_var_namedstyles(
+    master: &rust_ffi::FT_MM_Var,
+) -> Option<Vec<(rust_ffi::FT_Var_Named_Style, Vec<rust_ffi::FT_Fixed>)>> {
+    let axis_count = usize::try_from(master.num_axis).ok()?;
+    let namedstyle_count = usize::try_from(master.num_namedstyles).ok()?;
+    if master.namedstyle.is_null() {
+        return Some(Vec::new());
+    }
+    // SAFETY: this feature-gated helper is used immediately after
+    // `fontdone_wasm_get_mm_var`, whose face-owned side storage keeps the
+    // namedstyle pointer and coordinate arrays live.
+    let styles = unsafe { slice::from_raw_parts(master.namedstyle, namedstyle_count) };
+    Some(
+        styles
+            .iter()
+            .map(|style| {
+                let coords = if style.coords.is_null() {
+                    Vec::new()
+                } else {
+                    // SAFETY: each namedstyle record has one coordinate per
+                    // axis in the live descriptor side storage.
+                    unsafe { slice::from_raw_parts(style.coords, axis_count) }.to_vec()
+                };
+                (*style, coords)
+            })
+            .collect(),
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
 extern "C" fn abi_support_debug_hook_a(_arg: rust_ffi::FT_Pointer) -> rust_ffi::FT_Error {
     rust_ffi::FT_Err_Ok
 }
@@ -3051,6 +3088,7 @@ pub extern "C" fn fontdone_wasm_get_mm_var(
     axis: *mut rust_ffi::FT_Var_Axis,
     axis_capacity: FT_UInt,
 ) -> FT_Error {
+    let amaster_ptr = amaster;
     let amaster = unsafe { amaster.as_mut() };
     let axis = if axis.is_null() {
         None
@@ -3058,7 +3096,37 @@ pub extern "C" fn fontdone_wasm_get_mm_var(
         // SAFETY: caller provides `axis_capacity` writable FT_Var_Axis records.
         Some(unsafe { slice::from_raw_parts_mut(axis, axis_capacity as usize) })
     };
-    rust_ffi::FT_Get_MM_Var(face_ref(handle).map(|face| &face.face), amaster, axis)
+    let mut namedstyle =
+        vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
+    let mut namedstyle_coords = vec![rust_ffi::FT_Fixed::default(); 64 * 256].into_boxed_slice();
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Get_MM_Var(None, amaster, axis, None, None);
+    };
+    let err = rust_ffi::FT_Get_MM_Var(
+        Some(&face.face),
+        amaster,
+        axis,
+        Some(&mut namedstyle),
+        Some(&mut namedstyle_coords),
+    );
+    if err == rust_ffi::FT_Err_Ok && !amaster_ptr.is_null() {
+        // SAFETY: `amaster_ptr` is the same non-null caller-owned output
+        // descriptor just initialized by `FT_Get_MM_Var`.
+        let master = unsafe { &mut *amaster_ptr };
+        master.namedstyle = if master.num_namedstyles == 0 {
+            ptr::null_mut()
+        } else {
+            namedstyle.as_mut_ptr()
+        };
+        face.mm_vars.insert(
+            amaster_ptr as usize,
+            WasmMmVarStorage {
+                _namedstyle: namedstyle,
+                _namedstyle_coords: namedstyle_coords,
+            },
+        );
+    }
+    err
 }
 
 #[unsafe(no_mangle)]

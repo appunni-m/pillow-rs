@@ -24,7 +24,22 @@ thread_local! {
 struct OwnedMmVar {
     master: Box<FT_MM_Var>,
     _axis: Box<[FT_Var_Axis]>,
+    _namedstyle: Box<[rust_ffi::FT_Var_Named_Style]>,
+    _namedstyle_coords: Box<[rust_ffi::FT_Fixed]>,
 }
+
+#[cfg(feature = "abi-test-support")]
+pub type AbiMmVarNamedStyleSnapshot = (rust_ffi::FT_Var_Named_Style, Vec<rust_ffi::FT_Fixed>);
+
+#[cfg(feature = "abi-test-support")]
+pub type AbiMmVarDescriptorSnapshot = (
+    FT_Error,
+    FT_MM_Var,
+    Vec<FT_Var_Axis>,
+    Vec<FT_UInt>,
+    Vec<AbiMmVarNamedStyleSnapshot>,
+    FT_Error,
+);
 
 thread_local! {
     static OWNED_MM_VARS: RefCell<BTreeMap<usize, OwnedMmVar>> = const { RefCell::new(BTreeMap::new()) };
@@ -1112,11 +1127,18 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
 pub fn abi_mm_var_descriptor(
     library: FT_Library,
     face: FT_Face,
-) -> Option<(FT_Error, FT_MM_Var, Vec<FT_Var_Axis>, FT_Error)> {
+) -> Option<AbiMmVarDescriptorSnapshot> {
     let mut master_ptr: *mut FT_MM_Var = ptr::null_mut();
     let err = FT_Get_MM_Var(face, &mut master_ptr);
     if err != rust_ffi::FT_Err_Ok || master_ptr.is_null() {
-        return Some((err, FT_MM_Var::default(), Vec::new(), rust_ffi::FT_Err_Ok));
+        return Some((
+            err,
+            FT_MM_Var::default(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            rust_ffi::FT_Err_Ok,
+        ));
     }
     // SAFETY: `FT_Get_MM_Var` returned a live descriptor pointer owned by this
     // C ABI crate until `FT_Done_MM_Var` is called below.
@@ -1129,8 +1151,38 @@ pub fn abi_mm_var_descriptor(
         // records and remains live until `FT_Done_MM_Var`.
         unsafe { slice::from_raw_parts(master.axis, axis_count) }.to_vec()
     };
+    let mut axis_flags = Vec::with_capacity(axis_count);
+    for axis_index in 0..axis_count {
+        let mut flags = 0;
+        let axis_index = FT_UInt::try_from(axis_index).ok()?;
+        let flag_err = FT_Get_Var_Axis_Flags(master_ptr, axis_index, &mut flags);
+        if flag_err != rust_ffi::FT_Err_Ok {
+            return None;
+        }
+        axis_flags.push(flags);
+    }
+    let namedstyle_count = usize::try_from(master.num_namedstyles).ok()?;
+    let namedstyles = if master.namedstyle.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: the descriptor's namedstyle pointer has `num_namedstyles`
+        // initialized records and remains live until `FT_Done_MM_Var`.
+        unsafe { slice::from_raw_parts(master.namedstyle, namedstyle_count) }
+            .iter()
+            .map(|style| {
+                let coords = if style.coords.is_null() {
+                    Vec::new()
+                } else {
+                    // SAFETY: FreeType stores one coordinate per axis for
+                    // every named style in the live descriptor allocation.
+                    unsafe { slice::from_raw_parts(style.coords, axis_count) }.to_vec()
+                };
+                (*style, coords)
+            })
+            .collect()
+    };
     let done_err = FT_Done_MM_Var(library, master_ptr);
-    Some((err, master, axes, done_err))
+    Some((err, master, axes, axis_flags, namedstyles, done_err))
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1481,22 +1533,38 @@ pub extern "C" fn FT_Get_MM_Var(
     amaster: *mut *mut FT_MM_Var,
 ) -> FT_Error {
     let Some(amaster) = non_null_mut(amaster) else {
-        return rust_ffi::FT_Get_MM_Var(None, None, None);
+        return rust_ffi::FT_Get_MM_Var(None, None, None, None, None);
     };
     let Some(state) = face_state(face) else {
         let mut out = FT_MM_Var::default();
-        return rust_ffi::FT_Get_MM_Var(None, Some(&mut out), None);
+        return rust_ffi::FT_Get_MM_Var(None, Some(&mut out), None, None, None);
     };
-    let mut axis = vec![FT_Var_Axis::default(); 4].into_boxed_slice();
+    let mut axis = vec![FT_Var_Axis::default(); 64].into_boxed_slice();
+    let mut namedstyle =
+        vec![rust_ffi::FT_Var_Named_Style::default(); 256].into_boxed_slice();
+    let mut namedstyle_coords = vec![rust_ffi::FT_Fixed::default(); 64 * 256].into_boxed_slice();
     let mut master = Box::new(FT_MM_Var::default());
-    let err = rust_ffi::FT_Get_MM_Var(Some(&state.inner), Some(&mut master), Some(&mut axis));
+    let err = rust_ffi::FT_Get_MM_Var(
+        Some(&state.inner),
+        Some(&mut master),
+        Some(&mut axis),
+        Some(&mut namedstyle),
+        Some(&mut namedstyle_coords),
+    );
     if err != rust_ffi::FT_Err_Ok {
         return err;
     }
     master.axis = axis.as_mut_ptr();
+    master.namedstyle = if master.num_namedstyles == 0 {
+        ptr::null_mut()
+    } else {
+        namedstyle.as_mut_ptr()
+    };
     let mut owned = OwnedMmVar {
         master,
         _axis: axis,
+        _namedstyle: namedstyle,
+        _namedstyle_coords: namedstyle_coords,
     };
     let master_ptr: *mut FT_MM_Var = owned.master.as_mut();
     OWNED_MM_VARS.with(|vars| {

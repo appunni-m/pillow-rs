@@ -10101,6 +10101,10 @@ fn ftmm_get_mm_var_uses_type1_adobe(case: &InputCase) -> bool {
     })
 }
 
+fn ftmm_get_mm_var_has_resolved_font(case: &InputCase) -> bool {
+    runtime_font_asset(case).is_some_and(asset_is_runtime_resolved)
+}
+
 fn mm_var_axis_json(axis: &FT_Var_Axis) -> Value {
     json!({
         "name": ffi_nullable_c_string_json(axis.name),
@@ -10112,7 +10116,54 @@ fn mm_var_axis_json(axis: &FT_Var_Axis) -> Value {
     })
 }
 
-fn mm_var_descriptor_json(master: &FT_MM_Var, axes: &[FT_Var_Axis]) -> Value {
+fn mm_var_namedstyle_json(style: &FT_Var_Named_Style, coords: &[FT_Fixed]) -> Value {
+    json!({
+        "coords": coords,
+        "strid": style.strid,
+        "psid": style.psid,
+    })
+}
+
+fn mm_var_namedstyles_from_storage(
+    master: &FT_MM_Var,
+    namedstyles: &[FT_Var_Named_Style],
+    namedstyle_coords: &[FT_Fixed],
+) -> Vec<Value> {
+    let axis_count = usize::try_from(master.num_axis).unwrap_or(0);
+    let namedstyle_count = usize::try_from(master.num_namedstyles).unwrap_or(0);
+    namedstyles
+        .iter()
+        .take(namedstyle_count)
+        .enumerate()
+        .map(|style| {
+            let (index, style) = style;
+            let coord_start = index * axis_count;
+            let coord_end = coord_start + axis_count;
+            let coords = namedstyle_coords
+                .get(coord_start..coord_end)
+                .unwrap_or_default()
+                .to_vec();
+            mm_var_namedstyle_json(style, &coords)
+        })
+        .collect()
+}
+
+fn mm_var_axis_flags_from_descriptor(master: &FT_MM_Var) -> Vec<FT_UInt> {
+    (0..master.num_axis)
+        .map(|axis_index| {
+            let mut flags = 0;
+            let status = FT_Get_Var_Axis_Flags(Some(master), axis_index, Some(&mut flags));
+            if status == FT_Err_Ok { flags } else { 0 }
+        })
+        .collect()
+}
+
+fn mm_var_descriptor_json(
+    master: &FT_MM_Var,
+    axes: &[FT_Var_Axis],
+    axis_flags: &[FT_UInt],
+    namedstyles: &[Value],
+) -> Value {
     let axis_count = usize::try_from(master.num_axis)
         .unwrap_or(usize::MAX)
         .min(axes.len());
@@ -10123,7 +10174,8 @@ fn mm_var_descriptor_json(master: &FT_MM_Var, axes: &[FT_Var_Axis]) -> Value {
         "axis_pointer": if master.axis.is_null() { "null" } else { "non_null" },
         "namedstyle_pointer": if master.namedstyle.is_null() { "null" } else { "non_null" },
         "axis": axes.iter().take(axis_count).map(mm_var_axis_json).collect::<Vec<_>>(),
-        "axis_flags": vec![0; axis_count],
+        "axis_flags": axis_flags.iter().take(axis_count).copied().collect::<Vec<_>>(),
+        "namedstyle": namedstyles,
     })
 }
 
@@ -10131,13 +10183,15 @@ fn ftmm_get_mm_var_output(
     status: FT_Error,
     master: &FT_MM_Var,
     axes: &[FT_Var_Axis],
+    axis_flags: &[FT_UInt],
+    namedstyles: &[Value],
     done_return: FT_Error,
 ) -> RunOutput {
     if status == FT_Err_Ok {
         ok(json!({
             "return": status,
             "descriptor_pointer": "non_null",
-            "descriptor": mm_var_descriptor_json(master, axes),
+            "descriptor": mm_var_descriptor_json(master, axes, axis_flags, namedstyles),
             "done_return": done_return,
         }))
     } else {
@@ -10148,17 +10202,46 @@ fn ftmm_get_mm_var_output(
 fn rust_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
     let face = rust_new_face_without_size(case)?;
     let mut master = FT_MM_Var::default();
-    let mut axes = vec![FT_Var_Axis::default(); 4];
-    let status = FT_Get_MM_Var(Some(&face), Some(&mut master), Some(&mut axes));
-    Ok(ftmm_get_mm_var_output(status, &master, &axes, FT_Err_Ok))
+    let mut axes = vec![FT_Var_Axis::default(); 64];
+    let mut namedstyles = vec![FT_Var_Named_Style::default(); 256];
+    let mut namedstyle_coords = vec![FT_Fixed::default(); 64 * 256];
+    let status = FT_Get_MM_Var(
+        Some(&face),
+        Some(&mut master),
+        Some(&mut axes),
+        Some(&mut namedstyles),
+        Some(&mut namedstyle_coords),
+    );
+    let axis_flags = mm_var_axis_flags_from_descriptor(&master);
+    let namedstyles = mm_var_namedstyles_from_storage(&master, &namedstyles, &namedstyle_coords);
+    Ok(ftmm_get_mm_var_output(
+        status,
+        &master,
+        &axes,
+        &axis_flags,
+        &namedstyles,
+        FT_Err_Ok,
+    ))
 }
 
 fn c_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let (status, master, axes, done_return) = c_abi::abi_mm_var_descriptor(library, face)
-        .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
+    let (status, master, axes, axis_flags, namedstyle_records, done_return) =
+        c_abi::abi_mm_var_descriptor(library, face)
+            .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
+    let namedstyles = namedstyle_records
+        .iter()
+        .map(|(style, coords)| mm_var_namedstyle_json(style, coords))
+        .collect::<Vec<_>>();
     let output = if status == FT_Err_Ok {
-        ftmm_get_mm_var_output(status, &master, &axes, done_return)
+        ftmm_get_mm_var_output(
+            status,
+            &master,
+            &axes,
+            &axis_flags,
+            &namedstyles,
+            done_return,
+        )
     } else {
         error(status)
     };
@@ -10170,14 +10253,21 @@ fn c_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_new_face_without_size(case)?;
     let mut master = FT_MM_Var::default();
-    let mut axes = vec![FT_Var_Axis::default(); 4];
+    let mut axes = vec![FT_Var_Axis::default(); 64];
     let status = wasm_abi::fontdone_wasm_get_mm_var(
         handle,
         &mut master,
         axes.as_mut_ptr(),
         FT_UInt::try_from(axes.len()).unwrap_or(0),
     );
-    let output = ftmm_get_mm_var_output(status, &master, &axes, FT_Err_Ok);
+    let axis_flags = mm_var_axis_flags_from_descriptor(&master);
+    let namedstyles = wasm_abi::abi_mm_var_namedstyles(&master)
+        .ok_or_else(|| "missing WASM FT_MM_Var namedstyle snapshot".to_string())?
+        .iter()
+        .map(|(style, coords)| mm_var_namedstyle_json(style, coords))
+        .collect::<Vec<_>>();
+    let output =
+        ftmm_get_mm_var_output(status, &master, &axes, &axis_flags, &namedstyles, FT_Err_Ok);
     wasm_done_face(handle);
     Ok(output)
 }
@@ -10241,8 +10331,16 @@ fn ftmm_axis_flags_output(rows: Vec<Value>, done_return: FT_Error) -> RunOutput 
 fn rust_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     let face = rust_new_face_without_size(case)?;
     let mut master = FT_MM_Var::default();
-    let mut axes = vec![FT_Var_Axis::default(); 4];
-    let status = FT_Get_MM_Var(Some(&face), Some(&mut master), Some(&mut axes));
+    let mut axes = vec![FT_Var_Axis::default(); 64];
+    let mut namedstyles = vec![FT_Var_Named_Style::default(); 256];
+    let mut namedstyle_coords = vec![FT_Fixed::default(); 64 * 256];
+    let status = FT_Get_MM_Var(
+        Some(&face),
+        Some(&mut master),
+        Some(&mut axes),
+        Some(&mut namedstyles),
+        Some(&mut namedstyle_coords),
+    );
     if status != FT_Err_Ok {
         return Ok(error(status));
     }
@@ -10265,7 +10363,7 @@ fn rust_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let (status, mut master, axes, done_return) = c_abi::abi_mm_var_descriptor(library, face)
+    let (status, mut master, axes, _, _, done_return) = c_abi::abi_mm_var_descriptor(library, face)
         .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
     if status != FT_Err_Ok {
         c_done_face(face);
@@ -10294,7 +10392,7 @@ fn c_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_new_face_without_size(case)?;
     let mut master = FT_MM_Var::default();
-    let mut axes = vec![FT_Var_Axis::default(); 4];
+    let mut axes = vec![FT_Var_Axis::default(); 64];
     let status = wasm_abi::fontdone_wasm_get_mm_var(
         handle,
         &mut master,
@@ -18801,7 +18899,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             done_mm_var_library_present(params).to_string(),
             done_mm_var_descriptor_present(params).to_string(),
         ]),
-        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+        "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => {
             let mut args = vec!["--ftmm-get-mm-var".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
@@ -19962,7 +20060,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
-        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => rust_ftmm_get_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => rust_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
             rust_ftmm_axis_flags(case)
         }
@@ -20755,7 +20853,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
-        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => c_ftmm_get_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => c_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
             c_ftmm_axis_flags(case)
         }
@@ -21473,7 +21571,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
-        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => wasm_ftmm_get_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => wasm_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" if ftmm_get_mm_var_uses_type1_adobe(case) => {
             wasm_ftmm_axis_flags(case)
         }
@@ -29143,6 +29241,8 @@ fn runtime_font_asset_entry(case: &InputCase) -> Option<(&str, &Asset)> {
     }
     [
         "font",
+        "variable_font",
+        "adobe_mm_font",
         "font_bytes",
         "fixture",
         "blob",
