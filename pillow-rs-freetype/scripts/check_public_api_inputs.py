@@ -1377,9 +1377,7 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
-        "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
         "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
-        "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
     }
@@ -3757,11 +3755,23 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_Var_Blend_Coordinates partial, excess, and reset scenarios validate active OpenType design/blend coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_var_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend"
+    ):
+        return "FT_Set_Var_Blend_Coordinates glyph output validates active blend coordinates followed by FT_Load_Glyph/FT_Render_Glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmm.set_var_design_coordinates"
         and row.case_id
         == "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset"
     ):
         return "FT_Set_Var_Design_Coordinates partial, excess, and reset scenarios validate active OpenType design/blend coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_var_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates"
+    ):
+        return "FT_Set_Var_Design_Coordinates glyph output validates set design coordinates followed by FT_Load_Glyph/FT_Render_Glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_var_blend_coordinates"
         and row.case_id
