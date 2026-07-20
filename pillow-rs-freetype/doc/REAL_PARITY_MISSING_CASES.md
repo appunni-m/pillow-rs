@@ -12556,7 +12556,7 @@ Finding:
 - The remaining cache manager, image cache, cmap cache, sbit scaler, node,
   scaler descriptor, face-id, and type-contract rows had stayed in
   `generic-fallback` with the reason `no explicit maintained route
-  classification`.
+  classification`, then under one broad cache subsystem pending reason.
 - Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
   cache subsystem route that constructs a real `FTC_Manager`, installs image,
   cmap, and sbit caches, exercises requester callbacks and `FTC_FaceID`
@@ -12565,13 +12565,44 @@ Finding:
 
 Classification change:
 
-- 90 `ftcache.*` rows moved from `generic-fallback` to `pending-route`.
-- 37 existing exact `ftcache` rows remain `real-parity`.
-- The pre-existing
-  `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer` row remains
-  `pending-route` for its specific non-C-openable bitmap fixture reason.
-- New route audit counts: `real-parity=4465`, `generic-fallback=339`,
-  `pending-route=175`, `pending-core=7`.
+- Current route audit has 91 `ftcache.*` pending rows. 89 former broad-cache
+  rows now use explicit case-set blockers grouped by behavior surface.
+- The existing
+  `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` row keeps its specific
+  foreign-node layout blocker.
+- The existing
+  `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer` row keeps its
+  specific non-C-openable bitmap fixture blocker.
+- The route audit count remains stable for this refinement; it changes blocker
+  granularity, not the number of accepted parity rows.
+
+Current blocker families:
+
+- `FTC_Manager_New` / `FTC_Manager` allocation and lifecycle: default/custom
+  limits, requester data, reset/done ordering, and ownership of faces, sizes,
+  caches, and nodes.
+- `FTC_Manager_Done`: empty/populated destruction, referenced-node handling,
+  and null/foreign-library behavior.
+- `FTC_Manager_LookupFace` / `FTC_FaceID`: pointer identity, first requester
+  callback, cached repeat lookup, and current-size behavior.
+- `FTC_Manager_LookupSize` / `FTC_Scaler`: pixel versus 26.6 point sizing,
+  resolution handling, call-owned scaler lifetime, and cached size identity.
+- `FTC_Manager_RemoveFaceID`: unreferenced removal, referenced-node hiding until
+  unref, unchanged other face IDs, and null/unknown inputs.
+- CMap/Image/SBit cache creation: manager-owned opaque handles, cache
+  registration, reset interactions, and cache-limit behavior.
+- `FTC_CMapCache_Lookup`: hit/repeat-hit, miss-to-zero, negative cmap index,
+  remove-face/reset lifecycle, and all concrete codepoint variants.
+- `FTC_ImageCache_Lookup` / `FTC_ImageType`: call-owned descriptor lifetime,
+  lookup output, hit/repeat behavior, node acquisition/unref, and null-anode
+  ephemeral glyphs.
+- `FTC_ImageCache_LookupScaler`: pixel/point scaler output, hit/miss/repeat
+  behavior, node acquisition/unref, and pinned C load-flag truncation for all
+  font variants.
+- `FTC_SBitCache_LookupScaler`: scaler size semantics and int32 load-flag
+  truncation for all concrete font variants.
+- `FTC_Node` / `FTC_Node_Unref`: cache handle identity, lookup references,
+  unref release, and flushability after the final reference.
 
 Required fix plan:
 
