@@ -10083,6 +10083,70 @@ make -C pillow-rs-freetype lint
 git diff --check
 ```
 
+### Issue Set: Type 1 MM design-coordinate and named-instance reset state route
+
+Status: two real Type 1 MM design/reset state rows implemented on 2026-07-20.
+
+Baseline before this batch:
+
+- Route audit at `859026680`: `real-parity=4471`,
+  `pending-route=484`, `pending-core=1`.
+
+Finding:
+
+- Pinned FreeType 2.14.3 `src/base/ftmm.c:169-210`
+  `FT_Set_MM_Design_Coordinates` validates nonzero count with null coords,
+  dispatches to the Type 1 MM `set_mm_design` service, sets
+  `FT_FACE_FLAG_VARIATION` after a successful nonzero-count call, and clears
+  it after a successful zero-count call.
+- `src/type1/t1load.c:T1_Set_MM_Design` maps integer Adobe MM design
+  coordinates through `BlendDesignMap`, computes blend weights for every
+  design, ignores extra coordinates, and synthesizes C's missing-coordinate
+  default before recomputing the weight vector.
+- `src/type1/t1load.c:T1_Get_Var_Design` unmaps the current weight vector
+  back to 16.16 design coordinates and zero-fills excess output entries.
+  `T1_Get_MM_Blend` returns current normalized blend coordinates and fills
+  excess output entries with `0x8000`.
+- `src/base/ftmm.c:626-687` `FT_Set_Named_Instance` calls the MM service
+  reset hook; for Type 1 MM, `src/type1/t1load.c:T1_Reset_MM_Blend` ignores
+  the instance index and restores the default `WeightVector`.
+
+Implementation:
+
+- Extended the pure-Rust Type 1 MM descriptor with parsed design-map points.
+- Added core Type 1 MM design-coordinate mutation, blend/weight recomputation,
+  design-coordinate getter synthesis, and blend-coordinate getter synthesis.
+- Added Rust FFI, thin C ABI, and thin WASM ABI
+  `FT_Set_MM_Design_Coordinates` / `fontdone_wasm_set_mm_design_coordinates`
+  wrappers.
+- Added pinned C oracle/runtime routes for direct MM design-coordinate state
+  and Adobe MM named-instance reset after a prior design-coordinate mutation.
+- Promoted only state rows proven through pinned C oracle, Rust FFI, C ABI,
+  and WASM ABI:
+  - `ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates`
+  - `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
+- Left `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
+  pending because it needs an explicit multi-scenario row-list route.
+- Left `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
+  pending because glyph-output parity requires real Type 1 MM interpolation.
+
+Result:
+
+- Route audit after this batch: `real-parity=4473`, `pending-route=483`,
+  `pending-core=0`.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype lint
+make fontdone-ffi
+git diff --check
+```
+
 ### Issue Set Current: Adobe Type 1 MM fixture and false-green route guard
 
 Status: fixture added and false-green route promotion blocked on 2026-07-20.
@@ -10111,7 +10175,6 @@ Classification change:
 
 - Keep these rows as `pending-route` until exact same-input C/Rust/C-ABI/WASM
   routes exist and pass focused parity:
-  - `ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates`
   - `ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset`
   - `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
   - `ftmm.FT_MM_Var.populated_for_adobe_mm`

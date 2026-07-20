@@ -3286,6 +3286,29 @@ pub extern "C" fn FT_Get_Multi_Master(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_MM_Design_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *const FT_Long,
+) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Long values.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    let err = rust_ffi::FT_Set_MM_Design_Coordinates(Some(&mut state.inner), num_coords, coords);
+    if err == rust_ffi::FT_Err_Ok {
+        state.refresh_charmaps(face);
+        state.refresh_postscript_name();
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_MM_WeightVector(
     face: FT_Face,
     len: FT_UInt,

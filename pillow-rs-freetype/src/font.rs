@@ -140,6 +140,13 @@ pub(crate) struct Type1MultiMasterAxis {
     pub name: String,
     pub minimum: i32,
     pub maximum: i32,
+    design_map: Vec<Type1DesignMapPoint>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Type1DesignMapPoint {
+    design: i32,
+    blend: i32,
 }
 
 fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
@@ -620,6 +627,15 @@ fn parse_type1_multi_master(cleartext: &[u8]) -> Option<Type1MultiMaster> {
                 name,
                 minimum: i32_from_f64(map[0])?,
                 maximum: i32_from_f64(map[map.len() - 2])?,
+                design_map: map
+                    .chunks_exact(2)
+                    .map(|pair| {
+                        Some(Type1DesignMapPoint {
+                            design: i32_from_f64(pair[0])?,
+                            blend: type1_weight_to_fixed(pair[1])?,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?,
             })
         })
         .collect::<Option<Vec<_>>>()?;
@@ -818,6 +834,123 @@ fn type1_weight_to_fixed(value: f64) -> Option<i32> {
         return None;
     }
     i32::try_from(fixed as i64).ok()
+}
+
+fn type1_mm_design_to_blend(map: &[Type1DesignMapPoint], design: i32) -> i32 {
+    let Some(first) = map.first() else {
+        return 0;
+    };
+    let mut before: Option<&Type1DesignMapPoint> = None;
+    for point in map {
+        if design == point.design {
+            return point.blend;
+        }
+        if design < point.design {
+            return before.map_or(point.blend, |prev| {
+                crate::fixed::ft_mul_div(
+                    design - prev.design,
+                    point.blend - prev.blend,
+                    point.design - prev.design,
+                )
+            });
+        }
+        before = Some(point);
+    }
+    before.map_or(first.blend, |point| point.blend)
+}
+
+fn type1_mm_axis_unmap(map: &[Type1DesignMapPoint], ncv: i32) -> i32 {
+    let Some(first) = map.first() else {
+        return 0;
+    };
+    if ncv <= first.blend {
+        return first.design.saturating_mul(65_536);
+    }
+    for pair in map.windows(2) {
+        let prev = &pair[0];
+        let point = &pair[1];
+        if ncv <= point.blend {
+            let delta = crate::fixed::ft_mul_div(
+                ncv - prev.blend,
+                point.design - prev.design,
+                point.blend - prev.blend,
+            );
+            return (prev.design + delta).saturating_mul(65_536);
+        }
+    }
+    map.last()
+        .map_or(first.design, |point| point.design)
+        .saturating_mul(65_536)
+}
+
+fn type1_mm_weights_from_blends(blends: &[i32], active_axis_count: usize) -> Vec<i32> {
+    let num_designs = 1usize.checked_shl(blends.len() as u32).unwrap_or(0);
+    (0..num_designs)
+        .map(|design_index| {
+            let mut result = 65_536;
+            for (axis_index, mut factor) in blends.iter().copied().enumerate() {
+                if axis_index >= active_axis_count {
+                    result >>= 1;
+                    continue;
+                }
+                if (design_index & (1usize << axis_index)) == 0 {
+                    factor = 65_536 - factor;
+                }
+                if factor <= 0 {
+                    return 0;
+                }
+                if factor < 65_536 {
+                    result = crate::fixed::ft_mul_fix(result, factor);
+                }
+            }
+            result
+        })
+        .collect()
+}
+
+fn type1_mm_weights_unmap(weights: &[i32], axis_count: usize) -> Vec<i32> {
+    let mut out = vec![0; axis_count];
+    match axis_count {
+        0 => {}
+        1 => out[0] = weights.get(1).copied().unwrap_or(0),
+        2 => {
+            out[0] = weights.get(3).copied().unwrap_or(0) + weights.get(1).copied().unwrap_or(0);
+            out[1] = weights.get(3).copied().unwrap_or(0) + weights.get(2).copied().unwrap_or(0);
+        }
+        3 => {
+            out[0] = [7, 5, 3, 1]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+            out[1] = [7, 6, 3, 2]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+            out[2] = [7, 6, 5, 4]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+        }
+        _ => {
+            out[0] = [15, 13, 11, 9, 7, 5, 3, 1]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+            out[1] = [15, 14, 11, 10, 7, 6, 3, 2]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+            out[2] = [15, 14, 13, 12, 7, 6, 5, 4]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+            out[3] = [15, 14, 13, 12, 11, 10, 9, 8]
+                .into_iter()
+                .map(|index| weights.get(index).copied().unwrap_or(0))
+                .sum();
+        }
+    }
+    out
 }
 
 fn type1_name_token(text: &str, key: &str) -> Option<String> {
@@ -1532,6 +1665,13 @@ impl Font {
 
     /// Select or clear a named instance, equivalent to `FT_Set_Named_Instance`.
     pub fn set_named_instance(&mut self, instance_index: usize) -> Result<(), FontError> {
+        if self.type1_multi_master.is_some() {
+            // C parity: src/type1/t1load.c:T1_Reset_MM_Blend ignores the
+            // instance index for Adobe MM faces and resets the design by
+            // restoring the default WeightVector.
+            self.set_type1_mm_weight_vector(None)?;
+            return Ok(());
+        }
         let base_face_index = self.data.face_index & 0xFFFF;
         let next_face_index = base_face_index | (instance_index << 16);
         let mut next = Self::truetype_face_with_load_mode(
@@ -1554,6 +1694,10 @@ impl Font {
     /// Set explicit OpenType design coordinates, equivalent to
     /// `FT_Set_Var_Design_Coordinates` for TrueType/OpenType variation faces.
     pub(crate) fn set_var_design_coordinates(&mut self, coords: &[i32]) -> Result<(), FontError> {
+        if self.type1_multi_master.is_some() {
+            let mm_coords = coords.iter().map(|coord| coord >> 16).collect::<Vec<_>>();
+            return self.set_type1_mm_design_coordinates(&mm_coords, true);
+        }
         let base_face_index = self.data.face_index & 0xFFFF;
         let mut next = Self::truetype_face_with_load_mode_and_design_coords(
             &self.data.raw_data,
@@ -1577,6 +1721,11 @@ impl Font {
     /// Return active OpenType design coordinates, equivalent to
     /// `FT_Get_Var_Design_Coordinates` for TrueType/OpenType variation faces.
     pub(crate) fn var_design_coordinates(&self) -> Result<&[i32], FontError> {
+        if self.type1_multi_master.is_some() {
+            return Err(FontError::InvalidArgument(
+                "Type 1 MM design coordinates require fixed output synthesis".into(),
+            ));
+        }
         if self.data.fvar.is_none() {
             return Err(FontError::InvalidArgument(
                 "face has no variation design coordinates".into(),
@@ -1588,6 +1737,13 @@ impl Font {
     /// Return active normalized blend coordinates in FreeType's 16.16 public
     /// representation, equivalent to `FT_Get_MM_Blend_Coordinates`.
     pub(crate) fn var_blend_coordinates_16_16(&self) -> Result<Vec<i32>, FontError> {
+        if self.type1_multi_master.is_some() {
+            return self.type1_mm_blend_coordinates_16_16(
+                self.type1_multi_master
+                    .as_ref()
+                    .map_or(0, |master| master.axes.len()),
+            );
+        }
         if self.data.fvar.is_none() {
             return Err(FontError::InvalidArgument(
                 "face has no variation blend coordinates".into(),
@@ -1609,6 +1765,69 @@ impl Font {
         self.type1_mm_weight_vector
             .as_deref()
             .ok_or_else(|| FontError::InvalidArgument("face has no Type 1 MM weight vector".into()))
+    }
+
+    pub(crate) fn type1_mm_design_coordinates(&self, count: usize) -> Result<Vec<i32>, FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM design coordinates".into(),
+            ));
+        };
+        let weights = self.type1_mm_weight_vector()?;
+        let axis_coords = type1_mm_weights_unmap(weights, master.axes.len());
+        let mut out = Vec::with_capacity(count);
+        for (axis, coord) in master.axes.iter().zip(axis_coords).take(count) {
+            out.push(type1_mm_axis_unmap(&axis.design_map, coord));
+        }
+        out.resize(count, 0);
+        Ok(out)
+    }
+
+    pub(crate) fn type1_mm_blend_coordinates_16_16(
+        &self,
+        count: usize,
+    ) -> Result<Vec<i32>, FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM blend coordinates".into(),
+            ));
+        };
+        let weights = self.type1_mm_weight_vector()?;
+        let axis_coords = type1_mm_weights_unmap(weights, master.axes.len());
+        let mut out = Vec::with_capacity(count);
+        out.extend(axis_coords.into_iter().take(count));
+        out.resize(count, 0x8000);
+        Ok(out)
+    }
+
+    pub(crate) fn set_type1_mm_design_coordinates(
+        &mut self,
+        coords: &[i32],
+        variation_active: bool,
+    ) -> Result<(), FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM design coordinates".into(),
+            ));
+        };
+        let blends = master
+            .axes
+            .iter()
+            .enumerate()
+            .map(|(index, axis)| {
+                let design = coords.get(index).copied().unwrap_or_else(|| {
+                    let first = axis.design_map.first().map_or(0, |point| point.design);
+                    let last = axis.design_map.last().map_or(first, |point| point.design);
+                    // C parity: src/type1/t1load.c:T1_Set_MM_Design uses
+                    // `(last - first) / 2` as the missing-coordinate default.
+                    (last - first) / 2
+                });
+                type1_mm_design_to_blend(&axis.design_map, design)
+            })
+            .collect::<Vec<_>>();
+        self.type1_mm_weight_vector = Some(type1_mm_weights_from_blends(&blends, blends.len()));
+        self.type1_mm_variation_active = variation_active;
+        Ok(())
     }
 
     pub(crate) fn set_type1_mm_weight_vector(

@@ -505,6 +505,7 @@ const char* FT_Get_X11_Font_Format(FT_Face face);
 FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index);
 FT_Error FT_Get_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
 FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master* amaster);
+FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long* coords);
 FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed* weightvector);
 FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt* len, FT_Fixed* weightvector);
 FT_Error FT_Get_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);

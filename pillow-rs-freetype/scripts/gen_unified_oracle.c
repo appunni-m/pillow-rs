@@ -9879,6 +9879,19 @@ static void parse_fixed_coord_csv(const char* text, FT_Fixed* coords, FT_UInt co
     }
 }
 
+static void parse_long_coord_csv(const char* text, FT_Long* coords, FT_UInt count) {
+    if (!text || streq(text, "-")) {
+        return;
+    }
+    char* cursor = (char*)text;
+    for (FT_UInt i = 0; i < count; i++) {
+        coords[i] = strtol(cursor, &cursor, 10);
+        if (*cursor == ',') {
+            cursor++;
+        }
+    }
+}
+
 static void print_ftmm_var_design_output(
     FT_Error error,
     FT_Face face,
@@ -10459,6 +10472,33 @@ static int emit_ftmm_set_var_design_coordinates(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ftmm_set_mm_design_coordinates(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Long set_coords[16] = {0};
+    parse_long_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_Error err = FT_Set_MM_Design_Coordinates(face.face, set_count, set_coords);
+
+    FT_UInt output_count = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_Fixed design_coords[16] = {0};
+    FT_Fixed blend_coords[16] = {0};
+    if (!err) {
+        err = FT_Get_Var_Design_Coordinates(face.face, output_count, design_coords);
+    }
+    if (!err) {
+        err = FT_Get_Var_Blend_Coordinates(face.face, output_count, blend_coords);
+    }
+    print_ftmm_set_var_design_output(err, face.face, design_coords, blend_coords, output_count);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_named_instance_null_face_observation(FT_Error error) {
     printf("{\"return\":%d,\"face_index\":null,\"face_flags\":null,"
            "\"variation_bit_set\":null,\"postscript_name\":",
@@ -10657,6 +10697,50 @@ static int emit_set_named_instance(int argc, char** argv) {
     print_status(err);
     printf(",\"output\":");
     print_named_instance_observation(face.face, err);
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_set_named_instance_adobe_mm_reset(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    FT_UInt prior_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Long prior_coords[16] = {0};
+    parse_long_coord_csv(argv[6], prior_coords, prior_count < 16 ? prior_count : 16);
+    FT_UInt instance_index = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt output_count = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    OracleFace face;
+    int opened = open_oracle_face(source_kind, source_value, face_index, &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Error err = FT_Set_MM_Design_Coordinates(face.face, prior_count, prior_coords);
+    if (!err) {
+        err = FT_Set_Named_Instance(face.face, instance_index);
+    }
+    FT_Fixed design_coords[16] = {0};
+    if (!err) {
+        err = FT_Get_Var_Design_Coordinates(face.face, output_count, design_coords);
+    }
+
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"design_coords\":", err);
+        print_fixed_coord_array(design_coords, output_count);
+        printf(",\"face_flags\":%ld,\"variation_bit_set\":%s,\"face_index\":%ld}",
+               (long)face.face->face_flags,
+               (face.face->face_flags & FT_FACE_FLAG_VARIATION) ? "true" : "false",
+               (long)face.face->face_index);
+    }
     printf("}\n");
     close_oracle_face(&face);
     return 0;
@@ -16119,6 +16203,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 7 && streq(argv[1], "--set-named-instance")) {
         return emit_set_named_instance(argc, argv);
     }
+    if (argc == 9 && streq(argv[1], "--set-named-instance-adobe-mm-reset")) {
+        return emit_set_named_instance_adobe_mm_reset(argc, argv);
+    }
     if (argc == 12 && streq(argv[1], "--set-named-instance-glyph-output")) {
         return emit_set_named_instance_glyph_output(argc, argv);
     }
@@ -16130,6 +16217,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--ftmm-set-var-design-coordinates")) {
         return emit_ftmm_set_var_design_coordinates(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--ftmm-set-mm-design-coordinates")) {
+        return emit_ftmm_set_mm_design_coordinates(argc, argv);
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
