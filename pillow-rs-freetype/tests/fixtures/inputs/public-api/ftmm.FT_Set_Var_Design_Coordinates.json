@@ -34,7 +34,7 @@
       "operation": "ftmm.set_var_design_coordinates",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/variable/mvar-hvar-vvar.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "num_coords": 2, "coords_16_16": [45875200, 4915200], "pixel_size": 32, "observe": ["face_metrics", "size_metrics", "glyph_advance"]}},
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/variable/mvar-hvar-vvar.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "num_coords": 2, "coords_16_16": [45875200, 4915200], "pixel_size": 32, "glyph_index": 10, "load_flags": ["FT_LOAD_DEFAULT"], "observe": ["face_metrics", "size_metrics", "glyph_advance"]}},
       "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "operation:metrics-variation"],
       "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_Var_Design_Coordinates", "kind": "function"}, "source_behavior": "After successful design-coordinate changes, ftmm.c calls metrics_variations->metrics_adjust when available."},
       "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "face_metrics": "record", "size_metrics": "FT_Size_Metrics", "glyph_advance": "FT_Vector"}, "compare": {"mode": "exact", "paths": ["return", "face_metrics", "size_metrics", "glyph_advance"]}, "source_refs": ["freetype/src/base/ftmm.c:343-349", "freetype/src/truetype/ttgxvar.c"], "fixture_requirements": ["Variable font with MVAR plus HVAR or VVAR data."]}

@@ -11707,6 +11707,44 @@ fn ftmm_set_var_design_output(
     }
 }
 
+fn ftmm_face_metrics_json(info: &FT_FaceRecPublic) -> Value {
+    json!({
+        "ascender": info.ascender,
+        "descender": info.descender,
+        "height": info.height,
+        "max_advance_width": info.max_advance_width,
+        "max_advance_height": info.max_advance_height,
+    })
+}
+
+fn ftmm_vector_json(vector: &FT_Vector) -> Value {
+    json!({
+        "x": vector.x,
+        "y": vector.y,
+    })
+}
+
+fn ftmm_design_metrics_output(
+    status: FT_Error,
+    face_metrics: Value,
+    size_metrics: Value,
+    glyph_advance: Value,
+    face_flags: FT_Long,
+) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(json!({
+            "return": status,
+            "face_metrics": face_metrics,
+            "size_metrics": size_metrics,
+            "glyph_advance": glyph_advance,
+            "face_flags": face_flags,
+            "variation_bit_set": (face_flags & FT_FACE_FLAG_VARIATION) != 0,
+        }))
+    } else {
+        error(status)
+    }
+}
+
 fn ftmm_mm_design_row(
     set_return: FT_Error,
     get_design_return: FT_Error,
@@ -12557,6 +12595,36 @@ fn rust_ftmm_set_var_design_glyph_output(case: &InputCase) -> Result<RunOutput, 
     }
 }
 
+fn rust_ftmm_set_var_design_metrics_output(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let set_err = FT_Set_Var_Design_Coordinates(
+        Some(&mut face),
+        ftmm_num_coords(params)?,
+        if ftmm_coords_pointer_is_null(params) {
+            None
+        } else {
+            Some(&set_coords)
+        },
+    );
+    if set_err != FT_Err_Ok {
+        return Ok(error(set_err));
+    }
+    let slot = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?) {
+        Ok(slot) => slot,
+        Err(err) => return Ok(error(err)),
+    };
+    let info = rust_face_info(&face);
+    Ok(ftmm_design_metrics_output(
+        FT_Err_Ok,
+        ftmm_face_metrics_json(&info),
+        size_metrics_json(&face.size_metrics),
+        ftmm_vector_json(&slot.advance),
+        info.face_flags,
+    ))
+}
+
 fn rust_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let params = &case.inputs.params;
@@ -12722,6 +12790,41 @@ fn c_ftmm_set_var_design_glyph_output(case: &InputCase) -> Result<RunOutput, Str
             } else {
                 c_slot_json(face).map(ok)
             }
+        }
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn c_ftmm_set_var_design_metrics_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let set_err = c_abi::FT_Set_Var_Design_Coordinates(face, ftmm_num_coords(params)?, coords_ptr);
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err =
+            c_abi::FT_Load_Glyph(face, glyph_index_param(params)?, load_flags_param(params)?);
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let info =
+                c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+            let slot = c_slot_json(face)?;
+            Ok(ftmm_design_metrics_output(
+                FT_Err_Ok,
+                ftmm_face_metrics_json(&info),
+                c_size_metrics_json(face)?,
+                slot.get("advance").cloned().unwrap_or(Value::Null),
+                info.face_flags,
+            ))
         }
     };
     c_done_face(face);
@@ -12926,6 +13029,53 @@ fn wasm_ftmm_set_var_design_glyph_output(case: &InputCase) -> Result<RunOutput, 
                 Ok(error(render_err))
             } else {
                 wasm_slot_json(handle).map(ok)
+            }
+        }
+    };
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_ftmm_set_var_design_metrics_output(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let set_err = wasm_abi::fontdone_wasm_set_var_design_coordinates(
+        handle,
+        ftmm_num_coords(params)?,
+        coords_ptr,
+    );
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(
+            handle,
+            glyph_index_param(params)?,
+            load_flags_param(params)?,
+        );
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let info = wasm_abi::abi_face_info(handle)
+                .ok_or_else(|| "missing wasm face info".to_string())?;
+            let mut metrics = wasm_abi::FontdoneWasmSizeMetrics::default();
+            let metrics_err = wasm_abi::fontdone_wasm_size_metrics(handle, &mut metrics);
+            if metrics_err != FT_Err_Ok {
+                Ok(error(metrics_err))
+            } else {
+                let slot = wasm_slot_json(handle)?;
+                Ok(ftmm_design_metrics_output(
+                    FT_Err_Ok,
+                    ftmm_face_metrics_json(&info),
+                    wasm_size_metrics_json(&metrics),
+                    slot.get("advance").cloned().unwrap_or(Value::Null),
+                    info.face_flags,
+                ))
             }
         }
     };
@@ -18512,6 +18662,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(ftmm_blend_scenario_output_count(case)?.to_string());
         return Ok(args);
     }
+    if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations" {
+        let set_coords = ftmm_optional_coords_from_params(params)?;
+        let mut args = vec!["--ftmm-set-var-design-metrics-output".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(ftmm_num_coords(params)?.to_string());
+        args.push(ftmm_coords_csv(&set_coords));
+        let (pixel_width, pixel_height) = pixel_size_param(params)?;
+        args.push(pixel_width.to_string());
+        args.push(pixel_height.to_string());
+        args.push(glyph_index_param(params)?.to_string());
+        args.push(load_flags_param(params)?.to_string());
+        return Ok(args);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let mut args = vec!["--ftmm-set-var-design-glyph-output".to_string()];
@@ -20838,6 +21002,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_design_coordinates"
             if case.case_id
+                == "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations" =>
+        {
+            rust_ftmm_set_var_design_metrics_output(case)
+        }
+        "ftmm.set_var_design_coordinates"
+            if case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates" =>
         {
             rust_ftmm_set_var_design_glyph_output(case)
@@ -21660,6 +21830,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_design_coordinates"
             if case.case_id
+                == "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations" =>
+        {
+            c_ftmm_set_var_design_metrics_output(case)
+        }
+        "ftmm.set_var_design_coordinates"
+            if case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates" =>
         {
             c_ftmm_set_var_design_glyph_output(case)
@@ -22404,6 +22580,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset" =>
         {
             wasm_ftmm_set_var_design_coordinates(case)
+        }
+        "ftmm.set_var_design_coordinates"
+            if case.case_id
+                == "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations" =>
+        {
+            wasm_ftmm_set_var_design_metrics_output(case)
         }
         "ftmm.set_var_design_coordinates"
             if case.case_id

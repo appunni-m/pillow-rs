@@ -9962,6 +9962,16 @@ static void print_ftmm_set_var_design_output(
     printf("}\n");
 }
 
+static void print_ftmm_face_metrics_object(FT_Face face) {
+    printf("\"ascender\":%ld,\"descender\":%ld,\"height\":%ld,"
+           "\"max_advance_width\":%ld,\"max_advance_height\":%ld",
+           (long)face->ascender,
+           (long)face->descender,
+           (long)face->height,
+           (long)face->max_advance_width,
+           (long)face->max_advance_height);
+}
+
 static FT_Error apply_ftmm_blend_prior(FT_Face face, const char* kind, FT_UInt count, const char* csv) {
     FT_Fixed coords[16] = {0};
     parse_fixed_coord_csv(csv, coords, count < 16 ? count : 16);
@@ -10895,6 +10905,51 @@ static int emit_ftmm_set_var_design_glyph_output(int argc, char** argv) {
         print_slot_body(face.face->glyph, glyph_index);
         printf("}}\n");
     }
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_set_var_design_metrics_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[10], NULL, 10);
+
+    FT_Error err = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+    if (!err) {
+        err = FT_Set_Var_Design_Coordinates(face.face, set_count, set_coords);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(face.face, glyph_index, load_flags);
+    }
+
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"face_metrics\":{", err);
+        print_ftmm_face_metrics_object(face.face);
+        printf("},\"size_metrics\":{");
+        print_size_metrics_object(face.face->size->metrics);
+        printf("},");
+        print_vector_named("glyph_advance", face.face->glyph->advance);
+        printf(",\"face_flags\":%ld,\"variation_bit_set\":", (long)face.face->face_flags);
+        print_json_bool((face.face->face_flags & FT_FACE_FLAG_VARIATION) != 0);
+        printf("}");
+    }
+    printf("}\n");
     close_oracle_face(&face);
     return 0;
 }
@@ -17022,6 +17077,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 12 && streq(argv[1], "--ftmm-set-var-design-glyph-output")) {
         return emit_ftmm_set_var_design_glyph_output(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--ftmm-set-var-design-metrics-output")) {
+        return emit_ftmm_set_var_design_metrics_output(argc, argv);
     }
     if (argc == 12 && streq(argv[1], "--ftmm-set-var-blend-glyph-output")) {
         return emit_ftmm_set_var_blend_glyph_output(argc, argv);
