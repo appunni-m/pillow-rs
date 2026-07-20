@@ -12413,7 +12413,9 @@ Finding:
   `FT_Get_PS_Font_Private`, `FT_Get_PS_Font_Value`,
   `FT_Has_PS_Glyph_Names`, Multiple Master blend dictionary fields, blend flag
   groups, and Type1 encoding runtime cases had stayed in `generic-fallback`
-  with the reason `no explicit maintained route classification`.
+  with the reason `no explicit maintained route classification`, then under
+  one broad Type1 tables pending reason. The current classifier names each
+  blocked row explicitly.
 - Those rows are not same-input C/Rust/C-ABI/WASM parity. There is no maintained
   Type1 tables route that opens Type1/CFF/MM fixtures, reads the font-info and
   private dictionaries, queries `FT_Get_PS_Font_Value` for encoding and blend
@@ -12422,11 +12424,35 @@ Finding:
 
 Classification change:
 
-- 31 `t1tables.*` runtime rows moved from `generic-fallback` to
-  `pending-route`.
+- 27 current `t1tables.*` runtime rows are explicit `pending-route` records
+  with case-specific blockers instead of a subsystem-wide pending reason.
 - 29 `t1tables.*` constants/layout rows remain `compile-contract`.
-- New route audit counts: `real-parity=4465`, `generic-fallback=200`,
-  `pending-route=314`, `pending-core=7`.
+- The route audit count remains stable for this refinement; it changes blocker
+  granularity, not the number of accepted parity rows.
+
+Case-specific blocker groups:
+
+- `FT_Get_PS_Font_Info`, `FT_Get_PS_Font_Private`,
+  `FT_Get_PS_Font_Value`, and `FT_Has_PS_Glyph_Names` need C-openable
+  Type1/CFF fixtures and exact record, selector, length, glyph-name, and public
+  error comparison across pinned C, Rust FFI, C ABI, and WASM ABI.
+- `T1_BLEND_BLUE_SCALE`, `T1_BLEND_BLUE_SHIFT`,
+  `T1_BLEND_BLUE_VALUES`, `T1_BLEND_FAMILY_BLUES`,
+  `T1_BLEND_FAMILY_OTHER_BLUES`, `T1_BLEND_FORCE_BOLD`,
+  `T1_BLEND_ITALIC_ANGLE`, `T1_BLEND_OTHER_BLUES`,
+  `T1_BLEND_STANDARD_HEIGHT`, `T1_BLEND_STANDARD_WIDTH`,
+  `T1_BLEND_STEM_SNAP_HEIGHTS`, `T1_BLEND_STEM_SNAP_WIDTHS`,
+  `T1_BLEND_UNDERLINE_POSITION`, and
+  `T1_BLEND_UNDERLINE_THICKNESS` need Multiple Master Type1 fixtures and exact
+  blend dictionary scalar/array value comparison.
+- `T1_Blend_Flags.font_info_blend_group` and
+  `T1_Blend_Flags.private_blend_group` need runtime proof that public blend
+  flags select the same font-info and private dictionary fields as pinned C.
+- `T1_ENCODING_TYPE_ARRAY`, `T1_ENCODING_TYPE_EXPERT`,
+  `T1_ENCODING_TYPE_ISOLATIN1`, `T1_ENCODING_TYPE_NONE`,
+  `T1_ENCODING_TYPE_STANDARD`, and the `T1_EncodingType` runtime cases need
+  maintained Type1 encoding fixtures proving exact encoding classification,
+  encoding array records, and glyph-name resolution.
 
 Required fix plan:
 
