@@ -1498,6 +1498,80 @@ def ftstroke_count_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftstroke_set_rewind_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker_Set/Rewind rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Stroker_Set.attributes_affect_geometry": (
+            "FT_Stroker_Set attribute parity needs a maintained route proving "
+            "radius, line cap, line join, and miter-limit fields change later "
+            "stroke geometry exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one": (
+            "FT_Stroker_Set miter-limit parity needs a maintained route "
+            "proving values below one are clamped before miter fallback "
+            "decisions exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_Set.clears_existing_path": (
+            "FT_Stroker_Set path-clearing parity needs a maintained route "
+            "proving resetting attributes also clears prior border/path state "
+            "exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_Rewind.clears_previous_path": (
+            "FT_Stroker_Rewind path-clearing parity needs a maintained route "
+            "proving rewind clears previous border/path state exactly like "
+            "pinned C"
+        ),
+        "ftstroke.FT_Stroker_Rewind.attributes_preserved": (
+            "FT_Stroker_Rewind attribute parity needs a maintained route "
+            "proving radius, cap, join, and miter-limit attributes are "
+            "preserved while path state is cleared exactly like pinned C"
+        ),
+        "ftstroke.FT_Stroker_Rewind.set_calls_rewind": (
+            "FT_Stroker_Set/Rewind interaction parity needs a maintained "
+            "route proving Set performs the same implicit rewind/path clear "
+            "sequence as pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftstroke_glyph_stroke_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Glyph_Stroke/StrokeBorder rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success": (
+            "FT_Glyph_Stroke outline parity needs a maintained glyph-object "
+            "route proving an outline glyph is stroked into the same output "
+            "glyph format, outline points, tags, contours, and ownership state "
+            "as pinned C"
+        ),
+        "ftstroke.FT_Glyph_Stroke.destroy_original_option": (
+            "FT_Glyph_Stroke destroy-option parity needs a maintained "
+            "glyph-object route proving destroy=0 preserves the input glyph "
+            "and destroy=1 releases or replaces it exactly like pinned C"
+        ),
+        "ftstroke.FT_Glyph_StrokeBorder.outside_border_success": (
+            "FT_Glyph_StrokeBorder outside parity needs a maintained "
+            "glyph-object route proving outside-border stroking emits the same "
+            "outline geometry and ownership result as pinned C"
+        ),
+        "ftstroke.FT_Glyph_StrokeBorder.inside_border_success": (
+            "FT_Glyph_StrokeBorder inside parity needs a maintained "
+            "glyph-object route proving inside-border stroking emits the same "
+            "outline geometry and ownership result as pinned C"
+        ),
+        "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option": (
+            "FT_Glyph_StrokeBorder destroy-option parity needs a maintained "
+            "glyph-object route proving destroy=0 preserves the input glyph "
+            "and destroy=1 releases or replaces it exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
@@ -1535,6 +1609,12 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     count_pending = ftstroke_count_pending_reason(row)
     if count_pending:
         return count_pending
+    set_rewind_pending = ftstroke_set_rewind_pending_reason(row)
+    if set_rewind_pending:
+        return set_rewind_pending
+    glyph_stroke_pending = ftstroke_glyph_stroke_pending_reason(row)
+    if glyph_stroke_pending:
+        return glyph_stroke_pending
     pending_case_groups = {
         (
             "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
@@ -1544,30 +1624,6 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "non-null stroker object route proving library allocation, "
             "attribute storage, owned border buffers, and final cleanup across "
             "pinned C, Rust FFI, C ABI, and WASM ABI"
-        ),
-        (
-            "ftstroke.FT_Stroker_Set.attributes_affect_geometry",
-            "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one",
-            "ftstroke.FT_Stroker_Set.clears_existing_path",
-            "ftstroke.FT_Stroker_Rewind.clears_previous_path",
-            "ftstroke.FT_Stroker_Rewind.attributes_preserved",
-            "ftstroke.FT_Stroker_Rewind.set_calls_rewind",
-        ): (
-            "FT_Stroker_Set/Rewind parity needs a maintained non-null stroker "
-            "state route proving radius, cap, join, miter-limit clamp, path "
-            "clearing, and attribute preservation semantics against pinned C"
-        ),
-        (
-            "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",
-            "ftstroke.FT_Glyph_Stroke.destroy_original_option",
-            "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
-            "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
-            "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
-        ): (
-            "FT_Glyph_Stroke/StrokeBorder parity needs a maintained glyph-object "
-            "route that creates a real outline glyph, applies stroker geometry, "
-            "preserves or destroys the original per flag, and compares output "
-            "glyph ownership and outline geometry across all ABI lanes"
         ),
         (
             "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",

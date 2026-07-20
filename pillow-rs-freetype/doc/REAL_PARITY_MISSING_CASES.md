@@ -10940,6 +10940,35 @@ Current route-audit breakdown:
   - `FT_Stroker_GetCounts.optional_output_pointers`: null output pointers
     preserved while non-null outputs receive exact combined counts.
 
+2026-07-21 set/rewind and glyph-stroke blocker split:
+
+- `Set`, `Rewind`, `Glyph_Stroke`, and `Glyph_StrokeBorder` rows are split by
+  exact obligation instead of sharing broad state and glyph-object blockers:
+  - `FT_Stroker_Set.attributes_affect_geometry`: radius, line cap, line join,
+    and miter-limit fields changing later stroke geometry exactly like pinned C.
+  - `FT_Stroker_Set.miter_limit_clamped_to_one`: values below one clamped
+    before miter fallback decisions.
+  - `FT_Stroker_Set.clears_existing_path`: resetting attributes also clearing
+    prior border/path state.
+  - `FT_Stroker_Rewind.clears_previous_path`: rewind clearing previous
+    border/path state.
+  - `FT_Stroker_Rewind.attributes_preserved`: radius, cap, join, and
+    miter-limit attributes preserved while path state is cleared.
+  - `FT_Stroker_Rewind.set_calls_rewind`: `Set` performing the same implicit
+    rewind/path clear sequence as pinned C.
+  - `FT_Glyph_Stroke.outline_glyph_stroked_success`: an outline glyph stroked
+    into the same output glyph format, outline points, tags, contours, and
+    ownership state.
+  - `FT_Glyph_Stroke.destroy_original_option`: `destroy=0` preserving the
+    input glyph and `destroy=1` releasing or replacing it exactly like pinned C.
+  - `FT_Glyph_StrokeBorder.outside_border_success`: outside-border stroking
+    emitting the same outline geometry and ownership result.
+  - `FT_Glyph_StrokeBorder.inside_border_success`: inside-border stroking
+    emitting the same outline geometry and ownership result.
+  - `FT_Glyph_StrokeBorder.destroy_original_option`: `destroy=0` preserving
+    the input glyph and `destroy=1` releasing or replacing it exactly like
+    pinned C.
+
 2026-07-20 null-stroker no-op carve-out:
 
 - `FT_Stroker_Set(NULL, ...)`, `FT_Stroker_Rewind(NULL)`, and
