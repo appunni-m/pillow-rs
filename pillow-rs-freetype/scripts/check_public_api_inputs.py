@@ -1677,24 +1677,64 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Open_Face with FT_OPEN_PARAMS/FT_Parameter dispatch to compare "
             "known-tag, unknown-tag, null-data, and null-params behavior"
         )
-    freetype_rows_without_maintained_route = {
-        "freetype.FT_Attach_File.success_attach_auxiliary_file",
-        "freetype.FT_Attach_Stream.success_attach_auxiliary_stream",
-        "freetype.FT_FaceRec.populated_public_fields_match_c",
-        "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success",
-        "freetype.FT_GlyphSlot.overwritten_by_subsequent_load",
-        "freetype.FT_Open_Args.open_face_consumes_args_like_c",
-    }
-    if row.case_id not in freetype_rows_without_maintained_route:
-        return None
-    if exact_error_public_route(row.operation, row.case_id, row.expect_error):
-        return None
-    return (
-        "Core FreeType attach/open-face ownership, face/size/slot public "
-        "record, load-target, SVG flag, and track-kerning success behavior "
-        "requires a maintained core route; keeping it generic would be a "
-        "green placeholder"
-    )
+    if row.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Attach_File success requires the declared C-openable Type1 "
+            "PFA/PFB face plus matching AFM/PFM pathname asset and a maintained "
+            "attach route that compares the FT_Attach_File return code and "
+            "post-attach kerning/track-kerning mutations across pinned C, Rust "
+            "FFI, C ABI, and WASM; unsupported-file and null-path errors do not "
+            "prove auxiliary attachment success"
+        )
+    if row.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Attach_Stream success requires the declared C-openable Type1 "
+            "PFA/PFB face plus matching AFM/PFM bytes and a maintained "
+            "FT_Open_Args/FT_OPEN_MEMORY stream route that compares return code, "
+            "stream ownership, and post-attach kerning/track-kerning mutations "
+            "across pinned C, Rust FFI, C ABI, and WASM; null/invalid args "
+            "coverage does not exercise driver attach behavior"
+        )
+    if row.case_id == "freetype.FT_FaceRec.populated_public_fields_match_c":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_FaceRec populated-field parity requires splitting the current "
+            "broad snapshot into concrete C-openable operation stages: initial "
+            "face fields, size mutation, glyph load, charmap selection, "
+            "auxiliary attachment, and variation mutation. The row still names "
+            "missing bitmap and Type1 auxiliary assets, so treating a partial "
+            "inspect_face_rec route as full public-record parity would be a "
+            "green placeholder"
+        )
+    if row.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Get_Track_Kerning Type1/AFM success requires maintained "
+            "input/fonts/type1/track-kern-base.pfb and "
+            "input/aux/type1/track-kern-base.afm assets plus an attach-first "
+            "route that compares exact akerning values for negative, zero, and "
+            "positive track degrees over declared 16.16 point sizes across "
+            "pinned C, Rust FFI, C ABI, and WASM; null-face and no-track-data "
+            "error rows are not success parity"
+        )
+    if row.case_id == "freetype.FT_Open_Args.open_face_consumes_args_like_c":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Open_Args open-face behavior requires converting abstract "
+            "arg_variants into explicit maintained variants[] rows consumed by "
+            "the runner, then comparing FT_OPEN_MEMORY, driver, params, "
+            "negative face-index probe, stream, and pathname behavior across "
+            "pinned C, Rust FFI, C ABI, and WASM; current memory helpers alone "
+            "do not prove the full argument-dispatch contract"
+        )
+    return None
 
 
 def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | None:
