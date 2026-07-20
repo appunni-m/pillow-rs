@@ -9917,6 +9917,15 @@ static void print_ftmm_blend_output(
     printf("}\n");
 }
 
+static int fixed_coord_arrays_equal(FT_Fixed* left, FT_Fixed* right, FT_UInt count) {
+    for (FT_UInt i = 0; i < count; i++) {
+        if (left[i] != right[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static void print_ftmm_set_var_design_output(
     FT_Error error,
     FT_Face face,
@@ -10001,6 +10010,118 @@ static int emit_ftmm_blend_coordinates(int argc, char** argv) {
         }
     }
     print_ftmm_blend_output(err, face.face, coords, output_count);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_var_blend_alias(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    OracleFace control;
+    opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &control);
+    if (opened != 0) {
+        close_oracle_face(&face);
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_UInt output_count = (FT_UInt)strtoul(argv[7], NULL, 10);
+
+    FT_Fixed coords[16] = {0};
+    FT_Error err = FT_Set_Var_Blend_Coordinates(face.face, set_count, set_coords);
+    if (!err) {
+        err = FT_Get_Var_Blend_Coordinates(face.face, output_count, coords);
+    }
+
+    FT_Fixed control_coords[16] = {0};
+    FT_Error control_err = FT_Set_MM_Blend_Coordinates(control.face, set_count, set_coords);
+    if (!control_err) {
+        control_err = FT_Get_Var_Blend_Coordinates(control.face, output_count, control_coords);
+    }
+
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"active_blend_coords\":", err);
+        print_fixed_coord_array(coords, output_count);
+        printf(",\"matches_control_call\":");
+        print_json_bool(
+            control_err == err && fixed_coord_arrays_equal(coords, control_coords, output_count));
+        printf("}");
+    }
+    printf("}\n");
+
+    close_oracle_face(&control);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_var_blend_flag_matrix(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    char* cursor = argv[5];
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"results\":[");
+    int row = 0;
+    while (cursor && *cursor) {
+        char* end = cursor;
+        while (*end && *end != ';') {
+            end++;
+        }
+        char saved = *end;
+        *end = '\0';
+
+        char* colon = cursor;
+        while (*colon && *colon != ':') {
+            colon++;
+        }
+        if (*colon == ':') {
+            *colon = '\0';
+        }
+        FT_UInt count = (FT_UInt)strtoul(cursor, NULL, 10);
+        const char* csv = (*colon == '\0') ? colon + 1 : "-";
+        FT_Fixed coords[16] = {0};
+        parse_fixed_coord_csv(csv, coords, count < 16 ? count : 16);
+        FT_Error err = FT_Set_Var_Blend_Coordinates(
+            face.face,
+            count,
+            streq(csv, "null") ? NULL : coords);
+
+        if (row) {
+            printf(",");
+        }
+        printf("{\"num_coords\":%u,\"return\":%d,\"face_flags\":%ld,\"is_variation\":",
+               count,
+               err,
+               (long)face.face->face_flags);
+        print_json_bool((face.face->face_flags & FT_FACE_FLAG_VARIATION) != 0);
+        printf("}");
+        row++;
+
+        *end = saved;
+        if (saved == ';') {
+            cursor = end + 1;
+        } else {
+            break;
+        }
+    }
+    printf("]}}\n");
+
     close_oracle_face(&face);
     return 0;
 }
@@ -15811,6 +15932,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--ftmm-var-blend-alias")) {
+        return emit_ftmm_var_blend_alias(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--ftmm-var-blend-flag-matrix")) {
+        return emit_ftmm_var_blend_flag_matrix(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--ftmm-mm-blend-invalid-matrix")) {
         return emit_ftmm_mm_blend_invalid_matrix(argc, argv);

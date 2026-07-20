@@ -1112,7 +1112,7 @@ impl Font {
         load_mode: LoadMode,
     ) -> Result<Self, FontError> {
         Self::truetype_face_with_load_mode_and_design_coords(
-            data, face_index, size_pt, load_mode, None,
+            data, face_index, size_pt, load_mode, None, false,
         )
     }
 
@@ -1122,6 +1122,7 @@ impl Font {
         size_pt: f32,
         load_mode: LoadMode,
         design_coords: Option<&[i32]>,
+        variation_coordinates_set: bool,
     ) -> Result<Self, FontError> {
         // FreeType stores a 1-based named-instance selector in bits 16..30;
         // the low 16 bits still select the collection face (ftobjs.c).
@@ -1286,7 +1287,7 @@ impl Font {
             gvar,
             design_variation_coords,
             normalized_variation_coords,
-            variation_coordinates_set: design_coords.is_some(),
+            variation_coordinates_set,
             head,
             hhea,
             hvar,
@@ -1401,6 +1402,7 @@ impl Font {
             self.size_pt,
             self.load_mode,
             Some(coords),
+            true,
         )?;
         next.selected_charmap = next
             .data
@@ -1460,7 +1462,25 @@ impl Font {
                 design_coord_for_normalized_blend_16_16(blend, axis)
             })
             .collect::<Vec<_>>();
-        self.set_var_design_coordinates(&design_coords)
+        let variation_coordinates_set = coords_16_16.iter().any(|coord| *coord != 0);
+        let base_face_index = self.data.face_index & 0xFFFF;
+        let mut next = Self::truetype_face_with_load_mode_and_design_coords(
+            &self.data.raw_data,
+            base_face_index,
+            self.size_pt,
+            self.load_mode,
+            Some(&design_coords),
+            variation_coordinates_set,
+        )?;
+        next.selected_charmap = next
+            .data
+            .cmap
+            .charmaps
+            .len()
+            .checked_sub(1)
+            .map_or(0, |last| self.selected_charmap.min(last));
+        *self = next;
+        Ok(())
     }
 
     pub(crate) fn mvar_vertical_header_deltas(

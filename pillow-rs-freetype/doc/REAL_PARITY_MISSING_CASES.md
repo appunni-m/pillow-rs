@@ -5800,7 +5800,6 @@ repo-visible buckets for handoff and subagent selection.
 | 5 | `generic-fallback` | `ftmm` | `ftmm.get_var_design_coordinates` | `ftmm.FT_Get_Var_Design_Coordinates / success_default_design_coordinates` | no explicit maintained route classification |
 | 5 | `generic-fallback` | `ftmm` | `ftmm.set_mm_blend_coordinates` | `ftmm.FT_Set_MM_Blend_Coordinates / success_set_normalized_coordinates` | no explicit maintained route classification |
 | 5 | `generic-fallback` | `ftmm` | `ftmm.set_mm_weight_vector` | `ftmm.FT_Set_MM_WeightVector / success_set_weight_vector` | no explicit maintained route classification |
-| 5 | `generic-fallback` | `ftmm` | `ftmm.set_var_blend_coordinates` | `ftmm.FT_Set_Var_Blend_Coordinates / success_aliases_mm_blend_setter` | no explicit maintained route classification |
 
 ## Pending-Core Rows
 
@@ -10042,19 +10041,30 @@ Follow-up finding for blend-coordinate state rows:
   WASM ABI.  The same runner preserves the existing null-output and
   non-variable-face error rows; non-variable FTMM service absence must map to
   `FT_Err_Invalid_Argument`, not invalid font format.
-- Setter rows were probed but are not promoted.  On the current
-  `fonts/variable/inter-wght.ttf` fixture, pinned FreeType 2.14.3 returned
-  `FT_Err_Invalid_Argument` (`6`) for
-  `ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates` and
-  `ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter`.
+- Follow-up on 2026-07-20: the single-axis
+  `ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter` and
+  `success_variation_flag_matches_c` rows now have maintained C oracle routes
+  and validate through Rust FFI, C ABI, and WASM ABI.  The alias row is not a
+  boolean assumption: pinned C returns OK for `FT_Set_Var_Blend_Coordinates`
+  but the control `FT_Set_MM_Blend_Coordinates` call exposes the TrueType
+  service sentinel `-2`, so `matches_control_call=false` is the exact public
+  behavior for this fixture.
 - Pinned C also exposed the public-wrapper distinction in
-  `freetype/src/base/ftmm.c`: `FT_Set_MM_Blend_Coordinates` does not translate
-  internal service return `-2` to OK, while `FT_Set_Var_Blend_Coordinates`
-  does.  The current MM reset probe saw `-2`, so promoting it as a success row
-  would be a green placeholder.
-- Keep MM/Var blend setter rows pending until the same concrete fixture and
-  parameters return success in pinned C and the maintained runner compares
-  exact active coordinates, variation flag, and any declared glyph output.
+  `freetype/src/base/ftmm.c:390-572` and
+  `freetype/src/truetype/ttgxvar.c:3166-3184`:
+  `FT_Set_MM_Blend_Coordinates` does not translate internal service return
+  `-2` to OK, while `FT_Set_Var_Blend_Coordinates` does.  Rust FFI, C ABI, and
+  WASM ABI now keep those wrapper semantics separate instead of aliasing the MM
+  setter to the Var setter.
+- The promoted variation-flag matrix pins the C state transitions on
+  `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
+  and `FT_IS_VARIATION=false`, blend coords `[32768]` set
+  `face_flags=35609` and `FT_IS_VARIATION=true`, and zero/null reset returns
+  to `face_flags=2841`.
+- The remaining MM/Var blend setter rows stay pending until the same concrete
+  fixture and parameters return success in pinned C and the maintained runner
+  compares exact active coordinates, variation flag, and any declared glyph
+  output.
 - A maintained `FT_Get_MM_Blend_Coordinates` default-row route now validates the
   concrete OpenType variable-font row through pinned C, Rust FFI, C ABI, and
   WASM ABI.  The row's optional Adobe MM asset remains unresolved and is not

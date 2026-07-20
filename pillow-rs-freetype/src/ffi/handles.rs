@@ -3905,7 +3905,28 @@ pub fn FT_Set_MM_Blend_Coordinates(
     num_coords: FT_UInt,
     coords: Option<&[FT_Fixed]>,
 ) -> FT_Error {
-    FT_Set_Var_Blend_Coordinates(face, num_coords, coords)
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords_usize) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let coords = match coords {
+        Some(coords) if coords.len() >= num_coords_usize => &coords[..num_coords_usize],
+        Some(_) => return FT_Err_Invalid_Argument as FT_Error,
+        None if num_coords_usize == 0 => &[],
+        None => return FT_Err_Invalid_Argument as FT_Error,
+    };
+    if coords.iter().any(|coord| *coord != 0)
+        && face.inner.borrow().var_blend_coordinates_16_16().is_ok()
+    {
+        // FreeType ttgxvar.c:3166-3184 returns the internal public-wrapper
+        // sentinel -2 for non-default TrueType/OpenType blend coordinates.
+        // FT_Set_Var_Blend_Coordinates consumes this sentinel as success, but
+        // FT_Set_MM_Blend_Coordinates exposes it to its caller.
+        return -2;
+    }
+    FT_Set_Var_Blend_Coordinates(Some(face), num_coords, Some(coords))
 }
 
 pub fn FT_Get_Default_Named_Instance(
