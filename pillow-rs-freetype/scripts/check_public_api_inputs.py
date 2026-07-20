@@ -1643,16 +1643,44 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for core FreeType face/size/slot behavior without a maintained route."""
+    if row.case_id == "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_FACE_FLAG_EXTERNAL_STREAM runtime parity uses the maintained "
+            "input/fonts/DejaVuSans.ttf asset, but still needs a maintained "
+            "FT_Open_Face/FT_OPEN_STREAM route that preserves caller-owned "
+            "stream identity, observes stream close calls, and compares the "
+            "face_flags bit across pinned C, Rust FFI, C ABI, and WASM; "
+            "reusing the constant-value flag route would be a green placeholder"
+        )
+    if row.case_id == "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_LOAD_SVG_ONLY runtime parity declares fonts/svg/color-svg-glyph.ttf, "
+            "but that maintained OT-SVG font fixture is absent; exact same-input "
+            "C/Rust/C-ABI/WASM parity also requires a load-glyph route that "
+            "compares SVG-glyph success and non-SVG-glyph public error behavior "
+            "instead of reusing the constant-value flag route"
+        )
+    if row.case_id == "freetype.FT_Parameter.tag_data_parameters_match_c_behavior":
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Parameter runtime parity declares fonts/color/sbix-outline.ttf "
+            "for FT_PARAM_TAG_IGNORE_SBIX, but that maintained sbix fixture is "
+            "absent; exact same-input C/Rust/C-ABI/WASM parity also requires "
+            "FT_Open_Face with FT_OPEN_PARAMS/FT_Parameter dispatch to compare "
+            "known-tag, unknown-tag, null-data, and null-params behavior"
+        )
     freetype_rows_without_maintained_route = {
         "freetype.FT_Attach_File.success_attach_auxiliary_file",
         "freetype.FT_Attach_Stream.success_attach_auxiliary_stream",
-        "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership",
         "freetype.FT_FaceRec.populated_public_fields_match_c",
         "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success",
         "freetype.FT_GlyphSlot.overwritten_by_subsequent_load",
-        "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior",
         "freetype.FT_Open_Args.open_face_consumes_args_like_c",
-        "freetype.FT_Parameter.tag_data_parameters_match_c_behavior",
     }
     if row.case_id not in freetype_rows_without_maintained_route:
         return None

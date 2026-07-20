@@ -10403,6 +10403,61 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: core stream/SVG/parameter runtime route blockers
+
+Status: focused route probes classified on 2026-07-20.
+
+Finding:
+
+- `freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership` uses the
+  maintained `input/fonts/DejaVuSans.ttf` font asset, but it is not real runtime
+  parity yet.  It needs a maintained `FT_Open_Face` route using
+  `FT_OPEN_STREAM` that observes caller-owned stream identity, close-callback
+  behavior, and the `FT_FACE_FLAG_EXTERNAL_STREAM` bit through pinned C,
+  Rust FFI, C ABI, and WASM.  The existing constant-value flag route proves only
+  the macro value; reusing it as runtime ownership parity would be a green
+  placeholder.
+- `freetype.FT_LOAD_SVG_ONLY.svg_only_behavior` declares
+  `fonts/svg/color-svg-glyph.ttf`, but that maintained OT-SVG fixture is absent.
+  The future route must load the same SVG and non-SVG glyphs with
+  `FT_LOAD_SVG_ONLY` and compare pinned C
+  `freetype/include/freetype/freetype.h:3501-3636`,
+  `freetype/src/base/ftobjs.c:943-1177`, and
+  `freetype/src/truetype/ttgload.c:2485-2537` behavior against Rust FFI,
+  C ABI, and WASM.
+- `freetype.FT_Parameter.tag_data_parameters_match_c_behavior` declares
+  `fonts/color/sbix-outline.ttf` for `FT_PARAM_TAG_IGNORE_SBIX`; that maintained
+  sbix fixture is absent.  The row also needs a maintained `FT_Open_Face` with
+  `FT_OPEN_PARAMS` route that compares known-tag, unknown-tag, null-data, and
+  null-params behavior across pinned C, Rust FFI, C ABI, and WASM.
+
+Rejected diagnostic path:
+
+- Do not promote these rows through the existing constant/layout checks.  The
+  runtime rows require observable ownership, glyph-load, or parameter-dispatch
+  behavior for the same inputs.
+- Do not replace missing SVG/sbix fixtures with generic fonts; that would test a
+  different public input.
+
+Required fix plan:
+
+1. Add maintained core runtime routes for external-stream face opening,
+   SVG-only glyph loading, and `FT_Parameter` dispatch.  Each route must run the
+   same inputs through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Add or generate the missing OT-SVG and sbix fixtures before promoting the SVG
+   and parameter rows.
+3. Compare exact face flags, stream callback/ownership events, glyph slot format
+   and public error behavior, parameter tag/data nullness, and observable
+   parameter effects.
+
+Verified commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership
+make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_SVG_ONLY.svg_only_behavior
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.tag_data_parameters_match_c_behavior
+```
+
 ### Issue Set Current: `TT_MaxProfile` malformed maxp fixture blocker
 
 Status: classified as explicit pending-route on 2026-07-20.
