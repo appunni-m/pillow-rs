@@ -13436,6 +13436,16 @@ static void oracle_property_set_then_get(int module_selector,
     FT_Done_FreeType(library);
 }
 
+static void print_property_face_identity(FT_Face face, FT_Face prop_face) {
+    const char* identity = "other";
+    if (!prop_face) {
+        identity = "null";
+    } else if (face && prop_face == face) {
+        identity = "same-live-face";
+    }
+    printf("{\"identity_class\":\"%s\"}", identity);
+}
+
 static FT_UInt oracle_default_properties_value(int library_present, const char* env) {
     FT_Library library = NULL;
     unsetenv("FREETYPE_PROPERTIES");
@@ -13531,10 +13541,54 @@ static int emit_face_properties_case(int argc, char** argv) {
 }
 
 static int emit_property_case(int argc, char** argv) {
-    (void)argc;
     const char* case_id = argv[2];
     printf("{");
     print_status(FT_Err_Ok);
+    if (streq(case_id, "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit")) {
+        if (argc != 6) {
+            fprintf(stderr, "increase-x-height property case requires source_kind source_value face_index\n");
+            return 2;
+        }
+        OracleFace opened = {0};
+        int open_status = open_oracle_face(argv[3], argv[4], atol(argv[5]), &opened);
+        if (open_status) {
+            return open_status;
+        }
+        const FT_UInt values[] = {0, 6, 10, 14, 32};
+        printf(",\"output\":{\"rows\":[");
+        for (int i = 0; i < 5; i++) {
+            FT_Prop_IncreaseXHeight set_prop;
+            set_prop.face = opened.face;
+            set_prop.limit = values[i];
+            FT_Error set_error = FT_Property_Set(
+                opened.library,
+                "autofitter",
+                "increase-x-height",
+                &set_prop);
+            FT_Prop_IncreaseXHeight get_prop;
+            get_prop.face = opened.face;
+            get_prop.limit = PROPERTY_SENTINEL;
+            FT_Error get_error = FT_Property_Get(
+                opened.library,
+                "autofitter",
+                "increase-x-height",
+                &get_prop);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"input\":%u,\"set_error\":%d,\"get_error\":%d,\"set_prop\":{\"face\":",
+                   values[i],
+                   set_error,
+                   get_error);
+            print_property_face_identity(opened.face, set_prop.face);
+            printf(",\"limit\":%u},\"get_prop\":{\"face\":", set_prop.limit);
+            print_property_face_identity(opened.face, get_prop.face);
+            printf(",\"limit\":%u}}", get_prop.limit);
+        }
+        printf("]}}\n");
+        close_oracle_face(&opened);
+        return 0;
+    }
     if (streq(case_id, "ftmodapi.FT_Property_Get.gets_supported_property") ||
         streq(case_id, "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version")) {
         FT_UInt value = PROPERTY_SENTINEL;
@@ -18054,7 +18108,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--library-lifecycle")) {
         return emit_library_lifecycle(argc, argv);
     }
-    if (argc == 3 && streq(argv[1], "--property-case")) {
+    if ((argc == 3 || argc == 6) && streq(argv[1], "--property-case")) {
         return emit_property_case(argc, argv);
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--face-properties-case")) {

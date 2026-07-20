@@ -144,16 +144,16 @@ Required fix plan:
 
 Related property rows still pending:
 
-- `ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit`
 - `ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height`
 - `ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script`
 
 Reason:
 
 - These are not scalar `FT_UInt` properties like
-  `truetype:interpreter-version`.  They require typed `FT_Prop_*` records,
-  face-specific autohinter globals, and observable glyph-load behavior owned by
-  the Rust core before the C/WASM ABI wrappers can be considered thin and exact.
+  `truetype:interpreter-version`.  The `increase-x-height` storage/readback row
+  now has typed `FT_Prop_IncreaseXHeight` coverage; the remaining rows require
+  glyph-style map mutation or observable glyph-load behavior owned by the Rust
+  core before the C/WASM ABI wrappers can be considered thin and exact.
 
 ### Issue Set Current: post-zero-table route probes that must not be promoted as generic
 
@@ -795,10 +795,10 @@ Remaining related blockers:
 
 - `ftdriver.interpreter_version_glyph_output` remains pending until the
   bytecode-sensitive runtime glyph fixtures are C-openable.
-- Face-scoped autohinter property records such as
-  `FT_Prop_GlyphToScriptMap` and `FT_Prop_IncreaseXHeight` remain pending
-  because they require typed face/global state, not scalar interpreter-version
-  property plumbing.
+- Face-scoped autohinter property outputs such as
+  `FT_Prop_GlyphToScriptMap` mutation and `FT_Prop_IncreaseXHeight` glyph
+  effects remain pending because they require observable auto-hinted glyph
+  behavior, not scalar interpreter-version property plumbing.
 
 ### Issue Set Current: TrueType interpreter-version glyph-output fixture blocker
 
@@ -1097,8 +1097,8 @@ Remaining property implementation plan:
 
 1. Keep autohinter `glyph-to-script-map` pending until the Rust core owns the
    face-global glyph-style map and exposes it through thin ABI records.
-2. Keep autohinter `increase-x-height` pending until face-global x-height state
-   affects actual auto-hinted glyph output.
+2. Keep autohinter `increase-x-height` glyph-output pending until face-global
+   x-height state affects actual auto-hinted glyph output.
 3. Keep CFF/Type1 hinting-engine properties pending until the corresponding
    driver property storage and glyph behavior are implemented in core.
 
@@ -11325,20 +11325,17 @@ Baseline:
 
 Finding:
 
-- `ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit` is not
-  a scalar TrueType `interpreter-version` property row.  The current maintained
-  property route only handles scalar `FT_UInt` property values; this row needs
-  the typed `FT_Prop_IncreaseXHeight { face, limit }` `void*` dispatch used by
-  pinned FreeType `src/autofit/afmodule.c:172-187,326-336`, plus face-handle
-  resolution through Rust FFI, thin C ABI, and WASM.  A strict diagnostic probe
-  that added this case to the scalar allow-list still stopped before runtime
-  execution, proving the blocker is the broader property route, not just a
-  missing classification string.
+- `ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit` now has
+  a maintained typed property route.  Core stores the face-scoped
+  `increase_x_height` value on `FT_Face`, the C ABI dispatches the public
+  `void*` payload as `FT_Prop_IncreaseXHeight`, and the WASM ABI exposes an
+  equivalent handle-based helper.  The native oracle compares the same limits
+  against pinned FreeType `src/autofit/afmodule.c:172-187,326-336`.
 - Typed driver property rows are split by exact obligation instead of sharing
   one broad property-service blocker:
-  - `FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit`: typed
-    `FT_Property_Set/Get` route storing and reading back the limit with pinned-C
-    face/module scoping.
+  - `FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit`: verified
+    typed `FT_Property_Set/Get` route storing and reading back the limit with
+    pinned-C face/module scoping.
   - `FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height`: property route
     plus autohint load proving x-height adjustment changes metrics or outline
     output like pinned C.
@@ -11364,9 +11361,10 @@ Finding:
 
 Rejected diagnostic path:
 
-- Do not promote `FT_Prop_IncreaseXHeight` by treating its `void*` value as an
-  `FT_UInt*`; pinned C uses a face-specific record and mutates
-  `AF_FaceGlobals.increase_x_height`.
+- Do not promote remaining `FT_Prop_IncreaseXHeight` glyph-output behavior by
+  treating storage/readback as proof of rendered output; pinned C uses the
+  face-specific `AF_FaceGlobals.increase_x_height` value during auto-hinted
+  glyph processing.
 - Do not promote stroker success rows through the current null/no-op stroker
   functions; they do not allocate or retain a real stroker object.
 - Do not promote gzip success rows until deterministic compressed input
@@ -11374,10 +11372,12 @@ Rejected diagnostic path:
 
 Required fix plan:
 
-1. For driver properties, add typed property dispatch in core first:
-   `interpreter-version` stays scalar, while `increase-x-height` and
-   `glyph-to-script-map` must consume/produce their public records and resolve
-   live face handles.  Then add thin C/WASM wrappers and focused oracle routes.
+1. For driver properties, extend typed property dispatch beyond the verified
+   `increase-x-height` storage/readback row: `glyph-to-script-map` must
+   consume/produce its public record and resolve live face handles, and
+   `increase-x-height` must be threaded into the autohinter glyph-output path.
+   Then add thin C/WASM wrappers and focused oracle routes for those remaining
+   outputs.
 2. For stroker, implement real pure-Rust `FT_Stroker` object/path state and
    export geometry.  Only then expose allocation/lifetime/copying through C
    and WASM.

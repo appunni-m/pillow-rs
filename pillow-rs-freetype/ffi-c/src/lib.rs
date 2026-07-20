@@ -1849,6 +1849,10 @@ fn property_name_arg(ptr: *const FT_String) -> Option<String> {
     unsafe { CStr::from_ptr(ptr).to_str().ok().map(ToOwned::to_owned) }
 }
 
+fn is_increase_x_height_property(module_name: Option<&str>, property_name: Option<&str>) -> bool {
+    module_name == Some("autofitter") && property_name == Some("increase-x-height")
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Property_Get(
     library: FT_Library,
@@ -1856,6 +1860,28 @@ pub extern "C" fn FT_Property_Get(
     property_name: *const FT_String,
     value: *mut c_void,
 ) -> FT_Error {
+    let module_name = property_name_arg(module_name);
+    let property_name = property_name_arg(property_name);
+    if is_increase_x_height_property(module_name.as_deref(), property_name.as_deref()) {
+        let Some(prop) = (unsafe { value.cast::<rust_ffi::FT_Prop_IncreaseXHeight>().as_mut() })
+        else {
+            return rust_ffi::FT_Property_Get_IncreaseXHeight(
+                library_ref(library),
+                module_name.as_deref(),
+                property_name.as_deref(),
+                None,
+                None,
+            );
+        };
+        let face = face_state(prop.face.cast::<FT_FaceRec>()).map(|state| &state.inner);
+        return rust_ffi::FT_Property_Get_IncreaseXHeight(
+            library_ref(library),
+            module_name.as_deref(),
+            property_name.as_deref(),
+            face,
+            Some(prop),
+        );
+    }
     let value = if value.is_null() {
         None
     } else {
@@ -1863,8 +1889,6 @@ pub extern "C" fn FT_Property_Get(
         // requires an `FT_UInt*`; null was handled above.
         Some(unsafe { &mut *value.cast::<FT_UInt>() })
     };
-    let module_name = property_name_arg(module_name);
-    let property_name = property_name_arg(property_name);
     rust_ffi::FT_Property_Get(
         library_ref(library),
         module_name.as_deref(),
@@ -1880,6 +1904,19 @@ pub extern "C" fn FT_Property_Set(
     property_name: *const FT_String,
     value: *const c_void,
 ) -> FT_Error {
+    let module_name = property_name_arg(module_name);
+    let property_name = property_name_arg(property_name);
+    if is_increase_x_height_property(module_name.as_deref(), property_name.as_deref()) {
+        let prop = unsafe { value.cast::<rust_ffi::FT_Prop_IncreaseXHeight>().as_ref() };
+        let face = prop.and_then(|prop| face_state_mut(prop.face.cast::<FT_FaceRec>()));
+        return rust_ffi::FT_Property_Set_IncreaseXHeight(
+            library_ref(library),
+            module_name.as_deref(),
+            property_name.as_deref(),
+            face.map(|state| &mut state.inner),
+            prop,
+        );
+    }
     let value = if value.is_null() {
         None
     } else {
@@ -1887,8 +1924,6 @@ pub extern "C" fn FT_Property_Set(
         // requires an `FT_UInt*`; null was handled above.
         Some(unsafe { *value.cast::<FT_UInt>() })
     };
-    let module_name = property_name_arg(module_name);
-    let property_name = property_name_arg(property_name);
     rust_ffi::FT_Property_Set(
         library_mut(library),
         module_name.as_deref(),
