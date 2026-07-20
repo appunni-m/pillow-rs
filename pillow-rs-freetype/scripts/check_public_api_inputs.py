@@ -2100,6 +2100,55 @@ def ftcolor_transform_paint_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR layer iterator rows needing real layer routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success": (
+            "FT_Get_Color_Glyph_Layer v0 parity needs a maintained layer route "
+            "proving successive COLR v0 layer glyph indexes, color indexes, and "
+            "iterator advancement match pinned C"
+        ),
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index": (
+            "FT_Get_Color_Glyph_Layer foreground parity needs a maintained "
+            "route proving foreground color index sentinel values are emitted "
+            "and preserved exactly like pinned C"
+        ),
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs": (
+            "FT_Get_Color_Glyph_Layer terminal parity needs a maintained route "
+            "proving false return after the final layer preserves prior output "
+            "fields and iterator state exactly like pinned C"
+        ),
+        "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers": (
+            "FT_Get_Paint_Layers v1 parity needs a maintained layer route "
+            "proving COLR v1 layer paint handles, layer count, and iterator "
+            "advancement match pinned C"
+        ),
+        "ftcolor.FT_Get_Paint_Layers.end_of_iteration": (
+            "FT_Get_Paint_Layers terminal parity needs a maintained route "
+            "proving false return after the final v1 paint layer preserves "
+            "output paint and iterator fields like pinned C"
+        ),
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis": (
+            "FT_LayerIterator parity needs a maintained route proving public "
+            "iterator fields are initialized and advanced by COLR v0 and v1 "
+            "layer APIs with pinned C counter and opaque-state semantics"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload": (
+            "FT_COLR_PAINTFORMAT_COLR_LAYERS parity needs a maintained "
+            "FT_Get_Paint route proving COLR_LAYERS payload initializes the "
+            "same layer iterator fields and nested state as pinned C"
+        ),
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator": (
+            "FT_PaintColrLayers parity needs a maintained FT_Get_Paint route "
+            "proving layer count and initialized FT_LayerIterator output match "
+            "pinned C public union output"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -2126,21 +2175,10 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     transform_paint_pending = ftcolor_transform_paint_pending_reason(row)
     if transform_paint_pending:
         return transform_paint_pending
+    layer_iterator_pending = ftcolor_layer_iterator_pending_reason(row)
+    if layer_iterator_pending:
+        return layer_iterator_pending
     pending_case_groups = {
-        (
-            "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
-            "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
-            "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
-            "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers",
-            "ftcolor.FT_Get_Paint_Layers.end_of_iteration",
-            "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis",
-            "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload",
-            "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
-        ): (
-            "COLR layer iterator parity needs a maintained layer route proving "
-            "COLR v0/v1 layer iteration, foreground color indexes, terminal "
-            "false output preservation, and iterator state across all ABI lanes"
-        ),
         (
             "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
             "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed",

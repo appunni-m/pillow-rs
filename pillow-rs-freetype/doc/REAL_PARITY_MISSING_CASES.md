@@ -12579,8 +12579,27 @@ Current blocker families:
     `success_non_sfnt_noop`, and `default_foreground_color_policy`: foreground
     color mutation, non-SFNT no-op behavior, default policy, and later
     overrides.
-- Layer iteration: COLR v0/v1 layer iteration, foreground color indexes,
-  terminal false output preservation, and iterator state.
+- Layer iterator rows are split by exact obligation instead of sharing a broad
+  layer-route blocker:
+  - `FT_Get_Color_Glyph_Layer.layer_iteration_success`: successive COLR v0
+    layer glyph indexes, color indexes, and iterator advancement.
+  - `FT_Get_Color_Glyph_Layer.foreground_color_index`: foreground color index
+    sentinel values emitted and preserved exactly like pinned C.
+  - `FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs`: false
+    return after the final layer preserving prior output fields and iterator
+    state.
+  - `FT_Get_Paint_Layers.success_iterates_colr_v1_layers`: COLR v1 layer paint
+    handles, layer count, and iterator advancement.
+  - `FT_Get_Paint_Layers.end_of_iteration`: false return after the final v1
+    paint layer preserving output paint and iterator fields.
+  - `FT_LayerIterator.initialized_and_advanced_by_layer_apis`: public iterator
+    fields initialized and advanced by COLR v0 and v1 APIs with pinned-C
+    counter and opaque-state semantics.
+  - `FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload`:
+    `COLR_LAYERS` payload initialization of the same layer iterator fields and
+    nested state.
+  - `FT_PaintColrLayers.get_paint_initializes_layer_iterator`: layer count and
+    initialized `FT_LayerIterator` output from the public union.
 - Root paint and root transform rows are split by exact obligation instead of
   sharing a broad root-paint blocker:
   - `FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform`: initial
