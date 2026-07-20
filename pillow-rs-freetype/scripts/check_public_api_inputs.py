@@ -1720,9 +1720,16 @@ def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None
 
 def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
     """Residual public data, error, outline, and table rows without a route."""
+    if row.case_id == "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory":
+        return (
+            "FT_OpenType_Free after validation requires a maintained non-null "
+            "FT_OpenType_Validate table buffer route and face-memory ownership "
+            "tracking; current Rust FFI/C ABI/WASM coverage only proves the "
+            "null face and null table no-op cases"
+        )
+
     residual_rows_without_maintained_route = {
         "fterrdef.FT_Err_Missing_Property.known_property_success",
-        "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
         "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
         "tttables.TT_MaxProfile.malformed_table_error_source",
