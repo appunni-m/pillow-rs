@@ -84,6 +84,47 @@ Reason:
   face-specific autohinter globals, and observable glyph-load behavior owned by
   the Rust core before the C/WASM ABI wrappers can be considered thin and exact.
 
+### Issue Set Current: post-zero-table route probes that must not be promoted as generic
+
+Status: probed on 2026-07-20 after `real-parity=4531`; no route promoted.
+
+Probe commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table_error_source
+make -C pillow-rs-freetype test-case CASE=ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output
+make -C pillow-rs-freetype test-case CASE=ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip
+```
+
+Findings:
+
+- `tttables.TT_MaxProfile.malformed_table_error_source` is not an asset-only
+  problem.  The declared assets `input/fonts/sfnt/truncated-maxp.ttf` and
+  `input/fonts/sfnt/invalid-maxp.ttf` are missing, but the operation
+  `face.load_then_get_sfnt_table.maxp` also has no maintained runtime runner.
+  Required next fix: extend `scripts/build_sfnt_fixtures.py` to generate the
+  declared malformed `maxp` assets, then add an explicit pinned-C/Rust/C
+  ABI/WASM route that compares face-open error, nullness, and any loaded
+  `TT_MaxProfile` fields.  Do not alias this to `sfnt.get_sfnt_table.maxp`,
+  which only covers already-open valid faces.
+- `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output` is a fixture
+  expectation mismatch in the pinned build.  The audit records pinned
+  FreeType 2.14.3 returning `FT_Err_Unimplemented_Feature` (`7`) for
+  `FT_VALIDATE_BASE` and leaving non-null output sentinels untouched, while
+  the row declares OK/null-output behavior.  Required next fix: either change
+  the fixture contract through the maintained generator/input workflow to
+  assert the build's actual unsupported-service behavior, or provide a
+  C-openable build/asset path where BASE validation is supported.  Do not
+  promote the current row as absent-table success.
+- `ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip` is
+  not equivalent to the existing `truetype:interpreter-version` scalar
+  property route.  Removing the row from the driver pending set only exposes
+  the generic property-service guard:
+  `FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI property APIs`.
+  Required next fix: implement `autofitter:default-script` and related
+  typed autohinter property storage in the Rust core, then expose only thin
+  C/WASM calls for the same public property surface.
+
 ### Issue Set Current: malformed SFNT constructor errors with stale declared expectations
 
 Status: partially fixed on 2026-07-20; remaining stale-error fixtures stay
