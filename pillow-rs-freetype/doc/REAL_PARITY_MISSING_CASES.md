@@ -11108,6 +11108,19 @@ Follow-up finding for blend-coordinate state rows:
   Type 1 MM fixture whose glyph outline changes under non-default blend/design
   coordinates, followed by a pinned-C/Rust FFI/C ABI/WASM ABI glyph-output
   runner for `FT_Set_MM_Blend_Coordinates`.
+- Strict probe on 2026-07-20 from branch
+  `ftmm-route-audit-placeholder-parity`: temporarily removing only
+  `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` from the
+  FTMM route guard moved the audit classification from
+  `pending-route` to `real-parity`, but focused runtime parity still failed.
+  Command:
+  `make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend`.
+  Result: `runtime_cases: runnable=1 pending=0`,
+  `runtime_parity: passed=0 failed=1`, bucket `rust ffi:value:1`, with
+  `rust ffi: ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend oracle returned unexpected error -2`.
+  Keep the route guard in place.  The required next fix is an oracle-backed
+  success fixture and glyph-output runner; classifier movement alone is not a
+  valid parity gain.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set
