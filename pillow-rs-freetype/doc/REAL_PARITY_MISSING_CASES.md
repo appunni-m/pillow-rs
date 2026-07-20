@@ -12648,9 +12648,21 @@ Current blocker families:
 - `FTC_ImageCache_Lookup` / `FTC_ImageType`: call-owned descriptor lifetime,
   lookup output, hit/repeat behavior, node acquisition/unref, and null-anode
   ephemeral glyphs.
-- `FTC_ImageCache_LookupScaler`: pixel/point scaler output, hit/miss/repeat
-  behavior, node acquisition/unref, and pinned C load-flag truncation for all
-  font variants.
+- `FTC_ImageCache_LookupScaler` rows are split by exact scenario and fixture
+  variant instead of sharing a broad scaler-image blocker.  Each scenario must
+  be proven for `f1 DEFAULT`, `f2 NO_HINTING`, `f3 RENDER`, and
+  `f4 HIGH_BITS_SET`:
+  - `planned_cache_subsystem_not_out_of_scope`: prove the cache subsystem is
+    implemented as a maintained same-input route, not excluded as out of scope.
+  - `success_pixel_and_point_scalers`: prove integer pixel sizes and 26.6 point
+    sizes with x/y resolution select the same `FT_Size` metrics and glyph
+    output as pinned C.
+  - `success_lookup_hit_miss_and_repeated`: prove first lookup, repeat lookup,
+    and missing glyph behavior match pinned C cache node identity and output.
+  - `success_node_acquire_and_unref`: prove `anode` acquisition,
+    `FTC_Node_Unref` release, and post-unref cache state.
+  - `load_flags_truncation_policy`: prove `FT_ULong` input is truncated to the
+    pinned C signed `load_flags` path before lookup.
 - `FTC_SBitCache_LookupScaler`: scaler size semantics and int32 load-flag
   truncation for all concrete font variants.
 - `FTC_Node` / `FTC_Node_Unref`: cache handle identity, lookup references,
