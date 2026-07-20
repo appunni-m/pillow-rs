@@ -12618,8 +12618,30 @@ Current blocker families:
     `SWEEP_GRADIENT`: payload shape and nested colorline state.
   - `FT_COLR_PAINT_EXTEND_PAD`, `REFLECT`, `REPEAT`, and `FT_PaintExtend`: exact
     extend enum values and iterator preservation.
-- Transform paints: rotate, scale, skew, translate, explicit affine transform,
-  and FreeType normalization behavior.
+- Transform paint rows are split by exact obligation instead of sharing a broad
+  transform-paint blocker:
+  - `FT_PaintRotate.get_paint_rotate_values`: angle, center coordinates, and
+    nested paint handle fields.
+  - `FT_PaintScale.get_paint_scale_values`: x/y scale factors, center
+    coordinates, and nested paint handle fields.
+  - `FT_PaintSkew.get_paint_skew_values`: x/y skew angles, center coordinates,
+    and nested paint handle fields.
+  - `FT_PaintTransform.get_paint_transform_values`: explicit affine matrix
+    fields and nested paint handle.
+  - `FT_PaintTranslate.get_paint_translate_values`: dx/dy translation values
+    and nested paint handle fields.
+  - `FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload`:
+    FreeType-normalized rotate payload values and nested paint handle.
+  - `FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload`:
+    FreeType-normalized scale payload values, center handling, and nested paint
+    handle.
+  - `FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload`:
+    FreeType-normalized skew payload values, center handling, and nested paint
+    handle.
+  - `FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload`: affine
+    `xx`/`xy`/`dx`/`yx`/`yy`/`dy` fields and nested paint handle.
+  - `FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload`: translation
+    dx/dy payload values and nested paint handle.
 - Composite paint graph rows are split by exact obligation instead of sharing a
   broad graph blocker:
   - `FT_PaintComposite.get_paint_composite_values`: source paint, backdrop
