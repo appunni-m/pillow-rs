@@ -1248,6 +1248,15 @@ def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
 
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
+    if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
+        return (
+            "FTC_Node_Unref null-node/null-manager variants are C no-ops, but "
+            "this fixture also includes a non-null foreign/bad-cache-index node; "
+            "pinned FreeType src/cache/ftcmanag.c:FTC_Node_Unref reads "
+            "node->cache_index when both node and manager are non-null, so exact "
+            "same-input parity requires a maintained FTC node/manager layout "
+            "facade instead of a generic no-op"
+        )
     cache_operations_without_success_route = {
         "ftcache.cmap_cache_lookup",
         "ftcache.cmap_cache_new",
