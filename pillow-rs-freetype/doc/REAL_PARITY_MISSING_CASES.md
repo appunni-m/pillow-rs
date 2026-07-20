@@ -231,7 +231,9 @@ Status: two-row runtime route completed on 2026-07-20 for pinned FreeType
 
 Implemented real parity rows:
 
+- `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name`
 - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted`
+- `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name`
 - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted`
 
 Finding:
@@ -253,14 +255,22 @@ Remaining related blockers:
 - Other `ftparams` rows remain pending because they require real sbix,
   incremental font, random seed, stem-darkening, or unpatented-hinting
   behavior rather than name-selection tag plumbing.
+- The `open_face_uses_legacy_*` rows were normalized on 2026-07-20 to the
+  maintained `scenarios[]` route and now verify exact family/style strings
+  through pinned C, Rust FFI, C ABI, and WASM ABI.
 
-Impact:
+Latest impact for the 2026-07-20 legacy-name route normalization:
+
+- `real-parity`: `4525 -> 4527`
+- `pending-route`: `430 -> 428`
+
+Earlier null-data impact:
 
 - `real-parity`: `4450 -> 4452`
-- `compile-contract`: stays `2265`
+- `compile-contract`: stayed `2265`
 - `pending-route`: `505 -> 503`
-- `pending-core`: stays `1`
-- `generic-fallback`: stays `0`
+- `pending-core`: stayed `1`
+- `generic-fallback`: stayed `0`
 
 Verification:
 
@@ -1539,8 +1549,6 @@ Baseline before this batch:
 Finding:
 
 - The remaining `ftparams` rows cover `FT_PARAM_TAG_IGNORE_SBIX`,
-  `FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY`,
-  `FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY`,
   `FT_PARAM_TAG_INCREMENTAL`, `FT_PARAM_TAG_RANDOM_SEED`,
   `FT_PARAM_TAG_STEM_DARKENING`, and
   `FT_PARAM_TAG_UNPATENTED_HINTING`.
@@ -1567,9 +1575,9 @@ Required fix plan:
    shortcuts. It must run the same operation sequence through pinned C
    FreeType, Rust FFI, thin C ABI, and WASM ABI.
 2. Implement pure-Rust parameter dispatch first: sbix ignore behavior,
-   typographic family/subfamily fallback, incremental interface routing,
-   random-seed face property effects, stem-darkening toggles, unpatented
-   hinting no-op/acceptance semantics, and null-data handling.
+   incremental interface routing, random-seed face property effects,
+   stem-darkening toggles, unpatented hinting no-op/acceptance semantics, and
+   null-data handling.
 3. Compare exact return codes, face flags, family/subfamily strings, glyph-load
    outputs after parameter mutation, build-dependent support classifications,
    accepted null-data behavior, and preservation of unsupported inputs.
@@ -10303,11 +10311,9 @@ Rejected candidates from this snapshot:
   - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name`
     and
     `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name`
-    now have the named font file in the worktree, but the rows still use
-    `control_parameters`/`test_parameters` while the maintained
-    `freetype.open_face_with_params` route expects normalized option rows.
-    Required next fix: convert them to the existing option-row input shape and
-    verify pinned C, Rust FFI, C ABI, and WASM ABI family/style strings exactly.
+    were completed on 2026-07-20 by normalizing them to the existing option-row
+    input shape and fixing Rust SFNT face-name selection to match pinned
+    FreeType's WWS/typographic fallback order.
   - `freetype.FT_ENCODING_NONE.representative_runtime_observation` has a file
     at `fonts/no-encoding/bdf-or-pcf-encoding-none.bdf`, but pinned FreeType
     2.14.3 currently returns error 23 when opening it through the generated

@@ -44,6 +44,8 @@ const NAME_ID_POSTSCRIPT: u16 = 6;
 const NAME_ID_VARIATIONS_PREFIX: u16 = 25;
 const NAME_ID_TYPO_FAMILY: u16 = 16;
 const NAME_ID_TYPO_SUBFAMILY: u16 = 17;
+const NAME_ID_WWS_FAMILY: u16 = 21;
+const NAME_ID_WWS_SUBFAMILY: u16 = 22;
 
 #[derive(Debug)]
 struct NameRecord {
@@ -111,8 +113,8 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     // `tt_face_load_name` drops empty and out-of-range records before
     // `tt_face_get_name` selects public face names.  Select from the validated
     // copies for the same ordering and failure behavior.
-    let family = family_name_from_records(&raw_records, false);
-    let subfamily = subfamily_name_from_records(&raw_records, false);
+    let family = family_name_from_records(&raw_records, false, false);
+    let subfamily = subfamily_name_from_records(&raw_records, false, false);
     let postscript_name = find_postscript_name(&raw_records);
 
     Ok(NameTable {
@@ -197,21 +199,45 @@ pub(crate) fn name_string(table: &NameTable, name_id: u16) -> Option<String> {
 
 /// Return the public family name after applying FreeType's open-parameter
 /// typographic-name selection flags.
-pub(crate) fn family_name(table: &NameTable, ignore_typographic_family: bool) -> String {
-    family_name_from_records(&table.records, ignore_typographic_family)
+pub(crate) fn family_name(
+    table: &NameTable,
+    ignore_typographic_family: bool,
+    is_wws_only: bool,
+) -> String {
+    family_name_from_records(&table.records, ignore_typographic_family, is_wws_only)
 }
 
 /// Return the public subfamily name after applying FreeType's open-parameter
 /// typographic-name selection flags.
-pub(crate) fn subfamily_name(table: &NameTable, ignore_typographic_subfamily: bool) -> String {
-    subfamily_name_from_records(&table.records, ignore_typographic_subfamily)
+pub(crate) fn subfamily_name(
+    table: &NameTable,
+    ignore_typographic_subfamily: bool,
+    is_wws_only: bool,
+) -> String {
+    subfamily_name_from_records(&table.records, ignore_typographic_subfamily, is_wws_only)
 }
 
-fn family_name_from_records(records: &[SfntNameRecord], ignore_typographic_family: bool) -> String {
-    if ignore_typographic_family {
-        name_string_from_records(records, NAME_ID_FAMILY)
+fn family_name_from_records(
+    records: &[SfntNameRecord],
+    ignore_typographic_family: bool,
+    is_wws_only: bool,
+) -> String {
+    // FreeType `sfnt_init_face` (sfobjs.c:1039-1068) gives WWS name IDs
+    // priority for non-WWS-only faces, but skips WWS and optionally skips
+    // typographic IDs when the matching FT_Open_Face ignore parameter is set.
+    if is_wws_only {
+        if ignore_typographic_family {
+            name_string_from_records(records, NAME_ID_FAMILY)
+        } else {
+            name_string_from_records(records, NAME_ID_TYPO_FAMILY)
+                .or_else(|| name_string_from_records(records, NAME_ID_FAMILY))
+        }
+    } else if ignore_typographic_family {
+        name_string_from_records(records, NAME_ID_WWS_FAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_FAMILY))
     } else {
-        name_string_from_records(records, NAME_ID_TYPO_FAMILY)
+        name_string_from_records(records, NAME_ID_WWS_FAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_TYPO_FAMILY))
             .or_else(|| name_string_from_records(records, NAME_ID_FAMILY))
     }
     .unwrap_or_else(|| "Unknown".into())
@@ -220,11 +246,23 @@ fn family_name_from_records(records: &[SfntNameRecord], ignore_typographic_famil
 fn subfamily_name_from_records(
     records: &[SfntNameRecord],
     ignore_typographic_subfamily: bool,
+    is_wws_only: bool,
 ) -> String {
-    if ignore_typographic_subfamily {
-        name_string_from_records(records, NAME_ID_SUBFAMILY)
+    // Mirrors the family-name order above from FreeType `sfnt_init_face`
+    // (sfobjs.c:1039-1068) for `face->root.style_name`.
+    if is_wws_only {
+        if ignore_typographic_subfamily {
+            name_string_from_records(records, NAME_ID_SUBFAMILY)
+        } else {
+            name_string_from_records(records, NAME_ID_TYPO_SUBFAMILY)
+                .or_else(|| name_string_from_records(records, NAME_ID_SUBFAMILY))
+        }
+    } else if ignore_typographic_subfamily {
+        name_string_from_records(records, NAME_ID_WWS_SUBFAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_SUBFAMILY))
     } else {
-        name_string_from_records(records, NAME_ID_TYPO_SUBFAMILY)
+        name_string_from_records(records, NAME_ID_WWS_SUBFAMILY)
+            .or_else(|| name_string_from_records(records, NAME_ID_TYPO_SUBFAMILY))
             .or_else(|| name_string_from_records(records, NAME_ID_SUBFAMILY))
     }
     .unwrap_or_else(|| "Regular".into())

@@ -96,6 +96,11 @@ impl Os2Table {
         self.fs_selection & 128 != 0
     }
 
+    /// True when `fsSelection` bit 8 marks this as a WWS-only face.
+    pub fn is_wws_only(&self) -> bool {
+        self.version != 0xFFFF && self.fs_selection & 256 != 0
+    }
+
     /// Raw `fsSelection` flags as exposed by the public `TT_OS2` record.
     pub fn fs_selection(&self) -> u16 {
         self.fs_selection
