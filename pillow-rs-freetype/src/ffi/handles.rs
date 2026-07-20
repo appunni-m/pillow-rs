@@ -25,11 +25,12 @@ use super::types::{
     FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int,
     FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long,
     FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation,
-    FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
-    FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
-    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight,
+    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
+    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile,
+    TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1249,6 +1250,7 @@ pub struct FT_Face {
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
     random_seed: FT_Int32,
+    increase_x_height: FT_UInt,
     refcount: usize,
 }
 
@@ -3143,6 +3145,32 @@ fn property_lookup_error<'a>(
     Ok(library)
 }
 
+fn autofitter_property_lookup_error(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+) -> Result<(), FT_Error> {
+    let Some(library) = library else {
+        return Err(FT_Err_Invalid_Library_Handle as FT_Error);
+    };
+    let Some(module_name) = module_name else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    let Some(property_name) = property_name else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    if !library.module_names.contains(&module_name) {
+        return Err(FT_Err_Missing_Module as FT_Error);
+    }
+    if module_name != "autofitter" {
+        return Err(FT_Err_Unimplemented_Feature);
+    }
+    if property_name != "increase-x-height" {
+        return Err(FT_Err_Missing_Property as FT_Error);
+    }
+    Ok(())
+}
+
 pub fn FT_Property_Get(
     library: Option<&FT_Library>,
     module_name: Option<&str>,
@@ -3166,6 +3194,34 @@ pub fn FT_Property_Get(
         }
         Err(error) => error,
     }
+}
+
+pub fn FT_Property_Get_IncreaseXHeight(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+    face: Option<&FT_Face>,
+    value: Option<&mut FT_Prop_IncreaseXHeight>,
+) -> FT_Error {
+    // FreeType 2.14.3 dispatches `autofitter:increase-x-height` through
+    // `src/autofit/afmodule.c:af_property_get`.  The thin ABI layers validate
+    // the public raw face pointer; core keeps the actual property state on the
+    // safe `FT_Face` value.
+    let Some(value) = value else {
+        return if library.is_none() {
+            FT_Err_Invalid_Library_Handle as FT_Error
+        } else {
+            FT_Err_Invalid_Argument
+        };
+    };
+    if let Err(error) = autofitter_property_lookup_error(library, module_name, property_name) {
+        return error;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    value.limit = face.increase_x_height;
+    FT_Err_Ok
 }
 
 pub fn FT_Property_Set(
@@ -3204,6 +3260,34 @@ pub fn FT_Property_Set(
         }
         Err(error) => error,
     }
+}
+
+pub fn FT_Property_Set_IncreaseXHeight(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+    face: Option<&mut FT_Face>,
+    value: Option<&FT_Prop_IncreaseXHeight>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/autofit/afmodule.c:af_property_set` stores
+    // `FT_Prop_IncreaseXHeight.limit` on the face's internal auto-hint globals.
+    // Glyph-output effects are verified by a separate row; this helper proves
+    // the public property payload round-trips through the same face state.
+    let Some(value) = value else {
+        return if library.is_none() {
+            FT_Err_Invalid_Library_Handle as FT_Error
+        } else {
+            FT_Err_Invalid_Argument
+        };
+    };
+    if let Err(error) = autofitter_property_lookup_error(library, module_name, property_name) {
+        return error;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    face.increase_x_height = value.limit;
+    FT_Err_Ok
 }
 
 fn set_string_property_ignored(
@@ -4718,6 +4802,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         transform_delta: FT_Vector { x: 0, y: 0 },
         no_stem_darkening: -1,
         random_seed: -1,
+        increase_x_height: 0,
         refcount: 1,
     };
     register_face_size_handles(&face);

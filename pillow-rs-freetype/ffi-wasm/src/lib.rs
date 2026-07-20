@@ -52,6 +52,8 @@ pub type FT_Realloc_Func = Option<
 pub type FT_List_Destructor =
     Option<extern "C" fn(memory: FT_Memory, data: FT_Pointer, user: FT_Pointer)>;
 
+const PROPERTY_SENTINEL: FT_UInt = 0xDEAD_BEEF;
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmStatus {
@@ -1983,6 +1985,48 @@ pub extern "C" fn fontdone_wasm_property_set_then_get(
         wasm_property_name(property_selector),
         get_value,
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_property_increase_x_height_set_then_get(
+    handle: usize,
+    limit: FT_UInt,
+    out_limit: *mut FT_UInt,
+) -> FT_Error {
+    let library = rust_ffi::FT_Init_FreeType();
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let prop = rust_ffi::FT_Prop_IncreaseXHeight {
+        face: handle as FT_Pointer,
+        limit,
+    };
+    let set_status = rust_ffi::FT_Property_Set_IncreaseXHeight(
+        Some(&library),
+        Some("autofitter"),
+        Some("increase-x-height"),
+        Some(&mut face.face),
+        Some(&prop),
+    );
+    if set_status != rust_ffi::FT_Err_Ok {
+        return set_status;
+    }
+    let Some(out_limit) = (unsafe { out_limit.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut get_prop = rust_ffi::FT_Prop_IncreaseXHeight {
+        face: handle as FT_Pointer,
+        limit: PROPERTY_SENTINEL,
+    };
+    let get_status = rust_ffi::FT_Property_Get_IncreaseXHeight(
+        Some(&library),
+        Some("autofitter"),
+        Some("increase-x-height"),
+        Some(&face.face),
+        Some(&mut get_prop),
+    );
+    *out_limit = get_prop.limit;
+    get_status
 }
 
 #[cfg(feature = "abi-test-support")]

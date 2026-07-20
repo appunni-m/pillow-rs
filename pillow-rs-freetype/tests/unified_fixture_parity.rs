@@ -2506,6 +2506,12 @@ impl BackendComparisonWorker {
             "ftmodapi.property_get"
             | "ftdriver.interpreter_version_default"
             | "FT_Property_Get" => property_get_case_output(case, PropertyBackend::Rust),
+            "FT_Property_Set_then_Get"
+                if case.case_id
+                    == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
+            {
+                property_increase_x_height_roundtrip_output(case, PropertyBackend::Rust)
+            }
             "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
                 property_set_case_output(case, PropertyBackend::Rust)
             }
@@ -16290,6 +16296,151 @@ fn property_set_case_output(
     }
 }
 
+fn increase_x_height_limits(case: &InputCase) -> Result<Vec<FT_UInt>, String> {
+    array_param(&case.inputs.params, "limits")?
+        .iter()
+        .map(|value| u32_value(value, "limits[]").map(|value| value as FT_UInt))
+        .collect()
+}
+
+fn property_face_identity_json<T>(face: *const T, prop_face: FT_Pointer) -> Value {
+    json!({
+        "identity_class": if !face.is_null() && prop_face == face.cast_mut().cast() {
+            "same-live-face"
+        } else if prop_face.is_null() {
+            "null"
+        } else {
+            "other"
+        }
+    })
+}
+
+fn property_increase_x_height_roundtrip_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    let limits = increase_x_height_limits(case)?;
+    let rows = match backend {
+        PropertyBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let mut face = open_face(case)?;
+            let face_ptr = (&mut face as *mut FT_Face).cast::<c_void>();
+            limits
+                .into_iter()
+                .map(|limit| {
+                    let set_prop = FT_Prop_IncreaseXHeight {
+                        face: face_ptr,
+                        limit,
+                    };
+                    let set_error = FT_Property_Set_IncreaseXHeight(
+                        Some(&library),
+                        Some("autofitter"),
+                        Some("increase-x-height"),
+                        Some(&mut face),
+                        Some(&set_prop),
+                    );
+                    let mut get_prop = FT_Prop_IncreaseXHeight {
+                        face: face_ptr,
+                        limit: PROPERTY_SENTINEL,
+                    };
+                    let get_error = FT_Property_Get_IncreaseXHeight(
+                        Some(&library),
+                        Some("autofitter"),
+                        Some("increase-x-height"),
+                        Some(&face),
+                        Some(&mut get_prop),
+                    );
+                    json!({
+                        "input": limit,
+                        "set_error": set_error,
+                        "get_error": get_error,
+                        "set_prop": {
+                            "face": property_face_identity_json(&face, set_prop.face),
+                            "limit": set_prop.limit
+                        },
+                        "get_prop": {
+                            "face": property_face_identity_json(&face, get_prop.face),
+                            "limit": get_prop.limit
+                        }
+                    })
+                })
+                .collect::<Vec<_>>()
+        }
+        PropertyBackend::CAbi => {
+            let (library, face) = c_open_face(case)?;
+            let rows = limits
+                .into_iter()
+                .map(|limit| {
+                    let set_prop = FT_Prop_IncreaseXHeight {
+                        face: face.cast(),
+                        limit,
+                    };
+                    let set_error = c_abi::FT_Property_Set(
+                        library,
+                        c"autofitter".as_ptr(),
+                        c"increase-x-height".as_ptr(),
+                        (&set_prop as *const FT_Prop_IncreaseXHeight).cast(),
+                    );
+                    let mut get_prop = FT_Prop_IncreaseXHeight {
+                        face: face.cast(),
+                        limit: PROPERTY_SENTINEL,
+                    };
+                    let get_error = c_abi::FT_Property_Get(
+                        library,
+                        c"autofitter".as_ptr(),
+                        c"increase-x-height".as_ptr(),
+                        (&mut get_prop as *mut FT_Prop_IncreaseXHeight).cast(),
+                    );
+                    json!({
+                        "input": limit,
+                        "set_error": set_error,
+                        "get_error": get_error,
+                        "set_prop": {
+                            "face": property_face_identity_json(face, set_prop.face),
+                            "limit": set_prop.limit
+                        },
+                        "get_prop": {
+                            "face": property_face_identity_json(face, get_prop.face),
+                            "limit": get_prop.limit
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            c_done_face(face);
+            c_done_library(library);
+            rows
+        }
+        PropertyBackend::Wasm => {
+            let handle = wasm_open_face(case)?;
+            let rows = limits
+                .into_iter()
+                .map(|limit| {
+                    let mut out = PROPERTY_SENTINEL;
+                    let get_error = wasm_abi::fontdone_wasm_property_increase_x_height_set_then_get(
+                        handle, limit, &mut out,
+                    );
+                    json!({
+                        "input": limit,
+                        "set_error": if get_error == FT_Err_Ok { FT_Err_Ok } else { get_error },
+                        "get_error": get_error,
+                        "set_prop": {
+                            "face": {"identity_class": "same-live-face"},
+                            "limit": limit
+                        },
+                        "get_prop": {
+                            "face": {"identity_class": "same-live-face"},
+                            "limit": out
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            wasm_done_face(handle);
+            rows
+        }
+    };
+    Ok(ok(json!({ "rows": rows })))
+}
+
 fn property_get_call(
     backend: PropertyBackend,
     library_present: i32,
@@ -19769,6 +19920,7 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip"
             | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
+            | "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit"
     )
 }
 
@@ -19990,6 +20142,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
+        }
+        "FT_Property_Set_then_Get"
+            if case.case_id
+                == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
+        {
+            let mut args = vec!["--property-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
         }
         "ftmodapi.property_get"
         | "ftmodapi.property_set"
@@ -23260,6 +23421,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
             property_get_case_output(case, PropertyBackend::CAbi)
         }
+        "FT_Property_Set_then_Get"
+            if case.case_id
+                == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
+        {
+            property_increase_x_height_roundtrip_output(case, PropertyBackend::CAbi)
+        }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
@@ -24094,6 +24261,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
             property_get_case_output(case, PropertyBackend::Wasm)
+        }
+        "FT_Property_Set_then_Get"
+            if case.case_id
+                == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
+        {
+            property_increase_x_height_roundtrip_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::Wasm)

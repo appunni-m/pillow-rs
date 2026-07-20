@@ -169,6 +169,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_truetype_engine_type",
     "fontdone_wasm_face_properties_one",
     "fontdone_wasm_property_get",
+    "fontdone_wasm_property_increase_x_height_set_then_get",
     "fontdone_wasm_property_set_then_get",
     "fontdone_wasm_library_set_lcd_filter",
     "fontdone_wasm_library_set_lcd_filter_weights",
@@ -3147,11 +3148,6 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
             "property routing plus an autohint glyph-load observation proving "
             "map changes affect script selection like pinned C"
         ),
-        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": (
-            "FT_Prop_IncreaseXHeight round-trip parity needs maintained typed "
-            "FT_Property_Set/Get routing proving the limit value is stored and "
-            "read back with pinned-C face/module scoping"
-        ),
         "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height": (
             "FT_Prop_IncreaseXHeight glyph-output parity needs maintained "
             "typed property routing plus an autohint load proving the x-height "
@@ -4545,6 +4541,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_SizeRec.active_size_record_runtime": "FT_SizeRec public face/generic/metrics/internal state validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": "FT_Property_Set/Get increase-x-height face-scoped limit roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
