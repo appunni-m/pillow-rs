@@ -10327,6 +10327,18 @@ Implementation:
   - `ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default`
 - Left `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
   pending because glyph-output parity requires real Type 1 MM interpolation.
+- Follow-up on 2026-07-20: the row's declared `glyph_index=42` is not a
+  runnable C oracle input for the generated `adobe-mm-two-axis.pfb`; pinned
+  FreeType 2.14.3 returns error code `6` after
+  `FT_Set_MM_Design_Coordinates(face, [700,300])` and `FT_Load_Glyph(42)`.
+  Probing the same fixture showed glyph `1` is the only rendered glyph among
+  sampled indices, but its metrics and bitmap bytes were identical for
+  `[400,500]`, `[700,300]`, `[100,1000]`, and `[1000,100]`.  Changing the
+  row to glyph `1` would therefore validate only "load after set", not the
+  manifest's declared output-changing Type 1 MM interpolation behavior.  Keep
+  the row pending until the synthetic Type 1 MM fixture has a valid glyph whose
+  rendered output changes under design-coordinate mutation, or until pinned C
+  evidence proves a corrected output-changing fixture.
 
 Result:
 
