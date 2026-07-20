@@ -485,6 +485,7 @@ FT_UInt32* FT_Face_GetVariantSelectors(FT_Face face);
 FT_UInt32* FT_Face_GetVariantsOfChar(FT_Face face, FT_ULong charcode);
 FT_UInt32* FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variant_selector);
 FT_Error FT_Get_Kerning(FT_Face face, FT_UInt left_glyph, FT_UInt right_glyph, FT_UInt kern_mode, FT_Vector* akerning);
+FT_Error FT_Get_PFR_Kerning(FT_Face face, FT_UInt left_glyph, FT_UInt right_glyph, FT_Vector* avector);
 FT_Error FT_Select_Charmap(FT_Face face, FT_Encoding encoding);
 FT_Error FT_Set_Charmap(FT_Face face, FT_CharMap charmap);
 FT_Int FT_Get_Charmap_Index(FT_CharMap charmap);

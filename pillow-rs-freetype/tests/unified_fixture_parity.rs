@@ -2490,6 +2490,12 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
             }
+            "ftpfr.get_pfr_kerning"
+                if case.case_id
+                    == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
+            {
+                rust_get_pfr_kerning(case)
+            }
             "ftsnames.get_sfnt_name_count" => {
                 let face = self.rust_face(case)?;
                 Ok(ok(rust_sfnt_name_count_output(Some(face))))
@@ -2784,6 +2790,12 @@ impl BackendComparisonWorker {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
             }
+            "ftpfr.get_pfr_kerning"
+                if case.case_id
+                    == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
+            {
+                c_get_pfr_kerning(case)
+            }
             "ftsnames.get_sfnt_name_count" => {
                 let face = self.c_face(case)?;
                 Ok(ok(c_sfnt_name_count_output(face)))
@@ -3075,6 +3087,12 @@ impl BackendComparisonWorker {
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
+            }
+            "ftpfr.get_pfr_kerning"
+                if case.case_id
+                    == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
+            {
+                wasm_get_pfr_kerning(case)
             }
             "ftsnames.get_sfnt_name_count" => {
                 let handle = self.wasm_face(case)?;
@@ -9042,6 +9060,98 @@ fn wasm_get_kerning_optional(handle: Option<usize>, params: &Value) -> Result<Ru
     Ok(kerning_output(rows))
 }
 
+fn rust_get_pfr_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = pfr_kerning_font_bytes(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    rust_get_pfr_kerning_with_face(&face, &case.inputs.params)
+}
+
+fn rust_get_pfr_kerning_with_face(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let rows = pfr_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = rust_glyph_selector_index(face, &row.left)?;
+            let right_glyph = rust_glyph_selector_index(face, &row.right)?;
+            let mut vector = FT_Vector::default();
+            let status = FT_Get_PFR_Kerning(Some(face), left_glyph, right_glyph, Some(&mut vector));
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(pfr_kerning_output(rows))
+}
+
+fn c_get_pfr_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = pfr_kerning_font_bytes(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = c_get_pfr_kerning_with_face(face, &case.inputs.params);
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn c_get_pfr_kerning_with_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let rows = pfr_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = c_glyph_selector_index(face, &row.left)?;
+            let right_glyph = c_glyph_selector_index(face, &row.right)?;
+            let mut vector = c_abi::FT_Vector::default();
+            let status = c_abi::FT_Get_PFR_Kerning(face, left_glyph, right_glyph, &mut vector);
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(pfr_kerning_output(rows))
+}
+
+fn wasm_get_pfr_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = pfr_kerning_font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = wasm_get_pfr_kerning_with_face(handle, &case.inputs.params);
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_get_pfr_kerning_with_face(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let rows = pfr_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = wasm_glyph_selector_index(handle, &row.left)?;
+            let right_glyph = wasm_glyph_selector_index(handle, &row.right)?;
+            let mut vector = wasm_abi::FontdoneWasmVector::default();
+            let status = wasm_abi::fontdone_wasm_get_pfr_kerning(
+                handle,
+                left_glyph,
+                right_glyph,
+                &mut vector,
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(pfr_kerning_output(rows))
+}
+
 fn kerning_output(rows: Vec<KerningOutputRow>) -> RunOutput {
     let first_error = rows
         .iter()
@@ -9082,6 +9192,19 @@ fn kerning_output(rows: Vec<KerningOutputRow>) -> RunOutput {
     } else {
         error_with_output(first_error, output)
     }
+}
+
+fn pfr_kerning_output(rows: Vec<KerningOutputRow>) -> RunOutput {
+    let mut output = kerning_output(rows);
+    let fallback_return = output
+        .output
+        .get("status")
+        .and_then(Value::as_i64)
+        .unwrap_or(output.status.error_code);
+    if let Value::Object(map) = &mut output.output {
+        map.insert("fallback_return".to_string(), json!(fallback_return));
+    }
+    output
 }
 
 fn kerning_units(mode: u32) -> &'static str {
@@ -19770,6 +19893,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(kerning_rows_arg(params)?);
             Ok(args)
         }
+        "ftpfr.get_pfr_kerning"
+            if case.case_id
+                == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
+        {
+            let mut args = vec!["--get-pfr-kerning".to_string()];
+            push_pfr_kerning_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(pfr_kerning_rows_arg(params)?);
+            Ok(args)
+        }
         "freetype.get_postscript_name" => {
             if has_postscript_name_variants(params) {
                 let mut args = vec!["--get-postscript-name-variants".to_string()];
@@ -20984,6 +21117,11 @@ fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), Stri
             push_asset_source(&default, args)
         }
     }
+}
+
+fn push_pfr_kerning_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
+    let font = pfr_kerning_font_asset(case)?;
+    push_asset_source(font, args)
 }
 
 fn push_asset_source(asset: &Asset, args: &mut Vec<String>) -> Result<(), String> {
@@ -31098,6 +31236,18 @@ fn font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
     }
 }
 
+fn pfr_kerning_font_asset(case: &InputCase) -> Result<&Asset, String> {
+    case.inputs
+        .assets
+        .get("kern_font")
+        .or_else(|| runtime_font_asset(case))
+        .ok_or_else(|| "missing PFR kerning fallback font asset".to_string())
+}
+
+fn pfr_kerning_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    font_asset_bytes(pfr_kerning_font_asset(case)?)
+}
+
 fn foreign_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
     let font = case
         .inputs
@@ -39657,7 +39807,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             };
         }
         "freetype.set_charmap" => return "api_object",
-        "freetype.get_kerning" => return "api_object",
+        "freetype.get_kerning" | "ftpfr.get_pfr_kerning" => return "api_object",
         "freetype.face_get_char_variant_index" => return "api_object",
         "freetype.face_get_char_variant_is_default" => return "api_object",
         "freetype.face_get_variant_selectors" => return "api_object",
@@ -40665,6 +40815,29 @@ fn kerning_rows_arg(params: &Value) -> Result<String, String> {
         .map(|row| format!("{}|{}|{}", row.left, row.right, row.mode))
         .collect::<Vec<_>>()
         .join(","))
+}
+
+fn pfr_kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(pfr_kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}", row.left, row.right))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn pfr_kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
+    let rows = kerning_pairs(params)?
+        .into_iter()
+        .map(|(left, right)| KerningRow {
+            left,
+            right,
+            mode: FT_KERNING_UNSCALED as u32,
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        return Err("PFR kerning rows cannot be empty".to_string());
+    }
+    Ok(rows)
 }
 
 fn single_kerning_row(params: &Value) -> Result<KerningRow, String> {

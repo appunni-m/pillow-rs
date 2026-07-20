@@ -5225,6 +5225,25 @@ pub fn FT_Get_Kerning(
     FT_Err_Ok
 }
 
+pub fn FT_Get_PFR_Kerning(
+    face: Option<&FT_Face>,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+    avector: Option<&mut FT_Vector>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/base/ftpfr.c:98-120` validates face/vector, then
+    // falls back to `FT_Get_Kerning(..., FT_KERNING_UNSCALED, ...)` when the
+    // face has no PFR metrics service.  `fontdone` does not implement PFR
+    // services yet, so every supported face takes that public fallback path.
+    FT_Get_Kerning(
+        face,
+        left_glyph,
+        right_glyph,
+        FT_KERNING_UNSCALED as FT_UInt,
+        avector,
+    )
+}
+
 pub fn FT_Get_Charmap_Index(charmap: FT_CharMap) -> FT_Int {
     registered_charmap_metadata(charmap).map_or(-1, |(_, _, index)| index)
 }

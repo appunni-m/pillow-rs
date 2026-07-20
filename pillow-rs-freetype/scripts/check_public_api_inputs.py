@@ -211,6 +211,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_variants_of_char",
     "fontdone_wasm_get_chars_of_variant",
     "fontdone_wasm_get_kerning",
+    "fontdone_wasm_get_pfr_kerning",
     "fontdone_wasm_select_charmap",
     "fontdone_wasm_get_charmap_count",
     "fontdone_wasm_get_active_charmap_index",
@@ -399,6 +400,7 @@ REAL_PARITY_OPERATIONS = {
     "freetype.inspect_glyph_metrics",
     "freetype.inspect_glyph_slot",
     "freetype.get_subglyph_info",
+    "ftpfr.get_pfr_kerning",
     "freetype.load_glyph_outline",
     "ftbbox.outline_get_bbox",
     "ftimage.outline_decompose",
@@ -1712,7 +1714,6 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
         "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
         "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
-        "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning",
         "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
         "tttables.TT_MaxProfile.malformed_table_error_source",
     }
@@ -2355,6 +2356,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_Set_Default_Properties.ignores_malformed_or_failed_properties": "FT_Set_Default_Properties malformed, missing-property, and null-library ignored-error behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success": "PFR advance output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success": "PFR kerning output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning": "FT_Get_PFR_Kerning non-PFR fallback validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 
