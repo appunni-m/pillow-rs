@@ -4313,6 +4313,14 @@ static int emit_macro_eval(const char* case_id) {
         printf("],\"import_compiles\":true}}\n");
         return 0;
     }
+    if (streq(case_id, "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes")) {
+        print_ok_output_prefix();
+        printf("{\"render_mode\":%d,\"load_target\":%d,\"roundtrip_mode\":%d}}\n",
+               FT_RENDER_MODE_NORMAL,
+               FT_LOAD_TARGET_NORMAL,
+               FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_NORMAL));
+        return 0;
+    }
     if (streq(case_id, "freetype.FT_ENC_TAG.value_matches_header")) {
         print_ok_output_prefix();
         printf("{\"samples\":[");
