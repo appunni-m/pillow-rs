@@ -1827,6 +1827,12 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "num_properties > 0 and segfaults on a null face; counting a Rust "
             "Invalid_Face_Handle as C parity would be a green placeholder"
         ),
+        "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output": (
+            "pinned FreeType 2.14.3 FT_OpenType_Validate returns "
+            "Unimplemented_Feature (7) for FT_VALIDATE_BASE in this build and "
+            "leaves non-null output sentinels untouched; counting the declared "
+            "OK/null-output expectation as parity would be a green placeholder"
+        ),
     }
     if row.case_id in unresolved_future_asset_cases:
         return unresolved_future_asset_cases[row.case_id]

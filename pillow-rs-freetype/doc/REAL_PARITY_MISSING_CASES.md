@@ -1,5 +1,41 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: OpenType validation absent BASE table expectation mismatch
+
+Status: classified on 2026-07-20; no route promoted.
+
+Rejected candidate:
+
+- `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output`
+
+Finding:
+
+- The fixture declares success for `FT_OpenType_Validate` with
+  `FT_VALIDATE_BASE` on `input/fonts/DejaVuSans.ttf`, expecting the absent
+  BASE table to produce an OK status with a null `BASE_table` output.
+- A pinned FreeType 2.14.3 probe against this worktree returned
+  `FT_Err_Unimplemented_Feature` (`7`) for the exact public call:
+  `FT_OpenType_Validate(face, FT_VALIDATE_BASE, &base, &gdef, &gpos, &gsub,
+  &jstf)`.
+- The same probe initialized all output pointers to non-null sentinels before
+  the call; pinned C left those sentinels untouched rather than writing null.
+- Promoting the current fixture expectation as OK/null-output would contradict
+  the pinned C oracle and would be a green placeholder.
+
+Required fix plan:
+
+1. Decide whether this row is meant to cover the active pinned build behavior
+   or a future FreeType build with OpenType validation support enabled.
+2. If the pinned build is authoritative, update or replace the row so it
+   expects exact `FT_Err_Unimplemented_Feature` output and sentinel
+   preservation for the same DejaVuSans input.
+3. If a successful absent-table route is required, add a C-openable fixture and
+   build configuration where pinned FreeType actually returns OK and writes a
+   null BASE output for this public call.
+4. Promote only after the pinned C oracle, Rust FFI, C ABI, and WASM ABI all
+   compare the same validation flags, output pointer initialization, and table
+   pointer classes.
+
 ### Issue Set Current: property-route pending rows with fixture/input mismatches
 
 Status: classified on 2026-07-20; no route promoted.
