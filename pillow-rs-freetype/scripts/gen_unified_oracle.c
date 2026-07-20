@@ -10344,6 +10344,93 @@ static int emit_ftmm_get_mm_var(int argc, char** argv) {
     return 0;
 }
 
+static FT_UInt ftmm_axis_index_from_token(const char* token, FT_MM_Var* master) {
+    if (streq(token, "last")) {
+        return master && master->num_axis ? master->num_axis - 1 : 0;
+    }
+    if (streq(token, "num_axis")) {
+        return master ? master->num_axis : 0;
+    }
+    if (streq(token, "num_axis_plus_1")) {
+        return master ? master->num_axis + 1 : 1;
+    }
+    return (FT_UInt)strtoul(token, NULL, 10);
+}
+
+static void print_ftmm_axis_flags_row(const char* token, FT_MM_Var* master, FT_UInt flags_initial) {
+    FT_UInt axis_index = ftmm_axis_index_from_token(token, master);
+    FT_UInt flags = flags_initial;
+    FT_Error err = FT_Get_Var_Axis_Flags(master, axis_index, &flags);
+    printf("{\"axis_index_token\":\"%s\",\"axis_index\":%u,\"status\":%d,"
+           "\"flags_initial\":%u,\"flags\":%u,\"flags_after\":%u,\"axis\":",
+           token,
+           (unsigned)axis_index,
+           err,
+           (unsigned)flags_initial,
+           (unsigned)flags,
+           (unsigned)flags);
+    if (!err && master && axis_index < master->num_axis) {
+        print_ftmm_var_axis(&master->axis[axis_index]);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static int emit_ftmm_axis_flags(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_MM_Var* master = NULL;
+    FT_Error err = FT_Get_MM_Var(face.face, &master);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null}\n");
+        close_oracle_face(&face);
+        return 0;
+    }
+    FT_UInt flags_initial = (FT_UInt)strtoul(argv[6], NULL, 10);
+    char* rows_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!rows_arg) {
+        FT_Done_MM_Var(face.library, master);
+        close_oracle_face(&face);
+        return 2;
+    }
+    strcpy(rows_arg, argv[5]);
+    printf("{\"return\":%d,\"rows\":[", err);
+    FT_UInt row_index = 0;
+    char* cursor = rows_arg;
+    while (cursor && *cursor) {
+        char* end = cursor;
+        while (*end && *end != ',') {
+            end++;
+        }
+        char saved_end = *end;
+        *end = '\0';
+        if (row_index) {
+            printf(",");
+        }
+        print_ftmm_axis_flags_row(cursor, master, flags_initial);
+        row_index++;
+        *end = saved_end;
+        if (saved_end == ',') {
+            cursor = end + 1;
+        } else {
+            break;
+        }
+    }
+    FT_Error done_err = FT_Done_MM_Var(face.library, master);
+    printf("],\"done_return\":%d}}\n", done_err);
+    free(rows_arg);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_multi_master(int argc, char** argv) {
     FT_Multi_Master master;
     init_multi_master_sentinel(&master);
@@ -16542,6 +16629,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ftmm-get-mm-var")) {
         return emit_ftmm_get_mm_var(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--ftmm-axis-flags")) {
+        return emit_ftmm_axis_flags(argc, argv);
     }
     if (argc == 6 && streq(argv[1], "--ftmm-mm-weight-vector")) {
         return emit_ftmm_mm_weight_vector(argc, argv);

@@ -9961,7 +9961,7 @@ make -C pillow-rs-freetype route-audit
 
 ### Issue Set: `FT_Get_Multi_Master` generated Adobe MM descriptor route
 
-Status: seven real descriptor/capacity rows and one related
+Status: eight real descriptor/capacity rows and one related
 default-named-instance service row implemented on 2026-07-20.
 
 Baseline before this batch:
@@ -9972,6 +9972,8 @@ Baseline before this batch:
   `pending-route=482`, `pending-core=0`.
 - Follow-up baseline at `e7fa30b8e`: `real-parity=4478`,
   `pending-route=478`, `pending-core=0`.
+- Follow-up baseline at `dd640d1bb`: `real-parity=4481`,
+  `pending-route=475`, `pending-core=0`.
 
 Finding:
 
@@ -9996,6 +9998,11 @@ Finding:
   populates Adobe `FT_Var_Axis` records with 16.16 min/default/max values,
   inferred tags (`Weight -> wght`, `Width -> wdth`, etc.), `strid=~0U`, and
   a null namedstyle pointer.
+- FreeType `src/base/ftmm.c:594-613` `FT_Get_Var_Axis_Flags` validates the
+  `FT_MM_Var` pointer, output pointer, and axis index, then reads the
+  `FT_UShort` axis-flags array stored immediately after the descriptor. For
+  Type 1 Adobe MM descriptors produced by `T1_Get_MM_Var`, those flags are
+  zero because hidden-axis flags are not meaningful for Adobe MM.
 
 Implementation:
 
@@ -10014,6 +10021,12 @@ Implementation:
 - Added Rust FFI `FT_Get_MM_Var` for Type 1 MM, thin C ABI
   `FT_Get_MM_Var` allocation/free bookkeeping, and thin WASM
   `fontdone_wasm_get_mm_var` record copying.
+- Added Rust FFI `FT_Get_Var_Axis_Flags`, thin C ABI
+  `FT_Get_Var_Axis_Flags`, thin WASM
+  `fontdone_wasm_get_var_axis_flags`, and a pinned C oracle/runtime route for
+  generated Adobe MM axis-flag reads. The route explicitly opens the generated
+  `adobe_mm_font` asset rather than falling back to the unresolved variable-font
+  half of the manifest row.
 - Extended the Type 1 fixture generator to materialize the declared legacy
   Adobe MM asset path.
 - Fixed Rust `FT_Get_Default_Named_Instance` for Type 1 MM faces to return OK
@@ -10028,11 +10041,12 @@ Implementation:
   - `ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success`
   - `ftmm.FT_MM_Var.populated_for_adobe_mm`
   - `ftmm.FT_Var_Axis.adobe_mm_axis_values`
+  - `ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags`
 
 Result:
 
-- Route audit after this follow-up: `real-parity=4481`,
-  `pending-route=475`, `pending-core=0`.
+- Route audit after this follow-up: `real-parity=4482`,
+  `pending-route=474`, `pending-core=0`.
 
 Verification:
 
@@ -10045,6 +10059,7 @@ make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Default_Named_Instance.ser
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_MM_Var.populated_for_adobe_mm
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.adobe_mm_axis_values
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error
 make -C pillow-rs-freetype route-audit

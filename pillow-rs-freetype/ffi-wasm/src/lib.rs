@@ -3062,6 +3062,17 @@ pub extern "C" fn fontdone_wasm_get_mm_var(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_var_axis_flags(
+    master: *mut rust_ffi::FT_MM_Var,
+    axis_index: FT_UInt,
+    flags: *mut FT_UInt,
+) -> FT_Error {
+    let master = unsafe { master.as_ref() };
+    let flags = unsafe { flags.as_mut() };
+    rust_ffi::FT_Get_Var_Axis_Flags(master, axis_index, flags)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_mm_design_coordinates(
     handle: usize,
     num_coords: FT_UInt,

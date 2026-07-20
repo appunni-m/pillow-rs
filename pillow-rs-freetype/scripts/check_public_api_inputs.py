@@ -231,6 +231,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_multi_master",
     "fontdone_wasm_get_mm_weight_vector",
     "fontdone_wasm_get_var_blend_coordinates",
+    "fontdone_wasm_get_var_axis_flags",
     "fontdone_wasm_get_var_design_coordinates",
     "fontdone_wasm_set_mm_blend_coordinates",
     "fontdone_wasm_set_mm_design_coordinates",
@@ -1371,7 +1372,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
-        "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
@@ -3775,6 +3775,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Var_Axis.adobe_mm_axis_values"
     ):
         return "FT_Var_Axis Adobe MM axis fields validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var_then_axis_flags"
+        and row.case_id == "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags"
+    ):
+        return "FT_Get_Var_Axis_Flags Adobe MM zero axis flags validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_weightvector"
         and row.case_id == "ftmm.FT_Get_MM_WeightVector.len_without_buffer_error"
