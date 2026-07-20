@@ -10470,6 +10470,22 @@ Follow-up finding:
 - After adding a maintained `FT_Get_Var_Design_Coordinates` runner, pinned C
   validates the default single-axis and named-instance design-coordinate rows
   against Rust FFI, C ABI, and WASM ABI.
+- The generated three-axis `fonts/variable/wght-wdth-opsz.ttf` fixture was
+  corrected to remove `avar`, `gvar`, `HVAR`, and `STAT` data inherited from
+  the two-axis compact base.  With those axis-count-specific tables present,
+  pinned C returned an error for coordinate setters; with only the coherent
+  three-axis `fvar` and name data, pinned C accepts
+  `FT_Set_Var_Design_Coordinates`.
+- Pinned C preserves caller-provided design coordinate values in
+  `FT_Get_Var_Design_Coordinates` while filling omitted axes from `fvar`
+  defaults.  Rust previously clamped the public stored design coordinates to
+  each axis min/max.  The internal normalized-coordinate path still clamps for
+  variation math; only the public design-coordinate state now preserves C's
+  unclamped values.
+- The row
+  `ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates`
+  now validates the after-set active design coordinate state through pinned C
+  oracle, Rust FFI, C ABI, and WASM ABI.
 - The row named
   `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
   remains pending.  Its manifest text says entries beyond the axis count are
@@ -10479,6 +10495,9 @@ Follow-up finding:
   so the row must stay pending until the public C behavior is pinned with a
   deterministic fixture or the manifest expectation is corrected from C
   evidence.
+
+Latest route audit after this follow-up: `real-parity=4491`,
+`pending-route=465`, `pending-core=0`.
 
 Follow-up finding for blend-coordinate state rows:
 

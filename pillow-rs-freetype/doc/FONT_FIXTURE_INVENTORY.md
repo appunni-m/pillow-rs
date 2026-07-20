@@ -91,7 +91,7 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `c7ed80798946` | 8.9 | 3 | `fonts/variable/compact-variable.ttf` | 20-glyph variable glyf; fvar/avar/gvar/HVAR/STAT, 2 axes, 12 named instances |
 | `c7ed80798946` | 8.9 | 1 | `fonts/variable/multi-axis-visible.ttf` | compact generated variable control with visible wght/wdth fvar axes for `FT_Get_Var_Axis_Flags` visible-axis rows |
 | `a9c3f033abdb` | 8.9 | 2 | `fonts/variable/hidden-axis.ttf`, `fonts/variable/named-instances-hidden-axis.ttf` | compact generated variable controls with visible wdth and hidden wght fvar axes for adjacent hidden-axis flag parity |
-| `ee5d36b309ac` | 9.0 | 3 | `fonts/variable/wght-wdth-opsz.ttf` | compact generated variable control with wght, wdth, and opsz fvar axes for OpenType `FT_Var_Axis` descriptor parity |
+| `443c8ca4a9db` | 4.5 | 3 | `fonts/variable/wght-wdth-opsz.ttf` | compact generated variable control with wght, wdth, and opsz fvar axes, with axis-count-specific variation data removed so `FT_Get_MM_Var` and design-coordinate setters are both C-openable |
 | `7594a1df018a` | 8.7 | 1 | `fonts/variable/fvar-short.ttf` | compact generated malformed control with an 8-byte truncated fvar header |
 | `9aa6f372453b` | 8.7 | 1 | `fonts/variable/fvar-version-2.ttf` | compact generated malformed control with unsupported fvar major version 2 |
 | `18652ff465b1` | 8.9 | 1 | `fonts/variable/fvar-axis-size-short.ttf` | compact generated malformed control with fvar axis records one byte below the required 20-byte OpenType size |

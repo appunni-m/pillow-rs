@@ -1372,7 +1372,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
-        "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_MM_Var.ownership_matches_c",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
@@ -3729,6 +3728,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_Var_Design_Coordinates.error_null_coords"
     ):
         return "FT_Get_Var_Design_Coordinates null-coords error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_var_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates"
+    ):
+        return "FT_Get_Var_Design_Coordinates after FT_Set_Var_Design_Coordinates validates active OpenType design coordinates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_var_blend_coordinates"
         and row.case_id == "ftmm.FT_Get_Var_Blend_Coordinates.error_null_coords"

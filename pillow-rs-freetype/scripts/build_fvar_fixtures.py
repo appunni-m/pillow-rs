@@ -107,6 +107,9 @@ def write_instance_postscript_name() -> None:
 
 def write_three_axis_opsz_font() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
+    for table_tag in ["avar", "gvar", "HVAR", "STAT"]:
+        if table_tag in font:
+            del font[table_tag]
     fvar = font["fvar"]
 
     axis = Axis()
