@@ -1843,11 +1843,18 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
             "tracking; current Rust FFI/C ABI/WASM coverage only proves the "
             "null face and null table no-op cases"
         )
+    if row.case_id == "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success":
+        return (
+            "FT_Get_PFR_Metrics success requires a maintained C-openable PFR "
+            "font with the PFR_METRICS service and a pure-Rust PFR metrics route; "
+            "the existing non-PFR metrics/error routes do not prove outline "
+            "resolution, metrics resolution, or before/after-size scale parity "
+            "through pinned C, Rust FFI, C ABI, and WASM ABI"
+        )
 
     residual_rows_without_maintained_route = {
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
-        "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
         "tttables.TT_MaxProfile.malformed_table_error_source",
     }
     if row.case_id not in residual_rows_without_maintained_route:
