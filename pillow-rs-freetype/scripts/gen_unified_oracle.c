@@ -10285,6 +10285,21 @@ static void print_ftmm_var_axis(const FT_Var_Axis* axis) {
            (unsigned)axis->strid);
 }
 
+static void print_ftmm_var_namedstyle(const FT_Var_Named_Style* style, FT_UInt axis_count) {
+    printf("{\"coords\":[");
+    if (style && style->coords) {
+        for (FT_UInt i = 0; i < axis_count; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("%ld", (long)style->coords[i]);
+        }
+    }
+    printf("],\"strid\":%u,\"psid\":%u}",
+           style ? (unsigned)style->strid : 0,
+           style ? (unsigned)style->psid : 0);
+}
+
 static void print_ftmm_var_descriptor(FT_MM_Var* master) {
     printf("{\"num_axis\":%u,\"num_designs\":%u,\"num_namedstyles\":%u,"
            "\"axis_pointer\":\"%s\",\"namedstyle_pointer\":\"%s\",\"axis\":[",
@@ -10310,6 +10325,15 @@ static void print_ftmm_var_descriptor(FT_MM_Var* master) {
             }
             printf("%u", (unsigned)axis_flags[i]);
         }
+    }
+    printf("],\"namedstyle\":[");
+    FT_UInt namedstyle_count = master ? master->num_namedstyles : 0;
+    for (FT_UInt i = 0; i < namedstyle_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_ftmm_var_namedstyle(master && master->namedstyle ? &master->namedstyle[i] : NULL,
+                                  axis_count);
     }
     printf("]}");
 }

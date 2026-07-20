@@ -18,6 +18,8 @@ pub struct FvarAxis {
     pub min_value: i32,
     pub default_value: i32,
     pub max_value: i32,
+    pub flags: u16,
+    pub name_id: u16,
 }
 
 /// One named instance from the `fvar` table.
@@ -94,6 +96,8 @@ pub fn parse_fvar(data: &[u8]) -> Result<FvarTable, FontError> {
                 data[off + 14],
                 data[off + 15],
             ]),
+            flags: u16::from_be_bytes([data[off + 16], data[off + 17]]),
+            name_id: u16::from_be_bytes([data[off + 18], data[off + 19]]),
         });
     }
 
