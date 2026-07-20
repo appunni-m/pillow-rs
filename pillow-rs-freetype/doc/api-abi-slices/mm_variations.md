@@ -34,7 +34,7 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 | `FT_Get_Var_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; C documents this as another name for `FT_Get_MM_Blend_Coordinates`. |
 | `FT_Set_Named_Instance` | `freetype/ftmm.h` | `FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index)` | Partially implemented: existing variable-font named-instance state routes remain, and generated Type 1 MM `FT_Set_Named_Instance(0)` reset-to-default state is compared after prior MM design-coordinate mutation. Broader glyph-output named-instance parity remains planned. |
 | `FT_Get_Default_Named_Instance` | `freetype/ftmm.h` | `FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt *instance_index)` | Partially implemented: variable-font default instance rows remain routed, and Type 1 MM service-without-callback behavior returns OK while preserving the caller's output value. Broader named instance records and synthesized default instance work remain planned. |
-| `FT_Get_Var_Axis_Flags` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var *master, FT_UInt axis_index, FT_UInt *flags)` | Planned; no `FT_MM_Var` ABI record or axis flags storage. |
+| `FT_Get_Var_Axis_Flags` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var *master, FT_UInt axis_index, FT_UInt *flags)` | Partially implemented for generated Type 1 MM descriptors: Adobe MM axis flags are zero and are compared through `FT_Get_MM_Var` plus Rust FFI, C ABI, and WASM ABI. OpenType hidden-axis flags remain planned. |
 | `FT_Set_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed *weightvector)` | Partially implemented for generated Type 1 MM fixture state: null/non-null validation, short/exact/long copy behavior, reset, zero-fill, unenforced weight sum, and variation flag toggling through Rust FFI, C ABI, and WASM ABI. Glyph interpolation remains planned. |
 | `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Partially implemented for generated Type 1 MM state: required-length error, exact/larger/smaller capacity behavior, output write, zero-fill, and current state reporting are compared against pinned C through Rust FFI, C ABI, and WASM ABI. |
 | `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar glyph-index lookup through the active Unicode charmap and cmap format 14 default/non-default UVS records. |
@@ -50,14 +50,16 @@ symbols in this slice as implemented.  The Type 1 MM descriptor route covers
 `FT_Get_Multi_Master.adobe_mm_descriptor_success`, and the
 `T1_MAX_MM_DESIGNS` capacity row; the generated Adobe MM `FT_MM_Var` route
 covers the Adobe descriptor allocation row, the populated `FT_MM_Var` record
-row, and Adobe `FT_Var_Axis` values.  The generated Adobe MM weight-vector
-route covers the fixture-backed setter state rows, getter observation used by
-those rows, and the standalone declared Adobe MM getter capacity matrix.  The
+row, Adobe `FT_Var_Axis` values, and zero Adobe MM axis flags through
+`FT_Get_Var_Axis_Flags`.  The generated Adobe MM weight-vector route covers
+the fixture-backed setter state rows, getter observation used by those rows,
+and the standalone declared Adobe MM getter capacity matrix.  The
 generated Adobe MM design-coordinate route covers the direct state row,
 partial/extra/reset scenario row, and named-instance reset-to-default state.
 Type 1 MM also covers the `FT_Get_Default_Named_Instance`
-service-without-default-callback row. OpenType `FT_MM_Var` allocation,
-variation state APIs, and glyph-output interpolation remain planned.
+service-without-default-callback row. OpenType `FT_MM_Var` allocation, hidden
+axis flags, variation state APIs, and glyph-output interpolation remain
+planned.
 
 ## ABI Records
 

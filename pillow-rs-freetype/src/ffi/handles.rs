@@ -3815,6 +3815,25 @@ pub fn FT_Get_MM_Var(
     FT_Err_Ok
 }
 
+pub fn FT_Get_Var_Axis_Flags(
+    master: Option<&FT_MM_Var>,
+    axis_index: FT_UInt,
+    flags: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let (Some(master), Some(flags)) = (master, flags) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if axis_index >= master.num_axis {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    // C parity: `src/base/ftmm.c:594-613` reads a `FT_UShort` axis-flags
+    // array immediately after `FT_MM_Var`.  The Type 1 MM service
+    // (`src/type1/t1load.c:T1_Get_MM_Var`) zero-fills that array because
+    // axis flags are not meaningful for Adobe MM fonts.
+    *flags = 0;
+    FT_Err_Ok
+}
+
 pub fn FT_Set_MM_WeightVector(
     face: Option<&mut FT_Face>,
     len: FT_UInt,

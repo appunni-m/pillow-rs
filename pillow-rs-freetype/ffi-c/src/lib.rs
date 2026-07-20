@@ -1528,6 +1528,24 @@ pub extern "C" fn FT_Done_MM_Var(library: FT_Library, amaster: *mut FT_MM_Var) -
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Var_Axis_Flags(
+    master: *mut FT_MM_Var,
+    axis_index: FT_UInt,
+    flags: *mut FT_UInt,
+) -> FT_Error {
+    let master = non_null_mut(master).map(|master| {
+        // SAFETY: `master` is non-null and points to a public FT_MM_Var
+        // record supplied by the caller.
+        unsafe { master.as_ref() }
+    });
+    let flags = non_null_mut(flags).map(|mut flags| {
+        // SAFETY: `flags` is non-null and points to caller-writable FT_UInt storage.
+        unsafe { flags.as_mut() }
+    });
+    rust_ffi::FT_Get_Var_Axis_Flags(master, axis_index, flags)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Library_SetLcdFilter(_library: FT_Library, filter: FT_LcdFilter) -> FT_Error {
     rust_ffi::FT_Library_SetLcdFilter(None, filter)
 }
