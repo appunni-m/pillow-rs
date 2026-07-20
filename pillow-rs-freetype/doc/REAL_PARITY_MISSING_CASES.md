@@ -2260,13 +2260,21 @@ Route audit impact:
 
 Rejected or blocked during the same pass:
 
-- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success` must remain
-  `generic-fallback`. A focused operation run can pass because the row is not
-  forced to require successful oracle output while generic fallback is allowed,
-  but the raw pinned oracle cache for the selected case contains
+- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success` must remain explicit
+  `pending-route`. A focused operation run can pass while generic fallback is
+  allowed, but the raw pinned oracle cache for the selected case contains
   `FT_Err_Unimplemented_Feature` (`7`) and the row's PFR font remains
   `required_future_asset`. Treating it as `real-parity` would be a green
-  placeholder.
+  placeholder. Current route audit reports two concrete pending rows for this
+  case: `before_size` and `after_size`.
+- Required fix for `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success`: add a
+  maintained C-openable `input/fonts/pfr/basic-metrics.pfr` fixture exposing
+  the PFR metrics service, implement the pure-Rust PFR metrics route in core
+  first, then compare exact `outline_resolution`, `metrics_resolution`,
+  `metrics_x_scale`, and `metrics_y_scale` before and after setting size
+  through pinned C, Rust FFI, thin C ABI, and WASM ABI. The already-real
+  non-PFR metrics/error rows are not a substitute for this service-success
+  route.
 - A classifier-only 14-row `ftglyph` batch was rejected. After strict
   promotion, `CASE=ftglyph` reported pinned oracle error `7` for the promoted
   success/introspection rows. These rows need maintained public runner/facade
