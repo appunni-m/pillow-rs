@@ -10631,6 +10631,26 @@ Full parity follow-up on 2026-07-20:
   total=6697`, with `pending=537`.  Current route audit:
   `real-parity=4493`, `pending-route=463`, `pending-core=0`.
 
+Descriptor lifecycle follow-up on 2026-07-20:
+
+- `ftmm.FT_Done_MM_Var.frees_descriptor_success` and
+  `ftmm.FT_MM_Var.ownership_matches_c` now use the maintained
+  `fonts/variable/wght-wdth-opsz.ttf` fixture instead of future variable fixture
+  names.  The route calls `FT_Get_MM_Var`, observes a non-null descriptor class,
+  then calls `FT_Done_MM_Var` with the owning library.
+- Pinned C behavior is `FT_Get_MM_Var -> FT_Err_Ok` followed by
+  `FT_Done_MM_Var -> FT_Err_Ok`; C allocates and releases the descriptor with
+  the library memory (`ftmm.c:123-163`).  Rust FFI uses caller-provided
+  descriptor storage, C ABI validates removal from its owned descriptor table,
+  and WASM validates removal from its face-owned descriptor side storage through
+  feature-gated test support.  The comparison intentionally uses identity
+  classes (`non_null`, `same_pointer`, `allocation_released`) rather than raw
+  pointer values, so it checks the public contract without backend-specific
+  addresses.
+- Full parity after this lifecycle route: `runtime_parity: passed=6699 failed=0
+  total=6699`, with `pending=535`.  Current route audit:
+  `real-parity=4495`, `pending-route=461`, `pending-core=0`.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.

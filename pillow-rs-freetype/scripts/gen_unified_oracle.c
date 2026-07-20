@@ -10380,6 +10380,46 @@ static int emit_ftmm_get_mm_var(int argc, char** argv) {
     return 0;
 }
 
+static void print_ftmm_get_and_done_mm_var_output(
+    FT_Error get_err,
+    FT_Error done_err,
+    FT_MM_Var* descriptor_ptr
+) {
+    int pointer_non_null = descriptor_ptr != NULL;
+    printf("{");
+    print_status(get_err ? get_err : done_err);
+    printf(",\"output\":{\"get_return\":%d,"
+           "\"amaster_pointer\":\"%s\","
+           "\"descriptor_pointer_identity\":\"%s\","
+           "\"done_return\":%d,"
+           "\"allocation_events\":\"%s\","
+           "\"free_event\":\"%s\","
+           "\"free_events\":\"%s\"}}\n",
+           get_err,
+           pointer_non_null ? "non_null" : "null",
+           pointer_non_null ? "same_pointer" : "null",
+           done_err,
+           pointer_non_null ? "descriptor_allocated" : "none",
+           pointer_non_null && !done_err ? "allocation_released" : "none",
+           pointer_non_null && !done_err ? "allocation_released" : "none");
+}
+
+static int emit_ftmm_get_and_done_mm_var(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_MM_Var* master = NULL;
+    FT_Error get_err = FT_Get_MM_Var(face.face, &master);
+    FT_MM_Var* descriptor_ptr = master;
+    FT_Error done_err = get_err ? FT_Err_Ok : FT_Done_MM_Var(face.library, master);
+    print_ftmm_get_and_done_mm_var_output(get_err, done_err, descriptor_ptr);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static FT_UInt ftmm_axis_index_from_token(const char* token, FT_MM_Var* master) {
     size_t mmvar_size = (sizeof(FT_MM_Var) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
     if (streq(token, "null_master") || streq(token, "null_flags")) {
@@ -16915,6 +16955,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 5 || argc == 6) && streq(argv[1], "--ftmm-get-mm-var")) {
         return emit_ftmm_get_mm_var(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ftmm-get-and-done-mm-var")) {
+        return emit_ftmm_get_and_done_mm_var(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--ftmm-axis-flags")) {
         return emit_ftmm_axis_flags(argc, argv);

@@ -15959,6 +15959,129 @@ fn done_mm_var_output(err: FT_Error, descriptor_present: i32) -> RunOutput {
     }
 }
 
+fn ftmm_get_and_done_mm_var_output(
+    get_return: FT_Error,
+    done_return: FT_Error,
+    pointer_non_null: bool,
+    before_count: usize,
+    after_get_count: usize,
+    after_done_count: usize,
+) -> RunOutput {
+    let output = json!({
+        "get_return": get_return,
+        "amaster_pointer": if pointer_non_null { "non_null" } else { "null" },
+        "descriptor_pointer_identity": if pointer_non_null { "same_pointer" } else { "null" },
+        "done_return": done_return,
+        "allocation_events": if pointer_non_null && after_get_count > before_count {
+            "descriptor_allocated"
+        } else if pointer_non_null {
+            "descriptor_available"
+        } else {
+            "none"
+        },
+        "free_event": if pointer_non_null && done_return == FT_Err_Ok && after_done_count <= before_count {
+            "allocation_released"
+        } else {
+            "none"
+        },
+        "free_events": if pointer_non_null && done_return == FT_Err_Ok && after_done_count <= before_count {
+            "allocation_released"
+        } else {
+            "none"
+        },
+    });
+    if get_return == FT_Err_Ok && done_return == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(
+            if get_return != FT_Err_Ok {
+                get_return
+            } else {
+                done_return
+            },
+            output,
+        )
+    }
+}
+
+fn rust_ftmm_get_and_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let face = rust_new_face_without_size(case)?;
+    let mut master = FT_MM_Var::default();
+    let mut axes = vec![FT_Var_Axis::default(); 64];
+    let mut namedstyles = vec![FT_Var_Named_Style::default(); 256];
+    let mut namedstyle_coords = vec![FT_Fixed::default(); 64 * 256];
+    let get_return = FT_Get_MM_Var(
+        Some(&face),
+        Some(&mut master),
+        Some(&mut axes),
+        Some(&mut namedstyles),
+        Some(&mut namedstyle_coords),
+    );
+    let pointer_non_null = get_return == FT_Err_Ok;
+    let done_return = if pointer_non_null {
+        let library = FT_Init_FreeType();
+        FT_Done_MM_Var(Some(&library), Some(&mut master))
+    } else {
+        FT_Err_Ok
+    };
+    Ok(ftmm_get_and_done_mm_var_output(
+        get_return,
+        done_return,
+        pointer_non_null,
+        0,
+        usize::from(pointer_non_null),
+        0,
+    ))
+}
+
+fn c_ftmm_get_and_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let before_count = c_abi::abi_support_owned_mm_var_count();
+    let mut master_ptr: *mut FT_MM_Var = std::ptr::null_mut();
+    let get_return = c_abi::FT_Get_MM_Var(face, &mut master_ptr);
+    let after_get_count = c_abi::abi_support_owned_mm_var_count();
+    let pointer_non_null = !master_ptr.is_null();
+    let done_return = if get_return == FT_Err_Ok {
+        c_abi::FT_Done_MM_Var(library, master_ptr)
+    } else {
+        FT_Err_Ok
+    };
+    let after_done_count = c_abi::abi_support_owned_mm_var_count();
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_get_and_done_mm_var_output(
+        get_return,
+        done_return,
+        pointer_non_null,
+        before_count,
+        after_get_count,
+        after_done_count,
+    ))
+}
+
+fn wasm_ftmm_get_and_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let mut master = FT_MM_Var::default();
+    let mut axes = vec![FT_Var_Axis::default(); 64];
+    let (get_return, done_return, before_count, after_get_count, after_done_count) =
+        wasm_abi::abi_support_get_and_done_mm_var(
+            handle,
+            &mut master,
+            axes.as_mut_ptr(),
+            FT_UInt::try_from(axes.len()).unwrap_or(0),
+        );
+    let pointer_non_null = get_return == FT_Err_Ok;
+    wasm_done_face(handle);
+    Ok(ftmm_get_and_done_mm_var_output(
+        get_return,
+        done_return,
+        pointer_non_null,
+        before_count,
+        after_get_count,
+        after_done_count,
+    ))
+}
+
 fn rust_done_mm_var(case: &InputCase) -> Result<RunOutput, String> {
     let library = (done_mm_var_library_present(&case.inputs.params) != 0).then(FT_Init_FreeType);
     let mut descriptor =
@@ -19293,6 +19416,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             done_mm_var_library_present(params).to_string(),
             done_mm_var_descriptor_present(params).to_string(),
         ]),
+        "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
+            let mut args = vec!["--ftmm-get-and-done-mm-var".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => {
             let mut args = vec!["--ftmm-get-mm-var".to_string()];
             push_font_source(case, &mut args)?;
@@ -20463,6 +20592,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
+        "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
+            rust_ftmm_get_and_done_mm_var(case)
+        }
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => rust_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
             if ftmm_get_mm_var_has_resolved_font(case) =>
@@ -21270,6 +21402,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
+        "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
+            c_ftmm_get_and_done_mm_var(case)
+        }
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => c_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
             if ftmm_get_mm_var_has_resolved_font(case) =>
@@ -22002,6 +22137,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
+        "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
+            wasm_ftmm_get_and_done_mm_var(case)
+        }
         "ftmm.get_mm_var" if ftmm_get_mm_var_has_resolved_font(case) => wasm_ftmm_get_mm_var(case),
         "ftmm.get_mm_var_then_axis_flags" | "ftmm.get_var_axis_flags"
             if ftmm_get_mm_var_has_resolved_font(case) =>

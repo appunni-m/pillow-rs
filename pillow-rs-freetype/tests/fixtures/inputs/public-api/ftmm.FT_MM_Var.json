@@ -22,7 +22,7 @@
       "operation": "ftmm.get_and_done_mm_var",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/variable/named-instances-wght-wdth.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "call_sequence": ["FT_Get_MM_Var", "FT_Done_MM_Var"], "library_pointer": "owning_library"}},
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/variable/wght-wdth-opsz.ttf", "asset_kind": "font"}}, "params": {"face_index": 0, "call_sequence": ["FT_Get_MM_Var", "FT_Done_MM_Var"], "library_pointer": "owning_library"}},
       "classifiers": ["kind:record", "header:ftmm", "surface:public-c-api", "coverage:ownership"],
       "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_MM_Var", "kind": "record"}, "ownership": "allocated by FT_Get_MM_Var and released by FT_Done_MM_Var with face's parent FT_Library"},
       "expectation": {"status": "ok", "output_shape": {"get_return": "FT_Error", "amaster_pointer": "non_null", "done_return": "FT_Error", "free_event": "allocation_released"}, "compare": {"mode": "identity_class", "paths": ["get_return", "amaster_pointer", "done_return", "free_event"]}, "source_refs": ["freetype/include/freetype/ftmm.h:361-388", "freetype/src/base/ftmm.c:123-167"]}

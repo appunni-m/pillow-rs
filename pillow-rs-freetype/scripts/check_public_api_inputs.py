@@ -1369,10 +1369,8 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for MM/variation runtime data that do not have a maintained route."""
     ftmm_rows_without_maintained_route = {
         "ftmm.FT_Done_MM_Var.import_contract",
-        "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
-        "ftmm.FT_MM_Var.ownership_matches_c",
         "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
@@ -2229,6 +2227,15 @@ def done_mm_var_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.subject == "ftmm.FT_Done_MM_Var"
     ):
         return "FT_Done_MM_Var library/descriptor ownership behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation in {"ftmm.get_mm_var_then_done", "ftmm.get_and_done_mm_var"}
+        and row.case_id
+        in {
+            "ftmm.FT_Done_MM_Var.frees_descriptor_success",
+            "ftmm.FT_MM_Var.ownership_matches_c",
+        }
+    ):
+        return "FT_Get_MM_Var descriptor acquisition followed by FT_Done_MM_Var release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

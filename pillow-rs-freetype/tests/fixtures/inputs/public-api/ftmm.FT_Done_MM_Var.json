@@ -70,9 +70,8 @@
         "assets": {
           "variable_font": {
             "kind": "ref",
-            "id": "fonts/variable/multi-axis-named-instances.ttf",
-            "asset_kind": "font",
-            "status": "required_future_asset"
+            "id": "fonts/variable/wght-wdth-opsz.ttf",
+            "asset_kind": "font"
           }
         },
         "params": {
