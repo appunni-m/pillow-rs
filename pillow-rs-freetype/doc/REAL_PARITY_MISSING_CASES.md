@@ -11075,6 +11075,31 @@ Rejected candidates from this snapshot:
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` and
   `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` still require the
   declared Type1 PFB plus AFM/PFM auxiliary assets.
+- Follow-up on 2026-07-20: the route audit no longer uses one broad core
+  FreeType reason for the five remaining pending core rows.  Each row has a
+  separate blocker:
+  - `freetype.FT_Attach_File.success_attach_auxiliary_file` needs the declared
+    C-openable Type1 PFA/PFB face plus matching AFM/PFM pathname asset and a
+    maintained route that compares `FT_Attach_File` status plus post-attach
+    kerning/track-kerning mutations across pinned C, Rust FFI, thin C ABI, and
+    WASM.  Missing-file/null-path checks do not prove success attachment.
+  - `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` needs the same
+    Type1/AFM payload through `FT_Open_Args` with `FT_OPEN_MEMORY`, including
+    stream ownership and post-attach mutation checks across all ABI lanes.
+  - `freetype.FT_FaceRec.populated_public_fields_match_c` must be split from
+    its broad snapshot into concrete C-openable stages: initial face fields,
+    size mutation, glyph load, charmap selection, auxiliary attachment, and
+    variation mutation.  The current row still references missing bitmap and
+    Type1 auxiliary assets.
+  - `freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success` depends on
+    maintained `input/fonts/type1/track-kern-base.pfb` and
+    `input/aux/type1/track-kern-base.afm` assets, then must compare exact
+    `akerning` values for negative, zero, and positive track degrees over the
+    declared 16.16 point sizes.
+  - `freetype.FT_Open_Args.open_face_consumes_args_like_c` must convert its
+    abstract `arg_variants` description into explicit maintained `variants[]`
+    rows consumed by the runner, then keep stream/pathname variants pending
+    until real custom stream/path routes exist.
 - Follow-up core-route audit on 2026-07-20 after promoting
   `FT_Bitmap_Size.available_sizes_values_match_c`:
   - `freetype.FT_FaceRec.populated_public_fields_match_c` is not just a route
