@@ -10200,9 +10200,18 @@ fn ftmm_weight_scenarios_arg(params: &Value) -> Result<String, String> {
 }
 
 fn ftmm_weight_vector_json(values: &[FT_Fixed], len_after: FT_UInt, capacity: usize) -> Value {
+    let len_after_usize = usize::try_from(len_after).unwrap_or(usize::MAX);
+    let split = len_after_usize.min(capacity);
     json!({
         "len_after": len_after,
-        "weightvector_after": values.iter().take(capacity).copied().collect::<Vec<_>>()
+        "weightvector_after": values.iter().take(split).copied().collect::<Vec<_>>(),
+        "sentinel_after": values
+            .iter()
+            .skip(split)
+            .take(capacity.saturating_sub(split))
+            .copied()
+            .collect::<Vec<_>>(),
+        "buffer_after": values.iter().take(capacity).copied().collect::<Vec<_>>()
     })
 }
 
@@ -10213,6 +10222,185 @@ fn ftmm_weight_output(status: FT_Error, rows: Vec<Value>) -> RunOutput {
     } else {
         error_with_output(status, output)
     }
+}
+
+fn ftmm_weight_prior_values(params: &Value) -> Result<Option<Vec<FT_Fixed>>, String> {
+    params
+        .get("optional_prior_set_weightvector")
+        .map(|_| ftmm_coords_from_value(params, "optional_prior_set_weightvector"))
+        .transpose()
+}
+
+fn ftmm_weight_capacity_rows(
+    params: &Value,
+    num_designs: usize,
+) -> Result<Vec<(String, usize)>, String> {
+    let rows = array_param(params, "capacity_rows")?;
+    rows.iter()
+        .map(|row| {
+            let label = row
+                .as_str()
+                .ok_or_else(|| "capacity_rows entry must be a string".to_string())?
+                .to_string();
+            let capacity = match label.as_str() {
+                "exact_num_designs" => num_designs,
+                "larger_than_num_designs" => num_designs.saturating_add(2),
+                "smaller_than_num_designs" => num_designs.saturating_sub(1),
+                _ => return Err(format!("unsupported capacity row {label}")),
+            };
+            Ok((label, capacity))
+        })
+        .collect()
+}
+
+fn ftmm_weight_get_row(
+    row: &str,
+    status: FT_Error,
+    len_before: FT_UInt,
+    len_after: FT_UInt,
+    values: &[FT_Fixed],
+    capacity: usize,
+) -> Value {
+    json!({
+        "row": row,
+        "status": status,
+        "len_before": len_before,
+        "len_after": len_after,
+        "weightvector_after": values
+            .iter()
+            .take(usize::try_from(len_after).unwrap_or(usize::MAX).min(capacity))
+            .copied()
+            .collect::<Vec<_>>(),
+        "sentinel_after": values
+            .iter()
+            .skip(usize::try_from(len_after).unwrap_or(usize::MAX).min(capacity))
+            .take(capacity.saturating_sub(usize::try_from(len_after).unwrap_or(usize::MAX).min(capacity)))
+            .copied()
+            .collect::<Vec<_>>(),
+        "buffer_after": values.iter().take(capacity).copied().collect::<Vec<_>>(),
+    })
+}
+
+fn rust_ftmm_get_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    if let Some(prior) = ftmm_weight_prior_values(&case.inputs.params)? {
+        let prior_len = FT_UInt::try_from(prior.len())
+            .map_err(|err| format!("prior weightvector len invalid: {err}"))?;
+        let err = FT_Set_MM_WeightVector(Some(&mut face), prior_len, Some(&prior));
+        if err != FT_Err_Ok {
+            return Ok(error_with_output(err, json!({"prior_set_return": err})));
+        }
+    }
+    let mut master = sentinel_multi_master();
+    let master_err = FT_Get_Multi_Master(Some(&face), Some(&mut master));
+    if master_err != FT_Err_Ok {
+        return Ok(error_with_output(
+            master_err,
+            json!({"master_return": master_err}),
+        ));
+    }
+    let mut rows = Vec::new();
+    for (label, capacity) in ftmm_weight_capacity_rows(
+        &case.inputs.params,
+        usize::try_from(master.num_designs).unwrap_or(0),
+    )? {
+        let len_before = FT_UInt::try_from(capacity)
+            .map_err(|err| format!("capacity {capacity} invalid: {err}"))?;
+        let mut len_after = len_before;
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let status = FT_Get_MM_WeightVector(Some(&face), Some(&mut len_after), Some(&mut values));
+        rows.push(ftmm_weight_get_row(
+            &label, status, len_before, len_after, &values, capacity,
+        ));
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn c_ftmm_get_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    if let Some(prior) = ftmm_weight_prior_values(&case.inputs.params)? {
+        let prior_len = FT_UInt::try_from(prior.len())
+            .map_err(|err| format!("prior weightvector len invalid: {err}"))?;
+        let err = c_abi::FT_Set_MM_WeightVector(face, prior_len, prior.as_ptr());
+        if err != FT_Err_Ok {
+            let output = error_with_output(err, json!({"prior_set_return": err}));
+            c_done_face(face);
+            c_done_library(library);
+            return Ok(output);
+        }
+    }
+    let mut master = sentinel_multi_master();
+    let master_err = c_abi::FT_Get_Multi_Master(face, &mut master);
+    if master_err != FT_Err_Ok {
+        let output = error_with_output(master_err, json!({"master_return": master_err}));
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let mut rows = Vec::new();
+    for (label, capacity) in ftmm_weight_capacity_rows(
+        &case.inputs.params,
+        usize::try_from(master.num_designs).unwrap_or(0),
+    )? {
+        let len_before = FT_UInt::try_from(capacity)
+            .map_err(|err| format!("capacity {capacity} invalid: {err}"))?;
+        let mut len_after = len_before;
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let status = c_abi::FT_Get_MM_WeightVector(face, &mut len_after, values.as_mut_ptr());
+        rows.push(ftmm_weight_get_row(
+            &label, status, len_before, len_after, &values, capacity,
+        ));
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn wasm_ftmm_get_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    if let Some(prior) = ftmm_weight_prior_values(&case.inputs.params)? {
+        let prior_len = FT_UInt::try_from(prior.len())
+            .map_err(|err| format!("prior weightvector len invalid: {err}"))?;
+        let err = wasm_abi::fontdone_wasm_set_mm_weight_vector(handle, prior_len, prior.as_ptr());
+        if err != FT_Err_Ok {
+            let output = error_with_output(err, json!({"prior_set_return": err}));
+            wasm_done_face(handle);
+            return Ok(output);
+        }
+    }
+    let mut master = sentinel_multi_master();
+    let master_err = wasm_abi::fontdone_wasm_get_multi_master(handle, &mut master);
+    if master_err != FT_Err_Ok {
+        let output = error_with_output(master_err, json!({"master_return": master_err}));
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let mut rows = Vec::new();
+    for (label, capacity) in ftmm_weight_capacity_rows(
+        &case.inputs.params,
+        usize::try_from(master.num_designs).unwrap_or(0),
+    )? {
+        let len_before = FT_UInt::try_from(capacity)
+            .map_err(|err| format!("capacity {capacity} invalid: {err}"))?;
+        let mut len_after = len_before;
+        let mut values = (0..capacity)
+            .map(|index| FT_Fixed::from(0x1111_0000 + index as i32))
+            .collect::<Vec<_>>();
+        let status = wasm_abi::fontdone_wasm_get_mm_weight_vector(
+            handle,
+            &mut len_after,
+            values.as_mut_ptr(),
+        );
+        rows.push(ftmm_weight_get_row(
+            &label, status, len_before, len_after, &values, capacity,
+        ));
+    }
+    wasm_done_face(handle);
+    Ok(ok(json!({ "rows": rows })))
 }
 
 fn rust_ftmm_set_mm_weight_vector(case: &InputCase) -> Result<RunOutput, String> {
@@ -18482,6 +18670,28 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(ftmm_weight_scenarios_arg(params)?);
             Ok(args)
         }
+        "ftmm.get_mm_weightvector" if params.get("capacity_rows").is_some() => {
+            let mut args = vec!["--ftmm-mm-weight-vector-get".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(
+                array_param(params, "capacity_rows")?
+                    .iter()
+                    .map(|row| {
+                        row.as_str()
+                            .ok_or_else(|| "capacity row must be a string".to_string())
+                            .map(ToString::to_string)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(","),
+            );
+            args.push(
+                ftmm_weight_prior_values(params)?
+                    .map(|values| ftmm_coords_csv(&values))
+                    .unwrap_or_else(|| "-".to_string()),
+            );
+            Ok(args)
+        }
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -19535,6 +19745,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
+            rust_ftmm_get_mm_weight_vector(case)
+        }
         "ftmm.set_mm_weight_vector" => rust_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
@@ -20321,6 +20534,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
+            c_ftmm_get_mm_weight_vector(case)
+        }
         "ftmm.set_mm_weight_vector" => c_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
@@ -21032,6 +21248,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
+        "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
+            wasm_ftmm_get_mm_weight_vector(case)
+        }
         "ftmm.set_mm_weight_vector" => wasm_ftmm_set_mm_weight_vector(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
