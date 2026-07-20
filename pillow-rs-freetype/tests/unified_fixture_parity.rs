@@ -10384,9 +10384,14 @@ fn ftmm_num_coords(params: &Value) -> Result<FT_UInt, String> {
 }
 
 fn ftmm_coords_init_mode(params: &Value) -> &'static str {
-    match params.get("coords_pointer").and_then(Value::as_str) {
-        None => "null",
-        Some("valid_nonzero_sentinel_prefilled") | Some("valid_sentinel_prefilled") => "nonzero",
+    match params.get("coords_pointer") {
+        Some(value) if value.is_null() => "null",
+        Some(value)
+            if value.as_str() == Some("valid_nonzero_sentinel_prefilled")
+                || value.as_str() == Some("valid_sentinel_prefilled") =>
+        {
+            "nonzero"
+        }
         _ => "zero",
     }
 }
@@ -10405,26 +10410,110 @@ fn ftmm_optional_coords_from_params(params: &Value) -> Result<Vec<FT_Fixed>, Str
     }
 }
 
-fn ftmm_axis_count_hint(params: &Value, prior: &FtmmPriorCall, set_coords: &[FT_Fixed]) -> FT_UInt {
+fn ftmm_blend_font_asset(case: &InputCase) -> Result<&Asset, String> {
+    for key in ["font", "variable_font", "static_font"] {
+        if let Some(asset) = case.inputs.assets.get(key) {
+            if asset_is_runtime_resolved(asset) {
+                return Ok(asset);
+            }
+        }
+    }
+    runtime_font_asset(case).ok_or_else(|| "missing FTMM blend font asset".to_string())
+}
+
+fn push_ftmm_blend_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
+    push_asset_source(ftmm_blend_font_asset(case)?, args)
+}
+
+fn push_required_asset_source(
+    case: &InputCase,
+    key: &str,
+    args: &mut Vec<String>,
+) -> Result<(), String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(key)
+        .ok_or_else(|| format!("missing asset {key}"))?;
+    push_asset_source(asset, args)
+}
+
+fn required_asset_bytes(case: &InputCase, key: &str) -> Result<Arc<[u8]>, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(key)
+        .ok_or_else(|| format!("missing asset {key}"))?;
+    font_asset_bytes(asset)
+}
+
+fn ftmm_blend_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    font_asset_bytes(ftmm_blend_font_asset(case)?)
+}
+
+fn read_be_u16(data: &[u8], offset: usize) -> Option<u16> {
+    let bytes = data.get(offset..offset.checked_add(2)?)?;
+    Some(u16::from_be_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_be_u32(data: &[u8], offset: usize) -> Option<u32> {
+    let bytes = data.get(offset..offset.checked_add(4)?)?;
+    Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn sfnt_fvar_axis_count(data: &[u8]) -> Result<FT_UInt, String> {
+    let num_tables =
+        usize::from(read_be_u16(data, 4).ok_or_else(|| "SFNT offset table truncated".to_string())?);
+    for index in 0..num_tables {
+        let record = 12usize
+            .checked_add(
+                index
+                    .checked_mul(16)
+                    .ok_or_else(|| "SFNT table index overflow".to_string())?,
+            )
+            .ok_or_else(|| "SFNT table record overflow".to_string())?;
+        if data.get(record..record + 4) != Some(b"fvar") {
+            continue;
+        }
+        let offset = usize::try_from(
+            read_be_u32(data, record + 8).ok_or_else(|| "fvar offset missing".to_string())?,
+        )
+        .map_err(|err| format!("fvar offset does not fit usize: {err}"))?;
+        let axis_count =
+            read_be_u16(data, offset + 8).ok_or_else(|| "fvar header truncated".to_string())?;
+        return Ok(FT_UInt::from(axis_count));
+    }
+    Err("font has no fvar table".to_string())
+}
+
+fn ftmm_axis_count_hint(
+    case: &InputCase,
+    params: &Value,
+    prior: &FtmmPriorCall,
+    set_coords: &[FT_Fixed],
+) -> Result<FT_UInt, String> {
     if let Ok(axis_tags) = array_param(params, "axis_tags") {
         if let Ok(count) = FT_UInt::try_from(axis_tags.len()) {
-            return count.max(1);
+            return Ok(count.max(1));
         }
+    }
+    if params.get("num_coords").and_then(Value::as_str) == Some("axis_count") {
+        return sfnt_fvar_axis_count(ftmm_blend_font_bytes(case)?.as_ref());
     }
     if let Ok(num_coords) = ftmm_num_coords(params) {
         if num_coords > 0 {
-            return num_coords;
+            return Ok(num_coords);
         }
     }
     if let Ok(count) = FT_UInt::try_from(set_coords.len()) {
         if count > 0 {
-            return count;
+            return Ok(count);
         }
     }
     if prior.count > 0 {
-        return prior.count;
+        return Ok(prior.count);
     }
-    1
+    Ok(1)
 }
 
 fn ftmm_initial_coords(params: &Value) -> Result<Vec<FT_Fixed>, String> {
@@ -10467,6 +10556,74 @@ fn ftmm_blend_output(status: FT_Error, coords: &[FT_Fixed], face_flags: FT_Long)
     }
 }
 
+fn ftmm_mm_blend_invalid_matrix_output(
+    variable_null_coords: FT_Error,
+    null_face: FT_Error,
+    non_variable_face: FT_Error,
+) -> RunOutput {
+    ok(json!({
+        "results": [
+            {"scenario": "variable_null_coords", "return": variable_null_coords},
+            {"scenario": "null_face", "return": null_face},
+            {"scenario": "non_variable_face", "return": non_variable_face},
+        ]
+    }))
+}
+
+fn rust_ftmm_mm_blend_invalid_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let variable_bytes = required_asset_bytes(case, "variable_font")?;
+    let variable_face = rust_new_face_from_bytes(variable_bytes.as_ref(), 0)?;
+    let static_bytes = required_asset_bytes(case, "non_variable_font")?;
+    let static_face = rust_new_face_from_bytes(static_bytes.as_ref(), 0)?;
+    let count = ftmm_num_coords(&case.inputs.params)?;
+    let mut coords = vec![0; usize::try_from(count).unwrap_or(0)];
+    Ok(ftmm_mm_blend_invalid_matrix_output(
+        FT_Get_MM_Blend_Coordinates(Some(&variable_face), count, None),
+        FT_Get_MM_Blend_Coordinates(None, count, Some(&mut coords)),
+        FT_Get_MM_Blend_Coordinates(Some(&static_face), count, Some(&mut coords)),
+    ))
+}
+
+fn c_ftmm_mm_blend_invalid_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let variable_bytes = required_asset_bytes(case, "variable_font")?;
+    let (variable_library, variable_face) = c_new_face_from_bytes(variable_bytes.as_ref(), 0)?;
+    let static_bytes = required_asset_bytes(case, "non_variable_font")?;
+    let (static_library, static_face) = c_new_face_from_bytes(static_bytes.as_ref(), 0)?;
+    let count = ftmm_num_coords(&case.inputs.params)?;
+    let mut coords = vec![0; usize::try_from(count).unwrap_or(0)];
+    let output = ftmm_mm_blend_invalid_matrix_output(
+        c_abi::FT_Get_MM_Blend_Coordinates(variable_face, count, std::ptr::null_mut()),
+        c_abi::FT_Get_MM_Blend_Coordinates(std::ptr::null_mut(), count, coords.as_mut_ptr()),
+        c_abi::FT_Get_MM_Blend_Coordinates(static_face, count, coords.as_mut_ptr()),
+    );
+    c_done_face(static_face);
+    c_done_library(static_library);
+    c_done_face(variable_face);
+    c_done_library(variable_library);
+    Ok(output)
+}
+
+fn wasm_ftmm_mm_blend_invalid_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let variable_bytes = required_asset_bytes(case, "variable_font")?;
+    let variable_handle = wasm_new_face_from_bytes(variable_bytes.as_ref(), 0)?;
+    let static_bytes = required_asset_bytes(case, "non_variable_font")?;
+    let static_handle = wasm_new_face_from_bytes(static_bytes.as_ref(), 0)?;
+    let count = ftmm_num_coords(&case.inputs.params)?;
+    let mut coords = vec![0; usize::try_from(count).unwrap_or(0)];
+    let output = ftmm_mm_blend_invalid_matrix_output(
+        wasm_abi::fontdone_wasm_get_mm_blend_coordinates(
+            variable_handle,
+            count,
+            std::ptr::null_mut(),
+        ),
+        wasm_abi::fontdone_wasm_get_mm_blend_coordinates(0, count, coords.as_mut_ptr()),
+        wasm_abi::fontdone_wasm_get_mm_blend_coordinates(static_handle, count, coords.as_mut_ptr()),
+    );
+    wasm_done_face(static_handle);
+    wasm_done_face(variable_handle);
+    Ok(output)
+}
+
 fn ftmm_apply_rust_blend_prior(face: &mut FT_Face, prior: &FtmmPriorCall) -> FT_Error {
     match prior.kind.as_str() {
         "set_var_blend" => {
@@ -10478,11 +10635,13 @@ fn ftmm_apply_rust_blend_prior(face: &mut FT_Face, prior: &FtmmPriorCall) -> FT_
 }
 
 fn rust_ftmm_blend_coordinates(case: &InputCase, mode: &str) -> Result<RunOutput, String> {
-    let mut face = rust_new_face_without_size(case)?;
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let mut face =
+        rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let params = &case.inputs.params;
     let prior = ftmm_prior_call(params)?;
     let set_coords = ftmm_optional_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(params, &prior, &set_coords);
+    let output_count = ftmm_axis_count_hint(case, params, &prior, &set_coords)?;
     let mut status = ftmm_apply_rust_blend_prior(&mut face, &prior);
     if status == FT_Err_Ok {
         let set_count = ftmm_num_coords(params).unwrap_or(0);
@@ -10547,11 +10706,13 @@ fn ftmm_apply_c_blend_prior(face: c_abi::FT_Face, prior: &FtmmPriorCall) -> FT_E
 }
 
 fn c_ftmm_blend_coordinates(case: &InputCase, mode: &str) -> Result<RunOutput, String> {
-    let (library, face) = c_new_face_without_size(case)?;
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let params = &case.inputs.params;
     let prior = ftmm_prior_call(params)?;
     let set_coords = ftmm_optional_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(params, &prior, &set_coords);
+    let output_count = ftmm_axis_count_hint(case, params, &prior, &set_coords)?;
     let mut status = ftmm_apply_c_blend_prior(face, &prior);
     if status == FT_Err_Ok {
         let set_count = ftmm_num_coords(params).unwrap_or(0);
@@ -10614,11 +10775,12 @@ fn ftmm_apply_wasm_blend_prior(handle: usize, prior: &FtmmPriorCall) -> FT_Error
 }
 
 fn wasm_ftmm_blend_coordinates(case: &InputCase, mode: &str) -> Result<RunOutput, String> {
-    let handle = wasm_new_face_without_size(case)?;
+    let bytes = ftmm_blend_font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let params = &case.inputs.params;
     let prior = ftmm_prior_call(params)?;
     let set_coords = ftmm_optional_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(params, &prior, &set_coords);
+    let output_count = ftmm_axis_count_hint(case, params, &prior, &set_coords)?;
     let mut status = ftmm_apply_wasm_blend_prior(handle, &prior);
     if status == FT_Err_Ok {
         let set_count = ftmm_num_coords(params).unwrap_or(0);
@@ -16945,6 +17107,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "ftmm.get_mm_blend_coordinates"
         | "ftmm.set_var_blend_coordinates"
         | "ftmm.set_mm_blend_coordinates" => {
+            if case.operation == "ftmm.get_mm_blend_coordinates"
+                && params.get("argument_matrix").is_some()
+            {
+                let mut args = vec!["--ftmm-mm-blend-invalid-matrix".to_string()];
+                push_required_asset_source(case, "variable_font", &mut args)?;
+                push_required_asset_source(case, "non_variable_font", &mut args)?;
+                args.push(ftmm_num_coords(params)?.to_string());
+                return Ok(args);
+            }
             let mode = match case.operation.as_str() {
                 "ftmm.get_mm_blend_coordinates" => "get-mm",
                 "ftmm.set_var_blend_coordinates" => "set-var",
@@ -16953,9 +17124,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             };
             let prior = ftmm_prior_call(params)?;
             let set_coords = ftmm_optional_coords_from_params(params)?;
-            let output_count = ftmm_axis_count_hint(params, &prior, &set_coords);
+            let output_count = ftmm_axis_count_hint(case, params, &prior, &set_coords)?;
             let mut args = vec!["--ftmm-blend-coordinates".to_string(), mode.to_string()];
-            push_font_source(case, &mut args)?;
+            push_ftmm_blend_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(prior.kind);
             args.push(prior.count.to_string());
@@ -17988,7 +18159,13 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
         "ftmm.get_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "get-var"),
-        "ftmm.get_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "get-mm"),
+        "ftmm.get_mm_blend_coordinates" => {
+            if case.inputs.params.get("argument_matrix").is_some() {
+                rust_ftmm_mm_blend_invalid_matrix(case)
+            } else {
+                rust_ftmm_blend_coordinates(case, "get-mm")
+            }
+        }
         "ftmm.set_var_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
         "freetype.done_freetype" => rust_done_freetype(case),
@@ -18745,7 +18922,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
         "ftmm.get_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "get-var"),
-        "ftmm.get_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "get-mm"),
+        "ftmm.get_mm_blend_coordinates" => {
+            if case.inputs.params.get("argument_matrix").is_some() {
+                c_ftmm_mm_blend_invalid_matrix(case)
+            } else {
+                c_ftmm_blend_coordinates(case, "get-mm")
+            }
+        }
         "ftmm.set_var_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
         "freetype.done_freetype" => c_done_freetype_output(case),
@@ -19427,7 +19610,13 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
         "ftmm.get_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "get-var"),
-        "ftmm.get_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "get-mm"),
+        "ftmm.get_mm_blend_coordinates" => {
+            if case.inputs.params.get("argument_matrix").is_some() {
+                wasm_ftmm_mm_blend_invalid_matrix(case)
+            } else {
+                wasm_ftmm_blend_coordinates(case, "get-mm")
+            }
+        }
         "ftmm.set_var_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-var"),
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
         "freetype.done_freetype" => wasm_done_freetype_output(case),

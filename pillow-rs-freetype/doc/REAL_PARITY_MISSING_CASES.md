@@ -10041,6 +10041,13 @@ Follow-up finding for blend-coordinate state rows:
 - Keep MM/Var blend setter rows pending until the same concrete fixture and
   parameters return success in pinned C and the maintained runner compares
   exact active coordinates, variation flag, and any declared glyph output.
+- A maintained `FT_Get_MM_Blend_Coordinates` default-row route now validates the
+  concrete OpenType variable-font row through pinned C, Rust FFI, C ABI, and
+  WASM ABI.  The row's optional Adobe MM asset remains unresolved and is not
+  counted by this route; only the C-openable `variable_font` row is promoted.
+- The MM invalid argument-matrix row stays exact by comparing all three public
+  C scenarios explicitly: variable face with null coords, null face with valid
+  coords, and non-variable face with valid coords.
 
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
