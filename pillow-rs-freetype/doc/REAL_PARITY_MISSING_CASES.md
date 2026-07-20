@@ -803,6 +803,7 @@ Implemented real parity rows:
 - `freetype.FT_Face_Properties.error_invalid_property_tag_or_value`
 - `ftparams.FT_PARAM_TAG_LCD_FILTER_WEIGHTS.malformed_data_does_not_read_as_weights`
 - `ftparams.FT_PARAM_TAG_RANDOM_SEED.null_or_wrong_size_errors`
+- `ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error`
 
 C behavior verified:
 
@@ -813,6 +814,8 @@ C behavior verified:
   negative values to `0`, and resets to `-1` for null data.
 - `FT_PARAM_TAG_LCD_FILTER_WEIGHTS` returns
   `FT_Err_Unimplemented_Feature` before dereferencing `data`.
+- `FT_PARAM_TAG_STEM_DARKENING` with null data resets
+  `face->internal->no_stem_darkening` to `-1` and returns `FT_Err_Ok`.
 - Unknown tags return `FT_Err_Invalid_Argument`.
 
 Important blocker retained:
@@ -821,6 +824,14 @@ Important blocker retained:
   as parity. Pinned C dereferences `face` when `num_properties > 0` and
   segfaults for a null face. Counting Rust `Invalid_Face_Handle` as parity
   would be a green placeholder, so the row is `pending-route` with that reason.
+- `ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output`
+  remains pending until there is a C-openable CFF/Type1/CID fixture where stem
+  darkening changes a public metric, outline, or bitmap result.
+
+Latest impact for the 2026-07-20 stem-darkening null-data route:
+
+- `real-parity`: `4528 -> 4529`
+- `pending-route`: `428 -> 427`
 
 Verification:
 

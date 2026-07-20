@@ -3732,6 +3732,12 @@ fn rust_face_properties(case: &InputCase) -> Result<RunOutput, String> {
                 value: None,
             }]
         }
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error" => {
+            vec![FT_Face_Property {
+                tag: FT_PARAM_TAG_STEM_DARKENING as FT_ULong,
+                value: None,
+            }]
+        }
         other => return Err(format!("unsupported FT_Face_Properties case {other}")),
     };
     let err = FT_Face_Properties(Some(&mut face), Some(&properties));
@@ -3791,6 +3797,13 @@ fn c_face_properties(case: &InputCase) -> Result<RunOutput, String> {
             };
             c_face_properties_output(face, 1, &mut property)
         }
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error" => {
+            let mut property = c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_STEM_DARKENING as c_abi::FT_ULong,
+                data: ptr::null_mut(),
+            };
+            c_face_properties_output(face, 1, &mut property)
+        }
         other => Err(format!("unsupported C ABI FT_Face_Properties case {other}")),
     };
     c_done_face(face);
@@ -3846,6 +3859,12 @@ fn wasm_face_properties(case: &InputCase) -> Result<RunOutput, String> {
             wasm_face_properties_output(
                 handle,
                 wasm_abi::fontdone_wasm_face_properties_one(handle, 2, 0, 0),
+            )
+        }
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error" => {
+            wasm_face_properties_output(
+                handle,
+                wasm_abi::fontdone_wasm_face_properties_one(handle, 1, 0, 0),
             )
         }
         other => Err(format!("unsupported WASM FT_Face_Properties case {other}")),

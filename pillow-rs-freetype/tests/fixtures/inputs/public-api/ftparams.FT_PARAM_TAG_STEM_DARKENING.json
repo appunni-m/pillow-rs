@@ -126,12 +126,12 @@
       "case_id": "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error",
       "subject": "ftparams.FT_PARAM_TAG_STEM_DARKENING",
       "case": "unsupported_or_null_data_matches_c_error",
-      "operation": "freetype.face_properties_then_render",
+      "operation": "freetype.face_properties",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
         "assets": {
-          "unsupported_font": {
+          "font": {
             "kind": "file",
             "role": "font",
             "path": "input/fonts/DejaVuSans.ttf"
@@ -146,12 +146,7 @@
               "c_behavior": "resets no_stem_darkening to module default -1"
             }
           ],
-          "malformed_pointer_policy": "not C-callable in the fixture runner; C validates pointer nullness only and otherwise dereferences FT_Bool*",
-          "probe": {
-            "glyph_index": 1,
-            "size_ppem": 20,
-            "render_mode": "FT_RENDER_MODE_NORMAL"
-          }
+          "malformed_pointer_policy": "not C-callable in the fixture runner; C validates pointer nullness only and otherwise dereferences FT_Bool*"
         }
       },
       "classifiers": [
@@ -164,15 +159,13 @@
         "status": "ok",
         "output_shape": {
           "return": "FT_Error",
-          "face_no_stem_darkening": "module_default_or_internal_snapshot",
-          "post_call_slot": "public fields"
+          "face_no_stem_darkening": "module_default_or_internal_snapshot"
         },
         "compare": {
           "mode": "exact",
           "paths": [
             "return",
-            "face_no_stem_darkening",
-            "post_call_slot"
+            "face_no_stem_darkening"
           ]
         }
       }
