@@ -19009,6 +19009,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             string_param(params, "signature")?.to_string(),
         ]),
         "abi.value_echo" => abi_value_echo_oracle_args(params),
+        "freetype.load_target_mode"
+            if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" =>
+        {
+            Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
+        }
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
@@ -20992,6 +20997,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "abi.compile_alias_probe" => Ok(ok(compile_alias_probe(case)?)),
         "abi.value_echo" => Ok(ok(abi_value_echo(case)?)),
         "macro_eval" | "macro_compile_probe" => Ok(ok(rust_macro_eval(case)?)),
+        "freetype.load_target_mode"
+            if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" =>
+        {
+            Ok(ok(rust_macro_eval(case)?))
+        }
         "face_macro_flags" => Ok(ok(face_macro_flags_json(case)?)),
         "freetype.ceil_fix" | "freetype.floor_fix" | "freetype.round_fix" | "freetype.mul_div"
         | "freetype.mul_fix" | "freetype.div_fix" => {
@@ -36668,6 +36678,11 @@ fn rust_macro_eval(case: &InputCase) -> Result<Value, String> {
                 "import_compiles": true
             }))
         }
+        "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" => Ok(json!({
+            "render_mode": FT_RENDER_MODE_NORMAL,
+            "load_target": FT_LOAD_TARGET_NORMAL,
+            "roundtrip_mode": FT_LOAD_TARGET_MODE(FT_LOAD_TARGET_NORMAL)
+        })),
         "freetype.FT_ENC_TAG.value_matches_header" => {
             let samples = array_param(params, "samples")?
                 .iter()
@@ -38996,6 +39011,9 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
 
 fn comparison_schema(case: &InputCase) -> &str {
     if case.case_id == "ftoutln.FT_Outline_Decompose.invalid_outline_or_interface_errors" {
+        return "api_object";
+    }
+    if case.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes" {
         return "api_object";
     }
     if case.case_id
