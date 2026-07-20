@@ -10768,6 +10768,13 @@ Current route-audit breakdown:
   exact-error and null/no-op promotions reduced the remaining set from the
   original 65-row classification batch; do not use the old count as the
   implementation target.
+- The route classifier now names these rows through explicit case sets grouped
+  by behavior surface. Future `ftstroke.*` rows must add a concrete blocker or
+  a real parity route; they are not hidden by a wildcard subsystem reason.
+- The blocker families are allocation/lifecycle, Set/Rewind state,
+  BeginSubPath/LineTo path state, conic/cubic curves, line caps, line joins,
+  EndSubPath/ParseOutline, counts, border/export behavior,
+  Glyph_Stroke/Glyph_StrokeBorder ownership, and non-null Done cleanup.
 
 | Operation | Count | Pending case IDs |
 | --- | ---: | --- |
