@@ -1504,6 +1504,67 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     cmap_lookup_pending = ftcache_cmap_lookup_pending_reason(row)
     if cmap_lookup_pending:
         return cmap_lookup_pending
+    cache_creation_exact_cases = {
+        "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
+            "FTC_CMapCache opaque-handle parity needs a maintained cache route "
+            "proving the public CMap cache handle is manager-owned, stable "
+            "across lookups, and not a caller-owned descriptor"
+        ),
+        "ftcache.FTC_ImageCache.manager_owned_opaque_cache": (
+            "FTC_ImageCache opaque-handle parity needs a maintained cache route "
+            "proving the public Image cache handle is manager-owned, stable "
+            "across glyph lookups, and participates in node ownership like "
+            "pinned C"
+        ),
+        "ftcache.FTC_SBitCache.manager_owned_sbit_cache": (
+            "FTC_SBitCache opaque-handle parity needs a maintained cache route "
+            "proving the public SBit cache handle is manager-owned, stable "
+            "across sbit lookups, and participates in node ownership like "
+            "pinned C"
+        ),
+        "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_CMapCache_New planning parity needs a maintained same-input "
+            "CMap cache creation route instead of treating the public FTC cache "
+            "subsystem as out of scope"
+        ),
+        "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager": (
+            "FTC_CMapCache_New lifecycle parity needs a maintained route proving "
+            "a manager-created CMap cache is destroyed through FTC_Manager_Done "
+            "with the same ownership side effects as pinned C"
+        ),
+        "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit": (
+            "FTC_CMapCache_New registration-limit parity needs a maintained "
+            "route proving repeated cache registration fails at the same "
+            "manager limit and preserves prior caches like pinned C"
+        ),
+        "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset": (
+            "FTC_CMapCache_New reset parity needs a maintained route proving "
+            "manager reset preserves the cache handle while clearing cached CMap "
+            "entries exactly like pinned C"
+        ),
+        "ftcache.FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_ImageCache_New planning parity needs a maintained same-input "
+            "Image cache creation route instead of treating the public FTC cache "
+            "subsystem as out of scope"
+        ),
+        "ftcache.FTC_ImageCache_New.success_create_lookup_destroy_lifecycle": (
+            "FTC_ImageCache_New lookup lifecycle parity needs a maintained route "
+            "proving create, glyph lookup, node ownership, and manager-driven "
+            "destroy behavior match pinned C"
+        ),
+        "ftcache.FTC_ImageCache_New.success_manager_reset_preserves_handle": (
+            "FTC_ImageCache_New reset parity needs a maintained route proving "
+            "manager reset preserves the Image cache handle while clearing "
+            "cached glyph and node state like pinned C"
+        ),
+        "ftcache.FTC_SBitCache_New.creates_manager_owned_cache": (
+            "FTC_SBitCache_New creation parity needs a maintained route proving "
+            "the created SBit cache is manager-owned, supports lookup/node "
+            "lifecycle, and is destroyed through manager teardown like pinned C"
+        ),
+    }
+    if row.case_id in cache_creation_exact_cases:
+        return cache_creation_exact_cases[row.case_id]
     pending_case_groups = {
         (
             "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
@@ -1565,23 +1626,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "eviction route proving unreferenced removal, referenced-node "
             "hiding until unref, unchanged other face IDs, and null/unknown "
             "input behavior"
-        ),
-        (
-            "ftcache.FTC_CMapCache.manager_owned_opaque_cache",
-            "ftcache.FTC_ImageCache.manager_owned_opaque_cache",
-            "ftcache.FTC_SBitCache.manager_owned_sbit_cache",
-            "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager",
-            "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit",
-            "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset",
-            "ftcache.FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_ImageCache_New.success_create_lookup_destroy_lifecycle",
-            "ftcache.FTC_ImageCache_New.success_manager_reset_preserves_handle",
-            "ftcache.FTC_SBitCache_New.creates_manager_owned_cache",
-        ): (
-            "FTC cache creation parity needs a maintained manager-owned cache "
-            "route proving CMap/Image/SBit cache registration, opaque handle "
-            "ownership, manager reset interactions, and cache-limit behavior"
         ),
         (
             "ftcache.FTC_ImageType.points_to_call_owned_descriptor",
