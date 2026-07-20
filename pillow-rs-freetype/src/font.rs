@@ -1709,9 +1709,13 @@ impl Font {
     pub(crate) fn set_var_design_coordinates(&mut self, coords: &[i32]) -> Result<(), FontError> {
         if self.type1_multi_master.is_some() {
             let mm_coords = coords.iter().map(|coord| coord >> 16).collect::<Vec<_>>();
-            return self.set_type1_mm_design_coordinates(&mm_coords, true);
+            return self.set_type1_mm_design_coordinates(&mm_coords, !coords.is_empty());
         }
         let base_face_index = self.data.face_index & 0xFFFF;
+        // C parity: src/base/ftmm.c:281-360 clears FT_FACE_FLAG_VARIATION after
+        // a successful zero-count FT_Set_Var_Design_Coordinates reset while the
+        // TrueType service recomputes default design/blend coordinates.
+        let variation_coordinates_set = !coords.is_empty();
         let mut next = Self::truetype_face_with_load_mode_and_design_coords(
             &self.data.raw_data,
             base_face_index,
@@ -1719,7 +1723,7 @@ impl Font {
             self.load_mode,
             Some(coords),
             None,
-            true,
+            variation_coordinates_set,
         )?;
         next.selected_charmap = next
             .data
@@ -4363,8 +4367,7 @@ fn normalized_variation_coords_for_design_coords(
             let coord = design_coords
                 .get(index)
                 .copied()
-                .unwrap_or(axis.default_value)
-                .clamp(axis.min_value, axis.max_value);
+                .unwrap_or(axis.default_value);
             tt::gvar::normalize_axis_coord(
                 coord,
                 axis.min_value,

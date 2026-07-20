@@ -1373,13 +1373,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_MM_Var.ownership_matches_c",
+        "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
         "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
-        "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
@@ -3750,6 +3750,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_Var_Blend_Coordinates partial, excess, and reset scenarios validate active OpenType design/blend coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_var_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset"
+    ):
+        return "FT_Set_Var_Design_Coordinates partial, excess, and reset scenarios validate active OpenType design/blend coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmm.get_var_blend_coordinates"
         and row.case_id
         == "ftmm.FT_Get_Var_Blend_Coordinates.error_non_variable_or_invalid_face"
@@ -3845,11 +3851,6 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_MM_Axis.populated_by_get_multi_master"
     ):
         return "FT_MM_Axis populated slots validate through FT_Get_Multi_Master across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftmm.get_multi_master"
-        and row.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service"
-    ):
-        return "FT_Multi_Master Adobe MM service descriptor validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_multi_master"
         and row.case_id == "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success"

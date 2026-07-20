@@ -442,7 +442,16 @@ pub fn normalize_axis_coord(design: i32, min: i32, default: i32, max: i32) -> i1
     let value = if design == default {
         0
     } else if design < default {
-        -normalize_axis_delta(default - design, default - min)
+        if design <= min {
+            -F2DOT14_ONE
+        } else {
+            -normalize_axis_delta(default - design, default - min)
+        }
+    } else if design >= max {
+        // FreeType clamps out-of-range design coordinates before dividing by
+        // the axis extent, so degenerate default==max axes still normalize to
+        // +1.0 for values above the default.  See ttgxvar.c:2152-2211.
+        F2DOT14_ONE
     } else {
         normalize_axis_delta(design - default, max - default)
     };
