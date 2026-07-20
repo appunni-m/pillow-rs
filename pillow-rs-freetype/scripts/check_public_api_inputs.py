@@ -1628,7 +1628,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior",
         "freetype.FT_Open_Args.open_face_consumes_args_like_c",
         "freetype.FT_Parameter.tag_data_parameters_match_c_behavior",
-        "freetype.FT_Size.active_size_handle_runtime",
         "freetype.FT_SizeRec.active_size_record_runtime",
     }
     if row.case_id not in freetype_rows_without_maintained_route:
@@ -4004,6 +4003,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection"
     ):
         return "FT_FACE_FLAG_VARIATION set and declared named-instance reset probe validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.active_size_handle"
+        and row.case_id == "freetype.FT_Size.active_size_handle_runtime"
+    ):
+        return "FT_Size active face size handle, metrics, and follow-up glyph-load scaling validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
