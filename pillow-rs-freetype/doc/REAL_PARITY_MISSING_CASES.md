@@ -301,6 +301,15 @@ Rejected candidates:
   `FTC_Manager_RemoveFaceID.success_null_manager_noop`, and
   `FTC_Node_Unref.null_or_invalid_inputs_noop` remain pending because focused
   runtime filters currently select them as `runnable=0`.
+- `FTC_Node_Unref.null_or_invalid_inputs_noop` is not a safe null-only
+  promotion candidate.  Its fixture includes `{node: "foreign_or_bad_cache_index",
+  manager: "live_empty"}` in addition to null-node/null-manager variants.  Pinned
+  FreeType 2.14.3 `src/cache/ftcmanag.c:FTC_Node_Unref` reads
+  `node->cache_index` whenever both `node` and `manager` are non-null, then
+  compares that value with `manager->num_caches`.  A maintained route therefore
+  needs an explicit FTC node/manager layout facade that can model the foreign
+  bad-index input; treating the whole row as a generic void no-op would be a
+  green placeholder.
 - Palette non-SFNT/null-output rows and OpenType absent-table rows also remain
   pending for the same reason; promoting them would be placeholder accounting.
 - `ftparams` unpatented/sbix/incremental/stem-darkening rows remain pending
