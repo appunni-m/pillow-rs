@@ -10184,6 +10184,112 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: route-audit snapshot after FTMM and size-record promotions
+
+Status: current planning snapshot recorded on 2026-07-20 at `2eb49c8a8`.
+
+Current route-audit ledger:
+
+- `concrete_cases=7234`
+- `real-parity=4519`
+- `pending-route=437`
+- `compile-contract=2265`
+- `real-null-validation=8`
+- `raw-slot-null-validation=4`
+- `wrapper-null-validation=1`
+
+Largest remaining pending-route surfaces:
+
+- COLR/CPAL paint graph and palette success routes: 107 rows.
+- FTC cache manager/image/cmap/sbit/node lifecycle routes: 90 rows.
+- Stroker success, geometry, export, and lifecycle routes: 60 rows.
+- Type1/MM table and private dictionary routes: 27 rows.
+- GX validation and classic kern runtime routes: 16 rows.
+- Image/raster callback and parameter routes: 16 rows.
+- Incremental font callback routes: 14 rows.
+- Module/library lifecycle and dynamic module routes: 12 rows.
+- Stream wrapper routes: 11 rows.
+- Glyph-object ownership and SVG glyph routes: 11 rows.
+- Core FreeType face/open/slot macro routes: 10 rows.
+- `FT_Parameter` and open-parameter routes: 9 rows.
+
+Rejected candidates from this snapshot:
+
+- `freetype.FT_Bitmap_Size.available_sizes_values_match_c` uses
+  `fonts/bitmap/embedded-strikes.ttf`, but the worktree has
+  `embedded-strike.ttf`.  Do not substitute the similarly named file; promote
+  only after the declared asset is present or the input row is corrected with a
+  pinned C oracle run for the exact replacement.
+- `freetype.FT_Attach_File.success_attach_auxiliary_file` and
+  `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` still require the
+  declared Type1 PFB plus AFM/PFM auxiliary assets.
+- `freetype.FT_GlyphSlot.overwritten_by_subsequent_load` expects same
+  face-owned slot identity.  The current Rust FFI returns a fresh slot snapshot
+  from `FT_Load_Glyph`; the C ABI has a face-owned public slot.  Do not promote
+  until Rust exposes/observes the same face-owned slot object rather than only
+  matching copied slot values.
+- `ftmodapi.FT_New_Library.creates_library_with_version_and_refcount`,
+  `ftmodapi.FT_Reference_Library.increments_refcount`, and
+  `ftmodapi.FT_Done_Library.decrements_reference_without_destroying` require a
+  maintained public `FT_New_Library`/`FT_Done_Library`/`FT_Reference_Library`
+  route with allocator identity, default-module state, and library refcount
+  semantics.  Test-only `FT_New_Library_Without_Default_Modules` helpers are
+  not enough because the manifest row observes public allocator-backed library
+  construction.
+- `ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name` requires public
+  face driver/module representation.  The current C ABI `FT_FaceRec` exposes
+  only `glyph`, `size`, and `internal`, so a helper-only module-name check would
+  not prove public macro parity.
+- `freetype.FT_Face_Properties.error_null_face` is intentionally pending:
+  pinned FreeType 2.14.3 dereferences a null `face` when `num_properties > 0`
+  and crashes.  Counting Rust `Invalid_Face_Handle` as parity would be a green
+  placeholder.
+- `freetype.FT_ENCODING_NONE.representative_runtime_observation` is
+  intentionally pending: the tracked encoding-none font is not C-openable in
+  the current fixture set; pinned C returns error `23`.
+- `ftglyph.FT_SvgGlyph.feature_availability_recorded` and
+  `ftincrem.FT_Incremental_FuncsRec.required_and_optional_callbacks` remain
+  pending because they need maintained glyph-object/SVG and incremental-font
+  callback routes, respectively.
+- `ftstroke.FT_Stroker_Export.invalid_inputs_noop` remains pending with the
+  broad stroker route; promoting just the invalid-input no-op would not prove
+  stroker object/path ownership or export behavior.
+
+Required fix plan for the next route batch:
+
+1. Prefer one cohesive surface per change instead of one row when rows share
+   state.  The next practical batches are module/library lifecycle,
+   face-owned slot identity, or a narrow stroker null/export subset if it can be
+   tied to a maintained stroker object route.
+2. For module/library lifecycle, add public `FT_MemoryRec`-backed
+   `FT_New_Library`, `FT_Reference_Library`, `FT_Done_Library`, and
+   `FT_Get_Module` observations through Rust FFI first, then thin C ABI and
+   WASM.  The implementation must preserve FreeType's public refcount behavior:
+   first `FT_Done_Library` after `FT_Reference_Library` leaves the library
+   usable; final done releases it.
+3. For face-owned slot identity, make Rust expose the same persistent
+   face-owned slot record that C exposes at `face->glyph`.  Compare slot
+   pointer identity and overwritten slot fields after repeated loads through
+   pinned C, Rust FFI, C ABI, and WASM.
+4. For asset blockers, do not rename or substitute files silently.  Either add
+   the exact required asset with provenance in `FONT_FIXTURE_INVENTORY.md` or
+   update the input row only after a pinned C oracle proves the replacement
+   exercises the same public behavior.
+5. Keep crash rows and non-C-openable fixture rows pending unless the fixture is
+   corrected.  Exact parity cannot mean replacing a C crash or C open error
+   with a nicer Rust error.
+
+Verification for this snapshot:
+
+```bash
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Face_Properties.error_null_face
+make -C pillow-rs-freetype test-case CASE=freetype.FT_ENCODING_NONE.representative_runtime_observation
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_SvgGlyph.feature_availability_recorded
+make -C pillow-rs-freetype test-case CASE=ftincrem.FT_Incremental_FuncsRec.required_and_optional_callbacks
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export.invalid_inputs_noop
+```
+
 ### Issue Set: `FT_Get_Multi_Master` generated Adobe MM descriptor route
 
 Status: eight real descriptor/capacity rows and one related
