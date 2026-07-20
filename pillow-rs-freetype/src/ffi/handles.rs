@@ -3736,6 +3736,103 @@ pub fn FT_Get_Multi_Master(
     FT_Err_Ok
 }
 
+pub fn FT_Set_MM_WeightVector(
+    face: Option<&mut FT_Face>,
+    len: FT_UInt,
+    weightvector: Option<&[FT_Fixed]>,
+) -> FT_Error {
+    if len != 0 && weightvector.is_none() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(len) = usize::try_from(len) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let result = if len == 0 && weightvector.is_none() {
+        // C parity: src/base/ftmm.c clears FT_FACE_FLAG_VARIATION after a
+        // successful zero-length Type 1 MM weight-vector reset.
+        face.inner
+            .borrow_mut()
+            .font_mut()
+            .set_type1_mm_weight_vector(None)
+    } else {
+        let Some(weightvector) = weightvector else {
+            return FT_Err_Invalid_Argument as FT_Error;
+        };
+        if weightvector.len() < len {
+            return FT_Err_Invalid_Argument as FT_Error;
+        }
+        let weights = weightvector[..len]
+            .iter()
+            .copied()
+            .map(i32::try_from)
+            .collect::<Result<Vec<_>, _>>();
+        let Ok(weights) = weights else {
+            return FT_Err_Invalid_Argument as FT_Error;
+        };
+        face.inner
+            .borrow_mut()
+            .font_mut()
+            .set_type1_mm_weight_vector(Some(&weights))
+    };
+    match result {
+        Ok(()) => {
+            let transform_matrix = face.transform_matrix;
+            let transform_delta = face.transform_delta;
+            let refcount = face.refcount;
+            let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
+            refreshed.transform_matrix = transform_matrix;
+            refreshed.transform_delta = transform_delta;
+            refreshed.refcount = refcount;
+            *face = refreshed;
+            FT_Err_Ok
+        }
+        Err(err) => error_to_ft(err) as FT_Error,
+    }
+}
+
+pub fn FT_Get_MM_WeightVector(
+    face: Option<&FT_Face>,
+    len: Option<&mut FT_UInt>,
+    weightvector: Option<&mut [FT_Fixed]>,
+) -> FT_Error {
+    let Some(len) = len else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if weightvector.is_none() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let capacity = match usize::try_from(*len) {
+        Ok(capacity) => capacity,
+        Err(_) => return FT_Err_Invalid_Argument as FT_Error,
+    };
+    let inner = face.inner.borrow();
+    let weights = match inner.font().type1_mm_weight_vector() {
+        Ok(weights) => weights,
+        Err(err) => return error_to_ft(err) as FT_Error,
+    };
+    if capacity < weights.len() {
+        *len = FT_UInt::try_from(weights.len()).unwrap_or(FT_UInt::MAX);
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(weightvector) = weightvector else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if weightvector.len() < capacity {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    for (index, out) in weightvector.iter_mut().take(capacity).enumerate() {
+        *out = weights.get(index).copied().map_or(0, FT_Fixed::from);
+    }
+    *len = FT_UInt::try_from(weights.len()).unwrap_or(FT_UInt::MAX);
+    FT_Err_Ok
+}
+
 pub fn FT_Get_X11_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
     FT_Get_Font_Format(face)
 }
