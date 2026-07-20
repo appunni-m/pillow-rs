@@ -8077,6 +8077,61 @@ fn active_size_handle_output(
     }
 }
 
+fn first_non_ok(errors: &[FT_Error]) -> FT_Error {
+    errors
+        .iter()
+        .copied()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok)
+}
+
+fn face_owned_handles_output(
+    status: FT_Error,
+    glyph_owner: &'static str,
+    size_owner: &'static str,
+    charmap_count: usize,
+) -> RunOutput {
+    let output = json!({
+        "opened": true,
+        "status": status,
+        "glyph": {"owner": glyph_owner},
+        "size": {"owner": size_owner},
+        "charmaps": (0..charmap_count)
+            .map(|index| json!({"index": index, "owner": "same_face"}))
+            .collect::<Vec<_>>(),
+        "handles_after_done": {"policy": "invalid_after_done_face"}
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_face_owned_handles(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let set_size_error = FT_Set_Pixel_Sizes(&mut face, 0, 20);
+    let select_error = FT_Select_Charmap(Some(&mut face), FT_ENCODING_UNICODE as FT_Encoding);
+    let load_error = FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT)
+        .map(|_| FT_Err_Ok)
+        .unwrap_or_else(|error| error);
+    let status = first_non_ok(&[set_size_error, select_error, load_error]);
+    Ok(face_owned_handles_output(
+        status,
+        if load_error == FT_Err_Ok {
+            "same_face"
+        } else {
+            "none"
+        },
+        if face.size.is_null() {
+            "none"
+        } else {
+            "same_face"
+        },
+        face.charmaps.len(),
+    ))
+}
+
 fn rust_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
@@ -19099,6 +19154,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(pixel_height.to_string());
             Ok(args)
         }
+        "freetype.face_owned_handles"
+            if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
+        {
+            let mut args = vec!["--face-owned-handles".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
@@ -21182,6 +21245,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_active_size_handle(case)
         }
+        "freetype.face_owned_handles"
+            if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
+        {
+            rust_face_owned_handles(case)
+        }
         "get_char_index" => {
             let face = open_face(case)?;
             Ok(ok(json!({
@@ -21806,6 +21874,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
         {
             c_active_size_handle(case)
+        }
+        "freetype.face_owned_handles"
+            if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
+        {
+            c_face_owned_handles(case)
         }
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
@@ -22643,6 +22716,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
         {
             wasm_active_size_handle(case)
+        }
+        "freetype.face_owned_handles"
+            if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
+        {
+            wasm_face_owned_handles(case)
         }
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
@@ -27450,6 +27528,32 @@ fn c_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
     Ok(output)
 }
 
+fn c_face_owned_handles(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let set_size_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 20);
+    let select_error = c_abi::FT_Select_Charmap(face, FT_ENCODING_UNICODE as FT_Encoding);
+    let load_error = c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT);
+    let status = first_non_ok(&[set_size_error, select_error, load_error]);
+    let charmap_count = c_abi::abi_charmap_count(face).unwrap_or(0) as usize;
+    let output = face_owned_handles_output(
+        status,
+        if load_error == FT_Err_Ok {
+            "same_face"
+        } else {
+            "none"
+        },
+        if c_active_size(face).is_null() {
+            "none"
+        } else {
+            "same_face"
+        },
+        charmap_count,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
 fn c_glyph_metrics_fields_json(face: c_abi::FT_Face) -> Result<Value, String> {
     let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
@@ -27880,6 +27984,32 @@ fn wasm_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
         metrics,
         load_error,
         loaded_hori_advance,
+    );
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn wasm_face_owned_handles(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let set_size_error = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, 0, 20);
+    let select_error =
+        wasm_abi::fontdone_wasm_select_charmap(handle, FT_ENCODING_UNICODE as FT_Encoding);
+    let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT);
+    let status = first_non_ok(&[set_size_error, select_error, load_error]);
+    let charmap_count = wasm_abi::fontdone_wasm_get_charmap_count(handle) as usize;
+    let output = face_owned_handles_output(
+        status,
+        if load_error == FT_Err_Ok {
+            "same_face"
+        } else {
+            "none"
+        },
+        if wasm_abi::fontdone_wasm_active_size(handle) == 0 {
+            "none"
+        } else {
+            "same_face"
+        },
+        charmap_count,
     );
     wasm_done_face(handle);
     Ok(output)
