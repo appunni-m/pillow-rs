@@ -10284,6 +10284,36 @@ Rejected candidates from this snapshot:
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` and
   `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` still require the
   declared Type1 PFB plus AFM/PFM auxiliary assets.
+- Follow-up core-route audit on 2026-07-20 after promoting
+  `FT_Bitmap_Size.available_sizes_values_match_c`:
+  - `freetype.FT_FaceRec.populated_public_fields_match_c` is not just a route
+    classification issue.  The row still names missing
+    `fonts/bitmap/embedded-strikes.ttf` and missing
+    `input/aux/type1/attach-afm-base.afm`, and its declared operation sequence
+    spans initial face snapshots, size mutation, glyph loading, charmap
+    selection, attachment, and variation mutation.  Required next fix: split or
+    normalize this into concrete per-operation snapshots with C-openable
+    assets before any real-parity promotion.
+  - `freetype.FT_Open_Args.open_face_consumes_args_like_c` has existing
+    memory/open-face variant helpers, but its fixture still describes abstract
+    `arg_variants` instead of the concrete `variants[]` rows consumed by the
+    maintained runner.  Required next fix: convert each variant into explicit
+    row parameters and keep `FT_OPEN_STREAM`/`FT_OPEN_PATHNAME` rows pending
+    until a real custom stream/path route exists.
+  - `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.open_face_uses_legacy_family_name`
+    and
+    `ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name`
+    now have the named font file in the worktree, but the rows still use
+    `control_parameters`/`test_parameters` while the maintained
+    `freetype.open_face_with_params` route expects normalized option rows.
+    Required next fix: convert them to the existing option-row input shape and
+    verify pinned C, Rust FFI, C ABI, and WASM ABI family/style strings exactly.
+  - `freetype.FT_ENCODING_NONE.representative_runtime_observation` has a file
+    at `fonts/no-encoding/bdf-or-pcf-encoding-none.bdf`, but pinned FreeType
+    2.14.3 currently returns error 23 when opening it through the generated
+    oracle.  Required next fix: replace it with a C-openable BDF/PCF fixture
+    whose public charmap actually reports `FT_ENCODING_NONE`; do not clear
+    `required_future_asset` based only on file presence.
 - `freetype.FT_GlyphSlot.overwritten_by_subsequent_load` expects same
   face-owned slot identity.  The current Rust FFI returns a fresh slot snapshot
   from `FT_Load_Glyph`; the C ABI has a face-owned public slot.  Do not promote
