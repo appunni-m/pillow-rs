@@ -14790,6 +14790,26 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--winfnt-charmap-probe")) {
+        FT_WinFNT_HeaderRec header;
+        memset(&header, 0, sizeof(header));
+        err = FT_Get_WinFNT_Header(face, &header);
+        print_status(err);
+        if (err) {
+            printf(",\"output\":{\"error\":%d,\"status\":%d}}\n", err, err);
+        } else {
+            printf(",\"output\":{\"error\":%d,\"status\":%d,\"header\":", err, err);
+            print_winfnt_header_json(&header);
+            printf(",\"charmap\":");
+            print_active_charmap(face);
+            printf("}}\n");
+        }
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-x11-font-format-alias")) {
         const char* font_format = FT_Get_Font_Format(face);
         const char* x11_format = FT_Get_X11_Font_Format(face);
@@ -17569,6 +17589,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if ((argc == 7 || argc == 8) && streq(argv[1], "--get-winfnt-header")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--winfnt-charmap-probe")) {
         return emit_face_or_slot(argc, argv);
     }
     if ((argc == 2 || argc == 3) && streq(argv[1], "--get-winfnt-header-null-face")) {

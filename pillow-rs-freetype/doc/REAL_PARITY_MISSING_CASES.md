@@ -169,6 +169,32 @@ make -C pillow-rs-freetype test-case CASE=ftwinfnt.FT_WinFNT_Header.mutable_outp
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: WinFNT MAC charset charmap route promotion
+
+Status: one-row audit cleanup completed on 2026-07-20 for the WinFNT MAC
+charset runtime charmap contract.
+
+Promoted case:
+
+- `FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap` now runs through
+  the pinned C FreeType oracle, Rust FFI, thin C ABI, and WASM ABI. FreeType
+  `src/winfonts/winfnt.c:858-876` creates the WinFNT face charmap with
+  `FT_ENCODING_APPLE_ROMAN` and `TT_PLATFORM_MACINTOSH` when the parsed WinFNT
+  header charset byte is `FT_WinFNT_ID_MAC` (`77`); the fixture now compares
+  exact `FT_Get_WinFNT_Header` charset and active charmap public fields.
+
+Impact:
+
+- `real-parity`: `4515 -> 4516`
+- `pending-route`: `441 -> 440`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: CID signature and Type1 sentinel contract cleanup
 
 Status: two-row audit cleanup completed on 2026-07-20 for public signature and

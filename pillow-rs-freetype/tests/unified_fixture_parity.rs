@@ -2487,6 +2487,7 @@ impl BackendComparisonWorker {
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "ftwinfnt.get_winfnt_header_mutation" => rust_get_winfnt_header_mutation(case),
+            "winfnt.charmap_probe" => rust_winfnt_charmap_probe(case),
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
@@ -2788,6 +2789,7 @@ impl BackendComparisonWorker {
                 output
             }
             "ftwinfnt.get_winfnt_header_mutation" => c_get_winfnt_header_mutation(case),
+            "winfnt.charmap_probe" => c_winfnt_charmap_probe(case),
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
@@ -3087,6 +3089,7 @@ impl BackendComparisonWorker {
                 output
             }
             "ftwinfnt.get_winfnt_header_mutation" => wasm_get_winfnt_header_mutation(case),
+            "winfnt.charmap_probe" => wasm_winfnt_charmap_probe(case),
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
@@ -3519,6 +3522,76 @@ fn wasm_get_winfnt_header_mutation(case: &InputCase) -> Result<RunOutput, String
     ]);
     wasm_done_face(non_winfnt_handle);
     wasm_done_face(winfnt_handle);
+    Ok(output)
+}
+
+fn winfnt_charmap_probe_output(err: FT_Error, header: Value, charmap: Value) -> RunOutput {
+    let output = json!({
+        "error": err,
+        "status": err,
+        "header": header,
+        "charmap": charmap,
+    });
+    if err == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(err, output)
+    }
+}
+
+fn rust_winfnt_charmap_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let face = rust_new_face_without_size(case)?;
+    let mut header = FT_WinFNT_HeaderRec::default();
+    let err = FT_Get_WinFNT_Header(Some(&face), Some(&mut header));
+    let header = if err == FT_Err_Ok {
+        winfnt_header_json(&header)
+    } else {
+        Value::Null
+    };
+    Ok(winfnt_charmap_probe_output(
+        err,
+        header,
+        rust_active_charmap_json(&face, rust_face_active_charmap_index(&face))?,
+    ))
+}
+
+fn c_winfnt_charmap_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut header = c_abi::FT_WinFNT_HeaderRec::default();
+    let err = c_abi::FT_Get_WinFNT_Header(face, &mut header);
+    let header = if err == FT_Err_Ok {
+        c_winfnt_header_json(&header)
+    } else {
+        Value::Null
+    };
+    let output = winfnt_charmap_probe_output(
+        err,
+        header,
+        c_active_charmap_json(face, c_abi::abi_active_charmap_index(face).unwrap_or(-1))?,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_winfnt_charmap_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let mut header = wasm_abi::FontdoneWasmWinFNTHeader::default();
+    let err = wasm_abi::fontdone_wasm_get_winfnt_header(handle, &mut header);
+    let header = if err == FT_Err_Ok {
+        wasm_winfnt_header_json(&header)
+    } else {
+        Value::Null
+    };
+    let output = winfnt_charmap_probe_output(
+        err,
+        header,
+        wasm_active_charmap_json(
+            handle,
+            wasm_abi::fontdone_wasm_get_active_charmap_index(handle),
+        )?,
+    );
+    wasm_done_face(handle);
     Ok(output)
 }
 
@@ -21166,6 +21239,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 .ok_or_else(|| "missing non_winfnt_font asset".to_string())?;
             push_asset_source(non_winfnt, &mut args)?;
             args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "winfnt.charmap_probe" => {
+            let mut args = vec!["--winfnt-charmap-probe".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push("none".to_string());
+            args.push("0".to_string());
             Ok(args)
         }
         "tttables.get_cmap_format" => {

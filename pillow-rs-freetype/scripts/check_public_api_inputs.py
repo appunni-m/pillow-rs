@@ -1646,7 +1646,6 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
     """Rows for specialized public records without a maintained route."""
     specialized_rows_without_maintained_route = {
         "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
-        "ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap",
         "otsvg.FT_SVG_Document.renderer_callback_observes_document",
         "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
         "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
@@ -3285,6 +3284,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftwinfnt.FT_WinFNT_Header.mutable_output_handle_contract"
     ):
         return "FT_Get_WinFNT_Header caller-owned output mutation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "winfnt.charmap_probe"
+        and row.case_id == "ftwinfnt.FT_WinFNT_ID_MAC.mac_charset_selects_apple_roman_charmap"
+    ):
+        return "WinFNT charset 77 charmap selection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftoutln.outline_check"
         and row.case_id == "ftoutln.FT_Outline_Check.invalid_null_or_count_mismatch"
