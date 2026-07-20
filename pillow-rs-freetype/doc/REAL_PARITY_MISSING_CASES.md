@@ -10679,6 +10679,18 @@ FTMM metrics-variation route follow-up on 2026-07-20:
   advance only; rendered bitmap parity for the same fixture is covered by the
   glyph-output rows above.
 
+FTMM Adobe MM descriptor route follow-up on 2026-07-20:
+
+- `ftmm.FT_Multi_Master.populated_by_adobe_mm_service` now has a maintained
+  two-face route using `fonts/type1-mm/adobe-mm-two-axis.pfb` as the Adobe MM
+  success face and `fonts/variable/inter-wght.ttf` as the OpenType variation
+  error-control face.  Pinned FreeType 2.14.3 returns `FT_Err_Ok` for the
+  Adobe MM descriptor and `FT_Err_Invalid_Argument` for the OpenType control.
+- The route compares `num_axis`, `num_designs`, all four inline `FT_MM_Axis`
+  slots, and preserved sentinel state for unused axis slots through pinned C
+  oracle, Rust FFI, C ABI, and WASM ABI.  This avoids treating OpenType
+  variable-font behavior as Adobe MM behavior.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.

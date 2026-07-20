@@ -1371,7 +1371,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
-        "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
@@ -3803,6 +3802,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_Var.variable_font_descriptor_success"
     ):
         return "FT_Get_MM_Var OpenType variable descriptor validates fvar axes, namedstyles, axis flags, and FT_Done_MM_Var release through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_multi_master"
+        and row.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service"
+    ):
+        return "FT_Get_Multi_Master validates Adobe MM descriptor population plus OpenType variable-face error control through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_var"
         and row.case_id == "ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count"

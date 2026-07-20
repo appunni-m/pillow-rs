@@ -10283,6 +10283,40 @@ static void print_ftmm_get_multi_master_output(FT_Error err, const FT_Multi_Mast
     printf("}}\n");
 }
 
+static void print_ftmm_multi_master_populated_output(
+    FT_Error success_err,
+    const FT_Multi_Master* success_master,
+    FT_Error control_err) {
+    printf("{");
+    print_status(success_err);
+    printf(",\"output\":");
+    if (success_err) {
+        printf("null");
+    } else {
+        printf("{\"success_return\":%d,\"error_control_return\":%d,"
+               "\"num_axis\":%u,\"num_designs\":%u,\"axis\":",
+               success_err,
+               control_err,
+               (unsigned)success_master->num_axis,
+               (unsigned)success_master->num_designs);
+        printf("[");
+        for (FT_UInt i = 0; i < 4; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("{\"name\":");
+            print_postscript_name_result(success_master->axis[i].name);
+            printf(",\"minimum\":%ld,\"maximum\":%ld}",
+                   (long)success_master->axis[i].minimum,
+                   (long)success_master->axis[i].maximum);
+        }
+        printf("],\"unused_axis_slots\":");
+        print_json_bool(multi_master_unused_slots_preserved(success_master));
+        printf("}");
+    }
+    printf("}\n");
+}
+
 static void print_ftmm_var_axis(const FT_Var_Axis* axis) {
     printf("{\"name\":");
     print_postscript_name_result(axis->name);
@@ -10573,6 +10607,33 @@ static int emit_ftmm_get_multi_master(int argc, char** argv) {
     err = FT_Get_Multi_Master(face.face, streq(argv[6], "null") ? NULL : &master);
     print_ftmm_get_multi_master_output(err, &master);
     close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_get_multi_master_adobe_control(int argc, char** argv) {
+    (void)argc;
+    OracleFace success_face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &success_face);
+    if (opened != 0) {
+        return opened;
+    }
+    OracleFace control_face;
+    opened = open_oracle_face(argv[5], argv[6], atol(argv[7]), &control_face);
+    if (opened != 0) {
+        close_oracle_face(&success_face);
+        return opened;
+    }
+
+    FT_Multi_Master success_master;
+    init_multi_master_sentinel(&success_master);
+    FT_Multi_Master control_master;
+    init_multi_master_sentinel(&control_master);
+    FT_Error success_err = FT_Get_Multi_Master(success_face.face, &success_master);
+    FT_Error control_err = FT_Get_Multi_Master(control_face.face, &control_master);
+    print_ftmm_multi_master_populated_output(success_err, &success_master, control_err);
+
+    close_oracle_face(&control_face);
+    close_oracle_face(&success_face);
     return 0;
 }
 
@@ -17098,6 +17159,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 6 || argc == 7) && streq(argv[1], "--ftmm-get-multi-master")) {
         return emit_ftmm_get_multi_master(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--ftmm-get-multi-master-adobe-control")) {
+        return emit_ftmm_get_multi_master_adobe_control(argc, argv);
     }
     if ((argc == 5 || argc == 6) && streq(argv[1], "--ftmm-get-mm-var")) {
         return emit_ftmm_get_mm_var(argc, argv);
