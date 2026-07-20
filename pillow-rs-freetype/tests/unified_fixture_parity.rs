@@ -21632,6 +21632,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--outline-get-orientation-mutated".to_string(),
             case.case_id.clone(),
         ]),
+        "ftoutln.outline_reverse_orientation" => Ok(vec![
+            "--outline-reverse-orientation".to_string(),
+            case.case_id.clone(),
+        ]),
         "ftoutln.outline_check" => Ok(vec!["--outline-check".to_string(), case.case_id.clone()]),
         "ftoutln.outline_copy" => Ok(vec!["--outline-copy".to_string(), case.case_id.clone()]),
         "ftoutln.outline_done" => Ok(vec!["--outline-done".to_string(), case.case_id.clone()]),
@@ -22567,6 +22571,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftoutln.get_orientation_after_mutation" => {
             rust_outline_orientation_after_mutation_runtime_output(case)
+        }
+        "ftoutln.outline_reverse_orientation" => {
+            rust_outline_reverse_orientation_runtime_output(case)
         }
         "ftoutln.outline_check" => rust_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => rust_outline_copy_runtime_output(case),
@@ -23543,6 +23550,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftoutln.get_orientation_after_mutation" => {
             c_outline_orientation_after_mutation_runtime_output(case)
         }
+        "ftoutln.outline_reverse_orientation" => c_outline_reverse_orientation_runtime_output(case),
         "ftoutln.outline_check" => c_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => c_outline_copy_runtime_output(case),
         "ftoutln.outline_done" => c_outline_done_runtime_output(case),
@@ -24361,6 +24369,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftoutln.get_orientation_after_mutation" => {
             wasm_outline_orientation_after_mutation_runtime_output(case)
+        }
+        "ftoutln.outline_reverse_orientation" => {
+            wasm_outline_reverse_orientation_runtime_output(case)
         }
         "ftoutln.outline_check" => wasm_outline_check_runtime_output(case),
         "ftoutln.outline_copy" => wasm_outline_copy_runtime_output(case),
@@ -34044,6 +34055,280 @@ fn wasm_outline_reverse_runtime_output(case: &InputCase) -> Result<RunOutput, St
     outline_reverse_runtime_output(case, wasm_reverse_mutable_outline)
 }
 
+fn reverse_orientation_fixture_model() -> MutableOutlineModel {
+    MutableOutlineModel {
+        points: vec![
+            (4 * 64, 4 * 64),
+            (12 * 64, 4 * 64),
+            (12 * 64, 12 * 64),
+            (4 * 64, 12 * 64),
+        ],
+        tags: vec![1; 4],
+        contours: vec![3],
+        flags: 0,
+    }
+}
+
+fn bbox_value(x_min: i64, y_min: i64, x_max: i64, y_max: i64) -> Value {
+    json!({
+        "xMin": x_min,
+        "yMin": y_min,
+        "xMax": x_max,
+        "yMax": y_max
+    })
+}
+
+fn decompose_events_json(runs: Vec<FTOutlineDecomposeRun>) -> Result<Value, String> {
+    let run = runs.into_iter().next().ok_or_else(|| {
+        "outline reverse orientation route requires one decompose run".to_string()
+    })?;
+    Ok(Value::Array(
+        run.events
+            .into_iter()
+            .map(outline_decompose_event_json)
+            .collect(),
+    ))
+}
+
+fn outline_reverse_orientation_output<F, G, H>(
+    case: &InputCase,
+    mut reverse: F,
+    mut observe: G,
+    invalid_rows: H,
+) -> Result<RunOutput, String>
+where
+    F: FnMut(Option<&mut MutableOutlineModel>),
+    G: FnMut(&MutableOutlineModel) -> Result<Value, String>,
+    H: FnOnce() -> Result<Value, String>,
+{
+    if !case
+        .case_id
+        .ends_with(".reverse_toggles_orientation_fixture")
+    {
+        return Err(format!(
+            "unsupported outline reverse orientation case {}",
+            case.case_id
+        ));
+    }
+
+    let mut model = reverse_orientation_fixture_model();
+    let before = observe(&model)?;
+    reverse(Some(&mut model));
+    let after = observe(&model)?;
+
+    Ok(ok(json!({
+        "before": before,
+        "after": after,
+        "invalid_rows": invalid_rows()?
+    })))
+}
+
+fn rust_reverse_orientation_observe(model: &MutableOutlineModel) -> Result<Value, String> {
+    let snapshot = rust_snapshot_from_mutable(model);
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(&snapshot), Some(&mut cbox));
+    let mut bbox = FT_BBox::default();
+    let bbox_error = FT_Outline_Get_BBox(Some(&snapshot), Some(&mut bbox));
+    if bbox_error != FT_Err_Ok {
+        return Err(format!("FT_Outline_Get_BBox returned {bbox_error}"));
+    }
+    let events = decompose_events_json(
+        FT_Outline_Decompose_Trace(Some(&snapshot), &[(0, 0)])
+            .map_err(|err| format!("FT_Outline_Decompose_Trace returned {err}"))?,
+    )?;
+    let library = FT_Init_FreeType();
+    let mut buffer = vec![0u8; 16 * 16];
+    let target =
+        rust_outline_get_bitmap_target_with_buffer(FT_PIXEL_MODE_GRAY as u8, buffer.as_mut_ptr());
+    let bitmap = FT_Outline_Get_Bitmap(Some(&library), Some(&snapshot), Some(&target))
+        .map_err(|err| format!("FT_Outline_Get_Bitmap returned {err}"))?;
+    Ok(json!({
+        "orientation": FT_Outline_Get_Orientation(Some(&snapshot)),
+        "points": outline_points_json(&model.points),
+        "tags": model.tags,
+        "contours": model.contours,
+        "flags": model.flags,
+        "cbox": bbox_value(cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax),
+        "bbox": bbox_value(bbox.xMin, bbox.yMin, bbox.xMax, bbox.yMax),
+        "decompose_events": events,
+        "bitmap": outline_get_bitmap_result_json(FT_Err_Ok, FT_RASTER_FLAG_AA, &bitmap)
+            .get("bitmap")
+            .cloned()
+            .unwrap_or(Value::Null)
+    }))
+}
+
+fn c_reverse_orientation_observe(model: &MutableOutlineModel) -> Result<Value, String> {
+    let mut storage = CMutableOutlineStorage::new(model.clone());
+    let outline_ptr = storage.as_mut_ptr();
+    let mut cbox = c_abi::FT_BBox::default();
+    c_abi::FT_Outline_Get_CBox(outline_ptr, &mut cbox);
+    let mut bbox = c_abi::FT_BBox::default();
+    let bbox_error = c_abi::FT_Outline_Get_BBox(outline_ptr, &mut bbox);
+    if bbox_error != FT_Err_Ok {
+        return Err(format!("C ABI FT_Outline_Get_BBox returned {bbox_error}"));
+    }
+    let events = decompose_events_json(
+        c_abi::abi_support_outline_decompose_trace(outline_ptr, &[(0, 0)])
+            .map_err(|err| format!("C ABI outline decompose returned {err}"))?,
+    )?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Err(format!("C ABI FT_Init_FreeType returned {init_error}"));
+    }
+    let mut buffer = vec![0u8; 16 * 16];
+    let mut bitmap = c_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as i32, &mut buffer);
+    let bitmap_error = c_abi::FT_Outline_Get_Bitmap(library, outline_ptr, &mut bitmap);
+    c_done_library(library);
+    if bitmap_error != FT_Err_Ok {
+        return Err(format!(
+            "C ABI FT_Outline_Get_Bitmap returned {bitmap_error}"
+        ));
+    }
+    Ok(json!({
+        "orientation": c_abi::FT_Outline_Get_Orientation(outline_ptr),
+        "points": outline_points_json(&model.points),
+        "tags": model.tags,
+        "contours": model.contours,
+        "flags": model.flags,
+        "cbox": bbox_value(cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax),
+        "bbox": bbox_value(bbox.xMin, bbox.yMin, bbox.xMax, bbox.yMax),
+        "decompose_events": events,
+        "bitmap": c_outline_get_bitmap_result_json(FT_Err_Ok, FT_RASTER_FLAG_AA, &bitmap, &buffer)
+            .get("bitmap")
+            .cloned()
+            .unwrap_or(Value::Null)
+    }))
+}
+
+fn wasm_reverse_orientation_observe(model: &MutableOutlineModel) -> Result<Value, String> {
+    let mut storage = WasmMutableOutlineStorage::new(model.clone());
+    let outline_ptr = storage.as_mut_ptr();
+    let mut cbox = wasm_abi::FontdoneWasmBBox::default();
+    wasm_abi::fontdone_wasm_outline_get_cbox(outline_ptr, &mut cbox);
+    let mut bbox = wasm_abi::FontdoneWasmBBox::default();
+    let bbox_error = wasm_abi::fontdone_wasm_outline_get_bbox(outline_ptr, &mut bbox);
+    if bbox_error != FT_Err_Ok {
+        return Err(format!("WASM ABI outline_get_bbox returned {bbox_error}"));
+    }
+    let events = decompose_events_json(
+        wasm_abi::abi_support_outline_decompose_trace(outline_ptr, &[(0, 0)])
+            .map_err(|err| format!("WASM ABI outline decompose returned {err}"))?,
+    )?;
+    let mut buffer = vec![0u8; 16 * 16];
+    let mut bitmap = wasm_outline_get_bitmap_target(FT_PIXEL_MODE_GRAY as i32, &mut buffer);
+    let bitmap_error = wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline_ptr, &mut bitmap);
+    if bitmap_error != FT_Err_Ok {
+        return Err(format!(
+            "WASM ABI outline_get_bitmap returned {bitmap_error}"
+        ));
+    }
+    Ok(json!({
+        "orientation": wasm_abi::fontdone_wasm_outline_get_orientation(outline_ptr),
+        "points": outline_points_json(&model.points),
+        "tags": model.tags,
+        "contours": model.contours,
+        "flags": model.flags,
+        "cbox": bbox_value(cbox.xMin, cbox.yMin, cbox.xMax, cbox.yMax),
+        "bbox": bbox_value(bbox.xMin, bbox.yMin, bbox.xMax, bbox.yMax),
+        "decompose_events": events,
+        "bitmap": wasm_outline_get_bitmap_result_json(FT_Err_Ok, FT_RASTER_FLAG_AA, &bitmap, &buffer)
+            .get("bitmap")
+            .cloned()
+            .unwrap_or(Value::Null)
+    }))
+}
+
+fn rust_reverse_orientation_invalid_rows() -> Result<Value, String> {
+    let count_mismatch = check_outline_model(CheckOutlineKind::NonIncreasingContours)
+        .ok_or_else(|| "missing count mismatch outline model".to_string())?;
+    let count_mismatch_error = FT_Outline_Check(Some(&rust_snapshot_from_mutable(&count_mismatch)));
+    let bad_cubic = bbox_malformed_outline_model(BBoxMalformedOutlineKind::FirstPointCubic);
+    let bad_cubic_error = match FT_Outline_Decompose_Trace(
+        Some(&rust_snapshot_from_mutable(&bad_cubic)),
+        &[(0, 0)],
+    ) {
+        Ok(_) => FT_Err_Ok,
+        Err(err) => err,
+    };
+    Ok(json!([
+        {"label": "count_mismatch_rejected_before_reverse", "return": count_mismatch_error},
+        {"label": "invalid_cubic_start_decompose_error", "return": bad_cubic_error}
+    ]))
+}
+
+fn c_reverse_orientation_invalid_rows() -> Result<Value, String> {
+    let count_mismatch = check_outline_model(CheckOutlineKind::NonIncreasingContours)
+        .ok_or_else(|| "missing count mismatch outline model".to_string())?;
+    let mut count_storage = CMutableOutlineStorage::new(count_mismatch);
+    let count_mismatch_error = c_abi::FT_Outline_Check(count_storage.as_mut_ptr());
+    let bad_cubic = bbox_malformed_outline_model(BBoxMalformedOutlineKind::FirstPointCubic);
+    let mut bad_storage = CMutableOutlineStorage::new(bad_cubic);
+    let bad_cubic_error =
+        match c_abi::abi_support_outline_decompose_trace(bad_storage.as_mut_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    Ok(json!([
+        {"label": "count_mismatch_rejected_before_reverse", "return": count_mismatch_error},
+        {"label": "invalid_cubic_start_decompose_error", "return": bad_cubic_error}
+    ]))
+}
+
+fn wasm_reverse_orientation_invalid_rows() -> Result<Value, String> {
+    let count_mismatch = check_outline_model(CheckOutlineKind::NonIncreasingContours)
+        .ok_or_else(|| "missing count mismatch outline model".to_string())?;
+    let mut count_storage = WasmMutableOutlineStorage::new(count_mismatch);
+    let count_mismatch_error = wasm_abi::fontdone_wasm_outline_check(count_storage.as_mut_ptr());
+    let bad_cubic = bbox_malformed_outline_model(BBoxMalformedOutlineKind::FirstPointCubic);
+    let mut bad_storage = WasmMutableOutlineStorage::new(bad_cubic);
+    let bad_cubic_error =
+        match wasm_abi::abi_support_outline_decompose_trace(bad_storage.as_mut_ptr(), &[(0, 0)]) {
+            Ok(_) => FT_Err_Ok,
+            Err(err) => err,
+        };
+    Ok(json!([
+        {"label": "count_mismatch_rejected_before_reverse", "return": count_mismatch_error},
+        {"label": "invalid_cubic_start_decompose_error", "return": bad_cubic_error}
+    ]))
+}
+
+fn rust_outline_reverse_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_orientation_output(
+        case,
+        |model| {
+            let Some(model) = model else {
+                FT_Outline_Reverse(None);
+                return;
+            };
+            let mut snapshot = rust_snapshot_from_mutable(model);
+            FT_Outline_Reverse(Some(&mut snapshot));
+            update_mutable_from_rust_snapshot(model, snapshot);
+        },
+        rust_reverse_orientation_observe,
+        rust_reverse_orientation_invalid_rows,
+    )
+}
+
+fn c_outline_reverse_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_orientation_output(
+        case,
+        c_reverse_mutable_outline,
+        c_reverse_orientation_observe,
+        c_reverse_orientation_invalid_rows,
+    )
+}
+
+fn wasm_outline_reverse_orientation_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
+    outline_reverse_orientation_output(
+        case,
+        wasm_reverse_mutable_outline,
+        wasm_reverse_orientation_observe,
+        wasm_reverse_orientation_invalid_rows,
+    )
+}
+
 fn outline_transform_matrix(case: &InputCase) -> (i64, i64, i64, i64) {
     if case
         .case_id
@@ -41013,7 +41298,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         | "ftglyph.matrix_invert" => return "math_rows",
         "ftoutln.outline_render" | "ftoutln.outline_render_direct" => return "outline_render",
         "ftoutln.outline_decompose" => return "outline_decompose",
-        "ftoutln.outline_reverse" | "ftoutln.outline_transform" => return "api_object",
+        "ftoutln.outline_reverse"
+        | "ftoutln.outline_reverse_orientation"
+        | "ftoutln.outline_transform" => return "api_object",
         "ftoutln.outline_get_bitmap" if outline_get_bitmap_runtime_supported(case) => {
             return "outline_get_bitmap";
         }

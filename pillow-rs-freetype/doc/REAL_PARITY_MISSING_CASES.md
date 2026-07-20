@@ -1,5 +1,42 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_ORIENTATION_FILL_LEFT` reverse observation route
+
+Status: completed on 2026-07-20 for one composite outline reverse/orientation
+row.
+
+Implemented real parity row:
+
+- `ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture`
+
+Finding:
+
+- The fixture requires the public effect of `FT_Outline_Reverse` to be observed
+  through orientation, points, tags, contours, flags, cbox, bbox, outline
+  decomposition callbacks, bitmap rendering, and invalid-control rows.
+- The previous audit kept the row `pending-route` because only smaller
+  individual outline reverse/orientation helpers were maintained; promoting the
+  row through those partial helpers would have skipped required public outputs.
+- The new route calls pinned FreeType 2.14.3, Rust FFI, C ABI, and WASM ABI on
+  equivalent synthetic outlines and compares the full combined output exactly.
+
+Impact:
+
+- `real-parity`: `4532 -> 4533`
+- `pending-route`: `429 -> 428`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `8`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture
+make -C pillow-rs-freetype route-audit
+make -C pillow-rs-freetype fmt
+python3 -m py_compile pillow-rs-freetype/scripts/check_public_api_inputs.py
+git diff --check
+```
+
 ### Issue Set Current: `FT_Get_SubGlyph_Info` null-output wrapper contract
 
 Status: classified on 2026-07-20; no route promoted.

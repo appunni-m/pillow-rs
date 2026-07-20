@@ -8111,6 +8111,209 @@ static int emit_outline_get_orientation_mutated(int argc, char** argv) {
     return 0;
 }
 
+static void build_reverse_orientation_fixture(FT_Outline* outline, FT_Vector* points, unsigned char* tags, unsigned short* contours) {
+    points[0].x = 4L * 64L;
+    points[0].y = 4L * 64L;
+    points[1].x = 12L * 64L;
+    points[1].y = 4L * 64L;
+    points[2].x = 12L * 64L;
+    points[2].y = 12L * 64L;
+    points[3].x = 4L * 64L;
+    points[3].y = 12L * 64L;
+    for (int i = 0; i < 4; i++) {
+        tags[i] = FT_CURVE_TAG_ON;
+    }
+    contours[0] = 3;
+    outline->n_contours = 1;
+    outline->n_points = 4;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+}
+
+static void print_bbox_object(FT_BBox bbox) {
+    printf("{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           bbox.xMin,
+           bbox.yMin,
+           bbox.xMax,
+           bbox.yMax);
+}
+
+static void print_outline_tags(const FT_Outline* outline) {
+    printf("[");
+    for (int i = 0; i < outline->n_points; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("%u", (unsigned char)outline->tags[i]);
+    }
+    printf("]");
+}
+
+static void print_outline_contours(const FT_Outline* outline) {
+    printf("[");
+    for (int i = 0; i < outline->n_contours; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("%d", outline->contours[i]);
+    }
+    printf("]");
+}
+
+static void print_recorded_outline_events_array(void) {
+    printf("[");
+    for (int i = 0; i < recorded_outline_event_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        printf("{\"kind\":\"%s\",\"points\":[", recorded_outline_events[i].kind);
+        for (int j = 0; j < recorded_outline_events[i].count; j++) {
+            if (j) {
+                printf(",");
+            }
+            printf("{\"x\":%ld,\"y\":%ld}",
+                   recorded_outline_events[i].points[j].x,
+                   recorded_outline_events[i].points[j].y);
+        }
+        printf("]}");
+    }
+    printf("]");
+}
+
+static FT_Error decompose_outline_for_reverse_orientation(FT_Outline* outline) {
+    FT_Outline_Funcs funcs;
+    funcs.move_to = record_outline_move_to;
+    funcs.line_to = record_outline_line_to;
+    funcs.conic_to = record_outline_conic_to;
+    funcs.cubic_to = record_outline_cubic_to;
+    funcs.shift = 0;
+    funcs.delta = 0;
+    reset_recorded_outline_events();
+    return FT_Outline_Decompose(outline, &funcs, recorded_outline_decompose_user_token);
+}
+
+static void print_reverse_orientation_bitmap(FT_Library library, FT_Outline* outline) {
+    unsigned char buffer[16 * 16];
+    FT_Bitmap bitmap;
+    setup_outline_get_bitmap_target(&bitmap, buffer, FT_PIXEL_MODE_GRAY);
+    FT_Error err = FT_Outline_Get_Bitmap(library, outline, &bitmap);
+    if (err) {
+        printf("null");
+    } else {
+        long len = 0;
+        if (bitmap.buffer && bitmap.rows > 0) {
+            len = labs(bitmap.pitch) * bitmap.rows;
+        }
+        printf("{\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"buffer_hex\":\"",
+               bitmap.width,
+               bitmap.rows,
+               bitmap.pitch,
+               bitmap.pixel_mode,
+               bitmap.num_grays);
+        if (bitmap.buffer && len > 0) {
+            print_hex_bytes(bitmap.buffer, len);
+        }
+        printf("\"}");
+    }
+}
+
+static FT_Error print_reverse_orientation_observation(FT_Library library, const char* name, FT_Outline* outline) {
+    FT_BBox cbox;
+    FT_BBox bbox;
+    FT_Error bbox_error;
+    FT_Error decompose_error;
+
+    FT_Outline_Get_CBox(outline, &cbox);
+    bbox_error = FT_Outline_Get_BBox(outline, &bbox);
+    decompose_error = decompose_outline_for_reverse_orientation(outline);
+
+    printf("\"%s\":{\"orientation\":%d,\"points\":", name, FT_Outline_Get_Orientation(outline));
+    print_mutated_points(outline->points, (unsigned int)outline->n_points);
+    printf(",\"tags\":");
+    print_outline_tags(outline);
+    printf(",\"contours\":");
+    print_outline_contours(outline);
+    printf(",\"flags\":%d,\"cbox\":", outline->flags);
+    print_bbox_object(cbox);
+    printf(",\"bbox\":");
+    print_bbox_object(bbox);
+    printf(",\"decompose_events\":");
+    if (decompose_error) {
+        printf("[]");
+    } else {
+        print_recorded_outline_events_array();
+    }
+    printf(",\"bitmap\":");
+    if (bbox_error || decompose_error) {
+        printf("null");
+    } else {
+        print_reverse_orientation_bitmap(library, outline);
+    }
+    printf("}");
+    return bbox_error ? bbox_error : decompose_error;
+}
+
+static FT_Error reverse_orientation_count_mismatch_error(void) {
+    FT_Vector points[4] = {{0,0},{64,0},{64,64},{0,64}};
+    unsigned char tags[4] = {FT_CURVE_TAG_ON,FT_CURVE_TAG_ON,FT_CURVE_TAG_ON,FT_CURVE_TAG_ON};
+    unsigned short contours[2] = {2,2};
+    FT_Outline outline = {2, 4, points, tags, contours, 0};
+    return FT_Outline_Check(&outline);
+}
+
+static FT_Error reverse_orientation_bad_cubic_error(void) {
+    FT_Vector points[3] = {{0,0},{64,64},{128,0}};
+    unsigned char tags[3] = {FT_CURVE_TAG_CUBIC,FT_CURVE_TAG_CUBIC,FT_CURVE_TAG_ON};
+    unsigned short contours[1] = {2};
+    FT_Outline outline = {1, 3, points, tags, contours, 0};
+    return decompose_outline_for_reverse_orientation(&outline);
+}
+
+static int emit_outline_reverse_orientation(int argc, char** argv) {
+    if (argc != 3) {
+        return 1;
+    }
+    const char* case_id = argv[2];
+    if (!strstr(case_id, "FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture")) {
+        fprintf(stderr, "unsupported outline reverse orientation case: %s\n", case_id);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FT_Outline outline;
+    FT_Vector points[4];
+    unsigned char tags[4];
+    unsigned short contours[1];
+    build_reverse_orientation_fixture(&outline, points, tags, contours);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{");
+    FT_Error before_error = print_reverse_orientation_observation(library, "before", &outline);
+    FT_Outline_Reverse(&outline);
+    printf(",");
+    FT_Error after_error = print_reverse_orientation_observation(library, "after", &outline);
+    FT_Error count_error = reverse_orientation_count_mismatch_error();
+    FT_Error cubic_error = reverse_orientation_bad_cubic_error();
+    printf(",\"invalid_rows\":[");
+    printf("{\"label\":\"count_mismatch_rejected_before_reverse\",\"return\":%d},", count_error);
+    printf("{\"label\":\"invalid_cubic_start_decompose_error\",\"return\":%d}", cubic_error);
+    printf("]}}\n");
+
+    FT_Done_FreeType(library);
+    return (before_error || after_error) ? 2 : 0;
+}
+
 static void print_outline_border_row(
     const char* label,
     OrientationOutlineKind kind,
@@ -17637,6 +17840,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--outline-get-orientation-mutated")) {
         return emit_outline_get_orientation_mutated(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--outline-reverse-orientation")) {
+        return emit_outline_reverse_orientation(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--outline-border")) {
         return emit_outline_border(argc, argv);
