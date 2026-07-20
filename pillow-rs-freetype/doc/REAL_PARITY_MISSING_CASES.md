@@ -12693,8 +12693,30 @@ Current blocker families:
   resolution handling, call-owned scaler lifetime, and cached size identity.
 - `FTC_Manager_RemoveFaceID`: unreferenced removal, referenced-node hiding until
   unref, unchanged other face IDs, and null/unknown inputs.
-- CMap/Image/SBit cache creation: manager-owned opaque handles, cache
-  registration, reset interactions, and cache-limit behavior.
+- CMap/Image/SBit cache creation rows are split by exact obligation instead of
+  sharing a broad manager-owned-cache blocker:
+  - `FTC_CMapCache.manager_owned_opaque_cache`: CMap cache handle ownership,
+    stability across lookups, and distinction from caller-owned descriptors.
+  - `FTC_ImageCache.manager_owned_opaque_cache`: Image cache handle ownership,
+    stability across glyph lookups, and node ownership participation.
+  - `FTC_SBitCache.manager_owned_sbit_cache`: SBit cache handle ownership,
+    stability across sbit lookups, and node ownership participation.
+  - `FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope`: maintained
+    same-input CMap cache creation route, not an out-of-scope placeholder.
+  - `FTC_CMapCache_New.success_create_and_destroy_with_manager`: manager-owned
+    CMap cache destruction through `FTC_Manager_Done`.
+  - `FTC_CMapCache_New.success_multiple_cache_registration_limit`: repeated
+    cache registration limit and preservation of prior caches.
+  - `FTC_CMapCache_New.lifecycle_after_manager_reset`: manager reset preserves
+    the CMap cache handle while clearing cached CMap entries.
+  - `FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope`: maintained
+    same-input Image cache creation route, not an out-of-scope placeholder.
+  - `FTC_ImageCache_New.success_create_lookup_destroy_lifecycle`: create, glyph
+    lookup, node ownership, and manager-driven destroy behavior.
+  - `FTC_ImageCache_New.success_manager_reset_preserves_handle`: manager reset
+    preserves the Image cache handle while clearing cached glyph and node state.
+  - `FTC_SBitCache_New.creates_manager_owned_cache`: SBit cache creation,
+    lookup/node lifecycle participation, and manager teardown ownership.
 - `FTC_CMapCache_Lookup` rows are split by exact scenario and codepoint variant
   instead of sharing a broad cmap-cache blocker.  Each scenario must be proven
   for `cp65`, `cp1114111`, and `cp57344`:
