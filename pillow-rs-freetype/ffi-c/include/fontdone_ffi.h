@@ -418,6 +418,9 @@ struct FT_LibraryRec_ {
 
 FT_Error FT_Init_FreeType(FT_Library* alibrary);
 FT_Error FT_Done_FreeType(FT_Library library);
+FT_Error FT_New_Library(FT_Memory memory, FT_Library* alibrary);
+FT_Error FT_Reference_Library(FT_Library library);
+FT_Error FT_Done_Library(FT_Library library);
 FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var** amaster);
 FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var* amaster);
 FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var* master, FT_UInt axis_index, FT_UInt* flags);

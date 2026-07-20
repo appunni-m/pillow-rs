@@ -879,6 +879,34 @@ pub struct FT_LibraryRec {
     pub internal: *mut c_void,
 }
 
+struct LibraryState {
+    inner: rust_ffi::FT_Library,
+    allocation_memory: FT_Memory,
+    allocation_block: FT_Pointer,
+}
+
+impl LibraryState {
+    fn new(inner: rust_ffi::FT_Library) -> Self {
+        Self {
+            inner,
+            allocation_memory: std::ptr::null_mut(),
+            allocation_block: std::ptr::null_mut(),
+        }
+    }
+
+    fn new_with_allocation(
+        inner: rust_ffi::FT_Library,
+        allocation_memory: FT_Memory,
+        allocation_block: FT_Pointer,
+    ) -> Self {
+        Self {
+            inner,
+            allocation_memory,
+            allocation_block,
+        }
+    }
+}
+
 struct FaceState {
     inner: rust_ffi::FT_Face,
     size_records: Vec<FT_Size>,
@@ -1560,7 +1588,87 @@ pub extern "C" fn FT_Init_FreeType(alibrary: *mut FT_Library) -> FT_Error {
         return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
     };
     let library = Box::new(FT_LibraryRec {
-        internal: Box::into_raw(Box::new(rust_ffi::FT_Init_FreeType())).cast::<c_void>(),
+        internal: Box::into_raw(Box::new(LibraryState::new(rust_ffi::FT_Init_FreeType())))
+            .cast::<c_void>(),
+    });
+    // SAFETY: `out` is a valid out pointer checked above.
+    unsafe { *out.as_ptr() = Box::into_raw(library) };
+    rust_ffi::FT_Err_Ok
+}
+
+fn done_library_allocation(state: &mut LibraryState) {
+    if state.allocation_memory.is_null() || state.allocation_block.is_null() {
+        return;
+    }
+    // SAFETY: `allocation_memory` is the live FT_MemoryRec supplied to
+    // FT_New_Library, and `allocation_block` is the block returned by its
+    // alloc callback for this library object.
+    unsafe {
+        if let Some(free) = (*state.allocation_memory).free {
+            free(state.allocation_memory, state.allocation_block);
+        }
+    }
+    state.allocation_block = std::ptr::null_mut();
+}
+
+fn drop_library_rec(library: NonNull<FT_LibraryRec>, free_custom_allocation: bool) {
+    // SAFETY: `library` is a live handle allocated by this crate.
+    unsafe {
+        let library = Box::from_raw(library.as_ptr());
+        if !library.internal.is_null() {
+            let mut state = Box::from_raw(library.internal.cast::<LibraryState>());
+            if free_custom_allocation {
+                done_library_allocation(&mut state);
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
+    if let Some(library) = non_null_mut(library) {
+        drop_library_rec(library, false);
+        rust_ffi::FT_Err_Ok
+    } else {
+        35 // matches C runtime: FT_Done_FreeType(NULL)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_New_Library(memory: FT_Memory, alibrary: *mut FT_Library) -> FT_Error {
+    let (Some(memory), Some(out)) = (non_null_mut(memory), non_null_mut(alibrary)) else {
+        // FreeType 2.14.3 `src/base/ftobjs.c:FT_New_Library` returns before
+        // writing `alibrary` when either public argument is null.
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `memory` is a non-null FT_MemoryRec provided by the caller.
+    let allocation = unsafe {
+        match (*memory.as_ptr()).alloc {
+            Some(alloc) => alloc(memory.as_ptr(), std::mem::size_of::<FT_LibraryRec>() as c_long),
+            None => std::ptr::null_mut(),
+        }
+    };
+    if allocation.is_null() {
+        return rust_ffi::FT_Err_Out_Of_Memory;
+    }
+    let Ok(inner) =
+        rust_ffi::FT_New_Library(Some(memory.as_ptr().cast::<rust_ffi::FT_MemoryRec>()))
+    else {
+        // SAFETY: release the allocation block if core rejects construction.
+        unsafe {
+            if let Some(free) = (*memory.as_ptr()).free {
+                free(memory.as_ptr(), allocation);
+            }
+        }
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let library = Box::new(FT_LibraryRec {
+        internal: Box::into_raw(Box::new(LibraryState::new_with_allocation(
+            inner,
+            memory.as_ptr(),
+            allocation,
+        )))
+        .cast::<c_void>(),
     });
     // SAFETY: `out` is a valid out pointer checked above.
     unsafe { *out.as_ptr() = Box::into_raw(library) };
@@ -1568,21 +1676,24 @@ pub extern "C" fn FT_Init_FreeType(alibrary: *mut FT_Library) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
-    if let Some(library) = non_null_mut(library) {
-        // SAFETY: library must be a live handle from FT_Init_FreeType.
-        unsafe {
-            let library = Box::from_raw(library.as_ptr());
-            if !library.internal.is_null() {
-                drop(Box::from_raw(
-                    library.internal.cast::<rust_ffi::FT_Library>(),
-                ));
-            }
-        }
-        rust_ffi::FT_Err_Ok
-    } else {
-        35 // matches C runtime: FT_Done_FreeType(NULL)
+pub extern "C" fn FT_Reference_Library(library: FT_Library) -> FT_Error {
+    rust_ffi::FT_Reference_Library(library_mut(library))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Done_Library(library: FT_Library) -> FT_Error {
+    let Some(library_ptr) = non_null_mut(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let err = rust_ffi::FT_Done_Library(library_mut(library));
+    if err != rust_ffi::FT_Err_Ok {
+        return err;
     }
+    if library_ref(library).is_some_and(|library| rust_ffi::FT_Library_Refcount(Some(library)) == 0)
+    {
+        drop_library_rec(library_ptr, true);
+    }
+    err
 }
 
 #[unsafe(no_mangle)]
@@ -1866,7 +1977,9 @@ pub extern "C" fn FT_Set_Debug_Hook(
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_new_library_without_default_modules() -> FT_Library {
     Box::into_raw(Box::new(FT_LibraryRec {
-        internal: Box::into_raw(Box::new(rust_ffi::FT_New_Library_Without_Default_Modules()))
+        internal: Box::into_raw(Box::new(LibraryState::new(
+            rust_ffi::FT_New_Library_Without_Default_Modules(),
+        )))
             .cast::<c_void>(),
     }))
 }
@@ -1897,6 +2010,18 @@ pub fn abi_support_library_renderer_class(
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_default_module_names(library: FT_Library) -> &'static [&'static str] {
     rust_ffi::FT_Library_Default_Module_Names(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_refcount(library: FT_Library) -> usize {
+    rust_ffi::FT_Library_Refcount(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_memory_is(library: FT_Library, memory: FT_Memory) -> bool {
+    library_ref(library).is_some_and(|library| {
+        rust_ffi::FT_Library_Memory(Some(library)).cast::<FT_MemoryRec>() == memory
+    })
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -4384,8 +4509,8 @@ fn library_ref(library: FT_Library) -> Option<&'static rust_ffi::FT_Library> {
     if internal.is_null() {
         None
     } else {
-        // SAFETY: `internal` points to a `rust_ffi::FT_Library` allocated by this crate.
-        Some(unsafe { &*internal.cast::<rust_ffi::FT_Library>() })
+        // SAFETY: `internal` points to a `LibraryState` allocated by this crate.
+        Some(unsafe { &(*internal.cast::<LibraryState>()).inner })
     }
 }
 
@@ -4396,8 +4521,8 @@ fn library_mut(library: FT_Library) -> Option<&'static mut rust_ffi::FT_Library>
     if internal.is_null() {
         None
     } else {
-        // SAFETY: `internal` points to a uniquely borrowed `rust_ffi::FT_Library`.
-        Some(unsafe { &mut *internal.cast::<rust_ffi::FT_Library>() })
+        // SAFETY: `internal` points to a uniquely borrowed `LibraryState`.
+        Some(unsafe { &mut (*internal.cast::<LibraryState>()).inner })
     }
 }
 

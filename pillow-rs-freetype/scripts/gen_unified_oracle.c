@@ -2,6 +2,7 @@
 #include FT_FREETYPE_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12990,6 +12991,79 @@ static int emit_truetype_engine_type(int argc, char** argv) {
     return 0;
 }
 
+static int emit_library_lifecycle(int argc, char** argv) {
+    (void)argc;
+    int action = atoi(argv[2]);
+    struct FT_MemoryRec_ memory = {NULL, oracle_alloc, oracle_free, oracle_realloc};
+    FT_Library library = NULL;
+    FT_Error err = FT_New_Library(&memory, &library);
+    printf("{");
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    if (action == 1) {
+        FT_Int major = -1;
+        FT_Int minor = -1;
+        FT_Int patch = -1;
+        FT_Library_Version(library, &major, &minor, &patch);
+        int refcount_initial = library->refcount;
+        int memory_pointer_identity = library->memory == &memory;
+        int default_modules_installed = FT_Get_Module(library, "truetype") != NULL;
+        FT_Reference_Library(library);
+        FT_Done_Library(library);
+        print_status(FT_Err_Ok);
+        printf(
+            ",\"output\":{\"status\":0,\"library_handle\":{\"nullness\":false},\"version_fields\":{\"major\":%d,\"minor\":%d,\"patch\":%d},\"refcount_initial\":%d,\"memory_pointer_identity\":%s,\"default_modules_installed\":%s}}\n",
+            major,
+            minor,
+            patch,
+            refcount_initial,
+            memory_pointer_identity ? "true" : "false",
+            default_modules_installed ? "true" : "false");
+        FT_Done_Library(library);
+        return 0;
+    }
+
+    FT_Add_Default_Modules(library);
+    if (action == 2) {
+        FT_Error reference_status = FT_Reference_Library(library);
+        FT_Error first_done_status = FT_Done_Library(library);
+        int usable = FT_Get_Module(library, "truetype") != NULL;
+        FT_Error final_done_status = FT_Done_Library(library);
+        print_status(FT_Err_Ok);
+        printf(
+            ",\"output\":{\"reference_status\":%d,\"first_done_status\":%d,\"library_still_usable_after_first_done\":%s,\"final_done_status\":%d}}\n",
+            reference_status,
+            first_done_status,
+            usable ? "true" : "false",
+            final_done_status);
+        return 0;
+    }
+
+    if (action == 3) {
+        FT_Error reference_status = FT_Reference_Library(library);
+        FT_Error done_status = FT_Done_Library(library);
+        int usable = FT_Get_Module(library, "truetype") != NULL;
+        print_status(FT_Err_Ok);
+        printf(
+            ",\"output\":{\"status_sequence\":[%d,%d],\"library_still_usable\":%s,\"module_lookup_after_done\":{\"nullness\":%s}}}\n",
+            reference_status,
+            done_status,
+            usable ? "true" : "false",
+            usable ? "false" : "true");
+        FT_Done_Library(library);
+        return 0;
+    }
+
+    FT_Done_Library(library);
+    print_status(FT_Err_Unimplemented_Feature);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
 static const FT_UInt PROPERTY_SENTINEL = 0xDEADBEEF;
 
 static const char* property_module_name(int selector) {
@@ -17550,6 +17624,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--library-lifecycle")) {
+        return emit_library_lifecycle(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--property-case")) {
         return emit_property_case(argc, argv);
