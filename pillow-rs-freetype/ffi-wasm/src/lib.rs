@@ -3045,6 +3045,24 @@ pub extern "C" fn fontdone_wasm_get_multi_master(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_mm_design_coordinates(
+    handle: usize,
+    num_coords: FT_UInt,
+    coords: *const FT_Long,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Long values.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Set_MM_Design_Coordinates(Some(&mut face.face), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_mm_weight_vector(
     handle: usize,
     len: FT_UInt,

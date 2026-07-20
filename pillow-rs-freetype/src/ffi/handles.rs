@@ -3861,6 +3861,58 @@ pub fn FT_Set_Named_Instance(face: Option<&mut FT_Face>, instance_index: FT_UInt
     }
 }
 
+pub fn FT_Set_MM_Design_Coordinates(
+    face: Option<&mut FT_Face>,
+    num_coords: FT_UInt,
+    coords: Option<&[FT_Long]>,
+) -> FT_Error {
+    if num_coords != 0 && coords.is_none() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Ok(num_coords) = usize::try_from(num_coords) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let coords_i32 = match coords {
+        Some(coords) => {
+            if coords.len() < num_coords {
+                return FT_Err_Invalid_Argument as FT_Error;
+            }
+            let converted = coords[..num_coords]
+                .iter()
+                .copied()
+                .map(i32::try_from)
+                .collect::<Result<Vec<_>, _>>();
+            let Ok(converted) = converted else {
+                return FT_Err_Invalid_Argument as FT_Error;
+            };
+            converted
+        }
+        None => Vec::new(),
+    };
+    let result = face
+        .inner
+        .borrow_mut()
+        .font_mut()
+        .set_type1_mm_design_coordinates(&coords_i32, num_coords != 0);
+    match result {
+        Ok(()) => {
+            let transform_matrix = face.transform_matrix;
+            let transform_delta = face.transform_delta;
+            let refcount = face.refcount;
+            let mut refreshed = face_to_ffi(face.inner.borrow().clone(), face.probe_only);
+            refreshed.transform_matrix = transform_matrix;
+            refreshed.transform_delta = transform_delta;
+            refreshed.refcount = refcount;
+            *face = refreshed;
+            FT_Err_Ok
+        }
+        Err(err) => error_to_ft(err) as FT_Error,
+    }
+}
+
 pub fn FT_Set_Var_Design_Coordinates(
     face: Option<&mut FT_Face>,
     num_coords: FT_UInt,
@@ -3942,6 +3994,16 @@ pub fn FT_Get_Var_Design_Coordinates(
         return FT_Err_Invalid_Argument as FT_Error;
     }
     let inner = face.inner.borrow();
+    if inner.font().type1_multi_master().is_some() {
+        let design = match inner.font().type1_mm_design_coordinates(num_coords) {
+            Ok(design) => design,
+            Err(err) => return error_to_ft(err) as FT_Error,
+        };
+        for (index, out) in coords.iter_mut().take(num_coords).enumerate() {
+            *out = FT_Fixed::from(design.get(index).copied().unwrap_or(0));
+        }
+        return FT_Err_Ok;
+    }
     let design = match inner.var_design_coordinates() {
         Ok(design) => design,
         Err(err) => return error_to_ft(err) as FT_Error,
@@ -3970,6 +4032,16 @@ pub fn FT_Get_Var_Blend_Coordinates(
         return FT_Err_Invalid_Argument as FT_Error;
     }
     let inner = face.inner.borrow();
+    if inner.font().type1_multi_master().is_some() {
+        let blend = match inner.font().type1_mm_blend_coordinates_16_16(num_coords) {
+            Ok(blend) => blend,
+            Err(err) => return error_to_ft(err) as FT_Error,
+        };
+        for (index, out) in coords.iter_mut().take(num_coords).enumerate() {
+            *out = FT_Fixed::from(blend.get(index).copied().unwrap_or(0x8000));
+        }
+        return FT_Err_Ok;
+    }
     let blend = match inner.var_blend_coordinates_16_16() {
         Ok(blend) => blend,
         Err(err) => return error_to_ft(err) as FT_Error,

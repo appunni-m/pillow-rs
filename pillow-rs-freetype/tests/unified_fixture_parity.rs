@@ -10785,6 +10785,17 @@ fn ftmm_optional_coords_from_params(params: &Value) -> Result<Vec<FT_Fixed>, Str
     }
 }
 
+fn ftmm_long_coords_from_params(params: &Value) -> Result<Vec<FT_Long>, String> {
+    if params.get("coords_ft_long").is_some() {
+        array_param(params, "coords_ft_long")?
+            .iter()
+            .map(|item| i64_value(item, "coords_ft_long"))
+            .collect()
+    } else {
+        Ok(Vec::new())
+    }
+}
+
 struct FtmmBlendScenario {
     count: FT_UInt,
     coords: Vec<FT_Fixed>,
@@ -11551,6 +11562,36 @@ fn rust_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
     ))
 }
 
+fn rust_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_long_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let mut status = FT_Set_MM_Design_Coordinates(
+        Some(&mut face),
+        ftmm_num_coords(params)?,
+        if ftmm_coords_pointer_is_null(params) {
+            None
+        } else {
+            Some(&set_coords)
+        },
+    );
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = FT_Get_Var_Design_Coordinates(Some(&face), output_count, Some(&mut design_coords));
+    }
+    if status == FT_Err_Ok {
+        status = FT_Get_Var_Blend_Coordinates(Some(&face), output_count, Some(&mut blend_coords));
+    }
+    Ok(ftmm_set_var_design_output(
+        status,
+        &design_coords,
+        &blend_coords,
+        face.face_flags,
+    ))
+}
+
 fn c_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
     let params = &case.inputs.params;
@@ -11585,6 +11626,40 @@ fn c_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, Stri
     ))
 }
 
+fn c_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_long_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let mut status =
+        c_abi::FT_Set_MM_Design_Coordinates(face, ftmm_num_coords(params)?, coords_ptr);
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status =
+            c_abi::FT_Get_Var_Design_Coordinates(face, output_count, design_coords.as_mut_ptr());
+    }
+    if status == FT_Err_Ok {
+        status = c_abi::FT_Get_Var_Blend_Coordinates(face, output_count, blend_coords.as_mut_ptr());
+    }
+    let face_flags = c_abi::abi_face_info(face)
+        .ok_or_else(|| "missing C ABI face info".to_string())?
+        .face_flags;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_set_var_design_output(
+        status,
+        &design_coords,
+        &blend_coords,
+        face_flags,
+    ))
+}
+
 fn wasm_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_new_face_without_size(case)?;
     let params = &case.inputs.params;
@@ -11596,6 +11671,49 @@ fn wasm_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
         set_coords.as_ptr()
     };
     let mut status = wasm_abi::fontdone_wasm_set_var_design_coordinates(
+        handle,
+        ftmm_num_coords(params)?,
+        coords_ptr,
+    );
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_var_design_coordinates(
+            handle,
+            output_count,
+            design_coords.as_mut_ptr(),
+        );
+    }
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_var_blend_coordinates(
+            handle,
+            output_count,
+            blend_coords.as_mut_ptr(),
+        );
+    }
+    let face_flags = wasm_abi::abi_face_info(handle)
+        .ok_or_else(|| "missing WASM face info".to_string())?
+        .face_flags;
+    wasm_done_face(handle);
+    Ok(ftmm_set_var_design_output(
+        status,
+        &design_coords,
+        &blend_coords,
+        face_flags,
+    ))
+}
+
+fn wasm_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_long_coords_from_params(params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let mut status = wasm_abi::fontdone_wasm_set_mm_design_coordinates(
         handle,
         ftmm_num_coords(params)?,
         coords_ptr,
@@ -11757,6 +11875,30 @@ fn has_adobe_mm_prior_call(params: &Value) -> bool {
     })
 }
 
+fn adobe_mm_design_prior(params: &Value) -> Result<Option<(FT_UInt, Vec<FT_Long>)>, String> {
+    let Ok(prior_calls) = array_param(params, "prior_calls") else {
+        return Ok(None);
+    };
+    for call in prior_calls {
+        let operation = call
+            .get("operation")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if operation != "FT_Set_MM_Design_Coordinates" {
+            continue;
+        }
+        let count_value = call
+            .get("num_coords")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| "FT_Set_MM_Design_Coordinates prior missing num_coords".to_string())?;
+        let count = FT_UInt::try_from(count_value)
+            .map_err(|err| format!("prior num_coords {count_value} invalid: {err}"))?;
+        let coords = ftmm_long_coords_from_params(call)?;
+        return Ok(Some((count, coords)));
+    }
+    Ok(None)
+}
+
 fn named_instance_observation_json(
     status: FT_Error,
     info: &FT_FaceRecPublic,
@@ -11769,6 +11911,25 @@ fn named_instance_observation_json(
         "variation_bit_set": (info.face_flags & FT_FACE_FLAG_VARIATION) != 0,
         "postscript_name": postscript_name
     })
+}
+
+fn named_instance_adobe_mm_output(
+    status: FT_Error,
+    design_coords: &[FT_Fixed],
+    face_flags: FT_Long,
+    face_index: FT_Long,
+) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(json!({
+            "return": status,
+            "design_coords": design_coords,
+            "face_flags": face_flags,
+            "variation_bit_set": (face_flags & FT_FACE_FLAG_VARIATION) != 0,
+            "face_index": face_index
+        }))
+    } else {
+        error(status)
+    }
 }
 
 fn named_instance_null_face_output(status: FT_Error) -> RunOutput {
@@ -11900,6 +12061,9 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("glyph_index").is_some() {
         return rust_set_named_instance_glyph_output(case);
     }
+    if has_adobe_mm_prior_call(&case.inputs.params) {
+        return rust_set_named_instance_adobe_mm(case);
+    }
     let mut face = rust_new_face_without_size(case)?;
     if let Some(prior_instance) = prior_named_instance_index_param(&case.inputs.params)? {
         let err = FT_Set_Named_Instance(Some(&mut face), prior_instance);
@@ -11929,6 +12093,30 @@ fn rust_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     ))
 }
 
+fn rust_set_named_instance_adobe_mm(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let Some((prior_count, prior_coords)) = adobe_mm_design_prior(params)? else {
+        return Err("missing Adobe MM design prior".to_string());
+    };
+    let mut status =
+        FT_Set_MM_Design_Coordinates(Some(&mut face), prior_count, Some(&prior_coords));
+    if status == FT_Err_Ok {
+        status = FT_Set_Named_Instance(Some(&mut face), set_named_instance_index_param(params)?);
+    }
+    let output_count = FT_UInt::try_from(prior_coords.len()).unwrap_or(prior_count);
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = FT_Get_Var_Design_Coordinates(Some(&face), output_count, Some(&mut design_coords));
+    }
+    Ok(named_instance_adobe_mm_output(
+        status,
+        &design_coords,
+        face.face_flags,
+        rust_face_info(&face).face_index,
+    ))
+}
+
 fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         let err = c_abi::FT_Set_Named_Instance(
@@ -11943,11 +12131,43 @@ fn c_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("glyph_index").is_some() {
         return c_set_named_instance_glyph_output(case);
     }
+    if has_adobe_mm_prior_call(&case.inputs.params) {
+        return c_set_named_instance_adobe_mm(case);
+    }
     let (library, face) = c_new_face_without_size(case)?;
     let output = c_set_named_instance_on_face(face, &case.inputs.params);
     c_done_face(face);
     c_done_library(library);
     output
+}
+
+fn c_set_named_instance_adobe_mm(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let Some((prior_count, prior_coords)) = adobe_mm_design_prior(params)? else {
+        c_done_face(face);
+        c_done_library(library);
+        return Err("missing Adobe MM design prior".to_string());
+    };
+    let mut status = c_abi::FT_Set_MM_Design_Coordinates(face, prior_count, prior_coords.as_ptr());
+    if status == FT_Err_Ok {
+        status = c_abi::FT_Set_Named_Instance(face, set_named_instance_index_param(params)?);
+    }
+    let output_count = FT_UInt::try_from(prior_coords.len()).unwrap_or(prior_count);
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status =
+            c_abi::FT_Get_Var_Design_Coordinates(face, output_count, design_coords.as_mut_ptr());
+    }
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(named_instance_adobe_mm_output(
+        status,
+        &design_coords,
+        info.face_flags,
+        info.face_index,
+    ))
 }
 
 fn c_set_named_instance_on_face(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
@@ -11986,10 +12206,51 @@ fn wasm_set_named_instance(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("glyph_index").is_some() {
         return wasm_set_named_instance_glyph_output(case);
     }
+    if has_adobe_mm_prior_call(&case.inputs.params) {
+        return wasm_set_named_instance_adobe_mm(case);
+    }
     let handle = wasm_new_face_without_size(case)?;
     let output = wasm_set_named_instance_on_face(handle, &case.inputs.params);
     wasm_done_face(handle);
     output
+}
+
+fn wasm_set_named_instance_adobe_mm(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let params = &case.inputs.params;
+    let Some((prior_count, prior_coords)) = adobe_mm_design_prior(params)? else {
+        wasm_done_face(handle);
+        return Err("missing Adobe MM design prior".to_string());
+    };
+    let mut status = wasm_abi::fontdone_wasm_set_mm_design_coordinates(
+        handle,
+        prior_count,
+        prior_coords.as_ptr(),
+    );
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_set_named_instance(
+            handle,
+            set_named_instance_index_param(params)?,
+        );
+    }
+    let output_count = FT_UInt::try_from(prior_coords.len()).unwrap_or(prior_count);
+    let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_var_design_coordinates(
+            handle,
+            output_count,
+            design_coords.as_mut_ptr(),
+        );
+    }
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    wasm_done_face(handle);
+    Ok(named_instance_adobe_mm_output(
+        status,
+        &design_coords,
+        info.face_flags,
+        info.face_index,
+    ))
 }
 
 fn wasm_set_named_instance_on_face(handle: usize, params: &Value) -> Result<RunOutput, String> {
@@ -17519,9 +17780,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 ]);
             }
             if has_adobe_mm_prior_call(params) {
-                return Err(
-                    "Adobe MM named-instance reset requires real Adobe MM support".to_string(),
-                );
+                let Some((prior_count, prior_coords)) = adobe_mm_design_prior(params)? else {
+                    return Err("Adobe MM named-instance reset missing design prior".to_string());
+                };
+                let mut args = vec!["--set-named-instance-adobe-mm-reset".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(prior_count.to_string());
+                args.push(ftmm_coords_csv(&prior_coords));
+                args.push(set_named_instance_index_param(params)?.to_string());
+                args.push(prior_coords.len().to_string());
+                return Ok(args);
             }
             if params.get("compare_namedstyle_index").is_some() {
                 let mut args = vec!["--set-named-instance-descriptor".to_string()];
@@ -17952,6 +18221,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(prior.instance_index.to_string());
             args.push(ftmm_num_coords(params)?.to_string());
             args.push(ftmm_coords_init_mode(params).to_string());
+            Ok(args)
+        }
+        "ftmm.set_mm_design_coordinates" => {
+            let set_coords = ftmm_long_coords_from_params(params)?;
+            let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+            let mut args = vec!["--ftmm-set-mm-design-coordinates".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(ftmm_num_coords(params)?.to_string());
+            args.push(ftmm_coords_csv(&set_coords));
+            args.push(output_count.to_string());
             Ok(args)
         }
         "ftmm.get_var_blend_coordinates"
@@ -19026,6 +19306,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
+        "ftmm.set_mm_design_coordinates" => rust_ftmm_set_mm_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" =>
@@ -19811,6 +20092,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
+        "ftmm.set_mm_design_coordinates" => c_ftmm_set_mm_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" =>
@@ -20521,6 +20803,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
+        "ftmm.set_mm_design_coordinates" => wasm_ftmm_set_mm_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
                 == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" =>

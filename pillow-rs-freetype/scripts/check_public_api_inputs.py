@@ -232,6 +232,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_var_blend_coordinates",
     "fontdone_wasm_get_var_design_coordinates",
     "fontdone_wasm_set_mm_blend_coordinates",
+    "fontdone_wasm_set_mm_design_coordinates",
     "fontdone_wasm_set_mm_weight_vector",
     "fontdone_wasm_set_var_blend_coordinates",
     "fontdone_wasm_set_var_design_coordinates",
@@ -1383,7 +1384,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
-        "ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates",
         "ftmm.FT_Set_MM_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
         "ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset",
@@ -2093,6 +2093,8 @@ def pending_core_reason(row: ConcreteInput) -> str | None:
     ):
         return "non-SFNT face fixture must open before FT_Get_Sfnt_Name"
     if row.operation != "ftmm.set_named_instance":
+        return None
+    if row.case_id == "ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default":
         return None
     if any(
         isinstance(item, dict) and item.get("operation") == "FT_Set_MM_Design_Coordinates"
@@ -3812,6 +3814,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Set_MM_WeightVector.success_set_weight_vector"
     ):
         return "FT_Set_MM_WeightVector success validates Type 1 MM weight vector state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Design_Coordinates.success_adobe_mm_design_coordinates"
+    ):
+        return "FT_Set_MM_Design_Coordinates validates generated Type 1 MM design-coordinate state and follow-up design/blend getters through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_named_instance"
+        and row.case_id == "ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default"
+    ):
+        return "FT_Set_Named_Instance(0) validates Adobe MM reset-to-default state after Type 1 MM design-coordinate mutation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_mm_weight_vector"
         and row.case_id == "ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset"
