@@ -1389,8 +1389,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
         "ftmm.FT_Var_Axis.variable_font_axis_values",
         "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage",
-        "ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count",
-        "ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
     }
@@ -3766,6 +3764,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_Var.variable_font_descriptor_success"
     ):
         return "FT_Get_MM_Var OpenType variable descriptor validates fvar axes, namedstyles, axis flags, and FT_Done_MM_Var release through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count"
+    ):
+        return "FT_Var_Named_Style coordinate arrays validate one coordinate per axis through OpenType FT_Get_MM_Var across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c"
+    ):
+        return "FT_Var_Named_Style missing PostScript-name sentinel validates as 0xFFFF through OpenType FT_Get_MM_Var across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_var"
         and row.case_id == "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success"
