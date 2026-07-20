@@ -10409,6 +10409,118 @@ static int emit_ftmm_mm_weight_vector(int argc, char** argv) {
     return 0;
 }
 
+static FT_UInt ftmm_weight_capacity_for_row(const char* row, FT_UInt num_designs) {
+    if (streq(row, "exact_num_designs")) {
+        return num_designs;
+    }
+    if (streq(row, "larger_than_num_designs")) {
+        return num_designs + 2;
+    }
+    if (streq(row, "smaller_than_num_designs")) {
+        return num_designs ? num_designs - 1 : 0;
+    }
+    return num_designs;
+}
+
+static void print_ftmm_weight_get_row(
+    const char* row,
+    FT_Error status,
+    FT_UInt len_before,
+    FT_UInt len_after,
+    FT_Fixed* values,
+    FT_UInt capacity) {
+    FT_UInt split = len_after < capacity ? len_after : capacity;
+    printf("{\"row\":\"%s\",\"status\":%d,\"len_before\":%u,\"len_after\":%u,"
+           "\"weightvector_after\":",
+           row,
+           status,
+           (unsigned)len_before,
+           (unsigned)len_after);
+    print_fixed_coord_array(values, split);
+    printf(",\"sentinel_after\":[");
+    for (FT_UInt i = split; i < capacity; i++) {
+        if (i != split) {
+            printf(",");
+        }
+        printf("%ld", (long)values[i]);
+    }
+    printf("],\"buffer_after\":");
+    print_fixed_coord_array(values, capacity);
+    printf("}");
+}
+
+static int emit_ftmm_get_mm_weight_vector(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Multi_Master master;
+    init_multi_master_sentinel(&master);
+    FT_Error err = FT_Get_Multi_Master(face.face, &master);
+    if (!err && !streq(argv[6], "-")) {
+        FT_Fixed prior[16] = {0};
+        parse_fixed_coord_csv(argv[6], prior, master.num_designs < 16 ? master.num_designs : 16);
+        err = FT_Set_MM_WeightVector(face.face, master.num_designs, prior);
+    }
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"setup_return\":%d}}\n", err);
+        close_oracle_face(&face);
+        return 0;
+    }
+
+    char* rows_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!rows_arg) {
+        close_oracle_face(&face);
+        return 2;
+    }
+    strcpy(rows_arg, argv[5]);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    FT_UInt row_index = 0;
+    char* cursor = rows_arg;
+    while (cursor && *cursor) {
+        char* end = cursor;
+        while (*end && *end != ',') {
+            end++;
+        }
+        char saved_end = *end;
+        *end = '\0';
+
+        FT_UInt capacity = ftmm_weight_capacity_for_row(cursor, master.num_designs);
+        FT_Fixed values[16];
+        for (FT_UInt i = 0; i < 16; i++) {
+            values[i] = (FT_Fixed)(0x11110000 + i);
+        }
+        FT_UInt len_before = capacity;
+        FT_UInt len_after = capacity;
+        FT_Error get_err = FT_Get_MM_WeightVector(face.face, &len_after, values);
+        if (row_index) {
+            printf(",");
+        }
+        print_ftmm_weight_get_row(cursor, get_err, len_before, len_after, values, capacity);
+        row_index++;
+
+        *end = saved_end;
+        if (saved_end == ',') {
+            cursor = end + 1;
+        } else {
+            break;
+        }
+    }
+    printf("]}}\n");
+
+    free(rows_arg);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -16359,6 +16471,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--ftmm-mm-weight-vector")) {
         return emit_ftmm_mm_weight_vector(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--ftmm-mm-weight-vector-get")) {
+        return emit_ftmm_get_mm_weight_vector(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--ftmm-var-blend-alias")) {
         return emit_ftmm_var_blend_alias(argc, argv);

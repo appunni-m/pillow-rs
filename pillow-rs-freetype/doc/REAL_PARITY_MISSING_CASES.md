@@ -10035,13 +10035,15 @@ git diff --check
 
 ### Issue Set: `FT_Set_MM_WeightVector` generated Adobe MM state route
 
-Status: three real Type 1 MM weight-vector state rows implemented on
+Status: four real Type 1 MM weight-vector state/getter rows implemented on
 2026-07-20.
 
 Baseline before this batch:
 
 - Route audit at `acc333be1`: `real-parity=4468`,
   `pending-route=487`, `pending-core=1`.
+- Follow-up baseline at `665d71cc0`: `real-parity=4477`,
+  `pending-route=479`, `pending-core=0`.
 
 Finding:
 
@@ -10074,18 +10076,20 @@ Implementation:
 - Added a pinned C oracle/runtime route for `ftmm.set_mm_weight_vector` that
   performs each set scenario and then observes `FT_Get_MM_WeightVector`,
   face flags, `FT_FACE_FLAG_VARIATION`, returned length, and output buffer.
+- Added a getter-only capacity matrix route for the declared generated Adobe MM
+  fixture path.  It compares exact per-row status, `len` before/after,
+  written weight-vector values, and preserved/fill buffer slots for exact,
+  larger, and smaller caller capacities.
 - Promoted only the generated fixture-backed setter success rows:
   - `ftmm.FT_Set_MM_WeightVector.success_set_weight_vector`
   - `ftmm.FT_Set_MM_WeightVector.success_short_long_and_reset`
   - `ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum`
-- Left `ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success` pending
-  because its declared legacy `fonts/mm/adobe-multiple-master.pfb` asset is
-  still unresolved and was not tested through the generated fixture route.
+  - `ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success`
 
 Result:
 
-- Route audit after this batch: `real-parity=4471`, `pending-route=484`,
-  `pending-core=1`.
+- Route audit after this follow-up: `real-parity=4478`,
+  `pending-route=478`, `pending-core=0`.
 
 Verification:
 
@@ -10095,11 +10099,13 @@ make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.success_sh
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.success_unenforced_weight_sum
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_null_weightvector_with_nonzero_len
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_WeightVector.error_unsupported_on_true_type_variations
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.len_without_buffer_error
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_WeightVector.unsupported_face_error
 make -C pillow-rs-freetype route-audit
 make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype lint
+make fontdone-ffi
 git diff --check
 ```
 

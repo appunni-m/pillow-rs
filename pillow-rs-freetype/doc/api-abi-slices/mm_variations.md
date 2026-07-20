@@ -36,7 +36,7 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 | `FT_Get_Default_Named_Instance` | `freetype/ftmm.h` | `FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt *instance_index)` | Partially implemented: variable-font default instance rows remain routed, and Type 1 MM service-without-callback behavior returns OK while preserving the caller's output value. Broader named instance records and synthesized default instance work remain planned. |
 | `FT_Get_Var_Axis_Flags` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var *master, FT_UInt axis_index, FT_UInt *flags)` | Planned; no `FT_MM_Var` ABI record or axis flags storage. |
 | `FT_Set_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed *weightvector)` | Partially implemented for generated Type 1 MM fixture state: null/non-null validation, short/exact/long copy behavior, reset, zero-fill, unenforced weight sum, and variation flag toggling through Rust FFI, C ABI, and WASM ABI. Glyph interpolation remains planned. |
-| `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Partially implemented as the observation half of the generated Type 1 MM weight-vector route: required-length error, output write, zero-fill, and current state reporting are compared against pinned C. Standalone legacy fixture success remains pending until its declared asset is resolved. |
+| `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Partially implemented for generated Type 1 MM state: required-length error, exact/larger/smaller capacity behavior, output write, zero-fill, and current state reporting are compared against pinned C through Rust FFI, C ABI, and WASM ABI. |
 | `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar glyph-index lookup through the active Unicode charmap and cmap format 14 default/non-default UVS records. |
 | `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Implemented for scalar cmap format 14 default/non-default UVS classification through the selector charmap. |
 | `FT_Face_GetVariantSelectors` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantSelectors(FT_Face face)` | Implemented for face-owned zero-terminated selector lists from cmap format-14 selector records. |
@@ -49,13 +49,13 @@ symbols in this slice as implemented.  The Type 1 MM descriptor route covers
 `FT_Multi_Master.populated_by_adobe_mm_service`,
 `FT_Get_Multi_Master.adobe_mm_descriptor_success`, and the
 `T1_MAX_MM_DESIGNS` capacity row; the generated Adobe MM weight-vector route
-covers the fixture-backed setter state rows and getter observation used by
-those rows.  The generated Adobe MM design-coordinate route covers the direct
-state row, partial/extra/reset scenario row, and named-instance
-reset-to-default state.  Type 1 MM also covers the
-`FT_Get_Default_Named_Instance` service-without-default-callback row.
-`FT_MM_Var` allocation, OpenType variation state APIs, standalone legacy
-fixture weight-vector success, and glyph-output interpolation remain planned.
+covers the fixture-backed setter state rows, getter observation used by those
+rows, and the standalone declared Adobe MM getter capacity matrix.  The
+generated Adobe MM design-coordinate route covers the direct state row,
+partial/extra/reset scenario row, and named-instance reset-to-default state.
+Type 1 MM also covers the `FT_Get_Default_Named_Instance`
+service-without-default-callback row. `FT_MM_Var` allocation, OpenType
+variation state APIs, and glyph-output interpolation remain planned.
 
 ## ABI Records
 

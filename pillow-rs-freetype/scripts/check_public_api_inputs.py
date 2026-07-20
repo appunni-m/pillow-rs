@@ -1371,7 +1371,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
         "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success",
-        "ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success",
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
@@ -3773,6 +3772,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_WeightVector.unsupported_face_error"
     ):
         return "FT_Get_MM_WeightVector unsupported-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_weightvector"
+        and row.case_id == "ftmm.FT_Get_MM_WeightVector.adobe_mm_weightvector_success"
+    ):
+        return "FT_Get_MM_WeightVector Adobe MM capacity matrix validates through the declared generated Type 1 MM fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_multi_master"
         and row.case_id == "ftmm.FT_MM_Axis.populated_by_get_multi_master"
