@@ -2265,6 +2265,11 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     }
     if row.operation == "freetype.face_properties" and row.case_id in face_properties_rows:
         return "FT_Face_Properties scalar tags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.glyph_slot_reuse"
+        and row.case_id == "freetype.FT_GlyphSlot.overwritten_by_subsequent_load"
+    ):
+        return "FT_GlyphSlot load-sequence overwrite output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (row.operation, row.case_id) in FTERRDEF_EXACT_ERROR_BATCH:
         return "fterrdef load-glyph exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
