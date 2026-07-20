@@ -1996,6 +1996,65 @@ def ftcolor_paint_resolution_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcolor_transform_paint_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR transform paint rows needing real affine routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_PaintRotate.get_paint_rotate_values": (
+            "FT_PaintRotate parity needs a maintained FT_Get_Paint route "
+            "proving angle, center coordinates, and nested paint handle fields "
+            "match pinned C public union output"
+        ),
+        "ftcolor.FT_PaintScale.get_paint_scale_values": (
+            "FT_PaintScale parity needs a maintained FT_Get_Paint route proving "
+            "x/y scale factors, center coordinates, and nested paint handle "
+            "fields match pinned C public union output"
+        ),
+        "ftcolor.FT_PaintSkew.get_paint_skew_values": (
+            "FT_PaintSkew parity needs a maintained FT_Get_Paint route proving "
+            "x/y skew angles, center coordinates, and nested paint handle "
+            "fields match pinned C public union output"
+        ),
+        "ftcolor.FT_PaintTransform.get_paint_transform_values": (
+            "FT_PaintTransform parity needs a maintained FT_Get_Paint route "
+            "proving explicit affine matrix fields and nested paint handle "
+            "match pinned C public union output"
+        ),
+        "ftcolor.FT_PaintTranslate.get_paint_translate_values": (
+            "FT_PaintTranslate parity needs a maintained FT_Get_Paint route "
+            "proving dx/dy translation values and nested paint handle fields "
+            "match pinned C public union output"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload": (
+            "FT_COLR_PAINTFORMAT_ROTATE parity needs a maintained route proving "
+            "FreeType-normalized rotate payload values and nested paint handle "
+            "match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload": (
+            "FT_COLR_PAINTFORMAT_SCALE parity needs a maintained route proving "
+            "FreeType-normalized scale payload values, center handling, and "
+            "nested paint handle match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload": (
+            "FT_COLR_PAINTFORMAT_SKEW parity needs a maintained route proving "
+            "FreeType-normalized skew payload values, center handling, and "
+            "nested paint handle match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload": (
+            "FT_COLR_PAINTFORMAT_TRANSFORM explicit payload parity needs a "
+            "maintained route proving affine xx/xy/dx/yx/yy/dy fields and "
+            "nested paint handle match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload": (
+            "FT_COLR_PAINTFORMAT_TRANSLATE parity needs a maintained route "
+            "proving translation dx/dy payload values and nested paint handle "
+            "match pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -2019,6 +2078,9 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     paint_resolution_pending = ftcolor_paint_resolution_pending_reason(row)
     if paint_resolution_pending:
         return paint_resolution_pending
+    transform_paint_pending = ftcolor_transform_paint_pending_reason(row)
+    if transform_paint_pending:
+        return transform_paint_pending
     pending_case_groups = {
         (
             "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
@@ -2033,22 +2095,6 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "COLR layer iterator parity needs a maintained layer route proving "
             "COLR v0/v1 layer iteration, foreground color indexes, terminal "
             "false output preservation, and iterator state across all ABI lanes"
-        ),
-        (
-            "ftcolor.FT_PaintRotate.get_paint_rotate_values",
-            "ftcolor.FT_PaintScale.get_paint_scale_values",
-            "ftcolor.FT_PaintSkew.get_paint_skew_values",
-            "ftcolor.FT_PaintTransform.get_paint_transform_values",
-            "ftcolor.FT_PaintTranslate.get_paint_translate_values",
-            "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload",
-        ): (
-            "COLR transform paint parity needs a maintained route proving "
-            "rotate, scale, skew, translate, and explicit affine transform "
-            "payloads plus FreeType normalization behavior"
         ),
         (
             "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
