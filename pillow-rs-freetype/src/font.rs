@@ -4297,6 +4297,10 @@ fn design_variation_coords_for_design_coords(
     let Some(fvar) = fvar else {
         return Vec::new();
     };
+    // C parity: FT_Set_Var_Design_Coordinates stores the caller's design
+    // values for FT_Get_Var_Design_Coordinates while filling omitted axes
+    // from fvar defaults; normalization for internal deltas clamps separately.
+    // See freetype/src/base/ftmm.c:281-388 and truetype/ttgxvar.c.
     fvar.axes
         .iter()
         .enumerate()
@@ -4305,7 +4309,6 @@ fn design_variation_coords_for_design_coords(
                 .get(index)
                 .copied()
                 .unwrap_or(axis.default_value)
-                .clamp(axis.min_value, axis.max_value)
         })
         .collect()
 }
