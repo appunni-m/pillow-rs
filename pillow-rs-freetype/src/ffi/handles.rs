@@ -27,8 +27,9 @@ use super::types::{
     FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation, FT_OutlineSnapshot,
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName,
     FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec,
-    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis, FT_Vector,
+    FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
+    TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -3733,6 +3734,84 @@ pub fn FT_Get_Multi_Master(
             maximum: FT_Long::from(axis.maximum),
         };
     }
+    FT_Err_Ok
+}
+
+fn ft_make_tag(bytes: &[u8; 4]) -> FT_ULong {
+    FT_ULong::from(bytes[0]) << 24
+        | FT_ULong::from(bytes[1]) << 16
+        | FT_ULong::from(bytes[2]) << 8
+        | FT_ULong::from(bytes[3])
+}
+
+fn type1_mm_axis_tag(name: &str) -> FT_ULong {
+    match name {
+        "Weight" => ft_make_tag(b"wght"),
+        "Width" => ft_make_tag(b"wdth"),
+        "OpticalSize" => ft_make_tag(b"opsz"),
+        "Slant" => ft_make_tag(b"slnt"),
+        "Italic" => ft_make_tag(b"ital"),
+        _ => !FT_ULong::from(0u8),
+    }
+}
+
+fn int_to_fixed(value: i32) -> FT_Fixed {
+    FT_Fixed::from(value) * 0x10000
+}
+
+pub fn FT_Get_MM_Var(
+    face: Option<&FT_Face>,
+    amaster: Option<&mut FT_MM_Var>,
+    axis_storage: Option<&mut [FT_Var_Axis]>,
+) -> FT_Error {
+    let Some(amaster) = amaster else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let font = inner.font();
+    let Some(master) = font.type1_multi_master() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if master.axes.len() > face.type1_mm_axis_names.len() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    let Some(axis_storage) = axis_storage else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if axis_storage.len() < master.axes.len() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    // C parity: `src/type1/t1load.c:T1_Get_MM_Var` builds Adobe MM
+    // `FT_Var_Axis` records from `T1_Get_Multi_Master`, then writes min/max
+    // as 16.16 values and `def` from the unmapped default weight vector
+    // without applying another fixed-point shift.
+    let default_design = match font.type1_mm_default_design_coordinates() {
+        Ok(default_design) => default_design,
+        Err(err) => return error_to_ft(err) as FT_Error,
+    };
+    for (index, axis) in master.axes.iter().enumerate() {
+        axis_storage[index] = FT_Var_Axis {
+            name: face.type1_mm_axis_names[index].as_ptr().cast_mut(),
+            minimum: int_to_fixed(axis.minimum),
+            def: FT_Fixed::from(
+                default_design
+                    .get(index)
+                    .copied()
+                    .unwrap_or_else(|| axis.minimum.saturating_mul(65_536)),
+            ),
+            maximum: int_to_fixed(axis.maximum),
+            tag: type1_mm_axis_tag(&axis.name),
+            strid: !FT_UInt::from(0u8),
+        };
+    }
+    amaster.num_axis = FT_UInt::try_from(master.axes.len()).unwrap_or(0);
+    amaster.num_designs = FT_UInt::try_from(master.num_designs).unwrap_or(0);
+    amaster.num_namedstyles = 0;
+    amaster.axis = axis_storage.as_mut_ptr();
+    amaster.namedstyle = ptr::null_mut();
     FT_Err_Ok
 }
 

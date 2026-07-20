@@ -10089,6 +10089,99 @@ fn rust_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ftmm_get_multi_master_output(err, &master))
 }
 
+fn ftmm_get_mm_var_uses_type1_adobe(case: &InputCase) -> bool {
+    case.inputs.assets.values().any(|asset| match asset {
+        Asset::Ref { id: Some(id), .. } => {
+            id.contains("adobe-mm") || id.contains("adobe-multiple-master")
+        }
+        Asset::File { path, .. } => {
+            path.contains("adobe-mm") || path.contains("adobe-multiple-master")
+        }
+        _ => false,
+    })
+}
+
+fn mm_var_axis_json(axis: &FT_Var_Axis) -> Value {
+    json!({
+        "name": ffi_nullable_c_string_json(axis.name),
+        "minimum": axis.minimum,
+        "def": axis.def,
+        "maximum": axis.maximum,
+        "tag": axis.tag,
+        "strid": axis.strid,
+    })
+}
+
+fn mm_var_descriptor_json(master: &FT_MM_Var, axes: &[FT_Var_Axis]) -> Value {
+    let axis_count = usize::try_from(master.num_axis)
+        .unwrap_or(usize::MAX)
+        .min(axes.len());
+    json!({
+        "num_axis": master.num_axis,
+        "num_designs": master.num_designs,
+        "num_namedstyles": master.num_namedstyles,
+        "axis_pointer": if master.axis.is_null() { "null" } else { "non_null" },
+        "namedstyle_pointer": if master.namedstyle.is_null() { "null" } else { "non_null" },
+        "axis": axes.iter().take(axis_count).map(mm_var_axis_json).collect::<Vec<_>>(),
+        "axis_flags": vec![0; axis_count],
+    })
+}
+
+fn ftmm_get_mm_var_output(
+    status: FT_Error,
+    master: &FT_MM_Var,
+    axes: &[FT_Var_Axis],
+    done_return: FT_Error,
+) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(json!({
+            "return": status,
+            "descriptor_pointer": "non_null",
+            "descriptor": mm_var_descriptor_json(master, axes),
+            "done_return": done_return,
+        }))
+    } else {
+        error(status)
+    }
+}
+
+fn rust_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let face = rust_new_face_without_size(case)?;
+    let mut master = FT_MM_Var::default();
+    let mut axes = vec![FT_Var_Axis::default(); 4];
+    let status = FT_Get_MM_Var(Some(&face), Some(&mut master), Some(&mut axes));
+    Ok(ftmm_get_mm_var_output(status, &master, &axes, FT_Err_Ok))
+}
+
+fn c_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let (status, master, axes, done_return) = c_abi::abi_mm_var_descriptor(library, face)
+        .ok_or_else(|| "missing C ABI FT_MM_Var descriptor snapshot".to_string())?;
+    let output = if status == FT_Err_Ok {
+        ftmm_get_mm_var_output(status, &master, &axes, done_return)
+    } else {
+        error(status)
+    };
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_ftmm_get_mm_var(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let mut master = FT_MM_Var::default();
+    let mut axes = vec![FT_Var_Axis::default(); 4];
+    let status = wasm_abi::fontdone_wasm_get_mm_var(
+        handle,
+        &mut master,
+        axes.as_mut_ptr(),
+        FT_UInt::try_from(axes.len()).unwrap_or(0),
+    );
+    let output = ftmm_get_mm_var_output(status, &master, &axes, FT_Err_Ok);
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn c_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
     let mut master = sentinel_multi_master();
     let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -18565,6 +18658,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             done_mm_var_library_present(params).to_string(),
             done_mm_var_descriptor_present(params).to_string(),
         ]),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => {
+            let mut args = vec!["--ftmm-get-mm-var".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftmm.get_multi_master" => {
             let mut args = vec!["--ftmm-get-multi-master".to_string()];
             if lifecycle_handle_param(params, "face") == Some("null") {
@@ -19712,6 +19811,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => rust_ftmm_get_mm_var(case),
         "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
         "ftmm.set_mm_design_coordinates" => rust_ftmm_set_mm_design_coordinates(case),
@@ -20501,6 +20601,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => c_ftmm_get_mm_var(case),
         "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
         "ftmm.set_mm_design_coordinates" => c_ftmm_set_mm_design_coordinates(case),
@@ -21215,6 +21316,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
+        "ftmm.get_mm_var" if ftmm_get_mm_var_uses_type1_adobe(case) => wasm_ftmm_get_mm_var(case),
         "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
         "ftmm.set_mm_design_coordinates" => wasm_ftmm_set_mm_design_coordinates(case),

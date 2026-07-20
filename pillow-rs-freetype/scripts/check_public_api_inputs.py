@@ -227,6 +227,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_x11_font_format",
     "fontdone_wasm_set_named_instance",
     "fontdone_wasm_get_mm_blend_coordinates",
+    "fontdone_wasm_get_mm_var",
     "fontdone_wasm_get_multi_master",
     "fontdone_wasm_get_mm_weight_vector",
     "fontdone_wasm_get_var_blend_coordinates",
@@ -1370,14 +1371,12 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
-        "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success",
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
         "ftmm.FT_MM_Var.ownership_matches_c",
-        "ftmm.FT_MM_Var.populated_for_adobe_mm",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
@@ -1390,7 +1389,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
         "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
         "ftmm.FT_Var_Axis.variable_font_axis_values",
-        "ftmm.FT_Var_Axis.adobe_mm_axis_values",
         "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage",
         "ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count",
         "ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c",
@@ -3762,6 +3760,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_MM_Var.invalid_or_non_variable_face_error"
     ):
         return "FT_Get_MM_Var invalid/non-variable-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success"
+    ):
+        return "FT_Get_MM_Var Adobe MM descriptor allocation validates through the generated Type 1 MM fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_MM_Var.populated_for_adobe_mm"
+    ):
+        return "FT_MM_Var Adobe MM record fields validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var"
+        and row.case_id == "ftmm.FT_Var_Axis.adobe_mm_axis_values"
+    ):
+        return "FT_Var_Axis Adobe MM axis fields validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_weightvector"
         and row.case_id == "ftmm.FT_Get_MM_WeightVector.len_without_buffer_error"

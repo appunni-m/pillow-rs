@@ -9961,7 +9961,7 @@ make -C pillow-rs-freetype route-audit
 
 ### Issue Set: `FT_Get_Multi_Master` generated Adobe MM descriptor route
 
-Status: four real descriptor/capacity rows and one related
+Status: seven real descriptor/capacity rows and one related
 default-named-instance service row implemented on 2026-07-20.
 
 Baseline before this batch:
@@ -9970,6 +9970,8 @@ Baseline before this batch:
   `pending-route=489`, `pending-core=1`.
 - Follow-up baseline at `46e8d619c`: `real-parity=4474`,
   `pending-route=482`, `pending-core=0`.
+- Follow-up baseline at `e7fa30b8e`: `real-parity=4478`,
+  `pending-route=478`, `pending-core=0`.
 
 Finding:
 
@@ -9988,6 +9990,12 @@ Finding:
   `FT_Get_Default_Named_Instance` when a Multiple Master service exists but
   the service has no `get_default_named_instance` callback; the caller's
   `instance_index` remains unchanged.
+- FreeType `src/type1/t1load.c:290-378` `T1_Get_MM_Var` allocates an
+  `FT_MM_Var`, writes `num_axis`, `num_designs`, `num_namedstyles=0`,
+  provides a zero-filled axis-flags array directly after the descriptor,
+  populates Adobe `FT_Var_Axis` records with 16.16 min/default/max values,
+  inferred tags (`Weight -> wght`, `Width -> wdth`, etc.), `strid=~0U`, and
+  a null namedstyle pointer.
 
 Implementation:
 
@@ -9999,6 +10007,13 @@ Implementation:
 - Added unified oracle/runtime comparison for the descriptor record, including
   axis name bytes, design minima/maxima, counts, and unused-slot sentinel
   preservation.
+- Added a pinned C oracle/runtime route for generated Adobe MM `FT_Get_MM_Var`
+  output, including descriptor pointer class, counts, axis pointer/nullness,
+  namedstyle pointer nullness, axis name bytes, min/default/max 16.16 values,
+  inferred tags, `strid`, zero axis flags, and `FT_Done_MM_Var` release status.
+- Added Rust FFI `FT_Get_MM_Var` for Type 1 MM, thin C ABI
+  `FT_Get_MM_Var` allocation/free bookkeeping, and thin WASM
+  `fontdone_wasm_get_mm_var` record copying.
 - Extended the Type 1 fixture generator to materialize the declared legacy
   Adobe MM asset path.
 - Fixed Rust `FT_Get_Default_Named_Instance` for Type 1 MM faces to return OK
@@ -10010,11 +10025,14 @@ Implementation:
   - `ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success`
   - `ftmm.T1_MAX_MM_DESIGNS.record_design_capacity`
   - `ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success`
+  - `ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success`
+  - `ftmm.FT_MM_Var.populated_for_adobe_mm`
+  - `ftmm.FT_Var_Axis.adobe_mm_axis_values`
 
 Result:
 
-- Route audit after this follow-up: `real-parity=4477`,
-  `pending-route=479`, `pending-core=0`.
+- Route audit after this follow-up: `real-parity=4481`,
+  `pending-route=475`, `pending-core=0`.
 
 Verification:
 
@@ -10024,6 +10042,9 @@ make -C pillow-rs-freetype test-case CASE=ftmm.FT_Multi_Master.populated_by_adob
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success
 make -C pillow-rs-freetype test-case CASE=ftmm.T1_MAX_MM_DESIGNS.record_design_capacity
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_MM_Var.populated_for_adobe_mm
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.adobe_mm_axis_values
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.true_type_or_opentype_variation_error
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.invalid_or_non_variable_face_error
 make -C pillow-rs-freetype route-audit

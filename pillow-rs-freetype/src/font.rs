@@ -1783,6 +1783,21 @@ impl Font {
         Ok(out)
     }
 
+    pub(crate) fn type1_mm_default_design_coordinates(&self) -> Result<Vec<i32>, FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM default design coordinates".into(),
+            ));
+        };
+        let axis_coords = type1_mm_weights_unmap(&master.default_weight_vector, master.axes.len());
+        Ok(master
+            .axes
+            .iter()
+            .zip(axis_coords)
+            .map(|(axis, coord)| type1_mm_axis_unmap(&axis.design_map, coord))
+            .collect())
+    }
+
     pub(crate) fn type1_mm_blend_coordinates_16_16(
         &self,
         count: usize,

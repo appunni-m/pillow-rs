@@ -23,8 +23,8 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 | Symbol | Header | C signature | Current mapping |
 |---|---|---|---|
 | `FT_Get_Multi_Master` | `freetype/ftmm.h` | `FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master *amaster)` | Partially implemented for generated Type 1 MM descriptors: parses `BlendAxisTypes`, `BlendDesignPositions`, `BlendDesignMap`, and `WeightVector`; fills `FT_Multi_Master` counts and populated `FT_MM_Axis` slots through Rust FFI, C ABI, and WASM ABI for both maintained generated Type 1 MM fixture paths. |
-| `FT_Get_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var **amaster)` | Planned; no Rust API, no `fvar` parser, and no ABI-owned `FT_MM_Var` allocation model yet. |
-| `FT_Done_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var *amaster)` | Planned for C ABI layer; depends on ABI-owned allocation from `FT_Get_MM_Var`. |
+| `FT_Get_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var **amaster)` | Partially implemented for generated Type 1 MM descriptors: `FT_MM_Var` counts, Adobe MM `FT_Var_Axis` records, zero axis flags, null namedstyle pointer, and C ABI allocation/free ownership are compared through Rust FFI, C ABI, and WASM ABI. OpenType `fvar`/namedstyle descriptors remain planned. |
+| `FT_Done_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var *amaster)` | Partially implemented: null/default descriptor rows and C ABI descriptors allocated by the generated Type 1 MM `FT_Get_MM_Var` route are released through the owning library. OpenType descriptor ownership remains planned. |
 | `FT_Set_MM_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long *coords)` | Partially implemented for generated Type 1 MM fixture state: design-map conversion, weight-vector recomputation, partial-coordinate defaults, ignored extras, reset, follow-up design/blend getter observation, and variation flag behavior are compared through Rust FFI, C ABI, and WASM ABI. Glyph interpolation remains planned. |
 | `FT_Set_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state or glyph/metric delta application. |
 | `FT_Get_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state. |
@@ -48,13 +48,15 @@ symbols in this slice as implemented.  The Type 1 MM descriptor route covers
 `FT_MM_Axis.populated_by_get_multi_master`,
 `FT_Multi_Master.populated_by_adobe_mm_service`,
 `FT_Get_Multi_Master.adobe_mm_descriptor_success`, and the
-`T1_MAX_MM_DESIGNS` capacity row; the generated Adobe MM weight-vector route
-covers the fixture-backed setter state rows, getter observation used by those
-rows, and the standalone declared Adobe MM getter capacity matrix.  The
+`T1_MAX_MM_DESIGNS` capacity row; the generated Adobe MM `FT_MM_Var` route
+covers the Adobe descriptor allocation row, the populated `FT_MM_Var` record
+row, and Adobe `FT_Var_Axis` values.  The generated Adobe MM weight-vector
+route covers the fixture-backed setter state rows, getter observation used by
+those rows, and the standalone declared Adobe MM getter capacity matrix.  The
 generated Adobe MM design-coordinate route covers the direct state row,
 partial/extra/reset scenario row, and named-instance reset-to-default state.
 Type 1 MM also covers the `FT_Get_Default_Named_Instance`
-service-without-default-callback row. `FT_MM_Var` allocation, OpenType
+service-without-default-callback row. OpenType `FT_MM_Var` allocation,
 variation state APIs, and glyph-output interpolation remain planned.
 
 ## ABI Records
@@ -111,7 +113,8 @@ Record details that tests must pin:
   `psid == 0xFFFF` means the PostScript name entry is missing.
 - `FT_MM_Var::{axis,namedstyle}` are internally allocated by
   `FT_Get_MM_Var`; C callers release the full allocation with
-  `FT_Done_MM_Var(library, amaster)`.
+  `FT_Done_MM_Var(library, amaster)`.  The generated Type 1 MM route now owns
+  this C ABI lifetime for Adobe MM descriptors.
 - `FT_VAR_AXIS_FLAG_HIDDEN` has numeric value `1` and is returned through
   `FT_Get_Var_Axis_Flags`.
 
@@ -139,9 +142,10 @@ symbols can become more than stubs:
   checks, default/non-default distinction, sorted zero-terminated result lists,
   and face-owned scratch-buffer lifetime.  Scalar glyph-index lookup is already
   routed through `FT_Face_GetCharVariantIndex`.
-- Add the C ABI allocation boundary for `FT_Get_MM_Var` and
-  `FT_Done_MM_Var`; safe Rust wrappers may own `Vec`/`String` data, but ABI
-  callers must see stable C pointers until `FT_Done_MM_Var`.
+- Extend the C ABI allocation boundary for `FT_Get_MM_Var` and
+  `FT_Done_MM_Var` from generated Type 1 MM descriptors to OpenType `fvar`
+  descriptors; safe Rust wrappers may own `Vec`/`String` data, but ABI callers
+  must see stable C pointers until `FT_Done_MM_Var`.
 
 ## Fixture Coverage
 
