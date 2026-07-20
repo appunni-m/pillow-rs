@@ -1248,12 +1248,22 @@ pub struct FT_Face {
     sfnt_post: Option<Box<TT_Postscript>>,
     sfnt_pclt: Option<Box<TT_PCLT>>,
     charmap_metadata: Box<[(FT_Long, FT_ULong)]>,
+    cpal: Option<Rc<RefCell<CpalState>>>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
     random_seed: FT_Int32,
     increase_x_height: FT_UInt,
     refcount: usize,
+}
+
+#[derive(Clone)]
+struct CpalState {
+    palette_name_ids: Vec<FT_UShort>,
+    palette_flags: Vec<FT_UShort>,
+    palette_entry_name_ids: Vec<FT_UShort>,
+    palettes: Vec<Vec<FT_Color>>,
+    active_palette: Vec<FT_Color>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2724,6 +2734,103 @@ fn face_has_sfnt_table(face: &FT_Face, tag: [u8; 4]) -> bool {
         .is_ok()
 }
 
+fn read_u16_be(data: &[u8], offset: usize) -> Option<u16> {
+    Some(u16::from_be_bytes([
+        *data.get(offset)?,
+        *data.get(offset + 1)?,
+    ]))
+}
+
+fn read_u32_be(data: &[u8], offset: usize) -> Option<u32> {
+    Some(u32::from_be_bytes([
+        *data.get(offset)?,
+        *data.get(offset + 1)?,
+        *data.get(offset + 2)?,
+        *data.get(offset + 3)?,
+    ]))
+}
+
+fn parse_cpal_table(data: &[u8]) -> Option<CpalState> {
+    let version = read_u16_be(data, 0)?;
+    let num_palette_entries = usize::from(read_u16_be(data, 2)?);
+    let num_palettes = usize::from(read_u16_be(data, 4)?);
+    let num_color_records = usize::from(read_u16_be(data, 6)?);
+    let color_records_offset = usize::try_from(read_u32_be(data, 8)?).ok()?;
+    let indices_offset = 12usize;
+    let indices_end = indices_offset.checked_add(num_palettes.checked_mul(2)?)?;
+    if indices_end > data.len() {
+        return None;
+    }
+
+    let mut palettes = Vec::with_capacity(num_palettes);
+    for palette_index in 0..num_palettes {
+        let first_color = usize::from(read_u16_be(
+            data,
+            indices_offset + palette_index.checked_mul(2)?,
+        )?);
+        let palette_end = first_color.checked_add(num_palette_entries)?;
+        if palette_end > num_color_records {
+            return None;
+        }
+        let mut palette = Vec::with_capacity(num_palette_entries);
+        for entry_index in 0..num_palette_entries {
+            let record_offset = color_records_offset
+                .checked_add(first_color.checked_add(entry_index)?.checked_mul(4)?)?;
+            palette.push(FT_Color {
+                blue: *data.get(record_offset)?,
+                green: *data.get(record_offset + 1)?,
+                red: *data.get(record_offset + 2)?,
+                alpha: *data.get(record_offset + 3)?,
+            });
+        }
+        palettes.push(palette);
+    }
+
+    let mut palette_flags = vec![0; num_palettes];
+    let mut palette_name_ids = vec![0xFFFF; num_palettes];
+    let mut palette_entry_name_ids = vec![0xFFFF; num_palette_entries];
+    if version >= 1 {
+        let extensions_offset = indices_end;
+        if let Some(types_offset) = read_u32_be(data, extensions_offset)
+            .and_then(|offset| usize::try_from(offset).ok())
+            .filter(|offset| *offset != 0)
+        {
+            for (index, out) in palette_flags.iter_mut().enumerate() {
+                let offset = types_offset.checked_add(index.checked_mul(4)?)?;
+                *out = (read_u32_be(data, offset)? & 0xFFFF) as FT_UShort;
+            }
+        }
+        if let Some(labels_offset) = read_u32_be(data, extensions_offset + 4)
+            .and_then(|offset| usize::try_from(offset).ok())
+            .filter(|offset| *offset != 0)
+        {
+            for (index, out) in palette_name_ids.iter_mut().enumerate() {
+                *out = read_u16_be(data, labels_offset.checked_add(index.checked_mul(2)?)?)?;
+            }
+        }
+        if let Some(entry_labels_offset) = read_u32_be(data, extensions_offset + 8)
+            .and_then(|offset| usize::try_from(offset).ok())
+            .filter(|offset| *offset != 0)
+        {
+            for (index, out) in palette_entry_name_ids.iter_mut().enumerate() {
+                *out = read_u16_be(
+                    data,
+                    entry_labels_offset.checked_add(index.checked_mul(2)?)?,
+                )?;
+            }
+        }
+    }
+
+    let active_palette = palettes.first().cloned().unwrap_or_default();
+    Some(CpalState {
+        palette_name_ids,
+        palette_flags,
+        palette_entry_name_ids,
+        palettes,
+        active_palette,
+    })
+}
+
 pub fn FT_Palette_Data_Get(
     face: Option<&FT_Face>,
     apalette_data: Option<&mut FT_Palette_Data>,
@@ -2748,12 +2855,27 @@ pub fn FT_Palette_Data_Get(
         *apalette_data = FT_Palette_Data::default();
         return FT_Err_Ok;
     }
-    FT_Err_Unimplemented_Feature as FT_Error
+    let Some(cpal) = &face.cpal else {
+        return FT_Err_Invalid_Table as FT_Error;
+    };
+    let cpal = cpal.borrow();
+    *apalette_data = FT_Palette_Data {
+        num_palettes: cpal.palettes.len().try_into().unwrap_or(FT_UShort::MAX),
+        palette_name_ids: cpal.palette_name_ids.as_ptr(),
+        palette_flags: cpal.palette_flags.as_ptr(),
+        num_palette_entries: cpal
+            .active_palette
+            .len()
+            .try_into()
+            .unwrap_or(FT_UShort::MAX),
+        palette_entry_name_ids: cpal.palette_entry_name_ids.as_ptr(),
+    };
+    FT_Err_Ok
 }
 
 pub fn FT_Palette_Select(
     face: Option<&FT_Face>,
-    _palette_index: FT_UShort,
+    palette_index: FT_UShort,
     apalette: Option<&mut *const FT_Color>,
 ) -> FT_Error {
     let Some(face) = face else {
@@ -2767,7 +2889,18 @@ pub fn FT_Palette_Select(
         }
         return FT_Err_Ok;
     }
-    FT_Err_Unimplemented_Feature as FT_Error
+    let Some(cpal) = &face.cpal else {
+        return FT_Err_Invalid_Table as FT_Error;
+    };
+    let mut cpal = cpal.borrow_mut();
+    let Some(palette) = cpal.palettes.get(usize::from(palette_index)).cloned() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    cpal.active_palette = palette;
+    if let Some(apalette) = apalette {
+        *apalette = cpal.active_palette.as_ptr();
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_Palette_Set_Foreground_Color(face: Option<&FT_Face>, color: FT_Color) -> FT_Error {
@@ -4783,6 +4916,12 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_pclt(&data))
         .map(Box::new);
+    let cpal = font
+        .load_sfnt_table(u32::from_be_bytes(*b"CPAL"), 0, None)
+        .ok()
+        .and_then(|data| parse_cpal_table(&data))
+        .map(RefCell::new)
+        .map(Rc::new);
     let available_sizes = available_sizes_to_ffi(font);
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
@@ -4841,6 +4980,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sfnt_post,
         sfnt_pclt,
         charmap_metadata,
+        cpal,
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
