@@ -10264,6 +10264,20 @@ Rejected candidates from this snapshot:
   `embedded-strike.ttf`.  Do not substitute the similarly named file; promote
   only after the declared asset is present or the input row is corrected with a
   pinned C oracle run for the exact replacement.
+  Follow-up on 2026-07-20: probed the existing standard bitmap fixture
+  candidates with pinned FreeType 2.14.3:
+  `fonts/bitmap/bitmap-strikes.ttf`, `fonts/bitmap/embedded_strike.ttf`,
+  `fonts/bitmap/embedded_strike_color_or_sbit.ttf`,
+  `input/fonts/bitmap/embedded-strike.ttf`,
+  `input/fonts/cache/bitmap-strike-small-sbits.ttf`, and
+  `fonts/bitmap-strikes/public-bitmap-strike.ttf`.  All opened successfully
+  but returned `face->num_fixed_sizes == 0` and
+  `face->available_sizes == NULL`.  These are not valid replacements for the
+  declared row because they cannot exercise the public
+  `FT_FaceRec.available_sizes[]` contract.  Required next fix: add or generate
+  a C-openable SFNT bitmap-strike fixture whose pinned C face exposes at least
+  one `FT_Bitmap_Size`, then add the Rust FFI/C ABI/WASM ABI runtime route for
+  exact `num_fixed_sizes` and `available_sizes[]` comparison.
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` and
   `freetype.FT_Attach_Stream.success_attach_auxiliary_stream` still require the
   declared Type1 PFB plus AFM/PFM auxiliary assets.
