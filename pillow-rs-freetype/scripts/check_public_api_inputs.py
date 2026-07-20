@@ -1269,6 +1269,81 @@ def ftstroke_export_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftstroke_curve_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker conic/cubic curve rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_Stroker_ConicTo.conic_curve_success": (
+            "FT_Stroker_ConicTo conic parity needs a maintained route proving "
+            "quadratic curve subdivision, generated border points, tags, and "
+            "contours match pinned C"
+        ),
+        "ftstroke.FT_Stroker_ConicTo.first_segment_starts_subpath": (
+            "FT_Stroker_ConicTo first-segment parity needs a maintained route "
+            "proving a conic segment can initialize an otherwise empty subpath "
+            "with the same border state and output geometry as pinned C"
+        ),
+        "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop": (
+            "FT_Stroker_ConicTo coincident-control parity needs a maintained "
+            "route proving a control point equal to the current point and end "
+            "point is treated as the same no-op or preserved-state case as "
+            "pinned C"
+        ),
+        "ftstroke.FT_Stroker_CubicTo.cubic_curve_success": (
+            "FT_Stroker_CubicTo cubic parity needs a maintained route proving "
+            "cubic curve subdivision, generated border points, tags, and "
+            "contours match pinned C"
+        ),
+        "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath": (
+            "FT_Stroker_CubicTo first-segment parity needs a maintained route "
+            "proving a cubic segment can initialize an otherwise empty subpath "
+            "with the same border state and output geometry as pinned C"
+        ),
+        "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop": (
+            "FT_Stroker_CubicTo coincident-control parity needs a maintained "
+            "route proving both controls and end point equal to the current "
+            "point are treated as the same no-op or preserved-state case as "
+            "pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration": (
+            "FT_STROKER_LINEJOIN_ROUND wide-curve parity needs a maintained "
+            "route proving FreeType's wide-curve join restoration emits the "
+            "same round-join geometry after curve subdivision as pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftstroke_line_cap_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FT_Stroker open-path cap rows needing real routing."""
+    if not row.operation.startswith("ftstroke."):
+        return None
+    exact_cases = {
+        "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry": (
+            "FT_STROKER_LINECAP_BUTT parity needs a maintained open-path "
+            "route proving butt caps terminate at the endpoint with the same "
+            "border geometry, tags, and contours as pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry": (
+            "FT_STROKER_LINECAP_ROUND parity needs a maintained open-path "
+            "route proving round cap arc subdivision and emitted outline "
+            "geometry match pinned C"
+        ),
+        "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry": (
+            "FT_STROKER_LINECAP_SQUARE parity needs a maintained open-path "
+            "route proving square cap endpoint extension and emitted outline "
+            "geometry match pinned C"
+        ),
+        "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry": (
+            "FT_Stroker_LineCap runtime parity needs a maintained open-path "
+            "route proving the public cap enum selects butt, round, and square "
+            "geometry exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the stroker object/path subsystem that do not have a maintained route."""
     if not row.operation.startswith("ftstroke."):
@@ -1288,6 +1363,12 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     export_pending = ftstroke_export_pending_reason(row)
     if export_pending:
         return export_pending
+    curve_pending = ftstroke_curve_pending_reason(row)
+    if curve_pending:
+        return curve_pending
+    line_cap_pending = ftstroke_line_cap_pending_reason(row)
+    if line_cap_pending:
+        return line_cap_pending
     pending_case_groups = {
         (
             "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
@@ -1322,29 +1403,6 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "construction route proving open/closed initial state, first-segment "
             "behavior, zero-length handling, and resulting border geometry "
             "against pinned C"
-        ),
-        (
-            "ftstroke.FT_Stroker_ConicTo.conic_curve_success",
-            "ftstroke.FT_Stroker_ConicTo.first_segment_starts_subpath",
-            "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop",
-            "ftstroke.FT_Stroker_CubicTo.cubic_curve_success",
-            "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath",
-            "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop",
-            "ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration",
-        ): (
-            "FT_Stroker curve parity needs a maintained conic/cubic path route "
-            "proving curve subdivision, first-segment setup, coincident-control "
-            "no-op behavior, and wide-curve join restoration against pinned C"
-        ),
-        (
-            "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry",
-            "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry",
-            "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry",
-            "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry",
-        ): (
-            "FT_Stroker line-cap parity needs a maintained open-path route "
-            "comparing butt, round, and square cap geometry exactly across "
-            "pinned C, Rust FFI, C ABI, and WASM ABI"
         ),
         (
             "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry",
