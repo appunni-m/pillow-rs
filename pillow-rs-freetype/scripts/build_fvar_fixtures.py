@@ -135,6 +135,11 @@ def write_multi_axis_visible_font() -> None:
     save_font(OUT_DIR / "multi-axis-visible.ttf", font)
 
 
+def write_avar_wght_wdth_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    save_font(OUT_DIR / "avar-wght-wdth.ttf", font)
+
+
 def write_hidden_axis_fonts() -> None:
     font = TTFont(BASE_FONT, recalcTimestamp=False)
     # FreeType stores OpenType fvar axis flags in the FT_MM_Var-adjacent
@@ -283,6 +288,7 @@ def main() -> None:
     write_instance_count_limit()
     write_instance_postscript_name()
     write_three_axis_opsz_font()
+    write_avar_wght_wdth_font()
     write_multi_axis_visible_font()
     write_hidden_axis_fonts()
     write_zero_axis()

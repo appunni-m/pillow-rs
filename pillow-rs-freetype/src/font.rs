@@ -326,6 +326,7 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
         gvar: None,
         design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
+        blend_variation_coords_16_16: Vec::new(),
         variation_coordinates_set: false,
         gasp: None,
         head: tt::head::HeadTable {
@@ -667,6 +668,7 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         gvar: None,
         design_variation_coords: Vec::new(),
         normalized_variation_coords: Vec::new(),
+        blend_variation_coords_16_16: Vec::new(),
         variation_coordinates_set: false,
         gasp: None,
         head: tt::head::HeadTable {
@@ -1401,7 +1403,7 @@ impl Font {
         load_mode: LoadMode,
     ) -> Result<Self, FontError> {
         Self::truetype_face_with_load_mode_and_design_coords(
-            data, face_index, size_pt, load_mode, None, false,
+            data, face_index, size_pt, load_mode, None, None, false,
         )
     }
 
@@ -1411,6 +1413,7 @@ impl Font {
         size_pt: f32,
         load_mode: LoadMode,
         design_coords: Option<&[i32]>,
+        blend_coords_16_16: Option<&[i32]>,
         variation_coordinates_set: bool,
     ) -> Result<Self, FontError> {
         // FreeType stores a 1-based named-instance selector in bits 16..30;
@@ -1519,6 +1522,15 @@ impl Font {
         } else {
             normalized_variation_coords_for_named_instance(&fvar, named_instance)
         };
+        let blend_variation_coords_16_16 = blend_coords_16_16.map_or_else(
+            || {
+                normalized_variation_coords
+                    .iter()
+                    .map(|coord| i32::from(*coord) << 2)
+                    .collect()
+            },
+            |coords| blend_variation_coords_for_blend_coords_16_16(&fvar, coords),
+        );
         let hvar = dir.find(data, tag(b"HVAR")).and_then(|d| {
             fvar.as_ref()
                 .and_then(|fvar| tt::hvar::HvarTable::parse(d, fvar.axes.len()).ok())
@@ -1576,6 +1588,7 @@ impl Font {
             gvar,
             design_variation_coords,
             normalized_variation_coords,
+            blend_variation_coords_16_16,
             variation_coordinates_set,
             head,
             hhea,
@@ -1705,6 +1718,7 @@ impl Font {
             self.size_pt,
             self.load_mode,
             Some(coords),
+            None,
             true,
         )?;
         next.selected_charmap = next
@@ -1749,12 +1763,7 @@ impl Font {
                 "face has no variation blend coordinates".into(),
             ));
         }
-        Ok(self
-            .data
-            .normalized_variation_coords
-            .iter()
-            .map(|coord| i32::from(*coord) << 2)
-            .collect())
+        Ok(self.data.blend_variation_coords_16_16.to_vec())
     }
 
     pub(crate) fn type1_multi_master(&self) -> Option<&Type1MultiMaster> {
@@ -1899,6 +1908,7 @@ impl Font {
             self.size_pt,
             self.load_mode,
             Some(&design_coords),
+            Some(coords_16_16),
             variation_coordinates_set,
         )?;
         next.selected_charmap = next
@@ -4348,6 +4358,23 @@ fn design_coord_for_normalized_blend_16_16(blend_16_16: i32, axis: &tt::fvar::Fv
     };
     let delta = ((i64::from(extent) * i64::from(blend)) / 65_536) as i32;
     axis.default_value.saturating_add(delta)
+}
+
+fn blend_variation_coords_for_blend_coords_16_16(
+    fvar: &Option<tt::fvar::FvarTable>,
+    blend_coords_16_16: &[i32],
+) -> Vec<i32> {
+    let Some(fvar) = fvar else {
+        return Vec::new();
+    };
+    // C parity: the public blend setter copies caller-provided normalized
+    // 16.16 coordinates up to the axis count, fills omitted axes with default
+    // blend zero, and ignores excess values.  This public getter state is
+    // separate from the internal F2Dot14 coordinates used for variation math.
+    // See freetype/src/base/ftmm.c:465-600 and truetype/ttgxvar.c.
+    (0..fvar.axes.len())
+        .map(|index| blend_coords_16_16.get(index).copied().unwrap_or(0))
+        .collect()
 }
 
 const VARIATION_PS_NAME_MAX_LEN: usize = 127;
