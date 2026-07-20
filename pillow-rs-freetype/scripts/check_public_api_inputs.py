@@ -1937,6 +1937,65 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcolor_paint_resolution_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR FT_Get_Paint rows needing real paint-node routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format": (
+            "FT_Get_Paint format-dispatch parity needs a maintained paint-node "
+            "route proving every supported COLR paint format resolves to the "
+            "same public union tag and payload as pinned C"
+        ),
+        "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis": (
+            "FT_OpaquePaint handle parity needs a maintained route proving root "
+            "and nested opaque paint handles produced by public COLR APIs are "
+            "consumed by FT_Get_Paint with the same lifetime and identity "
+            "semantics as pinned C"
+        ),
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values": (
+            "FT_PaintColrGlyph parity needs a maintained FT_Get_Paint route "
+            "proving nested glyph ID and nested paint handle fields match "
+            "pinned C public union output"
+        ),
+        "ftcolor.FT_PaintGlyph.get_paint_glyph_values": (
+            "FT_PaintGlyph parity needs a maintained FT_Get_Paint route proving "
+            "glyph ID and nested paint handle fields match pinned C public "
+            "union output"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime": (
+            "FT_COLR_PAINTFORMAT_COLR_GLYPH parity needs a maintained route "
+            "proving this format tag is emitted only with the pinned C "
+            "FT_PaintColrGlyph payload shape"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload": (
+            "FT_COLR_PAINTFORMAT_GLYPH parity needs a maintained route proving "
+            "this format tag is emitted with glyph ID plus nested paint handle "
+            "payload matching pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index": (
+            "FT_COLR_PAINTFORMAT_SOLID parity needs a maintained route proving "
+            "solid paint color index, alpha, and palette-index semantics match "
+            "pinned C"
+        ),
+        "ftcolor.FT_ColorIndex.solid_and_color_stop_values": (
+            "FT_ColorIndex parity needs a maintained paint/colorline route "
+            "proving solid paint and color-stop color indexes expose the same "
+            "palette index, alpha, and foreground sentinel behavior as pinned C"
+        ),
+        "ftcolor.FT_PaintSolid.get_paint_solid_values": (
+            "FT_PaintSolid parity needs a maintained FT_Get_Paint route proving "
+            "color index and alpha fields match pinned C public union output"
+        ),
+        "ftcolor.FT_PaintFormat.paint_union_shape_runtime": (
+            "FT_PaintFormat union-shape parity needs a maintained route proving "
+            "public format tags select the same FT_COLR_Paint union arm and "
+            "record layout as pinned C for each supported paint node"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -1957,6 +2016,9 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     palette_pending = ftcolor_palette_pending_reason(row)
     if palette_pending:
         return palette_pending
+    paint_resolution_pending = ftcolor_paint_resolution_pending_reason(row)
+    if paint_resolution_pending:
+        return paint_resolution_pending
     pending_case_groups = {
         (
             "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
@@ -1971,23 +2033,6 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "COLR layer iterator parity needs a maintained layer route proving "
             "COLR v0/v1 layer iteration, foreground color indexes, terminal "
             "false output preservation, and iterator state across all ABI lanes"
-        ),
-        (
-            "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",
-            "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis",
-            "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
-            "ftcolor.FT_PaintGlyph.get_paint_glyph_values",
-            "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime",
-            "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index",
-            "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
-            "ftcolor.FT_PaintSolid.get_paint_solid_values",
-            "ftcolor.FT_PaintFormat.paint_union_shape_runtime",
-        ): (
-            "COLR paint resolution parity needs a maintained FT_Get_Paint route "
-            "proving opaque paint handles, supported paint-format dispatch, "
-            "glyph/colr-glyph/solid payloads, color indexes, and public union "
-            "shape output"
         ),
         (
             "ftcolor.FT_PaintRotate.get_paint_rotate_values",
