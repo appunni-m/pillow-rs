@@ -1956,6 +1956,62 @@ def ftcache_manager_remove_faceid_pending_reason(row: ConcreteInput) -> str | No
     return exact_cases.get(row.case_id)
 
 
+def ftcache_manager_lookup_face_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Manager_LookupFace/FTC_FaceID pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_Manager_LookupFace planning parity needs a maintained "
+            "same-input requester route instead of treating face lookup as "
+            "out of scope"
+        ),
+        "ftcache.FTC_Manager_LookupFace.success_first_lookup_invokes_requester": (
+            "FTC_Manager_LookupFace first-lookup parity needs a maintained "
+            "route proving the first lookup invokes the requester once with "
+            "the same FTC_FaceID and requester data as pinned C"
+        ),
+        "ftcache.FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face": (
+            "FTC_Manager_LookupFace repeat-lookup parity needs a maintained "
+            "route proving repeated lookup returns the cached face without "
+            "reinvoking the requester, matching pinned C handle identity"
+        ),
+        "ftcache.FTC_Manager_LookupFace.success_face_has_no_required_current_size": (
+            "FTC_Manager_LookupFace current-size parity needs a maintained "
+            "route proving the returned face has no required current size "
+            "unless the requester or later size lookup establishes one"
+        ),
+        "ftcache.FTC_FaceID.pointer_identity_key": (
+            "FTC_FaceID pointer-identity parity needs a maintained requester "
+            "route proving pointer identity, not pointed-to bytes or fallback "
+            "string equality, is the cache key exactly like pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftcache_sbit_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
+    """Case- and variant-specific FTC_SBitCache_LookupScaler pending rows."""
+    if row.operation != "ftcache.sbit_cache_lookup_scaler":
+        return None
+    runtime = runtime_id(row)
+    variant = runtime.split("@", 1)[1] if "@" in runtime else "single"
+    if row.case_id == "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c":
+        return (
+            "FTC_SBitCache_LookupScaler scaler-size parity needs a maintained "
+            f"route for variant {variant} proving pixel and point scaler "
+            "width/height/resolution semantics select the same strike, size "
+            "metrics, and sbit output as pinned C"
+        )
+    if row.case_id == "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32":
+        return (
+            "FTC_SBitCache_LookupScaler load-flag parity needs a maintained "
+            f"route for variant {variant} proving FT_ULong load_flags are "
+            "truncated to the pinned C signed 32-bit path before sbit lookup"
+        )
+    return None
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1990,6 +2046,12 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     remove_faceid_pending = ftcache_manager_remove_faceid_pending_reason(row)
     if remove_faceid_pending:
         return remove_faceid_pending
+    lookup_face_pending = ftcache_manager_lookup_face_pending_reason(row)
+    if lookup_face_pending:
+        return lookup_face_pending
+    sbit_lookup_scaler_pending = ftcache_sbit_lookup_scaler_pending_reason(row)
+    if sbit_lookup_scaler_pending:
+        return sbit_lookup_scaler_pending
     cache_creation_exact_cases = {
         "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
             "FTC_CMapCache opaque-handle parity needs a maintained cache route "
@@ -2052,25 +2114,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if row.case_id in cache_creation_exact_cases:
         return cache_creation_exact_cases[row.case_id]
     pending_case_groups = {
-        (
-            "ftcache.FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_Manager_LookupFace.success_first_lookup_invokes_requester",
-            "ftcache.FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face",
-            "ftcache.FTC_Manager_LookupFace.success_face_has_no_required_current_size",
-            "ftcache.FTC_FaceID.pointer_identity_key",
-        ): (
-            "FTC_Manager_LookupFace parity needs a maintained requester route "
-            "proving FTC_FaceID pointer identity, first requester callback, "
-            "cached repeat lookup, and face current-size behavior"
-        ),
-        (
-            "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
-            "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32",
-        ): (
-            "FTC_SBitCache_LookupScaler parity needs a maintained sbit-scaler "
-            "route proving scaler size semantics and int32 load-flag truncation "
-            "against pinned C for all concrete font variants"
-        ),
         (
             "ftcache.FTC_Node.reference_counted_cache_handle",
             "ftcache.FTC_Node_Unref.releases_lookup_reference",
@@ -2479,6 +2522,40 @@ def ftcolor_transform_paint_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcolor_clipbox_pending_reason(row: ConcreteInput) -> str | None:
+    """Case- and variant-specific COLR clipbox pending rows."""
+    if row.operation != "ftcolor.get_color_glyph_clipbox":
+        return None
+    runtime = runtime_id(row)
+    variant = runtime.split("@", 1)[1] if "@" in runtime else "single"
+    if row.case_id == "ftcolor.FT_ClipBox.color_glyph_clipbox_values":
+        return (
+            "FT_ClipBox public-record parity needs a maintained "
+            "FT_Get_Color_Glyph_ClipBox route proving xMin/yMin/xMax/yMax "
+            "fields are copied from pinned C clipbox output without wrapper "
+            "normalization"
+        )
+    if (
+        row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed"
+    ):
+        return (
+            "FT_Get_Color_Glyph_ClipBox success parity needs a maintained "
+            f"route for variant {variant} proving scaled size coordinates and "
+            "active transform effects match pinned C output exactly"
+        )
+    if (
+        row.case_id
+        == "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output"
+    ):
+        return (
+            "FT_Get_Color_Glyph_ClipBox no-clipbox parity needs a maintained "
+            "route proving a false return preserves the caller-provided output "
+            "box bytes exactly like pinned C"
+        )
+    return None
+
+
 def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
     """Case-specific COLR layer iterator rows needing real layer routing."""
     if not row.operation.startswith("ftcolor."):
@@ -2554,23 +2631,12 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     transform_paint_pending = ftcolor_transform_paint_pending_reason(row)
     if transform_paint_pending:
         return transform_paint_pending
+    clipbox_pending = ftcolor_clipbox_pending_reason(row)
+    if clipbox_pending:
+        return clipbox_pending
     layer_iterator_pending = ftcolor_layer_iterator_pending_reason(row)
     if layer_iterator_pending:
         return layer_iterator_pending
-    pending_case_groups = {
-        (
-            "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
-            "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed",
-            "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output",
-        ): (
-            "COLR clipbox parity needs a maintained FT_Get_Color_Glyph_ClipBox "
-            "route proving scaled/transformed box values for size variants and "
-            "false-with-output-preservation behavior when no clipbox exists"
-        ),
-    }
-    for case_ids, reason in pending_case_groups.items():
-        if row.case_id in case_ids:
-            return reason
     return None
 
 
