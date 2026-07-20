@@ -489,6 +489,17 @@ impl Face {
         Ok(())
     }
 
+    pub(crate) fn set_type1_mm_blend_coordinates(
+        &mut self,
+        coords_16_16: &[i32],
+        variation_active: bool,
+    ) -> Result<(), FontError> {
+        self.font
+            .set_type1_mm_blend_coordinates(coords_16_16, variation_active)?;
+        self.render_fonts.clear();
+        Ok(())
+    }
+
     /// Return a glyph's PostScript name when the face exposes glyph names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         self.font.glyph_name(glyph_index)
