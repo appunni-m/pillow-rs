@@ -65,6 +65,10 @@ pub enum FontError {
     #[error("BDF stream is missing STARTFONT")]
     BdfMissingStartfontStreamOperation,
 
+    /// SFNT offset table was readable but exposed no usable table records.
+    #[error("SFNT stream has no table records")]
+    SfntZeroTablesStreamOperation,
+
     /// A BDF glyph bitmap declaration is too large.
     #[error("BDF glyph bitmap is too large")]
     BdfBbxTooBig,

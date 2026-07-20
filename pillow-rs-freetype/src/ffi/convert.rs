@@ -191,6 +191,7 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidFont(message) if message.starts_with("data too short") => {
             FT_Err_Invalid_Stream_Operation as FT_Error
         }
+        FontError::SfntZeroTablesStreamOperation => FT_Err_Invalid_Stream_Operation as FT_Error,
         FontError::InvalidFont(message)
             if message.starts_with("face index ") || message.starts_with("named instance ") =>
         {

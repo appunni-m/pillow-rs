@@ -1790,12 +1790,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "tracked cache bitmap strike asset is not a C-openable success fixture; "
             "pinned C returns error 6, so exact success would be a green placeholder"
         ),
-        "fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt": (
-            "generated recognized-broken SFNT reaches a different pinned-C public "
-            "error (85) than the declared Invalid_File_Format route; Rust returns "
-            "3, so exact error parity needs a better C-observable fixture or core "
-            "classification fix"
-        ),
         "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected": (
             "generated unsupported-post-format SFNT opens successfully in pinned C; "
             "counting any Rust error as parity would be a green placeholder"

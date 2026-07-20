@@ -86,9 +86,10 @@ Reason:
 
 ### Issue Set Current: malformed SFNT constructor errors with stale declared expectations
 
-Status: classified on 2026-07-20; no route promoted.
+Status: partially fixed on 2026-07-20; remaining stale-error fixtures stay
+pending.
 
-Rejected candidate:
+Fixed candidate:
 
 - `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
 
@@ -96,34 +97,19 @@ Finding:
 
 - The fixture asset `fonts/synthetic/sfnt/recognized-broken-sfnt.ttf` is a
   12-byte SFNT header with version `0x00010000` and `numTables=0`.
-- The fixture metadata declares `FT_Err_Invalid_File_Format` (`3`), but the
-  route audit records pinned C FreeType returning `85`
+- FreeType 2.14.3 returns public error `85`
   (`FT_Err_Invalid_Stream_Operation`) for the exact asset.
-- The focused test keeps the row non-runnable:
-  `runtime_cases: runnable=0 pending=1` with the same C/Rust mismatch reason.
-- FreeType 2.14.3 `src/base/ftobjs.c:ft_open_face_internal` runs additional
-  Mac-font/resource-fork fallback handling when driver probing returns
-  `Unknown_File_Format` or `Invalid_Stream_Operation`; that public-open fallback
-  is part of the observed error path for very short streams.
-- The current Rust parser can parse the 12-byte SFNT directory as an empty
-  table directory and then reports missing required tables as
-  `FT_Err_Invalid_File_Format`.  Promoting the row as-is would either contradict
-  the pinned C oracle or hard-code one malformed asset without the public
-  open-face fallback route.
-
-Required fix plan:
-
-1. Decide whether this row is meant to prove `Invalid_File_Format` or the
-   actual pinned-C `Invalid_Stream_Operation` fallback behavior.
-2. If the intended surface is `Invalid_File_Format`, replace or add a
-   C-observable malformed SFNT fixture that actually returns `3` under the
-   pinned FreeType oracle.
-3. If the intended surface is the actual tiny-stream behavior, update the route
-   plan to compare `FT_Err_Invalid_Stream_Operation` (`85`) and implement a
-   maintained Rust open-face error path matching `ft_open_face_internal`,
-   including the relevant fallback ordering.
-4. Promote only after `FT_New_Memory_Face` exact-error output matches pinned C,
-   Rust FFI, C ABI, and WASM ABI for the same bytes.
+- Rust previously returned `3` (`FT_Err_Invalid_File_Format`) after treating
+  the zero-table directory as a generic missing-table font error.
+- The fix adds a narrow Rust constructor error for TrueType SFNT directories
+  with `numTables=0` and maps it to public error `85` through Rust FFI, C ABI,
+  and WASM.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
+  now reports `runtime_parity: passed=1 failed=0 total=1`.
+- FreeType 2.14.3 `src/sfnt/ttload.c:tt_face_load_font_dir`/
+  `check_table_dir` detects no valid table records before public face-open
+  status is surfaced.
 
 ### Issue Set Current: `FT_PARAM_TAG_UNPATENTED_HINTING` no-effect open params
 
@@ -2056,10 +2042,9 @@ Rejected or blocked during the same pass:
   `invalid-post-format.ttf`, `truncated-png-bitmap.ttf`, and
   `invalid-target-table.ttf`.
 - `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
-  remains unpromoted. Short `OTTO`, `true`, zero-table SFNT, unknown scaler,
-  and one-empty-record SFNT probes all returned pinned C error `85`, not
-  `FT_Err_Invalid_File_Format` (`3`), so using them would be a green
-  placeholder.
+  has since been promoted by matching the exact pinned-C zero-table SFNT public
+  error `85` (`FT_Err_Invalid_Stream_Operation`) across Rust FFI, C ABI, and
+  WASM.
 - `ftcolor.get_paint_graph` and `ftcolor.traverse_paint_graph` stayed
   unpromoted because focused parity reported unresolved runtime font assets.
 - `FT_HAS_COLOR` is not evidence for every color font flavor. SVG and sbix
@@ -10035,11 +10020,11 @@ Exact promotion findings:
   `FT_Err_Name_Table_Missing`.
 - `fterrdef.FT_Err_Name_Table_Missing.sfnt_without_name_table`: generated
   no-name-table SFNT opens successfully in pinned C (`FT_Err_Ok`).
-- `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`:
-  generated zero-table SFNT makes pinned C return public error `85`, while
-  Rust returns `3`.
+- `fterrdef.FT_Err_Invalid_File_Format.new_memory_face_rejects_broken_sfnt`
+  has since been fixed by matching pinned C public error `85` for the exact
+  zero-table SFNT asset.
 
-The route audit intentionally keeps these as `pending-route` until a fixture
+The route audit intentionally keeps the remaining cases as `pending-route` until a fixture
 hits the declared pinned-C public error path, or the fixture rows are moved to
 the public endpoint that actually observes the condition. Counting these as
 `generic-error-fallback` or `real-parity` would be a green placeholder.
