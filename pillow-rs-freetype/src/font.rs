@@ -1891,6 +1891,32 @@ impl Font {
                 "face has no variation blend coordinates".into(),
             ));
         };
+        if coords_16_16.is_empty() {
+            // C parity: TT_Set_MM_Blend(num_coords=0, coords=NULL) doesn't
+            // overwrite the existing blend/design arrays; the public wrapper
+            // only clears FT_FACE_FLAG_VARIATION.  See
+            // freetype/src/base/ftmm.c:465-525 and
+            // freetype/src/truetype/ttgxvar.c:2918-3184.
+            let base_face_index = self.data.face_index & 0xFFFF;
+            let mut next = Self::truetype_face_with_load_mode_and_design_coords(
+                &self.data.raw_data,
+                base_face_index,
+                self.size_pt,
+                self.load_mode,
+                Some(&self.data.design_variation_coords),
+                Some(&self.data.blend_variation_coords_16_16),
+                false,
+            )?;
+            next.selected_charmap = next
+                .data
+                .cmap
+                .charmaps
+                .len()
+                .checked_sub(1)
+                .map_or(0, |last| self.selected_charmap.min(last));
+            *self = next;
+            return Ok(());
+        }
         let design_coords = fvar
             .axes
             .iter()

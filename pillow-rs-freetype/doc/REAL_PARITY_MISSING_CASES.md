@@ -10572,6 +10572,20 @@ Follow-up finding for blend-coordinate state rows:
 
 Latest route audit after this follow-up: `real-parity=4492`,
 `pending-route=464`, `pending-core=0`.
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset` row now
+  has a maintained scenario route comparing partial, excess, and zero/null
+  calls through pinned C, Rust FFI, C ABI, and WASM ABI.  Pinned C truncates
+  excess public blend coordinates to the axis count, fills missing axes with
+  normalized zero, and for a zero-count/null-pointer call preserves the prior
+  internal blend/design coordinate arrays while clearing `FT_FACE_FLAG_VARIATION`.
+  Rust previously rebuilt default coordinate state for the zero/null call,
+  returning blend coordinate `0` where C still exposed the previous `16384`.
+  Rust now preserves public blend/design state for this reset path while
+  clearing the variation flag.
+
+Latest route audit after this follow-up: `real-parity=4493`,
+`pending-route=463`, `pending-core=0`.
 
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
