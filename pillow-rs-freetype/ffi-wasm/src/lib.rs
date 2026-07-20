@@ -3045,6 +3045,23 @@ pub extern "C" fn fontdone_wasm_get_multi_master(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_mm_var(
+    handle: usize,
+    amaster: *mut rust_ffi::FT_MM_Var,
+    axis: *mut rust_ffi::FT_Var_Axis,
+    axis_capacity: FT_UInt,
+) -> FT_Error {
+    let amaster = unsafe { amaster.as_mut() };
+    let axis = if axis.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `axis_capacity` writable FT_Var_Axis records.
+        Some(unsafe { slice::from_raw_parts_mut(axis, axis_capacity as usize) })
+    };
+    rust_ffi::FT_Get_MM_Var(face_ref(handle).map(|face| &face.face), amaster, axis)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_mm_design_coordinates(
     handle: usize,
     num_coords: FT_UInt,

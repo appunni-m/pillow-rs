@@ -4,8 +4,8 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
 use std::alloc::{Layout, alloc_zeroed, dealloc};
-#[cfg(feature = "abi-test-support")]
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::ffi::{
     CStr, CString, c_char, c_int, c_long, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void,
 };
@@ -19,6 +19,15 @@ thread_local! {
     static TEST_OUTLINE_RENDER_SPANS: RefCell<Vec<(c_int, FT_Span)>> = const { RefCell::new(Vec::new()) };
     static TEST_OUTLINE_RENDER_USER_SEEN: RefCell<bool> = const { RefCell::new(false) };
     static TEST_OUTLINE_RENDER_USER_TOKEN: RefCell<*mut c_void> = const { RefCell::new(ptr::null_mut()) };
+}
+
+struct OwnedMmVar {
+    master: Box<FT_MM_Var>,
+    _axis: Box<[FT_Var_Axis]>,
+}
+
+thread_local! {
+    static OWNED_MM_VARS: RefCell<BTreeMap<usize, OwnedMmVar>> = const { RefCell::new(BTreeMap::new()) };
 }
 
 pub type FT_Error = c_int;
@@ -53,6 +62,7 @@ pub type FT_Stroker = *mut c_void;
 pub type FT_String = c_char;
 pub type FT_MM_Axis = rust_ffi::FT_MM_Axis;
 pub type FT_Multi_Master = rust_ffi::FT_Multi_Master;
+pub type FT_Var_Axis = rust_ffi::FT_Var_Axis;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
@@ -1099,6 +1109,31 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_mm_var_descriptor(
+    library: FT_Library,
+    face: FT_Face,
+) -> Option<(FT_Error, FT_MM_Var, Vec<FT_Var_Axis>, FT_Error)> {
+    let mut master_ptr: *mut FT_MM_Var = ptr::null_mut();
+    let err = FT_Get_MM_Var(face, &mut master_ptr);
+    if err != rust_ffi::FT_Err_Ok || master_ptr.is_null() {
+        return Some((err, FT_MM_Var::default(), Vec::new(), rust_ffi::FT_Err_Ok));
+    }
+    // SAFETY: `FT_Get_MM_Var` returned a live descriptor pointer owned by this
+    // C ABI crate until `FT_Done_MM_Var` is called below.
+    let master = unsafe { *master_ptr };
+    let axis_count = usize::try_from(master.num_axis).ok()?;
+    let axes = if master.axis.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: the descriptor's axis pointer has `num_axis` initialized
+        // records and remains live until `FT_Done_MM_Var`.
+        unsafe { slice::from_raw_parts(master.axis, axis_count) }.to_vec()
+    };
+    let done_err = FT_Done_MM_Var(library, master_ptr);
+    Some((err, master, axes, done_err))
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_charmap_count(face: FT_Face) -> Option<FT_UInt> {
     let state = face_state(face)?;
     FT_UInt::try_from(state.charmaps.len()).ok()
@@ -1441,10 +1476,48 @@ pub extern "C" fn FT_Done_FreeType(library: FT_Library) -> FT_Error {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_MM_Var(
+    face: FT_Face,
+    amaster: *mut *mut FT_MM_Var,
+) -> FT_Error {
+    let Some(amaster) = non_null_mut(amaster) else {
+        return rust_ffi::FT_Get_MM_Var(None, None, None);
+    };
+    let Some(state) = face_state(face) else {
+        let mut out = FT_MM_Var::default();
+        return rust_ffi::FT_Get_MM_Var(None, Some(&mut out), None);
+    };
+    let mut axis = vec![FT_Var_Axis::default(); 4].into_boxed_slice();
+    let mut master = Box::new(FT_MM_Var::default());
+    let err = rust_ffi::FT_Get_MM_Var(Some(&state.inner), Some(&mut master), Some(&mut axis));
+    if err != rust_ffi::FT_Err_Ok {
+        return err;
+    }
+    master.axis = axis.as_mut_ptr();
+    let mut owned = OwnedMmVar {
+        master,
+        _axis: axis,
+    };
+    let master_ptr: *mut FT_MM_Var = owned.master.as_mut();
+    OWNED_MM_VARS.with(|vars| {
+        vars.borrow_mut().insert(master_ptr.addr(), owned);
+    });
+    // SAFETY: `amaster` is a non-null output pointer supplied by the caller.
+    unsafe { *amaster.as_ptr() = master_ptr };
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Done_MM_Var(library: FT_Library, amaster: *mut FT_MM_Var) -> FT_Error {
     let Some(library) = library_ref(library) else {
         return rust_ffi::FT_Done_MM_Var(None, None);
     };
+    if !amaster.is_null() {
+        let removed = OWNED_MM_VARS.with(|vars| vars.borrow_mut().remove(&amaster.addr()));
+        if removed.is_some() {
+            return rust_ffi::FT_Done_MM_Var(Some(library), None);
+        }
+    }
     let amaster = non_null_mut(amaster).map(|mut amaster| {
         // SAFETY: `amaster` is non-null and the caller provides a writable
         // FT_MM_Var descriptor owned by this API.  The current pure-Rust core

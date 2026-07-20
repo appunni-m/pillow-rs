@@ -10273,6 +10273,77 @@ static void print_ftmm_get_multi_master_output(FT_Error err, const FT_Multi_Mast
     printf("}}\n");
 }
 
+static void print_ftmm_var_axis(const FT_Var_Axis* axis) {
+    printf("{\"name\":");
+    print_postscript_name_result(axis->name);
+    printf(",\"minimum\":%ld,\"def\":%ld,\"maximum\":%ld,"
+           "\"tag\":%lu,\"strid\":%u}",
+           (long)axis->minimum,
+           (long)axis->def,
+           (long)axis->maximum,
+           (unsigned long)axis->tag,
+           (unsigned)axis->strid);
+}
+
+static void print_ftmm_var_descriptor(FT_MM_Var* master) {
+    printf("{\"num_axis\":%u,\"num_designs\":%u,\"num_namedstyles\":%u,"
+           "\"axis_pointer\":\"%s\",\"namedstyle_pointer\":\"%s\",\"axis\":[",
+           master ? (unsigned)master->num_axis : 0,
+           master ? (unsigned)master->num_designs : 0,
+           master ? (unsigned)master->num_namedstyles : 0,
+           master && master->axis ? "non_null" : "null",
+           master && master->namedstyle ? "non_null" : "null");
+    FT_UInt axis_count = master ? master->num_axis : 0;
+    for (FT_UInt i = 0; i < axis_count; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_ftmm_var_axis(&master->axis[i]);
+    }
+    printf("],\"axis_flags\":[");
+    if (master) {
+        size_t mmvar_size = (sizeof(FT_MM_Var) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
+        FT_UShort* axis_flags = (FT_UShort*)((char*)master + mmvar_size);
+        for (FT_UInt i = 0; i < axis_count; i++) {
+            if (i) {
+                printf(",");
+            }
+            printf("%u", (unsigned)axis_flags[i]);
+        }
+    }
+    printf("]}");
+}
+
+static void print_ftmm_get_mm_var_output(FT_Error err, FT_Library library, FT_MM_Var* master) {
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err) {
+        printf("null}\n");
+        return;
+    }
+    printf("{\"return\":%d,\"descriptor_pointer\":\"%s\",\"descriptor\":",
+           err,
+           master ? "non_null" : "null");
+    print_ftmm_var_descriptor(master);
+    FT_Error done_err = master ? FT_Done_MM_Var(library, master) : FT_Err_Ok;
+    printf(",\"done_return\":%d}}\n", done_err);
+}
+
+static int emit_ftmm_get_mm_var(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_MM_Var* master = NULL;
+    FT_Error err = FT_Get_MM_Var(face.face, &master);
+    print_ftmm_get_mm_var_output(err, face.library, master);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_get_multi_master(int argc, char** argv) {
     FT_Multi_Master master;
     init_multi_master_sentinel(&master);
@@ -16468,6 +16539,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 6 || argc == 7) && streq(argv[1], "--ftmm-get-multi-master")) {
         return emit_ftmm_get_multi_master(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ftmm-get-mm-var")) {
+        return emit_ftmm_get_mm_var(argc, argv);
     }
     if (argc == 6 && streq(argv[1], "--ftmm-mm-weight-vector")) {
         return emit_ftmm_mm_weight_vector(argc, argv);

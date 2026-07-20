@@ -410,6 +410,7 @@ struct FT_LibraryRec_ {
 
 FT_Error FT_Init_FreeType(FT_Library* alibrary);
 FT_Error FT_Done_FreeType(FT_Library library);
+FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var** amaster);
 FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var* amaster);
 FT_Error FT_Library_SetLcdFilter(FT_Library library, FT_LcdFilter filter);
 FT_Error FT_Library_SetLcdFilterWeights(FT_Library library, FT_Byte* weights);
