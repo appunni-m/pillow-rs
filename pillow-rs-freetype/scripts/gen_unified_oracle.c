@@ -4688,6 +4688,59 @@ static int print_slot_format_probe_rows(FT_Face face, const char* probes_arg) {
     return 0;
 }
 
+static int print_glyph_slot_reuse_rows(FT_Face face, const char* sequence_arg, FT_Int32 load_flags) {
+    char* sequence = (char*)malloc(strlen(sequence_arg) + 1);
+    if (!sequence) {
+        return 2;
+    }
+    memcpy(sequence, sequence_arg, strlen(sequence_arg) + 1);
+
+    print_status(0);
+    printf(",\"output\":{\"snapshots\":[");
+    char* glyph = strtok(sequence, ",");
+    int row_index = 0;
+    FT_UInt last_success_glyph = 0;
+    int have_success = 0;
+    while (glyph) {
+        FT_UInt glyph_index = (FT_UInt)strtoul(glyph, NULL, 10);
+        FT_Error status = FT_Load_Glyph(face, glyph_index, load_flags);
+        if (!status) {
+            last_success_glyph = glyph_index;
+            have_success = 1;
+        }
+        if (row_index) printf(",");
+        printf(
+            "{\"iteration\":%d,\"status\":%d,\"slot\":",
+            row_index,
+            status);
+        if (status) {
+            printf("null");
+        } else {
+            printf("{");
+            print_slot_body(face->glyph, glyph_index);
+            printf("}");
+        }
+        if (!status) {
+            printf(",");
+            print_slot_body(face->glyph, glyph_index);
+            printf(",\"outline_hash\":null");
+        } else {
+            printf(",\"outline_hash\":null");
+        }
+        printf("}");
+        row_index++;
+        glyph = strtok(NULL, ",");
+    }
+    printf("],\"slot_identity\":\"same\"");
+    if (have_success) {
+        printf(",");
+        print_slot_body(face->glyph, last_success_glyph);
+    }
+    printf("}}\n");
+    free(sequence);
+    return 0;
+}
+
 static int print_render_glyph_slot_state_rows(FT_Face face, const char* variants_arg, FT_Render_Mode render_mode) {
     char* variants = (char*)malloc(strlen(variants_arg) + 1);
     if (!variants) {
@@ -15639,6 +15692,13 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return result ? 2 : 0;
     }
+    if (streq(command, "--glyph-slot-reuse")) {
+        int result = print_glyph_slot_reuse_rows(face, argv[7], (FT_Int32)strtol(argv[8], NULL, 10));
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return result ? 2 : 0;
+    }
     if (streq(command, "--render-glyph-slot-states")) {
         int result = print_render_glyph_slot_state_rows(face, argv[7], (FT_Render_Mode)strtol(argv[8], NULL, 10));
         FT_Done_Face(face);
@@ -18080,6 +18140,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--inspect-glyph-slot")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--glyph-slot-reuse")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--glyph-get-cbox")) {

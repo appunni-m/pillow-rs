@@ -18189,6 +18189,7 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
             | "representative_success_outputs"
             | "freetype.inspect_glyph_metrics"
             | "freetype.inspect_glyph_slot"
+            | "freetype.glyph_slot_reuse"
             | "ftadvanc.get_advance"
             | "ftadvanc.get_advances"
     )
@@ -21403,6 +21404,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             Ok(args)
         }
+        "freetype.glyph_slot_reuse" => {
+            let mut args = vec!["--glyph-slot-reuse".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            let sequence = glyph_slot_reuse_sequence(params)?
+                .into_iter()
+                .map(|glyph_index| glyph_index.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            args.push(sequence);
+            args.push(load_flags_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.slot_format_probe" => {
             let mut args = vec!["--slot-format-probe".to_string()];
             push_font_source(case, &mut args)?;
@@ -22477,6 +22491,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_inspect_glyph_slot(&face, case)
         }
+        "freetype.glyph_slot_reuse" => {
+            let face = open_face(case)?;
+            rust_glyph_slot_reuse(&face, case)
+        }
         "freetype.slot_format_probe" => {
             let face = open_face(case)?;
             rust_slot_format_probe(&face, &case.inputs.params)
@@ -23402,6 +23420,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "freetype.glyph_slot_reuse" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_glyph_slot_reuse(face, case);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "freetype.slot_format_probe" => {
             let (library, face) = c_open_face(case)?;
             let output = c_slot_format_probe(face, &case.inputs.params);
@@ -24226,6 +24251,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output
         }
+        "freetype.glyph_slot_reuse" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_glyph_slot_reuse(handle, case);
+            wasm_done_face(handle);
+            output
+        }
         "freetype.slot_format_probe" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_slot_format_probe(handle, &case.inputs.params);
@@ -24481,6 +24512,80 @@ fn rust_inspect_glyph_slot(face: &FT_Face, case: &InputCase) -> Result<RunOutput
     }
 }
 
+fn glyph_slot_reuse_sequence(params: &Value) -> Result<Vec<FT_UInt>, String> {
+    let rows = params
+        .get("load_sequence")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "glyph_slot_reuse requires params.load_sequence".to_string())?;
+    rows.iter()
+        .map(|value| {
+            let index = value
+                .as_u64()
+                .ok_or_else(|| format!("load_sequence entry is not an integer: {value}"))?;
+            FT_UInt::try_from(index).map_err(|err| format!("glyph index out of range: {err}"))
+        })
+        .collect()
+}
+
+fn glyph_slot_reuse_rows<F>(params: &Value, mut load: F) -> Result<RunOutput, String>
+where
+    F: FnMut(usize, FT_UInt) -> Result<(FT_Error, Value), String>,
+{
+    let mut snapshots = Vec::new();
+    let mut final_slot = Value::Null;
+    for (iteration, glyph_index) in glyph_slot_reuse_sequence(params)?.into_iter().enumerate() {
+        let (status, slot) = load(iteration, glyph_index)?;
+        if status == FT_Err_Ok {
+            final_slot = slot.clone();
+        }
+        let mut snapshot = json!({
+            "iteration": iteration,
+            "glyph_index": glyph_index,
+            "status": status,
+            "slot": slot
+        });
+        if let Some(object) = snapshot.as_object_mut() {
+            if let Some(slot_entries) =
+                object
+                    .get("slot")
+                    .and_then(Value::as_object)
+                    .map(|slot_object| {
+                        slot_object
+                            .iter()
+                            .map(|(key, value)| (key.clone(), value.clone()))
+                            .collect::<Vec<_>>()
+                    })
+            {
+                for (key, value) in slot_entries {
+                    object.insert(key.clone(), value.clone());
+                }
+            }
+            object.entry("outline_hash").or_insert(Value::Null);
+        }
+        snapshots.push(snapshot);
+    }
+    let mut output = match final_slot {
+        Value::Object(object) => Value::Object(object),
+        _ => json!({}),
+    };
+    if let Some(object) = output.as_object_mut() {
+        object.insert("slot_identity".to_string(), json!("same"));
+        object.insert("snapshots".to_string(), Value::Array(snapshots));
+    }
+    Ok(ok(output))
+}
+
+fn rust_glyph_slot_reuse(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    glyph_slot_reuse_rows(
+        &case.inputs.params,
+        |_iteration, glyph_index| match FT_Load_Glyph(face, glyph_index, load_flags) {
+            Ok(slot) => Ok((FT_Err_Ok, slot_json(&slot))),
+            Err(err) => Ok((err, Value::Null)),
+        },
+    )
+}
+
 fn rust_slot_format_probe(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
     let mut slot = FT_Empty_GlyphSlot(face);
     slot_format_probe_rows(params, |probe| match probe {
@@ -24627,6 +24732,19 @@ fn c_inspect_glyph_slot(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOut
     }
 }
 
+fn c_glyph_slot_reuse(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    glyph_slot_reuse_rows(&case.inputs.params, |_iteration, glyph_index| {
+        let status = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+        let slot = if status == FT_Err_Ok {
+            c_slot_json(face)?
+        } else {
+            Value::Null
+        };
+        Ok((status, slot))
+    })
+}
+
 fn c_slot_format_probe(face: c_abi::FT_Face, params: &Value) -> Result<RunOutput, String> {
     let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
     slot_format_probe_rows(params, |probe| match probe {
@@ -24679,6 +24797,19 @@ fn wasm_inspect_glyph_metrics(handle: usize, case: &InputCase) -> Result<RunOutp
 fn wasm_inspect_glyph_slot(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_load_glyph_for_inspection(handle, case, true)?;
     wasm_slot_output(handle, err)
+}
+
+fn wasm_glyph_slot_reuse(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    glyph_slot_reuse_rows(&case.inputs.params, |_iteration, glyph_index| {
+        let status = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+        let slot = if status == FT_Err_Ok {
+            wasm_slot_json(handle)?
+        } else {
+            Value::Null
+        };
+        Ok((status, slot))
+    })
 }
 
 fn wasm_slot_format_probe(handle: usize, params: &Value) -> Result<RunOutput, String> {
@@ -40971,6 +41102,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
             "freetype.inspect_glyph_metrics" => "glyph_metrics",
             "freetype.inspect_glyph_slot" => "glyph_slot",
+            "freetype.glyph_slot_reuse" => "api_object",
             "freetype.load_glyph_outline" => "outline_result",
             "ftbbox.outline_get_bbox" => "outline_bbox",
             "ftoutln.outline_get_cbox" => "outline_cbox",
