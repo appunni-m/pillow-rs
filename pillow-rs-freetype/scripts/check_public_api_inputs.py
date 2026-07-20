@@ -2012,6 +2012,30 @@ def ftcache_sbit_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcache_node_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Node/FTC_Node_Unref pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Node.reference_counted_cache_handle": (
+            "FTC_Node cache-handle parity needs a maintained node lifecycle "
+            "route proving a lookup-acquired node records the same manager "
+            "cache handle identity and cache index as pinned C"
+        ),
+        "ftcache.FTC_Node_Unref.releases_lookup_reference": (
+            "FTC_Node_Unref release parity needs a maintained node lifecycle "
+            "route proving one unref releases exactly the lookup reference and "
+            "preserves any remaining references like pinned C"
+        ),
+        "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable": (
+            "FTC_Node_Unref flushability parity needs a maintained route "
+            "proving the final unref makes the node eligible for cache flush "
+            "or eviction with pinned-C observable state"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -2052,6 +2076,9 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     sbit_lookup_scaler_pending = ftcache_sbit_lookup_scaler_pending_reason(row)
     if sbit_lookup_scaler_pending:
         return sbit_lookup_scaler_pending
+    node_lifecycle_pending = ftcache_node_lifecycle_pending_reason(row)
+    if node_lifecycle_pending:
+        return node_lifecycle_pending
     cache_creation_exact_cases = {
         "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
             "FTC_CMapCache opaque-handle parity needs a maintained cache route "
@@ -2113,20 +2140,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     }
     if row.case_id in cache_creation_exact_cases:
         return cache_creation_exact_cases[row.case_id]
-    pending_case_groups = {
-        (
-            "ftcache.FTC_Node.reference_counted_cache_handle",
-            "ftcache.FTC_Node_Unref.releases_lookup_reference",
-            "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable",
-        ): (
-            "FTC_Node/FTC_Node_Unref parity needs a maintained node lifecycle "
-            "route proving cache handle identity, lookup references, unref "
-            "release, and flushability after the final reference"
-        ),
-    }
-    for case_ids, reason in pending_case_groups.items():
-        if row.case_id in case_ids:
-            return reason
     return None
 
 
@@ -2903,22 +2916,42 @@ def header_or_layout_compile_contract_reason(row: ConcreteInput) -> str | None:
 def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for MM/variation runtime data that do not have a maintained route."""
     ftmm_rows_without_maintained_route = {
-        "ftmm.FT_Done_MM_Var.import_contract",
-        "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
-        "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
-        "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
-        "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
-        "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
+        "ftmm.FT_Done_MM_Var.import_contract": (
+            "FT_Done_MM_Var import contract is a compile/layout obligation; "
+            "runtime descriptor ownership must stay routed through explicit "
+            "FT_Get_MM_Var then FT_Done_MM_Var rows"
+        ),
+        "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled": (
+            "FT_Get_Var_Design_Coordinates excess-output parity needs a "
+            "maintained MM route proving coordinates beyond the axis count are "
+            "zero-filled exactly like pinned C"
+        ),
+        "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend": (
+            "FT_Set_MM_Blend_Coordinates output parity needs a maintained MM "
+            "route proving active blend-coordinate changes alter subsequent "
+            "coordinates, metrics, and exposed state like pinned C"
+        ),
+        "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design": (
+            "FT_Set_MM_Design_Coordinates Adobe-MM parity needs a maintained "
+            "Type1 MM route proving design-coordinate changes alter blend "
+            "state and public outputs like pinned C"
+        ),
+        "ftmm.T1_MAX_MM_AXIS.record_array_capacity": (
+            "T1_MAX_MM_AXIS runtime parity needs a maintained Type1 MM "
+            "descriptor route proving public arrays are capped and populated "
+            "with pinned-C capacity semantics"
+        ),
+        "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity": (
+            "T1_MAX_MM_MAP_POINTS runtime parity needs a maintained Type1 MM "
+            "axis-map route proving blend design maps are capped and exposed "
+            "with pinned-C capacity semantics"
+        ),
     }
     if row.case_id not in ftmm_rows_without_maintained_route:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Multiple Master and variation descriptor, coordinate, axis-flag, and "
-        "layout success behavior requires a maintained MM route; keeping it "
-        "generic would be a green placeholder"
-    )
+    return ftmm_rows_without_maintained_route[row.case_id]
 
 
 def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
@@ -3099,21 +3132,40 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
         )
 
     property_rows_without_maintained_route = {
-        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
-        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c",
-        "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script",
-        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit",
-        "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height",
-        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": (
+            "FT_Prop_GlyphToScriptMap get parity needs maintained typed "
+            "FT_Property_Get routing that returns the face-specific glyph to "
+            "script map pointer/class exactly like pinned C"
+        ),
+        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c": (
+            "FT_Prop_GlyphToScriptMap invalid-face parity needs maintained "
+            "typed FT_Property_Get routing that preserves the exact pinned-C "
+            "error and output state for null or invalid face data"
+        ),
+        "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script": (
+            "FT_Prop_GlyphToScriptMap mutation parity needs maintained typed "
+            "property routing plus an autohint glyph-load observation proving "
+            "map changes affect script selection like pinned C"
+        ),
+        "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": (
+            "FT_Prop_IncreaseXHeight round-trip parity needs maintained typed "
+            "FT_Property_Set/Get routing proving the limit value is stored and "
+            "read back with pinned-C face/module scoping"
+        ),
+        "ftdriver.FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height": (
+            "FT_Prop_IncreaseXHeight glyph-output parity needs maintained "
+            "typed property routing plus an autohint load proving the x-height "
+            "adjustment changes metrics/outline output like pinned C"
+        ),
+        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c": (
+            "FT_Prop_IncreaseXHeight invalid-face parity needs maintained "
+            "typed FT_Property_Set/Get routing that preserves the exact pinned-C "
+            "error and output state for null or invalid face data"
+        ),
     }
     if row.case_id not in property_rows_without_maintained_route:
         return None
-    return (
-        "FT_Property_Get/Set and driver-property behavior requires maintained "
-        "public property APIs in Rust FFI, C ABI, and WASM ABI; generic "
-        "Unimplemented_Feature or null-error fallback would be a green "
-        "placeholder"
-    )
+    return property_rows_without_maintained_route[row.case_id]
 
 
 def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
@@ -3612,41 +3664,58 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for specialized public records without a maintained route."""
     specialized_rows_without_maintained_route = {
-        "otsvg.FT_SVG_Document.renderer_callback_observes_document",
-        "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
-        "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
+        "otsvg.FT_SVG_Document.renderer_callback_observes_document": (
+            "FT_SVG_Document renderer-callback parity needs a maintained "
+            "OT-SVG glyph route proving the renderer callback receives the "
+            "same document pointer class, glyph ID, and lifetime as pinned C"
+        ),
+        "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields": (
+            "FT_SVG_DocumentRec range parity needs a maintained OT-SVG route "
+            "proving document start/end offsets, payload byte range, and "
+            "document length fields match pinned C"
+        ),
+        "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields": (
+            "FT_SVG_DocumentRec transform/metrics parity needs a maintained "
+            "OT-SVG route proving transform matrix, delta, metrics, units, and "
+            "glyph size fields are populated exactly like pinned C"
+        ),
     }
     if row.case_id not in specialized_rows_without_maintained_route:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "WinFNT header/charset and OTSVG document public-record behavior "
-        "requires maintained specialized record routes; keeping it generic "
-        "would be a green placeholder"
-    )
+    return specialized_rows_without_maintained_route[row.case_id]
 
 
 def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for compressed and external stream behavior without a maintained route."""
     bzip2_stream_rows_without_maintained_route = {
-        "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source",
-        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy",
-        "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream",
-        "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
+        "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream": (
+            "FT_Stream_OpenBzip2 open parity needs maintained compressed/raw "
+            "fixtures plus a pure-Rust bzip2 stream route proving target stream "
+            "fields, source position, and initial open status match "
+            "freetype/src/bzip2/ftbzip2.c"
+        ),
+        "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes": (
+            "FT_Stream_OpenBzip2 read parity needs maintained compressed/raw "
+            "fixtures plus a pure-Rust bzip2 stream route proving decompressed "
+            "byte ranges, stream positions, and read status match pinned C"
+        ),
+        "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source": (
+            "FT_Stream_OpenBzip2 close-lifecycle parity needs a maintained "
+            "route proving closing the bzip2 wrapper releases wrapper state "
+            "without closing or corrupting the caller-owned source stream"
+        ),
+        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy": (
+            "FT_Stream_OpenBzip2 build-policy parity needs a maintained route "
+            "proving the active pinned build's compiled-bzip2 behavior instead "
+            "of treating optional bzip2 support as out of scope"
+        ),
     }
     if row.case_id in bzip2_stream_rows_without_maintained_route:
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
-        return (
-            "FT_Stream_OpenBzip2 success/lifecycle rows declare "
-            "streams/bzip2/valid-pcf-header.pcf.bz2 and, for read parity, "
-            "streams/bzip2/valid-pcf-header.raw, but those maintained "
-            "compressed/raw byte fixtures are absent; exact same-input "
-            "C/Rust/C-ABI/WASM parity also requires a pure-Rust bzip2 stream "
-            "route that matches open/read/seek-backwards/close ownership "
-            "behavior from freetype/src/bzip2/ftbzip2.c"
-        )
+        return bzip2_stream_rows_without_maintained_route[row.case_id]
     if row.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
