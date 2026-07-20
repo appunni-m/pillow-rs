@@ -2493,6 +2493,15 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 Ok(ok(face_driver_name_json(FT_FACE_DRIVER_NAME(Some(face)))))
             }
+            "ftmodapi.face_driver_name_with_font_format"
+                if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+            {
+                let face = self.rust_face(case)?;
+                Ok(ok(face_driver_name_with_font_format_json(
+                    FT_FACE_DRIVER_NAME(Some(face)),
+                    FT_Get_Font_Format(Some(face)),
+                )))
+            }
             "ftmodapi.property_get"
             | "ftdriver.interpreter_version_default"
             | "FT_Property_Get" => property_get_case_output(case, PropertyBackend::Rust),
@@ -2803,6 +2812,12 @@ impl BackendComparisonWorker {
                     c_abi::abi_support_face_driver_name(face),
                 )))
             }
+            "ftmodapi.face_driver_name_with_font_format"
+                if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+            {
+                let face = self.c_face(case)?;
+                Ok(ok(c_face_driver_name_with_font_format_json(face)))
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -3109,6 +3124,12 @@ impl BackendComparisonWorker {
             {
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_face_driver_name_json(handle)))
+            }
+            "ftmodapi.face_driver_name_with_font_format"
+                if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+            {
+                let handle = self.wasm_face(case)?;
+                Ok(ok(wasm_face_driver_name_with_font_format_json(handle)))
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
@@ -10493,6 +10514,17 @@ fn face_driver_name_json(name: Option<&str>) -> Value {
     }
 }
 
+fn face_driver_name_with_font_format_json(
+    driver_name: Option<&str>,
+    font_format: Option<&str>,
+) -> Value {
+    json!({
+        "driver_name": driver_name,
+        "font_format": font_format,
+        "same_source": false,
+    })
+}
+
 fn c_postscript_name_json(name: *const std::ffi::c_char) -> Value {
     c_nullable_c_string_json(name)
 }
@@ -10533,6 +10565,22 @@ fn c_face_driver_name_json(name: *const std::ffi::c_char) -> Value {
     })
 }
 
+fn c_string_option(name: *const std::ffi::c_char) -> Option<String> {
+    if name.is_null() {
+        return None;
+    }
+    let bytes = c_abi::abi_c_string_bytes(name);
+    Some(String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn c_face_driver_name_with_font_format_json(face: c_abi::FT_Face) -> Value {
+    json!({
+        "driver_name": c_string_option(c_abi::abi_support_face_driver_name(face)),
+        "font_format": c_string_option(c_abi::FT_Get_Font_Format(face)),
+        "same_source": false,
+    })
+}
+
 fn c_font_format_alias_json(face: c_abi::FT_Face) -> Value {
     let font_format = c_abi::FT_Get_Font_Format(face);
     let x11_font_format = c_abi::FT_Get_X11_Font_Format(face);
@@ -10566,6 +10614,27 @@ fn wasm_face_driver_name_json(handle: usize) -> Value {
         "driver_name": String::from_utf8_lossy(&bytes),
         "string_bytes": hex_bytes(&bytes),
         "nul_terminated": true,
+    })
+}
+
+fn wasm_string_option(ok: bool, value: wasm_abi::FontdoneWasmString) -> Option<String> {
+    if !ok {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&c_abi::abi_byte_slice(value.string, value.string_len)).to_string(),
+    )
+}
+
+fn wasm_face_driver_name_with_font_format_json(handle: usize) -> Value {
+    let mut driver_name = wasm_abi::FontdoneWasmString::default();
+    let mut font_format = wasm_abi::FontdoneWasmString::default();
+    let driver_ok = wasm_abi::abi_support_face_driver_name(handle, &mut driver_name) != 0;
+    let format_ok = wasm_abi::fontdone_wasm_get_font_format(handle, &mut font_format) != 0;
+    json!({
+        "driver_name": wasm_string_option(driver_ok, driver_name),
+        "font_format": wasm_string_option(format_ok, font_format),
+        "same_source": false,
     })
 }
 
@@ -20529,6 +20598,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_face_size(params, &mut args)?;
             Ok(args)
         }
+        "ftmodapi.face_driver_name_with_font_format"
+            if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+        {
+            let mut args = vec!["--face-driver-name-with-font-format".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
         "ftmm.get_default_named_instance" => {
             let mut args = vec![if case.case == "invalid_face_error" {
                 "--get-default-named-instance-invalid".to_string()
@@ -22531,6 +22608,15 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             Ok(ok(face_driver_name_json(FT_FACE_DRIVER_NAME(Some(&face)))))
         }
+        "ftmodapi.face_driver_name_with_font_format"
+            if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+        {
+            let face = open_face(case)?;
+            Ok(ok(face_driver_name_with_font_format_json(
+                FT_FACE_DRIVER_NAME(Some(&face)),
+                FT_Get_Font_Format(Some(&face)),
+            )))
+        }
         "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
         "ftmm.get_default_named_instance" => rust_get_default_named_instance(case),
         "ftmm.set_named_instance" => rust_set_named_instance(case),
@@ -23024,6 +23110,15 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             let (library, face) = c_open_face(case)?;
             let output = c_face_driver_name_json(c_abi::abi_support_face_driver_name(face));
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftmodapi.face_driver_name_with_font_format"
+            if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+        {
+            let (library, face) = c_open_face(case)?;
+            let output = c_face_driver_name_with_font_format_json(face);
             c_done_face(face);
             c_done_library(library);
             Ok(ok(output))
@@ -23855,6 +23950,14 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             let handle = wasm_open_face(case)?;
             let output = wasm_face_driver_name_json(handle);
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftmodapi.face_driver_name_with_font_format"
+            if case.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format" =>
+        {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_face_driver_name_with_font_format_json(handle);
             wasm_done_face(handle);
             Ok(ok(output))
         }
@@ -40694,7 +40797,8 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftmodapi.new_library"
             | "ftmodapi.reference_library"
             | "ftmodapi.reference_then_done_library"
-            | "ftmodapi.face_driver_name" => "api_object",
+            | "ftmodapi.face_driver_name"
+            | "ftmodapi.face_driver_name_with_font_format" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
             "freetype.inspect_glyph_metrics" => "glyph_metrics",
