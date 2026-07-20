@@ -17390,6 +17390,8 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
             | "load_char"
             | "load_glyph"
             | "render_glyph"
+            | "face_lifecycle.load_render_done"
+            | "representative_success_outputs"
             | "freetype.inspect_glyph_metrics"
             | "freetype.inspect_glyph_slot"
             | "ftadvanc.get_advance"
@@ -18977,6 +18979,14 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
     )
 }
 
+fn error_status_success_slot_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "fterrdef.FT_Err_Ok.successful_face_lifecycle"
+            | "fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output"
+    )
+}
+
 fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     let params = &case.inputs.params;
     if property_service_route_pending(case.operation.as_str())
@@ -18984,6 +18994,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     {
         return Err(
             "FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI property APIs; generic fallback would be a green placeholder"
+                .to_string(),
+        );
+    }
+    if matches!(
+        case.operation.as_str(),
+        "face_lifecycle.load_render_done" | "representative_success_outputs"
+    ) && !error_status_success_slot_route_supported(case)
+    {
+        return Err(
+            "error/status success route requires maintained lifecycle plus slot output comparison; generic OK status would be a green placeholder"
                 .to_string(),
         );
     }
@@ -20513,6 +20533,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "face_lifecycle.load_render_done" | "representative_success_outputs" => {
+            let mut args = vec!["--render-glyph-index".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push(render_mode_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.inspect_glyph_metrics" => {
             let mut args = vec!["--inspect-glyph-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -21541,6 +21570,16 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 }
             }
         }
+        "face_lifecycle.load_render_done" | "representative_success_outputs" => {
+            let face = open_face(case)?;
+            rust_render_glyph(
+                &face,
+                GlyphLoadInput::GlyphIndex(glyph_index_param(&case.inputs.params)?),
+                load_flags_param(&case.inputs.params)?,
+                render_mode_param(&case.inputs.params)?,
+                1,
+            )
+        }
         "freetype.inspect_glyph_metrics" => {
             let face = open_face(case)?;
             rust_inspect_glyph_metrics(&face, case)
@@ -22400,6 +22439,20 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "face_lifecycle.load_render_done" | "representative_success_outputs" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_render_glyph(
+                face,
+                GlyphLoadInput::GlyphIndex(glyph_index_param(&case.inputs.params)?),
+                load_flags_param(&case.inputs.params)?,
+                render_mode_param(&case.inputs.params)?,
+                1,
+                false,
+            );
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "freetype.inspect_glyph_metrics" => {
             let (library, face) = c_open_face(case)?;
             let output = c_inspect_glyph_metrics(face, case);
@@ -23181,6 +23234,19 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             }
             let handle = wasm_open_face(case)?;
             let output = wasm_load_glyph_output(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
+        }
+        "face_lifecycle.load_render_done" | "representative_success_outputs" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_render_glyph(
+                handle,
+                GlyphLoadInput::GlyphIndex(glyph_index_param(&case.inputs.params)?),
+                load_flags_param(&case.inputs.params)?,
+                render_mode_param(&case.inputs.params)?,
+                1,
+                false,
+            );
             wasm_done_face(handle);
             output
         }

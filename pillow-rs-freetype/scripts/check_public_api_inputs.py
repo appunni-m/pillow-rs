@@ -1710,8 +1710,6 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
     residual_rows_without_maintained_route = {
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature",
         "fterrdef.FT_Err_Missing_Property.known_property_success",
-        "fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output",
-        "fterrdef.FT_Err_Ok.successful_face_lifecycle",
         "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
         "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
@@ -3630,6 +3628,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Property_Get.rejects_null_arguments"
     ):
         return "FT_Property_Get null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "face_lifecycle.load_render_done"
+        and row.case_id == "fterrdef.FT_Err_Ok.successful_face_lifecycle"
+    ):
+        return "FT_Err_Ok lifecycle success validates load/render glyph status plus exact slot metrics and bitmap output through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "representative_success_outputs"
+        and row.case_id == "fterrdef.FT_Err_Ok.successful_constant_status_does_not_mask_output"
+    ):
+        return "FT_Err_Ok success control validates non-status glyph metrics and bitmap output through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.property_get"
         and row.case_id == "ftmodapi.FT_Property_Get.gets_supported_property"
