@@ -72,6 +72,7 @@ pub struct Font {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FaceKind {
     Sfnt,
+    Bdf,
     Type1 { is_fixed_pitch: bool },
     WinFnt { header: WinFntHeader },
 }
@@ -126,6 +127,15 @@ struct Type1Metadata {
     underline_position: i16,
     underline_thickness: i16,
     bbox: BBox,
+}
+
+struct BdfMetadata {
+    family_name: String,
+    pixel_width: i16,
+    pixel_height: i16,
+    x_offset: i16,
+    y_offset: i16,
+    glyph_count: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -402,6 +412,148 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
     font_data
 }
 
+fn parse_bdf_font_bounding_box(line: &str) -> Option<(i16, i16, i16, i16)> {
+    let mut parts = line.split_whitespace();
+    if parts.next()? != "FONTBOUNDINGBOX" {
+        return None;
+    }
+    let width = parts.next()?.parse().ok()?;
+    let height = parts.next()?.parse().ok()?;
+    let x_offset = parts.next()?.parse().ok()?;
+    let y_offset = parts.next()?.parse().ok()?;
+    Some((width, height, x_offset, y_offset))
+}
+
+fn parse_bdf_metadata(text: &str) -> Result<BdfMetadata, FontError> {
+    let mut family_name = "BDF".to_string();
+    let mut bbox = None;
+    let mut glyph_count = 0u16;
+
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if let Some(name) = line.strip_prefix("FONT ") {
+            family_name = name.trim().to_string();
+        } else if line.starts_with("FONTBOUNDINGBOX ") {
+            bbox = parse_bdf_font_bounding_box(line);
+        } else if line.starts_with("STARTCHAR ") {
+            glyph_count = glyph_count.saturating_add(1);
+        }
+    }
+
+    let Some((pixel_width, pixel_height, x_offset, y_offset)) = bbox else {
+        return Err(FontError::BdfMissingFontboundingboxField);
+    };
+    Ok(BdfMetadata {
+        family_name,
+        pixel_width,
+        pixel_height,
+        x_offset,
+        y_offset,
+        glyph_count: glyph_count.max(1),
+    })
+}
+
+fn bdf_font_data(data: &[u8], size_pt: f32, metadata: &BdfMetadata) -> Arc<FontData> {
+    let pixel_width = metadata.pixel_width.max(1);
+    let pixel_height = metadata.pixel_height.max(1);
+    let x_min = metadata.x_offset;
+    let y_min = metadata.y_offset;
+    let x_max = x_min.saturating_add(pixel_width);
+    let y_max = y_min.saturating_add(pixel_height);
+
+    #[allow(clippy::arc_with_non_send_sync)]
+    let font_data = Arc::new(FontData {
+        raw_data: data.to_vec(),
+        face_offset: 0,
+        face_index: 0,
+        num_faces: 1,
+        table_directory: tt::TableDirectory {
+            records: Vec::new(),
+        },
+        cmap: tt::cmap::CmapTable::default(),
+        fvar: None,
+        gvar: None,
+        design_variation_coords: Vec::new(),
+        normalized_variation_coords: Vec::new(),
+        blend_variation_coords_16_16: Vec::new(),
+        variation_coordinates_set: false,
+        gasp: None,
+        head: tt::head::HeadTable {
+            // BDF is a bitmap strike, not a scalable outline.  Use a nonzero
+            // synthetic UPEM only so shared size-metric helpers avoid division
+            // by zero; `FaceKind::Bdf` keeps FT_FACE_FLAG_SCALABLE clear.
+            units_per_em: u16::try_from(pixel_height).unwrap_or(1),
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+            index_to_loc_format: 0,
+            flags: 0,
+            mac_style: 0,
+            lowest_rec_ppem: 0,
+        },
+        hhea: tt::hhea::HheaTable {
+            ascent: y_max,
+            descent: y_min,
+            line_gap: 0,
+            advance_width_max: u16::try_from(pixel_width).unwrap_or(1),
+            num_hmetrics: 1,
+        },
+        hvar: None,
+        mvar: None,
+        hmtx: tt::hmtx::HmtxTable {
+            h_metrics: vec![tt::hmtx::LongHorMetric {
+                advance_width: u16::try_from(pixel_width).unwrap_or(1),
+                lsb: x_min,
+            }],
+            left_side_bearings: Vec::new(),
+        },
+        maxp: tt::maxp::MaxpTable {
+            num_glyphs: metadata.glyph_count,
+            ..tt::maxp::MaxpTable::default()
+        },
+        name: tt::name::NameTable {
+            format: 0,
+            family: metadata.family_name.clone(),
+            subfamily: "Regular".into(),
+            postscript_name: None,
+            records: Vec::new(),
+            lang_tags: Vec::new(),
+        },
+        os2: None,
+        post: None,
+        vhea: None,
+        vmtx: None,
+        hdmx: None,
+        kern: None,
+        sbit: None,
+        cff: None,
+        loca_data: Vec::new(),
+        glyf_data: Vec::new(),
+        size_pt: std::cell::Cell::new(size_pt),
+        size_x_scale: std::cell::Cell::new(0),
+        size_y_scale: std::cell::Cell::new(0),
+        size_tt_scale: std::cell::Cell::new(0),
+        size_tt_ppem: std::cell::Cell::new(0),
+        size_tt_x_ratio: std::cell::Cell::new(0x1_0000),
+        size_tt_y_ratio: std::cell::Cell::new(0x1_0000),
+        size_tt_point_size: std::cell::Cell::new(0),
+        transform_xx: std::cell::Cell::new(0x1_0000),
+        transform_xy: std::cell::Cell::new(0),
+        transform_yx: std::cell::Cell::new(0),
+        transform_yy: std::cell::Cell::new(0x1_0000),
+        transform_dx: std::cell::Cell::new(0),
+        transform_dy: std::cell::Cell::new(0),
+        fpgm: None,
+        prep: None,
+        cvt: None,
+        glyph_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        self_arc: std::sync::OnceLock::new(),
+    });
+    let _ = font_data.self_arc.set(font_data.clone());
+    font_data
+}
+
 fn bdf_text(data: &[u8]) -> Option<&str> {
     std::str::from_utf8(data).ok()
 }
@@ -416,7 +568,8 @@ fn first_bdf_keyword(text: &str) -> Option<&str> {
 fn is_bdf_probe_keyword(keyword: &str) -> bool {
     matches!(
         keyword,
-        "COMMENT"
+        "STARTFONT"
+            | "COMMENT"
             | "FONT"
             | "SIZE"
             | "FONTBOUNDINGBOX"
@@ -560,9 +713,7 @@ fn parse_bdf_constructor_error(data: &[u8]) -> Option<FontError> {
     if in_glyph {
         return Some(FontError::BdfCorruptedFontGlyphs);
     }
-    Some(FontError::InvalidFont(
-        "BDF faces are not implemented".into(),
-    ))
+    None
 }
 
 fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
@@ -1259,8 +1410,14 @@ impl Font {
         if matches!(read_u16_le(data, 0), Some(0x0200 | 0x0300)) {
             return Self::winfnt_face(data, face_index, size_pt);
         }
-        if let Some(error) = parse_bdf_constructor_error(data) {
-            return Err(error);
+        if bdf_text(data)
+            .and_then(first_bdf_keyword)
+            .is_some_and(is_bdf_probe_keyword)
+        {
+            if let Some(error) = parse_bdf_constructor_error(data) {
+                return Err(error);
+            }
+            return Self::bdf_face(data, face_index, size_pt);
         }
         if type1_cleartext(data).is_some() {
             return Self::type1_face(data, face_index, size_pt);
@@ -1346,6 +1503,45 @@ impl Font {
             type1_mm_variation_active: false,
             face_globals,
             is_italic,
+            family_name,
+            subfamily_name,
+            size_metrics,
+            selected_charmap: 0,
+            bytecode_context: BytecodeContextCache::default(),
+            raster_scratch: std::cell::RefCell::new(crate::grays::RasterScratch::new()),
+        })
+    }
+
+    fn bdf_face(data: &[u8], face_index: usize, size_pt: f32) -> Result<Self, FontError> {
+        if face_index != 0 {
+            return Err(FontError::InvalidFont(format!(
+                "face index {face_index} out of range for 1 face(s)"
+            )));
+        }
+        let text = bdf_text(data)
+            .ok_or_else(|| FontError::InvalidFont("BDF stream is not text".into()))?;
+        let metadata = parse_bdf_metadata(text)?;
+        let font_data = bdf_font_data(data, size_pt, &metadata);
+        let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), false);
+        let size_metrics = SizeMetrics::from_pixel_size(
+            u32::from(u16::try_from(metadata.pixel_width.max(1)).unwrap_or(1)),
+            u32::from(u16::try_from(metadata.pixel_height.max(1)).unwrap_or(1)),
+            font_data.as_ref(),
+        );
+        sync_active_size_metrics(&font_data, size_metrics);
+        let family_name = font_data.name.family.clone();
+        let subfamily_name = font_data.name.subfamily.clone();
+
+        Ok(Font {
+            data: font_data,
+            size_pt,
+            load_mode: LoadMode::Default,
+            face_kind: FaceKind::Bdf,
+            type1_multi_master: None,
+            type1_mm_weight_vector: None,
+            type1_mm_variation_active: false,
+            face_globals,
+            is_italic: false,
             family_name,
             subfamily_name,
             size_metrics,
@@ -2048,6 +2244,7 @@ impl Font {
     /// Equivalent to `FT_Get_Font_Format` for the supported SFNT wrappers.
     pub fn font_format(&self) -> &'static str {
         match self.face_kind {
+            FaceKind::Bdf => return "BDF",
             FaceKind::Type1 { .. } => return "Type 1",
             FaceKind::WinFnt { .. } => return "Windows FNT",
             FaceKind::Sfnt => {}
@@ -2176,6 +2373,13 @@ impl Font {
         const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
         const FT_FACE_FLAG_HINTER: u32 = 1 << 11;
         const FT_FACE_FLAG_VARIATION: u32 = 1 << 15;
+
+        if self.face_kind == FaceKind::Bdf {
+            // FreeType's BDF driver exposes bitmap-only faces as horizontal
+            // fixed-size strikes.  Pinned 2.14.3 reports face_flags=18 for
+            // the maintained BDF macro control: FIXED_SIZES | HORIZONTAL.
+            return FT_FACE_FLAG_FIXED_SIZES | FT_FACE_FLAG_HORIZONTAL;
+        }
 
         if let FaceKind::WinFnt { header } = self.face_kind {
             // FreeType winfnt.c:fnt_size_select exposes fixed bitmap sizes
