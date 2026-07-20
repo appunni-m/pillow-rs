@@ -9922,6 +9922,16 @@ Finding:
   `23` for the row instead of the expected successful charmap observation.
 - The marker was restored. Promoting this row based only on the existing file
   would be a green placeholder.
+- Rechecked on 2026-07-20 after adding narrow valid-BDF face-open support for
+  the `FT_IS_SCALABLE` bitmap macro row.  The same BDF can open through the
+  `--face-macro` oracle path, but the generated `--inspect-charmaps` route
+  still returns `FT_Err_Invalid_Pixel_Size` (`23`) with the default
+  `FT_Set_Pixel_Sizes(face, 0, 0)` setup.  Preserving the initial size avoids
+  that setup error and proves the deeper mismatch: pinned C exposes one BDF
+  charmap with encoding `1094995778`, platform `7`, encoding ID `0`; selecting
+  `FT_ENCODING_NONE` (`0`) returns `FT_Err_Invalid_Argument` (`6`).  Therefore
+  the existing BDF is a valid bitmap macro control but not a valid
+  `FT_ENCODING_NONE` runtime-observation fixture.
 
 Required fix:
 
