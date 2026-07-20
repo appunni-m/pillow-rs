@@ -12540,9 +12540,26 @@ Current blocker families:
   transforms, affine values, downstream opaque paint use, and size variants.
 - Paint resolution: opaque paint handles, supported paint-format dispatch,
   glyph/colr-glyph/solid payloads, color indexes, and public union shape.
-- Colorline and gradients: colorline records, color stop iterator
-  initialization/advance/end, static and variable stops, linear/radial/sweep
-  payloads, and pad/reflect/repeat extend modes.
+- Colorline and gradient rows are split by exact obligation instead of sharing
+  a broad colorline blocker:
+  - `FT_ColorLine.gradient_colorline_values`: extend mode, stop count, and
+    iterator fields from `FT_Get_Paint`.
+  - `FT_ColorStop.iterator_output_values`: stop offset, color index, and alpha
+    emitted by `FT_Get_Colorline_Stops`.
+  - `FT_ColorStopIterator.initialized_by_get_paint` and
+    `advanced_by_get_colorline_stops`: iterator initialization, mutation, and
+    output preservation across calls.
+  - `FT_Get_Colorline_Stops.success_iterates_static_colorline_stops`,
+    `success_iterates_variable_colorline_stops`, and `end_of_iteration`: static
+    stops, variation-adjusted stops, false return, and terminal output
+    preservation.
+  - `FT_PaintLinearGradient`, `FT_PaintRadialGradient`, and
+    `FT_PaintSweepGradient`: public union fields plus attached colorline
+    iterator state.
+  - `FT_COLR_PAINTFORMAT_LINEAR_GRADIENT`, `RADIAL_GRADIENT`, and
+    `SWEEP_GRADIENT`: payload shape and nested colorline state.
+  - `FT_COLR_PAINT_EXTEND_PAD`, `REFLECT`, `REPEAT`, and `FT_PaintExtend`: exact
+    extend enum values and iterator preservation.
 - Transform paints: rotate, scale, skew, translate, explicit affine transform,
   and FreeType normalization behavior.
 - Composite paint graph rows are split by exact obligation instead of sharing a

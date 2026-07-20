@@ -1632,6 +1632,96 @@ def ftcolor_composite_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcolor_colorline_gradient_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR colorline and gradient rows needing real routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_ColorLine.gradient_colorline_values": (
+            "FT_ColorLine parity needs a maintained FT_Get_Paint route proving "
+            "extend mode, stop count, and color stop iterator fields match "
+            "pinned C public record output"
+        ),
+        "ftcolor.FT_ColorStop.iterator_output_values": (
+            "FT_ColorStop parity needs a maintained FT_Get_Colorline_Stops "
+            "route proving each emitted stop offset, color index, and alpha "
+            "matches pinned C iteration output"
+        ),
+        "ftcolor.FT_ColorStopIterator.initialized_by_get_paint": (
+            "FT_ColorStopIterator initialization parity needs a maintained "
+            "FT_Get_Paint route proving iterator counters and opaque colorline "
+            "state are initialized exactly like pinned C"
+        ),
+        "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops": (
+            "FT_ColorStopIterator advance parity needs a maintained "
+            "FT_Get_Colorline_Stops route proving iterator mutation and output "
+            "preservation across successive calls match pinned C"
+        ),
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops": (
+            "FT_Get_Colorline_Stops static-stop parity needs a maintained "
+            "colorline route proving every static stop is emitted in pinned C "
+            "order with exact scalar fields"
+        ),
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops": (
+            "FT_Get_Colorline_Stops variable-stop parity needs a maintained "
+            "colorline route proving variation-adjusted stop values and "
+            "iterator state match pinned C"
+        ),
+        "ftcolor.FT_Get_Colorline_Stops.end_of_iteration": (
+            "FT_Get_Colorline_Stops end-of-iteration parity needs a maintained "
+            "route proving false return and output preservation after the final "
+            "stop match pinned C"
+        ),
+        "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values": (
+            "FT_PaintLinearGradient parity needs a maintained route proving "
+            "p0/p1/p2 vectors and attached colorline iterator match pinned C "
+            "public union output"
+        ),
+        "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values": (
+            "FT_PaintRadialGradient parity needs a maintained route proving "
+            "circle centers, radii, and attached colorline iterator match "
+            "pinned C public union output"
+        ),
+        "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values": (
+            "FT_PaintSweepGradient parity needs a maintained route proving "
+            "center, start/end angles, and attached colorline iterator match "
+            "pinned C public union output"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload": (
+            "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT parity needs a maintained "
+            "gradient route proving linear payload shape and nested colorline "
+            "state match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload": (
+            "FT_COLR_PAINTFORMAT_RADIAL_GRADIENT parity needs a maintained "
+            "gradient route proving radial payload shape and nested colorline "
+            "state match pinned C"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload": (
+            "FT_COLR_PAINTFORMAT_SWEEP_GRADIENT parity needs a maintained "
+            "gradient route proving sweep payload shape and nested colorline "
+            "state match pinned C"
+        ),
+        "ftcolor.FT_PaintExtend.gradient_extend_runtime": (
+            "FT_PaintExtend gradient parity needs a maintained traversal route "
+            "proving public extend enum values emitted by gradients match "
+            "pinned C"
+        ),
+    }
+    if row.case_id in exact_cases:
+        return exact_cases[row.case_id]
+    extend_prefix = "ftcolor.FT_COLR_PAINT_EXTEND_"
+    if row.case_id.startswith(extend_prefix):
+        extend_name = row.case_id[len(extend_prefix) :].split(".", 1)[0]
+        return (
+            f"FT_COLR_PAINT_EXTEND_{extend_name} parity needs a maintained "
+            "gradient colorline route proving pinned C emits this extend mode "
+            "with exact enum value and preserves the same color stop iterator "
+            "state"
+        )
+    return None
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -1643,6 +1733,9 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     composite_pending = ftcolor_composite_pending_reason(row)
     if composite_pending:
         return composite_pending
+    colorline_gradient_pending = ftcolor_colorline_gradient_pending_reason(row)
+    if colorline_gradient_pending:
+        return colorline_gradient_pending
     pending_case_groups = {
         (
             "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
@@ -1710,30 +1803,6 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "proving opaque paint handles, supported paint-format dispatch, "
             "glyph/colr-glyph/solid payloads, color indexes, and public union "
             "shape output"
-        ),
-        (
-            "ftcolor.FT_ColorLine.gradient_colorline_values",
-            "ftcolor.FT_ColorStop.iterator_output_values",
-            "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
-            "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops",
-            "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops",
-            "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
-            "ftcolor.FT_Get_Colorline_Stops.end_of_iteration",
-            "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values",
-            "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",
-            "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values",
-            "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
-            "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
-            "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad",
-            "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect",
-            "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat",
-            "ftcolor.FT_PaintExtend.gradient_extend_runtime",
-        ): (
-            "COLR colorline/gradient parity needs a maintained route proving "
-            "colorline records, color stop iterator initialization/advance/end, "
-            "static and variable stops, linear/radial/sweep payloads, and "
-            "pad/reflect/repeat extend modes"
         ),
         (
             "ftcolor.FT_PaintRotate.get_paint_rotate_values",
