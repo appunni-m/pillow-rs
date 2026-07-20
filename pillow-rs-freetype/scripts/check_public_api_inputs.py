@@ -2264,8 +2264,50 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     return reason
 
 
+def done_glyph_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific non-null FT_Done_Glyph rows that need owned glyph routing."""
+    if row.operation != "ftglyph.done_glyph":
+        return None
+    if (
+        row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
+        and row.params.get("glyph") is None
+    ):
+        return None
+    pending_cases = {
+        "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation": (
+            "FT_Done_Glyph invalid-handle parity needs a maintained owned-glyph "
+            "facade that distinguishes valid glyphs, null no-op, and foreign "
+            "or stale handles without treating any non-null pointer as valid"
+        ),
+        "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer": (
+            "FT_BitmapGlyphRec ownership parity needs a maintained bitmap-glyph "
+            "route proving the bitmap buffer is owned by the glyph and released "
+            "by FT_Done_Glyph exactly like pinned C"
+        ),
+        "ftglyph.FT_Done_Glyph.success_releases_owned_glyph": (
+            "FT_Done_Glyph success parity needs a maintained owned-glyph "
+            "allocation/free route proving a real glyph is released once across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftglyph.FT_Done_Glyph.lifetime_before_library_done": (
+            "FT_Done_Glyph lifetime parity needs a maintained glyph/library "
+            "route proving owned glyphs can be released before FT_Done_Library "
+            "with the same allocator and handle invalidation behavior as pinned C"
+        ),
+        "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays": (
+            "FT_OutlineGlyphRec ownership parity needs a maintained outline-glyph "
+            "route proving contour, point, and tag arrays are glyph-owned and "
+            "released by FT_Done_Glyph exactly like pinned C"
+        ),
+    }
+    return pending_cases.get(row.case_id)
+
+
 def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for glyph object behavior that do not have a maintained route."""
+    done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
+    if done_glyph_pending:
+        return done_glyph_pending
     ftglyph_rows_without_maintained_route = {
         "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record": (
             "FT_BitmapGlyph alias parity needs a maintained FT_Get_Glyph or "
@@ -3061,14 +3103,9 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "the attempted pinned-C FT_Outline_Decompose probe segfaulted, so "
             "accepting a generic Invalid_Outline would be a green placeholder"
         )
-    if row.operation == "ftglyph.done_glyph" and not (
-        row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
-        and row.params.get("glyph") is None
-    ):
-        return (
-            "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
-            "and allocator facade; treating it as generic would be a green placeholder"
-        )
+    done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
+    if done_glyph_pending:
+        return done_glyph_pending
     if row.case_id == "ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload":
         return (
             "FT_Get_Glyph unsupported-format/bad-slot payload requires a "
@@ -5553,15 +5590,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     null_error_real_reason = null_error_real_parity_reason(row)
     if null_error_real_reason:
         return ("real-parity", null_error_real_reason)
-    if row.operation == "ftglyph.done_glyph" and not (
-        row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
-        and row.params.get("glyph") is None
-    ):
-        return (
-            "pending-route",
-            "non-null FT_Done_Glyph lifecycle requires a maintained owned-glyph "
-            "and allocator facade; treating it as generic would be a green placeholder",
-        )
+    done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
+    if done_glyph_pending:
+        return ("pending-route", done_glyph_pending)
     ftstroke_null_noop_reason = ftstroke_null_noop_real_parity_reason(row)
     if ftstroke_null_noop_reason:
         return ("real-parity", ftstroke_null_noop_reason)

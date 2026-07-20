@@ -2053,6 +2053,18 @@ Current exact glyph-object pending split:
   `FT_SvgGlyphRec.svg_feature_disabled_classification`: add a build-feature
   route that distinguishes enabled SVG glyph records from unsupported builds for
   the same public SVG glyph input.
+- `FT_Done_Glyph` non-null lifecycle rows are now split by exact ownership
+  obligation instead of sharing a broad generic blocker:
+  - `fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation`: distinguish
+    valid glyphs, null no-op, and foreign or stale handles.
+  - `FT_BitmapGlyphRec.owns_bitmap_buffer`: prove bitmap buffers are
+    glyph-owned and released by `FT_Done_Glyph`.
+  - `FT_Done_Glyph.success_releases_owned_glyph`: prove a real owned glyph is
+    released exactly once across C/Rust/C-ABI/WASM.
+  - `FT_Done_Glyph.lifetime_before_library_done`: prove glyph release before
+    `FT_Done_Library` uses the same allocator and invalidation behavior as C.
+  - `FT_OutlineGlyphRec.owns_outline_arrays`: prove contour, point, and tag
+    arrays are glyph-owned and released by `FT_Done_Glyph`.
 
 Verification for the classification batch:
 
