@@ -15374,6 +15374,43 @@ static void print_open_face_name_output(FT_Error err, FT_Face face) {
     printf("}");
 }
 
+static void print_face_style_flag_output(FT_Error err, FT_Face face) {
+    printf("{\"status\":%d,\"family_name\":", err);
+    print_nullable_c_string_result(face ? face->family_name : NULL);
+    printf(",\"style_name\":");
+    print_nullable_c_string_result(face ? face->style_name : NULL);
+    printf(",\"style_flags\":%ld,\"has_bold_flag\":",
+           face ? (long)face->style_flags : 0);
+    print_json_bool(face && ((face->style_flags & FT_STYLE_FLAG_BOLD) != 0));
+    printf("}");
+}
+
+static int emit_face_style_flags(int argc, char** argv) {
+    (void)argc;
+    OracleFace bold;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[6]), &bold);
+    if (opened != 0) {
+        return opened;
+    }
+    OracleFace regular;
+    opened = open_oracle_face(argv[4], argv[5], atol(argv[6]), &regular);
+    if (opened != 0) {
+        close_oracle_face(&bold);
+        return opened;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"bold_face\":");
+    print_face_style_flag_output(FT_Err_Ok, bold.face);
+    printf(",\"regular_face\":");
+    print_face_style_flag_output(FT_Err_Ok, regular.face);
+    printf("}}\n");
+
+    close_oracle_face(&regular);
+    close_oracle_face(&bold);
+    return 0;
+}
+
 static int emit_open_face_name_options(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -17007,6 +17044,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--open-face-name-options")) {
         return emit_open_face_name_options(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--face-style-flags")) {
+        return emit_face_style_flags(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--open-face-ignored-params")) {
         return emit_open_face_ignored_params(argc, argv);

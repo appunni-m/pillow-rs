@@ -1629,7 +1629,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior",
         "freetype.FT_Open_Args.open_face_consumes_args_like_c",
         "freetype.FT_Parameter.tag_data_parameters_match_c_behavior",
-        "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior",
         "freetype.FT_Size.active_size_handle_runtime",
         "freetype.FT_SizeRec.active_size_record_runtime",
     }
@@ -3996,6 +3995,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_RENDER_MODE_NORMAL.maps_supported_modes"
     ):
         return "FT_RENDER_MODE_NORMAL to FT_LOAD_TARGET_NORMAL roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_pair"
+        and row.case_id == "freetype.FT_STYLE_FLAG_BOLD.face_style_flag_behavior"
+    ):
+        return "FT_STYLE_FLAG_BOLD face-pair style flags validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.remove_module"
         and row.case_id == "ftmodapi.FT_Remove_Module.rejects_null_library"
