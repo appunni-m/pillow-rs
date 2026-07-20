@@ -1601,26 +1601,56 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for FT_Open_Args parameters that do not have a maintained route."""
     ftparams_rows_without_maintained_route = {
-        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix",
-        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture",
-        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_FAMILY.null_data_accepted",
-        "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted",
-        "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load",
-        "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c",
-        "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property",
-        "ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output",
-        "ftparams.FT_PARAM_TAG_STEM_DARKENING.unsupported_or_null_data_matches_c_error",
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix": (
+            "FT_PARAM_TAG_IGNORE_SBIX must be verified with a real C-openable "
+            "SBIX font that has an outline/default-strike distinction through "
+            "pinned C FreeType sfnt/sfobjs.c parameter dispatch, Rust FFI, "
+            "thin C ABI FT_Open_Face params, and WASM ABI; the existing "
+            "non-SBIX no-effect row does not prove SBIX outline/bitmap "
+            "selection"
+        ),
+        "ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture": (
+            "FT_PARAM_TAG_IGNORE_SBIX bitmap-only behavior needs a maintained "
+            "real SBIX fixture and exact C/Rust/C-ABI/WASM comparison of the "
+            "bitmap-only or missing-outline result; current sbix-named assets "
+            "are not sufficient proof, so counting this would be a green "
+            "placeholder"
+        ),
+        "ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load": (
+            "FT_PARAM_TAG_INCREMENTAL success parity needs a maintained "
+            "incremental-font route that stores the callback interface during "
+            "FT_Open_Face, invokes glyph-data callbacks, releases glyph data, "
+            "applies metrics overrides, and compares callback event logs and "
+            "public glyph output across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c": (
+            "FT_PARAM_TAG_INCREMENTAL null or incomplete interface behavior "
+            "must be proven through the FT_Open_Face parameter route from "
+            "pinned C FreeType src/base/ftobjs.c and mirrored Rust/C-ABI/WASM "
+            "validation; a generic open-face or exact-error route would not "
+            "prove the parameter-table branch"
+        ),
+        "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property": (
+            "FT_PARAM_TAG_RANDOM_SEED valid-data parity needs a maintained "
+            "route that proves the seeded face-internal value through a "
+            "driver-visible public CFF/Type1/CID output or a pinned C oracle "
+            "showing no observable output change across Rust FFI, C ABI, and "
+            "WASM ABI; scalar error handling alone is not enough"
+        ),
+        "ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output": (
+            "FT_PARAM_TAG_STEM_DARKENING output parity needs a C-openable "
+            "CFF/Type1/CID fixture where toggling the property changes or "
+            "provably preserves a public metric, outline, or bitmap result "
+            "across pinned C, Rust FFI, C ABI, and WASM ABI; the existing "
+            "null-data/scalar property route does not prove output behavior"
+        ),
     }
-    if row.case_id not in ftparams_rows_without_maintained_route:
+    reason = ftparams_rows_without_maintained_route.get(row.case_id)
+    if reason is None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "FT_Open_Args parameter tag behavior for real sbix bitmap/outline "
-        "selection, incremental loading, random seed, and stem darkening "
-        "requires a maintained parameter route; keeping it generic would be a "
-        "green placeholder"
-    )
+    return reason
 
 
 def ftparams_name_option_real_parity_reason(row: ConcreteInput) -> str | None:

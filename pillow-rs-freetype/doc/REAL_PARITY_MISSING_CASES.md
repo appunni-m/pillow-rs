@@ -372,6 +372,37 @@ Remaining related blockers:
   maintained `scenarios[]` route and now verify exact family/style strings
   through pinned C, Rust FFI, C ABI, and WASM ABI.
 
+Current exact pending `ftparams` fix plan:
+
+- `ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix`: add a maintained
+  real SBIX font fixture with an outline/default-strike distinction, then route
+  `FT_Open_Face` with `FT_OPEN_PARAMS` through pinned C FreeType
+  `sfnt/sfobjs.c` SBIX dispatch, Rust FFI, thin C ABI params, and WASM ABI.
+  The verified non-SBIX no-effect row cannot prove this branch.
+- `ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture`:
+  add a real bitmap-only or missing-outline SBIX fixture and compare exact
+  public open/load result across C/Rust/C-ABI/WASM. The current sbix-named test
+  assets are not sufficient proof, so this must remain pending.
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load`:
+  build a maintained incremental-font route that stores the client callback
+  interface at `FT_Open_Face`, invokes glyph-data callbacks, releases glyph
+  data, applies metrics overrides, and compares callback event logs plus public
+  glyph output across all ABI lanes.
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c`:
+  prove null or incomplete callback-interface behavior through the same
+  `FT_Open_Face` parameter-table branch from pinned C FreeType
+  `src/base/ftobjs.c`; do not count a generic open-face or exact-error route as
+  parity for this parameter branch.
+- `ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property`: route a
+  valid seed through a driver-visible public CFF/Type1/CID output, or document
+  and verify with pinned C that the seed is intentionally not observable for the
+  maintained fixture set. Scalar error/null-size handling alone is not output
+  parity.
+- `ftparams.FT_PARAM_TAG_STEM_DARKENING.cff_type1_toggle_changes_supported_output`:
+  add a C-openable CFF/Type1/CID fixture where toggling stem darkening changes
+  or provably preserves public metrics, outline, or bitmap output across
+  C/Rust/C-ABI/WASM. The existing null-data/scalar property route is not enough.
+
 Latest impact for the 2026-07-20 SBIX non-SBIX no-op route:
 
 - `real-parity`: `4527 -> 4528`
