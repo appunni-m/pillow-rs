@@ -1531,6 +1531,58 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftcolor_composite_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific COLR composite rows that need maintained paint graph routing."""
+    if not row.operation.startswith("ftcolor."):
+        return None
+    exact_cases = {
+        "ftcolor.FT_PaintComposite.get_paint_composite_values": (
+            "FT_PaintComposite parity needs a maintained FT_Get_Paint route "
+            "proving source paint, backdrop paint, and composite mode fields "
+            "match pinned C public union output"
+        ),
+        "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload": (
+            "FT_COLR_PAINTFORMAT_COMPOSITE parity needs a maintained paint node "
+            "route proving composite payload shape and nested opaque paint "
+            "handles match pinned C"
+        ),
+        "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime": (
+            "FT_Composite_Mode parity needs a maintained traversal route proving "
+            "every public composite enum value is emitted from valid COLR paint "
+            "graphs with exact pinned C numeric values"
+        ),
+        "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph": (
+            "FT_COLR_COMPOSITE_MAX sentinel parity needs a maintained valid-paint "
+            "graph route proving the sentinel enum value is never emitted by "
+            "pinned C for real composite paints"
+        ),
+    }
+    if row.case_id in exact_cases:
+        return exact_cases[row.case_id]
+    mode_prefix = "ftcolor.FT_COLR_COMPOSITE_"
+    if row.case_id.startswith(mode_prefix):
+        mode_name = row.case_id[len(mode_prefix) :].split(".", 1)[0]
+        if row.operation == "ftcolor.traverse_paint_graph":
+            return (
+                f"FT_COLR_COMPOSITE_{mode_name} traversal parity needs a "
+                "maintained COLR paint graph route proving pinned C emits this "
+                "mode at the same graph position without skipping nested source "
+                "or backdrop paints"
+            )
+        if row.operation == "ftcolor.get_paint_graph":
+            return (
+                f"FT_COLR_COMPOSITE_{mode_name} graph parity needs a maintained "
+                "COLR paint graph route proving pinned C exposes this composite "
+                "mode with exact enum value and nested paint handles"
+            )
+        return (
+            f"FT_COLR_COMPOSITE_{mode_name} parity needs a maintained COLR "
+            "composite route proving exact pinned C payload, enum value, and "
+            "nested paint behavior"
+        )
+    return None
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
@@ -1539,6 +1591,9 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
+    composite_pending = ftcolor_composite_pending_reason(row)
+    if composite_pending:
+        return composite_pending
     pending_case_groups = {
         (
             "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime",
@@ -1646,44 +1701,6 @@ def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "COLR transform paint parity needs a maintained route proving "
             "rotate, scale, skew, translate, and explicit affine transform "
             "payloads plus FreeType normalization behavior"
-        ),
-        (
-            "ftcolor.FT_PaintComposite.get_paint_composite_values",
-            "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload",
-            "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_CLEAR.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_COLOR_BURN.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_COLOR_DODGE.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DARKEN.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DEST.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DEST_ATOP.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DEST_IN.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DEST_OUT.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DEST_OVER.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_DIFFERENCE.paint_composite_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_EXCLUSION.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_HARD_LIGHT.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_HSL_COLOR.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_HSL_HUE.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_HSL_LUMINOSITY.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_HSL_SATURATION.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_LIGHTEN.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
-            "ftcolor.FT_COLR_COMPOSITE_MULTIPLY.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_OVERLAY.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_PLUS.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SCREEN.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SOFT_LIGHT.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SRC.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SRC_ATOP.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SRC_IN.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SRC_OUT.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_SRC_OVER.paint_composite_mode_runtime",
-            "ftcolor.FT_COLR_COMPOSITE_XOR.paint_composite_mode_runtime",
-        ): (
-            "COLR composite paint parity needs a maintained paint-graph route "
-            "proving composite payload shape, all public composite modes, valid "
-            "graph traversal, and sentinel non-emission against pinned C"
         ),
         (
             "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
