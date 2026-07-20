@@ -1,5 +1,39 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: `FT_Get_SubGlyph_Info` null-output wrapper contract
+
+Status: classified on 2026-07-20; no route promoted.
+
+Rejected candidate:
+
+- `freetype.FT_Get_SubGlyph_Info.error_null_outputs`
+
+Finding:
+
+- The row is useful ABI evidence, but it is not same-input native C parity.
+- Pinned FreeType 2.14.3 `FT_Get_SubGlyph_Info` checks the slot and subglyph
+  first, then writes through every output pointer.  For a valid composite slot,
+  passing a null `p_index`, `p_flags`, `p_arg1`, `p_arg2`, or `p_transform`
+  would dereference null memory instead of returning a public `FT_Error`.
+- The unified oracle intentionally avoids the crash by first calling pinned C
+  with every output pointer non-null to prove the selected subglyph is
+  native-C-callable, then records `FT_Err_Invalid_Argument` as the Rust FFI,
+  C ABI, and WASM ABI null-output policy.
+- Promoting this row to `real-parity` would make the audit claim exact
+  same-input C/Rust/C-ABI/WASM behavior for inputs that pinned C cannot safely
+  execute.
+
+Required fix plan:
+
+1. Keep this row explicit `pending-route` unless the fixture is split into two
+   separately named behaviors: native C valid-subglyph success and wrapper
+   null-output validation.
+2. If a wrapper-contract row is kept, classify it separately from real parity
+   and keep the reason tied to `ftobjs.c` `FT_Get_SubGlyph_Info` output writes.
+3. Promote only a same-input row where pinned C, Rust FFI, C ABI, and WASM ABI
+   all call `FT_Get_SubGlyph_Info` with equivalent slot, sub-index, and output
+   pointer nullness and compare the same public result.
+
 ### Issue Set Current: OpenType validation absent BASE table expectation mismatch
 
 Status: classified on 2026-07-20; no route promoted.
