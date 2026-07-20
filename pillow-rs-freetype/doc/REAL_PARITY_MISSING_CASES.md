@@ -12915,8 +12915,20 @@ Current blocker families:
     caches, and nodes while done tears down ownership.
   - `FTC_Manager.owns_faces_sizes_and_cache_nodes`: manager-owned face, size,
     cache, and node lifetimes.
-- `FTC_Manager_Done`: empty/populated destruction, referenced-node handling,
-  and null/foreign-library behavior.
+- `FTC_Manager_Done` rows are split by exact obligation instead of sharing a
+  broad teardown blocker:
+  - `FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope`: maintained
+    same-input manager teardown route, not an out-of-scope placeholder.
+  - `FTC_Manager_Done.success_destroy_empty_manager`: empty manager release or
+    no-op behavior.
+  - `FTC_Manager_Done.success_destroy_populated_manager`: cached faces, sizes,
+    caches, and nodes destroyed in pinned-C observable order and ownership
+    state.
+  - `FTC_Manager_Done.success_null_or_invalid_library_noop`: null managers and
+    foreign-library ownership cases returning or no-oping exactly like pinned C.
+  - `FTC_Manager_Done.node_reference_lifecycle_on_done`: referenced nodes during
+    manager teardown keeping or releasing observable cache ownership exactly
+    like pinned C.
 - `FTC_Manager_LookupFace` / `FTC_FaceID`: pointer identity, first requester
   callback, cached repeat lookup, and current-size behavior.
 - `FTC_Manager_LookupSize` / `FTC_Scaler` rows are split by exact obligation
@@ -12938,8 +12950,21 @@ Current blocker families:
   - `FTC_Scaler.points_to_call_owned_scaler`: public `FTC_Scaler` argument as a
     call-owned descriptor whose pointed fields follow pinned-C copy/consume
     lifetime semantics.
-- `FTC_Manager_RemoveFaceID`: unreferenced removal, referenced-node hiding until
-  unref, unchanged other face IDs, and null/unknown inputs.
+- `FTC_Manager_RemoveFaceID` rows are split by exact obligation instead of
+  sharing a broad face-id eviction blocker:
+  - `FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope`:
+    maintained same-input face-id eviction route, not an out-of-scope
+    placeholder.
+  - `FTC_Manager_RemoveFaceID.success_removes_unreferenced_face_size_and_nodes`:
+    unreferenced face, size, and node entries for the face ID removed.
+  - `FTC_Manager_RemoveFaceID.success_referenced_nodes_hidden_until_unref`:
+    referenced nodes hidden from future lookup until `FTC_Node_Unref`.
+  - `FTC_Manager_RemoveFaceID.success_other_face_ids_unchanged`: eviction of
+    one face ID preserving cached faces, sizes, and nodes for other face IDs.
+  - `FTC_Manager_RemoveFaceID.success_null_manager_noop`: null manager returning
+    or no-oping exactly like pinned C.
+  - `FTC_Manager_RemoveFaceID.success_null_or_unknown_face_id`: null or unknown
+    face IDs leaving cache state unchanged.
 - CMap/Image/SBit cache creation rows are split by exact obligation instead of
   sharing a broad manager-owned-cache blocker:
   - `FTC_CMapCache.manager_owned_opaque_cache`: CMap cache handle ownership,
