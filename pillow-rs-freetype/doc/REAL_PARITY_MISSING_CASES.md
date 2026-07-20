@@ -2021,6 +2021,39 @@ Required fix plan:
 5. Promote rows only after focused `ftglyph` runtime proves exact C oracle,
    Rust FFI, C ABI, and WASM ABI output for the same input.
 
+Current exact glyph-object pending split:
+
+- `FT_BitmapGlyph.pointer_alias_matches_record`: create a real bitmap glyph
+  through `FT_Get_Glyph` or `FT_Glyph_To_Bitmap`, cast it to `FT_BitmapGlyph`,
+  and compare root fields plus `FT_BitmapGlyphRec` payload across C/Rust/C-ABI/WASM.
+- `FT_Glyph.caller_owned_lifetime`: add allocation/free event proof for
+  `FT_New_Glyph`, `FT_Get_Glyph`, `FT_Glyph_Copy`, `FT_Glyph_To_Bitmap`, and
+  `FT_Done_Glyph`. Non-null handle existence is not ownership parity.
+- `FT_Glyph_Class.opaque_class_identity_only`: classify the private class
+  pointer only through stable public behavior after creating outline, bitmap,
+  and SVG glyphs. Do not compare raw private pointers or private fields.
+- `FT_Glyph_Transform.success_outline_matrix_delta`: compare fixed-point
+  matrix math, delta application, root advance, and transformed outline arrays
+  against pinned C across all ABI lanes.
+- `FT_Glyph_Transform.success_outline_delta_only_or_matrix_only`: cover null
+  matrix/null delta public inputs and exact output for delta-only and matrix-only
+  outline transforms.
+- `FT_Glyph_Transform.success_svg_transform_accumulates`: use an SVG-enabled
+  glyph fixture and prove `FT_SvgGlyphRec` transform/delta accumulation. Outline
+  transform parity does not prove SVG record mutation.
+- `FT_New_Glyph.success_renderer_supported_custom_format`: register a synthetic
+  renderer whose glyph format is accepted by pinned C and compare initialized
+  root fields, payload class, and ownership behavior.
+- `FT_OutlineGlyph.pointer_alias_matches_record`: create a real outline glyph,
+  cast it to `FT_OutlineGlyph`, and compare root record plus outline arrays.
+- `FT_SvgGlyph.pointer_alias_matches_record_when_enabled`: with SVG enabled,
+  prove `FT_GLYPH_FORMAT_SVG` can be cast to `FT_SvgGlyph` and exposes matching
+  `FT_SvgGlyphRec` fields.
+- `FT_SvgGlyph.feature_availability_recorded` and
+  `FT_SvgGlyphRec.svg_feature_disabled_classification`: add a build-feature
+  route that distinguishes enabled SVG glyph records from unsupported builds for
+  the same public SVG glyph input.
+
 Verification for the classification batch:
 
 ```bash
