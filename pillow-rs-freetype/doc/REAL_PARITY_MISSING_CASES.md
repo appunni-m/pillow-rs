@@ -2194,6 +2194,16 @@ Rejected future-asset probes:
   removing `required_future_asset` made the row runnable, but pinned C returned
   error `85`; the tracked `fonts/bitmap/bitmap-only.pcf` file is still not a
   C-openable bitmap-only face for this public macro route.
+- Follow-up on 2026-07-20: the row now uses the existing C-openable
+  `fonts/no-encoding/bdf-or-pcf-encoding-none.bdf` bitmap face for this macro
+  route only.  Direct pinned C `--face-macro` output is `FT_Err_Ok`,
+  `face_flags=18`, and `FT_IS_SCALABLE=false`.  Rust previously returned
+  `FT_Err_Invalid_Argument` for structurally valid BDF because the constructor
+  only classified malformed BDF errors and ended valid BDF with "not
+  implemented."  Rust now constructs a narrow bitmap-only `FaceKind::Bdf`
+  public face record with FreeType-compatible `FIXED_SIZES | HORIZONTAL`
+  flags.  This does not promote BDF glyph rendering or the separate
+  `FT_ENCODING_NONE` charmap row.
 - `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: temporarily
   removing `required_future_asset` made the row runnable, but pinned C returned
   error `6`; the current `input/fonts/cache/bitmap-strike-small-sbits.ttf`
@@ -3268,8 +3278,10 @@ Rejected rows from the same primary-font probe:
 
 - `freetype.FT_ENCODING_NONE.representative_runtime_observation`: full exact
   classification failed because pinned C returned error `23`.
-- `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: full exact
-  classification failed because pinned C returned error `85`.
+- `freetype.FT_IS_SCALABLE.bitmap_only_face_returns_false`: later promoted by
+  switching the macro row from the invalid 8-byte `.pcf` placeholder to the
+  C-openable BDF bitmap face and adding a narrow valid-BDF face-open path in
+  Rust.
 - `freetype.FT_HAS_HORIZONTAL.no_horizontal_metrics_control`: full exact
   classification failed because pinned C returned error `85`.
 - `ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer`: full exact
