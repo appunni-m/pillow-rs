@@ -12833,8 +12833,17 @@ Current blocker families:
     `PLUS`, `SCREEN`, `SOFT_LIGHT`, `SRC`, `SRC_ATOP`, `SRC_IN`, `SRC_OUT`,
     `SRC_OVER`, and `XOR`: graph construction must expose each mode with exact
     enum value and nested paint handles.
-- Clipbox: scaled/transformed box values for size variants and false-with-output
-  preservation when no clipbox exists.
+- Clipbox rows are split by exact obligation instead of sharing a broad
+  clipbox blocker:
+  - `FT_ClipBox.color_glyph_clipbox_values`: public `FT_ClipBox`
+    `xMin`/`yMin`/`xMax`/`yMax` fields copied from pinned-C clipbox output
+    without wrapper normalization.
+  - `FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed`: scaled
+    size coordinates and active transform effects, separately for the `s12`
+    and `s37` variants.
+  - `FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output`: a
+    false return preserving the caller-provided output box bytes exactly like
+    pinned C.
 
 Required fix plan:
 
@@ -12929,8 +12938,21 @@ Current blocker families:
   - `FTC_Manager_Done.node_reference_lifecycle_on_done`: referenced nodes during
     manager teardown keeping or releasing observable cache ownership exactly
     like pinned C.
-- `FTC_Manager_LookupFace` / `FTC_FaceID`: pointer identity, first requester
-  callback, cached repeat lookup, and current-size behavior.
+- `FTC_Manager_LookupFace` / `FTC_FaceID` rows are split by exact obligation
+  instead of sharing a broad requester blocker:
+  - `FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope`:
+    maintained same-input requester route, not an out-of-scope placeholder.
+  - `FTC_Manager_LookupFace.success_first_lookup_invokes_requester`: first
+    lookup invokes the requester once with the same `FTC_FaceID` and requester
+    data as pinned C.
+  - `FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face`:
+    repeated lookup returns the cached face without reinvoking the requester,
+    matching pinned-C handle identity.
+  - `FTC_Manager_LookupFace.success_face_has_no_required_current_size`: returned
+    face has no required current size unless the requester or later size lookup
+    establishes one.
+  - `FTC_FaceID.pointer_identity_key`: pointer identity, not pointed-to bytes or
+    fallback string equality, is the cache key exactly like pinned C.
 - `FTC_Manager_LookupSize` / `FTC_Scaler` rows are split by exact obligation
   instead of sharing a broad scaler blocker:
   - `FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope`:
@@ -13035,8 +13057,13 @@ Current blocker families:
     `FTC_Node_Unref` release, and post-unref cache state.
   - `load_flags_truncation_policy`: prove `FT_ULong` input is truncated to the
     pinned C signed `load_flags` path before lookup.
-- `FTC_SBitCache_LookupScaler`: scaler size semantics and int32 load-flag
-  truncation for all concrete font variants.
+- `FTC_SBitCache_LookupScaler` rows are split by exact scenario and fixture
+  variant instead of sharing a broad sbit-scaler blocker:
+  - `scaler_size_semantics_match_c`: pixel and point scaler
+    width/height/resolution semantics selecting the same strike, size metrics,
+    and sbit output for `f1`, `f2`, and `f3`.
+  - `load_flags_truncate_to_int32`: `FT_ULong` load flags truncated to the
+    pinned-C signed 32-bit path before sbit lookup for `f1` and `f2`.
 - `FTC_Node` / `FTC_Node_Unref`: cache handle identity, lookup references,
   unref release, and flushability after the final reference.
 
