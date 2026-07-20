@@ -10533,6 +10533,17 @@ Follow-up finding for blend-coordinate state rows:
   `-2` to OK, while `FT_Set_Var_Blend_Coordinates` does.  Rust FFI, C ABI, and
   WASM ABI now keep those wrapper semantics separate instead of aliasing the MM
   setter to the Var setter.
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates` row now
+  validates Adobe Type 1 MM instead of the OpenType `inter-wght.ttf` path that
+  pinned C returns as sentinel `-2`.  Pinned FreeType 2.14.3 proves
+  `FT_Set_MM_Blend_Coordinates(adobe-mm-two-axis.pfb, [32768,32768]) -> Ok`,
+  followed by `FT_Get_MM_Blend_Coordinates -> [32768,32768]` with
+  `FT_FACE_FLAG_VARIATION` set.  Rust now routes Type 1 MM blend mutation
+  before the TrueType/OpenType sentinel path and recomputes the Type 1 MM
+  weight vector using `src/type1/t1load.c:t1_set_mm_blend` semantics: clamp
+  `num_coords` to `num_axis`, ignore extra coordinates, and use 0.5 for omitted
+  axes.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set

@@ -1884,6 +1884,28 @@ impl Font {
         Ok(())
     }
 
+    pub(crate) fn set_type1_mm_blend_coordinates(
+        &mut self,
+        coords_16_16: &[i32],
+        variation_active: bool,
+    ) -> Result<(), FontError> {
+        let Some(master) = self.type1_multi_master.as_ref() else {
+            return Err(FontError::InvalidArgument(
+                "face has no Type 1 MM blend coordinates".into(),
+            ));
+        };
+        let axis_count = master.axes.len();
+        let mut blends = vec![0x8000; axis_count];
+        let copy_len = coords_16_16.len().min(axis_count);
+        blends[..copy_len].copy_from_slice(&coords_16_16[..copy_len]);
+        // C parity: src/type1/t1load.c:t1_set_mm_blend clamps num_coords to
+        // num_axis, ignores extra coordinates, and treats omitted axes as
+        // the default 0.5 blend factor while recomputing WeightVector.
+        self.type1_mm_weight_vector = Some(type1_mm_weights_from_blends(&blends, axis_count));
+        self.type1_mm_variation_active = variation_active;
+        Ok(())
+    }
+
     /// Set normalized blend coordinates, equivalent to
     /// `FT_Set_MM_Blend_Coordinates` / `FT_Set_Var_Blend_Coordinates`.
     pub(crate) fn set_var_blend_coordinates(
