@@ -87,6 +87,7 @@ pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 pub type FT_Pointer = *mut c_void;
+pub type FT_Generic_Finalizer = FT_Pointer;
 pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
 pub type FT_List_Iterator = Option<extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
@@ -110,6 +111,13 @@ pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
 pub type FT_Glyph = *mut FT_GlyphRec;
 pub type FT_CharMap = *mut FT_CharMapRec;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_Generic {
+    pub data: FT_Pointer,
+    pub finalizer: FT_Generic_Finalizer,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -849,6 +857,10 @@ pub struct FT_GlyphSlotRec {
 
 #[repr(C)]
 pub struct FT_SizeRec {
+    // FreeType include/freetype/freetype.h exposes `face`, `generic`, `metrics`,
+    // and opaque non-null `internal` as the public FT_SizeRec fields.
+    pub face: FT_Face,
+    pub generic: FT_Generic,
     pub metrics: FT_Size_Metrics,
     pub internal: *mut c_void,
     rust_size: rust_ffi::FT_Size,
@@ -1421,6 +1433,40 @@ pub fn abi_active_size(face: FT_Face) -> Option<FT_Size> {
     let face = NonNull::new(face)?;
     // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
     Some(unsafe { (*face.as_ptr()).size })
+}
+
+#[cfg(feature = "abi-test-support")]
+#[derive(Clone, Copy)]
+pub struct AbiSizeRecSnapshot {
+    pub face: FT_Face,
+    pub generic: FT_Generic,
+    pub metrics: FT_Size_Metrics,
+    pub internal: *mut c_void,
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_size_rec_snapshot(size: FT_Size) -> Option<AbiSizeRecSnapshot> {
+    let size = NonNull::new(size)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let size = unsafe { size.as_ref() };
+    Some(AbiSizeRecSnapshot {
+        face: size.face,
+        generic: size.generic,
+        metrics: size.metrics,
+        internal: size.internal,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_size_rec_set_generic_data(size: FT_Size, data: FT_Pointer) -> bool {
+    let Some(mut size) = NonNull::new(size) else {
+        return false;
+    };
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    unsafe {
+        size.as_mut().generic.data = data;
+    }
+    true
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -2251,8 +2297,10 @@ fn ft_new_memory_face_with_name_options(
             let mut face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
                 size: Box::into_raw(Box::new(FT_SizeRec {
+                    face: ptr::null_mut(),
+                    generic: FT_Generic::default(),
                     metrics,
-                    internal: ptr::null_mut(),
+                    internal: ptr::dangling_mut::<c_void>(),
                     rust_size,
                     owner: ptr::null_mut(),
                 })),
@@ -2261,7 +2309,10 @@ fn ft_new_memory_face_with_name_options(
             let face_ptr = (&mut *face) as *mut FT_FaceRec;
             let mut state = Box::new(FaceState::new(inner));
             // SAFETY: `face.size` was allocated above and is owned by `state`.
-            unsafe { (*face.size).owner = face_ptr };
+            unsafe {
+                (*face.size).face = face_ptr;
+                (*face.size).owner = face_ptr;
+            };
             state.push_size_record(face.size);
             state.refresh_charmaps(face_ptr);
             face.internal = Box::into_raw(state).cast::<c_void>();
@@ -3036,8 +3087,10 @@ pub extern "C" fn FT_New_Size(face: FT_Face, asize: *mut FT_Size) -> FT_Error {
     }
 
     let size = Box::into_raw(Box::new(FT_SizeRec {
+        face,
+        generic: FT_Generic::default(),
         metrics: rust_size_metrics_to_abi(state.inner.size_metrics),
-        internal: ptr::null_mut(),
+        internal: ptr::dangling_mut::<c_void>(),
         rust_size,
         owner: face,
     }));

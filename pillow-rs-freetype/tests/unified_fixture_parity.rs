@@ -1012,6 +1012,16 @@ fn set_char_size_runtime_supported(case: &InputCase) -> bool {
         && char_size_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
 }
 
+fn size_record_state_runtime_supported(case: &InputCase) -> bool {
+    !case.expect_error
+        && case_id_base(&case.case_id) == "freetype.FT_SizeRec.active_size_record_runtime"
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && face_index_param(&case.inputs.params).is_ok()
+        && size_record_setup(&case.inputs.params).is_ok()
+}
+
 fn lcd_filter_runtime_supported(case: &InputCase) -> bool {
     // Subpixel rendering modes not yet implemented in pure Rust
     if case
@@ -8235,6 +8245,65 @@ fn active_size_fixture_pixel_size(params: &Value) -> Result<(u32, u32), String> 
     ))
 }
 
+enum SizeRecordSetup {
+    Pixel {
+        width: u32,
+        height: u32,
+    },
+    Char {
+        char_width: i64,
+        char_height: i64,
+        hres: u32,
+        vres: u32,
+    },
+}
+
+fn size_record_setup(params: &Value) -> Result<SizeRecordSetup, String> {
+    let object = params
+        .get("pixel_size")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "size record fixture requires pixel_size object".to_string())?;
+    if let Some(pixels) = object.get("pixels") {
+        return Ok(SizeRecordSetup::Pixel {
+            width: 0,
+            height: u32_value(pixels, "pixel_size.pixels")?,
+        });
+    }
+    if let Some(char_height) = object.get("char_size_26_6") {
+        let dpi = optional_u32_object_any(object, &["dpi"], 72)?;
+        return Ok(SizeRecordSetup::Char {
+            char_width: 0,
+            char_height: i64_value(char_height, "pixel_size.char_size_26_6")?,
+            hres: dpi,
+            vres: dpi,
+        });
+    }
+    Ok(SizeRecordSetup::Pixel {
+        width: u32_param_object(object, "x")?,
+        height: u32_param_object(object, "y")?,
+    })
+}
+
+fn push_size_record_setup(params: &Value, args: &mut Vec<String>) -> Result<(), String> {
+    args.push(face_index_param(params)?.to_string());
+    match size_record_setup(params)? {
+        SizeRecordSetup::Pixel { width, height } => {
+            args.push(width.to_string());
+            args.push(height.to_string());
+        }
+        SizeRecordSetup::Char {
+            char_width,
+            char_height,
+            hres,
+            vres,
+        } => {
+            args.push(format!("char:{char_width}:{char_height}:{hres}:{vres}"));
+            args.push("0".to_string());
+        }
+    }
+    Ok(())
+}
+
 fn active_size_handle_output(
     status: FT_Error,
     active_size_is_null: bool,
@@ -8249,6 +8318,29 @@ fn active_size_handle_output(
         "later_load_uses_active_size": status == FT_Err_Ok
             && load_error == FT_Err_Ok
             && loaded_hori_advance.is_some_and(|advance| advance != 0)
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn size_record_state_output(
+    status: FT_Error,
+    face_identity: &'static str,
+    generic_identity: &'static str,
+    metrics: Value,
+    internal_nullness: &'static str,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "size": {
+            "face_identity": face_identity,
+            "generic_identity": generic_identity,
+            "metrics": if status == FT_Err_Ok { metrics } else { Value::Null },
+            "internal_nullness": internal_nullness
+        }
     });
     if status == FT_Err_Ok {
         ok(output)
@@ -8335,6 +8427,42 @@ fn rust_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
         metrics,
         load_error,
         loaded_hori_advance,
+    ))
+}
+
+fn rust_size_record_state(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let mut face = FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    )
+    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    let status = match size_record_setup(&case.inputs.params)? {
+        SizeRecordSetup::Pixel { width, height } => FT_Set_Pixel_Sizes(&mut face, width, height),
+        SizeRecordSetup::Char {
+            char_width,
+            char_height,
+            hres,
+            vres,
+        } => FT_Set_Char_Size(&mut face, char_width, char_height, hres, vres),
+    };
+    Ok(size_record_state_output(
+        status,
+        if face.size.is_null() {
+            "none"
+        } else {
+            "same_as_parent_face"
+        },
+        "client_pointer",
+        size_metrics_json(&face.size_metrics),
+        if face.size.is_null() {
+            "null"
+        } else {
+            "non_null"
+        },
     ))
 }
 
@@ -19459,6 +19587,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(pixel_height.to_string());
             Ok(args)
         }
+        "freetype.size_record_state" if size_record_state_runtime_supported(case) => {
+            let mut args = vec!["--size-record-state".to_string()];
+            push_font_source(case, &mut args)?;
+            push_size_record_setup(params, &mut args)?;
+            Ok(args)
+        }
         "freetype.face_owned_handles"
             if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
         {
@@ -21606,6 +21740,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_active_size_handle(case)
         }
+        "freetype.size_record_state" if size_record_state_runtime_supported(case) => {
+            rust_size_record_state(case)
+        }
         "freetype.face_owned_handles"
             if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
         {
@@ -22248,6 +22385,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
         {
             c_active_size_handle(case)
+        }
+        "freetype.size_record_state" if size_record_state_runtime_supported(case) => {
+            c_size_record_state(case)
         }
         "freetype.face_owned_handles"
             if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
@@ -23107,6 +23247,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
         {
             wasm_active_size_handle(case)
+        }
+        "freetype.size_record_state" if size_record_state_runtime_supported(case) => {
+            wasm_size_record_state(case)
         }
         "freetype.face_owned_handles"
             if case.case_id == "freetype.FT_Face.owns_slot_size_and_charmaps" =>
@@ -27935,6 +28078,51 @@ fn c_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
     Ok(output)
 }
 
+fn c_size_record_state(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let status = match size_record_setup(&case.inputs.params)? {
+        SizeRecordSetup::Pixel { width, height } => c_abi::FT_Set_Pixel_Sizes(face, width, height),
+        SizeRecordSetup::Char {
+            char_width,
+            char_height,
+            hres,
+            vres,
+        } => c_abi::FT_Set_Char_Size(face, char_width, char_height, hres, vres),
+    };
+    let size = c_active_size(face);
+    if !size.is_null() {
+        c_abi::abi_size_rec_set_generic_data(size, 0x51usize as c_abi::FT_Pointer);
+    }
+    let output = if size.is_null() {
+        size_record_state_output(status, "none", "other", Value::Null, "null")
+    } else {
+        let record = c_abi::abi_size_rec_snapshot(size)
+            .ok_or_else(|| "missing c active size record snapshot".to_string())?;
+        size_record_state_output(
+            status,
+            if record.face == face {
+                "same_as_parent_face"
+            } else {
+                "other"
+            },
+            if record.generic.data == 0x51usize as c_abi::FT_Pointer {
+                "client_pointer"
+            } else {
+                "other"
+            },
+            c_size_metrics_json(face)?,
+            if record.internal.is_null() {
+                "null"
+            } else {
+                "non_null"
+            },
+        )
+    };
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
 fn c_face_owned_handles(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
     let set_size_error = c_abi::FT_Set_Pixel_Sizes(face, 0, 20);
@@ -28391,6 +28579,43 @@ fn wasm_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
         metrics,
         load_error,
         loaded_hori_advance,
+    );
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn wasm_size_record_state(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let status = match size_record_setup(&case.inputs.params)? {
+        SizeRecordSetup::Pixel { width, height } => {
+            wasm_abi::fontdone_wasm_set_pixel_sizes(handle, width, height)
+        }
+        SizeRecordSetup::Char {
+            char_width,
+            char_height,
+            hres,
+            vres,
+        } => wasm_abi::fontdone_wasm_set_char_size(handle, char_width, char_height, hres, vres),
+    };
+    let metrics = if status == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+    let output = size_record_state_output(
+        status,
+        if wasm_abi::fontdone_wasm_active_size(handle) == 0 {
+            "none"
+        } else {
+            "same_as_parent_face"
+        },
+        "client_pointer",
+        metrics,
+        if wasm_abi::fontdone_wasm_active_size(handle) == 0 {
+            "null"
+        } else {
+            "non_null"
+        },
     );
     wasm_done_face(handle);
     Ok(output)
@@ -39963,6 +40188,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         return "api_object";
     }
     if case.case_id == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" {
+        return "api_object";
+    }
+    if size_record_state_runtime_supported(case) {
         return "api_object";
     }
     if case.case_id
