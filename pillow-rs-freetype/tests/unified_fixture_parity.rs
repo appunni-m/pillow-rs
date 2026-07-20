@@ -10069,7 +10069,33 @@ fn ftmm_get_multi_master_output(err: FT_Error, master: &FT_Multi_Master) -> RunO
     }
 }
 
+fn ftmm_multi_master_populated_output(
+    success_err: FT_Error,
+    success_master: &FT_Multi_Master,
+    control_err: FT_Error,
+) -> RunOutput {
+    if success_err == FT_Err_Ok {
+        let descriptor = multi_master_descriptor_json(success_master);
+        ok(json!({
+            "success_return": success_err,
+            "error_control_return": control_err,
+            "num_axis": descriptor.get("num_axis").cloned().unwrap_or(Value::Null),
+            "num_designs": descriptor.get("num_designs").cloned().unwrap_or(Value::Null),
+            "axis": descriptor.get("axis").cloned().unwrap_or(Value::Null),
+            "unused_axis_slots": descriptor
+                .get("unused_axis_sentinels")
+                .cloned()
+                .unwrap_or(Value::Null),
+        }))
+    } else {
+        error(success_err)
+    }
+}
+
 fn rust_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service" {
+        return rust_ftmm_get_multi_master_populated(case);
+    }
     let mut master = sentinel_multi_master();
     let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         FT_Get_Multi_Master(None, Some(&mut master))
@@ -10088,6 +10114,28 @@ fn rust_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
         return Ok(ftmm_get_multi_master_output(err, &master));
     };
     Ok(ftmm_get_multi_master_output(err, &master))
+}
+
+fn rust_ftmm_get_multi_master_populated(case: &InputCase) -> Result<RunOutput, String> {
+    let success_bytes = required_asset_bytes(case, "adobe_mm_font")?;
+    let success_face = rust_new_face_from_bytes(
+        success_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "success_face")?,
+    )?;
+    let control_bytes = required_asset_bytes(case, "variable_font")?;
+    let control_face = rust_new_face_from_bytes(
+        control_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "error_control_face")?,
+    )?;
+    let mut success_master = sentinel_multi_master();
+    let mut control_master = sentinel_multi_master();
+    let success_err = FT_Get_Multi_Master(Some(&success_face), Some(&mut success_master));
+    let control_err = FT_Get_Multi_Master(Some(&control_face), Some(&mut control_master));
+    Ok(ftmm_multi_master_populated_output(
+        success_err,
+        &success_master,
+        control_err,
+    ))
 }
 
 fn ftmm_get_mm_var_uses_type1_adobe(case: &InputCase) -> bool {
@@ -10539,6 +10587,9 @@ fn wasm_ftmm_axis_flags(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service" {
+        return c_ftmm_get_multi_master_populated(case);
+    }
     let mut master = sentinel_multi_master();
     let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         c_abi::FT_Get_Multi_Master(std::ptr::null_mut(), &mut master)
@@ -10563,7 +10614,33 @@ fn c_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ftmm_get_multi_master_output(err, &master))
 }
 
+fn c_ftmm_get_multi_master_populated(case: &InputCase) -> Result<RunOutput, String> {
+    let success_bytes = required_asset_bytes(case, "adobe_mm_font")?;
+    let (success_library, success_face) = c_new_face_from_bytes(
+        success_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "success_face")?,
+    )?;
+    let control_bytes = required_asset_bytes(case, "variable_font")?;
+    let (control_library, control_face) = c_new_face_from_bytes(
+        control_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "error_control_face")?,
+    )?;
+    let mut success_master = sentinel_multi_master();
+    let mut control_master = sentinel_multi_master();
+    let success_err = c_abi::FT_Get_Multi_Master(success_face, &mut success_master);
+    let control_err = c_abi::FT_Get_Multi_Master(control_face, &mut control_master);
+    let output = ftmm_multi_master_populated_output(success_err, &success_master, control_err);
+    c_done_face(control_face);
+    c_done_library(control_library);
+    c_done_face(success_face);
+    c_done_library(success_library);
+    Ok(output)
+}
+
 fn wasm_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service" {
+        return wasm_ftmm_get_multi_master_populated(case);
+    }
     let mut master = sentinel_multi_master();
     let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
         wasm_abi::fontdone_wasm_get_multi_master(0, &mut master)
@@ -10585,6 +10662,27 @@ fn wasm_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
         return Ok(output);
     };
     Ok(ftmm_get_multi_master_output(err, &master))
+}
+
+fn wasm_ftmm_get_multi_master_populated(case: &InputCase) -> Result<RunOutput, String> {
+    let success_bytes = required_asset_bytes(case, "adobe_mm_font")?;
+    let success_handle = wasm_new_face_from_bytes(
+        success_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "success_face")?,
+    )?;
+    let control_bytes = required_asset_bytes(case, "variable_font")?;
+    let control_handle = wasm_new_face_from_bytes(
+        control_bytes.as_ref(),
+        face_index_from_named_face_params(&case.inputs.params, "error_control_face")?,
+    )?;
+    let mut success_master = sentinel_multi_master();
+    let mut control_master = sentinel_multi_master();
+    let success_err = wasm_abi::fontdone_wasm_get_multi_master(success_handle, &mut success_master);
+    let control_err = wasm_abi::fontdone_wasm_get_multi_master(control_handle, &mut control_master);
+    let output = ftmm_multi_master_populated_output(success_err, &success_master, control_err);
+    wasm_done_face(control_handle);
+    wasm_done_face(success_handle);
+    Ok(output)
 }
 
 #[derive(Debug, Clone)]
@@ -19826,6 +19924,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftmm.get_multi_master" => {
+            if case.case_id == "ftmm.FT_Multi_Master.populated_by_adobe_mm_service" {
+                let mut args = vec!["--ftmm-get-multi-master-adobe-control".to_string()];
+                push_required_asset_source(case, "adobe_mm_font", &mut args)?;
+                args.push(face_index_from_named_face_params(params, "success_face")?.to_string());
+                push_required_asset_source(case, "variable_font", &mut args)?;
+                args.push(
+                    face_index_from_named_face_params(params, "error_control_face")?.to_string(),
+                );
+                return Ok(args);
+            }
             let mut args = vec!["--ftmm-get-multi-master".to_string()];
             if lifecycle_handle_param(params, "face") == Some("null") {
                 args.push("null".to_string());
@@ -40540,6 +40648,10 @@ fn face_index_param(value: &Value) -> Result<i64, String> {
     value
         .get("face_index")
         .map_or(Ok(0), |raw| i64_value(raw, "face_index"))
+}
+
+fn face_index_from_named_face_params(params: &Value, key: &str) -> Result<i64, String> {
+    params.get(key).map_or(Ok(0), face_index_param)
 }
 
 fn preserve_initial_size(value: &Value) -> Result<bool, String> {
