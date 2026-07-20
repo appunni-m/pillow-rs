@@ -10937,6 +10937,39 @@ static int emit_ftmm_set_var_design_coordinates(int argc, char** argv) {
     return 0;
 }
 
+static int emit_face_flags_after_variation(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_Long initial_flags = (FT_Long)face.face->face_flags;
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_Error setter_status = FT_Set_Var_Design_Coordinates(face.face, set_count, set_coords);
+    FT_Long after_set_flags = (FT_Long)face.face->face_flags;
+    FT_Error reset_status = FT_Set_Named_Instance(face.face, (FT_UInt)-1);
+    FT_Long after_reset_flags = (FT_Long)face.face->face_flags;
+
+    printf("{");
+    print_status(setter_status);
+    printf(",\"output\":{\"initial_face_flags\":%ld,"
+           "\"after_set_face_flags\":%ld,"
+           "\"after_reset_face_flags\":%ld,"
+           "\"setter_status\":%d,"
+           "\"reset_status\":%d}}\n",
+           initial_flags,
+           after_set_flags,
+           after_reset_flags,
+           setter_status,
+           reset_status);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ftmm_set_var_design_glyph_output(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -17291,6 +17324,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--ftmm-set-var-design-coordinates")) {
         return emit_ftmm_set_var_design_coordinates(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--face-flags-after-variation")) {
+        return emit_face_flags_after_variation(argc, argv);
     }
     if (argc == 12 && streq(argv[1], "--ftmm-set-var-design-glyph-output")) {
         return emit_ftmm_set_var_design_glyph_output(argc, argv);
