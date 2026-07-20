@@ -9866,6 +9866,66 @@ static void print_fixed_coord_array(FT_Fixed* coords, FT_UInt count) {
     printf("]");
 }
 
+static void print_ftmm_var_design_output(
+    FT_Error error,
+    FT_Face face,
+    FT_Fixed* coords,
+    FT_UInt count) {
+    printf("{");
+    print_status(error);
+    printf(",\"output\":");
+    if (error) {
+        printf("null");
+    } else {
+        printf("{\"return\":%d,\"coords\":", error);
+        print_fixed_coord_array(coords, count);
+        printf(",\"face_index\":%ld}", (long)face->face_index);
+    }
+    printf("}\n");
+}
+
+static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    const char* prior_kind = argv[5];
+    FT_Error err = FT_Err_Ok;
+    if (streq(prior_kind, "set_var_design")) {
+        FT_UInt prior_count = (FT_UInt)strtoul(argv[6], NULL, 10);
+        FT_Fixed prior_coords[8] = {0};
+        char* cursor = argv[7];
+        for (FT_UInt i = 0; i < prior_count && i < 8; i++) {
+            prior_coords[i] = strtol(cursor, &cursor, 10);
+            if (*cursor == ',') {
+                cursor++;
+            }
+        }
+        err = FT_Set_Var_Design_Coordinates(face.face, prior_count, prior_coords);
+    } else if (streq(prior_kind, "set_named_instance")) {
+        FT_UInt instance_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+        err = FT_Set_Named_Instance(face.face, instance_index);
+    }
+
+    FT_UInt count = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Fixed coords[16];
+    for (FT_UInt i = 0; i < 16; i++) {
+        coords[i] = streq(argv[10], "nonzero") ? (FT_Fixed)(0x11110000 + i) : 0;
+    }
+    if (!err) {
+        err = FT_Get_Var_Design_Coordinates(
+            face.face,
+            count,
+            streq(argv[10], "null") ? NULL : coords);
+    }
+    print_ftmm_var_design_output(err, face.face, coords, count);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_named_instance_null_face_observation(FT_Error error) {
     printf("{\"return\":%d,\"face_index\":null,\"face_flags\":null,"
            "\"variation_bit_set\":null,\"postscript_name\":",
@@ -15531,6 +15591,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--set-named-instance-descriptor")) {
         return emit_set_named_instance_descriptor(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--ftmm-get-var-design-coordinates")) {
+        return emit_ftmm_get_var_design_coordinates(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);

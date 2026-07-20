@@ -9946,6 +9946,81 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FTMM` future variable-font fixture substitutions rejected
+
+Status: investigated and left pending on 2026-07-20.
+
+Current baseline:
+
+- Route audit at `ea229b4e7`: `real-parity=4457`,
+  `pending-route=498`, `pending-core=1`.
+
+Finding:
+
+- Existing local variable fixtures are not valid drop-in replacements for the
+  future FTMM success assets.  Two tempting candidates were checked:
+  `tests/fixtures/fonts/variable/compact-variable.ttf` and
+  `tests/fixtures/input/fonts/variation/mvar-vertical-metrics.ttf`.
+- Aliasing the missing semantic IDs such as
+  `fonts/variable/multi-axis-named-instances.ttf`,
+  `fonts/variable/named-instances-wght-wdth.ttf`,
+  `fonts/variable/named-instance-missing-psid.ttf`,
+  `fonts/variable/inter-wght.ttf`, and related MVAR/HVAR/GVAR names to those
+  existing files made the rows C-openable, but pinned FreeType returned
+  `FT_Err_Invalid_Argument` (`7`) for the declared success APIs.
+- Failed focused probes included:
+  - `ftmm.FT_Get_MM_Var.variable_font_descriptor_success`
+  - `ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count`
+  - `ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c`
+  - `ftmm.FT_Get_Var_Design_Coordinates.success_default_design_coordinates`
+  - `ftmm.FT_Get_Var_Design_Coordinates.success_named_instance_design_coordinates`
+  - `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  - `ftmm.FT_Get_Var_Blend_Coordinates.success_default_blend_coordinates`
+  - `ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates`
+  - `ftmm.FT_Get_Var_Blend_Coordinates.excess_output_coordinates_zero_filled`
+  - `ftmm.FT_MM_Var.ownership_matches_c`
+- Therefore those aliases would be green placeholders: they change route audit
+  classification without same-input C/Rust/C-ABI/WASM success parity.
+
+Required fix plan:
+
+1. Do not satisfy the missing future FTMM rows by aliasing to the existing
+   compact or MVAR fixtures unless a focused pinned-C probe first returns
+   success for the exact public API row.
+2. Add or generate source-backed variable fixtures whose FreeType services
+   actually expose the required descriptor, named-style, design-coordinate,
+   blend-coordinate, axis-flag, and ownership behavior.
+3. Keep Adobe MM rows pending until a real Adobe MM fixture and pure-Rust Adobe
+   MM support exist.  Do not emulate them with OpenType variable fonts.
+4. Promote each row only after the focused operation passes through pinned C
+   oracle, Rust FFI, thin C ABI, and WASM ABI for the same fixture and
+   parameters.
+
+Verification commands used for the failed probes:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmm.get_mm_var
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_design_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_blend_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.get_and_done_mm_var
+make -C pillow-rs-freetype route-audit
+```
+
+Follow-up finding:
+
+- After adding a maintained `FT_Get_Var_Design_Coordinates` runner, pinned C
+  validates the default single-axis and named-instance design-coordinate rows
+  against Rust FFI, C ABI, and WASM ABI.
+- The row named
+  `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  remains pending.  Its manifest text says entries beyond the axis count are
+  zero-filled, but pinned FreeType 2.14.3 on the maintained ABI returned
+  non-zero, run-varying data in the second output slot for the single-axis
+  fixture.  Matching that unstable value in Rust would be a green placeholder,
+  so the row must stay pending until the public C behavior is pinned with a
+  deterministic fixture or the manifest expectation is corrected from C
+  evidence.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.

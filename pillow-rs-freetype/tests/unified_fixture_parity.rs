@@ -10273,6 +10273,215 @@ fn wasm_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String
     ))
 }
 
+struct FtmmPriorCall {
+    kind: String,
+    count: FT_UInt,
+    coords: Vec<FT_Fixed>,
+    instance_index: FT_UInt,
+}
+
+fn ftmm_prior_call(params: &Value) -> Result<FtmmPriorCall, String> {
+    let mut result = FtmmPriorCall {
+        kind: "none".to_string(),
+        count: 0,
+        coords: Vec::new(),
+        instance_index: 0,
+    };
+    let Ok(prior_calls) = array_param(params, "prior_calls") else {
+        return Ok(result);
+    };
+    for call in prior_calls {
+        let operation = call
+            .get("operation")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match operation {
+            "FT_Set_Var_Design_Coordinates" => {
+                result.kind = "set_var_design".to_string();
+                result.count = call
+                    .get("num_coords")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| {
+                        "FT_Set_Var_Design_Coordinates prior missing num_coords".to_string()
+                    })
+                    .and_then(|value| {
+                        FT_UInt::try_from(value).map_err(|err| {
+                            format!("prior num_coords {value} does not fit FT_UInt: {err}")
+                        })
+                    })?;
+                result.coords = ftmm_coords_from_value(call, "coords_16_16")?;
+            }
+            "FT_Set_Named_Instance" => {
+                result.kind = "set_named_instance".to_string();
+                result.instance_index = call
+                    .get("instance_index")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| "FT_Set_Named_Instance prior missing instance_index".to_string())
+                    .and_then(|value| {
+                        FT_UInt::try_from(value).map_err(|err| {
+                            format!("prior instance_index {value} does not fit FT_UInt: {err}")
+                        })
+                    })?;
+            }
+            _ => {}
+        }
+    }
+    Ok(result)
+}
+
+fn ftmm_coords_from_value(value: &Value, key: &str) -> Result<Vec<FT_Fixed>, String> {
+    array_param(value, key)?
+        .iter()
+        .map(|item| i64_value(item, key))
+        .collect()
+}
+
+fn ftmm_coords_csv(coords: &[FT_Fixed]) -> String {
+    if coords.is_empty() {
+        return "-".to_string();
+    }
+    coords
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn ftmm_num_coords(params: &Value) -> Result<FT_UInt, String> {
+    let value = u64_param(params, "num_coords")?;
+    FT_UInt::try_from(value)
+        .map_err(|err| format!("num_coords {value} does not fit FT_UInt: {err}"))
+}
+
+fn ftmm_coords_init_mode(params: &Value) -> &'static str {
+    match params.get("coords_pointer").and_then(Value::as_str) {
+        None => "null",
+        Some("valid_nonzero_sentinel_prefilled") | Some("valid_sentinel_prefilled") => "nonzero",
+        _ => "zero",
+    }
+}
+
+fn ftmm_coords_pointer_is_null(params: &Value) -> bool {
+    params
+        .get("coords_pointer")
+        .is_some_and(|value| value.is_null())
+}
+
+fn ftmm_initial_coords(params: &Value) -> Result<Vec<FT_Fixed>, String> {
+    let count = usize::try_from(ftmm_num_coords(params)?)
+        .map_err(|err| format!("num_coords does not fit usize: {err}"))?;
+    let nonzero = ftmm_coords_init_mode(params) == "nonzero";
+    Ok((0..count)
+        .map(|index| {
+            if nonzero {
+                FT_Fixed::from(0x1111_0000u32) + FT_Fixed::try_from(index).unwrap_or(0)
+            } else {
+                0
+            }
+        })
+        .collect())
+}
+
+fn ftmm_var_design_output(status: FT_Error, coords: &[FT_Fixed], face_index: FT_Long) -> RunOutput {
+    if status == FT_Err_Ok {
+        ok(json!({
+            "return": status,
+            "coords": coords,
+            "face_index": face_index,
+        }))
+    } else {
+        error(status)
+    }
+}
+
+fn rust_ftmm_get_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let prior = ftmm_prior_call(&case.inputs.params)?;
+    let mut status = match prior.kind.as_str() {
+        "set_var_design" => {
+            FT_Set_Var_Design_Coordinates(Some(&mut face), prior.count, Some(&prior.coords))
+        }
+        "set_named_instance" => FT_Set_Named_Instance(Some(&mut face), prior.instance_index),
+        _ => FT_Err_Ok,
+    };
+    let mut coords = ftmm_initial_coords(&case.inputs.params)?;
+    if status == FT_Err_Ok {
+        status = if ftmm_coords_pointer_is_null(&case.inputs.params) {
+            FT_Get_Var_Design_Coordinates(Some(&face), ftmm_num_coords(&case.inputs.params)?, None)
+        } else {
+            FT_Get_Var_Design_Coordinates(
+                Some(&face),
+                ftmm_num_coords(&case.inputs.params)?,
+                Some(&mut coords),
+            )
+        };
+    }
+    Ok(ftmm_var_design_output(status, &coords, face.face_index))
+}
+
+fn c_ftmm_get_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let prior = ftmm_prior_call(&case.inputs.params)?;
+    let mut status = match prior.kind.as_str() {
+        "set_var_design" => {
+            c_abi::FT_Set_Var_Design_Coordinates(face, prior.count, prior.coords.as_ptr())
+        }
+        "set_named_instance" => c_abi::FT_Set_Named_Instance(face, prior.instance_index),
+        _ => FT_Err_Ok,
+    };
+    let mut coords = ftmm_initial_coords(&case.inputs.params)?;
+    if status == FT_Err_Ok {
+        status = c_abi::FT_Get_Var_Design_Coordinates(
+            face,
+            ftmm_num_coords(&case.inputs.params)?,
+            if ftmm_coords_pointer_is_null(&case.inputs.params) {
+                std::ptr::null_mut()
+            } else {
+                coords.as_mut_ptr()
+            },
+        );
+    }
+    let face_index = c_abi::abi_face_info(face)
+        .ok_or_else(|| "missing C ABI face info".to_string())?
+        .face_index;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ftmm_var_design_output(status, &coords, face_index))
+}
+
+fn wasm_ftmm_get_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let prior = ftmm_prior_call(&case.inputs.params)?;
+    let mut status = match prior.kind.as_str() {
+        "set_var_design" => wasm_abi::fontdone_wasm_set_var_design_coordinates(
+            handle,
+            prior.count,
+            prior.coords.as_ptr(),
+        ),
+        "set_named_instance" => {
+            wasm_abi::fontdone_wasm_set_named_instance(handle, prior.instance_index)
+        }
+        _ => FT_Err_Ok,
+    };
+    let mut coords = ftmm_initial_coords(&case.inputs.params)?;
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_var_design_coordinates(
+            handle,
+            ftmm_num_coords(&case.inputs.params)?,
+            if ftmm_coords_pointer_is_null(&case.inputs.params) {
+                std::ptr::null_mut()
+            } else {
+                coords.as_mut_ptr()
+            },
+        );
+    }
+    let face_index = wasm_abi::abi_face_info(handle)
+        .ok_or_else(|| "missing WASM face info".to_string())?
+        .face_index;
+    wasm_done_face(handle);
+    Ok(ftmm_var_design_output(status, &coords, face_index))
+}
+
 fn prior_named_instance_index_param(params: &Value) -> Result<Option<FT_UInt>, String> {
     let Ok(prior_calls) = array_param(params, "prior_calls") else {
         return Ok(None);
@@ -16446,6 +16655,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             done_mm_var_library_present(params).to_string(),
             done_mm_var_descriptor_present(params).to_string(),
         ]),
+        "ftmm.get_var_design_coordinates" => {
+            let mut args = vec!["--ftmm-get-var-design-coordinates".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            let prior = ftmm_prior_call(params)?;
+            args.push(prior.kind);
+            args.push(prior.count.to_string());
+            args.push(ftmm_coords_csv(&prior.coords));
+            args.push(prior.instance_index.to_string());
+            args.push(ftmm_num_coords(params)?.to_string());
+            args.push(ftmm_coords_init_mode(params).to_string());
+            Ok(args)
+        }
         "freetype.done_freetype" => {
             if lifecycle_handle_param(params, "library") == Some("null") {
                 return Ok(vec!["--done-freetype".to_string(), "null".to_string()]);
@@ -17466,6 +17688,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
+        "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
         "freetype.done_freetype" => rust_done_freetype(case),
         "freetype.done_face" => rust_done_face(case),
         "freetype.face_check_truetype_patents" => rust_face_check_truetype_patents(case),
@@ -18218,6 +18441,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
+        "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
         "freetype.done_freetype" => c_done_freetype_output(case),
         "freetype.done_face" => c_done_face_output(case),
         "freetype.face_check_truetype_patents" => c_face_check_truetype_patents(case),
@@ -18895,6 +19119,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
+        "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
         "freetype.done_freetype" => wasm_done_freetype_output(case),
         "freetype.done_face" => wasm_done_face_output(case),
         "freetype.face_check_truetype_patents" => wasm_face_check_truetype_patents(case),

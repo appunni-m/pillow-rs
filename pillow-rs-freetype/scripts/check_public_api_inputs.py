@@ -226,6 +226,11 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_font_format",
     "fontdone_wasm_get_x11_font_format",
     "fontdone_wasm_set_named_instance",
+    "fontdone_wasm_get_mm_blend_coordinates",
+    "fontdone_wasm_get_var_blend_coordinates",
+    "fontdone_wasm_get_var_design_coordinates",
+    "fontdone_wasm_set_mm_blend_coordinates",
+    "fontdone_wasm_set_var_blend_coordinates",
     "fontdone_wasm_set_var_design_coordinates",
     "fontdone_wasm_get_default_named_instance",
     "fontdone_wasm_get_winfnt_header",
@@ -1368,8 +1373,30 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success",
         "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags",
         "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
+        "ftmm.FT_Get_Var_Blend_Coordinates.success_default_blend_coordinates",
+        "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
+        "ftmm.FT_Get_Var_Blend_Coordinates.excess_output_coordinates_zero_filled",
+        "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
+        "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
+        "ftmm.FT_MM_Var.ownership_matches_c",
         "ftmm.FT_Multi_Master.populated_by_adobe_mm_service",
+        "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates",
+        "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
+        "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
+        "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
+        "ftmm.FT_Set_Var_Blend_Coordinates.success_aliases_mm_blend_setter",
+        "ftmm.FT_Set_Var_Blend_Coordinates.success_partial_extra_and_reset",
+        "ftmm.FT_Set_Var_Blend_Coordinates.success_variation_flag_matches_c",
+        "ftmm.FT_Set_Var_Blend_Coordinates.output_changes_for_active_blend",
+        "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates",
+        "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset",
+        "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
+        "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
         "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
+        "ftmm.FT_Var_Axis.variable_font_axis_values",
+        "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage",
+        "ftmm.FT_Var_Named_Style.coordinates_array_matches_axis_count",
+        "ftmm.FT_Var_Named_Style.psid_missing_sentinel_matches_c",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_DESIGNS.record_design_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
@@ -2253,6 +2280,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.expectation_status == "ok"
         and has_runtime_asset(row)
         and unresolved_assets_reason(row) is None
+        and ftmm_subsystem_pending_reason(row) is None
     ):
         return "FT multiple-master/variation success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (

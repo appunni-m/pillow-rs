@@ -3229,6 +3229,83 @@ pub extern "C" fn FT_Set_Var_Design_Coordinates(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Var_Design_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` writable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts_mut(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Get_Var_Design_Coordinates(Some(&state.inner), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Var_Blend_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` writable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts_mut(coords, num_coords as usize) })
+    };
+    rust_ffi::FT_Get_Var_Blend_Coordinates(Some(&state.inner), num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_MM_Blend_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *mut FT_Fixed,
+) -> FT_Error {
+    FT_Get_Var_Blend_Coordinates(face, num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Var_Blend_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let coords = if coords.is_null() {
+        None
+    } else {
+        // SAFETY: caller provides `num_coords` readable FT_Fixed values.
+        Some(unsafe { slice::from_raw_parts(coords, num_coords as usize) })
+    };
+    let err = rust_ffi::FT_Set_Var_Blend_Coordinates(Some(&mut state.inner), num_coords, coords);
+    if err == rust_ffi::FT_Err_Ok {
+        state.refresh_charmaps(face);
+        state.refresh_postscript_name();
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_MM_Blend_Coordinates(
+    face: FT_Face,
+    num_coords: FT_UInt,
+    coords: *const FT_Fixed,
+) -> FT_Error {
+    FT_Set_Var_Blend_Coordinates(face, num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Default_Named_Instance(
     face: FT_Face,
     instance_index: *mut FT_UInt,
