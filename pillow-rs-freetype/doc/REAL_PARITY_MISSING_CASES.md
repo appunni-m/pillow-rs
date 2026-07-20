@@ -10553,6 +10553,13 @@ Follow-up finding for blend-coordinate state rows:
   `[16384,0]`, proving extra coordinates are ignored after the two real axes.
   The maintained scenario route compares those rows through pinned C oracle,
   Rust FFI, C ABI, and WASM ABI.
+- Follow-up on 2026-07-20: the
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default` row now validates
+  the Adobe Type 1 MM reset path with the same scenario route.  Pinned FreeType
+  proves a same-face non-default set to `[16384,16384]` reads back
+  `[16384,16384]` with `FT_FACE_FLAG_VARIATION` set; a subsequent
+  `num_coords=0, coords=NULL` reset reads back `[32768,32768]` and clears
+  `FT_FACE_FLAG_VARIATION`.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set
