@@ -10560,6 +10560,23 @@ Follow-up finding for blend-coordinate state rows:
   `[16384,16384]` with `FT_FACE_FLAG_VARIATION` set; a subsequent
   `num_coords=0, coords=NULL` reset reads back `[32768,32768]` and clears
   `FT_FACE_FLAG_VARIATION`.
+- Follow-up on 2026-07-20: keep
+  `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` pending.
+  The current row uses the OpenType fixture
+  `fonts/variable/gvar-hvar-wght.ttf`, but pinned FreeType 2.14.3 returns the
+  public-wrapper sentinel `FT_Err_Unimplemented_Feature` (`-2`) for the same
+  call shape:
+  `FT_Set_MM_Blend_Coordinates(face, 1, [65536])`, before any glyph load or
+  render can prove output parity.  The state-only Adobe Type 1 MM route is not
+  a substitute for this glyph-output row: `scripts/build_type1_fixtures.py`
+  explicitly keeps `adobe-mm-two-axis.pfb` glyph programs minimal, so it is
+  suitable for descriptor, coordinate, weight-vector, and reset state but not
+  yet for proving blend-dependent glyph metrics, cbox, or bitmap bytes.  Moving
+  this row to `real-parity` with either the OpenType error or the minimal Type 1
+  glyph would be a green placeholder.  The required next fix is a maintained
+  Type 1 MM fixture whose glyph outline changes under non-default blend/design
+  coordinates, followed by a pinned-C/Rust FFI/C ABI/WASM ABI glyph-output
+  runner for `FT_Set_MM_Blend_Coordinates`.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set
