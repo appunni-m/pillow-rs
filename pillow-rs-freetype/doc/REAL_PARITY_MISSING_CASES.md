@@ -12899,9 +12899,22 @@ Classification change:
 
 Current blocker families:
 
-- `FTC_Manager_New` / `FTC_Manager` allocation and lifecycle: default/custom
-  limits, requester data, reset/done ordering, and ownership of faces, sizes,
-  caches, and nodes.
+- `FTC_Manager_New` / `FTC_Manager` allocation and lifecycle rows are split by
+  exact obligation instead of sharing a broad manager blocker:
+  - `FTC_Manager_New.planned_cache_subsystem_not_out_of_scope`: maintained
+    same-input cache-manager route, not an out-of-scope placeholder.
+  - `FTC_Manager_New.success_defaults_for_zero_limits`: zero `max_faces`,
+    `max_sizes`, and `max_bytes` inputs selecting the same pinned-C default
+    cache limits.
+  - `FTC_Manager_New.success_custom_limits_and_req_data`: explicit limits and
+    requester data stored, forwarded, and reported through lookups.
+  - `FTC_Manager_New.lifecycle_create_lookup_reset_done`: create, lookup,
+    reset, and done sequencing with the same observable cache state and return
+    codes.
+  - `FTC_Manager.reset_and_done_lifecycle`: reset clearing cached faces, sizes,
+    caches, and nodes while done tears down ownership.
+  - `FTC_Manager.owns_faces_sizes_and_cache_nodes`: manager-owned face, size,
+    cache, and node lifetimes.
 - `FTC_Manager_Done`: empty/populated destruction, referenced-node handling,
   and null/foreign-library behavior.
 - `FTC_Manager_LookupFace` / `FTC_FaceID`: pointer identity, first requester
@@ -12966,9 +12979,22 @@ Current blocker families:
   - `lifecycle_remove_faceid_and_reset`: prove cache entries are evicted or
     rebuilt after `FTC_Manager_RemoveFaceID` and manager reset exactly like
     pinned C.
-- `FTC_ImageCache_Lookup` / `FTC_ImageType`: call-owned descriptor lifetime,
-  lookup output, hit/repeat behavior, node acquisition/unref, and null-anode
-  ephemeral glyphs.
+- `FTC_ImageCache_Lookup` / `FTC_ImageType` rows are split by exact obligation
+  instead of sharing a broad image-type blocker:
+  - `FTC_ImageType.points_to_call_owned_descriptor`: public `FTC_ImageType`
+    argument as a call-owned descriptor whose fields follow pinned-C
+    copy/consume lifetime semantics.
+  - `FTC_ImageTypeRec.drives_image_and_sbit_lookup`: `face_id`, width, height,
+    flags, and load flags driving image and sbit cache lookup.
+  - `FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope`:
+    maintained same-input image-cache route, not an out-of-scope placeholder.
+  - `FTC_ImageCache_Lookup.success_lookup_hit_and_repeat_hit`: first lookup,
+    repeat lookup, glyph output, requester use, and cache identity.
+  - `FTC_ImageCache_Lookup.success_node_acquire_and_unref`: `anode`
+    acquisition, `FTC_Node_Unref` release, and post-unref cache state.
+  - `FTC_ImageCache_Lookup.success_null_anode_ephemeral_glyph`: null `anode`
+    returning an ephemeral glyph with pinned-C ownership and cache-node side
+    effects.
 - `FTC_ImageCache_LookupScaler` rows are split by exact scenario and fixture
   variant instead of sharing a broad scaler-image blocker.  Each scenario must
   be proven for `f1 DEFAULT`, `f2 NO_HINTING`, `f3 RENDER`, and

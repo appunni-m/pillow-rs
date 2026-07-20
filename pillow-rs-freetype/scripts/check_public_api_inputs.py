@@ -1805,6 +1805,84 @@ def ftcache_manager_lookup_size_pending_reason(row: ConcreteInput) -> str | None
     return exact_cases.get(row.case_id)
 
 
+def ftcache_manager_new_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_Manager_New/FTC_Manager pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_Manager_New planning parity needs a maintained same-input "
+            "cache-manager route instead of treating the public FTC manager "
+            "subsystem as out of scope"
+        ),
+        "ftcache.FTC_Manager_New.success_defaults_for_zero_limits": (
+            "FTC_Manager_New default-limit parity needs a maintained route "
+            "proving zero max_faces, max_sizes, and max_bytes inputs select "
+            "the same pinned-C default cache limits"
+        ),
+        "ftcache.FTC_Manager_New.success_custom_limits_and_req_data": (
+            "FTC_Manager_New custom-limit parity needs a maintained route "
+            "proving explicit limits and requester data are stored, forwarded, "
+            "and reported through lookups exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager_New.lifecycle_create_lookup_reset_done": (
+            "FTC_Manager_New lifecycle parity needs a maintained route proving "
+            "create, lookup, reset, and done sequencing produces the same "
+            "observable cache state and return codes as pinned C"
+        ),
+        "ftcache.FTC_Manager.reset_and_done_lifecycle": (
+            "FTC_Manager reset/done parity needs a maintained route proving "
+            "reset clears cached faces, sizes, caches, and nodes while done "
+            "tears down ownership exactly like pinned C"
+        ),
+        "ftcache.FTC_Manager.owns_faces_sizes_and_cache_nodes": (
+            "FTC_Manager ownership parity needs a maintained route proving "
+            "manager-owned face, size, cache, and node lifetimes match pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
+def ftcache_image_lookup_pending_reason(row: ConcreteInput) -> str | None:
+    """Case-specific FTC_ImageCache_Lookup/FTC_ImageType pending rows."""
+    if not row.operation.startswith("ftcache."):
+        return None
+    exact_cases = {
+        "ftcache.FTC_ImageType.points_to_call_owned_descriptor": (
+            "FTC_ImageType pointer-lifetime parity needs a maintained route "
+            "proving the public FTC_ImageType argument is a call-owned "
+            "descriptor whose fields are copied or consumed with pinned-C "
+            "lifetime semantics"
+        ),
+        "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup": (
+            "FTC_ImageTypeRec descriptor parity needs a maintained route "
+            "proving face_id, width, height, flags, and load_flags drive image "
+            "and sbit cache lookup exactly like pinned C"
+        ),
+        "ftcache.FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope": (
+            "FTC_ImageCache_Lookup planning parity needs a maintained "
+            "same-input image-cache route instead of treating cache lookup as "
+            "out of scope"
+        ),
+        "ftcache.FTC_ImageCache_Lookup.success_lookup_hit_and_repeat_hit": (
+            "FTC_ImageCache_Lookup hit/repeat parity needs a maintained route "
+            "proving first lookup, repeat lookup, glyph output, requester use, "
+            "and cache identity match pinned C"
+        ),
+        "ftcache.FTC_ImageCache_Lookup.success_node_acquire_and_unref": (
+            "FTC_ImageCache_Lookup node lifecycle parity needs a maintained "
+            "route proving anode acquisition, FTC_Node_Unref release, and "
+            "post-unref cache state match pinned C"
+        ),
+        "ftcache.FTC_ImageCache_Lookup.success_null_anode_ephemeral_glyph": (
+            "FTC_ImageCache_Lookup null-anode parity needs a maintained route "
+            "proving a null anode returns an ephemeral glyph with the same "
+            "ownership and cache-node side effects as pinned C"
+        ),
+    }
+    return exact_cases.get(row.case_id)
+
+
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
     if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
@@ -1827,6 +1905,12 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     manager_lookup_size_pending = ftcache_manager_lookup_size_pending_reason(row)
     if manager_lookup_size_pending:
         return manager_lookup_size_pending
+    manager_new_pending = ftcache_manager_new_pending_reason(row)
+    if manager_new_pending:
+        return manager_new_pending
+    image_lookup_pending = ftcache_image_lookup_pending_reason(row)
+    if image_lookup_pending:
+        return image_lookup_pending
     cache_creation_exact_cases = {
         "ftcache.FTC_CMapCache.manager_owned_opaque_cache": (
             "FTC_CMapCache opaque-handle parity needs a maintained cache route "
@@ -1890,19 +1974,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return cache_creation_exact_cases[row.case_id]
     pending_case_groups = {
         (
-            "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_Manager_New.success_defaults_for_zero_limits",
-            "ftcache.FTC_Manager_New.success_custom_limits_and_req_data",
-            "ftcache.FTC_Manager_New.lifecycle_create_lookup_reset_done",
-            "ftcache.FTC_Manager.reset_and_done_lifecycle",
-            "ftcache.FTC_Manager.owns_faces_sizes_and_cache_nodes",
-        ): (
-            "FTC_Manager allocation/lifecycle parity needs a maintained manager "
-            "route proving default/custom limits, requester data, reset/done "
-            "ordering, and ownership of faces, sizes, caches, and nodes across "
-            "pinned C, Rust FFI, C ABI, and WASM ABI"
-        ),
-        (
             "ftcache.FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope",
             "ftcache.FTC_Manager_Done.success_destroy_empty_manager",
             "ftcache.FTC_Manager_Done.success_destroy_populated_manager",
@@ -1936,18 +2007,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "eviction route proving unreferenced removal, referenced-node "
             "hiding until unref, unchanged other face IDs, and null/unknown "
             "input behavior"
-        ),
-        (
-            "ftcache.FTC_ImageType.points_to_call_owned_descriptor",
-            "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup",
-            "ftcache.FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope",
-            "ftcache.FTC_ImageCache_Lookup.success_lookup_hit_and_repeat_hit",
-            "ftcache.FTC_ImageCache_Lookup.success_node_acquire_and_unref",
-            "ftcache.FTC_ImageCache_Lookup.success_null_anode_ephemeral_glyph",
-        ): (
-            "FTC_ImageCache_Lookup parity needs a maintained image-type route "
-            "proving call-owned descriptor lifetime, lookup output, hit/repeat "
-            "behavior, node acquisition/unref, and null-anode ephemeral glyphs"
         ),
         (
             "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
