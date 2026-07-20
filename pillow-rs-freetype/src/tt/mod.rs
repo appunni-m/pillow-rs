@@ -104,6 +104,14 @@ pub fn parse_table_directory_at(data: &[u8], base: usize) -> Result<TableDirecto
     }
 
     let num_tables = read_u16(font, 4) as usize;
+    if sf_version == TRUE_MAGIC && num_tables == 0 {
+        // FreeType 2.14.3 reads the SFNT offset table, then rejects a
+        // TrueType directory with no valid entries during face open
+        // (`sfnt/ttload.c`: `tt_face_load_font_dir`/`check_table_dir`).
+        // The maintained pinned-C fixture surfaces this through the public
+        // `FT_New_Memory_Face` status `FT_Err_Invalid_Stream_Operation`.
+        return Err(FontError::SfntZeroTablesStreamOperation);
+    }
     let dir_start = 12usize;
     let dir_end = dir_start + num_tables * 16;
     if font.len() < dir_end {

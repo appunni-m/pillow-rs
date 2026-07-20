@@ -162,10 +162,8 @@ def write_missing_hmtx() -> None:
 
 def write_recognized_broken_sfnt() -> None:
     # FreeType's SFNT driver recognizes the 0x00010000 scaler type before it
-    # validates the table directory.  A directory declaring zero tables is a
-    # reproducible future-route control; pinned C currently reports public
-    # error 85 for this input, so exact Invalid_File_Format parity remains
-    # pending until a better C-observable fixture is found.
+    # validates the table directory.  A directory declaring zero tables reaches
+    # the pinned C public `FT_Err_Invalid_Stream_Operation` constructor path.
     save_synthetic_sfnt(
         "recognized-broken-sfnt.ttf",
         b"\x00\x01\x00\x00" + b"\x00\x00" + b"\x00\x00" + b"\x00\x00" + b"\x00\x00",
