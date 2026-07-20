@@ -1756,31 +1756,91 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         )
 
     ftimage_rows_without_maintained_route = {
-        "ftimage.FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory",
-        "ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled",
-        "ftimage.FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification",
-        "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
-        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior",
-        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior",
-        "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior",
-        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior",
-        "ftimage.FT_Raster.lifecycle_callback_contract",
-        "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done",
-        "ftimage.FT_Raster_Funcs.callback_slots_match_registered_renderers",
-        "ftimage.FT_Raster_New_Func.renderer_lifecycle_calls_new",
-        "ftimage.FT_Raster_Reset_Func.renderer_lifecycle_calls_reset",
-        "ftimage.FT_Raster_Set_Mode_Func.set_mode_result_is_observable",
-        "ftimage.FT_Raster_Span_Func.direct_render_emits_spans",
+        "ftimage.FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory": (
+            "FT_GLYPH_FORMAT_PLOTTER success parity needs a maintained glyph "
+            "format emitter route or pinned C evidence that no shipped module "
+            "can produce plotter glyphs; scalar tag equality alone does not "
+            "prove runtime source inventory across Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled": (
+            "FT_GLYPH_FORMAT_SVG runtime parity needs an SVG-enabled pinned C "
+            "fixture and pure-Rust SVG glyph-slot route that compares load "
+            "error, slot format, SVG document fields, and C/WASM ABI output; "
+            "unsupported or scalar-format checks do not prove produced glyphs"
+        ),
+        "ftimage.FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification": (
+            "FT_GLYPH_FORMAT_SVG unsupported-build parity needs a maintained "
+            "build-feature classification route that compares pinned C, Rust "
+            "FFI, C ABI, and WASM ABI behavior for the same SVG glyph input; "
+            "treating any load error as equivalent would be a green placeholder"
+        ),
+        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior": (
+            "FT_OUTLINE_IGNORE_DROPOUTS mono parity needs a maintained "
+            "FT_Outline_Get_Bitmap or glyph render route carrying this outline "
+            "flag into the mono rasterizer and comparing exact bitmap bytes "
+            "against pinned C across all ABI lanes"
+        ),
+        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior": (
+            "FT_OUTLINE_INCLUDE_STUBS mono parity needs a maintained dropout "
+            "fixture with stubs where FreeType's mono rasterizer behavior is "
+            "observable in exact bitmap bytes through Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior": (
+            "FT_OUTLINE_OWNER lifecycle parity needs a maintained outline "
+            "allocation/free route that proves owner-bit destruction semantics "
+            "and allocator ownership across pinned C, Rust FFI, C ABI, and "
+            "WASM ABI; generic drop behavior would not prove the public flag"
+        ),
+        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior": (
+            "FT_OUTLINE_SMART_DROPOUTS mono parity needs a maintained smart "
+            "dropout fixture and exact C/Rust/C-ABI/WASM bitmap comparison; "
+            "smooth-raster or flag-value checks do not prove mono behavior"
+        ),
+        "ftimage.FT_Raster.lifecycle_callback_contract": (
+            "FT_Raster lifecycle parity needs a maintained custom renderer "
+            "facade that records raster object allocation, reset, render, "
+            "set-mode, and done callback ordering across pinned C, Rust FFI, "
+            "C ABI, and WASM ABI"
+        ),
+        "ftimage.FT_Raster_Done_Func.renderer_lifecycle_calls_done": (
+            "FT_Raster_Done_Func parity needs a maintained custom renderer "
+            "lifecycle route proving FreeType calls the done callback with the "
+            "expected raster handle and teardown ordering across all ABI lanes"
+        ),
+        "ftimage.FT_Raster_Funcs.callback_slots_match_registered_renderers": (
+            "FT_Raster_Funcs callback-slot parity needs a maintained renderer "
+            "class probe that registers synthetic renderers and compares the "
+            "public callback table identity/availability across C, Rust FFI, "
+            "C ABI, and WASM ABI"
+        ),
+        "ftimage.FT_Raster_New_Func.renderer_lifecycle_calls_new": (
+            "FT_Raster_New_Func parity needs a maintained custom renderer "
+            "route proving the new callback, raster handle creation, and "
+            "failure cleanup behavior against pinned C"
+        ),
+        "ftimage.FT_Raster_Reset_Func.renderer_lifecycle_calls_reset": (
+            "FT_Raster_Reset_Func parity needs a maintained renderer route "
+            "that records reset callback invocation and memory-pool argument "
+            "semantics across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftimage.FT_Raster_Set_Mode_Func.set_mode_result_is_observable": (
+            "FT_Raster_Set_Mode_Func parity needs a maintained custom renderer "
+            "route where set-mode return codes and side effects are observable "
+            "through subsequent public render behavior across all ABI lanes"
+        ),
+        "ftimage.FT_Raster_Span_Func.direct_render_emits_spans": (
+            "FT_Raster_Span_Func direct-render parity needs a maintained "
+            "outline render route that compares emitted span count, y/x/len/"
+            "coverage tuples, clipping, and callback ordering against pinned C "
+            "through Rust FFI, C ABI, and WASM ABI"
+        ),
     }
-    if row.case_id not in ftimage_rows_without_maintained_route:
+    reason = ftimage_rows_without_maintained_route.get(row.case_id)
+    if reason is None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Image glyph-format, outline-flag, pixel-mode, coordinate, and raster "
-        "callback success behavior requires a maintained image/raster route; "
-        "keeping it generic would be a green placeholder"
-    )
+    return reason
 
 
 def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:

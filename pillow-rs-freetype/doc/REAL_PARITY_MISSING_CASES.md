@@ -1877,6 +1877,40 @@ Required fix plan:
 5. Promote rows only after focused `ftimage` runtime proves exact C oracle,
    Rust FFI, C ABI, and WASM ABI output for the same input.
 
+Current exact image/raster pending split:
+
+- `FT_GLYPH_FORMAT_PLOTTER.source_emitter_inventory`: add a maintained glyph
+  format emitter inventory route, or pinned C evidence that the versioned build
+  cannot produce plotter glyphs through any shipped module. Scalar tag equality
+  is not runtime parity.
+- `FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled`: add an
+  SVG-enabled C-openable glyph fixture and pure-Rust SVG glyph-slot route that
+  compares load error, slot format, SVG document fields, and C/WASM ABI output.
+- `FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification`: compare the same
+  SVG glyph input across pinned C, Rust FFI, C ABI, and WASM ABI for the
+  build-feature-disabled case; do not treat arbitrary load errors as equal.
+- `FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior`: route the flag into the
+  mono rasterizer through `FT_Outline_Get_Bitmap` or glyph rendering and
+  compare exact bitmap bytes.
+- `FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior`: add a dropout fixture
+  with stubs and compare FreeType mono rasterizer bytes across all ABI lanes.
+- `FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior`: add a smart-dropout
+  mono fixture and exact bitmap comparison. Smooth-raster checks are not proof.
+- `FT_OUTLINE_OWNER.destruction_ownership_behavior`: prove owner-bit
+  allocation/free semantics and allocator ownership through a maintained
+  lifecycle route.
+- `FT_Raster.lifecycle_callback_contract`: add a custom renderer facade that
+  records raster allocation, reset, render, set-mode, and done callback order.
+- `FT_Raster_New_Func.renderer_lifecycle_calls_new`,
+  `FT_Raster_Reset_Func.renderer_lifecycle_calls_reset`,
+  `FT_Raster_Set_Mode_Func.set_mode_result_is_observable`, and
+  `FT_Raster_Done_Func.renderer_lifecycle_calls_done`: verify each callback's
+  arguments, ordering, return-code behavior, and side effects against pinned C.
+- `FT_Raster_Funcs.callback_slots_match_registered_renderers`: register
+  synthetic renderers and compare public callback-table identity/availability.
+- `FT_Raster_Span_Func.direct_render_emits_spans`: compare direct-render span
+  count, y/x/len/coverage tuples, clipping, and callback ordering.
+
 Verification for the classification batch:
 
 ```bash
