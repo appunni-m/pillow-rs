@@ -10651,6 +10651,20 @@ Descriptor lifecycle follow-up on 2026-07-20:
   total=6699`, with `pending=535`.  Current route audit:
   `real-parity=4495`, `pending-route=461`, `pending-core=0`.
 
+FTMM glyph-output route follow-up on 2026-07-20:
+
+- The Var Blend and Var Design glyph-output rows were not C-runnable as
+  authored: both used `glyph_index=36` with the maintained
+  `fonts/variable/gvar-hvar-wght.ttf` fixture, whose `maxp.numGlyphs` is 20.
+  Pinned FreeType 2.14.3 therefore returned `FT_Err_Invalid_Argument` (`6`)
+  before any glyph-output parity comparison.
+- Probing the same fixture with `glyph_index=10` returned `FT_Err_Ok` for both
+  `FT_Set_Var_Blend_Coordinates -> FT_Load_Glyph -> FT_Render_Glyph` and
+  `FT_Set_Var_Design_Coordinates -> FT_Load_Glyph -> FT_Render_Glyph`, with a
+  rendered normal grayscale bitmap.  The manifest inputs now use glyph 10 so
+  the rows validate actual same-input C oracle output instead of an
+  out-of-range placeholder.
+
 ### Issue Set Current: MVAR vertical-header SFNT table mutation
 
 Status: promoted to real parity after the MVAR vertical-header implementation.
