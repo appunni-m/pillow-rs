@@ -7,8 +7,9 @@ selector queries.
 This slice tracks implemented and planned C ABI replacement routes.  The
 current `fontdone` Rust facade exposes an Adobe Type 1 MM descriptor route and
 generated-fixture weight-vector plus design-coordinate state routes for the
-maintained generated fixture; broader Multiple Master multi-scenario
-coordinate mutation, glyph interpolation output, and `FT_MM_Var` allocation
+maintained generated fixture, including Type 1 MM design-coordinate partial,
+extra, and reset scenarios; broader OpenType variation coordinate mutation,
+glyph interpolation output, and `FT_MM_Var` allocation
 remain planned.  It also
 exposes `FT_Face_GetCharVariantIndex`,
 `FT_Face_GetCharVariantIsDefault`, `FT_Face_GetVariantSelectors`,
@@ -23,7 +24,7 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 | `FT_Get_Multi_Master` | `freetype/ftmm.h` | `FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master *amaster)` | Partially implemented for generated Type 1 MM descriptors: parses `BlendAxisTypes`, `BlendDesignPositions`, `BlendDesignMap`, and `WeightVector`; fills `FT_Multi_Master` counts and populated `FT_MM_Axis` slots through Rust FFI, C ABI, and WASM ABI. |
 | `FT_Get_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var **amaster)` | Planned; no Rust API, no `fvar` parser, and no ABI-owned `FT_MM_Var` allocation model yet. |
 | `FT_Done_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var *amaster)` | Planned for C ABI layer; depends on ABI-owned allocation from `FT_Get_MM_Var`. |
-| `FT_Set_MM_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long *coords)` | Partially implemented for generated Type 1 MM fixture state: design-map conversion, weight-vector recomputation, follow-up design/blend getter observation, and variation flag behavior are compared through Rust FFI, C ABI, and WASM ABI. Multi-scenario reset and glyph interpolation remain planned. |
+| `FT_Set_MM_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long *coords)` | Partially implemented for generated Type 1 MM fixture state: design-map conversion, weight-vector recomputation, partial-coordinate defaults, ignored extras, reset, follow-up design/blend getter observation, and variation flag behavior are compared through Rust FFI, C ABI, and WASM ABI. Glyph interpolation remains planned. |
 | `FT_Set_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state or glyph/metric delta application. |
 | `FT_Get_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state. |
 | `FT_Set_MM_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no normalized blend coordinate model. |
@@ -47,8 +48,8 @@ symbols in this slice as implemented.  The Type 1 MM descriptor route covers
 `FT_Multi_Master.populated_by_adobe_mm_service`; the generated Adobe MM
 weight-vector route covers the fixture-backed setter state rows and getter
 observation used by those rows.  The generated Adobe MM design-coordinate
-route covers the direct state row and named-instance reset-to-default state.
-Multiple Master multi-scenario reset rows, `FT_MM_Var` allocation, OpenType
+route covers the direct state row, partial/extra/reset scenario row, and
+named-instance reset-to-default state. `FT_MM_Var` allocation, OpenType
 variation state APIs, standalone legacy fixture weight-vector success, and
 glyph-output interpolation remain planned.
 
@@ -227,6 +228,6 @@ ownership, and oracle-backed dynamic tests exist would create false
 compatibility.  Descriptor, weight-vector, design-coordinate, and reset rows
 are real only where the same generated fixture passes through pinned C
 FreeType, Rust FFI, thin C ABI, and WASM ABI with exact output; remaining
-multi-scenario reset, `FT_MM_Var`, broader named-instance, and glyph-output
-rows must stay pending until they have the same proof.  Glyph-output rows
-additionally require real Type 1 MM interpolation.
+`FT_MM_Var`, broader named-instance, and glyph-output rows must stay pending
+until they have the same proof.  Glyph-output rows additionally require real
+Type 1 MM interpolation.

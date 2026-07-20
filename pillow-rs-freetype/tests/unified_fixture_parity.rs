@@ -10796,6 +10796,46 @@ fn ftmm_long_coords_from_params(params: &Value) -> Result<Vec<FT_Long>, String> 
     }
 }
 
+struct FtmmMmDesignScenario {
+    count: FT_UInt,
+    coords: Vec<FT_Long>,
+    pointer_null: bool,
+}
+
+fn ftmm_mm_design_scenarios(params: &Value) -> Result<Vec<FtmmMmDesignScenario>, String> {
+    array_param(params, "scenarios")?
+        .iter()
+        .map(|scenario| {
+            let count_value = u64_param(scenario, "num_coords")?;
+            let count = FT_UInt::try_from(count_value)
+                .map_err(|err| format!("scenario num_coords {count_value} invalid: {err}"))?;
+            Ok(FtmmMmDesignScenario {
+                count,
+                coords: ftmm_long_coords_from_params(scenario)?,
+                pointer_null: ftmm_coords_pointer_is_null(scenario),
+            })
+        })
+        .collect()
+}
+
+fn ftmm_mm_design_scenarios_arg(params: &Value) -> Result<String, String> {
+    Ok(ftmm_mm_design_scenarios(params)?
+        .into_iter()
+        .map(|scenario| {
+            format!(
+                "{}:{}",
+                scenario.count,
+                if scenario.pointer_null {
+                    "null".to_string()
+                } else {
+                    ftmm_coords_csv(&scenario.coords)
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
 struct FtmmBlendScenario {
     count: FT_UInt,
     coords: Vec<FT_Fixed>,
@@ -11028,6 +11068,29 @@ fn ftmm_set_var_design_output(
     } else {
         error(status)
     }
+}
+
+fn ftmm_mm_design_row(
+    set_return: FT_Error,
+    get_design_return: FT_Error,
+    get_blend_return: FT_Error,
+    design_coords: &[FT_Fixed],
+    blend_coords: &[FT_Fixed],
+    face_flags: FT_Long,
+) -> Value {
+    json!({
+        "set_return": set_return,
+        "get_design_return": get_design_return,
+        "get_blend_return": get_blend_return,
+        "design_coords": design_coords,
+        "blend_coords": blend_coords,
+        "face_flags": face_flags,
+        "variation_bit_set": (face_flags & FT_FACE_FLAG_VARIATION) != 0,
+    })
+}
+
+fn ftmm_mm_design_scenarios_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
 }
 
 fn ftmm_mm_blend_invalid_matrix_output(
@@ -11565,6 +11628,42 @@ fn rust_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
 fn rust_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let params = &case.inputs.params;
+    if params.get("scenarios").is_some() {
+        let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+        let mut rows = Vec::new();
+        for scenario in ftmm_mm_design_scenarios(params)? {
+            let set_return = FT_Set_MM_Design_Coordinates(
+                Some(&mut face),
+                scenario.count,
+                if scenario.pointer_null {
+                    None
+                } else {
+                    Some(&scenario.coords)
+                },
+            );
+            let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let get_design_return = if set_return == FT_Err_Ok {
+                FT_Get_Var_Design_Coordinates(Some(&face), output_count, Some(&mut design_coords))
+            } else {
+                FT_Err_Ok
+            };
+            let get_blend_return = if set_return == FT_Err_Ok && get_design_return == FT_Err_Ok {
+                FT_Get_Var_Blend_Coordinates(Some(&face), output_count, Some(&mut blend_coords))
+            } else {
+                FT_Err_Ok
+            };
+            rows.push(ftmm_mm_design_row(
+                set_return,
+                get_design_return,
+                get_blend_return,
+                &design_coords,
+                &blend_coords,
+                face.face_flags,
+            ));
+        }
+        return Ok(ftmm_mm_design_scenarios_output(rows));
+    }
     let set_coords = ftmm_long_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
     let mut status = FT_Set_MM_Design_Coordinates(
@@ -11629,6 +11728,47 @@ fn c_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, Stri
 fn c_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
     let params = &case.inputs.params;
+    if params.get("scenarios").is_some() {
+        let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+        let mut rows = Vec::new();
+        for scenario in ftmm_mm_design_scenarios(params)? {
+            let set_return = c_abi::FT_Set_MM_Design_Coordinates(
+                face,
+                scenario.count,
+                if scenario.pointer_null {
+                    std::ptr::null()
+                } else {
+                    scenario.coords.as_ptr()
+                },
+            );
+            let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let get_design_return = if set_return == FT_Err_Ok {
+                c_abi::FT_Get_Var_Design_Coordinates(face, output_count, design_coords.as_mut_ptr())
+            } else {
+                FT_Err_Ok
+            };
+            let get_blend_return = if set_return == FT_Err_Ok && get_design_return == FT_Err_Ok {
+                c_abi::FT_Get_Var_Blend_Coordinates(face, output_count, blend_coords.as_mut_ptr())
+            } else {
+                FT_Err_Ok
+            };
+            let face_flags = c_abi::abi_face_info(face)
+                .ok_or_else(|| "missing C ABI face info".to_string())?
+                .face_flags;
+            rows.push(ftmm_mm_design_row(
+                set_return,
+                get_design_return,
+                get_blend_return,
+                &design_coords,
+                &blend_coords,
+                face_flags,
+            ));
+        }
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(ftmm_mm_design_scenarios_output(rows));
+    }
     let set_coords = ftmm_long_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
     let coords_ptr = if ftmm_coords_pointer_is_null(params) {
@@ -11706,6 +11846,54 @@ fn wasm_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
 fn wasm_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_new_face_without_size(case)?;
     let params = &case.inputs.params;
+    if params.get("scenarios").is_some() {
+        let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+        let mut rows = Vec::new();
+        for scenario in ftmm_mm_design_scenarios(params)? {
+            let set_return = wasm_abi::fontdone_wasm_set_mm_design_coordinates(
+                handle,
+                scenario.count,
+                if scenario.pointer_null {
+                    std::ptr::null()
+                } else {
+                    scenario.coords.as_ptr()
+                },
+            );
+            let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
+            let get_design_return = if set_return == FT_Err_Ok {
+                wasm_abi::fontdone_wasm_get_var_design_coordinates(
+                    handle,
+                    output_count,
+                    design_coords.as_mut_ptr(),
+                )
+            } else {
+                FT_Err_Ok
+            };
+            let get_blend_return = if set_return == FT_Err_Ok && get_design_return == FT_Err_Ok {
+                wasm_abi::fontdone_wasm_get_var_blend_coordinates(
+                    handle,
+                    output_count,
+                    blend_coords.as_mut_ptr(),
+                )
+            } else {
+                FT_Err_Ok
+            };
+            let face_flags = wasm_abi::abi_face_info(handle)
+                .ok_or_else(|| "missing WASM face info".to_string())?
+                .face_flags;
+            rows.push(ftmm_mm_design_row(
+                set_return,
+                get_design_return,
+                get_blend_return,
+                &design_coords,
+                &blend_coords,
+                face_flags,
+            ));
+        }
+        wasm_done_face(handle);
+        return Ok(ftmm_mm_design_scenarios_output(rows));
+    }
     let set_coords = ftmm_long_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
     let coords_ptr = if ftmm_coords_pointer_is_null(params) {
@@ -18224,6 +18412,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftmm.set_mm_design_coordinates" => {
+            if params.get("scenarios").is_some() {
+                let output_count =
+                    ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+                let mut args = vec!["--ftmm-set-mm-design-scenarios".to_string()];
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                args.push(ftmm_mm_design_scenarios_arg(params)?);
+                args.push(output_count.to_string());
+                return Ok(args);
+            }
             let set_coords = ftmm_long_coords_from_params(params)?;
             let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
             let mut args = vec!["--ftmm-set-mm-design-coordinates".to_string()];
