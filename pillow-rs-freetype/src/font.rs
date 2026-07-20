@@ -50,6 +50,7 @@ pub struct Font {
     pub size_pt: f32,
     pub load_mode: LoadMode,
     face_kind: FaceKind,
+    type1_multi_master: Option<Arc<Type1MultiMaster>>,
     /// Face-level global hinting data: per-glyph script assignment,
     /// lazy-computed per-style metrics (Latin, Greek, etc.).
     /// Matches FreeType's AF_FaceGlobals.
@@ -123,6 +124,19 @@ struct Type1Metadata {
     underline_position: i16,
     underline_thickness: i16,
     bbox: BBox,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Type1MultiMaster {
+    pub axes: Vec<Type1MultiMasterAxis>,
+    pub num_designs: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Type1MultiMasterAxis {
+    pub name: String,
+    pub minimum: i32,
+    pub maximum: i32,
 }
 
 fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
@@ -570,6 +584,42 @@ fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
     })
 }
 
+fn parse_type1_multi_master(cleartext: &[u8]) -> Option<Type1MultiMaster> {
+    let text = std::str::from_utf8(cleartext).ok()?;
+    let axes = type1_name_array(text, "BlendAxisTypes")?;
+    if axes.is_empty() || axes.len() > 4 {
+        return None;
+    }
+    let design_positions = type1_nested_number_array(text, "BlendDesignPositions")?;
+    let design_maps = type1_nested_number_array(text, "BlendDesignMap")?;
+    let weight_vector = type1_number_array(text, "WeightVector")?;
+    let num_designs = 1usize.checked_shl(u32::try_from(axes.len()).ok()?)?;
+    if design_positions.len() != num_designs
+        || weight_vector.len() != num_designs
+        || design_maps.len() != axes.len()
+        || design_positions
+            .iter()
+            .any(|position| position.len() != axes.len())
+    {
+        return None;
+    }
+    let axes = axes
+        .into_iter()
+        .zip(design_maps)
+        .map(|(name, map)| {
+            if map.len() < 2 || map.len() % 2 != 0 {
+                return None;
+            }
+            Some(Type1MultiMasterAxis {
+                name,
+                minimum: i32_from_f64(map[0])?,
+                maximum: i32_from_f64(map[map.len() - 2])?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(Type1MultiMaster { axes, num_designs })
+}
+
 fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<FontData> {
     let mac_style = u16::from(metadata.italic_angle != 0) << 1
         | if matches!(metadata.style_name.as_str(), "Bold" | "Black") {
@@ -672,6 +722,81 @@ fn type1_value_tail<'a>(text: &'a str, key: &str) -> Option<&'a str> {
     let marker = format!("/{key}");
     let start = text.find(&marker)? + marker.len();
     Some(text[start..].trim_start())
+}
+
+fn type1_bracket_value<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let tail = type1_value_tail(text, key)?;
+    let start = tail.find('[')?;
+    let mut depth = 0usize;
+    for (index, ch) in tail[start..].char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(&tail[start..start + index + 1]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn type1_name_array(text: &str, key: &str) -> Option<Vec<String>> {
+    let value = type1_bracket_value(text, key)?;
+    value
+        .trim_matches(['[', ']'])
+        .split_whitespace()
+        .map(|item| item.strip_prefix('/').map(str::to_owned))
+        .collect::<Option<Vec<_>>>()
+}
+
+fn type1_number_array(text: &str, key: &str) -> Option<Vec<f64>> {
+    let value = type1_bracket_value(text, key)?;
+    parse_type1_numbers(value)
+}
+
+fn type1_nested_number_array(text: &str, key: &str) -> Option<Vec<Vec<f64>>> {
+    let value = type1_bracket_value(text, key)?;
+    let inner = value.strip_prefix('[')?.strip_suffix(']')?;
+    let mut rows = Vec::new();
+    let mut depth = 0usize;
+    let mut row_start = None;
+    for (index, ch) in inner.char_indices() {
+        match ch {
+            '[' => {
+                if depth == 0 {
+                    row_start = Some(index);
+                }
+                depth += 1;
+            }
+            ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    let start = row_start.take()?;
+                    rows.push(parse_type1_numbers(&inner[start..=index])?);
+                }
+            }
+            _ => {}
+        }
+    }
+    (depth == 0 && !rows.is_empty()).then_some(rows)
+}
+
+fn parse_type1_numbers(value: &str) -> Option<Vec<f64>> {
+    let normalized = value.replace(['[', ']'], " ");
+    normalized
+        .split_whitespace()
+        .map(|item| item.parse::<f64>().ok())
+        .collect()
+}
+
+fn i32_from_f64(value: f64) -> Option<i32> {
+    if !value.is_finite() || value.fract() != 0.0 {
+        return None;
+    }
+    i32::try_from(value as i64).ok()
 }
 
 fn type1_name_token(text: &str, key: &str) -> Option<String> {
@@ -1035,6 +1160,7 @@ impl Font {
         let cleartext = type1_cleartext(data)
             .ok_or_else(|| FontError::InvalidFont("missing Type 1 clear-text dictionary".into()))?;
         let metadata = parse_type1_metadata(cleartext)?;
+        let type1_multi_master = parse_type1_multi_master(cleartext).map(Arc::new);
         let font_data = type1_font_data(data, size_pt, &metadata);
         let is_italic = metadata.italic_angle != 0;
         let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
@@ -1056,6 +1182,7 @@ impl Font {
             face_kind: FaceKind::Type1 {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
+            type1_multi_master,
             face_globals,
             is_italic,
             family_name,
@@ -1093,6 +1220,7 @@ impl Font {
             size_pt,
             load_mode: LoadMode::Default,
             face_kind: FaceKind::WinFnt { header },
+            type1_multi_master: None,
             face_globals,
             is_italic,
             family_name,
@@ -1350,6 +1478,7 @@ impl Font {
             size_pt,
             load_mode,
             face_kind: FaceKind::Sfnt,
+            type1_multi_master: None,
             face_globals,
             is_italic,
             family_name,
@@ -1440,6 +1569,10 @@ impl Font {
             .iter()
             .map(|coord| i32::from(*coord) << 2)
             .collect())
+    }
+
+    pub(crate) fn type1_multi_master(&self) -> Option<&Type1MultiMaster> {
+        self.type1_multi_master.as_deref()
     }
 
     /// Set normalized blend coordinates, equivalent to
@@ -1700,6 +1833,9 @@ impl Font {
                 | FT_FACE_FLAG_HORIZONTAL
                 | FT_FACE_FLAG_GLYPH_NAMES
                 | FT_FACE_FLAG_HINTER;
+            if self.type1_multi_master.is_some() {
+                flags |= FT_FACE_FLAG_MULTIPLE_MASTERS;
+            }
             if is_fixed_pitch {
                 flags |= FT_FACE_FLAG_FIXED_WIDTH;
             }

@@ -3035,6 +3035,16 @@ pub extern "C" fn fontdone_wasm_get_default_named_instance(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_multi_master(
+    handle: usize,
+    amaster: *mut rust_ffi::FT_Multi_Master,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the public descriptor or null.
+    let amaster = unsafe { amaster.as_mut() };
+    rust_ffi::FT_Get_Multi_Master(face_ref(handle).map(|face| &face.face), amaster)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_winfnt_header(
     handle: usize,
     header: *mut FontdoneWasmWinFNTHeader,

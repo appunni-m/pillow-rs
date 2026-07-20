@@ -51,6 +51,8 @@ pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
 pub type FT_Stroker = *mut c_void;
 pub type FT_String = c_char;
+pub type FT_MM_Axis = rust_ffi::FT_MM_Axis;
+pub type FT_Multi_Master = rust_ffi::FT_Multi_Master;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
@@ -3271,6 +3273,16 @@ pub extern "C" fn FT_Get_MM_Blend_Coordinates(
     coords: *mut FT_Fixed,
 ) -> FT_Error {
     FT_Get_Var_Blend_Coordinates(face, num_coords, coords)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Multi_Master(
+    face: FT_Face,
+    amaster: *mut FT_Multi_Master,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the public descriptor or null.
+    let amaster = unsafe { amaster.as_mut() };
+    rust_ffi::FT_Get_Multi_Master(face_state(face).map(|state| &state.inner), amaster)
 }
 
 #[unsafe(no_mangle)]

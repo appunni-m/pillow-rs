@@ -4,9 +4,11 @@ Scope: FreeType 2.14.3 public C API compatibility for `ftmm.h` Multiple
 Master/OpenType variation entry points and `freetype.h` Unicode variation
 selector queries.
 
-This is mostly a planning slice for the future C ABI replacement layer.  The
-current `fontdone` Rust facade does not expose Multiple Master or OpenType
-variation state APIs.  It does expose `FT_Face_GetCharVariantIndex`,
+This slice tracks implemented and planned C ABI replacement routes.  The
+current `fontdone` Rust facade exposes a descriptor-only Adobe Type 1 MM
+`FT_Get_Multi_Master` route for the maintained generated fixture; broader
+Multiple Master coordinate/weight-vector mutation and `FT_MM_Var` allocation
+remain planned.  It also exposes `FT_Face_GetCharVariantIndex`,
 `FT_Face_GetCharVariantIsDefault`, `FT_Face_GetVariantSelectors`,
 `FT_Face_GetVariantsOfChar`, and `FT_Face_GetCharsOfVariant` through a compact
 cmap format-14 parser/query path.  Servo `rust-freetype` is a binding
@@ -16,7 +18,7 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 
 | Symbol | Header | C signature | Current mapping |
 |---|---|---|---|
-| `FT_Get_Multi_Master` | `freetype/ftmm.h` | `FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master *amaster)` | Planned; no Rust API, no core Adobe MM parser. |
+| `FT_Get_Multi_Master` | `freetype/ftmm.h` | `FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master *amaster)` | Partially implemented for generated Type 1 MM descriptors: parses `BlendAxisTypes`, `BlendDesignPositions`, `BlendDesignMap`, and `WeightVector`; fills `FT_Multi_Master` counts and populated `FT_MM_Axis` slots through Rust FFI, C ABI, and WASM ABI. |
 | `FT_Get_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var **amaster)` | Planned; no Rust API, no `fvar`/Adobe MM descriptor parser. |
 | `FT_Done_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var *amaster)` | Planned for C ABI layer; depends on ABI-owned allocation from `FT_Get_MM_Var`. |
 | `FT_Set_MM_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long *coords)` | Planned; Adobe MM only. |
@@ -38,8 +40,11 @@ reference only; parity must be proven against the pinned C FreeType oracle.
 | `FT_Face_GetCharsOfVariant` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variantSelector)` | Implemented for face-owned zero-terminated default plus non-default character lists for one selector. |
 
 The audit inventory tracks all five cmap format-14 Unicode variation selector
-symbols in this slice as implemented.  Multiple Master and OpenType variation
-state APIs remain planned.
+symbols in this slice as implemented.  The Type 1 MM descriptor route covers
+`FT_MM_Axis.populated_by_get_multi_master` and
+`FT_Multi_Master.populated_by_adobe_mm_service` for the generated Adobe MM
+fixture.  Multiple Master coordinate/weight-vector state APIs and OpenType
+variation state APIs remain planned.
 
 ## ABI Records
 

@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
@@ -23,12 +23,12 @@ use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bool, FT_Byte, FT_Bytes, FT_Char, FT_CharMap,
     FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F26Dot6, FT_Fixed,
     FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int, FT_Int32, FT_LcdFilter,
-    FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Var, FT_Matrix,
-    FT_Memory, FT_MemoryRec, FT_Orientation, FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer,
-    FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_TrueTypeEngineType,
-    FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
-    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var,
+    FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation, FT_OutlineSnapshot,
+    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName,
+    FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Vector, FT_WinFNT_HeaderRec,
+    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1227,6 +1227,7 @@ pub struct FT_Face {
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
     postscript_name: Option<String>,
+    type1_mm_axis_names: Vec<CString>,
     sfnt_os2: Option<Box<TT_OS2>>,
     sfnt_head: Option<Box<TT_Header>>,
     sfnt_maxp: Option<Box<TT_MaxProfile>>,
@@ -3700,6 +3701,41 @@ pub fn FT_Get_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
     face.map(|face| face.inner.borrow().font().font_format())
 }
 
+pub fn FT_Get_Multi_Master(
+    face: Option<&FT_Face>,
+    amaster: Option<&mut FT_Multi_Master>,
+) -> FT_Error {
+    let Some(amaster) = amaster else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let Some(master) = inner.font().type1_multi_master() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if master.axes.len() > amaster.axis.len()
+        || master.axes.len() > face.type1_mm_axis_names.len()
+        || master.num_designs > 16
+    {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    // FreeType `src/type1/t1load.c:T1_Get_Multi_Master` writes the descriptor
+    // counts and populated axis slots only; unused caller slots retain their
+    // incoming sentinel values.
+    amaster.num_axis = FT_UInt::try_from(master.axes.len()).unwrap_or(0);
+    amaster.num_designs = FT_UInt::try_from(master.num_designs).unwrap_or(0);
+    for (index, axis) in master.axes.iter().enumerate() {
+        amaster.axis[index] = FT_MM_Axis {
+            name: face.type1_mm_axis_names[index].as_ptr().cast_mut(),
+            minimum: FT_Long::from(axis.minimum),
+            maximum: FT_Long::from(axis.maximum),
+        };
+    }
+    FT_Err_Ok
+}
+
 pub fn FT_Get_X11_Font_Format(face: Option<&FT_Face>) -> Option<&'static str> {
     FT_Get_Font_Format(face)
 }
@@ -4103,6 +4139,16 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
     let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
+    let type1_mm_axis_names = font
+        .type1_multi_master()
+        .map(|master| {
+            master
+                .axes
+                .iter()
+                .filter_map(|axis| CString::new(axis.name.as_str()).ok())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let size_state = inner.active_size_state();
     let size_metrics = inner.size_metrics().into();
     let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
@@ -4185,6 +4231,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sizes,
         probe_only,
         postscript_name,
+        type1_mm_axis_names,
         sfnt_os2,
         sfnt_head,
         sfnt_maxp,

@@ -9939,6 +9939,18 @@ fn c_nullable_c_string_json(name: *const std::ffi::c_char) -> Value {
     })
 }
 
+fn ffi_nullable_c_string_json(name: *const FT_String) -> Value {
+    if name.is_null() {
+        return nullable_c_string_json(None);
+    }
+    let bytes = c_abi::abi_c_string_bytes(name);
+    json!({
+        "null": false,
+        "bytes": hex_bytes(&bytes),
+        "length": bytes.len()
+    })
+}
+
 fn c_font_format_alias_json(face: c_abi::FT_Face) -> Value {
     let font_format = c_abi::FT_Get_Font_Format(face);
     let x11_font_format = c_abi::FT_Get_X11_Font_Format(face);
@@ -9973,6 +9985,157 @@ fn wasm_font_format_alias_json(handle: usize) -> Value {
             && font_format.string == x11_font_format.string
             && font_format.string_len == x11_font_format.string_len
     })
+}
+
+fn sentinel_multi_master() -> FT_Multi_Master {
+    FT_Multi_Master {
+        num_axis: 0xA5A5,
+        num_designs: 0x5A5A,
+        axis: [
+            FT_MM_Axis {
+                name: std::ptr::null_mut(),
+                minimum: -101,
+                maximum: 101,
+            },
+            FT_MM_Axis {
+                name: std::ptr::null_mut(),
+                minimum: -202,
+                maximum: 202,
+            },
+            FT_MM_Axis {
+                name: std::ptr::null_mut(),
+                minimum: -303,
+                maximum: 303,
+            },
+            FT_MM_Axis {
+                name: std::ptr::null_mut(),
+                minimum: -404,
+                maximum: 404,
+            },
+        ],
+    }
+}
+
+fn multi_master_descriptor_json(master: &FT_Multi_Master) -> Value {
+    let axis = master
+        .axis
+        .iter()
+        .map(|axis| {
+            json!({
+                "name": ffi_nullable_c_string_json(axis.name),
+                "minimum": axis.minimum,
+                "maximum": axis.maximum
+            })
+        })
+        .collect::<Vec<_>>();
+    let sentinel = sentinel_multi_master();
+    let populated = usize::try_from(master.num_axis)
+        .unwrap_or(usize::MAX)
+        .min(master.axis.len());
+    let unused_axis_sentinels = master
+        .axis
+        .iter()
+        .zip(sentinel.axis.iter())
+        .enumerate()
+        .skip(populated)
+        .all(|(_, (axis, expected))| {
+            axis.name.is_null()
+                && axis.minimum == expected.minimum
+                && axis.maximum == expected.maximum
+        });
+    json!({
+        "num_axis": master.num_axis,
+        "num_designs": master.num_designs,
+        "axis": axis,
+        "unused_axis_sentinels": unused_axis_sentinels
+    })
+}
+
+fn ftmm_get_multi_master_output(err: FT_Error, master: &FT_Multi_Master) -> RunOutput {
+    if err == FT_Err_Ok {
+        ok(json!({
+            "return": err,
+            "descriptor": multi_master_descriptor_json(master)
+        }))
+    } else {
+        error_with_output(
+            err,
+            json!({
+                "return": err,
+                "descriptor_after": multi_master_descriptor_json(master)
+            }),
+        )
+    }
+}
+
+fn rust_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    let mut master = sentinel_multi_master();
+    let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        FT_Get_Multi_Master(None, Some(&mut master))
+    } else if case
+        .inputs
+        .params
+        .get("amaster")
+        .is_some_and(Value::is_null)
+    {
+        let face = rust_new_face_without_size(case)?;
+        let err = FT_Get_Multi_Master(Some(&face), None);
+        return Ok(ftmm_get_multi_master_output(err, &master));
+    } else {
+        let face = rust_new_face_without_size(case)?;
+        let err = FT_Get_Multi_Master(Some(&face), Some(&mut master));
+        return Ok(ftmm_get_multi_master_output(err, &master));
+    };
+    Ok(ftmm_get_multi_master_output(err, &master))
+}
+
+fn c_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    let mut master = sentinel_multi_master();
+    let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        c_abi::FT_Get_Multi_Master(std::ptr::null_mut(), &mut master)
+    } else {
+        let (library, face) = c_new_face_without_size(case)?;
+        let master_ptr = if case
+            .inputs
+            .params
+            .get("amaster")
+            .is_some_and(Value::is_null)
+        {
+            std::ptr::null_mut()
+        } else {
+            &mut master
+        };
+        let err = c_abi::FT_Get_Multi_Master(face, master_ptr);
+        let output = ftmm_get_multi_master_output(err, &master);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    };
+    Ok(ftmm_get_multi_master_output(err, &master))
+}
+
+fn wasm_ftmm_get_multi_master(case: &InputCase) -> Result<RunOutput, String> {
+    let mut master = sentinel_multi_master();
+    let err = if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
+        wasm_abi::fontdone_wasm_get_multi_master(0, &mut master)
+    } else {
+        let handle = wasm_new_face_without_size(case)?;
+        let master_ptr = if case
+            .inputs
+            .params
+            .get("amaster")
+            .is_some_and(Value::is_null)
+        {
+            std::ptr::null_mut()
+        } else {
+            &mut master
+        };
+        let err = wasm_abi::fontdone_wasm_get_multi_master(handle, master_ptr);
+        let output = ftmm_get_multi_master_output(err, &master);
+        wasm_done_face(handle);
+        return Ok(output);
+    };
+    Ok(ftmm_get_multi_master_output(err, &master))
 }
 
 fn wasm_fontdone_string_json(
@@ -17545,6 +17708,27 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             done_mm_var_library_present(params).to_string(),
             done_mm_var_descriptor_present(params).to_string(),
         ]),
+        "ftmm.get_multi_master" => {
+            let mut args = vec!["--ftmm-get-multi-master".to_string()];
+            if lifecycle_handle_param(params, "face") == Some("null") {
+                args.push("null".to_string());
+                args.push("none".to_string());
+                args.push("0".to_string());
+            } else {
+                args.push("face".to_string());
+                push_font_source(case, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+            }
+            args.push(
+                if params.get("amaster").is_some_and(Value::is_null) {
+                    "null"
+                } else {
+                    "valid"
+                }
+                .to_string(),
+            );
+            Ok(args)
+        }
         "ftmm.get_var_design_coordinates" => {
             let mut args = vec!["--ftmm-get-var-design-coordinates".to_string()];
             push_font_source(case, &mut args)?;
@@ -18621,6 +18805,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => rust_get_module(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
+        "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
@@ -19404,6 +19589,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => c_get_module(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
+        "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
@@ -20112,6 +20298,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.get_module" => wasm_get_module(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
+        "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
         "ftmm.set_var_design_coordinates"
             if case.case_id
