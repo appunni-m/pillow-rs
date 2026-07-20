@@ -4152,6 +4152,13 @@ pub fn FT_Get_Default_Named_Instance(
     };
     let inner = face.inner.borrow();
     let font = inner.font();
+    if font.type1_multi_master().is_some() {
+        // FreeType `src/base/ftmm.c:694-716` treats a Multiple Master service
+        // without `get_default_named_instance` as success and leaves the
+        // caller's output value untouched.  The Type 1 MM service has that
+        // shape, unlike TrueType/OpenType `fvar` faces.
+        return FT_Err_Ok;
+    }
     let fvar = font
         .load_sfnt_table(u32::from_be_bytes(*b"fvar"), 0, None)
         .ok()
