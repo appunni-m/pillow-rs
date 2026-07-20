@@ -1704,7 +1704,6 @@ def callback_provider_subsystem_pending_reason(row: ConcreteInput) -> str | None
 def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
     """Residual public data, error, outline, and table rows without a route."""
     residual_rows_without_maintained_route = {
-        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature",
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
@@ -1719,6 +1718,18 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
         "Residual CID, error/status, OpenType validation, outline orientation, "
         "PFR metric, and TrueType table behavior requires maintained public "
         "surface routes; keeping it generic would be a green placeholder"
+    )
+
+
+def malformed_maxp_fixture_pending_reason(row: ConcreteInput) -> str | None:
+    """Rows whose declared malformed maxp assets are current placeholders."""
+    if row.case_id != "tttables.TT_MaxProfile.malformed_table_error_source":
+        return None
+    return (
+        "Declared malformed maxp assets resolve to placeholder DejaVuSans symlinks "
+        "instead of truncated/invalid maxp tables; a maintained malformed SFNT "
+        "fixture or generator is required before same-input C/Rust/C-ABI/WASM "
+        "parity can be claimed"
     )
 
 
@@ -4505,6 +4516,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     callback_provider_pending = callback_provider_subsystem_pending_reason(row)
     if callback_provider_pending:
         return ("pending-route", callback_provider_pending)
+    malformed_maxp_fixture_pending = malformed_maxp_fixture_pending_reason(row)
+    if malformed_maxp_fixture_pending:
+        return ("pending-route", malformed_maxp_fixture_pending)
     residual_public_pending = residual_public_surface_pending_reason(row)
     if residual_public_pending:
         return ("pending-route", residual_public_pending)

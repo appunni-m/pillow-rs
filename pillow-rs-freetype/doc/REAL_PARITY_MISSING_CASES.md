@@ -10340,6 +10340,50 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `TT_MaxProfile` malformed maxp fixture blocker
+
+Status: classified as explicit pending-route on 2026-07-20.
+
+Finding:
+
+- `tttables.TT_MaxProfile.malformed_table_error_source` is intended to compare
+  the pinned C face-load error or C-adjusted parsed `TT_MaxProfile` state for
+  malformed `maxp` tables.
+- The declared assets resolve, but they are not malformed maxp fixtures:
+  `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
+  `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf` are symlinks to
+  `../DejaVuSans.ttf`.
+- Treating that row as runtime parity would compare a normal DejaVuSans face
+  and would not prove the declared `ttload.c:785-835` malformed-table behavior.
+
+Classification change:
+
+- The row remains `pending-route`, but the route-audit reason now names the
+  exact fixture blocker instead of the generic residual public-surface bucket.
+- The stale residual mention of
+  `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature` was
+  removed from the residual list; current route audit already classifies that
+  row as a compile contract.
+
+Required fix plan:
+
+1. Add or generate real malformed SFNT fixtures for truncated and invalid
+   `maxp` tables under the maintained fixture workflow.
+2. Add a maintained `face.load_then_get_sfnt_table.maxp` route that opens each
+   malformed face through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+3. Compare exact face-load status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer
+   nullness, and any C-adjusted `TT_MaxProfile` fields when FreeType keeps the
+   face open.
+4. Promote the row only after the focused case is runnable and proves exact
+   same-input parity across all four lanes.
+
+Verification for this audit-only clarification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table_error_source
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: remove placeholder-style validation categories
 
 Status: de-placeholdered on 2026-07-20.
