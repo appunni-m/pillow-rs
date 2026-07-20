@@ -1364,7 +1364,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftmm_rows_without_maintained_route = {
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
-        "ftmm.FT_Get_MM_Blend_Coordinates.default_blend_coordinates",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
         "ftmm.FT_Get_MM_Blend_Coordinates.partial_or_excess_count",
         "ftmm.FT_Get_MM_Var.variable_font_descriptor_success",
@@ -2282,6 +2281,14 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         and ftmm_subsystem_pending_reason(row) is None
     ):
         return "FT multiple-master/variation success output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_blend_coordinates"
+        and row.case_id == "ftmm.FT_Get_MM_Blend_Coordinates.default_blend_coordinates"
+        and row.expectation_status == "ok"
+        and unresolved_asset_reason(row.assets.get("variable_font"), "variable_font") is None
+        and ftmm_subsystem_pending_reason(row) is None
+    ):
+        return "FT_Get_MM_Blend_Coordinates default variable-font blend output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation in FTDRIVER_SUCCESS_OPERATIONS
         and row.expectation_status in {"ok", "build_dependent"}

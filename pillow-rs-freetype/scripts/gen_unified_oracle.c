@@ -9982,6 +9982,42 @@ static int emit_ftmm_blend_coordinates(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ftmm_mm_blend_invalid_matrix(int argc, char** argv) {
+    (void)argc;
+    OracleFace variable_face;
+    int opened = open_oracle_face(argv[2], argv[3], 0, &variable_face);
+    if (opened != 0) {
+        return opened;
+    }
+    OracleFace static_face;
+    opened = open_oracle_face(argv[4], argv[5], 0, &static_face);
+    if (opened != 0) {
+        close_oracle_face(&variable_face);
+        return opened;
+    }
+
+    FT_UInt count = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_Fixed coords[8] = {0};
+    FT_Error err_variable_null_coords =
+        FT_Get_MM_Blend_Coordinates(variable_face.face, count, NULL);
+    FT_Error err_null_face =
+        FT_Get_MM_Blend_Coordinates(NULL, count, coords);
+    FT_Error err_static_face =
+        FT_Get_MM_Blend_Coordinates(static_face.face, count, coords);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"results\":[");
+    printf("{\"scenario\":\"variable_null_coords\",\"return\":%d},", err_variable_null_coords);
+    printf("{\"scenario\":\"null_face\",\"return\":%d},", err_null_face);
+    printf("{\"scenario\":\"non_variable_face\",\"return\":%d}", err_static_face);
+    printf("]}}\n");
+
+    close_oracle_face(&static_face);
+    close_oracle_face(&variable_face);
+    return 0;
+}
+
 static int emit_ftmm_get_var_design_coordinates(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -15689,6 +15725,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 13 && streq(argv[1], "--ftmm-blend-coordinates")) {
         return emit_ftmm_blend_coordinates(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--ftmm-mm-blend-invalid-matrix")) {
+        return emit_ftmm_mm_blend_invalid_matrix(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-named-instance-null-face")) {
         return emit_set_named_instance_null_face(argc, argv);
