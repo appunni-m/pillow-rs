@@ -1686,6 +1686,24 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
 
 def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for compressed and external stream behavior without a maintained route."""
+    bzip2_stream_rows_without_maintained_route = {
+        "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source",
+        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy",
+        "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream",
+        "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
+    }
+    if row.case_id in bzip2_stream_rows_without_maintained_route:
+        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        return (
+            "FT_Stream_OpenBzip2 success/lifecycle rows declare "
+            "streams/bzip2/valid-pcf-header.pcf.bz2 and, for read parity, "
+            "streams/bzip2/valid-pcf-header.raw, but those maintained "
+            "compressed/raw byte fixtures are absent; exact same-input "
+            "C/Rust/C-ABI/WASM parity also requires a pure-Rust bzip2 stream "
+            "route that matches open/read/seek-backwards/close ownership "
+            "behavior from freetype/src/bzip2/ftbzip2.c"
+        )
     if row.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
@@ -1698,10 +1716,6 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "gzip routing"
         )
     stream_rows_without_maintained_route = {
-        "ftbzip2.FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source",
-        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy",
-        "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream",
-        "ftbzip2.FT_Stream_OpenBzip2.success_read_decompressed_bytes",
         "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream",
         "ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream",
         "ftsystem.FT_Memory.custom_allocator_runtime_events",

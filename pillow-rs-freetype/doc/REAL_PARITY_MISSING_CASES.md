@@ -1453,6 +1453,15 @@ Finding:
   streams, observe decompressed bytes, validate close ownership, inspect public
   stream record fields, and compare custom allocator/callback events across all
   ABI lanes.
+- The BZIP2 success/lifecycle rows are blocked by concrete missing declared
+  byte fixtures as well as missing stream behavior.  The public input manifests
+  reference `streams/bzip2/valid-pcf-header.pcf.bz2` for open/read/close
+  lifecycle rows and `streams/bzip2/valid-pcf-header.raw` for decompressed byte
+  reads; neither fixture exists in the maintained fixture tree.  The future
+  route must compare pinned C `freetype/include/freetype/ftbzip2.h:63-91` and
+  `freetype/src/bzip2/ftbzip2.c:471-515` open behavior, plus
+  `freetype/src/bzip2/ftbzip2.c:371-466` read, seek-backwards reset, and close
+  ownership behavior, against Rust FFI, C ABI, and WASM for the same bytes.
 
 Classification change:
 
