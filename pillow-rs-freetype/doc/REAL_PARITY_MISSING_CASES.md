@@ -1255,6 +1255,46 @@ make -C pillow-rs-freetype route-audit
 make -C pillow-rs-freetype test-case CASE=ftbitmap.FT_GlyphSlot_Own_Bitmap
 ```
 
+### Issue Set Current: `FT_Glyph_Copy` copy-hook failure cleanup route
+
+Status: still pending. The current maintained `FT_Glyph_Copy` route covers
+null source, null target, and null class error rows only.
+
+Finding:
+
+- `ftglyph.FT_Glyph_Copy.error_copy_hook_failure_cleans_target` declares two
+  future facades: `facades/memory/allocation-failure.json` and
+  `facades/glyph/malformed-slot-and-class-cases.json`.
+- The row is not an asset-only problem. It needs a maintained glyph-copy
+  failure route that forces allocator or class copy-hook failure after partial
+  target allocation, then observes whether FreeType destroys the partial target
+  and leaves the caller-visible target pointer/class state exactly as pinned C
+  does.
+- The existing null-input route proves only early argument validation for
+  `FT_Glyph_Copy`; it does not exercise `src/base/ftglyph.c` cleanup after a
+  copy hook returns an error.
+
+Required fix plan:
+
+1. Add a reproducible allocation-failure facade and malformed glyph-class
+   facade under the maintained fixture workflow.
+2. Add a same-input `ftglyph.glyph_copy` route that drives the three declared
+   failure modes: allocator failure, bitmap copy failure, and SVG zero-length
+   source behavior.
+3. Compare exact `FT_Error`, target pointer class/nullness, partial-copy
+   destruction, and cleanup-event order through pinned C, Rust FFI, thin C ABI,
+   and WASM ABI.
+4. Promote only after the focused case is runnable and proves those exact
+   cleanup semantics; do not fold it into the existing null source/target/class
+   real-parity route.
+
+Verification while pending:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_Copy.error_copy_hook_failure_cleans_target
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_Render_Glyph` unloaded and unsupported slot-state route
 
 Status: implemented as real parity on 2026-07-20.
