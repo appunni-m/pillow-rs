@@ -1226,10 +1226,143 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "FT_Stroker object/path success and lifecycle behavior requires a "
-        "maintained stroker route; keeping it generic would be a green placeholder"
-    )
+    pending_case_groups = {
+        (
+            "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
+            "ftstroke.FT_Stroker.lifecycle_contract",
+        ): (
+            "FT_Stroker allocation/lifecycle parity needs a maintained "
+            "non-null stroker object route proving library allocation, "
+            "attribute storage, owned border buffers, and final cleanup across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        (
+            "ftstroke.FT_Stroker_Set.attributes_affect_geometry",
+            "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one",
+            "ftstroke.FT_Stroker_Set.clears_existing_path",
+            "ftstroke.FT_Stroker_Rewind.clears_previous_path",
+            "ftstroke.FT_Stroker_Rewind.attributes_preserved",
+            "ftstroke.FT_Stroker_Rewind.set_calls_rewind",
+        ): (
+            "FT_Stroker_Set/Rewind parity needs a maintained non-null stroker "
+            "state route proving radius, cap, join, miter-limit clamp, path "
+            "clearing, and attribute preservation semantics against pinned C"
+        ),
+        (
+            "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state",
+            "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state",
+            "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join",
+            "ftstroke.FT_Stroker_LineTo.line_segment_success",
+            "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath",
+            "ftstroke.FT_Stroker_LineTo.zero_length_line_noop",
+        ): (
+            "FT_Stroker_BeginSubPath/LineTo parity needs a maintained path "
+            "construction route proving open/closed initial state, first-segment "
+            "behavior, zero-length handling, and resulting border geometry "
+            "against pinned C"
+        ),
+        (
+            "ftstroke.FT_Stroker_ConicTo.conic_curve_success",
+            "ftstroke.FT_Stroker_ConicTo.first_segment_starts_subpath",
+            "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop",
+            "ftstroke.FT_Stroker_CubicTo.cubic_curve_success",
+            "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath",
+            "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop",
+            "ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration",
+        ): (
+            "FT_Stroker curve parity needs a maintained conic/cubic path route "
+            "proving curve subdivision, first-segment setup, coincident-control "
+            "no-op behavior, and wide-curve join restoration against pinned C"
+        ),
+        (
+            "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry",
+            "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry",
+            "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry",
+            "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry",
+        ): (
+            "FT_Stroker line-cap parity needs a maintained open-path route "
+            "comparing butt, round, and square cap geometry exactly across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        (
+            "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry",
+            "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry",
+            "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry",
+            "ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry",
+            "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry",
+            "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit",
+        ): (
+            "FT_Stroker line-join parity needs a maintained join-geometry route "
+            "comparing bevel, round, fixed miter, variable miter, alias behavior, "
+            "and miter-limit output against pinned C"
+        ),
+        (
+            "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders",
+            "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border",
+            "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin",
+            "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success",
+            "ftstroke.FT_Stroker_ParseOutline.opened_outline_success",
+            "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped",
+        ): (
+            "FT_Stroker EndSubPath/ParseOutline parity needs a maintained "
+            "outline-to-stroker route proving contour opening, close/cap "
+            "emission, no-segment handling, and degenerate-contour skipping "
+            "against pinned C"
+        ),
+        (
+            "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts",
+            "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts",
+            "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers",
+            "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts",
+            "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts",
+            "ftstroke.FT_Stroker_GetCounts.optional_output_pointers",
+        ): (
+            "FT_Stroker count parity needs a maintained non-null stroker route "
+            "that compares closed/open border counts, combined counts, and "
+            "optional output-pointer preservation exactly against pinned C"
+        ),
+        (
+            "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry",
+            "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry",
+            "ftstroke.FT_StrokerBorder.border_selection_runtime_shape",
+            "ftstroke.FT_Stroker_Export.exports_left_then_right",
+            "ftstroke.FT_Stroker_Export.append_to_existing_outline",
+            "ftstroke.FT_Stroker_Export.invalid_inputs_noop",
+            "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
+            "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
+            "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop",
+            "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline",
+        ): (
+            "FT_Stroker export parity needs a maintained border/export route "
+            "proving left/right selection, open-path empty-border behavior, "
+            "append semantics, invalid-input no-op preservation, and exact "
+            "outline point/tag/contour output against pinned C"
+        ),
+        (
+            "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",
+            "ftstroke.FT_Glyph_Stroke.destroy_original_option",
+            "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
+            "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
+            "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
+        ): (
+            "FT_Glyph_Stroke/StrokeBorder parity needs a maintained glyph-object "
+            "route that creates a real outline glyph, applies stroker geometry, "
+            "preserves or destroys the original per flag, and compares output "
+            "glyph ownership and outline geometry across all ABI lanes"
+        ),
+        (
+            "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",
+            "ftstroke.FT_Stroker_Done.after_export_cleanup",
+        ): (
+            "FT_Stroker_Done parity needs a maintained non-null stroker route "
+            "proving owned buffers are released after normal use and after "
+            "export without double-free or leaked observable state"
+        ),
+    }
+    for case_ids, reason in pending_case_groups.items():
+        if row.case_id in case_ids:
+            return reason
+    return None
 
 
 def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
