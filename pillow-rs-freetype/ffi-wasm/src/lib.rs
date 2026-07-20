@@ -3934,6 +3934,9 @@ pub extern "C" fn fontdone_wasm_glyphslot_adjust_weight(
     xdelta: FT_Fixed,
     ydelta: FT_Fixed,
 ) -> FT_Error {
+    if handle == 0 {
+        return rust_ffi::FT_Err_Ok;
+    }
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
@@ -3950,6 +3953,9 @@ pub extern "C" fn fontdone_wasm_glyphslot_slant(
     xslant: FT_Fixed,
     yslant: FT_Fixed,
 ) -> FT_Error {
+    if handle == 0 {
+        return rust_ffi::FT_Err_Ok;
+    }
     let Some(face) = face_mut(handle) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
