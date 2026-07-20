@@ -127,6 +127,22 @@ def write_three_axis_opsz_font() -> None:
     save_font(OUT_DIR / "wght-wdth-opsz.ttf", font)
 
 
+def write_multi_axis_visible_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    save_font(OUT_DIR / "multi-axis-visible.ttf", font)
+
+
+def write_hidden_axis_fonts() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    # FreeType stores OpenType fvar axis flags in the FT_MM_Var-adjacent
+    # FT_UShort array and exposes them through FT_Get_Var_Axis_Flags
+    # (src/base/ftmm.c:604-613).  Keep one visible axis and mark one axis
+    # hidden so public rows can compare both classes against the C oracle.
+    font["fvar"].axes[1].flags = 1
+    save_font(OUT_DIR / "hidden-axis.ttf", font)
+    save_font(OUT_DIR / "named-instances-hidden-axis.ttf", font)
+
+
 def write_zero_axis() -> None:
     payload = bytearray(base_fvar_payload()[:20])
     payload[8:10] = (0).to_bytes(2, "big")
@@ -264,6 +280,8 @@ def main() -> None:
     write_instance_count_limit()
     write_instance_postscript_name()
     write_three_axis_opsz_font()
+    write_multi_axis_visible_font()
+    write_hidden_axis_fonts()
     write_zero_axis()
 
 

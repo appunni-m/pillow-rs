@@ -1371,7 +1371,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Done_MM_Var.frees_descriptor_success",
         "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates",
-        "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag",
         "ftmm.FT_Get_Var_Blend_Coordinates.success_after_set_var_blend_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.success_after_set_var_design_coordinates",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
@@ -1386,8 +1385,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmm.FT_Set_Var_Design_Coordinates.success_partial_extra_and_reset",
         "ftmm.FT_Set_Var_Design_Coordinates.success_updates_metrics_variations",
         "ftmm.FT_Set_Var_Design_Coordinates.output_changes_for_design_coordinates",
-        "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags",
-        "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
     }
@@ -3798,6 +3795,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmm.FT_Get_Var_Axis_Flags.valid_axis_flags"
     ):
         return "FT_Get_Var_Axis_Flags Adobe MM zero axis flags validate through FT_Get_MM_Var on the generated Type 1 MM fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var_then_axis_flags"
+        and row.case_id == "ftmm.FT_Get_Var_Axis_Flags.hidden_axis_flag"
+    ):
+        return "FT_Get_Var_Axis_Flags hidden OpenType fvar axis flags validate through the generated hidden-axis fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_mm_var_then_axis_flags"
+        and row.case_id == "ftmm.FT_VAR_AXIS_FLAG_HIDDEN.returned_by_axis_flags"
+    ):
+        return "FT_VAR_AXIS_FLAG_HIDDEN visible/hidden flag rows validate through generated OpenType fvar fixtures across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.get_var_axis_flags"
+        and row.case_id == "ftmm.FT_Var_Axis.hidden_axis_flag_adjacent_storage"
+    ):
+        return "FT_Var_Axis adjacent hidden-axis flag storage validates through FT_Get_Var_Axis_Flags on the generated named-instance hidden-axis fixture across pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.get_mm_weightvector"
         and row.case_id == "ftmm.FT_Get_MM_WeightVector.len_without_buffer_error"

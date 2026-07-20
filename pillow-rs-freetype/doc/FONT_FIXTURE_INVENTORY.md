@@ -89,6 +89,8 @@ Unicode cmap reachability, not proof of distinct script geometry.
 | `7d4ee1626b98` | 743.4 | 52 | `input/fonts/generated/os2-unicode-ranges.ttf` | broad multiscript cmap and OS/2 Unicode/codepage range source |
 | `b85c38ecea8a` | 555.9 | 1 | `input/fonts/generated/variable/ubuntu-sans-variable.ttf` | glyf font with STAT but no fvar/avar/gvar; retained non-variable control despite filename |
 | `c7ed80798946` | 8.9 | 3 | `fonts/variable/compact-variable.ttf` | 20-glyph variable glyf; fvar/avar/gvar/HVAR/STAT, 2 axes, 12 named instances |
+| `c7ed80798946` | 8.9 | 1 | `fonts/variable/multi-axis-visible.ttf` | compact generated variable control with visible wght/wdth fvar axes for `FT_Get_Var_Axis_Flags` visible-axis rows |
+| `a9c3f033abdb` | 8.9 | 2 | `fonts/variable/hidden-axis.ttf`, `fonts/variable/named-instances-hidden-axis.ttf` | compact generated variable controls with visible wdth and hidden wght fvar axes for adjacent hidden-axis flag parity |
 | `ee5d36b309ac` | 9.0 | 3 | `fonts/variable/wght-wdth-opsz.ttf` | compact generated variable control with wght, wdth, and opsz fvar axes for OpenType `FT_Var_Axis` descriptor parity |
 | `7594a1df018a` | 8.7 | 1 | `fonts/variable/fvar-short.ttf` | compact generated malformed control with an 8-byte truncated fvar header |
 | `9aa6f372453b` | 8.7 | 1 | `fonts/variable/fvar-version-2.ttf` | compact generated malformed control with unsupported fvar major version 2 |
