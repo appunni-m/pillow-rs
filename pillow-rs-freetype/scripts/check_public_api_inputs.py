@@ -1393,7 +1393,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for module/library lifecycle data that do not have a maintained route."""
     ftmodapi_rows_without_maintained_route = {
         "ftmodapi.FT_Add_Module.add_minimal_module_success",
-        "ftmodapi.FT_Done_Library.decrements_reference_without_destroying",
         "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
         "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name",
         "ftmodapi.FT_FACE_DRIVER_NAME.driver_name_not_font_format",
@@ -1404,8 +1403,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         "ftmodapi.FT_MODULE_STYLER.styler_module_registration",
         "ftmodapi.FT_Module_Class.fields_drive_module_lifecycle",
         "ftmodapi.FT_Module_Interface.requester_return_type",
-        "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount",
-        "ftmodapi.FT_Reference_Library.increments_refcount",
         "ftmodapi.FT_Remove_Module.removes_installed_module",
     }
     if row.case_id not in ftmodapi_rows_without_maintained_route:
@@ -3641,9 +3638,24 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_New_Library null-input error/output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.new_library"
+        and row.case_id == "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount"
+    ):
+        return "FT_New_Library allocator-backed success, version, memory identity, refcount, and default-module absence validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.new_library"
         and row.case_id == "ftmodapi.FT_New_Library.allocation_failure_preserves_output"
     ):
         return "FT_New_Library allocator-failure output preservation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.reference_library"
+        and row.case_id == "ftmodapi.FT_Reference_Library.increments_refcount"
+    ):
+        return "FT_Reference_Library refcount increment and first-done usability validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.reference_then_done_library"
+        and row.case_id == "ftmodapi.FT_Done_Library.decrements_reference_without_destroying"
+    ):
+        return "FT_Done_Library refcount decrement without destruction validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.property_get"
         and row.case_id == "ftmodapi.FT_Property_Get.rejects_null_arguments"

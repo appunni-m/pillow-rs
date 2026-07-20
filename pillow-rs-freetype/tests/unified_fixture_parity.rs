@@ -28,6 +28,7 @@ use std::ffi::{CString, c_void};
 use std::fs;
 use std::io::BufRead;
 use std::mem::{align_of, offset_of, size_of};
+use std::os::raw::c_long;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::ptr;
@@ -16910,6 +16911,235 @@ fn wasm_get_module(case: &InputCase) -> Result<RunOutput, String> {
     })?))
 }
 
+fn library_lifecycle_action(case: &InputCase) -> Result<i32, String> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount" => Ok(1),
+        "ftmodapi.FT_Reference_Library.increments_refcount" => Ok(2),
+        "ftmodapi.FT_Done_Library.decrements_reference_without_destroying" => Ok(3),
+        other => Err(format!("unsupported library lifecycle case {other}")),
+    }
+}
+
+fn new_library_output(
+    major: FT_Int,
+    minor: FT_Int,
+    patch: FT_Int,
+    refcount_initial: usize,
+    memory_pointer_identity: bool,
+    default_modules_installed: bool,
+) -> Value {
+    json!({
+        "status": FT_Err_Ok,
+        "library_handle": {"nullness": false},
+        "version_fields": {"major": major, "minor": minor, "patch": patch},
+        "refcount_initial": refcount_initial,
+        "memory_pointer_identity": memory_pointer_identity,
+        "default_modules_installed": default_modules_installed,
+    })
+}
+
+fn reference_library_output(
+    reference_status: FT_Error,
+    first_done_status: FT_Error,
+    library_still_usable_after_first_done: bool,
+    final_done_status: FT_Error,
+) -> Value {
+    json!({
+        "reference_status": reference_status,
+        "first_done_status": first_done_status,
+        "library_still_usable_after_first_done": library_still_usable_after_first_done,
+        "final_done_status": final_done_status,
+    })
+}
+
+fn reference_then_done_library_output(
+    reference_status: FT_Error,
+    done_status: FT_Error,
+    library_still_usable: bool,
+    module_nullness: bool,
+) -> Value {
+    json!({
+        "status_sequence": [reference_status, done_status],
+        "library_still_usable": library_still_usable,
+        "module_lookup_after_done": {"nullness": module_nullness},
+    })
+}
+
+fn rust_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    match library_lifecycle_action(case)? {
+        1 => {
+            let mut memory = FT_MemoryRec::default();
+            let mut library = FT_New_Library(Some(&mut memory))
+                .map_err(|err| format!("FT_New_Library failed with {err}"))?;
+            let mut major = -1;
+            let mut minor = -1;
+            let mut patch = -1;
+            FT_Library_Version(
+                Some(&library),
+                Some(&mut major),
+                Some(&mut minor),
+                Some(&mut patch),
+            );
+            let refcount_initial = FT_Library_Refcount(Some(&library));
+            let memory_pointer_identity = FT_Library_Memory(Some(&library)) == &mut memory;
+            let default_modules_installed = FT_Library_Has_Module(Some(&library), "truetype");
+            FT_Reference_Library(Some(&mut library));
+            FT_Done_Library(Some(&mut library));
+            FT_Done_Library(Some(&mut library));
+            Ok(ok(new_library_output(
+                major,
+                minor,
+                patch,
+                refcount_initial,
+                memory_pointer_identity,
+                default_modules_installed,
+            )))
+        }
+        2 => {
+            let mut library = FT_New_Library_Without_Default_Modules();
+            FT_Add_Default_Modules(Some(&mut library));
+            let reference_status = FT_Reference_Library(Some(&mut library));
+            let first_done_status = FT_Done_Library(Some(&mut library));
+            let usable = FT_Library_Has_Module(Some(&library), "truetype");
+            let final_done_status = FT_Done_Library(Some(&mut library));
+            Ok(ok(reference_library_output(
+                reference_status,
+                first_done_status,
+                usable,
+                final_done_status,
+            )))
+        }
+        3 => {
+            let mut library = FT_New_Library_Without_Default_Modules();
+            FT_Add_Default_Modules(Some(&mut library));
+            let reference_status = FT_Reference_Library(Some(&mut library));
+            let done_status = FT_Done_Library(Some(&mut library));
+            let usable = FT_Library_Has_Module(Some(&library), "truetype");
+            FT_Done_Library(Some(&mut library));
+            Ok(ok(reference_then_done_library_output(
+                reference_status,
+                done_status,
+                usable,
+                !usable,
+            )))
+        }
+        action => Err(format!("unsupported library lifecycle action {action}")),
+    }
+}
+
+extern "C" fn c_library_alloc(_memory: c_abi::FT_Memory, size: c_long) -> FT_Pointer {
+    let size = usize::try_from(size).unwrap_or(0);
+    Box::into_raw(Box::new(vec![0_u8; size])).cast()
+}
+
+extern "C" fn c_library_free(_memory: c_abi::FT_Memory, block: FT_Pointer) {
+    let _ = block;
+}
+
+fn c_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let action = library_lifecycle_action(case)?;
+    let mut memory = c_abi::FT_MemoryRec {
+        user: ptr::null_mut(),
+        alloc: Some(c_library_alloc),
+        free: Some(c_library_free),
+        realloc: None,
+    };
+    let mut library = ptr::null_mut();
+    let err = c_abi::FT_New_Library(&mut memory, &mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    match action {
+        1 => {
+            let mut major = -1;
+            let mut minor = -1;
+            let mut patch = -1;
+            c_abi::FT_Library_Version(library, &mut major, &mut minor, &mut patch);
+            let refcount_initial = c_abi::abi_support_library_refcount(library);
+            let memory_pointer_identity =
+                c_abi::abi_support_library_memory_is(library, &mut memory);
+            let default_modules_installed =
+                c_abi::abi_support_library_has_module(library, "truetype");
+            c_abi::FT_Reference_Library(library);
+            c_abi::FT_Done_Library(library);
+            let output = new_library_output(
+                major,
+                minor,
+                patch,
+                refcount_initial,
+                memory_pointer_identity,
+                default_modules_installed,
+            );
+            c_abi::FT_Done_Library(library);
+            Ok(ok(output))
+        }
+        2 => {
+            c_abi::FT_Add_Default_Modules(library);
+            let reference_status = c_abi::FT_Reference_Library(library);
+            let first_done_status = c_abi::FT_Done_Library(library);
+            let usable = c_abi::abi_support_library_has_module(library, "truetype");
+            let final_done_status = c_abi::FT_Done_Library(library);
+            Ok(ok(reference_library_output(
+                reference_status,
+                first_done_status,
+                usable,
+                final_done_status,
+            )))
+        }
+        3 => {
+            c_abi::FT_Add_Default_Modules(library);
+            let reference_status = c_abi::FT_Reference_Library(library);
+            let done_status = c_abi::FT_Done_Library(library);
+            let usable = c_abi::abi_support_library_has_module(library, "truetype");
+            let output =
+                reference_then_done_library_output(reference_status, done_status, usable, !usable);
+            c_abi::FT_Done_Library(library);
+            Ok(ok(output))
+        }
+        other => Err(format!("unsupported C library lifecycle action {other}")),
+    }
+}
+
+fn wasm_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    match library_lifecycle_action(case)? {
+        1 => {
+            let (major, minor, patch, refcount, memory_identity, default_modules) =
+                wasm_abi::abi_support_new_library_observation();
+            Ok(ok(new_library_output(
+                major,
+                minor,
+                patch,
+                refcount,
+                memory_identity,
+                default_modules,
+            )))
+        }
+        2 => {
+            let (reference_status, first_done_status, usable, final_done_status) =
+                wasm_abi::abi_support_reference_library_observation();
+            Ok(ok(reference_library_output(
+                reference_status,
+                first_done_status,
+                usable,
+                final_done_status,
+            )))
+        }
+        3 => {
+            let (reference_status, done_status, usable, module_nullness) =
+                wasm_abi::abi_support_reference_then_done_library_observation();
+            Ok(ok(reference_then_done_library_output(
+                reference_status,
+                done_status,
+                usable,
+                module_nullness,
+            )))
+        }
+        action => Err(format!(
+            "unsupported WASM library lifecycle action {action}"
+        )),
+    }
+}
+
 fn rust_inspect_module_flags(case: &InputCase) -> Result<RunOutput, String> {
     let library = FT_Init_FreeType();
     Ok(ok(module_flag_output(&case.inputs.params, |name| {
@@ -20644,6 +20874,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             module_lookup_library_present(params).to_string(),
             module_lookup_names_arg(params)?,
         ]),
+        "ftmodapi.new_library"
+        | "ftmodapi.reference_library"
+        | "ftmodapi.reference_then_done_library" => {
+            let Ok(action) = library_lifecycle_action(case) else {
+                return oracle_fallback_args(case);
+            };
+            Ok(vec!["--library-lifecycle".to_string(), action.to_string()])
+        }
         "ftrender.get_renderer" => Ok(vec![
             "--get-renderer".to_string(),
             if lifecycle_handle_param_is_null(params, "library") {
@@ -21923,6 +22161,13 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
         "ftmodapi.get_module" => rust_get_module(case),
+        "ftmodapi.new_library"
+        | "ftmodapi.reference_library"
+        | "ftmodapi.reference_then_done_library"
+            if library_lifecycle_action(case).is_ok() =>
+        {
+            rust_library_lifecycle(case)
+        }
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -22798,6 +23043,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
         "ftmodapi.get_module" => c_get_module(case),
+        "ftmodapi.new_library"
+        | "ftmodapi.reference_library"
+        | "ftmodapi.reference_then_done_library"
+            if library_lifecycle_action(case).is_ok() =>
+        {
+            c_library_lifecycle(case)
+        }
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -23602,6 +23854,13 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
         "ftmodapi.get_module" => wasm_get_module(case),
+        "ftmodapi.new_library"
+        | "ftmodapi.reference_library"
+        | "ftmodapi.reference_then_done_library"
+            if library_lifecycle_action(case).is_ok() =>
+        {
+            wasm_library_lifecycle(case)
+        }
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -40339,7 +40598,10 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftglyph.done_glyph"
             | "ftmm.done_mm_var"
             | "ftmm.get_default_named_instance"
-            | "ftmm.set_named_instance" => "api_object",
+            | "ftmm.set_named_instance"
+            | "ftmodapi.new_library"
+            | "ftmodapi.reference_library"
+            | "ftmodapi.reference_then_done_library" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
             "load_char" | "load_glyph" | "render_glyph" => "glyph_slot",
             "freetype.inspect_glyph_metrics" => "glyph_metrics",

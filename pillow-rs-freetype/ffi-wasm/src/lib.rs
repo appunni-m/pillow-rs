@@ -2134,6 +2134,63 @@ pub fn abi_support_add_default_modules_observation(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_new_library_observation() -> (i32, i32, i32, usize, bool, bool) {
+    let mut memory = rust_ffi::FT_MemoryRec::default();
+    let mut library = rust_ffi::FT_New_Library(Some(&mut memory))
+        .unwrap_or_else(|_| rust_ffi::FT_New_Library_Without_Default_Modules());
+    let mut major = -1;
+    let mut minor = -1;
+    let mut patch = -1;
+    rust_ffi::FT_Library_Version(
+        Some(&library),
+        Some(&mut major),
+        Some(&mut minor),
+        Some(&mut patch),
+    );
+    let refcount_initial = rust_ffi::FT_Library_Refcount(Some(&library));
+    let memory_pointer_identity = rust_ffi::FT_Library_Memory(Some(&library)) == &mut memory;
+    let default_modules_installed = rust_ffi::FT_Library_Has_Module(Some(&library), "truetype");
+    let _ = rust_ffi::FT_Reference_Library(Some(&mut library));
+    let _ = rust_ffi::FT_Done_Library(Some(&mut library));
+    let _ = rust_ffi::FT_Done_Library(Some(&mut library));
+    (
+        major,
+        minor,
+        patch,
+        refcount_initial,
+        memory_pointer_identity,
+        default_modules_installed,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_reference_library_observation() -> (i32, i32, bool, i32) {
+    let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    rust_ffi::FT_Add_Default_Modules(Some(&mut library));
+    let reference_status = rust_ffi::FT_Reference_Library(Some(&mut library));
+    let first_done_status = rust_ffi::FT_Done_Library(Some(&mut library));
+    let usable = rust_ffi::FT_Library_Has_Module(Some(&library), "truetype");
+    let final_done_status = rust_ffi::FT_Done_Library(Some(&mut library));
+    (
+        reference_status,
+        first_done_status,
+        usable,
+        final_done_status,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_reference_then_done_library_observation() -> (i32, i32, bool, bool) {
+    let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    rust_ffi::FT_Add_Default_Modules(Some(&mut library));
+    let reference_status = rust_ffi::FT_Reference_Library(Some(&mut library));
+    let done_status = rust_ffi::FT_Done_Library(Some(&mut library));
+    let usable = rust_ffi::FT_Library_Has_Module(Some(&library), "truetype");
+    let _ = rust_ffi::FT_Done_Library(Some(&mut library));
+    (reference_status, done_status, usable, !usable)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_default_module_flags(name: &str) -> Option<rust_ffi::FT_ULong> {
     let library = rust_ffi::FT_Init_FreeType();
     rust_ffi::FT_Library_Module_Flags(Some(&library), name)

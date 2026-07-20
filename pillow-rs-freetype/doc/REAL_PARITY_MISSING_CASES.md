@@ -10290,6 +10290,44 @@ make -C pillow-rs-freetype test-case CASE=ftincrem.FT_Incremental_FuncsRec.requi
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export.invalid_inputs_noop
 ```
 
+FT module/library lifecycle follow-up on 2026-07-20:
+
+- Implemented Rust core `FT_New_Library`, `FT_Reference_Library`, and
+  `FT_Done_Library` state for the public module-lifecycle route.  The core now
+  records the caller memory pointer, initializes library refcount to 1, leaves
+  default modules absent for `FT_New_Library`, increments on
+  `FT_Reference_Library`, and decrements without destruction while refcount is
+  still non-zero.
+- Updated the thin C ABI to keep the public `FT_LibraryRec` layout unchanged
+  while storing internal library state behind `internal`.  Public
+  `FT_New_Library`, `FT_Reference_Library`, and `FT_Done_Library` exports now
+  route through the same core behavior; the C wrapper owns only raw
+  `FT_MemoryRec` allocation/free bookkeeping and handle lifetime.
+- Added WASM ABI test-support observations for the same lifecycle behavior.
+  The WASM wrapper does not implement module logic; it delegates to core and
+  copies observable values for the unified parity harness.
+- Added a pinned C oracle route for:
+  - `ftmodapi.FT_New_Library.creates_library_with_version_and_refcount`
+  - `ftmodapi.FT_Reference_Library.increments_refcount`
+  - `ftmodapi.FT_Done_Library.decrements_reference_without_destroying`
+- The pre-existing `FT_New_Library` null-input and allocator-failure rows still
+  pass through their existing exact-error route.  They were not broadened into
+  the new success route because the success route is specifically about live
+  library state after allocator-backed construction.
+- Route audit impact: `real-parity=4519 -> 4522`,
+  `pending-route=437 -> 434`, `compile-contract=2265` unchanged.
+
+Verification for this follow-up:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.creates_library_with_version_and_refcount
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Reference_Library.increments_refcount
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Done_Library.decrements_reference_without_destroying
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.rejects_null_inputs_preserving_output
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_New_Library.allocation_failure_preserves_output
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set: `FT_Get_Multi_Master` generated Adobe MM descriptor route
 
 Status: eight real descriptor/capacity rows and one related

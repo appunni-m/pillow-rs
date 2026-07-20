@@ -1174,6 +1174,8 @@ pub fn FT_Bitmap_Blend(
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FT_Library {
     inner: api::Library,
+    memory: FT_Memory,
+    refcount: usize,
     module_names: &'static [&'static str],
     truetype_interpreter_version: FT_UInt,
     debug_hooks: [FT_DebugHook_Func; 4],
@@ -1475,6 +1477,8 @@ pub struct FT_GlyphSlot {
 pub fn FT_Init_FreeType() -> FT_Library {
     FT_Library {
         inner: api::Library::init(),
+        memory: std::ptr::null_mut(),
+        refcount: 1,
         module_names: DEFAULT_MODULE_NAMES,
         truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
         debug_hooks: [None; 4],
@@ -1484,6 +1488,21 @@ pub fn FT_Init_FreeType() -> FT_Library {
             FT_Vector { x: 21, y: 0 },
         ],
     }
+}
+
+pub fn FT_New_Library(memory: Option<FT_Memory>) -> Result<FT_Library, FT_Error> {
+    let Some(memory) = memory else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_New_Library` stores the caller's
+    // FT_Memory pointer, initializes refcount to 1, and does not install
+    // default modules.  Allocator invocation and object allocation lifetime are
+    // handled by the thin ABI layer that owns raw FT_MemoryRec access.
+    Ok(FT_Library {
+        memory,
+        module_names: &[],
+        ..FT_Init_FreeType()
+    })
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -1500,6 +1519,35 @@ pub fn FT_Done_FreeType(library: Option<FT_Library>) -> FT_Error {
     } else {
         35 // matches FreeType 2.14.3 runtime: FT_Done_FreeType(NULL)
     }
+}
+
+pub fn FT_Reference_Library(library: Option<&mut FT_Library>) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Reference_Library` increments the
+    // public library refcount and otherwise has no observable side effects.
+    library.refcount = library.refcount.saturating_add(1);
+    FT_Err_Ok
+}
+
+pub fn FT_Done_Library(library: Option<&mut FT_Library>) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Done_Library` decrements first and
+    // destroys only when the refcount reaches zero.  Core records that state;
+    // thin ABI wrappers own actual allocation release.
+    library.refcount = library.refcount.saturating_sub(1);
+    FT_Err_Ok
+}
+
+pub fn FT_Library_Refcount(library: Option<&FT_Library>) -> usize {
+    library.map_or(0, |library| library.refcount)
+}
+
+pub fn FT_Library_Memory(library: Option<&FT_Library>) -> FT_Memory {
+    library.map_or(std::ptr::null_mut(), |library| library.memory)
 }
 
 pub fn FT_Done_MM_Var(library: Option<&FT_Library>, _amaster: Option<&mut FT_MM_Var>) -> FT_Error {
