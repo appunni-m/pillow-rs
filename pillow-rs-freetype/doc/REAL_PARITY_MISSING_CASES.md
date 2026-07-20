@@ -1615,6 +1615,17 @@ Finding:
   `freetype/src/bzip2/ftbzip2.c:471-515` open behavior, plus
   `freetype/src/bzip2/ftbzip2.c:371-466` read, seek-backwards reset, and close
   ownership behavior, against Rust FFI, C ABI, and WASM for the same bytes.
+  The BZIP2 rows are split by exact obligation instead of sharing one broad
+  stream blocker:
+  - `FT_Stream_OpenBzip2.success_open_valid_bzip2_stream`: target stream fields,
+    source position, and initial open status.
+  - `FT_Stream_OpenBzip2.success_read_decompressed_bytes`: decompressed byte
+    ranges, stream positions, and read status.
+  - `FT_Stream_OpenBzip2.lifecycle_close_does_not_close_source`: wrapper close
+    releases wrapper state without closing or corrupting the caller-owned source
+    stream.
+  - `FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy`: active pinned
+    build behavior for optional bzip2 support, not an out-of-scope placeholder.
 - The gzip stream success row is also blocked by a concrete missing declared
   stream manifest.  `ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream`
   references `compressed/gzip/small-and-large-streams.json`, which must include
@@ -1709,6 +1720,14 @@ Finding:
   fixtures, call the relevant APIs/callbacks, and compare exact header fields,
   charset/charmap behavior, SVG document records, callback payloads, pointer
   shapes, and layout/ABI contracts across all ABI lanes.
+- The OTSVG rows are split by exact obligation instead of sharing one broad
+  specialized-record blocker:
+  - `FT_SVG_Document.renderer_callback_observes_document`: renderer callback
+    receives the same document pointer class, glyph ID, and lifetime.
+  - `FT_SVG_DocumentRec.document_range_and_payload_fields`: document start/end
+    offsets, payload byte range, and document length fields.
+  - `FT_SVG_DocumentRec.transform_and_metrics_fields`: transform matrix, delta,
+    metrics, units, and glyph size fields.
 
 Classification change:
 
@@ -11315,6 +11334,17 @@ Finding:
   that added this case to the scalar allow-list still stopped before runtime
   execution, proving the blocker is the broader property route, not just a
   missing classification string.
+- Typed driver property rows are split by exact obligation instead of sharing
+  one broad property-service blocker:
+  - `FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit`: typed
+    `FT_Property_Set/Get` route storing and reading back the limit with pinned-C
+    face/module scoping.
+  - `FT_Prop_IncreaseXHeight.limit_changes_autohint_x_height`: property route
+    plus autohint load proving x-height adjustment changes metrics or outline
+    output like pinned C.
+  - `FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script`: typed
+    glyph-to-script map route plus autohint glyph-load observation proving map
+    changes affect script selection like pinned C.
 - `ftstroke.FT_Stroker_LineTo.line_segment_success` is not covered by the
   existing stroker null/no-op route.  It requires maintained `FT_Stroker_New`,
   `FT_Stroker_BeginSubPath`, `FT_Stroker_LineTo`, `FT_Stroker_GetCounts`, and
@@ -12213,6 +12243,15 @@ Follow-up finding:
   (`src/truetype/ttgxvar.c:3438-3488`).  For the one-axis `inter-wght.ttf`
   fixture with `num_coords=4`, the oracle emitted a process-dependent
   pointer-like `/coords/1` value while Rust returned deterministic zero-fill.
+- Remaining MM success rows are split by exact obligation instead of sharing
+  one broad MM blocker:
+  - `FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`:
+    deterministic excess output semantics after the active axes.
+  - `FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend`: active blend
+    coordinate changes altering subsequent coordinates, metrics, and exposed
+    state.
+  - `FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`: Type1 Adobe MM
+    design-coordinate changes altering blend state and public outputs.
   Do not change Rust to synthesize or preserve adjacent-memory values, and do
   not promote this row until pinned C, Rust FFI, C ABI, and WASM ABI have exact
   deterministic same-input output.
@@ -13064,8 +13103,14 @@ Current blocker families:
     and sbit output for `f1`, `f2`, and `f3`.
   - `load_flags_truncate_to_int32`: `FT_ULong` load flags truncated to the
     pinned-C signed 32-bit path before sbit lookup for `f1` and `f2`.
-- `FTC_Node` / `FTC_Node_Unref`: cache handle identity, lookup references,
-  unref release, and flushability after the final reference.
+- `FTC_Node` / `FTC_Node_Unref` rows are split by exact obligation instead of
+  sharing a broad node-lifecycle blocker:
+  - `FTC_Node.reference_counted_cache_handle`: lookup-acquired node records the
+    same manager cache handle identity and cache index as pinned C.
+  - `FTC_Node_Unref.releases_lookup_reference`: one unref releases exactly the
+    lookup reference and preserves any remaining references.
+  - `FTC_Node_Unref.unreferenced_node_becomes_flushable`: final unref makes the
+    node eligible for cache flush or eviction with pinned-C observable state.
 
 Required fix plan:
 
