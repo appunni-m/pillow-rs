@@ -1371,7 +1371,6 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftmm_rows_without_maintained_route = {
         "ftmm.FT_Done_MM_Var.import_contract",
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled",
-        "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates",
         "ftmm.FT_Set_MM_Blend_Coordinates.success_reset_to_default",
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend",
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design",
@@ -3971,6 +3970,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftmm.FT_Set_MM_Blend_Coordinates.success_set_normalized_coordinates"
     ):
         return "FT_Set_MM_Blend_Coordinates Adobe MM normalized-coordinate success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmm.set_mm_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Blend_Coordinates.success_partial_and_extra_coordinates"
+    ):
+        return "FT_Set_MM_Blend_Coordinates Adobe MM partial and extra coordinate scenarios validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmm.set_then_get_mm_blend_coordinates"
         and row.case_id
