@@ -3763,6 +3763,84 @@ static int emit_get_winfnt_header_null_face(int argc, char** argv) {
     return 0;
 }
 
+static void print_winfnt_header_mutation_row(const char* label, FT_Face face) {
+    FT_WinFNT_HeaderRec header;
+    memset(&header, 0xA5, sizeof(header));
+    FT_WinFNT_HeaderRec sentinel = header;
+    FT_Error err = FT_Get_WinFNT_Header(face, &header);
+    int unchanged = memcmp(&header, &sentinel, sizeof(header)) == 0;
+    printf("{\"row\":\"%s\",\"status\":%d,\"sentinel_unchanged\":%s,\"record_mutation\":\"%s\"}",
+           label,
+           err,
+           unchanged ? "true" : "false",
+           unchanged ? "sentinel_preserved" : "overwritten");
+}
+
+static int emit_get_winfnt_header_mutation(int argc, char** argv) {
+    if (argc != 7) {
+        return 1;
+    }
+    if (!streq(argv[2], "file") || !streq(argv[4], "file")) {
+        fprintf(stderr, "WinFNT header mutation currently expects file assets\n");
+        return 2;
+    }
+    unsigned char* winfnt_data = NULL;
+    unsigned char* non_winfnt_data = NULL;
+    long winfnt_len = 0;
+    long non_winfnt_len = 0;
+    if (load_file(argv[3], &winfnt_data, &winfnt_len) != 0 ||
+        load_file(argv[5], &non_winfnt_data, &non_winfnt_len) != 0) {
+        free(winfnt_data);
+        free(non_winfnt_data);
+        return 2;
+    }
+    FT_Library winfnt_library = NULL;
+    FT_Library non_winfnt_library = NULL;
+    FT_Face winfnt_face = NULL;
+    FT_Face non_winfnt_face = NULL;
+    FT_Error err = FT_Init_FreeType(&winfnt_library);
+    if (!err) {
+        err = FT_New_Memory_Face(
+            winfnt_library, winfnt_data, winfnt_len, atol(argv[6]), &winfnt_face);
+    }
+    if (!err) {
+        err = FT_Init_FreeType(&non_winfnt_library);
+    }
+    if (!err) {
+        err = FT_New_Memory_Face(
+            non_winfnt_library, non_winfnt_data, non_winfnt_len, atol(argv[6]), &non_winfnt_face);
+    }
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        if (non_winfnt_face) FT_Done_Face(non_winfnt_face);
+        if (non_winfnt_library) FT_Done_FreeType(non_winfnt_library);
+        if (winfnt_face) FT_Done_Face(winfnt_face);
+        if (winfnt_library) FT_Done_FreeType(winfnt_library);
+        free(non_winfnt_data);
+        free(winfnt_data);
+        return 0;
+    }
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    printf("{\"rows\":[");
+    print_winfnt_header_mutation_row("winfnt_font", winfnt_face);
+    printf(",");
+    print_winfnt_header_mutation_row("non_winfnt_font", non_winfnt_face);
+    printf(",");
+    print_winfnt_header_mutation_row("null", NULL);
+    printf("]}}\n");
+    FT_Done_Face(non_winfnt_face);
+    FT_Done_FreeType(non_winfnt_library);
+    FT_Done_Face(winfnt_face);
+    FT_Done_FreeType(winfnt_library);
+    free(non_winfnt_data);
+    free(winfnt_data);
+    return 0;
+}
+
 static void print_charmap_record(FT_CharMap charmap) {
     if (!charmap) {
         printf("null");
@@ -17495,6 +17573,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 2 || argc == 3) && streq(argv[1], "--get-winfnt-header-null-face")) {
         return emit_get_winfnt_header_null_face(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--get-winfnt-header-mutation")) {
+        return emit_get_winfnt_header_mutation(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--get-font-format-null-face")) {
         printf("{");

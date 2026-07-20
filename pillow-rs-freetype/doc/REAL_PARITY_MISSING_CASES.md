@@ -144,6 +144,31 @@ make -C pillow-rs-freetype test-op OP=freetype.open_face_with_params
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: WinFNT output mutation route promotion
+
+Status: one-row audit cleanup completed on 2026-07-20 for the
+`FT_Get_WinFNT_Header` caller-owned output record mutation contract.
+
+Promoted case:
+
+- `FT_WinFNT_Header.mutable_output_handle_contract` now runs through the pinned
+  C FreeType oracle, Rust FFI, thin C ABI, and WASM ABI. FreeType
+  `src/base/ftwinfnt.c` copies the WinFNT header into the caller-owned record
+  on success and leaves the caller's sentinel record unchanged for non-WinFNT
+  and null-face error rows; all three mutation rows now compare exactly.
+
+Impact:
+
+- `real-parity`: `4514 -> 4515`
+- `pending-route`: `442 -> 441`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftwinfnt.FT_WinFNT_Header.mutable_output_handle_contract
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: CID signature and Type1 sentinel contract cleanup
 
 Status: two-row audit cleanup completed on 2026-07-20 for public signature and
@@ -165,8 +190,6 @@ Rejected candidates:
   manager-owned cache lifecycle and post-done invalidation behavior.
 - `FT_StreamRec` memory/callback stream rows remain pending because they require
   exact stream field mutation and callback event parity.
-- `FT_WinFNT_Header.mutable_output_handle_contract` remains pending because it
-  requires exact record mutation behavior for WinFNT and control faces.
 
 Impact:
 

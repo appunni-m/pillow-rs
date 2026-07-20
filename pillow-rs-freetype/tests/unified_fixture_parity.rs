@@ -2486,6 +2486,7 @@ impl BackendComparisonWorker {
                 set_default_properties_case_output(case, PropertyBackend::Rust)
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
+            "ftwinfnt.get_winfnt_header_mutation" => rust_get_winfnt_header_mutation(case),
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
@@ -2786,6 +2787,7 @@ impl BackendComparisonWorker {
                 c_done_library(library);
                 output
             }
+            "ftwinfnt.get_winfnt_header_mutation" => c_get_winfnt_header_mutation(case),
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
@@ -3084,6 +3086,7 @@ impl BackendComparisonWorker {
                 wasm_done_face(handle);
                 output
             }
+            "ftwinfnt.get_winfnt_header_mutation" => wasm_get_winfnt_header_mutation(case),
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
@@ -3431,6 +3434,92 @@ fn wasm_get_winfnt_header(handle: usize, params: &Value) -> Result<RunOutput, St
     );
     let header_json = (err == FT_Err_Ok).then(|| wasm_winfnt_header_json(&header));
     Ok(winfnt_header_output(err, header_json, err != FT_Err_Ok))
+}
+
+fn winfnt_header_mutation_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn winfnt_header_mutation_row(row: &str, status: FT_Error, unchanged: bool) -> Value {
+    json!({
+        "row": row,
+        "status": status,
+        "sentinel_unchanged": unchanged,
+        "record_mutation": if unchanged { "sentinel_preserved" } else { "overwritten" }
+    })
+}
+
+fn rust_winfnt_header_mutation_row(row: &str, face: Option<&FT_Face>) -> Value {
+    let mut header = FT_WinFNT_HeaderRec::default();
+    let sentinel = header;
+    let status = FT_Get_WinFNT_Header(face, Some(&mut header));
+    winfnt_header_mutation_row(row, status, header == sentinel)
+}
+
+fn rust_get_winfnt_header_mutation(case: &InputCase) -> Result<RunOutput, String> {
+    let winfnt_bytes = required_asset_bytes(case, "winfnt_font")?;
+    let non_winfnt_bytes = required_asset_bytes(case, "non_winfnt_font")?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let winfnt_face = rust_new_face_from_bytes(winfnt_bytes.as_ref(), face_index)?;
+    let non_winfnt_face = rust_new_face_from_bytes(non_winfnt_bytes.as_ref(), face_index)?;
+    Ok(winfnt_header_mutation_output(vec![
+        rust_winfnt_header_mutation_row("winfnt_font", Some(&winfnt_face)),
+        rust_winfnt_header_mutation_row("non_winfnt_font", Some(&non_winfnt_face)),
+        rust_winfnt_header_mutation_row("null", None),
+    ]))
+}
+
+fn c_winfnt_header_mutation_row(row: &str, face: c_abi::FT_Face) -> Value {
+    let mut header = c_abi::FT_WinFNT_HeaderRec::default();
+    let sentinel = header;
+    let status = c_abi::FT_Get_WinFNT_Header(face, &mut header);
+    winfnt_header_mutation_row(row, status, header == sentinel)
+}
+
+fn c_get_winfnt_header_mutation(case: &InputCase) -> Result<RunOutput, String> {
+    let winfnt_bytes = required_asset_bytes(case, "winfnt_font")?;
+    let non_winfnt_bytes = required_asset_bytes(case, "non_winfnt_font")?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let (winfnt_library, winfnt_face) = c_new_face_from_bytes(winfnt_bytes.as_ref(), face_index)?;
+    let (non_winfnt_library, non_winfnt_face) =
+        c_new_face_from_bytes(non_winfnt_bytes.as_ref(), face_index)?;
+    let output = winfnt_header_mutation_output(vec![
+        c_winfnt_header_mutation_row("winfnt_font", winfnt_face),
+        c_winfnt_header_mutation_row("non_winfnt_font", non_winfnt_face),
+        c_winfnt_header_mutation_row("null", ptr::null_mut()),
+    ]);
+    c_done_face(non_winfnt_face);
+    c_done_library(non_winfnt_library);
+    c_done_face(winfnt_face);
+    c_done_library(winfnt_library);
+    Ok(output)
+}
+
+fn wasm_winfnt_header_mutation_row(row: &str, handle: usize) -> Value {
+    let mut header = wasm_abi::FontdoneWasmWinFNTHeader::default();
+    let sentinel = header;
+    let status = wasm_abi::fontdone_wasm_get_winfnt_header(handle, &mut header);
+    winfnt_header_mutation_row(
+        row,
+        status,
+        wasm_winfnt_header_json(&header) == wasm_winfnt_header_json(&sentinel),
+    )
+}
+
+fn wasm_get_winfnt_header_mutation(case: &InputCase) -> Result<RunOutput, String> {
+    let winfnt_bytes = required_asset_bytes(case, "winfnt_font")?;
+    let non_winfnt_bytes = required_asset_bytes(case, "non_winfnt_font")?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let winfnt_handle = wasm_new_face_from_bytes(winfnt_bytes.as_ref(), face_index)?;
+    let non_winfnt_handle = wasm_new_face_from_bytes(non_winfnt_bytes.as_ref(), face_index)?;
+    let output = winfnt_header_mutation_output(vec![
+        wasm_winfnt_header_mutation_row("winfnt_font", winfnt_handle),
+        wasm_winfnt_header_mutation_row("non_winfnt_font", non_winfnt_handle),
+        wasm_winfnt_header_mutation_row("null", 0),
+    ]);
+    wasm_done_face(non_winfnt_handle);
+    wasm_done_face(winfnt_handle);
+    Ok(output)
 }
 
 fn rust_fstype_flags_output(face: Option<&FT_Face>, params: &Value) -> Result<Value, String> {
@@ -21060,6 +21149,23 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push("none".to_string());
             args.push("0".to_string());
             args.push(header_mode.to_string());
+            Ok(args)
+        }
+        "ftwinfnt.get_winfnt_header_mutation" => {
+            let mut args = vec!["--get-winfnt-header-mutation".to_string()];
+            let winfnt = case
+                .inputs
+                .assets
+                .get("winfnt_font")
+                .ok_or_else(|| "missing winfnt_font asset".to_string())?;
+            push_asset_source(winfnt, &mut args)?;
+            let non_winfnt = case
+                .inputs
+                .assets
+                .get("non_winfnt_font")
+                .ok_or_else(|| "missing non_winfnt_font asset".to_string())?;
+            push_asset_source(non_winfnt, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
         "tttables.get_cmap_format" => {
