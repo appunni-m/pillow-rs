@@ -1314,11 +1314,123 @@ def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
-    return (
-        "Type1/Multiple Master font-info, private dictionary, encoding, and "
-        "blend runtime data requires a maintained Type1 tables route; keeping "
-        "it generic would be a green placeholder"
-    )
+    pending_cases = {
+        "t1tables.FT_Get_PS_Font_Info.signature_and_behavior_matrix": (
+            "FT_Get_PS_Font_Info parity needs a C-openable Type1/CFF fixture "
+            "and exact T1_FontInfo string/scalar record comparison across "
+            "pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "t1tables.FT_Get_PS_Font_Private.signature_and_behavior_matrix": (
+            "FT_Get_PS_Font_Private parity needs a C-openable Type1/CFF "
+            "fixture and exact T1_Private dictionary scalar/array comparison "
+            "across all ABI lanes"
+        ),
+        "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix": (
+            "FT_Get_PS_Font_Value parity needs maintained selector routing for "
+            "font-info, private, encoding, and blend keys with exact value "
+            "bytes, lengths, and public errors"
+        ),
+        "t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix": (
+            "FT_Has_PS_Glyph_Names parity needs Type1/CFF fixtures proving "
+            "pinned C glyph-name availability and matching Rust/C-ABI/WASM "
+            "boolean output"
+        ),
+        "t1tables.T1_BLEND_BLUE_SCALE.private_blue_scale_runtime_value": (
+            "T1_BLEND_BLUE_SCALE parity needs a Multiple Master Type1 fixture "
+            "and exact private blue_scale blend value comparison"
+        ),
+        "t1tables.T1_BLEND_BLUE_SHIFT.private_blue_shift_runtime_value": (
+            "T1_BLEND_BLUE_SHIFT parity needs a Multiple Master Type1 fixture "
+            "and exact private blue_shift blend value comparison"
+        ),
+        "t1tables.T1_BLEND_BLUE_VALUES.private_blue_values_runtime_array": (
+            "T1_BLEND_BLUE_VALUES parity needs exact private blue_values array "
+            "length and element comparison from a Multiple Master Type1 fixture"
+        ),
+        "t1tables.T1_BLEND_FAMILY_BLUES.private_family_blues_runtime_array": (
+            "T1_BLEND_FAMILY_BLUES parity needs exact private family_blues "
+            "array length and element comparison"
+        ),
+        "t1tables.T1_BLEND_FAMILY_OTHER_BLUES.private_family_other_blues_runtime_array": (
+            "T1_BLEND_FAMILY_OTHER_BLUES parity needs exact private "
+            "family_other_blues array length and element comparison"
+        ),
+        "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value": (
+            "T1_BLEND_FORCE_BOLD parity needs exact private force_bold blend "
+            "value comparison and C boolean normalization"
+        ),
+        "t1tables.T1_BLEND_ITALIC_ANGLE.font_info_italic_angle_runtime_value": (
+            "T1_BLEND_ITALIC_ANGLE parity needs exact font-info italic_angle "
+            "blend value comparison from a Multiple Master Type1 fixture"
+        ),
+        "t1tables.T1_BLEND_OTHER_BLUES.private_other_blues_runtime_array": (
+            "T1_BLEND_OTHER_BLUES parity needs exact private other_blues array "
+            "length and element comparison"
+        ),
+        "t1tables.T1_BLEND_STANDARD_HEIGHT.private_standard_height_runtime_value": (
+            "T1_BLEND_STANDARD_HEIGHT parity needs exact private standard_height "
+            "blend value comparison"
+        ),
+        "t1tables.T1_BLEND_STANDARD_WIDTH.private_standard_width_runtime_value": (
+            "T1_BLEND_STANDARD_WIDTH parity needs exact private standard_width "
+            "blend value comparison"
+        ),
+        "t1tables.T1_BLEND_STEM_SNAP_HEIGHTS.private_snap_heights_runtime_array": (
+            "T1_BLEND_STEM_SNAP_HEIGHTS parity needs exact private snap_heights "
+            "array length and element comparison"
+        ),
+        "t1tables.T1_BLEND_STEM_SNAP_WIDTHS.private_snap_widths_runtime_array": (
+            "T1_BLEND_STEM_SNAP_WIDTHS parity needs exact private snap_widths "
+            "array length and element comparison"
+        ),
+        "t1tables.T1_BLEND_UNDERLINE_POSITION.blend_dictionary_runtime": (
+            "T1_BLEND_UNDERLINE_POSITION parity needs maintained blend "
+            "dictionary routing and exact underline_position output comparison"
+        ),
+        "t1tables.T1_BLEND_UNDERLINE_THICKNESS.blend_dictionary_runtime": (
+            "T1_BLEND_UNDERLINE_THICKNESS parity needs maintained blend "
+            "dictionary routing and exact underline_thickness output comparison"
+        ),
+        "t1tables.T1_Blend_Flags.font_info_blend_group": (
+            "T1_Blend_Flags font-info group parity needs runtime proof that "
+            "public blend flags select the same font-info dictionary fields as "
+            "pinned C"
+        ),
+        "t1tables.T1_Blend_Flags.private_blend_group": (
+            "T1_Blend_Flags private group parity needs runtime proof that "
+            "public blend flags select the same private dictionary fields as "
+            "pinned C"
+        ),
+        "t1tables.T1_ENCODING_TYPE_ARRAY.ps_font_value_encoding_type": (
+            "T1_ENCODING_TYPE_ARRAY parity needs a Type1 encoding fixture and "
+            "exact FT_Get_PS_Font_Value encoding-type output comparison"
+        ),
+        "t1tables.T1_ENCODING_TYPE_EXPERT.ps_font_value_encoding_type": (
+            "T1_ENCODING_TYPE_EXPERT parity needs an expert-encoding fixture "
+            "and exact FT_Get_PS_Font_Value encoding-type output comparison"
+        ),
+        "t1tables.T1_ENCODING_TYPE_ISOLATIN1.ps_font_value_encoding_type": (
+            "T1_ENCODING_TYPE_ISOLATIN1 parity needs an ISO Latin-1 encoding "
+            "fixture and exact FT_Get_PS_Font_Value output comparison"
+        ),
+        "t1tables.T1_ENCODING_TYPE_NONE.ps_font_value_encoding_type": (
+            "T1_ENCODING_TYPE_NONE parity needs a no-encoding Type1 fixture and "
+            "exact FT_Get_PS_Font_Value output comparison"
+        ),
+        "t1tables.T1_ENCODING_TYPE_STANDARD.ps_font_value_encoding_type": (
+            "T1_ENCODING_TYPE_STANDARD parity needs a standard-encoding Type1 "
+            "fixture and exact FT_Get_PS_Font_Value output comparison"
+        ),
+        "t1tables.T1_EncodingType.array_encoding_runtime_case": (
+            "T1_EncodingType array parity needs maintained encoding extraction "
+            "that compares array encoding records and glyph-name resolution"
+        ),
+        "t1tables.T1_EncodingType.standard_or_expert_runtime_cases": (
+            "T1_EncodingType standard/expert parity needs maintained fixtures "
+            "that prove standard and expert encoding classification separately"
+        ),
+    }
+    return pending_cases.get(row.case_id)
 
 
 def ftgxval_subsystem_pending_reason(row: ConcreteInput) -> str | None:
