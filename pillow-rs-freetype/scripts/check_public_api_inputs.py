@@ -1566,6 +1566,20 @@ def ftparams_name_option_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftparams_ignored_param_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Deprecated/no-effect FT_Open_Args parameter rows with maintained routes."""
+    if row.case_id in {
+        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect",
+        "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored",
+    }:
+        return (
+            "FT_Open_Args deprecated unpatented-hinting parameter validates as "
+            "no-effect through pinned C oracle, Rust FFI output, C ABI "
+            "FT_Open_Face params, and WASM ABI output"
+        )
+    return None
+
+
 def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for image/raster public records that do not have a maintained route."""
     ftimage_rows_without_maintained_route = {
@@ -4189,6 +4203,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftparams_name_option_reason = ftparams_name_option_real_parity_reason(row)
     if ftparams_name_option_reason:
         return ("real-parity", ftparams_name_option_reason)
+    ftparams_ignored_param_reason = ftparams_ignored_param_real_parity_reason(row)
+    if ftparams_ignored_param_reason:
+        return ("real-parity", ftparams_ignored_param_reason)
     ftparams_pending = ftparams_subsystem_pending_reason(row)
     if ftparams_pending:
         return ("pending-route", ftparams_pending)
