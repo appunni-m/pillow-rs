@@ -1708,7 +1708,6 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftotval.FT_OpenType_Free.frees_validated_table_with_face_memory",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
-        "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
         "ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success",
         "tttables.TT_MaxProfile.malformed_table_error_source",
     }
@@ -2486,6 +2485,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftoutln.outline_new",
             "ftoutln.FT_Outline_New.invalid_arguments_and_limits",
         ): "FT_Outline_New invalid-argument/limit errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftoutln.outline_reverse_orientation",
+            "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
+        ): "FT_Outline_Reverse followed by orientation, cbox, bbox, decompose, and bitmap observation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "freetype.new_size",
             "fterrdef.FT_Err_Invalid_Driver_Handle.module_driver_handle_validation",
