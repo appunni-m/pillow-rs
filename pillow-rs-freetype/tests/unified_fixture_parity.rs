@@ -8038,6 +8038,71 @@ fn wasm_nominal_size_request(height: wasm_abi::FT_Long) -> wasm_abi::FontdoneWas
     }
 }
 
+fn active_size_fixture_pixel_size(params: &Value) -> Result<(u32, u32), String> {
+    let Some(size) = params.get("pixel_size") else {
+        return pixel_size_param(params);
+    };
+    let Some(object) = size.as_object() else {
+        return Ok((0, u32_value(size, "pixel_size")?));
+    };
+    if object.get("pixels").is_some() {
+        let pixels = u32_param_object(object, "pixels")?;
+        return Ok((0, pixels));
+    }
+    Ok((
+        u32_param_object(object, "x")?,
+        u32_param_object(object, "y")?,
+    ))
+}
+
+fn active_size_handle_output(
+    status: FT_Error,
+    active_size_is_null: bool,
+    metrics: Value,
+    load_error: FT_Error,
+    loaded_hori_advance: Option<i64>,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "active_size_identity": if active_size_is_null { "null" } else { "face_active_size" },
+        "metrics": if status == FT_Err_Ok { metrics } else { Value::Null },
+        "later_load_uses_active_size": status == FT_Err_Ok
+            && load_error == FT_Err_Ok
+            && loaded_hori_advance.is_some_and(|advance| advance != 0)
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let mut face = FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    )
+    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    let (pixel_width, pixel_height) = active_size_fixture_pixel_size(&case.inputs.params)?;
+    let status = FT_Set_Pixel_Sizes(&mut face, pixel_width, pixel_height);
+    let metrics = size_metrics_json(&face.size_metrics);
+    let (load_error, loaded_hori_advance) = match FT_Load_Glyph(&face, 36, FT_LOAD_DEFAULT) {
+        Ok(slot) => (FT_Err_Ok, Some(slot.metrics.horiAdvance)),
+        Err(err) => (err, None),
+    };
+    Ok(active_size_handle_output(
+        status,
+        face.size.is_null(),
+        metrics,
+        load_error,
+        loaded_hori_advance,
+    ))
+}
+
 fn rust_new_size_sequence(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let initial = face.size;
@@ -19023,6 +19088,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
+        "freetype.active_size_handle"
+            if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
+        {
+            let mut args = vec!["--active-size-handle".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            let (pixel_width, pixel_height) = active_size_fixture_pixel_size(params)?;
+            args.push(pixel_width.to_string());
+            args.push(pixel_height.to_string());
+            Ok(args)
+        }
         "macro_eval" | "macro_compile_probe" => {
             Ok(vec!["--macro-eval".to_string(), case.case_id.clone()])
         }
@@ -20904,6 +20980,10 @@ fn parse_run_output(text: &str) -> Result<RunOutput, String> {
     Ok(RunOutput { status, output })
 }
 
+fn case_id_base(case_id: &str) -> &str {
+    case_id.split_once('@').map_or(case_id, |(base, _)| base)
+}
+
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
     // Handle null-param error tests: only for operations without explicit implementation.
     // Exclude operations that have dedicated match arms below but lack font assets.
@@ -21096,6 +21176,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "size_metrics" => {
             let face = open_face(case)?;
             Ok(ok(size_metrics_json(&face.size_metrics)))
+        }
+        "freetype.active_size_handle"
+            if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
+        {
+            rust_active_size_handle(case)
         }
         "get_char_index" => {
             let face = open_face(case)?;
@@ -21716,6 +21801,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
         {
             c_face_flags_after_variation(case)
+        }
+        "freetype.active_size_handle"
+            if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
+        {
+            c_active_size_handle(case)
         }
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
@@ -22548,6 +22638,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection" =>
         {
             wasm_face_flags_after_variation(case)
+        }
+        "freetype.active_size_handle"
+            if case_id_base(&case.case_id) == "freetype.FT_Size.active_size_handle_runtime" =>
+        {
+            wasm_active_size_handle(case)
         }
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
@@ -27330,6 +27425,31 @@ fn c_active_size(face: c_abi::FT_Face) -> c_abi::FT_Size {
     c_abi::abi_active_size(face).unwrap_or(std::ptr::null_mut())
 }
 
+fn c_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let (pixel_width, pixel_height) = active_size_fixture_pixel_size(&case.inputs.params)?;
+    let status = c_abi::FT_Set_Pixel_Sizes(face, pixel_width, pixel_height);
+    let metrics = c_size_metrics_json(face)?;
+    let load_error = c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT);
+    let loaded_hori_advance = if load_error == FT_Err_Ok {
+        let slot = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+        Some(slot.metrics.horiAdvance)
+    } else {
+        None
+    };
+    let output = active_size_handle_output(
+        status,
+        c_active_size(face).is_null(),
+        metrics,
+        load_error,
+        loaded_hori_advance,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
 fn c_glyph_metrics_fields_json(face: c_abi::FT_Face) -> Result<Value, String> {
     let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
@@ -27735,6 +27855,34 @@ fn wasm_size_metrics_value(handle: usize) -> Result<Value, String> {
     } else {
         Err(format!("fontdone_wasm_size_metrics returned {err}"))
     }
+}
+
+fn wasm_active_size_handle(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let (pixel_width, pixel_height) = active_size_fixture_pixel_size(&case.inputs.params)?;
+    let status = wasm_abi::fontdone_wasm_set_pixel_sizes(handle, pixel_width, pixel_height);
+    let metrics = if status == FT_Err_Ok {
+        wasm_size_metrics_value(handle)?
+    } else {
+        Value::Null
+    };
+    let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT);
+    let loaded_hori_advance = if load_error == FT_Err_Ok {
+        let slot = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+        Some(slot.metrics.horiAdvance)
+    } else {
+        None
+    };
+    let output = active_size_handle_output(
+        status,
+        wasm_abi::fontdone_wasm_active_size(handle) == 0,
+        metrics,
+        load_error,
+        loaded_hori_advance,
+    );
+    wasm_done_face(handle);
+    Ok(output)
 }
 
 fn wasm_select_size(case: &InputCase) -> Result<RunOutput, String> {

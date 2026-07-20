@@ -9296,6 +9296,46 @@ static int open_oracle_face(
     return 0;
 }
 
+static int emit_active_size_handle(int argc, char** argv) {
+    if (argc != 7) {
+        return 1;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_Error status = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+    FT_Error load_error = FT_Load_Glyph(face.face, 36, FT_LOAD_DEFAULT);
+    int later_load_uses_active_size =
+        status == FT_Err_Ok &&
+        load_error == FT_Err_Ok &&
+        face.face->glyph &&
+        face.face->glyph->metrics.horiAdvance != 0;
+
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"status\":%d,", status);
+    printf("\"active_size_identity\":\"%s\",", face.face->size ? "face_active_size" : "null");
+    printf("\"metrics\":");
+    if (status == FT_Err_Ok && face.face->size) {
+        printf("{");
+        print_size_metrics_object(face.face->size->metrics);
+        printf("}");
+    } else {
+        printf("null");
+    }
+    printf(",\"later_load_uses_active_size\":");
+    print_json_bool(later_load_uses_active_size);
+    printf("}}\n");
+
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_size_metrics_named_value(const char* name, FT_Size_Metrics* metrics) {
     printf("\"%s\":", name);
     if (!metrics) {
@@ -17450,6 +17490,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--active-size-handle")) {
+        return emit_active_size_handle(argc, argv);
     }
     if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
         return emit_face_or_slot(argc, argv);
