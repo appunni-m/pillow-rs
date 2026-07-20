@@ -1356,6 +1356,7 @@ def header_or_layout_compile_contract_reason(row: ConcreteInput) -> str | None:
         "ftglyph.FT_Glyph_BBox_Mode.deprecated_lowercase_aliases_match",
         "ftimage.FT_IMAGE_TAG.override_contract_matches_c",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature",
+        "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity",
         "ftmm.T1_MAX_MM_MAP_POINTS.axis_map_capacity",
         "t1tables.T1_BLEND_MAX.sentinel_not_runtime_field",
@@ -1639,7 +1640,6 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for specialized public records without a maintained route."""
     specialized_rows_without_maintained_route = {
-        "ftwinfnt.FT_WinFNT_ID_DEFAULT.invalid_as_real_font_charset",
         "otsvg.FT_SVG_Document.renderer_callback_observes_document",
         "otsvg.FT_SVG_DocumentRec.document_range_and_payload_fields",
         "otsvg.FT_SVG_DocumentRec.transform_and_metrics_fields",
