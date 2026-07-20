@@ -866,6 +866,32 @@ Remaining malformed glyph blockers:
 These remain pending until maintained synthetic slot, class-hook, cleanup, and
 renderer-failure routes exist across Rust, C ABI, WASM, and pinned C.
 
+Per-case blocker detail:
+
+- `ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload` requires
+  a synthetic `FT_GlyphSlot` route matching pinned FreeType 2.14.3
+  `freetype/src/base/ftglyph.c:633-682`. The route must build C-observable
+  `slot->library`, `slot->format`, and payload fields, call `FT_New_Glyph` and
+  the selected glyph-class `glyph_init` hook, then compare the public
+  `FT_Error` and `*aglyph` null/preservation behavior through pinned C, Rust
+  FFI, thin C ABI, and WASM.
+- `ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range` requires synthetic
+  slot advances at the exact C overflow boundaries from
+  `freetype/src/base/ftglyph.c:651-667`: `slot->advance.x/y >= 0x8000 * 64`
+  and `<= -0x8000 * 64`. Exact parity must prove allocation cleanup and
+  `*aglyph = NULL`; null-slot coverage does not exercise this path.
+- `ftglyph.FT_GlyphRec.clazz_is_private_identity_only` must not compare raw
+  private pointers. `freetype/include/freetype/ftglyph.h:93-120` exposes
+  `clazz` as a private glyph-class pointer; the maintained route must create
+  outline, bitmap, and SVG glyphs through public operations and classify the
+  private class only by public behavior and glyph format across all ABI lanes.
+- `ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original` requires
+  a real `glyph_prepare` or renderer-failure route matching
+  `freetype/src/base/ftglyph.c:771-874`: dummy slot construction, bitmap-glyph
+  allocation, optional origin apply/restore, partial bitmap free on render
+  error, and original handle preservation even when `destroy` is true. The
+  already-routed early invalid-argument checks do not prove this path.
+
 Verification:
 
 ```bash
