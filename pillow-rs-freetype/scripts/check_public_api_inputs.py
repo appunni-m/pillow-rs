@@ -2726,6 +2726,7 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
         )
     if row.case_id in {
         "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
+        "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values",
         "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
         "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
         "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",

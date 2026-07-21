@@ -4326,6 +4326,8 @@ subjects:
         description: Field order is colorline, p0, p1, p2 exactly, with p0/p1/p2 FT_Vector coordinates exposed as 16.16 fixed-point font units.
       - id: get_paint_linear_gradient_values
         description: FT_Get_Paint returns ColorLine and p0/p1/p2 values exactly as C, including variable COLR v1 interpolation when available.
+      - id: get_paint_linear_gradient_static_values
+        description: FT_Get_Paint returns the static PaintLinearGradient ColorLine and p0/p1/p2 values exactly as C for the maintained COLR v1 static-gradient fixture.
     # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static and variable PaintLinearGradient records covering horizontal, vertical, diagonal, p2 equal to p0, p2 distinct from p0, negative coordinates, and nested transforms; params resolve gradients under default and varied design coordinates, then iterate color stops; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_LINEAR_GRADIENT, u.linear_gradient { colorline { extend, color_stop_iterator }, p0, p1, p2 } } plus FT_ColorStop sequence; comparison=exact C oracle format, 16.16 vector fields, colorline iterator fields, color stop sequence, variable interpolation, and output preservation on malformed/truncated gradient data.
   - id: ftcolor.FT_PaintRadialGradient
     kind: record

@@ -4,7 +4,8 @@
   "manifest_cases": [
     "layout_matches_c",
     "field_order_matches_c",
-    "get_paint_linear_gradient_values"
+    "get_paint_linear_gradient_values",
+    "get_paint_linear_gradient_static_values"
   ],
   "cases": [
     {
@@ -201,6 +202,71 @@
         },
         "fixture_requirements": [
           "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values",
+      "subject": "ftcolor.FT_PaintLinearGradient",
+      "case": "get_paint_linear_gradient_static_values",
+      "operation": "ftcolor.get_color_glyph_paint_and_get_paint",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/color/colr-v1-static-gradients.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyph": "linear_pad",
+          "root_transform": "FT_COLOR_NO_ROOT_TRANSFORM",
+          "traversal": "FT_Get_Color_Glyph_Paint then FT_Get_Paint then FT_Get_Colorline_Stops",
+          "expected_format": "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT",
+          "active_union_member": "linear_gradient",
+          "read_colorline_stops": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Bool",
+          "paint": {
+            "format": "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT",
+            "linear_gradient": {
+              "colorline": "C oracle value",
+              "p0": "C oracle 16.16 FT_Vector",
+              "p1": "C oracle 16.16 FT_Vector",
+              "p2": "C oracle 16.16 FT_Vector"
+            }
+          },
+          "color_stops": "FT_ColorStop sequence"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "sequence.root_return",
+            "sequence.paint_return",
+            "sequence.paint.format",
+            "sequence.paint.node",
+            "sequence.colorline",
+            "sequence.calls"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs",
+          "Does not replace get_paint_linear_gradient_values, which remains the broad static+variable+malformed row."
         ]
       }
     }

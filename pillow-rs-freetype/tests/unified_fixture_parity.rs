@@ -11070,6 +11070,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintTransform.get_paint_transform_values"
             | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
             | "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
             | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
             | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
@@ -12177,6 +12178,7 @@ fn color_static_gradient_case(case_id: &str) -> bool {
     matches!(
         case_id,
         "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
             | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
             | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
@@ -12201,6 +12203,7 @@ fn color_static_gradient_output_for_open_face(
 ) -> RunOutput {
     match case.case_id.as_str() {
         "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+        | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
         | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad" => ok(json!({
             "sequence": gradient_colorline_sequence_json(
                 backend,
