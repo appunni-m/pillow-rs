@@ -13644,6 +13644,33 @@ static int emit_ps_font_info(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ps_font_info_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    PS_FontInfoRec info;
+    memset(&info, 0, sizeof(info));
+    FT_Error err = FT_Get_PS_Font_Info(NULL, &info);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
+static int emit_ps_font_info_null_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Error err = FT_Get_PS_Font_Info(face.face, NULL);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_has_ps_glyph_names(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -13775,6 +13802,33 @@ static int emit_ps_font_private(int argc, char** argv) {
         printf("null");
     }
     printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ps_font_private_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    PS_PrivateRec private_rec;
+    memset(&private_rec, 0, sizeof(private_rec));
+    FT_Error err = FT_Get_PS_Font_Private(NULL, &private_rec);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
+static int emit_ps_font_private_null_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Error err = FT_Get_PS_Font_Private(face.face, NULL);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
     close_oracle_face(&face);
     return 0;
 }
@@ -24191,6 +24245,12 @@ static int dispatch(int argc, char** argv) {
     if (argc == 5 && streq(argv[1], "--ps-font-info")) {
         return emit_ps_font_info(argc, argv);
     }
+    if (argc == 2 && streq(argv[1], "--ps-font-info-null-face")) {
+        return emit_ps_font_info_null_face(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-info-null-output")) {
+        return emit_ps_font_info_null_output(argc, argv);
+    }
     if (argc == 5 && streq(argv[1], "--has-ps-glyph-names")) {
         return emit_has_ps_glyph_names(argc, argv);
     }
@@ -24202,6 +24262,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--ps-font-private-null-face")) {
+        return emit_ps_font_private_null_face(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-private-null-output")) {
+        return emit_ps_font_private_null_output(argc, argv);
     }
     if (argc >= 6 && streq(argv[1], "--ps-font-private-rowset")) {
         return emit_ps_font_private_rowset(argc, argv);

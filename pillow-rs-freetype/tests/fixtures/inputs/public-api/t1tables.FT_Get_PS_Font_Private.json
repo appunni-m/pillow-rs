@@ -132,6 +132,61 @@
         "output_shape": {"status": "FT_Error", "private": null},
         "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true}
       }
+    },
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "null_face_and_null_output_errors",
+      "covers_manifest_cases": ["null_face_and_null_output_errors"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face_source": "null",
+          "output_pointer_mode": "valid",
+          "source_behavior": "FT_Get_PS_Font_Private returns Invalid_Face_Handle for a null face before service lookup."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "asset:existing", "null-face"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "private": null},
+        "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Get_PS_Font_Private"]
+      }
+    },
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "null_face_and_null_output_errors",
+      "covers_manifest_cases": ["null_face_and_null_output_errors"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "type1_font",
+            "path": "input/fonts/type1/font-value-populated.pfb"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "output_pointer_mode": "null",
+          "source_behavior": "FT_Get_PS_Font_Private returns Invalid_Argument for a null PS_Private output pointer."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "asset:existing", "null-output"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "private": null},
+        "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Get_PS_Font_Private"]
+      }
     }
   ]
 }

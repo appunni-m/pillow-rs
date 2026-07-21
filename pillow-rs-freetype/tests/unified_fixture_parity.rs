@@ -9286,10 +9286,19 @@ fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
 }
 
 fn rust_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = PS_FontInfoRec::default();
+        let err = FT_Get_PS_Font_Info(None, Some(&mut info));
+        return Ok(ps_font_info_output(err, ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = PS_FontInfoRec::default();
-    let err = FT_Get_PS_Font_Info(Some(&face), Some(&mut info));
+    let err = FT_Get_PS_Font_Info(
+        Some(&face),
+        (lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") != Some("null"))
+            .then_some(&mut info),
+    );
     Ok(ps_font_info_output(err, ps_font_info_json(&info)))
 }
 
@@ -9312,11 +9321,22 @@ fn rust_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = c_abi::PS_FontInfoRec::default();
+        let err = c_abi::FT_Get_PS_Font_Info(ptr::null_mut(), &mut info);
+        return Ok(ps_font_info_output(err, ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = c_abi::PS_FontInfoRec::default();
-    let err = c_abi::FT_Get_PS_Font_Info(face, &mut info);
+    let info_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut info
+        };
+    let err = c_abi::FT_Get_PS_Font_Info(face, info_ptr);
     let output = ps_font_info_output(err, ps_font_info_json(&info));
     c_done_face(face);
     c_done_library(library);
@@ -9346,10 +9366,21 @@ fn c_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
+        let err = wasm_abi::fontdone_wasm_get_ps_font_info(0, &mut info);
+        return Ok(ps_font_info_output(err, wasm_ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
-    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, &mut info);
+    let info_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut info
+        };
+    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, info_ptr);
     let output = ps_font_info_output(err, wasm_ps_font_info_json(&info));
     wasm_done_face(handle);
     Ok(output)
@@ -9606,11 +9637,21 @@ fn ps_font_value_signature_matrix_case(case: &InputCase) -> bool {
 }
 
 fn direct_ps_font_info_case(case: &InputCase) -> bool {
-    case.case_id == "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success"
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success"
+            | "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle"
+            | "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument"
+    )
 }
 
 fn direct_ps_font_private_case(case: &InputCase) -> bool {
-    case.case_id == "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success"
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success"
+            | "t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle"
+            | "t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument"
+    )
 }
 
 fn direct_has_ps_glyph_names_case(case: &InputCase) -> bool {
@@ -9899,10 +9940,19 @@ fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = PS_PrivateRec::default();
+        let err = FT_Get_PS_Font_Private(None, Some(&mut private));
+        return Ok(ps_private_output(err, ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = PS_PrivateRec::default();
-    let err = FT_Get_PS_Font_Private(Some(&face), Some(&mut private));
+    let err = FT_Get_PS_Font_Private(
+        Some(&face),
+        (lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") != Some("null"))
+            .then_some(&mut private),
+    );
     Ok(ps_private_output(err, ps_private_json(&private)))
 }
 
@@ -9928,11 +9978,22 @@ fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = c_abi::PS_PrivateRec::default();
+        let err = c_abi::FT_Get_PS_Font_Private(ptr::null_mut(), &mut private);
+        return Ok(ps_private_output(err, ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = c_abi::PS_PrivateRec::default();
-    let err = c_abi::FT_Get_PS_Font_Private(face, &mut private);
+    let private_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut private
+        };
+    let err = c_abi::FT_Get_PS_Font_Private(face, private_ptr);
     c_done_face(face);
     c_done_library(library);
     Ok(ps_private_output(err, ps_private_json(&private)))
@@ -9958,10 +10019,21 @@ fn wasm_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
+        let err = wasm_abi::fontdone_wasm_get_ps_font_private(0, &mut private);
+        return Ok(ps_private_output(err, wasm_ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
-    let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, &mut private);
+    let private_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut private
+        };
+    let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, private_ptr);
     wasm_done_face(handle);
     Ok(ps_private_output(err, wasm_ps_private_json(&private)))
 }
@@ -26590,6 +26662,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             oracle_fallback_args(case)
         }
         "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                return Ok(vec!["--ps-font-private-null-face".to_string()]);
+            }
+            if lifecycle_handle_param(params, "output_pointer_mode") == Some("null") {
+                let mut args = vec!["--ps-font-private-null-output".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--ps-font-private".to_string()];
             push_font_source_from_param(case, params, &mut args)?;
             args.push(face_index_param(params)?.to_string());
@@ -26624,6 +26705,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
         }
         "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                return Ok(vec!["--ps-font-info-null-face".to_string()]);
+            }
+            if lifecycle_handle_param(params, "output_pointer_mode") == Some("null") {
+                let mut args = vec!["--ps-font-info-null-output".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--ps-font-info".to_string()];
             push_font_source_from_param(case, params, &mut args)?;
             args.push(face_index_param(params)?.to_string());

@@ -107,6 +107,41 @@ make -C pillow-rs-freetype test-case CASE=t1tables.FT_Has_PS_Glyph_Names.null_fa
 make -C pillow-rs-freetype test-op OP=t1tables.has_ps_glyph_names
 ```
 
+After the `FT_Get_PS_Font_Info` / `FT_Get_PS_Font_Private` null-error split:
+
+```text
+route audit concrete_cases=7256 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4744}
+focused FontInfo operation runtime_parity: passed=5 failed=0 total=5 covered_manifest_cases=4
+focused FontPrivate operation runtime_parity: passed=16 failed=0 total=16 covered_manifest_cases=15
+full fontdone-test runtime_parity: passed=7014 failed=0 total=7014 covered_manifest_cases=3912
+full fontdone-test runtime_cases: runnable=7014 pending=242
+```
+
+Added same-input rows:
+
+- `t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle`
+- `t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument`
+- `t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle`
+- `t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument`
+
+These rows prove the `src/base/fttype1.c` public error paths for null face and
+null output pointers through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+The null-output rows reuse the maintained generated Type1 fixture
+`input/fonts/type1/font-value-populated.pfb`; null-face rows require no asset.
+The broad FontInfo/Private matrices remain pending for CFF2, CID, Type42, and
+other format/service cases.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_info
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_private
+```
+
 Historical route-audit baseline before the FTC route batches:
 
 ```text
