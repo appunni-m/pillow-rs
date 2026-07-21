@@ -2894,9 +2894,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "coordinates, metrics, and exposed state like pinned C"
         ),
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design": (
-            "FT_Set_MM_Design_Coordinates Adobe-MM parity needs a maintained "
-            "Type1 MM route proving design-coordinate changes alter blend "
-            "state and public outputs like pinned C"
+            "FT_Set_MM_Design_Coordinates Adobe-MM glyph-output fixture is not "
+            "currently a C-observable success row: pinned FreeType 2.14.3 "
+            "returns OK for FT_Set_Pixel_Sizes and FT_Set_MM_Design_Coordinates "
+            "on the maintained Type1 MM fixture, then FT_Load_Glyph returns "
+            "error 6 for the declared glyph_index=42; promoting this as glyph "
+            "output parity would be a green placeholder until the input names a "
+            "glyph that C can load successfully"
         ),
         "ftmm.T1_MAX_MM_AXIS.record_array_capacity": (
             "T1_MAX_MM_AXIS runtime parity needs a maintained Type1 MM "

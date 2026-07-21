@@ -1,5 +1,58 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
+
+Status: audited on 2026-07-21; remains pending. A maintained glyph-output
+route was added for diagnosis, but the current fixture row is not a pinned-C
+success case.
+
+Still-pending row:
+
+- `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
+
+Finding:
+
+- The row declares Type1 MM glyph-output success for
+  `fonts/type1-mm/adobe-mm-two-axis.pfb` with `glyph_index=42`, pixel size 32,
+  and design coordinates `[700, 300]`.
+- The C oracle path was traced step by step:
+  - `FT_Set_Pixel_Sizes(face, 0, 32)` returns `0`.
+  - `FT_Set_MM_Design_Coordinates(face, 2, [700, 300])` returns `0`.
+  - `FT_Load_Glyph(face, 42, FT_LOAD_DEFAULT)` returns `6`.
+- Because pinned C does not load the declared glyph successfully, the row cannot
+  prove glyph metrics, cbox, or bitmap parity as currently written. Promoting
+  Rust/C-ABI/WASM behavior for this row would be a green placeholder.
+
+Maintained route state:
+
+- The unified oracle, Rust FFI, thin C ABI, and WASM harness now have a
+  Type1-MM `FT_Set_MM_Design_Coordinates` glyph-output route analogous to the
+  already-routed OpenType `FT_Set_Var_Design_Coordinates` glyph-output route.
+- The route must remain pending until the input names a glyph that pinned C can
+  load and render successfully, or the fixture is explicitly reclassified as an
+  exact error row.
+
+Required follow-up:
+
+1. Find a glyph index in the maintained Type1 MM fixture that pinned C loads
+   after the same design-coordinate mutation, then compare Rust FFI, C ABI, and
+   WASM glyph output exactly; or
+2. Split this into an exact-error row for glyph 42 and a separate success row
+   with a C-loadable glyph.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmm.set_mm_design_coordinates
+```
+
+With the route temporarily classified as real, the focused run failed with:
+
+```text
+rust ffi: ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design
+oracle returned unexpected error 6
+```
+
 ### Issue Set Current: FT_Get_Var_Design_Coordinates excess output row
 
 Status: audited on 2026-07-21; remains pending. Do not promote this row as a

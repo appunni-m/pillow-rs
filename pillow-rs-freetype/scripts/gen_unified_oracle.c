@@ -12208,6 +12208,50 @@ static int emit_ftmm_set_mm_design_coordinates(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ftmm_set_mm_design_glyph_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Long set_coords[16] = {0};
+    parse_long_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[10], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[11], NULL, 10);
+
+    FT_Error err = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+    if (!err) {
+        err = FT_Set_MM_Design_Coordinates(
+            face.face,
+            set_count,
+            streq(argv[6], "null") ? NULL : set_coords);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(face.face, glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Render_Glyph(face.face->glyph, render_mode);
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{");
+        print_slot_body(face.face->glyph, glyph_index);
+        printf("}}\n");
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
 typedef struct FtmmMmDesignScenarioRow_ {
     FT_Error set_err;
     FT_Error get_design_err;
@@ -19254,6 +19298,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--ftmm-set-mm-design-coordinates")) {
         return emit_ftmm_set_mm_design_coordinates(argc, argv);
+    }
+    if (argc == 12 && streq(argv[1], "--ftmm-set-mm-design-glyph-output")) {
+        return emit_ftmm_set_mm_design_glyph_output(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--ftmm-set-mm-design-scenarios")) {
         return emit_ftmm_set_mm_design_scenarios(argc, argv);
