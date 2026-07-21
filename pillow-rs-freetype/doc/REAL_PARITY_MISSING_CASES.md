@@ -2,7 +2,7 @@
 
 ### Issue Set Current: FT_Glyph_Transform owned outline glyph success route
 
-Status: planned on 2026-07-21 after route audit at `ef6bbc55a`.
+Status: in progress on 2026-07-21 after route audit at `ef6bbc55a`.
 
 Pending real parity rows:
 
@@ -15,11 +15,21 @@ Current evidence:
 - The two `FT_Glyph_Transform` public error rows are already real parity:
   null/bad glyph and non-scalable bitmap paths compare exact `FT_Error`
   behavior across pinned C oracle, Rust FFI, C ABI, and WASM ABI.
+- Core now has an owned outline glyph primitive that copies a loaded outline
+  slot into an `FT_GlyphRec`-shaped record, converts slot advance from 26.6 to
+  glyph advance 16.16 with FreeType's overflow checks, computes glyph CBox, and
+  applies the pinned outline transform semantics.
+- The thin C ABI now has public `FT_Glyph_Transform`, C header declaration,
+  `FT_Get_Glyph` success allocation for wrapper-owned outline glyphs, CBox
+  support for those glyphs, and `FT_Done_Glyph` release for wrapper-owned
+  outline glyphs. The wrapper owns pointer validation, record copying, and
+  lifetime only; transform math remains in `fontdone`.
 - The success rows remain pending because the C and WASM thin ABI layers do not
-  yet own a real allocated `FT_OutlineGlyphRec`/SVG glyph object produced by
-  `FT_Get_Glyph`. The existing outline transform helpers can mutate outline
-  snapshots, but using only those helpers would not prove the public
-  `FT_Glyph_Transform` endpoint or glyph ownership contract.
+  both expose the full owned-glyph route. The WASM ABI still needs an owned
+  outline glyph handle/record path, and the unified harness/oracle still needs
+  to compare this operation across all lanes. Using only outline snapshot
+  helpers would not prove the public `FT_Glyph_Transform` endpoint or glyph
+  ownership contract.
 - Pinned C behavior to match:
   - `freetype/src/base/ftglyph.c:672-700` checks `glyph` and `glyph->clazz`,
     calls the class transform hook when present, and transforms `glyph->advance`
@@ -31,14 +41,16 @@ Current evidence:
 
 Implementation plan:
 
-1. Add an owned glyph representation in `fontdone` that can hold the public
+1. [done] Add an owned glyph representation in `fontdone` that can hold the public
    `FT_GlyphRec` root plus outline payload copied from a loaded glyph slot.
-2. Teach Rust FFI `FT_Get_Glyph` success to allocate/copy an outline glyph for
+2. [partial] Teach Rust FFI/C ABI `FT_Get_Glyph` success to allocate/copy an outline glyph for
    scalable outline slots, preserving root format, advance, library/class
-   presence, outline points/tags/contours, and CBox.
-3. Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only after the
-   owned glyph object exists; wrappers may validate raw pointers and copy
-   records, but must not implement transform logic independently.
+   presence, outline points/tags/contours, and CBox. Core and C ABI are present;
+   WASM is still pending.
+3. [partial] Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only
+   after the owned glyph object exists; wrappers may validate raw pointers and
+   copy records, but must not implement transform logic independently. C ABI is
+   present; WASM is still pending.
 4. Route `ftglyph.glyph_transform` success through pinned C oracle, Rust FFI,
    C ABI, and WASM ABI, comparing status, transformed outline points, root
    advance, CBox, and mutation class for matrix+delta, delta-only, matrix-only,
