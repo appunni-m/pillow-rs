@@ -2693,12 +2693,14 @@ Current exact broad-driver pending split:
 - `FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime`: compare Basic
   Latin, Greek, and Cyrillic script-map values and subsequent auto-hinted glyph
   output through the maintained map route.
-- `FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip`: still
-  pending because the declared property list also includes
+- `ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip`:
+  still pending because the declared property list also includes
   `glyph-to-script-map`; promoting only the scalar default/fallback subset
-  would skip a typed public property input.
-- `FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime`: compare map mutation
-  side effects and before/after auto-hinted glyph output.
+  would skip a typed public property input.  Focused verification currently
+  reports `ftdriver.property_set_get` as `3` runnable passing rows and this
+  one pending row.
+- `ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime`: compare map
+  mutation side effects and before/after auto-hinted glyph output.
 - `FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime` and
   `FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime`: route CFF driver
   hinting-engine property set/get and compare metrics, outline, or bitmap
