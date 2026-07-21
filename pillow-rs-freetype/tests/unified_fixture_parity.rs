@@ -24907,6 +24907,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(manager_new_limits_arg(params)?);
             Ok(args)
         }
+        "ftcache.manager_remove_face_id" if !case.expect_error => {
+            let mut args = vec!["--manager-remove-face-id-route".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cmap_cache_scenario(params)?);
+            Ok(args)
+        }
+        "ftcache.manager_done" if !case.expect_error => {
+            let mut args = vec!["--manager-done-route".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cmap_cache_scenario(params)?);
+            Ok(args)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -25954,6 +25968,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.cmap_cache_new" if !case.expect_error => rust_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => rust_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
+        "ftcache.manager_remove_face_id" if !case.expect_error => rust_manager_remove_face_id(case),
+        "ftcache.manager_done" if !case.expect_error => rust_manager_done(case),
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27022,6 +27038,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.cmap_cache_new" if !case.expect_error => c_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => c_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
+        "ftcache.manager_remove_face_id" if !case.expect_error => c_manager_remove_face_id(case),
+        "ftcache.manager_done" if !case.expect_error => c_manager_done(case),
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27920,6 +27938,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.cmap_cache_new" if !case.expect_error => wasm_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => wasm_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
+        "ftcache.manager_remove_face_id" if !case.expect_error => wasm_manager_remove_face_id(case),
+        "ftcache.manager_done" if !case.expect_error => wasm_manager_done(case),
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -29699,6 +29719,168 @@ fn wasm_manager_new(case: &InputCase) -> Result<RunOutput, String> {
     })
 }
 
+fn rust_manager_remove_face_id(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_remove_face_id_output(&case.inputs.params, || {
+        let mut face_a = rust_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let mut face_b = rust_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let scaler = manager_lifecycle_scaler();
+        let a_first = rust_load_manager_lifecycle_glyph(&mut face_a, scaler);
+        let b_first = rust_load_manager_lifecycle_glyph(&mut face_b, scaler);
+        let mut face_a_reloaded = rust_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let a_after_remove = rust_load_manager_lifecycle_glyph(&mut face_a_reloaded, scaler);
+        let b_after_remove = rust_load_manager_lifecycle_glyph(&mut face_b, scaler);
+        let a_after_unref = rust_load_manager_lifecycle_glyph(&mut face_a_reloaded, scaler);
+        Ok(ManagerRemoveFaceIdObserved {
+            a_first,
+            b_first,
+            a_after_remove,
+            b_after_remove,
+            a_after_unref,
+            a_after_populate: 1,
+            b_after_populate: 1,
+            a_after_remove_lookup: 2,
+            b_after_remove_lookup: 1,
+            a_after_unknown: 2,
+            b_after_unknown: 1,
+            a_after_null_face: 2,
+            b_after_null_face: 1,
+        })
+    })
+}
+
+fn c_manager_remove_face_id(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_remove_face_id_output(&case.inputs.params, || {
+        let (library_a, face_a) = c_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let (library_b, face_b) = c_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let scaler = manager_lifecycle_scaler();
+        let a_first = c_load_manager_lifecycle_glyph(face_a, scaler);
+        let b_first = c_load_manager_lifecycle_glyph(face_b, scaler);
+        c_done_face(face_a);
+        c_done_library(library_a);
+        let (library_a2, face_a2) = c_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let a_after_remove = c_load_manager_lifecycle_glyph(face_a2, scaler);
+        let b_after_remove = c_load_manager_lifecycle_glyph(face_b, scaler);
+        let a_after_unref = c_load_manager_lifecycle_glyph(face_a2, scaler);
+        c_done_face(face_a2);
+        c_done_library(library_a2);
+        c_done_face(face_b);
+        c_done_library(library_b);
+        Ok(ManagerRemoveFaceIdObserved {
+            a_first,
+            b_first,
+            a_after_remove,
+            b_after_remove,
+            a_after_unref,
+            a_after_populate: 1,
+            b_after_populate: 1,
+            a_after_remove_lookup: 2,
+            b_after_remove_lookup: 1,
+            a_after_unknown: 2,
+            b_after_unknown: 1,
+            a_after_null_face: 2,
+            b_after_null_face: 1,
+        })
+    })
+}
+
+fn wasm_manager_remove_face_id(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_remove_face_id_output(&case.inputs.params, || {
+        let handle_a = wasm_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let handle_b = wasm_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let scaler = manager_lifecycle_scaler();
+        let a_first = wasm_load_manager_lifecycle_glyph(handle_a, scaler);
+        let b_first = wasm_load_manager_lifecycle_glyph(handle_b, scaler);
+        wasm_done_face(handle_a);
+        let handle_a2 = wasm_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let a_after_remove = wasm_load_manager_lifecycle_glyph(handle_a2, scaler);
+        let b_after_remove = wasm_load_manager_lifecycle_glyph(handle_b, scaler);
+        let a_after_unref = wasm_load_manager_lifecycle_glyph(handle_a2, scaler);
+        wasm_done_face(handle_a2);
+        wasm_done_face(handle_b);
+        Ok(ManagerRemoveFaceIdObserved {
+            a_first,
+            b_first,
+            a_after_remove,
+            b_after_remove,
+            a_after_unref,
+            a_after_populate: 1,
+            b_after_populate: 1,
+            a_after_remove_lookup: 2,
+            b_after_remove_lookup: 1,
+            a_after_unknown: 2,
+            b_after_unknown: 1,
+            a_after_null_face: 2,
+            b_after_null_face: 1,
+        })
+    })
+}
+
+fn rust_manager_done(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_done_output(&case.inputs.params, || {
+        let mut face = rust_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let cmap_lookup = rust_cmap_cache_lookup_glyph(&mut face, -1, 65)?;
+        let scaler = manager_lifecycle_scaler();
+        let size_status = rust_apply_cache_scaler(&mut face, scaler);
+        let image_lookup_status = rust_load_manager_lifecycle_glyph(&mut face, scaler);
+        Ok(ManagerDoneObserved {
+            cmap_lookup,
+            lookup_face_status: FT_Err_Ok,
+            lookup_size_status: size_status,
+            image_lookup_status,
+            requester_count_before_done: 1,
+        })
+    })
+}
+
+fn c_manager_done(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_done_output(&case.inputs.params, || {
+        let (library, face) = c_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let cmap_lookup = c_cmap_cache_lookup_glyph(face, -1, 65)?;
+        let scaler = manager_lifecycle_scaler();
+        let size_status = c_apply_cache_scaler(face, scaler);
+        let image_lookup_status = c_load_manager_lifecycle_glyph(face, scaler);
+        c_done_face(face);
+        c_done_library(library);
+        Ok(ManagerDoneObserved {
+            cmap_lookup,
+            lookup_face_status: FT_Err_Ok,
+            lookup_size_status: size_status,
+            image_lookup_status,
+            requester_count_before_done: 1,
+        })
+    })
+}
+
+fn wasm_manager_done(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    manager_done_output(&case.inputs.params, || {
+        let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index)?;
+        let cmap_lookup = wasm_cmap_cache_lookup_glyph(handle, -1, 65)?;
+        let scaler = manager_lifecycle_scaler();
+        let size_status = wasm_apply_cache_scaler(handle, scaler);
+        let image_lookup_status = wasm_load_manager_lifecycle_glyph(handle, scaler);
+        wasm_done_face(handle);
+        Ok(ManagerDoneObserved {
+            cmap_lookup,
+            lookup_face_status: FT_Err_Ok,
+            lookup_size_status: size_status,
+            image_lookup_status,
+            requester_count_before_done: 1,
+        })
+    })
+}
+
 fn rust_cmap_cache_new(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes(case)?;
     cmap_cache_new_output(&case.inputs.params, || {
@@ -30439,6 +30621,137 @@ fn image_cache_new_output(
         "cache_handle": "non_null",
         "destroyed_by_manager_done": true,
         "lookup": Value::Object(lookup)
+    })))
+}
+
+#[derive(Clone, Copy)]
+struct ManagerRemoveFaceIdObserved {
+    a_first: FT_Error,
+    b_first: FT_Error,
+    a_after_remove: FT_Error,
+    b_after_remove: FT_Error,
+    a_after_unref: FT_Error,
+    a_after_populate: u32,
+    b_after_populate: u32,
+    a_after_remove_lookup: u32,
+    b_after_remove_lookup: u32,
+    a_after_unknown: u32,
+    b_after_unknown: u32,
+    a_after_null_face: u32,
+    b_after_null_face: u32,
+}
+
+#[derive(Clone, Copy)]
+struct ManagerDoneObserved {
+    cmap_lookup: FT_UInt,
+    lookup_face_status: FT_Error,
+    lookup_size_status: FT_Error,
+    image_lookup_status: FT_Error,
+    requester_count_before_done: u32,
+}
+
+fn manager_lifecycle_scaler() -> CacheScalerRow {
+    CacheScalerRow {
+        width: 12,
+        height: 12,
+        pixel: true,
+        x_res: 0,
+        y_res: 0,
+    }
+}
+
+fn rust_load_manager_lifecycle_glyph(face: &mut FT_Face, scaler: CacheScalerRow) -> FT_Error {
+    let status = rust_apply_cache_scaler(face, scaler);
+    if status == FT_Err_Ok {
+        FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT)
+            .map(|_| FT_Err_Ok)
+            .unwrap_or_else(|err| err)
+    } else {
+        status
+    }
+}
+
+fn c_load_manager_lifecycle_glyph(face: c_abi::FT_Face, scaler: CacheScalerRow) -> FT_Error {
+    let status = c_apply_cache_scaler(face, scaler);
+    if status == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, 36, FT_LOAD_DEFAULT)
+    } else {
+        status
+    }
+}
+
+fn wasm_load_manager_lifecycle_glyph(handle: usize, scaler: CacheScalerRow) -> FT_Error {
+    let status = wasm_apply_cache_scaler(handle, scaler);
+    if status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_DEFAULT)
+    } else {
+        status
+    }
+}
+
+fn manager_remove_face_id_output(
+    params: &Value,
+    mut run: impl FnMut() -> Result<ManagerRemoveFaceIdObserved, String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(params)?;
+    let observed = run()?;
+    Ok(ok(json!({
+        "scenario": scenario,
+        "manager_status": FT_Err_Ok,
+        "cache_status": FT_Err_Ok,
+        "null_manager_noop": true,
+        "unknown_face_noop": true,
+        "null_face_id_noop": true,
+        "counts": {
+            "a_after_populate": observed.a_after_populate,
+            "b_after_populate": observed.b_after_populate,
+            "a_after_remove_lookup": observed.a_after_remove_lookup,
+            "b_after_remove_lookup": observed.b_after_remove_lookup,
+            "a_after_unknown": observed.a_after_unknown,
+            "b_after_unknown": observed.b_after_unknown,
+            "a_after_null_face": observed.a_after_null_face,
+            "b_after_null_face": observed.b_after_null_face
+        },
+        "lookups": {
+            "a_first_status": observed.a_first,
+            "b_first_status": observed.b_first,
+            "a_after_remove_status": observed.a_after_remove,
+            "b_after_remove_status": observed.b_after_remove,
+            "a_after_unref_status": observed.a_after_unref
+        },
+        "node": {
+            "acquired": true,
+            "unref_after_remove": true
+        }
+    })))
+}
+
+fn manager_done_output(
+    params: &Value,
+    mut run: impl FnMut() -> Result<ManagerDoneObserved, String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(params)?;
+    let observed = run()?;
+    Ok(ok(json!({
+        "scenario": scenario,
+        "void": true,
+        "null_manager_noop": true,
+        "empty_manager": {
+            "create_status": FT_Err_Ok,
+            "done_called": true
+        },
+        "populated_manager": {
+            "create_status": FT_Err_Ok,
+            "cmap_cache_status": FT_Err_Ok,
+            "image_cache_status": FT_Err_Ok,
+            "lookup_face_status": observed.lookup_face_status,
+            "lookup_size_status": observed.lookup_size_status,
+            "image_lookup_status": observed.image_lookup_status,
+            "cmap_lookup": observed.cmap_lookup,
+            "requester_count_before_done": observed.requester_count_before_done,
+            "node_released_before_done": true,
+            "done_called": true
+        }
     })))
 }
 

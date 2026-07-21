@@ -7130,6 +7130,282 @@ static int emit_image_cache_new_route(int argc, char** argv) {
     return 0;
 }
 
+static void print_manager_remove_counts(unsigned int a_after_populate,
+                                        unsigned int b_after_populate,
+                                        unsigned int a_after_remove_lookup,
+                                        unsigned int b_after_remove_lookup,
+                                        unsigned int a_after_unknown,
+                                        unsigned int b_after_unknown,
+                                        unsigned int a_after_null_face,
+                                        unsigned int b_after_null_face) {
+    printf("\"counts\":{\"a_after_populate\":%u,\"b_after_populate\":%u,"
+           "\"a_after_remove_lookup\":%u,\"b_after_remove_lookup\":%u,"
+           "\"a_after_unknown\":%u,\"b_after_unknown\":%u,"
+           "\"a_after_null_face\":%u,\"b_after_null_face\":%u}",
+           a_after_populate,
+           b_after_populate,
+           a_after_remove_lookup,
+           b_after_remove_lookup,
+           a_after_unknown,
+           b_after_unknown,
+           a_after_null_face,
+           b_after_null_face);
+}
+
+static int emit_manager_remove_face_id_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    MemoryFaceRequestRec request_a = {data, data_len, face_index, 0};
+    MemoryFaceRequestRec request_b = {data, data_len, face_index, 0};
+    MemoryFaceRequestRec unknown = {data, data_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             memory_face_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    FTC_ScalerRec scaler_a;
+    FTC_ScalerRec scaler_b;
+    memset(&scaler_a, 0, sizeof(scaler_a));
+    memset(&scaler_b, 0, sizeof(scaler_b));
+    scaler_a.face_id = (FTC_FaceID)&request_a;
+    scaler_a.width = 12;
+    scaler_a.height = 12;
+    scaler_a.pixel = 1;
+    scaler_b = scaler_a;
+    scaler_b.face_id = (FTC_FaceID)&request_b;
+
+    FT_Glyph glyph = NULL;
+    FTC_Node held_node = NULL;
+    FT_Error a_first = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler_a, FT_LOAD_DEFAULT, 36, &glyph, &held_node);
+    FT_Glyph glyph_b = NULL;
+    FTC_Node node_b = NULL;
+    FT_Error b_first = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler_b, FT_LOAD_DEFAULT, 36, &glyph_b, &node_b);
+    if (node_b) {
+        FTC_Node_Unref(node_b, manager);
+    }
+    unsigned int a_after_populate = request_a.calls;
+    unsigned int b_after_populate = request_b.calls;
+
+    if (manager) {
+        FTC_Manager_RemoveFaceID(manager, (FTC_FaceID)&request_a);
+    }
+    FT_Glyph a_after_remove_glyph = NULL;
+    FTC_Node a_after_remove_node = NULL;
+    FT_Error a_after_remove = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler_a, FT_LOAD_DEFAULT, 36, &a_after_remove_glyph, &a_after_remove_node);
+    if (a_after_remove_node) {
+        FTC_Node_Unref(a_after_remove_node, manager);
+    }
+    FT_Glyph b_after_remove_glyph = NULL;
+    FTC_Node b_after_remove_node = NULL;
+    FT_Error b_after_remove = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler_b, FT_LOAD_DEFAULT, 36, &b_after_remove_glyph, &b_after_remove_node);
+    if (b_after_remove_node) {
+        FTC_Node_Unref(b_after_remove_node, manager);
+    }
+    unsigned int a_after_remove_lookup = request_a.calls;
+    unsigned int b_after_remove_lookup = request_b.calls;
+
+    if (manager) {
+        FTC_Manager_RemoveFaceID(manager, (FTC_FaceID)&unknown);
+    }
+    unsigned int a_after_unknown = request_a.calls;
+    unsigned int b_after_unknown = request_b.calls;
+    if (manager) {
+        FTC_Manager_RemoveFaceID(manager, NULL);
+    }
+    unsigned int a_after_null_face = request_a.calls;
+    unsigned int b_after_null_face = request_b.calls;
+
+    FT_Error a_after_unref = FT_Err_Ok;
+    if (held_node) {
+        FTC_Node_Unref(held_node, manager);
+        FT_Glyph after_unref_glyph = NULL;
+        FTC_Node after_unref_node = NULL;
+        a_after_unref = cache_error ? cache_error
+            : FTC_ImageCache_LookupScaler(cache, &scaler_a, FT_LOAD_DEFAULT, 36, &after_unref_glyph, &after_unref_node);
+        if (after_unref_node) {
+            FTC_Node_Unref(after_unref_node, manager);
+        }
+    }
+    FTC_Manager_RemoveFaceID(NULL, (FTC_FaceID)&request_a);
+
+    printf("{");
+    print_status(cache_error);
+    printf(",\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"manager_status\":%d,\"cache_status\":%d,"
+           "\"null_manager_noop\":true,\"unknown_face_noop\":true,\"null_face_id_noop\":true,",
+           manager_error,
+           cache_error);
+    print_manager_remove_counts(a_after_populate,
+                                b_after_populate,
+                                a_after_remove_lookup,
+                                b_after_remove_lookup,
+                                a_after_unknown,
+                                b_after_unknown,
+                                a_after_null_face,
+                                b_after_null_face);
+    printf(",\"lookups\":{\"a_first_status\":%d,\"b_first_status\":%d,"
+           "\"a_after_remove_status\":%d,\"b_after_remove_status\":%d,"
+           "\"a_after_unref_status\":%d},\"node\":{\"acquired\":%s,"
+           "\"unref_after_remove\":%s}}}\n",
+           a_first,
+           b_first,
+           a_after_remove,
+           b_after_remove,
+           a_after_unref,
+           held_node ? "true" : "false",
+           held_node ? "true" : "false");
+
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_manager_done_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    FTC_Manager_Done(NULL);
+    MemoryFaceRequestRec request = {data, data_len, face_index, 0};
+    FTC_Manager empty_manager = NULL;
+    FT_Error empty_status = FTC_Manager_New(library, 0, 0, 0,
+                                            memory_face_requester,
+                                            &request,
+                                            &empty_manager);
+    if (empty_manager) {
+        FTC_Manager_Done(empty_manager);
+    }
+
+    request.calls = 0;
+    FTC_Manager manager = NULL;
+    FT_Error manager_status = FTC_Manager_New(library, 0, 0, 0,
+                                              memory_face_requester,
+                                              &request,
+                                              &manager);
+    FTC_CMapCache cmap_cache = NULL;
+    FTC_ImageCache image_cache = NULL;
+    FT_Error cmap_status = manager_status ? manager_status : FTC_CMapCache_New(manager, &cmap_cache);
+    FT_Error image_status = manager_status ? manager_status : FTC_ImageCache_New(manager, &image_cache);
+    FT_UInt cmap_lookup = 0;
+    if (!cmap_status) {
+        cmap_lookup = FTC_CMapCache_Lookup(cmap_cache, (FTC_FaceID)&request, -1, 65);
+    }
+    FTC_ScalerRec scaler;
+    memset(&scaler, 0, sizeof(scaler));
+    scaler.face_id = (FTC_FaceID)&request;
+    scaler.width = 12;
+    scaler.height = 12;
+    scaler.pixel = 1;
+    FT_Size size = NULL;
+    FT_Error size_status = manager_status ? manager_status : FTC_Manager_LookupSize(manager, &scaler, &size);
+    FT_Face face = NULL;
+    FT_Error face_status = manager_status ? manager_status : FTC_Manager_LookupFace(manager, (FTC_FaceID)&request, &face);
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Error image_lookup_status = image_status ? image_status
+        : FTC_ImageCache_LookupScaler(image_cache, &scaler, FT_LOAD_DEFAULT, 36, &glyph, &node);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    unsigned int requester_count_before_done = request.calls;
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"void\":true,\"null_manager_noop\":true,"
+           "\"empty_manager\":{\"create_status\":%d,\"done_called\":true},"
+           "\"populated_manager\":{\"create_status\":%d,\"cmap_cache_status\":%d,"
+           "\"image_cache_status\":%d,\"lookup_face_status\":%d,"
+           "\"lookup_size_status\":%d,\"image_lookup_status\":%d,"
+           "\"cmap_lookup\":%u,\"requester_count_before_done\":%u,"
+           "\"node_released_before_done\":true,\"done_called\":true}}}\n",
+           empty_status,
+           manager_status,
+           cmap_status,
+           image_status,
+           face_status,
+           size_status,
+           image_lookup_status,
+           cmap_lookup,
+           requester_count_before_done);
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_manager_reset(int argc, char** argv) {
     const char* command = argv[1];
     if (streq(command, "--manager-reset-null")) {
@@ -20933,6 +21209,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--manager-new-route")) {
         return emit_manager_new_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--manager-remove-face-id-route")) {
+        return emit_manager_remove_face_id_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--manager-done-route")) {
+        return emit_manager_done_route(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--manager-lookup-size")) {
         return emit_manager_lookup_size(argc, argv);
