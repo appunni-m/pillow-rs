@@ -7,6 +7,20 @@ import pathlib
 import subprocess
 
 
+def freetype_library(build_dir: pathlib.Path) -> pathlib.Path:
+    candidates = [
+        build_dir / "libfreetype.so",
+        build_dir / "libfreetype.dylib",
+    ]
+    candidates.extend(sorted(build_dir.glob("libfreetype*.so*")))
+    candidates.extend(sorted(build_dir.glob("libfreetype*.dylib")))
+    candidates.extend(sorted(build_dir.glob("libfreetype*.a")))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"no libfreetype artifact found in {build_dir}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="target/unified-fixtures/gen_unified_oracle")
@@ -19,8 +33,8 @@ def main() -> None:
     constants = root / "target" / "unified-fixtures" / "generated_constants.inc"
     generator = root / "scripts" / "generate_public_constants.py"
     script = pathlib.Path(__file__).resolve()
-    library = root / "freetype" / "build" / "libfreetype.so"
     freetype_build = root / "freetype" / "build"
+    library = freetype_library(freetype_build)
 
     subprocess.run(
         [

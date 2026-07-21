@@ -5604,6 +5604,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_SBitCache_New successful manager-owned SBit cache handle creation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.type_contract"
+        and row.case_id
+        in {
+            "ftcache.FTC_CMapCache.manager_owned_opaque_cache",
+            "ftcache.FTC_ImageCache.manager_owned_opaque_cache",
+            "ftcache.FTC_SBitCache.manager_owned_sbit_cache",
+        }
+    ):
+        return "FTC cache opaque public handle nullness, manager ownership identity, and manager-done lifecycle class validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftbzip2.stream_open_bzip2"
         and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
     ):

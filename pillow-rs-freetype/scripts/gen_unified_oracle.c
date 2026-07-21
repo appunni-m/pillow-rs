@@ -6507,6 +6507,61 @@ static int emit_sbit_cache_new_success(void) {
     return 0;
 }
 
+static int emit_cache_type_contract(int argc, char** argv) {
+    (void)argc;
+    const char* constructor = argv[2];
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cache_no_lookup_requester,
+                                             NULL,
+                                             &manager);
+    FT_Error cache_error = manager_error;
+    const char* nullness = "null";
+    if (!manager_error) {
+        if (streq(constructor, "FTC_CMapCache_New")) {
+            FTC_CMapCache cache = NULL;
+            cache_error = FTC_CMapCache_New(manager, &cache);
+            nullness = cache ? "non_null" : "null";
+        } else if (streq(constructor, "FTC_ImageCache_New")) {
+            FTC_ImageCache cache = NULL;
+            cache_error = FTC_ImageCache_New(manager, &cache);
+            nullness = cache ? "non_null" : "null";
+        } else if (streq(constructor, "FTC_SBitCache_New")) {
+            FTC_SBitCache cache = NULL;
+            cache_error = FTC_SBitCache_New(manager, &cache);
+            nullness = cache ? "non_null" : "null";
+        } else {
+            cache_error = FT_Err_Invalid_Argument;
+        }
+    }
+
+    printf("{");
+    print_status(cache_error);
+    printf(",\"output\":{\"constructor\":\"");
+    print_json_string_content(constructor);
+    printf("\",\"manager_status\":%d,\"create\":{\"status\":%d},"
+           "\"handle\":{\"nullness\":\"%s\"},"
+           "\"owner\":{\"identity_class\":\"manager\"},"
+           "\"done\":{\"lifecycle_class\":\"manager_destroys_cache\"}}}\n",
+           manager_error,
+           cache_error,
+           nullness);
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 typedef struct CMapCacheRequesterData_ {
     unsigned char* data;
     long data_len;
@@ -21394,6 +21449,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--sbit-cache-new-success")) {
         return emit_sbit_cache_new_success();
+    }
+    if (argc == 3 && streq(argv[1], "--cache-type-contract")) {
+        return emit_cache_type_contract(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--image-cache-lookup-scaler")) {
         return emit_image_cache_lookup_scaler(argc, argv);
