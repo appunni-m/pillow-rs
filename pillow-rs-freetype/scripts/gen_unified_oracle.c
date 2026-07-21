@@ -12,6 +12,7 @@
 #include <freetype/ftbitmap.h>
 #include <freetype/ftbdf.h>
 #include <freetype/ftbzip2.h>
+#include <freetype/ftcid.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftfntfmt.h>
@@ -8373,6 +8374,78 @@ static void print_manager_lookup_size_row(FTC_Manager manager,
            repeat_error,
            (!error && !repeat_error && size && repeat_size && size == repeat_size) ? "true" : "false",
            after_repeat_calls);
+}
+
+static int emit_cid_route(int argc, char** argv) {
+    if (argc != 6) {
+        return 2;
+    }
+    const char* route = argv[2];
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (load_oracle_source_bytes(argv[3], argv[4], &data, &data_len) != 0) {
+        return 1;
+    }
+    FT_Long face_index = (FT_Long)strtol(argv[5], NULL, 10);
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf("}\n");
+        free(data);
+        return 0;
+    }
+    FT_Error open_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (open_error) {
+        printf("{");
+        print_status(open_error);
+        printf("}\n");
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    printf("{");
+    if (streq(route, "is-internally-cid-keyed")) {
+        FT_Bool is_cid = 0;
+        FT_Error err = FT_Get_CID_Is_Internally_CID_Keyed(face, &is_cid);
+        print_status(err);
+        printf(",\"output\":{\"is_cid\":%u,\"ft_is_cid_keyed\":%d}}\n",
+               (unsigned)is_cid,
+               FT_IS_CID_KEYED(face) ? 1 : 0);
+    } else if (strncmp(route, "glyph-index:", 12) == 0) {
+        FT_UInt glyph_index = streq(route + 12, "last_valid")
+                                  ? (FT_UInt)(face->num_glyphs - 1)
+                                  : (FT_UInt)strtoul(route + 12, NULL, 10);
+        FT_UInt cid = 0;
+        FT_Error err = FT_Get_CID_From_Glyph_Index(face, glyph_index, &cid);
+        print_status(err);
+        printf(",\"output\":{\"glyph_index\":%u,\"cid\":%u}}\n",
+               glyph_index,
+               cid);
+    } else if (streq(route, "ros")) {
+        const char* registry = NULL;
+        const char* ordering = NULL;
+        FT_Int supplement = 0;
+        FT_Error err = FT_Get_CID_Registry_Ordering_Supplement(
+            face, &registry, &ordering, &supplement);
+        print_status(err);
+        printf(",\"output\":{\"registry\":");
+        print_json_c_string_or_null(registry);
+        printf(",\"ordering\":");
+        print_json_c_string_or_null(ordering);
+        printf(",\"supplement\":%d}}\n", supplement);
+    } else {
+        print_status(FT_Err_Invalid_Argument);
+        printf("}\n");
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
 }
 
 static int emit_manager_lookup_size(int argc, char** argv) {
@@ -25116,6 +25189,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--face-id-identity")) {
         return emit_face_id_identity_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--cid-route")) {
+        return emit_cid_route(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");

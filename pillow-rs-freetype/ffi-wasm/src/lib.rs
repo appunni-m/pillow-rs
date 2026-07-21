@@ -312,6 +312,16 @@ pub struct FontdoneWasmBdfCharset {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmCidRos {
+    pub registry: *const FT_Byte,
+    pub registry_len: FT_UInt,
+    pub ordering: *const FT_Byte,
+    pub ordering_len: FT_UInt,
+    pub supplement: FT_Int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmOutline {
     pub n_contours: FT_UShort,
     pub n_points: FT_UShort,
@@ -4706,6 +4716,82 @@ pub extern "C" fn fontdone_wasm_get_bdf_charset_id(
             } else {
                 CStr::from_ptr(registry).to_bytes().len() as FT_UInt
             };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_is_internally_cid_keyed(
+    handle: usize,
+    is_cid: *mut FT_Bool,
+) -> FT_Error {
+    let mut value = 0;
+    let err = rust_ffi::FT_Get_CID_Is_Internally_CID_Keyed(
+        face_ref(handle).map(|face| &face.face),
+        (!is_cid.is_null()).then_some(&mut value),
+    );
+    if !is_cid.is_null() {
+        // SAFETY: null was checked and caller provides writable scalar output.
+        unsafe {
+            *is_cid = value;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_from_glyph_index(
+    handle: usize,
+    glyph_index: FT_UInt,
+    cid: *mut FT_UInt,
+) -> FT_Error {
+    let mut value = 0;
+    let err = rust_ffi::FT_Get_CID_From_Glyph_Index(
+        face_ref(handle).map(|face| &face.face),
+        glyph_index,
+        (!cid.is_null()).then_some(&mut value),
+    );
+    if !cid.is_null() {
+        // SAFETY: null was checked and caller provides writable scalar output.
+        unsafe {
+            *cid = value;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_registry_ordering_supplement(
+    handle: usize,
+    output: *mut FontdoneWasmCidRos,
+) -> FT_Error {
+    let mut registry: *const rust_ffi::FT_String = std::ptr::null();
+    let mut ordering: *const rust_ffi::FT_String = std::ptr::null();
+    let mut supplement = 0;
+    let err = rust_ffi::FT_Get_CID_Registry_Ordering_Supplement(
+        face_ref(handle).map(|face| &face.face),
+        (!output.is_null()).then_some(&mut registry),
+        (!output.is_null()).then_some(&mut ordering),
+        (!output.is_null()).then_some(&mut supplement),
+    );
+    if !output.is_null() {
+        // SAFETY: null was checked above and caller provided writable
+        // linear-memory storage for the flat WASM ROS record.
+        unsafe {
+            (*output).registry = registry.cast::<FT_Byte>();
+            (*output).registry_len = if registry.is_null() {
+                0
+            } else {
+                CStr::from_ptr(registry).to_bytes().len() as FT_UInt
+            };
+            (*output).ordering = ordering.cast::<FT_Byte>();
+            (*output).ordering_len = if ordering.is_null() {
+                0
+            } else {
+                CStr::from_ptr(ordering).to_bytes().len() as FT_UInt
+            };
+            (*output).supplement = supplement;
         }
     }
     err

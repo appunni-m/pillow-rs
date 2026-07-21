@@ -117,11 +117,13 @@
             "id": "g0",
             "assets": {
               "font": {
-                "kind": "ref",
+                "kind": "file",
                 "role": "sfnt_wrapped_cid_font",
                 "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
-                "status": "required_future_asset",
-                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+                "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+                "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+                "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+                "license": "OFL-1.1"
               }
             },
             "params": {
@@ -137,11 +139,13 @@
             "id": "g1",
             "assets": {
               "font": {
-                "kind": "ref",
+                "kind": "file",
                 "role": "sfnt_wrapped_cid_font",
                 "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
-                "status": "required_future_asset",
-                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+                "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+                "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+                "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+                "license": "OFL-1.1"
               }
             },
             "params": {
@@ -157,11 +161,13 @@
             "id": "glast_valid",
             "assets": {
               "font": {
-                "kind": "ref",
+                "kind": "file",
                 "role": "sfnt_wrapped_cid_font",
                 "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
-                "status": "required_future_asset",
-                "requires": "OpenType CFF/CID font whose CFF service reports internally CID-keyed state"
+                "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+                "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+                "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+                "license": "OFL-1.1"
               }
             },
             "params": {

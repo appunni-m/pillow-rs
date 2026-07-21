@@ -2694,6 +2694,8 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 rust_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => rust_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => rust_cid_from_glyph_index_output(case),
             "FT_Property_Set_then_Get"
                 if case.case_id
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
@@ -3072,6 +3074,8 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 c_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => c_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => c_cid_from_glyph_index_output(case),
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -3435,6 +3439,8 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 wasm_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => wasm_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => wasm_cid_from_glyph_index_output(case),
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return wasm_get_winfnt_header(0, &case.inputs.params);
@@ -21192,6 +21198,117 @@ fn wasm_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
     Ok(output)
 }
 
+fn cid_keyed_run_output(error: FT_Error, is_cid: FT_Bool, ft_is_cid_keyed: bool) -> RunOutput {
+    let output = json!({
+        "is_cid": is_cid,
+        "ft_is_cid_keyed": if ft_is_cid_keyed { 1 } else { 0 }
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_from_glyph_run_output(error: FT_Error, glyph_index: FT_UInt, cid: FT_UInt) -> RunOutput {
+    let output = json!({
+        "glyph_index": glyph_index,
+        "cid": cid
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_route_glyph_index(num_glyphs: FT_Long, params: &Value) -> Result<FT_UInt, String> {
+    if params
+        .get("glyph_index")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "last_valid")
+    {
+        return num_glyphs
+            .checked_sub(1)
+            .and_then(|value| FT_UInt::try_from(value).ok())
+            .ok_or_else(|| "face has no last valid glyph index".to_string());
+    }
+    glyph_index_param(params)
+}
+
+fn rust_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut is_cid = 0;
+    let error = FT_Get_CID_Is_Internally_CID_Keyed(Some(&face), Some(&mut is_cid));
+    Ok(cid_keyed_run_output(
+        error,
+        is_cid,
+        face.face_flags & FT_FACE_FLAG_CID_KEYED != 0,
+    ))
+}
+
+fn c_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut is_cid = 0;
+    let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, &mut is_cid);
+    let ft_is_cid_keyed = c_abi::abi_face_info(face)
+        .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut is_cid = 0;
+    let error = wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, &mut is_cid);
+    let ft_is_cid_keyed = wasm_abi::abi_face_info(handle)
+        .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn rust_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let glyph_index = cid_route_glyph_index(face.num_glyphs, &case.inputs.params)?;
+    let mut cid = 0;
+    let error = FT_Get_CID_From_Glyph_Index(Some(&face), glyph_index, Some(&mut cid));
+    Ok(cid_from_glyph_run_output(error, glyph_index, cid))
+}
+
+fn c_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let num_glyphs = c_abi::abi_face_info(face)
+        .map(|info| info.num_glyphs)
+        .ok_or_else(|| "missing c abi face info".to_string())?;
+    let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    let mut cid = 0;
+    let error = c_abi::FT_Get_CID_From_Glyph_Index(face, glyph_index, &mut cid);
+    let output = cid_from_glyph_run_output(error, glyph_index, cid);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let num_glyphs = wasm_abi::abi_face_info(handle)
+        .map(|info| info.num_glyphs)
+        .ok_or_else(|| "missing wasm abi face info".to_string())?;
+    let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    let mut cid = 0;
+    let error = wasm_abi::fontdone_wasm_get_cid_from_glyph_index(handle, glyph_index, &mut cid);
+    let output = cid_from_glyph_run_output(error, glyph_index, cid);
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn bdf_property_sentinel() -> BDF_PropertyRec {
     BDF_PropertyRec {
         type_: BDF_PROPERTY_TYPE_SENTINEL,
@@ -26443,6 +26560,30 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
             let mut args = vec!["--bdf-charset-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_is_internally_cid_keyed" => {
+            let mut args = vec![
+                "--cid-route".to_string(),
+                "is-internally-cid-keyed".to_string(),
+            ];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_from_glyph_index" => {
+            let route = if params
+                .get("glyph_index")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value == "last_valid")
+            {
+                "glyph-index:last_valid".to_string()
+            } else {
+                format!("glyph-index:{}", glyph_index_param(params)?)
+            };
+            let mut args = vec!["--cid-route".to_string(), route];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)

@@ -1259,6 +1259,9 @@ pub struct FT_Face {
     postscript_name: Option<String>,
     type1_font_info_strings: Option<Type1FontInfoStrings>,
     type1_mm_axis_names: Vec<CString>,
+    cid_registry: Option<CString>,
+    cid_ordering: Option<CString>,
+    cid_supplement: FT_Int,
     sfnt_os2: Option<Box<TT_OS2>>,
     sfnt_head: Option<Box<TT_Header>>,
     sfnt_maxp: Option<Box<TT_MaxProfile>>,
@@ -5695,6 +5698,85 @@ pub fn FT_Get_BDF_Charset_ID(
     error
 }
 
+pub fn FT_Get_CID_Is_Internally_CID_Keyed(
+    face: Option<&FT_Face>,
+    mut is_cid: Option<&mut FT_Bool>,
+) -> FT_Error {
+    if let Some(output) = &mut is_cid {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if face.inner.borrow().font().is_cid_keyed() {
+        if let Some(output) = is_cid {
+            *output = 1;
+        }
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Argument as FT_Error
+    }
+}
+
+pub fn FT_Get_CID_From_Glyph_Index(
+    face: Option<&FT_Face>,
+    glyph_index: FT_UInt,
+    mut cid: Option<&mut FT_UInt>,
+) -> FT_Error {
+    if let Some(output) = &mut cid {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(value) = face.inner.borrow().font().cid_for_glyph_index(glyph_index) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if let Some(output) = cid {
+        *output = FT_UInt::from(value);
+    }
+    FT_Err_Ok
+}
+
+pub fn FT_Get_CID_Registry_Ordering_Supplement(
+    face: Option<&FT_Face>,
+    mut registry: Option<&mut *const FT_String>,
+    mut ordering: Option<&mut *const FT_String>,
+    mut supplement: Option<&mut FT_Int>,
+) -> FT_Error {
+    if let Some(output) = &mut registry {
+        **output = ptr::null();
+    }
+    if let Some(output) = &mut ordering {
+        **output = ptr::null();
+    }
+    if let Some(output) = &mut supplement {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if !face.inner.borrow().font().is_cid_keyed() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    if let Some(output) = registry {
+        *output = face
+            .cid_registry
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+    }
+    if let Some(output) = ordering {
+        *output = face
+            .cid_ordering
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+    }
+    if let Some(output) = supplement {
+        *output = face.cid_supplement;
+    }
+    FT_Err_Ok
+}
+
 pub fn FT_GlyphSlot_AdjustWeight(
     slot: Option<&mut FT_GlyphSlot>,
     x_delta: FT_Fixed,
@@ -7727,6 +7809,15 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    let (cid_registry, cid_ordering, cid_supplement) = font
+        .cid_registry_ordering_supplement()
+        .map_or((None, None, 0), |(registry, ordering, supplement)| {
+            (
+                CString::new(registry).ok(),
+                CString::new(ordering).ok(),
+                supplement,
+            )
+        });
     let size_state = inner.active_size_state();
     let size_metrics = inner.size_metrics().into();
     let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
@@ -7829,6 +7920,9 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         postscript_name,
         type1_font_info_strings,
         type1_mm_axis_names,
+        cid_registry,
+        cid_ordering,
+        cid_supplement,
         sfnt_os2,
         sfnt_head,
         sfnt_maxp,

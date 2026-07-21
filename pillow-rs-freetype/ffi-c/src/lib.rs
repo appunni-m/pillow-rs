@@ -5128,6 +5128,55 @@ pub extern "C" fn FT_Get_BDF_Charset_ID(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_Is_Internally_CID_Keyed(
+    face: FT_Face,
+    is_cid: *mut FT_Bool,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the output pointer or
+    // null, matching FreeType's nullable output contract.
+    let is_cid = unsafe { is_cid.as_mut() };
+    rust_ffi::FT_Get_CID_Is_Internally_CID_Keyed(face_state(face).map(|state| &state.inner), is_cid)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_From_Glyph_Index(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+    cid: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the output pointer or
+    // null, matching FreeType's nullable output contract.
+    let cid = unsafe { cid.as_mut() };
+    rust_ffi::FT_Get_CID_From_Glyph_Index(
+        face_state(face).map(|state| &state.inner),
+        glyph_index,
+        cid,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_Registry_Ordering_Supplement(
+    face: FT_Face,
+    registry: *mut *const c_char,
+    ordering: *mut *const c_char,
+    supplement: *mut FT_Int,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for each output pointer or
+    // null, matching FreeType's nullable output contract.
+    let registry = unsafe { registry.as_mut() };
+    // SAFETY: same as above for ordering.
+    let ordering = unsafe { ordering.as_mut() };
+    // SAFETY: same as above for supplement.
+    let supplement = unsafe { supplement.as_mut() };
+    rust_ffi::FT_Get_CID_Registry_Ordering_Supplement(
+        face_state(face).map(|state| &state.inner),
+        registry,
+        ordering,
+        supplement,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Sfnt_Name_Count(face: FT_Face) -> FT_UInt {
     rust_ffi::FT_Get_Sfnt_Name_Count(face_state(face).map(|state| &state.inner))
 }
