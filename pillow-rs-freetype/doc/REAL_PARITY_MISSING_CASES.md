@@ -11262,6 +11262,41 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+## FT_Get_BDF_Property route audit correction
+
+`ftbdf.get_bdf_property` fixture rows are present, but they are not real parity
+yet.  The first divergence was
+`ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties`:
+the generated route audit marked the row `real-parity`, while the harness had
+no maintained native-oracle command and no Rust FFI, thin C ABI, or WASM route
+for `FT_Get_BDF_Property`.  The Rust fallback returned
+`FT_Err_Unimplemented_Feature` and any generic output acceptance would be a
+green placeholder.
+
+Required fix plan:
+
+1. Add a native oracle command that calls pinned FreeType
+   `FT_Get_BDF_Property` for BDF, PCF, selected-strike SFNT BDF-table, missing
+   property, unsupported face, and null-argument rows.
+2. Implement the pure-Rust core property model first.  BDF/PCF/SFNT property
+   parsing must live in `fontdone`; C and WASM ABI layers may only validate
+   handles, copy `BDF_PropertyRec`-style records, and preserve string
+   lifetimes.
+3. Compare exact `FT_Error`, property type, atom string contents, signed
+   integer, cardinal value, and output preservation semantics across pinned C,
+   Rust FFI, C ABI, and WASM before promoting any row back to real parity.
+
+## FT_Property_Set invalid property preservation
+
+Pinned FreeType `FT_Property_Set` failure does not by itself define the
+post-set value.  The maintained oracle command follows the failed set with
+`FT_Property_Get` using the same module/property pair.  For an invalid property
+name, the follow-up get also fails and leaves the sentinel unchanged; for an
+invalid `truetype:interpreter-version` value, the follow-up get succeeds and
+returns the unchanged interpreter version.  The WASM parity helper must use the
+same module/property selectors for that follow-up get instead of always reading
+the valid `truetype:interpreter-version` property.
+
 ### Issue Set Current: core stream/SVG/parameter runtime route blockers
 
 Status: focused route probes classified on 2026-07-20.

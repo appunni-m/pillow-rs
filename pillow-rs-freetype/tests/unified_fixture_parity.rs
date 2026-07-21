@@ -17396,7 +17396,12 @@ fn property_rejected_set_preservation(
             &mut ignored,
         );
         let mut value_after = PROPERTY_SENTINEL;
-        let _ = wasm_abi::fontdone_wasm_property_get(1, 1, 1, &mut value_after);
+        let _ = wasm_abi::fontdone_wasm_property_get(
+            1,
+            module_selector,
+            property_selector,
+            &mut value_after,
+        );
         return (set_status, value_after);
     }
     let (set_status, get_status, value_after) = property_set_then_get_call(
