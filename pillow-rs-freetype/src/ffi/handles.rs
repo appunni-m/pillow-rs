@@ -14,7 +14,7 @@ use crate::font::{
     SizeRequestType, Type1FontInfo, Type1PrivateDict, WinFntHeader,
 };
 use crate::tt::varstore::ItemVariationStore;
-use crate::{api, grays, render};
+use crate::{api, grays, render, scaler};
 
 use super::constants::*;
 use super::convert::{
@@ -2001,6 +2001,54 @@ pub fn FT_Bitmap_Glyph_Copy(glyph: &FT_BitmapGlyphOwned) -> FT_BitmapGlyphOwned 
     // buffer.  Cloning the safe owned representation gives the same detached
     // target lifetime without sharing the source Vec.
     glyph.clone()
+}
+
+pub fn FT_Outline_Glyph_To_Bitmap(
+    glyph: &FT_OutlineGlyphOwned,
+    render_mode: FT_Render_Mode,
+) -> Result<FT_BitmapGlyphOwned, FT_Error> {
+    let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(&glyph.outline), Some(&mut cbox));
+    let off_x = scaler::ft_pix_floor(i32::try_from(cbox.xMin).map_err(|_| FT_Err_Invalid_Outline)?);
+    let off_y = scaler::ft_pix_floor(i32::try_from(cbox.yMin).map_err(|_| FT_Err_Invalid_Outline)?);
+    let left = off_x >> 6;
+    let bottom = off_y >> 6;
+    let top =
+        scaler::ft_pix_ceil(i32::try_from(cbox.yMax).map_err(|_| FT_Err_Invalid_Outline)?) >> 6;
+    let mut outline = outline_snapshot_to_core(&glyph.outline).ok_or(FT_Err_Invalid_Outline)?;
+    for point in &mut outline.points {
+        point.x -= off_x;
+        point.y -= off_y;
+    }
+    outline.cbox_x_min = 0;
+    outline.cbox_y_min = 0;
+    outline.cbox_x_max =
+        (scaler::ft_pix_ceil(i32::try_from(cbox.xMax).map_err(|_| FT_Err_Invalid_Outline)?)
+            - off_x)
+            >> 6;
+    outline.cbox_y_max =
+        (scaler::ft_pix_ceil(i32::try_from(cbox.yMax).map_err(|_| FT_Err_Invalid_Outline)?)
+            - off_y)
+            >> 6;
+
+    // FreeType `src/base/ftglyph.c:809-869` prepares an outline glyph into a
+    // dummy slot, renders it, then copies the rendered bitmap and root advance
+    // into a newly allocated bitmap glyph.
+    let mut scratch = grays::RasterScratch::default();
+    let bitmap = render::render_loaded_outline(outline, left, bottom, top, mode, &mut scratch)
+        .map_err(error_to_ft)?;
+    Ok(FT_BitmapGlyphOwned {
+        root: FT_GlyphRec {
+            library: glyph.root.library,
+            clazz: ptr::dangling(),
+            format: FT_GLYPH_FORMAT_BITMAP,
+            advance: glyph.root.advance,
+        },
+        left: bitmap.left,
+        top: bitmap.top,
+        bitmap: bitmap.into(),
+    })
 }
 
 pub fn FT_Outline_Glyph_Copy(glyph: &FT_OutlineGlyphOwned) -> FT_OutlineGlyphOwned {

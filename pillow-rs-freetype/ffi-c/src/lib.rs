@@ -3799,10 +3799,42 @@ pub extern "C" fn FT_Glyph_Transform(
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Glyph_To_Bitmap(
     the_glyph: *mut FT_Glyph,
-    _render_mode: FT_Render_Mode,
-    _origin: *const FT_Vector,
-    _destroy: FT_Bool,
+    render_mode: FT_Render_Mode,
+    origin: *const FT_Vector,
+    destroy: FT_Bool,
 ) -> FT_Error {
+    if !the_glyph.is_null() {
+        // SAFETY: `the_glyph` is non-null and points to caller-owned handle
+        // storage.  We only copy the handle value before validating the glyph.
+        let glyph = unsafe { *the_glyph };
+        if owned_bitmap_glyph_from_root(glyph).is_some() {
+            // FreeType `src/base/ftglyph.c:794-795` returns success without
+            // replacing or freeing an already-bitmap glyph.
+            return rust_ffi::FT_Err_Ok;
+        }
+        if let Some(owned) = owned_outline_glyph_from_root(glyph) {
+            if !origin.is_null() {
+                return rust_ffi::FT_Err_Unimplemented_Feature;
+            }
+            let bitmap = match rust_ffi::FT_Outline_Glyph_To_Bitmap(&owned.core, render_mode) {
+                Ok(bitmap) => bitmap,
+                Err(error) => return error,
+            };
+            let bitmap =
+                Box::into_raw(Box::new(OwnedBitmapGlyph::new(bitmap))).cast::<FT_GlyphRec>();
+            if destroy != 0 {
+                // SAFETY: the class sentinel proves this pointer came from
+                // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
+                unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+            }
+            // SAFETY: `the_glyph` is non-null and points to caller-provided
+            // handle storage.  C FreeType replaces it after successful render.
+            unsafe {
+                *the_glyph = bitmap;
+            }
+            return rust_ffi::FT_Err_Ok;
+        }
+    }
     let (glyph_present, library_present, class_present, prepare_hook_present) =
         if the_glyph.is_null() {
             (false, false, false, false)

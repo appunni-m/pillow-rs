@@ -160,6 +160,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_done_glyph_handle",
     "fontdone_wasm_glyph_transform",
     "fontdone_wasm_glyph_to_bitmap",
+    "fontdone_wasm_glyph_to_bitmap_handle",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",

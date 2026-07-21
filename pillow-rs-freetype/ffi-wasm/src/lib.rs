@@ -2346,6 +2346,42 @@ pub extern "C" fn fontdone_wasm_glyph_to_bitmap(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_to_bitmap_handle(
+    the_glyph: *mut usize,
+    render_mode: i32,
+    origin: *const FontdoneWasmVector,
+    destroy: FT_Bool,
+) -> FT_Error {
+    let Some(handle) = (unsafe { the_glyph.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let glyph = ptr::with_exposed_provenance_mut::<FontdoneWasmGlyph>(*handle);
+    if wasm_owned_bitmap_glyph_from_root(glyph).is_some() {
+        // FreeType `src/base/ftglyph.c:794-795` returns success without
+        // replacing or freeing an already-bitmap glyph.
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(owned) = wasm_owned_outline_glyph_from_root(glyph) else {
+        return rust_ffi::FT_Glyph_To_Bitmap(true, *handle != 0, true, false, false);
+    };
+    if !origin.is_null() {
+        return rust_ffi::FT_Err_Unimplemented_Feature;
+    }
+    let bitmap = match rust_ffi::FT_Outline_Glyph_To_Bitmap(&owned.core, render_mode) {
+        Ok(bitmap) => bitmap,
+        Err(error) => return error,
+    };
+    let bitmap = Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(bitmap))).addr();
+    if destroy != 0 {
+        // SAFETY: the private class marker proves this pointer came from
+        // `Box<WasmOwnedOutlineGlyph>` in `fontdone_wasm_get_glyph_from_face`.
+        unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedOutlineGlyph>())) };
+    }
+    *handle = bitmap;
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,
     abbox: *mut FontdoneWasmBBox,

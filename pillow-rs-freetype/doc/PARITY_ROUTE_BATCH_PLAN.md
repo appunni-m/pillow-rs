@@ -2024,6 +2024,53 @@ Rows deliberately left pending in the same surface:
   `ftglyph.FT_Glyph.caller_owned_lifetime` still require broader
   outline/bitmap/SVG and creation-path lifecycle matrices.
 
+### Route FT_Glyph_To_Bitmap through owned C/WASM glyph handles: 2026-07-22
+
+Status: implemented as a real ABI-path strengthening; no broad pending row was
+promoted.
+
+Scope:
+
+- Added a core `FT_Outline_Glyph_To_Bitmap` helper that renders an owned
+  `FT_OutlineGlyphOwned` into an owned `FT_BitmapGlyphOwned`.
+- Updated the C ABI `FT_Glyph_To_Bitmap` to recognize crate-owned outline and
+  bitmap glyph handles:
+  - bitmap glyph input returns success without replacement, matching FreeType
+    `src/base/ftglyph.c:794-795`;
+  - outline glyph input allocates a bitmap glyph, copies root advance and
+    rendered bitmap payload, replaces the caller handle, and frees the original
+    only when `destroy != 0`, matching FreeType `src/base/ftglyph.c:809-869`.
+- Added the equivalent WASM handle entry point
+  `fontdone_wasm_glyph_to_bitmap_handle`.
+- Updated the focused `ftglyph.glyph_to_bitmap` Rust/C/WASM runners so success
+  cases exercise the real owned-glyph conversion path rather than a slot-render
+  surrogate.
+
+Why the broad lifecycle rows remain pending:
+
+- `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` still declares outline,
+  bitmap, optional SVG, `FT_Get_Glyph`, and `FT_Glyph_To_Bitmap` lifecycle
+  coverage plus free-event sequencing.  This change proves the maintained
+  outline-to-bitmap conversion route, but does not yet provide SVG
+  classification or allocation/failure facade coverage.
+- `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` still needs a combined
+  ownership/free-event route for both `FT_Get_Glyph bitmap` and
+  `FT_Glyph_To_Bitmap outline`.  Existing record-field checks now exercise the
+  real conversion path, but the broad ownership row should remain visible until
+  the lifecycle/free-event route is complete.
+
+Observed impact:
+
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap.success_outline_to_bitmap_destroy_false`
+    passed 4/4 across Rust FFI, C ABI, and WASM ABI.
+  - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap.success_outline_to_bitmap_destroy_true`
+    passed 2/2 across Rust FFI, C ABI, and WASM ABI.
+  - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format`
+    passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+  - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap`
+    passed 2/2 across Rust FFI, C ABI, and WASM ABI.
+
 ### Split FT_Stream_OpenBzip2 disabled-build precedence rows: 2026-07-22
 
 Status: implemented as additive active-build split rows; the enabled-build
