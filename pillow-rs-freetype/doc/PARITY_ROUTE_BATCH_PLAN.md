@@ -586,10 +586,11 @@ Checked and rejected in this sweep:
   error `7` for `FT_Get_PS_Font_Info`/`FT_Get_PS_Font_Private` on those same
   bytes while Rust returned success, so keeping those rows would expose a real
   Rust/C contract gap, not a parity fixture.
-- `input/fonts/cff/fontinfo-populated.otf` is not a valid
-  `FT_Get_PS_Font_Info` success row for the current pinned build; pinned C
-  returned error `7` while Rust returned success. This remains implementation
-  work, not a green fixture promotion.
+- The maintained `input/fonts/cff/fontinfo-populated.otf` fixture is a valid
+  current pinned-C `FT_Get_PS_Font_Info` success input. Pinned FreeType 2.14.3
+  returns null `version`/`notice`, full name `Hybrid OTTO Coverage Regular`,
+  family `Hybrid OTTO Coverage`, weight `Regular`, italic/fixed-pitch zero,
+  and underline defaults `-100/50`.
 
 Promoted in this sweep:
 
@@ -604,6 +605,20 @@ Promoted in this sweep:
   Rust FFI, C ABI, and WASM ABI. These split only the non-PostScript control
   scenarios out of the broad matrices; they do not complete the Type1/CID/Type42
   success obligations.
+- `t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success` uses the
+  maintained `input/fonts/cff/fontinfo-populated.otf` CFF face and compares the
+  exact top-dict `PS_FontInfoRec` strings and scalars through pinned C,
+  Rust FFI, C ABI, and WASM ABI. This splits only the CFF success scenario out
+  of the broad matrix; CID, Type42, and CFF2 obligations remain pending until
+  maintained same-input fixtures exist.
+
+After the CFF FontInfo route:
+
+```text
+route audit concrete_cases=7257 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4745}
+runtime_parity: passed=6 failed=0 total=6 covered_manifest_cases=5
+runtime_cases: runnable=6 pending=1
+```
 
 After the malformed `TT_MaxProfile` route:
 

@@ -3253,7 +3253,7 @@ pub fn FT_Get_PS_Font_Info(
         return FT_Err_Invalid_Argument as FT_Error;
     };
     let inner = face.inner.borrow();
-    let Some(info) = inner.font().type1_font_info() else {
+    let Some(info) = inner.font().postscript_font_info() else {
         return FT_Err_Invalid_Argument as FT_Error;
     };
     let Some(info) = ps_font_info_to_ffi(info, face.type1_font_info_strings.as_ref()) else {
@@ -7716,7 +7716,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     });
     let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
-    let type1_font_info_strings = type1_font_info_strings(font.type1_font_info());
+    let type1_font_info_strings = type1_font_info_strings(font.postscript_font_info());
     let type1_mm_axis_names = font
         .type1_multi_master()
         .map(|master| {

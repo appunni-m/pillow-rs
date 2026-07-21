@@ -2438,6 +2438,12 @@ impl Font {
         self.type1_font_info.as_ref()
     }
 
+    pub(crate) fn postscript_font_info(&self) -> Option<&Type1FontInfo> {
+        self.type1_font_info
+            .as_ref()
+            .or_else(|| self.data.cff.as_ref().map(tt::cff::CffTable::font_info))
+    }
+
     pub(crate) fn type1_encoding(&self) -> Option<&Type1EncodingInfo> {
         self.type1_encoding.as_ref()
     }
