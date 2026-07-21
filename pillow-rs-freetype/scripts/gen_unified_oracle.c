@@ -14989,6 +14989,42 @@ static void print_palette_set_foreground_sfnt_runs_json(FT_Face face) {
     printf("]}");
 }
 
+static FT_Color default_foreground_color_for_palette_flags(FT_UShort palette_flags) {
+    if (palette_flags & FT_PALETTE_FOR_DARK_BACKGROUND) {
+        FT_Color color = { 255, 255, 255, 255 };
+        return color;
+    }
+    FT_Color color = { 0, 0, 0, 255 };
+    return color;
+}
+
+static void print_palette_default_foreground_policy_json(FT_Face face) {
+    FT_Palette_Data data;
+    memset(&data, 0, sizeof(data));
+    FT_Error data_error = FT_Palette_Data_Get(face, &data);
+    FT_UShort num_palettes = data_error ? 0 : data.num_palettes;
+    printf("{\"runs\":[");
+    for (FT_UShort i = 0; i < num_palettes; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_UShort palette_flags = data.palette_flags ? data.palette_flags[i] : 0;
+        FT_Error select_error = FT_Palette_Select(face, i, NULL);
+        FT_Color default_foreground = default_foreground_color_for_palette_flags(palette_flags);
+        printf("{\"palette_index\":%u,\"select_error\":%d,\"palette_flags\":%u,\"default_foreground_bgra\":",
+               i,
+               select_error,
+               palette_flags);
+        print_ft_color_json(default_foreground);
+        printf(",\"render_or_blend_output\":{\"kind\":\"resolved_default_foreground_and_public_paint_reference\",\"resolved_default_foreground_bgra\":");
+        print_ft_color_json(default_foreground);
+        printf(",\"public_foreground_reference\":");
+        print_foreground_solid_public_reference_json(face);
+        printf("}}");
+    }
+    printf("]}");
+}
+
 static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
     printf("{");
     print_status(0);
@@ -15389,6 +15425,10 @@ static int emit_color_palette_case(int argc, char** argv) {
     } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color")) {
         printf(",\"output\":");
         print_palette_set_foreground_sfnt_runs_json(face.face);
+        printf("}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy")) {
+        printf(",\"output\":");
+        print_palette_default_foreground_policy_json(face.face);
         printf("}\n");
     } else {
         close_oracle_face(&face);

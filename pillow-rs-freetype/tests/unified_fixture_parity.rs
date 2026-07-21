@@ -10735,11 +10735,21 @@ fn palette_select_zero_call(
     c_face: c_abi::FT_Face,
     wasm_handle: usize,
 ) -> FT_Error {
+    palette_select_call(backend, rust_face, c_face, wasm_handle, 0)
+}
+
+fn palette_select_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    palette_index: FT_UShort,
+) -> FT_Error {
     match backend {
-        ColorPaintBackend::Rust => FT_Palette_Select(rust_face, 0, None),
-        ColorPaintBackend::CAbi => c_abi::FT_Palette_Select(c_face, 0, ptr::null_mut()),
+        ColorPaintBackend::Rust => FT_Palette_Select(rust_face, palette_index, None),
+        ColorPaintBackend::CAbi => c_abi::FT_Palette_Select(c_face, palette_index, ptr::null_mut()),
         ColorPaintBackend::Wasm => {
-            wasm_abi::fontdone_wasm_palette_select(wasm_handle, 0, ptr::null_mut())
+            wasm_abi::fontdone_wasm_palette_select(wasm_handle, palette_index, ptr::null_mut())
         }
     }
 }
@@ -10818,6 +10828,76 @@ fn palette_set_foreground_sfnt_runs_json(
                     c_face,
                     wasm_handle,
                 )
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+fn default_foreground_color_for_palette_flags(palette_flags: FT_UShort) -> FT_Color {
+    if palette_flags & FT_PALETTE_FOR_DARK_BACKGROUND as FT_UShort != 0 {
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c:1834-1851` resolves COLR
+        // palette index 0xFFFF to opaque white for dark-background palettes
+        // when `FT_Palette_Set_Foreground_Color` has not supplied an explicit
+        // foreground color. All other palettes default to opaque black.
+        FT_Color {
+            blue: 255,
+            green: 255,
+            red: 255,
+            alpha: 255,
+        }
+    } else {
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 255,
+        }
+    }
+}
+
+fn palette_flags_for_backend(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<FT_UShort> {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Data_Copy(rust_face).palette_flags,
+        ColorPaintBackend::CAbi => c_abi::abi_palette_data_snapshot(c_face).palette_flags,
+        ColorPaintBackend::Wasm => wasm_abi::abi_palette_data_snapshot(wasm_handle).palette_flags,
+    }
+}
+
+fn palette_default_foreground_policy_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let runs: Vec<Value> = palette_flags_for_backend(backend, rust_face, c_face, wasm_handle)
+        .into_iter()
+        .enumerate()
+        .map(|(index, palette_flags)| {
+            let palette_index = FT_UShort::try_from(index).unwrap_or(FT_UShort::MAX);
+            let select_error =
+                palette_select_call(backend, rust_face, c_face, wasm_handle, palette_index);
+            let default_foreground_bgra = default_foreground_color_for_palette_flags(palette_flags);
+            json!({
+                "palette_index": palette_index,
+                "select_error": select_error,
+                "palette_flags": palette_flags,
+                "default_foreground_bgra": ft_color_json(default_foreground_bgra),
+                "render_or_blend_output": {
+                    "kind": "resolved_default_foreground_and_public_paint_reference",
+                    "resolved_default_foreground_bgra": ft_color_json(default_foreground_bgra),
+                    "public_foreground_reference": foreground_solid_public_reference_json(
+                        backend,
+                        rust_face,
+                        c_face,
+                        wasm_handle,
+                    )
+                }
             })
         })
         .collect();
@@ -12937,6 +13017,15 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 0,
             )))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let face = open_face(case)?;
+            Ok(ok(palette_default_foreground_policy_json(
+                ColorPaintBackend::Rust,
+                Some(&face),
+                ptr::null_mut(),
+                0,
+            )))
+        }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(FT_Err_Invalid_Face_Handle as FT_Error))
         }
@@ -13056,6 +13145,14 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             Ok(ok(output))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let (library, face) = c_open_face(case)?;
+            let output =
+                palette_default_foreground_policy_json(ColorPaintBackend::CAbi, None, face, 0);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(c_abi::FT_Palette_Set_Foreground_Color(
                 ptr::null_mut(),
@@ -13169,6 +13266,17 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
             let handle = wasm_open_face(case)?;
             let output = palette_set_foreground_sfnt_runs_json(
+                ColorPaintBackend::Wasm,
+                None,
+                ptr::null_mut(),
+                handle,
+            );
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let handle = wasm_open_face(case)?;
+            let output = palette_default_foreground_policy_json(
                 ColorPaintBackend::Wasm,
                 None,
                 ptr::null_mut(),
