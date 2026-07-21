@@ -607,6 +607,7 @@ FT_Bool FT_Get_Color_Glyph_Layer(FT_Face face, FT_UInt base_glyph, FT_UInt* agly
 FT_Bool FT_Get_Color_Glyph_Paint(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform, FT_OpaquePaint* paint);
 FT_Bool FT_Get_Paint(FT_Face face, FT_OpaquePaint opaque_paint, FT_COLR_Paint* paint);
 FT_Bool FT_Get_Paint_Layers(FT_Face face, FT_LayerIterator* layer_iterator, FT_OpaquePaint* paint);
+FT_Bool FT_Get_Colorline_Stops(FT_Face face, FT_ColorStop* color_stop, FT_ColorStopIterator* iterator);
 void FT_TrueTypeGX_Free(FT_Face face, FT_Bytes table);
 void FT_ClassicKern_Free(FT_Face face, FT_Bytes table);
 

@@ -459,6 +459,9 @@ pub struct FT_Palette_Data {
 
 pub type FT_OpaquePaint = rust_ffi::FT_OpaquePaint;
 pub type FT_ColorIndex = rust_ffi::FT_ColorIndex;
+pub type FT_ColorLine = rust_ffi::FT_ColorLine;
+pub type FT_ColorStop = rust_ffi::FT_ColorStop;
+pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
 pub type FT_PaintSolid = rust_ffi::FT_PaintSolid;
 pub type FT_PaintGlyph = rust_ffi::FT_PaintGlyph;
 pub type FT_PaintComposite = rust_ffi::FT_PaintComposite;
@@ -1145,12 +1148,36 @@ pub extern "C" fn FT_Get_Paint_Layers(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Colorline_Stops(
+    face: FT_Face,
+    color_stop: *mut FT_ColorStop,
+    iterator: *mut FT_ColorStopIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Colorline_Stops(
+        face_state(face).map(|state| &state.inner),
+        unsafe { color_stop.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_colr_v1_paint_layer_iterator(
     face: FT_Face,
     opaque_paint: FT_OpaquePaint,
 ) -> Option<FT_LayerIterator> {
     rust_ffi::FT_ColrV1_Paint_Layer_Iterator_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_colorline(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(
         face_state(face).map(|state| &state.inner),
         opaque_paint,
     )

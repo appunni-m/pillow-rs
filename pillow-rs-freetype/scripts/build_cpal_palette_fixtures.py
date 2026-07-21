@@ -354,6 +354,106 @@ def build_colr_v1_transform_paints_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def color_line(extend: ot.ExtendMode, stops: list[tuple[float, int, float]]) -> dict[str, object]:
+    return {
+        "Extend": int(extend),
+        "ColorStop": [
+            {
+                "StopOffset": stop_offset,
+                "PaletteIndex": palette_index,
+                "Alpha": alpha,
+            }
+            for stop_offset, palette_index, alpha in stops
+        ],
+    }
+
+
+def build_colr_v1_static_gradients_font(path: Path) -> None:
+    """Build compact static COLRv1 gradient and ColorLine fixture.
+
+    FreeType 2.14.3 exposes PaintLinearGradient, PaintRadialGradient, and
+    PaintSweepGradient coordinates as 16.16 public values and initializes
+    ColorLine iterators from static ColorStop records.  This fixture covers
+    the static PAD/REPEAT/REFLECT routes only; variable ColorLine rows remain
+    pending until VarColorStop deltas are implemented and compared.
+    """
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:40]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 4
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+            Color(0x70, 0x80, 0x90, 0x40),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: {
+            "Format": int(ot.PaintFormat.PaintLinearGradient),
+            "ColorLine": color_line(
+                ot.ExtendMode.PAD,
+                [
+                    (0.0, 1, 1.0),
+                    (0.5, 2, 0.5),
+                    (1.0, 3, 0.25),
+                ],
+            ),
+            "x0": -10,
+            "y0": 0,
+            "x1": 40,
+            "y1": 0,
+            "x2": 40,
+            "y2": 20,
+        },
+        base_names[1]: {
+            "Format": int(ot.PaintFormat.PaintRadialGradient),
+            "ColorLine": color_line(
+                ot.ExtendMode.REPEAT,
+                [
+                    (0.25, 2, 0.75),
+                    (0.875, 3, 0.125),
+                ],
+            ),
+            "x0": 5,
+            "y0": -7,
+            "r0": 3,
+            "x1": 33,
+            "y1": 29,
+            "r1": 41,
+        },
+        base_names[2]: {
+            "Format": int(ot.PaintFormat.PaintSweepGradient),
+            "ColorLine": color_line(
+                ot.ExtendMode.REFLECT,
+                [
+                    (0.75, 1, 0.625),
+                ],
+            ),
+            "centerX": -13,
+            "centerY": 17,
+            "startAngle": -0.25,
+            "endAngle": 0.5,
+        },
+    }
+
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def main() -> None:
     for name in (
         "cpal-palettes-names-flags.ttf",
@@ -366,6 +466,7 @@ def main() -> None:
     build_colr_v1_layers_font(COLOR_OUTPUT_DIR / "colr-v1-paint-colr-layers-cpal.ttf")
     build_colr_v1_colr_glyph_font(COLOR_OUTPUT_DIR / "colr-v1-colr-glyph-recursive.ttf")
     build_colr_v1_transform_paints_font(COLOR_OUTPUT_DIR / "colr-v1-transform-paints.ttf")
+    build_colr_v1_static_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-static-gradients.ttf")
 
 
 if __name__ == "__main__":

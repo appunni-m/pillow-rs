@@ -191,6 +191,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_color_glyph_paint",
     "fontdone_wasm_get_paint",
     "fontdone_wasm_get_paint_layers",
+    "fontdone_wasm_get_colorline_stops",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
@@ -2679,6 +2680,24 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "exact child opaque-paint classes and fixed-point fields through "
             "the maintained transform fixture, pinned C oracle, Rust FFI, "
             "C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
+        "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad",
+        "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat",
+        "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect",
+        "ftcolor.FT_PaintExtend.gradient_extend_runtime",
+        "ftcolor.FT_ColorLine.gradient_colorline_values",
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops",
+        "ftcolor.FT_Get_Colorline_Stops.end_of_iteration",
+        "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops",
+    }:
+        return (
+            "COLRv1 static gradient payloads and ColorLine stop iteration "
+            "validate through the maintained PAD/REPEAT/REFLECT static "
+            "gradient fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
         row.case_id.endswith(".paint_composite_runtime")
