@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import struct
+import shutil
 from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
@@ -2826,6 +2827,10 @@ def build_latin_low_upem() -> None:
 
 def main() -> None:
     build_script_coverage()
+    shutil.copyfile(
+        OUT_DIR / "script-coverage.ttf",
+        OUT_DIR / "mixed-script-map.ttf",
+    )
     build_latin_x_height_rejection()
     build_khmer_sub_top_overlap()
     build_arabic_standard_fallback()

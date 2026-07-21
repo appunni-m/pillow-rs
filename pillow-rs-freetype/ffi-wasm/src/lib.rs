@@ -2553,6 +2553,61 @@ pub extern "C" fn fontdone_wasm_property_glyph_to_script_map_invalid_face(
     error
 }
 
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, Default)]
+pub struct AbiGlyphToScriptMapSnapshot {
+    pub error: FT_Error,
+    pub face_identity: &'static str,
+    pub map_is_null: bool,
+    pub num_glyphs: FT_Long,
+    pub sample: Vec<(FT_UInt, FT_UShort)>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn abi_property_glyph_to_script_map_snapshot(
+    handle: usize,
+    glyph_indices: &[FT_UInt],
+) -> AbiGlyphToScriptMapSnapshot {
+    let library = rust_ffi::FT_Init_FreeType();
+    let Some(face) = face_ref(handle) else {
+        return AbiGlyphToScriptMapSnapshot {
+            error: rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error,
+            ..Default::default()
+        };
+    };
+    let face_ptr = (&face.face as *const rust_ffi::FT_Face).cast_mut().cast();
+    let mut prop = rust_ffi::FT_Prop_GlyphToScriptMap {
+        face: face_ptr,
+        map: std::ptr::without_provenance_mut(1),
+    };
+    let error = rust_ffi::FT_Property_Get_GlyphToScriptMap(
+        Some(&library),
+        Some("autofitter"),
+        Some("glyph-to-script-map"),
+        Some(&face.face),
+        Some(&mut prop),
+    );
+    let map_is_null = prop.map.is_null();
+    let sample = if error == rust_ffi::FT_Err_Ok && !map_is_null {
+        rust_ffi::FT_Glyph_To_Script_Map_Sample_For_Test(&face.face, glyph_indices)
+    } else {
+        Vec::new()
+    };
+    AbiGlyphToScriptMapSnapshot {
+        error,
+        face_identity: if prop.face == face_ptr {
+            "same-live-face"
+        } else if prop.face.is_null() {
+            "null"
+        } else {
+            "other"
+        },
+        map_is_null,
+        num_glyphs: face.face.num_glyphs,
+        sample,
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_property_increase_x_height_invalid_face(
     out_limit: *mut FT_UInt,

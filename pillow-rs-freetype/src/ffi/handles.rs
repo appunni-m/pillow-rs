@@ -1257,6 +1257,7 @@ pub struct FT_Face {
     no_stem_darkening: i32,
     random_seed: FT_Int32,
     increase_x_height: FT_UInt,
+    glyph_to_script_map: Box<[FT_UShort]>,
     refcount: usize,
 }
 
@@ -3854,11 +3855,30 @@ pub fn FT_Property_Get_GlyphToScriptMap(
     if let Err(error) = autofitter_property_lookup_error(library, module_name, property_name) {
         return error;
     }
-    if face.is_none() {
+    let Some(face) = face else {
         return FT_Err_Invalid_Face_Handle as FT_Error;
-    }
-    let _ = value;
-    FT_Err_Unimplemented_Feature
+    };
+    value.face = (face as *const FT_Face).cast_mut().cast();
+    value.map = face.glyph_to_script_map.as_ptr().cast_mut();
+    FT_Err_Ok
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Glyph_To_Script_Map_Sample_For_Test(
+    face: &FT_Face,
+    glyph_indices: &[FT_UInt],
+) -> Vec<(FT_UInt, FT_UShort)> {
+    glyph_indices
+        .iter()
+        .copied()
+        .filter_map(|glyph_index| {
+            let index = usize::try_from(glyph_index).ok()?;
+            face.glyph_to_script_map
+                .get(index)
+                .copied()
+                .map(|script| (glyph_index, script))
+        })
+        .collect()
 }
 
 pub fn FT_Property_Get(
@@ -5475,6 +5495,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let available_sizes = available_sizes_to_ffi(font);
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
+    let glyph_to_script_map = inner.font().autohint_glyph_style_map().into_boxed_slice();
     let inner = Rc::new(RefCell::new(inner));
     // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
     // start with `face->size == NULL`; `FT_New_Size` may allocate one later.
@@ -5542,6 +5563,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         no_stem_darkening: -1,
         random_seed: -1,
         increase_x_height: 0,
+        glyph_to_script_map,
         refcount: 1,
     };
     register_face_size_handles(&face);

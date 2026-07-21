@@ -14148,6 +14148,19 @@ static void print_property_map_identity(FT_UShort* map) {
            map ? "false" : "true");
 }
 
+static void print_glyph_to_script_map_sample(FT_Face face, FT_UShort* map) {
+    const FT_ULong chars[] = {0x41, 0x4E2D, 0x0905};
+    printf("[{\"glyph_index\":0,\"script\":%u}", map ? map[0] : 0);
+    for (size_t i = 0; i < sizeof(chars) / sizeof(chars[0]); i++) {
+        FT_UInt glyph_index = FT_Get_Char_Index(face, chars[i]);
+        if (glyph_index == 0 || glyph_index >= face->num_glyphs) {
+            continue;
+        }
+        printf(",{\"glyph_index\":%u,\"script\":%u}", glyph_index, map[glyph_index]);
+    }
+    printf("]");
+}
+
 static FT_UInt oracle_default_properties_value(int library_present, const char* env) {
     FT_Library library = NULL;
     unsetenv("FREETYPE_PROPERTIES");
@@ -14445,6 +14458,35 @@ static int emit_bdf_charset_case(int argc, char** argv) {
 static int emit_property_case(int argc, char** argv) {
     const char* case_id = argv[2];
     printf("{");
+    if (streq(case_id, "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map")) {
+        if (argc != 6) {
+            fprintf(stderr, "glyph-to-script-map property case requires source_kind source_value face_index\n");
+            return 2;
+        }
+        OracleFace opened = {0};
+        int open_status = open_oracle_face(argv[3], argv[4], atol(argv[5]), &opened);
+        if (open_status) {
+            return open_status;
+        }
+        FT_Prop_GlyphToScriptMap prop;
+        prop.face = opened.face;
+        prop.map = (FT_UShort*)1;
+        FT_Error error = FT_Property_Get(
+            opened.library,
+            "autofitter",
+            "glyph-to-script-map",
+            &prop);
+        print_status(error);
+        printf(",\"output\":{\"error\":%d,\"prop_after\":{\"face\":", error);
+        print_property_face_identity(opened.face, prop.face);
+        printf(",\"map\":");
+        print_property_map_identity(prop.map);
+        printf("},\"num_glyphs\":%ld,\"map_sample\":", opened.face->num_glyphs);
+        print_glyph_to_script_map_sample(opened.face, prop.map);
+        printf("}}\n");
+        close_oracle_face(&opened);
+        return 0;
+    }
     if (streq(case_id, "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c")) {
         FT_Library library = NULL;
         FT_Error init_error = FT_Init_FreeType(&library);

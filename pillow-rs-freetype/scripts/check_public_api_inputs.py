@@ -3098,11 +3098,6 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
         )
 
     property_rows_without_maintained_route = {
-        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": (
-            "FT_Prop_GlyphToScriptMap get parity needs maintained typed "
-            "FT_Property_Get routing that returns the face-specific glyph to "
-            "script map pointer/class exactly like pinned C"
-        ),
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script": (
             "FT_Prop_GlyphToScriptMap mutation parity needs maintained typed "
             "property routing plus an autohint glyph-load observation proving "
@@ -6702,7 +6697,6 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face",
-        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern",
