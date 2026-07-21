@@ -208,6 +208,15 @@ pub struct FontdoneWasmBdfProperty {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmBdfCharset {
+    pub charset_encoding: *const FT_Byte,
+    pub charset_encoding_len: FT_UInt,
+    pub charset_registry: *const FT_Byte,
+    pub charset_registry_len: FT_UInt,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmOutline {
     pub n_contours: FT_UShort,
     pub n_points: FT_UShort,
@@ -3864,6 +3873,40 @@ pub extern "C" fn fontdone_wasm_get_bdf_property(
             {
                 (*property).cardinal = rust_property.u.cardinal;
             }
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_bdf_charset_id(
+    handle: usize,
+    output: *mut FontdoneWasmBdfCharset,
+) -> FT_Error {
+    let face = face_ref(handle);
+    let mut encoding: *const rust_ffi::FT_String = std::ptr::null();
+    let mut registry: *const rust_ffi::FT_String = std::ptr::null();
+    let err = rust_ffi::FT_Get_BDF_Charset_ID(
+        face.map(|face| &face.face),
+        (!output.is_null()).then_some(&mut encoding),
+        (!output.is_null()).then_some(&mut registry),
+    );
+    if face.is_some() && !output.is_null() {
+        // SAFETY: null was checked above and the caller provided writable
+        // linear-memory storage for the flat WASM charset record.
+        unsafe {
+            (*output).charset_encoding = encoding.cast::<FT_Byte>();
+            (*output).charset_encoding_len = if encoding.is_null() {
+                0
+            } else {
+                CStr::from_ptr(encoding).to_bytes().len() as FT_UInt
+            };
+            (*output).charset_registry = registry.cast::<FT_Byte>();
+            (*output).charset_registry_len = if registry.is_null() {
+                0
+            } else {
+                CStr::from_ptr(registry).to_bytes().len() as FT_UInt
+            };
         }
     }
     err

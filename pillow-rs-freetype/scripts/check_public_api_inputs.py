@@ -248,6 +248,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_default_named_instance",
     "fontdone_wasm_get_winfnt_header",
     "fontdone_wasm_get_bdf_property",
+    "fontdone_wasm_get_bdf_charset_id",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
@@ -3886,6 +3887,8 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftbdf.get_bdf_charset_id":
+        if row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face":
+            return None
         unresolved = unresolved_assets_reason(row)
         if unresolved:
             return (

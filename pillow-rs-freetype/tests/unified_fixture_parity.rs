@@ -2631,6 +2631,9 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
                 rust_bdf_property_output(case)
             }
+            "ftbdf.get_bdf_charset_id" if bdf_charset_error_case_supported(case) => {
+                rust_bdf_charset_output(case)
+            }
             "FT_Property_Set_then_Get"
                 if case.case_id
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
@@ -2957,6 +2960,9 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
                 c_bdf_property_output(case)
             }
+            "ftbdf.get_bdf_charset_id" if bdf_charset_error_case_supported(case) => {
+                c_bdf_charset_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -3273,6 +3279,9 @@ impl BackendComparisonWorker {
             }
             "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
                 wasm_bdf_property_output(case)
+            }
+            "ftbdf.get_bdf_charset_id" if bdf_charset_error_case_supported(case) => {
+                wasm_bdf_charset_output(case)
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
@@ -16949,6 +16958,76 @@ fn bdf_property_error_case_supported(case: &InputCase) -> bool {
     )
 }
 
+fn bdf_charset_error_case_supported(case: &InputCase) -> bool {
+    case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
+}
+
+fn bdf_charset_pointer_json<T>(pointer: *const T) -> Value {
+    json!({ "is_null": pointer.is_null() })
+}
+
+fn bdf_charset_run_output(
+    error: FT_Error,
+    charset_encoding: Value,
+    charset_registry: Value,
+) -> RunOutput {
+    let output = json!({
+        "error": error,
+        "charset_encoding": charset_encoding,
+        "charset_registry": charset_registry
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn rust_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut encoding = std::ptr::without_provenance::<FT_String>(1);
+    let mut registry = std::ptr::without_provenance::<FT_String>(1);
+    let error = FT_Get_BDF_Charset_ID(Some(&face), Some(&mut encoding), Some(&mut registry));
+    Ok(bdf_charset_run_output(
+        error,
+        bdf_charset_pointer_json(encoding),
+        bdf_charset_pointer_json(registry),
+    ))
+}
+
+fn c_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut encoding = std::ptr::without_provenance::<c_abi::FT_String>(1);
+    let mut registry = std::ptr::without_provenance::<c_abi::FT_String>(1);
+    let error = c_abi::FT_Get_BDF_Charset_ID(face, &mut encoding, &mut registry);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(bdf_charset_run_output(
+        error,
+        bdf_charset_pointer_json(encoding),
+        bdf_charset_pointer_json(registry),
+    ))
+}
+
+fn wasm_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut output = wasm_abi::FontdoneWasmBdfCharset {
+        charset_encoding: std::ptr::without_provenance::<FT_Byte>(1),
+        charset_encoding_len: PROPERTY_SENTINEL,
+        charset_registry: std::ptr::without_provenance::<FT_Byte>(1),
+        charset_registry_len: PROPERTY_SENTINEL,
+    };
+    let error = wasm_abi::fontdone_wasm_get_bdf_charset_id(handle, &mut output);
+    wasm_done_face(handle);
+    Ok(bdf_charset_run_output(
+        error,
+        bdf_charset_pointer_json(output.charset_encoding),
+        bdf_charset_pointer_json(output.charset_registry),
+    ))
+}
+
 fn bdf_property_sentinel() -> BDF_PropertyRec {
     BDF_PropertyRec {
         type_: BDF_PROPERTY_TYPE_SENTINEL,
@@ -21353,6 +21432,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
         "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
             let mut args = vec!["--bdf-property-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftbdf.get_bdf_charset_id" if bdf_charset_error_case_supported(case) => {
+            let mut args = vec!["--bdf-charset-case".to_string(), case.case_id.clone()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
@@ -43152,6 +43237,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         "freetype.set_charmap" => return "api_object",
         "freetype.get_kerning" | "ftpfr.get_pfr_kerning" => return "api_object",
         "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+            return "api_object";
+        }
+        "ftbdf.get_bdf_charset_id" if bdf_charset_error_case_supported(case) => {
             return "api_object";
         }
         "freetype.face_get_char_variant_index" => return "api_object",

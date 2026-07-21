@@ -3223,6 +3223,36 @@ pub fn FT_Get_BDF_Property(
     }
 }
 
+pub fn FT_Get_BDF_Charset_ID(
+    face: Option<&FT_Face>,
+    acharset_encoding: Option<&mut *const FT_String>,
+    acharset_registry: Option<&mut *const FT_String>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let (error, encoding, registry) = if inner.font().font_format() == "BDF" {
+        // Successful BDF charset output still needs a maintained fixture with
+        // CHARSET_ENCODING/CHARSET_REGISTRY.  Until that route is implemented,
+        // match FreeType's public error shape for unsupported service output.
+        (FT_Err_Invalid_Argument, ptr::null(), ptr::null())
+    } else {
+        // FreeType 2.14.3 `src/base/ftbdf.c` initializes both local output
+        // pointers to NULL and writes them to non-null caller outputs.  For
+        // the version-pinned non-BDF fixture, the service-missing route is
+        // observed as public error `FT_Err_Invalid_Table` in this build.
+        (FT_Err_Invalid_Table, ptr::null(), ptr::null())
+    };
+    if let Some(output) = acharset_encoding {
+        *output = encoding;
+    }
+    if let Some(output) = acharset_registry {
+        *output = registry;
+    }
+    error
+}
+
 pub fn FT_GlyphSlot_AdjustWeight(
     slot: Option<&mut FT_GlyphSlot>,
     x_delta: FT_Fixed,

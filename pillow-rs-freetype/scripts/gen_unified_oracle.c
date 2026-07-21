@@ -13965,6 +13965,43 @@ static int emit_bdf_property_case(int argc, char** argv) {
     return 0;
 }
 
+static void print_bdf_charset_pointer(const char* value) {
+    printf("{\"is_null\":");
+    print_json_bool(value == NULL);
+    printf("}");
+}
+
+static int emit_bdf_charset_case(int argc, char** argv) {
+    const char* case_id = argv[2];
+    if (argc != 6) {
+        fprintf(stderr, "--bdf-charset-case requires case_id source_kind source_value face_index\n");
+        return 2;
+    }
+    if (!streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face")) {
+        fprintf(stderr, "unsupported BDF charset case: %s\n", case_id);
+        return 2;
+    }
+
+    OracleFace face = {0};
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened) {
+        return opened;
+    }
+
+    const char* encoding = (const char*)0x1;
+    const char* registry = (const char*)0x1;
+    FT_Error error = FT_Get_BDF_Charset_ID(face.face, &encoding, &registry);
+    printf("{");
+    print_status(error);
+    printf(",\"output\":{\"error\":%d,\"charset_encoding\":", error);
+    print_bdf_charset_pointer(encoding);
+    printf(",\"charset_registry\":");
+    print_bdf_charset_pointer(registry);
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_property_case(int argc, char** argv) {
     const char* case_id = argv[2];
     printf("{");
@@ -18706,6 +18743,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--bdf-property-case")) {
         return emit_bdf_property_case(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--bdf-charset-case")) {
+        return emit_bdf_charset_case(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
