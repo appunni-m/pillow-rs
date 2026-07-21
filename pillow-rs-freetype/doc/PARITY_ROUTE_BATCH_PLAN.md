@@ -284,6 +284,39 @@ make -C pillow-rs-freetype test-op OP=ftcache.manager_lifecycle
 make -C pillow-rs-freetype route-audit
 ```
 
+After the SFNT name/cmap metadata fixture batch:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 342, 'real-null-validation': 9, 'real-parity': 4621}
+runtime_parity: passed=42 failed=0 total=42 covered_manifest_cases=26
+runtime_cases: runnable=42 pending=0
+```
+
+This batch promotes six related `ttnameid` runtime rows by generating compact
+same-input SFNT fixtures under `input/fonts/name-cmap/` and routing them through
+the maintained `sfnt.mac_encoding_record` comparison:
+
+- `TT_PLATFORM_APPLE_UNICODE.unicode_charmap_platform_runtime`
+- `TT_APPLE_ID_ISO_10646.deprecated_apple_unicode_encoding_runtime`
+- `TT_PLATFORM_ISO.deprecated_iso_platform_runtime`
+- `TT_ISO_ID_10646.deprecated_iso_10646_runtime`
+- `TT_PLATFORM_MICROSOFT.microsoft_unicode_platform_runtime`
+- `TT_PLATFORM_CUSTOM.custom_charmap_platform_runtime`
+
+Each generated fixture contains one focused `name` record and one deterministic
+`cmap` mapping for U+0041, then compares public charmap platform/encoding,
+matched name-record fields/bytes, and glyph index through pinned C, Rust FFI,
+thin C ABI, and WASM ABI. The Mac Japanese and Adobe rows remain pending
+because their manifest requirements need real Mac Japanese multi-codepoint or
+Adobe CFF/Type1 charmap behavior, not this compact single-mapping SFNT fixture.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=sfnt.mac_encoding_record
+make -C pillow-rs-freetype route-audit
+```
+
 Pinned FreeType 2.14.3 keeps both generated malformed faces open and exposes a
 non-null `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` record. For the truncated table,
 `tt_face_load_maxp` reads from the `maxp` stream offset beyond the declared

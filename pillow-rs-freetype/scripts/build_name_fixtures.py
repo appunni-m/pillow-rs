@@ -15,6 +15,7 @@ BASE_VARIABLE = ROOT / "tests" / "fixtures" / "fonts" / "variable" / "compact-va
 NAME_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "names"
 LEGACY_ASSET_FONT_OUT_DIR = ROOT / "tests" / "fixtures" / "fixtures" / "assets" / "fonts"
 VARIABLE_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "variable"
+NAME_CMAP_OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "name-cmap"
 
 
 @dataclass(frozen=True)
@@ -542,6 +543,86 @@ def write_variable_long_postscript_name() -> None:
     )
 
 
+def write_name_cmap_fixture(
+    name: str,
+    platform_id: int,
+    encoding_id: int,
+    language_id: int,
+    name_data: bytes,
+    cmap_format: int = 4,
+) -> None:
+    path = NAME_CMAP_OUT_DIR / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        path.unlink()
+    path.write_bytes(BASE_STATIC.read_bytes())
+    replace_table_bytes(
+        path,
+        b"name",
+        build_name_table(
+            [
+                NameRecordSpec(
+                    platform_id,
+                    encoding_id,
+                    language_id,
+                    1,
+                    name_data,
+                )
+            ]
+        ),
+    )
+    replace_table_bytes(
+        path,
+        b"cmap",
+        build_single_mapping_cmap(platform_id, encoding_id, cmap_format),
+    )
+
+
+def write_name_cmap_fixtures() -> None:
+    write_name_cmap_fixture(
+        "apple-unicode-platform.ttf",
+        0,
+        3,
+        0,
+        utf16be("Apple Unicode Platform"),
+    )
+    write_name_cmap_fixture(
+        "apple-unicode-iso10646.ttf",
+        0,
+        2,
+        0,
+        utf16be("Apple ISO 10646"),
+    )
+    write_name_cmap_fixture(
+        "deprecated-iso-platform.ttf",
+        2,
+        1,
+        0,
+        utf16be("Deprecated ISO Platform"),
+    )
+    write_name_cmap_fixture(
+        "iso-10646.ttf",
+        2,
+        1,
+        0,
+        utf16be("ISO 10646"),
+    )
+    write_name_cmap_fixture(
+        "microsoft-unicode-platform.ttf",
+        3,
+        1,
+        0x0409,
+        utf16be("Microsoft Unicode Platform"),
+    )
+    write_name_cmap_fixture(
+        "custom-platform.ttf",
+        4,
+        0,
+        0,
+        utf16be("Custom Platform"),
+    )
+
+
 def build_missing_subfamily_fvar() -> bytes:
     payload = bytearray(table_payload(BASE_VARIABLE, b"fvar"))
     axes_offset = int.from_bytes(payload[4:6], "big")
@@ -616,6 +697,63 @@ def build_name_table(
         + bytes(rows)
         + bytes(lang_rows)
         + bytes(storage)
+    )
+
+
+def build_single_mapping_cmap(platform_id: int, encoding_id: int, format_: int) -> bytes:
+    if format_ == 0:
+        subtable = build_format0_cmap()
+    elif format_ == 4:
+        subtable = build_format4_cmap()
+    else:
+        raise ValueError(f"unsupported cmap format {format_}")
+    return (
+        (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + platform_id.to_bytes(2, "big")
+        + encoding_id.to_bytes(2, "big")
+        + (12).to_bytes(4, "big")
+        + subtable
+    )
+
+
+def build_format0_cmap() -> bytes:
+    glyphs = bytearray(256)
+    glyphs[65] = 1
+    return (
+        (0).to_bytes(2, "big")
+        + (262).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + bytes(glyphs)
+    )
+
+
+def build_format4_cmap() -> bytes:
+    # Two segments: U+0041 maps to glyph index 1, followed by the required
+    # 0xFFFF terminator segment.  This keeps the fixture focused on public cmap
+    # platform/encoding metadata while still giving FT_Get_Char_Index one
+    # deterministic mapping to compare.
+    seg_count = 2
+    seg_count_x2 = seg_count * 2
+    length = 16 + seg_count * 8
+    id_delta = (1 - 0x41) & 0xFFFF
+    return (
+        (4).to_bytes(2, "big")
+        + length.to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + seg_count_x2.to_bytes(2, "big")
+        + (4).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (0x0041).to_bytes(2, "big")
+        + (0xFFFF).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (0x0041).to_bytes(2, "big")
+        + (0xFFFF).to_bytes(2, "big")
+        + id_delta.to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
     )
 
 
@@ -741,6 +879,7 @@ def main() -> None:
     write_variable_subfamily_conversion()
     write_variable_missing_subfamily()
     write_variable_long_postscript_name()
+    write_name_cmap_fixtures()
 
 
 if __name__ == "__main__":

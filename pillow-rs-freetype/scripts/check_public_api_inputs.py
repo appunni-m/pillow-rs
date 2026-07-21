@@ -6934,14 +6934,8 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success",
         "ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match",
         "ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match",
-        "ttnameid.TT_APPLE_ID_ISO_10646.deprecated_apple_unicode_encoding_runtime",
-        "ttnameid.TT_ISO_ID_10646.deprecated_iso_10646_runtime",
         "ttnameid.TT_MAC_ID_JAPANESE.mac_japanese_charmap_runtime",
         "ttnameid.TT_PLATFORM_ADOBE.representative_adobe_charmap_match",
-        "ttnameid.TT_PLATFORM_APPLE_UNICODE.unicode_charmap_platform_runtime",
-        "ttnameid.TT_PLATFORM_CUSTOM.custom_charmap_platform_runtime",
-        "ttnameid.TT_PLATFORM_ISO.deprecated_iso_platform_runtime",
-        "ttnameid.TT_PLATFORM_MICROSOFT.microsoft_unicode_platform_runtime",
     }
     if row.case_id in runtime_skipped_needs_input_cases:
         return (
