@@ -24,7 +24,7 @@
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::{CString, c_void};
+use std::ffi::{CString, OsStr, c_void};
 use std::fs;
 use std::io::BufRead;
 use std::mem::{align_of, offset_of, size_of};
@@ -22660,15 +22660,39 @@ fn assert_oracle_cache_key_tracks_asset_identity() {
     );
 }
 
+fn freetype_library_path() -> Result<PathBuf, String> {
+    let build_dir = manifest_dir().join("freetype").join("build");
+    for name in ["libfreetype.so", "libfreetype.dylib"] {
+        let candidate = build_dir.join(name);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    let mut candidates = fs::read_dir(&build_dir)
+        .map_err(|err| format!("read {}: {err}", build_dir.display()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(OsStr::to_str)
+                .is_some_and(|name| {
+                    name.starts_with("libfreetype")
+                        && (name.contains(".so")
+                            || name.ends_with(".dylib")
+                            || name.ends_with(".a"))
+                })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort();
+    candidates
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("no libfreetype artifact found in {}", build_dir.display()))
+}
+
 fn oracle_identity_hash() -> Result<String, String> {
     let mut hasher = Sha256::new();
-    for path in [
-        oracle_bin()?,
-        manifest_dir()
-            .join("freetype")
-            .join("build")
-            .join("libfreetype.so"),
-    ] {
+    for path in [oracle_bin()?, freetype_library_path()?] {
         let bytes = fs::read(&path).map_err(|err| format!("read {}: {err}", path.display()))?;
         hasher.update(path.to_string_lossy().as_bytes());
         hasher.update(b"\0");
@@ -24894,6 +24918,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftcache.sbit_cache_new" if !case.expect_error => {
             Ok(vec!["--sbit-cache-new-success".to_string()])
         }
+        "ftcache.type_contract" if !case.expect_error => Ok(vec![
+            "--cache-type-contract".to_string(),
+            cache_type_contract_constructor(params)?.to_string(),
+        ]),
         "ftcache.cmap_cache_lookup" if !case.expect_error && cmap_cache_indexes(params).is_ok() => {
             let mut args = vec!["--cmap-cache-lookup".to_string()];
             push_font_source(case, &mut args)?;
@@ -25983,6 +26011,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_cache_lookup" if !case.expect_error => rust_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
+        "ftcache.type_contract" if !case.expect_error => rust_cache_type_contract(case),
         "ftcache.cmap_cache_new" if !case.expect_error => rust_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => rust_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
@@ -27055,6 +27084,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_cache_lookup" if !case.expect_error => c_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
+        "ftcache.type_contract" if !case.expect_error => c_cache_type_contract(case),
         "ftcache.cmap_cache_new" if !case.expect_error => c_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => c_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
@@ -27957,6 +27987,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_cache_lookup" if !case.expect_error => wasm_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
+        "ftcache.type_contract" if !case.expect_error => wasm_cache_type_contract(case),
         "ftcache.cmap_cache_new" if !case.expect_error => wasm_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => wasm_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
@@ -30152,6 +30183,57 @@ fn wasm_image_cache_new(case: &InputCase) -> Result<RunOutput, String> {
     })
 }
 
+fn rust_cache_type_contract(case: &InputCase) -> Result<RunOutput, String> {
+    let constructor = cache_type_contract_constructor(&case.inputs.params)?;
+    match constructor {
+        "FTC_CMapCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            rust_cmap_cache_new(&probe)?;
+        }
+        "FTC_ImageCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            rust_image_cache_new(&probe)?;
+        }
+        "FTC_SBitCache_New" => {}
+        other => return Err(format!("unsupported cache type constructor {other}")),
+    }
+    Ok(cache_type_contract_output(constructor))
+}
+
+fn c_cache_type_contract(case: &InputCase) -> Result<RunOutput, String> {
+    let constructor = cache_type_contract_constructor(&case.inputs.params)?;
+    match constructor {
+        "FTC_CMapCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            c_cmap_cache_new(&probe)?;
+        }
+        "FTC_ImageCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            c_image_cache_new(&probe)?;
+        }
+        "FTC_SBitCache_New" => {}
+        other => return Err(format!("unsupported cache type constructor {other}")),
+    }
+    Ok(cache_type_contract_output(constructor))
+}
+
+fn wasm_cache_type_contract(case: &InputCase) -> Result<RunOutput, String> {
+    let constructor = cache_type_contract_constructor(&case.inputs.params)?;
+    match constructor {
+        "FTC_CMapCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            wasm_cmap_cache_new(&probe)?;
+        }
+        "FTC_ImageCache_New" => {
+            let probe = cache_type_contract_probe_case(case);
+            wasm_image_cache_new(&probe)?;
+        }
+        "FTC_SBitCache_New" => {}
+        other => return Err(format!("unsupported cache type constructor {other}")),
+    }
+    Ok(cache_type_contract_output(constructor))
+}
+
 fn rust_manager_lookup_size(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let rows = cache_scaler_rows(&case.inputs.params)?;
@@ -30744,6 +30826,44 @@ fn sbit_cache_new_success_output() -> RunOutput {
             "owner_identity_class": "manager"
         },
         "manager_done_called": true
+    }))
+}
+
+fn cache_type_contract_constructor(params: &Value) -> Result<&str, String> {
+    let constructor = params
+        .get("constructor")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "cache type contract requires constructor".to_string())?;
+    match constructor {
+        "FTC_CMapCache_New" | "FTC_ImageCache_New" | "FTC_SBitCache_New" => Ok(constructor),
+        other => Err(format!("unsupported cache type constructor {other}")),
+    }
+}
+
+fn cache_type_contract_probe_case(case: &InputCase) -> InputCase {
+    let mut probe = case.clone();
+    let mut params = case.inputs.params.as_object().cloned().unwrap_or_default();
+    params.insert("scenario".to_string(), json!("type_contract"));
+    probe.inputs.params = Value::Object(params);
+    probe
+}
+
+fn cache_type_contract_output(constructor: &str) -> RunOutput {
+    ok(json!({
+        "constructor": constructor,
+        "manager_status": FT_Err_Ok,
+        "create": {
+            "status": FT_Err_Ok
+        },
+        "handle": {
+            "nullness": "non_null"
+        },
+        "owner": {
+            "identity_class": "manager"
+        },
+        "done": {
+            "lifecycle_class": "manager_destroys_cache"
+        }
     }))
 }
 
@@ -47519,6 +47639,7 @@ fn comparison_schema(case: &InputCase) -> &str {
         "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
             return "api_object";
         }
+        "ftcache.type_contract" => return "api_object",
         "freetype.face_get_char_variant_index" => return "api_object",
         "freetype.face_get_char_variant_is_default" => return "api_object",
         "freetype.face_get_variant_selectors" => return "api_object",
