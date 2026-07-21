@@ -90,6 +90,9 @@ pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
 pub type BDF_Property = *mut BDF_PropertyRec;
+pub type PS_FontInfoRec = rust_ffi::PS_FontInfoRec;
+pub type PS_FontInfo = *mut PS_FontInfoRec;
+pub type T1_FontInfo = PS_FontInfoRec;
 pub type PS_PrivateRec = rust_ffi::PS_PrivateRec;
 pub type PS_Private = *mut PS_PrivateRec;
 pub type T1_Private = PS_PrivateRec;
@@ -1374,6 +1377,22 @@ pub extern "C" fn FT_OpenType_Validate(
         write_ft_bytes(gpos_table, gpos);
         write_ft_bytes(gsub_table, gsub);
         write_ft_bytes(jstf_table, jstf);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_PS_Font_Info(face: FT_Face, afont_info: PS_FontInfo) -> FT_Error {
+    let face = face_state(face).map(|state| &state.inner);
+    let mut info = PS_FontInfoRec::default();
+    let err = rust_ffi::FT_Get_PS_Font_Info(face, (!afont_info.is_null()).then_some(&mut info));
+    if err == rust_ffi::FT_Err_Ok && !afont_info.is_null() {
+        // SAFETY: C ABI caller supplied a non-null `PS_FontInfoRec*` output
+        // pointer; copying the repr(C) public record is the wrapper's only
+        // responsibility.
+        unsafe {
+            *afont_info = info;
+        }
     }
     err
 }

@@ -2750,7 +2750,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => rust_open_type_validate(case),
             "ftotval.open_type_free" => rust_open_type_free(case),
-            "t1tables.get_ps_font_private_mm_blend" => rust_get_ps_font_private(case),
+            "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+                rust_get_ps_font_info(case)
+            }
+            "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+                rust_get_ps_font_private(case)
+            }
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 rust_gxval_free_null_face(case)
             }
@@ -3063,7 +3068,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => c_open_type_validate(case),
             "ftotval.open_type_free" => c_open_type_free(case),
-            "t1tables.get_ps_font_private_mm_blend" => c_get_ps_font_private(case),
+            "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+                c_get_ps_font_info(case)
+            }
+            "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+                c_get_ps_font_private(case)
+            }
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 c_gxval_free_null_face(case)
             }
@@ -3380,7 +3390,12 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => wasm_open_type_validate(case),
             "ftotval.open_type_free" => wasm_open_type_free(case),
-            "t1tables.get_ps_font_private_mm_blend" => wasm_get_ps_font_private(case),
+            "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+                wasm_get_ps_font_info(case)
+            }
+            "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+                wasm_get_ps_font_private(case)
+            }
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 wasm_gxval_free_null_face(case)
             }
@@ -8928,6 +8943,37 @@ fn font_bytes_for_face_source(case: &InputCase) -> Result<Arc<[u8]>, String> {
     font_asset_bytes(font_asset_for_source(case, &case.inputs.params)?)
 }
 
+fn type1_mm_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("type1_mm_font")
+        .ok_or_else(|| "missing type1_mm_font asset".to_string())?;
+    font_asset_bytes(asset)
+}
+
+fn font_bytes_for_ps_font_info(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    if case.operation == "t1tables.t1_blend_flags_font_info_group" {
+        return type1_mm_font_bytes(case);
+    }
+    font_bytes_for_face_source(case)
+}
+
+fn font_bytes_for_ps_private(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    if case.operation == "t1tables.t1_blend_flags_private_group" {
+        return type1_mm_font_bytes(case);
+    }
+    font_bytes_for_face_source(case)
+}
+
+fn ps_font_info_output(error_code: FT_Error, info: Value) -> RunOutput {
+    if error_code == FT_Err_Ok {
+        ok(info)
+    } else {
+        error_with_output(error_code, Value::Null)
+    }
+}
+
 fn ps_private_output(error_code: FT_Error, private: Value) -> RunOutput {
     if error_code == FT_Err_Ok {
         ok(private)
@@ -8966,6 +9012,38 @@ fn ps_private_json(private: &PS_PrivateRec) -> Value {
     })
 }
 
+fn ps_font_info_json(info: &PS_FontInfoRec) -> Value {
+    json!({
+        "version": ffi_nullable_c_string_json(info.version),
+        "notice": ffi_nullable_c_string_json(info.notice),
+        "full_name": ffi_nullable_c_string_json(info.full_name),
+        "family_name": ffi_nullable_c_string_json(info.family_name),
+        "weight": ffi_nullable_c_string_json(info.weight),
+        "italic_angle": info.italic_angle,
+        "is_fixed_pitch": info.is_fixed_pitch,
+        "underline_position": info.underline_position,
+        "underline_thickness": info.underline_thickness
+    })
+}
+
+fn wasm_fontdone_string_value_json(value: wasm_abi::FontdoneWasmString) -> Value {
+    wasm_string_record_json(value.string_len != 0 || !value.string.is_null(), value)
+}
+
+fn wasm_ps_font_info_json(info: &wasm_abi::FontdoneWasmPSFontInfo) -> Value {
+    json!({
+        "version": wasm_fontdone_string_value_json(info.version),
+        "notice": wasm_fontdone_string_value_json(info.notice),
+        "full_name": wasm_fontdone_string_value_json(info.full_name),
+        "family_name": wasm_fontdone_string_value_json(info.family_name),
+        "weight": wasm_fontdone_string_value_json(info.weight),
+        "italic_angle": info.italic_angle,
+        "is_fixed_pitch": info.is_fixed_pitch,
+        "underline_position": info.underline_position,
+        "underline_thickness": info.underline_thickness
+    })
+}
+
 fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
     json!({
         "unique_id": private.unique_id,
@@ -8996,8 +9074,38 @@ fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
     })
 }
 
+fn rust_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_ps_font_info(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = PS_FontInfoRec::default();
+    let err = FT_Get_PS_Font_Info(Some(&face), Some(&mut info));
+    Ok(ps_font_info_output(err, ps_font_info_json(&info)))
+}
+
+fn c_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_ps_font_info(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = c_abi::PS_FontInfoRec::default();
+    let err = c_abi::FT_Get_PS_Font_Info(face, &mut info);
+    let output = ps_font_info_output(err, ps_font_info_json(&info));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_ps_font_info(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
+    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, &mut info);
+    let output = ps_font_info_output(err, wasm_ps_font_info_json(&info));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
-    let bytes = font_bytes_for_face_source(case)?;
+    let bytes = font_bytes_for_ps_private(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = PS_PrivateRec::default();
     let err = FT_Get_PS_Font_Private(Some(&face), Some(&mut private));
@@ -9005,7 +9113,7 @@ fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
-    let bytes = font_bytes_for_face_source(case)?;
+    let bytes = font_bytes_for_ps_private(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = c_abi::PS_PrivateRec::default();
@@ -9016,7 +9124,7 @@ fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
-    let bytes = font_bytes_for_face_source(case)?;
+    let bytes = font_bytes_for_ps_private(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
     let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, &mut private);
@@ -22049,6 +22157,24 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "t1tables.get_ps_font_info_mm_blend" => {
+            let mut args = vec!["--ps-font-info".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.t1_blend_flags_font_info_group" => {
+            let mut args = vec!["--ps-font-info".to_string()];
+            push_named_font_source(case, "type1_mm_font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.t1_blend_flags_private_group" => {
+            let mut args = vec!["--ps-font-private".to_string()];
+            push_named_font_source(case, "type1_mm_font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftotval.open_type_free" => {
             if param_is_null(params, "face") {
                 return Ok(vec!["--open-type-free-null-face".to_string()]);
@@ -23633,6 +23759,19 @@ fn push_font_source_from_param(
     push_asset_source(font_asset_for_source(case, params)?, args)
 }
 
+fn push_named_font_source(
+    case: &InputCase,
+    name: &str,
+    args: &mut Vec<String>,
+) -> Result<(), String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(name)
+        .ok_or_else(|| format!("missing font asset {name}"))?;
+    push_asset_source(asset, args)
+}
+
 fn push_pfr_kerning_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
     let font = pfr_kerning_font_asset(case)?;
     push_asset_source(font, args)
@@ -24501,7 +24640,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
-        "t1tables.get_ps_font_private_mm_blend" => rust_get_ps_font_private(case),
+        "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+            rust_get_ps_font_info(case)
+        }
+        "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+            rust_get_ps_font_private(case)
+        }
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => rust_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
@@ -24634,7 +24778,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
-        "t1tables.get_ps_font_private_mm_blend" => c_get_ps_font_private(case),
+        "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+            c_get_ps_font_info(case)
+        }
+        "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+            c_get_ps_font_private(case)
+        }
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => c_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
@@ -25556,7 +25705,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
-        "t1tables.get_ps_font_private_mm_blend" => wasm_get_ps_font_private(case),
+        "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
+            wasm_get_ps_font_info(case)
+        }
+        "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
+            wasm_get_ps_font_private(case)
+        }
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => wasm_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"

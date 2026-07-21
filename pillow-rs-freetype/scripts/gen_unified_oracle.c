@@ -10349,6 +10349,46 @@ static void print_ps_ushort_array(const FT_UShort* values, int len) {
     printf("]");
 }
 
+static void print_ps_font_info_json(const PS_FontInfoRec* info) {
+    printf("{\"version\":");
+    print_nullable_c_string_result(info->version);
+    printf(",\"notice\":");
+    print_nullable_c_string_result(info->notice);
+    printf(",\"full_name\":");
+    print_nullable_c_string_result(info->full_name);
+    printf(",\"family_name\":");
+    print_nullable_c_string_result(info->family_name);
+    printf(",\"weight\":");
+    print_nullable_c_string_result(info->weight);
+    printf(",\"italic_angle\":%ld", (long)info->italic_angle);
+    printf(",\"is_fixed_pitch\":%u", info->is_fixed_pitch);
+    printf(",\"underline_position\":%d", info->underline_position);
+    printf(",\"underline_thickness\":%u}", info->underline_thickness);
+}
+
+static int emit_ps_font_info(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    PS_FontInfoRec info;
+    memset(&info, 0, sizeof(info));
+    FT_Error err = FT_Get_PS_Font_Info(face.face, &info);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err == FT_Err_Ok) {
+        print_ps_font_info_json(&info);
+    } else {
+        printf("null");
+    }
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_ps_private_json(const PS_PrivateRec* private_rec) {
     printf("{\"unique_id\":%d,\"lenIV\":%d", private_rec->unique_id, private_rec->lenIV);
     printf(",\"num_blue_values\":%u", private_rec->num_blue_values);
@@ -18759,6 +18799,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--open-type-validate-service-missing")) {
         return emit_open_type_validate_service_missing(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-info")) {
+        return emit_ps_font_info(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);

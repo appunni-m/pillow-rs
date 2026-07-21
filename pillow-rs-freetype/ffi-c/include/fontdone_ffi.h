@@ -198,6 +198,21 @@ typedef struct BDF_PropertyRec_ {
 
 typedef BDF_PropertyRec* BDF_Property;
 
+typedef struct PS_FontInfoRec_ {
+  char* version;
+  char* notice;
+  char* full_name;
+  char* family_name;
+  char* weight;
+  FT_Fixed italic_angle;
+  FT_Bool is_fixed_pitch;
+  FT_Short underline_position;
+  FT_UShort underline_thickness;
+} PS_FontInfoRec;
+
+typedef PS_FontInfoRec* PS_FontInfo;
+typedef PS_FontInfoRec T1_FontInfo;
+
 typedef struct PS_PrivateRec_ {
   FT_Int unique_id;
   FT_Int lenIV;
@@ -582,6 +597,7 @@ FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
 FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
 FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRec* aproperty);
 FT_Error FT_Get_BDF_Charset_ID(FT_Face face, const char** acharset_encoding, const char** acharset_registry);
+FT_Error FT_Get_PS_Font_Info(FT_Face face, PS_FontInfo afont_info);
 FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);

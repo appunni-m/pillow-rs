@@ -254,6 +254,33 @@ fn copy_rust_ps_private_to_wasm(out: &mut FontdoneWasmPSPrivate, value: rust_ffi
     out.min_feature = value.min_feature;
 }
 
+fn wasm_string_from_ft_string(value: *mut rust_ffi::FT_String) -> FontdoneWasmString {
+    if value.is_null() {
+        return FontdoneWasmString::default();
+    }
+    // SAFETY: `FT_Get_PS_Font_Info` returns face-owned NUL-terminated strings.
+    let bytes = unsafe { CStr::from_ptr(value.cast()).to_bytes() };
+    FontdoneWasmString {
+        string: value.cast(),
+        string_len: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+    }
+}
+
+fn copy_rust_ps_font_info_to_wasm(
+    out: &mut FontdoneWasmPSFontInfo,
+    value: rust_ffi::PS_FontInfoRec,
+) {
+    out.version = wasm_string_from_ft_string(value.version);
+    out.notice = wasm_string_from_ft_string(value.notice);
+    out.full_name = wasm_string_from_ft_string(value.full_name);
+    out.family_name = wasm_string_from_ft_string(value.family_name);
+    out.weight = wasm_string_from_ft_string(value.weight);
+    out.italic_angle = value.italic_angle;
+    out.is_fixed_pitch = value.is_fixed_pitch;
+    out.underline_position = value.underline_position;
+    out.underline_thickness = value.underline_thickness;
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmBdfProperty {
@@ -1102,6 +1129,20 @@ pub struct FontdoneWasmVertHeader {
 pub struct FontdoneWasmString {
     pub string: *const c_uchar,
     pub string_len: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmPSFontInfo {
+    pub version: FontdoneWasmString,
+    pub notice: FontdoneWasmString,
+    pub full_name: FontdoneWasmString,
+    pub family_name: FontdoneWasmString,
+    pub weight: FontdoneWasmString,
+    pub italic_angle: FT_Fixed,
+    pub is_fixed_pitch: FT_Bool,
+    pub underline_position: FT_Short,
+    pub underline_thickness: FT_UShort,
 }
 
 #[repr(C)]
@@ -3880,6 +3921,26 @@ pub extern "C" fn fontdone_wasm_get_winfnt_header(
                 color_table_offset: rust_header.color_table_offset,
                 reserved1: rust_header.reserved1,
             };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_ps_font_info(
+    handle: usize,
+    info: *mut FontdoneWasmPSFontInfo,
+) -> FT_Error {
+    let mut rust_info = rust_ffi::PS_FontInfoRec::default();
+    let err = rust_ffi::FT_Get_PS_Font_Info(
+        face_ref(handle).map(|face| &face.face),
+        (!info.is_null()).then_some(&mut rust_info),
+    );
+    if err == rust_ffi::FT_Err_Ok && !info.is_null() {
+        // SAFETY: null was checked above and the caller provided writable
+        // linear-memory storage for the flat public WASM record.
+        unsafe {
+            copy_rust_ps_font_info_to_wasm(&mut *info, rust_info);
         }
     }
     err
