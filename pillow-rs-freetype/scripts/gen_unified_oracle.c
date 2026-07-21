@@ -9773,6 +9773,7 @@ typedef struct OracleFace {
     FT_Library library;
     FT_Face face;
     unsigned char* data;
+    long data_len;
 } OracleFace;
 
 static void close_oracle_face(OracleFace* face) {
@@ -9796,6 +9797,7 @@ static int open_oracle_face(
     out->library = NULL;
     out->face = NULL;
     out->data = NULL;
+    out->data_len = 0;
     long data_len = 0;
     if (streq(source_kind, "file")) {
         if (load_file(source_value, &out->data, &data_len) != 0) {
@@ -9816,6 +9818,7 @@ static int open_oracle_face(
     if (!err) {
         err = FT_New_Memory_Face(out->library, out->data, data_len, face_index, &out->face);
     }
+    out->data_len = data_len;
     if (err) {
         printf("{");
         print_status(err);
@@ -10384,6 +10387,60 @@ static int emit_ps_font_info(int argc, char** argv) {
     } else {
         printf("null");
     }
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int oracle_bytes_contains(const unsigned char* data, long data_len, const char* pattern) {
+    size_t pattern_len = strlen(pattern);
+    if (!data || data_len <= 0 || pattern_len == 0 || (long)pattern_len > data_len) {
+        return 0;
+    }
+    for (long i = 0; i <= data_len - (long)pattern_len; i++) {
+        if (memcmp(data + i, pattern, pattern_len) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void print_ps_mm_blend_dictionary_output(
+    const PS_FontInfoRec* info,
+    const char* field,
+    long constant_value,
+    int blend_present) {
+    printf("{\"constant_value\":%ld", constant_value);
+    printf(",\"blend_present\":");
+    print_json_bool(blend_present);
+    printf(",\"font_info\":{");
+    if (streq(field, "underline_position")) {
+        printf("\"underline_position\":%d", info->underline_position);
+    } else if (streq(field, "underline_thickness")) {
+        printf("\"underline_thickness\":%u", info->underline_thickness);
+    }
+    printf("}}");
+}
+
+static int emit_ps_mm_blend_dictionary(int argc, char** argv) {
+    (void)argc;
+    const char* field = argv[5];
+    long constant_value = atol(argv[6]);
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    char pattern[96];
+    snprintf(pattern, sizeof(pattern), "/%s [", field);
+    int blend_present = oracle_bytes_contains(face.data, face.data_len, pattern);
+    PS_FontInfoRec info;
+    memset(&info, 0, sizeof(info));
+    FT_Error err = FT_Get_PS_Font_Info(face.face, &info);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    print_ps_mm_blend_dictionary_output(&info, field, constant_value, blend_present);
     printf("}\n");
     close_oracle_face(&face);
     return 0;
@@ -18911,6 +18968,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ps-font-info")) {
         return emit_ps_font_info(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--ps-mm-blend-dictionary")) {
+        return emit_ps_mm_blend_dictionary(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);

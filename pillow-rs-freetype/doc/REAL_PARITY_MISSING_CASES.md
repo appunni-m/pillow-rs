@@ -11321,6 +11321,52 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Result: Type1 MM underline blend dictionary public output
+
+Rows promoted:
+
+- `t1tables.T1_BLEND_UNDERLINE_POSITION.blend_dictionary_runtime`
+- `t1tables.T1_BLEND_UNDERLINE_THICKNESS.blend_dictionary_runtime`
+
+Pinned C behavior:
+
+- FreeType parses Type1 MM scalar FontInfo arrays such as
+  `/UnderlinePosition [...]` and `/UnderlineThickness [...]` through
+  `src/type1/t1load.c:t1_load_keyword` into `blend->font_infos[1..]` via
+  `ps_parser_load_field`.
+- Public `FT_Set_MM_*` APIs in `src/type1/t1load.c` recompute
+  `blend->weight_vector`; they do not rewrite `face->type1.font_info`.
+- Therefore public `FT_Get_PS_Font_Info` still returns the base
+  `PS_FontInfoRec` underline fields.  A C probe with MM underline arrays
+  returned `underline_position=-100` and `underline_thickness=50`, matching
+  the base generated Type1 FontInfo values.
+
+Rust behavior before this route:
+
+- The rows had no maintained route and the declared
+  `input/fonts/type1-mm/underline-position.pfb` and
+  `input/fonts/type1-mm/underline-thickness.pfb` assets were absent.
+- Existing Rust Type1 parsing also reads scalar `/Key value` fields, not MM
+  scalar arrays, so promoting these rows as interpolated public fields would
+  have fabricated behavior C does not expose through `FT_Get_PS_Font_Info`.
+
+Implemented route:
+
+- Added source-backed Type1 MM underline-array fixtures in
+  `scripts/build_type1_fixtures.py`.
+- Added `t1tables.mm_blend_dictionary` parity output comparing:
+  - public `T1_Blend_Flags` constant value,
+  - presence of the underline blend array in the source font,
+  - public `FT_Get_PS_Font_Info` underline field output.
+- Compared the same shape across pinned C oracle, Rust FFI, thin C ABI, and
+  WASM ABI.
+
+Impact:
+
+- `route-audit`: `real-parity 4557 -> 4559`, `pending-route 403 -> 401`.
+- Focused runtime: `make -C pillow-rs-freetype test-op
+  OP=t1tables.mm_blend_dictionary` passed `2/2`, pending `0`.
+
 ### Issue Set Current: Type1 PS FontInfo route and blend flag groups
 
 Batch target:

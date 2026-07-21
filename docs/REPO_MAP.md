@@ -339,6 +339,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_autohint_script_fixtures.py
 |   |   |-- build_cff_fixtures.py
 |   |   |-- build_cmap_fixtures.py
+|   |   |-- build_cpal_palette_fixtures.py
 |   |   |-- build_ft.sh
 |   |   |-- build_ftmm_future_variable_fixtures.py
 |   |   |-- build_fvar_fixtures.py

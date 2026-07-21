@@ -16,6 +16,7 @@ MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "type1-mm"
 LEGACY_MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "mm"
 INPUT_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1"
 INPUT_ENCODING_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1-encoding"
+INPUT_MM_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1-mm"
 
 
 def charstring(program: list[object]) -> T1CharString:
@@ -194,6 +195,44 @@ def build_mm_blend_fontinfo_private(path: Path) -> None:
     )
 
 
+def build_mm_underline_blend_fixture(
+    path: Path,
+    font_name: str,
+    family_name: str,
+    underline_key: str,
+    values: list[int],
+) -> None:
+    """Build Type 1 MM FontInfo underline-array fixtures.
+
+    FreeType parses scalar FontInfo arrays in MM fonts into
+    `blend->font_infos[1..]` (`src/type1/t1load.c:t1_load_keyword` via
+    `ps_parser_load_field`).  The public `FT_Get_PS_Font_Info` record still
+    exposes the base face FontInfo value; these fixtures pin that C behavior
+    while proving the blend dictionary array is present in the source font.
+    """
+
+    array = " ".join(str(value) for value in values).encode()
+    build_simple_type1(
+        path,
+        font_name,
+        family_name,
+        f"Generated for fontdone Type 1 MM {underline_key} blend parity",
+        cleartext_replacements=[
+            (
+                b"/FontBBox {0 0 500 700} def",
+                b"/FontBBox {0 0 500 700} def\n"
+                b"/BlendAxisTypes [/Weight /Width] def\n"
+                b"/BlendDesignPositions [[400 100] [900 100] [400 200] [900 200]] def\n"
+                b"/BlendDesignMap [[[400 0] [900 1]] [[100 0] [200 1]]] def\n"
+                b"/WeightVector [1 0 0 0] def\n"
+                + f"/{underline_key} [".encode()
+                + array
+                + b"] def",
+            )
+        ],
+    )
+
+
 def build_non_mm_force_bold(path: Path) -> None:
     """Build the declared non-MM ForceBold control for Type 1 private parity."""
 
@@ -333,6 +372,20 @@ def main() -> None:
     build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
     build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
     build_mm_blend_fontinfo_private(OUT_DIR / "mm-blend-fontinfo-private.pfb")
+    build_mm_underline_blend_fixture(
+        INPUT_MM_OUT_DIR / "underline-position.pfb",
+        "MMUnderlinePosition",
+        "MM Underline Position",
+        "UnderlinePosition",
+        [-111, -222, -333, -444],
+    )
+    build_mm_underline_blend_fixture(
+        INPUT_MM_OUT_DIR / "underline-thickness.pfb",
+        "MMUnderlineThickness",
+        "MM Underline Thickness",
+        "UnderlineThickness",
+        [11, 22, 33, 44],
+    )
     build_non_mm_force_bold(OUT_DIR / "non-mm-force-bold.pfb")
     build_type1_encoding_fixtures()
 

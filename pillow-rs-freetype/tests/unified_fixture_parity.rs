@@ -2753,6 +2753,7 @@ impl BackendComparisonWorker {
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 rust_get_ps_font_info(case)
             }
+            "t1tables.mm_blend_dictionary" => rust_mm_blend_dictionary(case),
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -3076,6 +3077,7 @@ impl BackendComparisonWorker {
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 c_get_ps_font_info(case)
             }
+            "t1tables.mm_blend_dictionary" => c_mm_blend_dictionary(case),
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -3403,6 +3405,7 @@ impl BackendComparisonWorker {
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 wasm_get_ps_font_info(case)
             }
+            "t1tables.mm_blend_dictionary" => wasm_mm_blend_dictionary(case),
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -9059,6 +9062,65 @@ fn wasm_ps_font_info_json(info: &wasm_abi::FontdoneWasmPSFontInfo) -> Value {
     })
 }
 
+fn mm_blend_dictionary_asset_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("font")
+        .ok_or_else(|| "missing MM blend dictionary font asset".to_string())?;
+    font_asset_bytes(asset)
+}
+
+fn mm_blend_dictionary_field(case: &InputCase) -> Result<&str, String> {
+    case.inputs
+        .params
+        .get("font_info_field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing font_info_field".to_string())
+}
+
+fn mm_blend_dictionary_constant(case: &InputCase) -> Result<i64, String> {
+    let symbol = case
+        .inputs
+        .params
+        .get("blend_flag")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing blend_flag".to_string())?;
+    generated_rust_constant(symbol).ok_or_else(|| format!("unknown blend flag {symbol}"))
+}
+
+fn type1_source_has_blend_array(bytes: &[u8], field: &str) -> bool {
+    let pattern = format!("/{field} [");
+    bytes
+        .windows(pattern.len())
+        .any(|window| window == pattern.as_bytes())
+}
+
+fn mm_blend_dictionary_output(
+    err: FT_Error,
+    constant_value: i64,
+    blend_present: bool,
+    field: &str,
+    underline_position: i64,
+    underline_thickness: i64,
+) -> RunOutput {
+    let field_value = match field {
+        "underline_position" => json!({ "underline_position": underline_position }),
+        "underline_thickness" => json!({ "underline_thickness": underline_thickness }),
+        _ => json!({ field: null }),
+    };
+    let output = json!({
+        "constant_value": constant_value,
+        "blend_present": blend_present,
+        "font_info": field_value
+    });
+    if err == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(err, output)
+    }
+}
+
 fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
     json!({
         "unique_id": private.unique_id,
@@ -9097,6 +9159,24 @@ fn rust_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ps_font_info_output(err, ps_font_info_json(&info)))
 }
 
+fn rust_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = mm_blend_dictionary_asset_bytes(case)?;
+    let field = mm_blend_dictionary_field(case)?;
+    let constant_value = mm_blend_dictionary_constant(case)?;
+    let blend_present = type1_source_has_blend_array(bytes.as_ref(), field);
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = PS_FontInfoRec::default();
+    let err = FT_Get_PS_Font_Info(Some(&face), Some(&mut info));
+    Ok(mm_blend_dictionary_output(
+        err,
+        constant_value,
+        blend_present,
+        field,
+        i64::from(info.underline_position),
+        i64::from(info.underline_thickness),
+    ))
+}
+
 fn c_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes_for_ps_font_info(case)?;
     let (library, face) =
@@ -9109,12 +9189,54 @@ fn c_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     Ok(output)
 }
 
+fn c_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = mm_blend_dictionary_asset_bytes(case)?;
+    let field = mm_blend_dictionary_field(case)?;
+    let constant_value = mm_blend_dictionary_constant(case)?;
+    let blend_present = type1_source_has_blend_array(bytes.as_ref(), field);
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = c_abi::PS_FontInfoRec::default();
+    let err = c_abi::FT_Get_PS_Font_Info(face, &mut info);
+    let output = mm_blend_dictionary_output(
+        err,
+        constant_value,
+        blend_present,
+        field,
+        i64::from(info.underline_position),
+        i64::from(info.underline_thickness),
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
 fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes_for_ps_font_info(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
     let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, &mut info);
     let output = ps_font_info_output(err, wasm_ps_font_info_json(&info));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn wasm_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = mm_blend_dictionary_asset_bytes(case)?;
+    let field = mm_blend_dictionary_field(case)?;
+    let constant_value = mm_blend_dictionary_constant(case)?;
+    let blend_present = type1_source_has_blend_array(bytes.as_ref(), field);
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
+    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, &mut info);
+    let output = mm_blend_dictionary_output(
+        err,
+        constant_value,
+        blend_present,
+        field,
+        i64::from(info.underline_position),
+        i64::from(info.underline_thickness),
+    );
     wasm_done_face(handle);
     Ok(output)
 }
@@ -22508,6 +22630,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "t1tables.mm_blend_dictionary" => {
+            let mut args = vec!["--ps-mm-blend-dictionary".to_string()];
+            push_named_font_source(case, "font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(mm_blend_dictionary_field(case)?.to_string());
+            args.push(mm_blend_dictionary_constant(case)?.to_string());
+            Ok(args)
+        }
         "t1tables.t1_blend_flags_font_info_group" => {
             let mut args = vec!["--ps-font-info".to_string()];
             push_named_font_source(case, "type1_mm_font", &mut args)?;
@@ -25023,6 +25153,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             rust_get_ps_font_info(case)
         }
+        "t1tables.mm_blend_dictionary" => rust_mm_blend_dictionary(case),
         "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
             if ps_font_value_encoding_case(case) =>
         {
@@ -25166,6 +25297,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             c_get_ps_font_info(case)
         }
+        "t1tables.mm_blend_dictionary" => c_mm_blend_dictionary(case),
         "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
             if ps_font_value_encoding_case(case) =>
         {
@@ -26098,6 +26230,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             wasm_get_ps_font_info(case)
         }
+        "t1tables.mm_blend_dictionary" => wasm_mm_blend_dictionary(case),
         "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
             if ps_font_value_encoding_case(case) =>
         {
