@@ -2071,6 +2071,45 @@ Observed impact:
   - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap`
     passed 2/2 across Rust FFI, C ABI, and WASM ABI.
 
+### Promote FT_BitmapGlyphRec broad bitmap-buffer ownership row: 2026-07-22
+
+Status: implemented as the declared broad ownership row; broader
+`FT_Done_Glyph` lifecycle rows remain pending.
+
+Scope:
+
+- Promoted `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer`.
+- Added a pinned-C `--done-bitmap-glyph-paths` oracle command that creates two
+  real bitmap glyphs:
+  - `FT_Get_Glyph bitmap` from the maintained bitmap strike fixture;
+  - `FT_Glyph_To_Bitmap outline` from the maintained outline fixture.
+- For both creation paths, the oracle records the public bitmap glyph state
+  before destruction and then calls `FT_Done_Glyph` once.
+- Added matching Rust FFI, thin C ABI, and WASM ABI runners.  The C/WASM
+  outline path uses the real owned `FT_Glyph_To_Bitmap` handle conversion, not
+  a slot-render surrogate.
+- The broad row's fixture omits explicit indices and size, so the route uses
+  existing maintained harness defaults already used by the record-path route:
+  face index `0`, pixel size `0x20`, bitmap glyph index `1`, outline glyph
+  index fallback `0`, and normal render mode.
+
+Why adjacent rows remain pending:
+
+- `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` still declares outline,
+  bitmap, optional SVG, multiple creation paths, allocation/free-event
+  sequencing, and malformed/allocation facades.  This promoted row proves
+  bitmap-glyph buffer ownership and release for the two maintained bitmap
+  creation paths only.
+- `ftglyph.FT_Done_Glyph.lifetime_before_library_done` still needs explicit
+  glyph/library ordering and stale-handle/invalid-use classification.
+
+Observed impact:
+
+- Route audit: `real-parity` 4759 → 4760, `pending-route` 228 → 227.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer`
+  passed 2/2 across Rust FFI, C ABI, and WASM ABI.
+
 ### Split FT_Stream_OpenBzip2 disabled-build precedence rows: 2026-07-22
 
 Status: implemented as additive active-build split rows; the enabled-build

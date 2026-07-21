@@ -3360,6 +3360,16 @@ def done_glyph_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
         and row.params.get("glyph") is None
     ):
         return None
+    if row.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer":
+        creation_paths = row.params.get("creation_paths")
+        if (
+            isinstance(creation_paths, list)
+            and {"FT_Get_Glyph bitmap", "FT_Glyph_To_Bitmap outline"}
+            <= set(creation_paths)
+            and "outline_font" in row.assets
+            and "bitmap_strike_font" in row.assets
+        ):
+            return None
     pending_cases = {
         "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation": (
             "FT_Done_Glyph invalid-handle parity needs a maintained owned-glyph "
@@ -5050,6 +5060,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.done_glyph",
             "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",
         ): "FT_Done_Glyph bitmap-glyph ownership validates a real FT_Get_Glyph bitmap, owned bitmap buffer fields before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer",
+        ): "FT_BitmapGlyphRec ownership validates both FT_Get_Glyph bitmap and FT_Glyph_To_Bitmap outline bitmap-glyph creation paths, owned bitmap buffer fields before release, and one public FT_Done_Glyph release per owned bitmap glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftglyph.record_inspect",
             "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap",
