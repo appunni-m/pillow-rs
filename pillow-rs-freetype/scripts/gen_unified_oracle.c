@@ -37,6 +37,7 @@
 #include <freetype/internal/ftobjs.h>
 #include <freetype/t1tables.h>
 #include <freetype/tttables.h>
+#include "../freetype/src/cache/ftccache.h"
 
 #ifndef FT_ERR_PREFIX
 #define FT_ERR_PREFIX FT_Err_
@@ -6858,6 +6859,171 @@ static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     free(data);
     free(scalers_arg);
     (void)first_error;
+    return 0;
+}
+
+static int emit_cache_node_lifecycle(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt size = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong max_bytes = (FT_ULong)strtoull(argv[7], NULL, 0);
+    const char* scenario = argv[8];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, max_bytes,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_SBitCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_SBitCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = size;
+    image_type.height = size;
+    image_type.flags = FT_LOAD_DEFAULT;
+
+    FTC_SBit sbit = NULL;
+    FTC_Node node = NULL;
+    FT_Error lookup_error = FTC_SBitCache_Lookup(cache, &image_type, glyph_index, &sbit, &node);
+    SBitSnapshot snapshot;
+    if (snapshot_ftc_sbit(lookup_error ? NULL : sbit, &snapshot) != 0) {
+        if (node) {
+            FTC_Node_Unref(node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        return 1;
+    }
+
+    int node_present = node ? 1 : 0;
+    int cache_index = node ? ((FTC_NodeRec*)node)->cache_index : -1;
+    int ref_count_before_unref = node ? ((FTC_NodeRec*)node)->ref_count : 0;
+    int sbit_readable_before_unref = ftc_sbit_snapshot_still_matches(lookup_error ? NULL : sbit, &snapshot);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    int ref_count_after_unref = node ? ((FTC_NodeRec*)node)->ref_count : 0;
+
+    unsigned int pressure_glyphs[5] = {37, 38, 39, 40, 41};
+    FT_Error pressure_statuses[5] = {0, 0, 0, 0, 0};
+    for (int index = 0; index < 5; index++) {
+        FTC_SBit pressure_sbit = NULL;
+        FTC_Node pressure_node = NULL;
+        pressure_statuses[index] =
+            FTC_SBitCache_Lookup(cache, &image_type, pressure_glyphs[index], &pressure_sbit, &pressure_node);
+        if (pressure_node) {
+            FTC_Node_Unref(pressure_node, manager);
+        }
+    }
+
+    FTC_SBit repeat_sbit = NULL;
+    FTC_Node repeat_node = NULL;
+    FT_Error repeat_error = FTC_SBitCache_Lookup(cache, &image_type, glyph_index, &repeat_sbit, &repeat_node);
+    int repeat_same_node = node && repeat_node && node == repeat_node;
+    if (repeat_node) {
+        FTC_Node_Unref(repeat_node, manager);
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"lookup\":\"FTC_SBitCache_Lookup\","
+           "\"glyph_index\":%u,\"size\":%u,\"max_bytes\":%lu,"
+           "\"lookup_status\":%d,\"repeat_status\":%d,"
+           "\"requester_count_final\":%d,",
+           glyph_index,
+           size,
+           (unsigned long)max_bytes,
+           lookup_error,
+           repeat_error,
+           requester.request_count);
+    printf("\"sbit\":");
+    print_ftc_sbit_snapshot_fields(&snapshot);
+    printf(",");
+    printf("\"node\":{\"anode_nullness\":\"%s\","
+           "\"locked\":%s,"
+           "\"cache_handle_identity\":\"manager_cache_0\","
+           "\"cache_index\":%d,"
+           "\"ref_count_before_unref\":%d,"
+           "\"ref_count_after_unref\":%d,"
+           "\"ref_count_delta\":%d},",
+           node_present ? "non_null" : "null",
+           node_present && ref_count_before_unref > 0 ? "true" : "false",
+           cache_index,
+           ref_count_before_unref,
+           ref_count_after_unref,
+           ref_count_after_unref - ref_count_before_unref);
+    printf("\"sbit_still_readable_before_pressure\":%s,"
+           "\"locked_survival_class\":\"held_until_unref\","
+           "\"after_unref_survival_class\":\"eligible\",",
+           sbit_readable_before_unref ? "true" : "false");
+    printf("\"post_pressure\":{\"lookup_statuses\":[");
+    for (int index = 0; index < 5; index++) {
+        if (index) {
+            printf(",");
+        }
+        printf("%d", pressure_statuses[index]);
+    }
+    printf("],\"repeat_same_node_after_unref\":%s,"
+           "\"node_survival_class\":\"%s\"}",
+           repeat_same_node ? "true" : "false",
+           repeat_same_node ? "survived_unlocked_pressure" : "flushable_or_replaced");
+    printf("}}\n");
+
+    free_sbit_snapshot(&snapshot);
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
     return 0;
 }
 
@@ -22164,6 +22330,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--cache-node-lifecycle")) {
+        return emit_cache_node_lifecycle(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--scaler-descriptor-lifetime")) {
         return emit_scaler_descriptor_lifetime(argc, argv);

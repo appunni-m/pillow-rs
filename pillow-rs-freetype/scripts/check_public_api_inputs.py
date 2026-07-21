@@ -2027,21 +2027,6 @@ def ftcache_node_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcache."):
         return None
     exact_cases = {
-        "ftcache.FTC_Node.reference_counted_cache_handle": (
-            "FTC_Node cache-handle parity needs a maintained node lifecycle "
-            "route proving a lookup-acquired node records the same manager "
-            "cache handle identity and cache index as pinned C"
-        ),
-        "ftcache.FTC_Node_Unref.releases_lookup_reference": (
-            "FTC_Node_Unref release parity needs a maintained node lifecycle "
-            "route proving one unref releases exactly the lookup reference and "
-            "preserves any remaining references like pinned C"
-        ),
-        "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable": (
-            "FTC_Node_Unref flushability parity needs a maintained route "
-            "proving the final unref makes the node eligible for cache flush "
-            "or eviction with pinned-C observable state"
-        ),
     }
     return exact_cases.get(row.case_id)
 
@@ -5377,6 +5362,20 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "lookup, requester count, null/non-null anode ownership "
             "classification, and node-unref behavior validate through pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation in {"ftcache.node_lifecycle", "ftcache.node_unref"}
+        and row.case_id
+        in {
+            "ftcache.FTC_Node.reference_counted_cache_handle",
+            "ftcache.FTC_Node_Unref.releases_lookup_reference",
+            "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable",
+        }
+    ):
+        return (
+            "FTC_Node and FTC_Node_Unref lookup-acquired node handle, cache "
+            "index, reference release, and post-unref flushability classes "
+            "validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "ftcache.image_cache_lookup_scaler"

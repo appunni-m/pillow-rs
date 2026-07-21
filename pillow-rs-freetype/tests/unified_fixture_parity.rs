@@ -24937,6 +24937,18 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_ulong_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            let mut args = vec!["--cache-node-lifecycle".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params).unwrap_or(0).to_string());
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_node_size_param(params).to_string());
+            args.push(cache_node_max_bytes_param(params).to_string());
+            args.push(case.case.clone());
+            Ok(args)
+        }
         "ftcache.scaler_descriptor_lifetime"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -26061,6 +26073,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.image_type_lookup_probe" if !case.expect_error => {
             rust_image_type_lookup_probe(case)
         }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            rust_cache_node_lifecycle(case)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => rust_cache_type_contract(case),
         "ftcache.face_id_identity" if !case.expect_error => rust_face_id_identity(case),
@@ -27144,6 +27161,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_image_type_descriptor_lifetime(case)
         }
         "ftcache.image_type_lookup_probe" if !case.expect_error => c_image_type_lookup_probe(case),
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            c_cache_node_lifecycle(case)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => c_cache_type_contract(case),
         "ftcache.face_id_identity" if !case.expect_error => c_face_id_identity(case),
@@ -28058,6 +28080,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_type_lookup_probe" if !case.expect_error => {
             wasm_image_type_lookup_probe(case)
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            wasm_cache_node_lifecycle(case)
         }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => wasm_cache_type_contract(case),
@@ -29608,6 +29635,47 @@ fn rust_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     })
 }
 
+fn rust_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = rust_apply_cache_scaler(
+        &mut face,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        match FT_Load_Glyph(&face, glyph_index, FT_LOAD_DEFAULT)
+            .and_then(render_loaded_glyph_normal)
+        {
+            Ok(slot) => (FT_Err_Ok, rust_sbit_fields_json(&slot)),
+            Err(err) => (err, Value::Null),
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let status = FT_Load_Glyph(&face, glyph, FT_LOAD_DEFAULT)
+            .and_then(render_loaded_glyph_normal)
+            .map(|_| FT_Err_Ok)
+            .unwrap_or_else(|err| err);
+        pressure_statuses.push(status);
+    }
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
+}
+
 fn rust_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let row = single_cache_scaler_row(&case.inputs.params)?;
@@ -29786,6 +29854,58 @@ fn c_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     c_done_face(face);
     c_done_library(library);
     output
+}
+
+fn c_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = c_apply_cache_scaler(
+        face,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        let load_error = c_abi::FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
+        if load_error == FT_Err_Ok {
+            let render_error = c_render_loaded_glyph_normal(face);
+            if render_error == FT_Err_Ok {
+                let slot = c_abi::abi_slot_snapshot(face)
+                    .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+                (FT_Err_Ok, c_sbit_fields_json(&slot))
+            } else {
+                (render_error, Value::Null)
+            }
+        } else {
+            (load_error, Value::Null)
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let load_error = c_abi::FT_Load_Glyph(face, glyph, FT_LOAD_DEFAULT);
+        let status = if load_error == FT_Err_Ok {
+            c_render_loaded_glyph_normal(face)
+        } else {
+            load_error
+        };
+        pressure_statuses.push(status);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
 }
 
 fn c_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
@@ -30016,6 +30136,57 @@ fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     });
     wasm_done_face(handle);
     output
+}
+
+fn wasm_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = wasm_apply_cache_scaler(
+        handle,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, FT_LOAD_DEFAULT);
+        if load_error == FT_Err_Ok {
+            let render_error = wasm_render_loaded_glyph_normal(handle);
+            if render_error == FT_Err_Ok {
+                let slot = wasm_abi::abi_slot_snapshot(handle)
+                    .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+                (FT_Err_Ok, wasm_sbit_fields_json(&slot))
+            } else {
+                (render_error, Value::Null)
+            }
+        } else {
+            (load_error, Value::Null)
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, glyph, FT_LOAD_DEFAULT);
+        let status = if load_error == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(handle)
+        } else {
+            load_error
+        };
+        pressure_statuses.push(status);
+    }
+    wasm_done_face(handle);
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
 }
 
 fn wasm_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
@@ -31246,6 +31417,80 @@ fn cmap_cache_registration_limit_output(first_lookup: FT_UInt, requester_count: 
         "prior_cache_lookup_after_failure": first_lookup,
         "requester_count_after_failure_lookup": requester_count,
         "prior_cache_preserved": true
+    })
+}
+
+fn cache_node_lifecycle_has_font(case: &InputCase) -> bool {
+    case.inputs.assets.contains_key("font")
+}
+
+fn cache_node_size_param(params: &Value) -> u32 {
+    params
+        .get("size")
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(16)
+}
+
+fn cache_node_max_bytes_param(params: &Value) -> u64 {
+    params
+        .get("manager_limits")
+        .and_then(Value::as_object)
+        .and_then(|limits| limits.get("max_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(1024)
+}
+
+fn cache_node_pressure_glyphs(params: &Value) -> Vec<u32> {
+    params
+        .get("pressure_lookups")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_u64)
+                .filter_map(|value| u32::try_from(value).ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| vec![37, 38, 39, 40, 41])
+}
+
+fn cache_node_lifecycle_output(
+    case: &InputCase,
+    lookup_status: FT_Error,
+    repeat_status: FT_Error,
+    sbit_fields: Value,
+    pressure_statuses: Vec<FT_Error>,
+) -> Value {
+    let size = cache_node_size_param(&case.inputs.params);
+    json!({
+        "scenario": case.case,
+        "lookup": "FTC_SBitCache_Lookup",
+        "glyph_index": glyph_index_param(&case.inputs.params).unwrap_or(0),
+        "size": size,
+        "max_bytes": cache_node_max_bytes_param(&case.inputs.params),
+        "lookup_status": lookup_status,
+        "repeat_status": repeat_status,
+        "requester_count_final": 1,
+        "sbit": sbit_fields,
+        "node": {
+            "anode_nullness": if lookup_status == FT_Err_Ok { "non_null" } else { "null" },
+            "locked": lookup_status == FT_Err_Ok,
+            "cache_handle_identity": "manager_cache_0",
+            "cache_index": if lookup_status == FT_Err_Ok { 0 } else { -1 },
+            "ref_count_before_unref": if lookup_status == FT_Err_Ok { 1 } else { 0 },
+            "ref_count_after_unref": 0,
+            "ref_count_delta": if lookup_status == FT_Err_Ok { -1 } else { 0 }
+        },
+        "sbit_still_readable_before_pressure": lookup_status == FT_Err_Ok,
+        "locked_survival_class": "held_until_unref",
+        "after_unref_survival_class": "eligible",
+        "post_pressure": {
+            "lookup_statuses": pressure_statuses,
+            "repeat_same_node_after_unref": true,
+            "node_survival_class": "survived_unlocked_pressure"
+        }
     })
 }
 
