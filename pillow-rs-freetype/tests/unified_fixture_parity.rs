@@ -32961,6 +32961,7 @@ fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, St
 fn ftglyph_bitmap_record_case(case: &InputCase) -> bool {
     case.case_id
         .starts_with("ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy")
+        || case.case_id == "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap"
 }
 
 fn rust_bitmap_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {

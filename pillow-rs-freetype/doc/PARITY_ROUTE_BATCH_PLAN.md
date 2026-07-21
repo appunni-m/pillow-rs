@@ -1756,3 +1756,43 @@ Rows deliberately left pending in the same surface:
   release-event route, not only field equality before destruction.
 - SVG alias/record rows still need SVG fixture support or exact unsupported
   classification against pinned C.
+
+### Split FT_BitmapGlyphRec FT_Get_Glyph bitmap record row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad row remains
+pending.
+
+Scope:
+
+- Added `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap`.
+- The split row names exactly the maintained input it proves:
+  `FT_Get_Glyph bitmap` on
+  `fonts/bitmap-strikes/public-bitmap-strike.ttf` with
+  `glyph_index: "bitmap_glyph"`.
+- Reused the existing real bitmap glyph record route to compare the public
+  `FT_BitmapGlyphRec` payload across pinned C, Rust FFI, thin C ABI, and WASM
+  ABI: root format and advance, left/top, bitmap descriptor, and bitmap buffer
+  bytes.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` declares
+  both `FT_Get_Glyph bitmap` and `FT_Glyph_To_Bitmap outline` creation paths.
+- The new split row proves the `FT_Get_Glyph bitmap` half only.  Counting it as
+  the full broad row would hide the unresolved `FT_Glyph_To_Bitmap outline`
+  path.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7242 → 7243, `real-parity` 4730 → 4731,
+  `pending-route` remains 237 because the original broad row is still pending.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` remains
+  pending for the `FT_Glyph_To_Bitmap outline` path.
+- `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` still needs a destruction and
+  ownership-event route.
