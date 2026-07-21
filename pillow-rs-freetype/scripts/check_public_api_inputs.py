@@ -121,6 +121,7 @@ WASM_ABI_SOURCE = ROOT / "ffi-wasm" / "src" / "lib.rs"
 WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
+    "fontdone_wasm_gzip_uncompress",
     "fontdone_wasm_open_face",
     "fontdone_wasm_open_external_stream_face",
     "fontdone_wasm_open_face_with_name_options",
@@ -1169,6 +1170,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
+        "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
         "ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small",
         "ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data",
@@ -5852,6 +5854,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table"
     ):
         return "FT_TrueTypeGX_Validate unimplemented/invalid-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer"
+    ):
+        return "FT_Gzip_Uncompress gzip/zlib success validates exact bytes through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgzip.gzip_uncompress"
         and row.case_id == "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments"

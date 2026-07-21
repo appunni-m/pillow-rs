@@ -238,6 +238,19 @@ enum Asset {
     Other(Value),
 }
 
+#[derive(Debug, Deserialize)]
+struct GzipPayloadManifest {
+    payloads: Vec<GzipPayloadEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GzipPayloadEntry {
+    id: String,
+    raw: String,
+    gzip: String,
+    zlib_wrapped: String,
+}
+
 impl<'de> Deserialize<'de> for Asset {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -2509,6 +2522,11 @@ impl BackendComparisonWorker {
             return run_rust_ffi(case);
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::Rust)
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2849,6 +2867,11 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::CAbi)
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3187,6 +3210,11 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::Wasm)
+            }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -23372,6 +23400,32 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     ) {
         return Ok(vec!["--ft-list".to_string(), case.case_id.clone()]);
     }
+    if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
+        let manifest = gzip_payload_manifest(case)?;
+        let mut args = vec!["--gzip-uncompress".to_string()];
+        for payload in manifest.payloads {
+            args.push(payload.id);
+            args.push(
+                fixture_dir()
+                    .join(payload.raw)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(payload.gzip)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(payload.zlib_wrapped)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return Ok(args);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let output_count =
@@ -25967,6 +26021,9 @@ fn case_id_base(case_id: &str) -> &str {
 }
 
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
+        return gzip_uncompress_output(case, GzipBackend::Rust);
+    }
     // Handle null-param error tests: only for operations without explicit implementation.
     // Exclude operations that have dedicated match arms below but lack font assets.
     if has_no_font_assets(case)
@@ -40886,6 +40943,107 @@ fn cached_file_bytes(path: &str) -> Result<Arc<[u8]>, String> {
         .entry(path.to_string())
         .or_insert_with(|| Arc::clone(&bytes));
     Ok(Arc::clone(bytes))
+}
+
+#[derive(Clone, Copy)]
+enum GzipBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn gzip_payload_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("gzip_payloads")
+        .ok_or_else(|| "missing gzip_payloads asset".to_string())?;
+    let path =
+        asset_file_path(asset).ok_or_else(|| format!("unresolved {}", asset_label(asset)))?;
+    let text = fs::read_to_string(fixture_dir().join(path))
+        .map_err(|err| format!("read gzip payload manifest {path}: {err}"))?;
+    serde_json::from_str(&text).map_err(|err| format!("parse gzip payload manifest {path}: {err}"))
+}
+
+fn gzip_uncompress_output(case: &InputCase, backend: GzipBackend) -> Result<RunOutput, String> {
+    let manifest = gzip_payload_manifest(case)?;
+    let mut rows = Vec::new();
+    for payload in manifest.payloads {
+        let raw = cached_file_bytes(&payload.raw)?;
+        for (input_kind, input_path) in [
+            ("gzip", payload.gzip.as_str()),
+            ("zlib_wrapped", payload.zlib_wrapped.as_str()),
+        ] {
+            let input = cached_file_bytes(input_path)?;
+            for (buffer_size, capacity) in [
+                ("exact_uncompressed_size", raw.len()),
+                (
+                    "larger_than_uncompressed_size",
+                    raw.len().checked_add(7).ok_or_else(|| {
+                        format!("gzip payload {} output size overflow", payload.id)
+                    })?,
+                ),
+            ] {
+                let (status, output_len, output) =
+                    gzip_uncompress_call(backend, input.as_ref(), capacity)?;
+                rows.push(json!({
+                    "payload": payload.id,
+                    "input_kind": input_kind,
+                    "buffer_size": buffer_size,
+                    "status": status,
+                    "output_len": output_len,
+                    "output_bytes": hex_bytes(&output),
+                }));
+            }
+        }
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn gzip_uncompress_call(
+    backend: GzipBackend,
+    input: &[u8],
+    capacity: usize,
+) -> Result<(FT_Error, FT_ULong, Vec<u8>), String> {
+    let mut output = vec![0xA5; capacity];
+    let mut output_len = FT_ULong::try_from(capacity).map_err(|err| err.to_string())?;
+    let status = match backend {
+        GzipBackend::Rust => {
+            let memory = FT_MemoryRec::default();
+            FT_Gzip_Uncompress(
+                Some(&memory),
+                Some(output.as_mut_slice()),
+                Some(&mut output_len),
+                Some(input),
+            )
+        }
+        GzipBackend::CAbi => {
+            let mut memory = c_abi::FT_MemoryRec::default();
+            c_abi::FT_Gzip_Uncompress(
+                &mut memory,
+                output.as_mut_ptr(),
+                &mut output_len,
+                input.as_ptr(),
+                FT_ULong::try_from(input.len()).map_err(|err| err.to_string())?,
+            )
+        }
+        GzipBackend::Wasm => {
+            let mut memory = wasm_abi::FontdoneWasmMemory::default();
+            wasm_abi::fontdone_wasm_gzip_uncompress(
+                &mut memory,
+                output.as_mut_ptr(),
+                &mut output_len,
+                input.as_ptr(),
+                FT_ULong::try_from(input.len()).map_err(|err| err.to_string())?,
+            )
+        }
+    };
+    let prefix_len = if status == FT_Err_Ok {
+        usize::try_from(output_len).map_err(|err| err.to_string())?
+    } else {
+        0
+    };
+    Ok((status, output_len, output[..prefix_len].to_vec()))
 }
 
 fn ok(output: Value) -> RunOutput {

@@ -445,6 +445,7 @@ typedef struct FT_Palette_Data_ {
 
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
+FT_Error FT_Gzip_Uncompress(FT_Memory memory, FT_Byte* output, FT_ULong* output_len, const FT_Byte* input, FT_ULong input_len);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
 FT_Error FT_Bitmap_Convert(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target, FT_Int alignment);
 FT_Error FT_Bitmap_Done(FT_Library library, FT_Bitmap* bitmap);

@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
+use std::io::Read;
 use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
@@ -3293,6 +3294,39 @@ pub fn FT_OpenType_Validate(
     }
     let _ = validation_flags;
     FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Gzip_Uncompress(
+    memory: Option<&FT_MemoryRec>,
+    output: Option<&mut [FT_Byte]>,
+    output_len: Option<&mut FT_ULong>,
+    input: Option<&[FT_Byte]>,
+) -> FT_Error {
+    let (Some(_memory), Some(output), Some(output_len)) = (memory, output, output_len) else {
+        // FreeType 2.14.3 `src/gzip/ftgzip.c:716-717` rejects missing memory,
+        // output buffer, or output_len before it initializes zlib state.
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(input) = input else {
+        return FT_Err_Invalid_Table;
+    };
+
+    let mut decoded = Vec::new();
+    let read_result = if input.starts_with(&[0x1F, 0x8B]) {
+        flate2::read::GzDecoder::new(input).read_to_end(&mut decoded)
+    } else {
+        flate2::read::ZlibDecoder::new(input).read_to_end(&mut decoded)
+    };
+    if read_result.is_err() {
+        return FT_Err_Invalid_Table;
+    }
+    if decoded.len() > output.len() {
+        return FT_Err_Array_Too_Large as FT_Error;
+    }
+
+    output[..decoded.len()].copy_from_slice(&decoded);
+    *output_len = FT_ULong::try_from(decoded.len()).unwrap_or(FT_ULong::MAX);
+    FT_Err_Ok
 }
 
 pub fn FT_TrueTypeGX_Free(face: Option<&FT_Face>, table: FT_Bytes) {

@@ -1476,6 +1476,45 @@ pub extern "C" fn fontdone_wasm_free(ptr: *mut c_void, size: usize) {
     unsafe { dealloc(ptr.cast::<u8>(), layout) };
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_gzip_uncompress(
+    memory: FT_Memory,
+    output: *mut FT_Byte,
+    output_len: *mut FT_ULong,
+    input: *const FT_Byte,
+    input_len: FT_ULong,
+) -> FT_Error {
+    if memory.is_null() || output.is_null() || output_len.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Ok(input_len) = usize::try_from(input_len) else {
+        return rust_ffi::FT_Err_Invalid_Table;
+    };
+    // SAFETY: `output_len` is non-null and is exclusively borrowed for this
+    // synchronous WASM ABI call.
+    let output_len_ref = unsafe { &mut *output_len };
+    let Ok(output_capacity) = usize::try_from(*output_len_ref) else {
+        return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
+    };
+    // SAFETY: `output` is non-null and `*output_len` is the caller-provided
+    // output capacity, matching the FreeType-shaped ABI.
+    let output_slice = unsafe { slice::from_raw_parts_mut(output, output_capacity) };
+    let input_slice = if input.is_null() {
+        None
+    } else {
+        // SAFETY: non-null `input` and `input_len` describe the caller-owned
+        // compressed bytes for this call.
+        Some(unsafe { slice::from_raw_parts(input, input_len) })
+    };
+    let memory_view = rust_ffi::FT_MemoryRec::default();
+    rust_ffi::FT_Gzip_Uncompress(
+        Some(&memory_view),
+        Some(output_slice),
+        Some(output_len_ref),
+        input_slice,
+    )
+}
+
 fn wasm_alloc_zeroed_array<T>(count: usize) -> *mut u8 {
     if count == 0 {
         return ptr::null_mut();

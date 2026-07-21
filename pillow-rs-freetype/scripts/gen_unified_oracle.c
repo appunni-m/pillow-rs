@@ -15,6 +15,7 @@
 #include <freetype/ftdriver.h>
 #include <freetype/ftfntfmt.h>
 #include <freetype/ftglyph.h>
+#include <freetype/ftgzip.h>
 #include <freetype/ftgasp.h>
 #include <freetype/ftgxval.h>
 #include <freetype/ftimage.h>
@@ -152,6 +153,7 @@ static int is_moveto_callback_error_case(const char* case_id) {
 }
 
 static void print_json_bool(int value);
+static void print_status(FT_Error err);
 static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index);
 
 #include "generated_constants.inc"
@@ -189,6 +191,105 @@ static int load_file(const char* path, unsigned char** out, long* out_len) {
     fclose(fp);
     *out = data;
     *out_len = len;
+    return 0;
+}
+
+static void print_gzip_uncompress_row(
+    const char* payload_id,
+    const char* input_kind,
+    const char* buffer_size,
+    FT_Error status,
+    FT_ULong output_len,
+    const unsigned char* output) {
+    printf("{\"payload\":\"");
+    print_json_string_content(payload_id);
+    printf("\",\"input_kind\":\"");
+    print_json_string_content(input_kind);
+    printf("\",\"buffer_size\":\"");
+    print_json_string_content(buffer_size);
+    printf("\",\"status\":%d,\"output_len\":%lu,\"output_bytes\":\"",
+           status, (unsigned long)output_len);
+    if (!status) {
+        print_hex_bytes(output, (long)output_len);
+    }
+    printf("\"}");
+}
+
+static int emit_gzip_uncompress(int argc, char** argv) {
+    if (argc < 6 || ((argc - 2) % 4) != 0) {
+        fprintf(stderr, "--gzip-uncompress requires PAYLOAD_ID RAW GZIP ZLIB groups\n");
+        return 2;
+    }
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"rows\":[");
+    int first = 1;
+    for (int index = 2; index + 3 < argc; index += 4) {
+        const char* payload_id = argv[index];
+        const char* raw_path = argv[index + 1];
+        const char* gzip_path = argv[index + 2];
+        const char* zlib_path = argv[index + 3];
+        unsigned char* raw = NULL;
+        unsigned char* gzip_bytes = NULL;
+        unsigned char* zlib_bytes = NULL;
+        long raw_len = 0;
+        long gzip_len = 0;
+        long zlib_len = 0;
+        if (load_file(raw_path, &raw, &raw_len) != 0 ||
+            load_file(gzip_path, &gzip_bytes, &gzip_len) != 0 ||
+            load_file(zlib_path, &zlib_bytes, &zlib_len) != 0) {
+            free(raw);
+            free(gzip_bytes);
+            free(zlib_bytes);
+            FT_Done_FreeType(library);
+            return 2;
+        }
+        for (int kind = 0; kind < 2; kind++) {
+            const char* input_kind = kind == 0 ? "gzip" : "zlib_wrapped";
+            const unsigned char* input = kind == 0 ? gzip_bytes : zlib_bytes;
+            long input_len = kind == 0 ? gzip_len : zlib_len;
+            for (int size_kind = 0; size_kind < 2; size_kind++) {
+                const char* buffer_size = size_kind == 0
+                    ? "exact_uncompressed_size"
+                    : "larger_than_uncompressed_size";
+                FT_ULong output_capacity = (FT_ULong)raw_len + (size_kind == 0 ? 0UL : 7UL);
+                unsigned char* output = (unsigned char*)malloc((size_t)(output_capacity ? output_capacity : 1));
+                if (!output) {
+                    free(raw);
+                    free(gzip_bytes);
+                    free(zlib_bytes);
+                    FT_Done_FreeType(library);
+                    return 1;
+                }
+                memset(output, 0xA5, (size_t)(output_capacity ? output_capacity : 1));
+                FT_ULong output_len = output_capacity;
+                FT_Error status = FT_Gzip_Uncompress(
+                    library->memory,
+                    output,
+                    &output_len,
+                    input,
+                    (FT_ULong)input_len);
+                if (!first) {
+                    printf(",");
+                }
+                print_gzip_uncompress_row(payload_id, input_kind, buffer_size, status, output_len, output);
+                first = 0;
+                free(output);
+            }
+        }
+        free(raw);
+        free(gzip_bytes);
+        free(zlib_bytes);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
     return 0;
 }
 
@@ -22890,6 +22991,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);
+    }
+    if (argc >= 6 && streq(argv[1], "--gzip-uncompress")) {
+        return emit_gzip_uncompress(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);
