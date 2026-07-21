@@ -6074,6 +6074,29 @@ static void print_glyph_record_payload(FT_Glyph glyph) {
     printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->advance.x, glyph->advance.y);
     printf("\"library_present\":%s,", glyph->library ? "true" : "false");
     printf("\"clazz_present\":%s", glyph->clazz ? "true" : "false");
+    if (glyph->format == FT_GLYPH_FORMAT_BITMAP) {
+        FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
+        FT_Bitmap* bitmap = &bitmap_glyph->bitmap;
+        long len = 0;
+        if (bitmap->buffer && bitmap->rows > 0) {
+            len = labs(bitmap->pitch) * bitmap->rows;
+        }
+        printf(",\"bitmap\":");
+        if (!bitmap->buffer || len == 0) {
+            printf("null");
+        } else {
+            printf("{\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"left\":%d,\"top\":%d,\"buffer_hex\":\"",
+                   bitmap->width,
+                   bitmap->rows,
+                   bitmap->pitch,
+                   bitmap->pixel_mode,
+                   bitmap->num_grays,
+                   bitmap_glyph->left,
+                   bitmap_glyph->top);
+            print_hex_bytes(bitmap->buffer, len);
+            printf("\"}");
+        }
+    }
     printf("}}");
 }
 

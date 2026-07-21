@@ -3395,13 +3395,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if done_glyph_pending:
         return done_glyph_pending
     glyph_object_rows_without_exact_payload_route = {
-        "ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy": (
-            "FT_Get_Glyph bitmap success parity needs the runner to create a "
-            "real FT_BitmapGlyph with FT_GLYPH_FORMAT_BITMAP and compare "
-            "FT_BitmapGlyphRec left/top/bitmap buffer payload. The current "
-            "slot-record snapshot can pass with an outline glyph and would be "
-            "a green placeholder for the declared bitmap-glyph contract"
-        ),
         "ftglyph.FT_Get_Glyph.success_svg_slot_deep_copy": (
             "FT_Get_Glyph SVG success parity needs an SVG-enabled glyph route "
             "that creates FT_GLYPH_FORMAT_SVG and compares FT_SvgGlyphRec "
