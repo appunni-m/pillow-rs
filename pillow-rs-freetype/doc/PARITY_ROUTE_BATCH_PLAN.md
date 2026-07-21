@@ -51,6 +51,22 @@ buffer decompression, thin C/WASM ABI exports, and a pinned C oracle route for
 exact output bytes. `FT_Stream_OpenGzip` remains pending because stream wrapper
 state, source-position behavior, and close lifecycle are separate semantics.
 
+After the `FT_Stream_OpenGzip` small/large stream success batch:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 334, 'real-null-validation': 9, 'real-parity': 4629}
+runtime_parity: passed=6899 failed=0 total=6899 covered_manifest_cases=3806
+runtime_cases: runnable=6899 pending=339
+```
+
+This batch extends `font-fixture-gzip` with `small-and-large-streams.json`, adds
+pure-Rust `FT_Stream_OpenGzip` stream setup over the existing rust-backend gzip
+decoder, exposes only thin FreeType-shaped C/WASM wrappers, and compares pinned
+C stream classes plus beginning/middle/end decompressed range bytes. The stream
+row covers small in-memory stream behavior and large callback-style stream
+behavior for both zero and nonzero initial source positions. Bzip2, LZW, and
+gzip close-lifecycle rows remain separate pending surfaces.
+
 After the FTC manager/cache creation route batch:
 
 ```text

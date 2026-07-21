@@ -652,6 +652,41 @@ pub extern "C" fn FT_Gzip_Uncompress(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stream_OpenGzip(stream: FT_Stream, source: FT_Stream) -> FT_Error {
+    let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    if source_ref.base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    }
+    let Ok(source_len) = usize::try_from(source_ref.size) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    // SAFETY: this thin ABI wrapper supports the memory-backed stream shape
+    // used by the parity fixtures; `base` and `size` are caller-provided.
+    let source_bytes = unsafe { slice::from_raw_parts(source_ref.base.cast_const(), source_len) };
+    rust_ffi::FT_Stream_OpenGzip(Some(stream_ref), Some(source_ref), Some(source_bytes))
+}
+
+pub fn abi_support_gzip_stream_bytes(
+    stream: FT_Stream,
+    offset: FT_ULong,
+    count: FT_ULong,
+) -> Option<Vec<FT_Byte>> {
+    let stream_ref = unsafe { stream.as_ref() }?;
+    rust_ffi::FT_Gzip_Stream_Read(Some(stream_ref), offset, count)
+}
+
+pub fn abi_support_gzip_stream_close(stream: FT_Stream) {
+    if let Some(stream_ref) = unsafe { stream.as_mut() } {
+        rust_ffi::FT_Gzip_Stream_Close(Some(stream_ref));
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_List_Add(list: FT_List, node: FT_ListNode) {
     let (Some(list_ref), Some(node_ref)) = (unsafe { list.as_mut() }, unsafe { node.as_mut() })
     else {

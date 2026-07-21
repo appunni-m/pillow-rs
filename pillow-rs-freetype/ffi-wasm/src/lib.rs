@@ -1515,6 +1515,44 @@ pub extern "C" fn fontdone_wasm_gzip_uncompress(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_stream_open_gzip(
+    stream: *mut rust_ffi::FT_StreamRec,
+    source: *const rust_ffi::FT_StreamRec,
+) -> FT_Error {
+    let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    if source_ref.base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    }
+    let Ok(source_len) = usize::try_from(source_ref.size) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    // SAFETY: the WASM ABI parity fixtures pass a memory-backed source stream
+    // with `base` readable for `size` bytes.
+    let source_bytes = unsafe { slice::from_raw_parts(source_ref.base.cast_const(), source_len) };
+    rust_ffi::FT_Stream_OpenGzip(Some(stream_ref), Some(source_ref), Some(source_bytes))
+}
+
+pub fn abi_support_gzip_stream_bytes(
+    stream: *const rust_ffi::FT_StreamRec,
+    offset: FT_ULong,
+    count: FT_ULong,
+) -> Option<Vec<FT_Byte>> {
+    let stream_ref = unsafe { stream.as_ref() }?;
+    rust_ffi::FT_Gzip_Stream_Read(Some(stream_ref), offset, count)
+}
+
+pub fn abi_support_gzip_stream_close(stream: *mut rust_ffi::FT_StreamRec) {
+    if let Some(stream_ref) = unsafe { stream.as_mut() } {
+        rust_ffi::FT_Gzip_Stream_Close(Some(stream_ref));
+    }
+}
+
 fn wasm_alloc_zeroed_array<T>(count: usize) -> *mut u8 {
     if count == 0 {
         return ptr::null_mut();

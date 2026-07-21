@@ -293,6 +293,141 @@ static int emit_gzip_uncompress(int argc, char** argv) {
     return 0;
 }
 
+static const char* stream_ptr_class(const void* ptr) {
+    return ptr ? "nonnull" : "null";
+}
+
+static void print_gzip_stream_read_ranges(
+    FT_Stream stream,
+    const unsigned char* raw,
+    long raw_len) {
+    const unsigned long lengths[3] = { 16UL, 19UL, 23UL };
+    unsigned long starts[3];
+    starts[0] = 0;
+    starts[1] = raw_len > 19 ? (unsigned long)(raw_len / 2) : 0;
+    starts[2] = raw_len > 23 ? (unsigned long)(raw_len - 23) : 0;
+    const char* labels[3] = { "beginning", "middle", "end" };
+
+    printf("[");
+    for (int i = 0; i < 3; i++) {
+        unsigned long available = raw_len > (long)starts[i]
+            ? (unsigned long)raw_len - starts[i]
+            : 0;
+        unsigned long count = lengths[i] < available ? lengths[i] : available;
+        unsigned char buffer[32];
+        memset(buffer, 0, sizeof(buffer));
+        unsigned long read_count = 0;
+        if (stream->base) {
+            if (count) {
+                memcpy(buffer, stream->base + starts[i], count);
+            }
+            read_count = count;
+        } else if (stream->read) {
+            read_count = stream->read(stream, starts[i], buffer, count);
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("{\"label\":\"%s\",\"offset\":%lu,\"requested\":%lu,\"read\":%lu,\"bytes\":\"",
+               labels[i], starts[i], count, read_count);
+        print_hex_bytes(buffer, (long)read_count);
+        printf("\",\"expected\":\"");
+        print_hex_bytes(raw + starts[i], (long)read_count);
+        printf("\"}");
+    }
+    printf("]");
+}
+
+static void print_gzip_stream_row(
+    const char* payload_id,
+    const char* source_position,
+    FT_Error status,
+    FT_Stream stream,
+    const unsigned char* raw,
+    long raw_len) {
+    printf("{\"payload\":\"");
+    print_json_string_content(payload_id);
+    printf("\",\"source_position\":\"");
+    print_json_string_content(source_position);
+    printf("\",\"status\":%d,\"stream\":{", status);
+    printf("\"size\":%lu,\"base_class\":\"%s\",\"read_class\":\"%s\",\"close_class\":\"%s\"},",
+           status ? 0UL : (unsigned long)stream->size,
+           status ? "null" : stream_ptr_class(stream->base),
+           status ? "null" : stream_ptr_class(stream->read),
+           status ? "null" : stream_ptr_class(stream->close));
+    printf("\"read_ranges\":");
+    if (status) {
+        printf("[]");
+    } else {
+        print_gzip_stream_read_ranges(stream, raw, raw_len);
+    }
+    printf("}");
+}
+
+static int emit_gzip_stream_open(int argc, char** argv) {
+    if (argc < 5 || ((argc - 2) % 3) != 0) {
+        fprintf(stderr, "--gzip-stream-open requires PAYLOAD_ID RAW GZIP groups\n");
+        return 2;
+    }
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"rows\":[");
+    int first = 1;
+    for (int index = 2; index + 2 < argc; index += 3) {
+        const char* payload_id = argv[index];
+        const char* raw_path = argv[index + 1];
+        const char* gzip_path = argv[index + 2];
+        unsigned char* raw = NULL;
+        unsigned char* gzip_bytes = NULL;
+        long raw_len = 0;
+        long gzip_len = 0;
+        if (load_file(raw_path, &raw, &raw_len) != 0 ||
+            load_file(gzip_path, &gzip_bytes, &gzip_len) != 0) {
+            free(raw);
+            free(gzip_bytes);
+            FT_Done_FreeType(library);
+            return 2;
+        }
+        for (int source_case = 0; source_case < 2; source_case++) {
+            FT_StreamRec source;
+            FT_StreamRec stream;
+            memset(&source, 0, sizeof(source));
+            memset(&stream, 0xA5, sizeof(stream));
+            source.base = gzip_bytes;
+            source.size = (FT_ULong)gzip_len;
+            source.pos = source_case == 0 ? 0UL : 3UL;
+            source.memory = library->memory;
+            FT_Error status = FT_Stream_OpenGzip(&stream, &source);
+            if (!first) {
+                printf(",");
+            }
+            print_gzip_stream_row(
+                payload_id,
+                source_case == 0 ? "zero" : "nonzero_before_header",
+                status,
+                &stream,
+                raw,
+                raw_len);
+            first = 0;
+            if (!status && stream.close) {
+                stream.close(&stream);
+            }
+        }
+        free(raw);
+        free(gzip_bytes);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static unsigned char hex_nibble(char c) {
     if (c >= '0' && c <= '9') {
         return (unsigned char)(c - '0');
@@ -22994,6 +23129,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc >= 6 && streq(argv[1], "--gzip-uncompress")) {
         return emit_gzip_uncompress(argc, argv);
+    }
+    if (argc >= 5 && streq(argv[1], "--gzip-stream-open")) {
+        return emit_gzip_stream_open(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);

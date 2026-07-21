@@ -248,7 +248,8 @@ struct GzipPayloadEntry {
     id: String,
     raw: String,
     gzip: String,
-    zlib_wrapped: String,
+    #[serde(default)]
+    zlib_wrapped: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for Asset {
@@ -2527,6 +2528,11 @@ impl BackendComparisonWorker {
             {
                 gzip_uncompress_output(case, GzipBackend::Rust)
             }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::Rust)
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2872,6 +2878,11 @@ impl BackendComparisonWorker {
             {
                 gzip_uncompress_output(case, GzipBackend::CAbi)
             }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::CAbi)
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3214,6 +3225,11 @@ impl BackendComparisonWorker {
                 if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
             {
                 gzip_uncompress_output(case, GzipBackend::Wasm)
+            }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::Wasm)
             }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
@@ -23404,6 +23420,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         let manifest = gzip_payload_manifest(case)?;
         let mut args = vec!["--gzip-uncompress".to_string()];
         for payload in manifest.payloads {
+            let zlib_wrapped = payload.zlib_wrapped.as_deref().ok_or_else(|| {
+                format!(
+                    "gzip uncompress payload {} missing zlib_wrapped",
+                    payload.id
+                )
+            })?;
             args.push(payload.id);
             args.push(
                 fixture_dir()
@@ -23419,7 +23441,27 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             );
             args.push(
                 fixture_dir()
-                    .join(payload.zlib_wrapped)
+                    .join(zlib_wrapped)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return Ok(args);
+    }
+    if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
+        let manifest = gzip_stream_manifest(case)?;
+        let mut args = vec!["--gzip-stream-open".to_string()];
+        for payload in manifest.payloads {
+            args.push(payload.id);
+            args.push(
+                fixture_dir()
+                    .join(payload.raw)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(payload.gzip)
                     .to_string_lossy()
                     .into_owned(),
             );
@@ -26023,6 +26065,9 @@ fn case_id_base(case_id: &str) -> &str {
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
     if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
         return gzip_uncompress_output(case, GzipBackend::Rust);
+    }
+    if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
+        return gzip_stream_open_output(case, GzipStreamBackend::Rust);
     }
     // Handle null-param error tests: only for operations without explicit implementation.
     // Exclude operations that have dedicated match arms below but lack font assets.
@@ -40970,9 +41015,15 @@ fn gzip_uncompress_output(case: &InputCase, backend: GzipBackend) -> Result<RunO
     let mut rows = Vec::new();
     for payload in manifest.payloads {
         let raw = cached_file_bytes(&payload.raw)?;
+        let zlib_wrapped = payload.zlib_wrapped.as_deref().ok_or_else(|| {
+            format!(
+                "gzip uncompress payload {} missing zlib_wrapped",
+                payload.id
+            )
+        })?;
         for (input_kind, input_path) in [
             ("gzip", payload.gzip.as_str()),
-            ("zlib_wrapped", payload.zlib_wrapped.as_str()),
+            ("zlib_wrapped", zlib_wrapped),
         ] {
             let input = cached_file_bytes(input_path)?;
             for (buffer_size, capacity) in [
@@ -41044,6 +41095,155 @@ fn gzip_uncompress_call(
         0
     };
     Ok((status, output_len, output[..prefix_len].to_vec()))
+}
+
+#[derive(Clone, Copy)]
+enum GzipStreamBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn gzip_stream_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("gzip_streams")
+        .ok_or_else(|| "missing gzip_streams asset".to_string())?;
+    let path =
+        asset_file_path(asset).ok_or_else(|| format!("unresolved {}", asset_label(asset)))?;
+    let text = fs::read_to_string(fixture_dir().join(path))
+        .map_err(|err| format!("read gzip stream manifest {path}: {err}"))?;
+    serde_json::from_str(&text).map_err(|err| format!("parse gzip stream manifest {path}: {err}"))
+}
+
+fn gzip_stream_open_output(
+    case: &InputCase,
+    backend: GzipStreamBackend,
+) -> Result<RunOutput, String> {
+    let manifest = gzip_stream_manifest(case)?;
+    let mut rows = Vec::new();
+    for payload in manifest.payloads {
+        let raw = cached_file_bytes(&payload.raw)?;
+        let gzip = cached_file_bytes(&payload.gzip)?;
+        for (source_position, initial_pos) in [("zero", 0), ("nonzero_before_header", 3)] {
+            rows.push(gzip_stream_open_row(
+                backend,
+                payload.id.as_str(),
+                source_position,
+                initial_pos,
+                raw.as_ref(),
+                gzip.as_ref(),
+            )?);
+        }
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn gzip_stream_open_row(
+    backend: GzipStreamBackend,
+    payload_id: &str,
+    source_position: &str,
+    initial_pos: FT_ULong,
+    raw: &[u8],
+    gzip: &[u8],
+) -> Result<Value, String> {
+    let mut source = FT_StreamRec {
+        base: gzip.as_ptr().cast_mut(),
+        size: FT_ULong::try_from(gzip.len()).map_err(|err| err.to_string())?,
+        pos: initial_pos,
+        ..FT_StreamRec::default()
+    };
+    let mut memory = FT_MemoryRec::default();
+    source.memory = (&mut memory) as *mut FT_MemoryRec;
+    let mut stream = FT_StreamRec {
+        base: std::ptr::NonNull::<u8>::dangling().as_ptr(),
+        size: FT_ULong::MAX,
+        pos: FT_ULong::MAX,
+        read: std::ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+        close: std::ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+        ..FT_StreamRec::default()
+    };
+
+    let status = match backend {
+        GzipStreamBackend::Rust => FT_Stream_OpenGzip(Some(&mut stream), Some(&source), Some(gzip)),
+        GzipStreamBackend::CAbi => c_abi::FT_Stream_OpenGzip(&mut stream, &mut source),
+        GzipStreamBackend::Wasm => wasm_abi::fontdone_wasm_stream_open_gzip(&mut stream, &source),
+    };
+    let read_ranges = if status == FT_Err_Ok {
+        gzip_stream_read_ranges(backend, &stream, raw)?
+    } else {
+        Vec::new()
+    };
+    let row = json!({
+        "payload": payload_id,
+        "source_position": source_position,
+        "status": status,
+        "stream": {
+            "size": if status == FT_Err_Ok { stream.size } else { 0 },
+            "base_class": pointer_class(stream.base.cast_const()),
+            "read_class": pointer_class(stream.read.cast_const()),
+            "close_class": pointer_class(stream.close.cast_const()),
+        },
+        "read_ranges": read_ranges,
+    });
+    if status == FT_Err_Ok {
+        match backend {
+            GzipStreamBackend::Rust => FT_Gzip_Stream_Close(Some(&mut stream)),
+            GzipStreamBackend::CAbi => c_abi::abi_support_gzip_stream_close(&mut stream),
+            GzipStreamBackend::Wasm => wasm_abi::abi_support_gzip_stream_close(&mut stream),
+        }
+    }
+    Ok(row)
+}
+
+fn gzip_stream_read_ranges(
+    backend: GzipStreamBackend,
+    stream: &FT_StreamRec,
+    raw: &[u8],
+) -> Result<Vec<Value>, String> {
+    let starts = [
+        ("beginning", 0usize, 16usize),
+        ("middle", raw.len().checked_div(2).unwrap_or(0), 19usize),
+        ("end", raw.len().saturating_sub(23), 23usize),
+    ];
+    starts
+        .into_iter()
+        .map(|(label, offset, requested)| {
+            let requested = requested.min(raw.len().saturating_sub(offset));
+            let bytes = match backend {
+                GzipStreamBackend::Rust => FT_Gzip_Stream_Read(
+                    Some(stream),
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+                GzipStreamBackend::CAbi => c_abi::abi_support_gzip_stream_bytes(
+                    (stream as *const FT_StreamRec).cast_mut(),
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+                GzipStreamBackend::Wasm => wasm_abi::abi_support_gzip_stream_bytes(
+                    stream as *const FT_StreamRec,
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+            }
+            .ok_or_else(|| "gzip stream read missing registry bytes".to_string())?;
+            let expected = raw[offset..offset + bytes.len()].to_vec();
+            Ok(json!({
+                "label": label,
+                "offset": offset,
+                "requested": requested,
+                "read": bytes.len(),
+                "bytes": hex_bytes(&bytes),
+                "expected": hex_bytes(&expected),
+            }))
+        })
+        .collect()
+}
+
+fn pointer_class<T>(ptr: *const T) -> &'static str {
+    if ptr.is_null() { "null" } else { "nonnull" }
 }
 
 fn ok(output: Value) -> RunOutput {
