@@ -183,6 +183,42 @@ Verification:
 make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_property
 ```
 
+### Issue Set Current: BDF charset SFNT-BDF fixture blocker
+
+Status: audited on 2026-07-21; remains pending. Do not count the SFNT-BDF
+charset rows as real parity until the declared same input exists and is
+C-openable.
+
+Still-pending rows:
+
+- `ftbdf.FT_Get_BDF_Charset_ID.success_sfnt_bdf_table_selected_strike`
+- `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`
+
+Finding:
+
+- Both rows require `input/fonts/bdf/sfnt-bdf-table.otb`, but the maintained
+  fixture tree does not provide that asset.
+- The currently passing BDF charset rows exercise existing BDF inputs only.
+  They do not prove pinned FreeType's SFNT embedded-BDF table selection, strike
+  dependency, output string lifetime, or missing-strike error behavior.
+- Promoting the rows against a different BDF font or a synthetic missing-file
+  error would be a green placeholder.
+
+Required follow-up:
+
+1. Add or generate a maintained C-openable SFNT/bitmap font containing an
+   embedded BDF table and documented strike-selection behavior.
+2. Route `FT_Get_BDF_Charset_ID` through pinned C, Rust FFI, thin C ABI, and
+   WASM ABI for both selected-strike success and no-selected-strike error.
+3. Compare exact error code plus registry/encoding output bytes and output
+   preservation for the error case.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
+```
+
 ### Issue Set Current: CPAL palette null-input verifier routes
 
 Status: completed on 2026-07-21 for two already-routed palette exact-error
@@ -257,6 +293,69 @@ Verification:
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range
 ```
+
+### Issue Set Current: CFF hinting-engine property runtime blockers
+
+Status: audited on 2026-07-21; remains pending. Scalar constants and generic
+property errors are not output parity for CFF hinting-engine selection.
+
+Still-pending rows:
+
+- `ftdriver.FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime`
+- `ftdriver.FT_CFF_HINTING_FREETYPE.hinting_engine_property_runtime`
+
+Finding:
+
+- The rows require maintained `FT_Property_Set/Get` routing for the `cff`
+  driver plus a C-openable CFF fixture where choosing Adobe versus FreeType
+  hinting is proven through a public output: metrics, outline, bbox/cbox, or
+  bitmap bytes.
+- The existing property routes cover other driver/property cases and scalar
+  error behavior. They do not prove CFF driver dispatch, property storage, or
+  downstream glyph-output effects for `hinting-engine`.
+- Counting the public enum values or a generic property fallback as parity
+  would be a green placeholder.
+
+Required follow-up:
+
+1. Add a focused route that sets each CFF hinting engine through pinned C,
+   Rust FFI, thin C ABI, and WASM ABI.
+2. Use the same C-openable CFF input and glyph/load configuration for both
+   engines.
+3. Compare exact public output after the property mutation. If pinned C shows
+   no observable output change for the chosen fixture, record that as oracle
+   evidence instead of assuming no-op behavior.
+
+### Issue Set Current: PS public dictionary record blockers
+
+Status: audited on 2026-07-21; remains pending. Encoding-only PS value support
+does not prove full public PS font info/private dictionary records.
+
+Still-pending rows:
+
+- `t1tables.FT_Get_PS_Font_Info.signature_and_behavior_matrix`
+- `t1tables.FT_Get_PS_Font_Private.signature_and_behavior_matrix`
+
+Finding:
+
+- `FT_Get_PS_Font_Info` requires exact `PS_FontInfoRec` string/scalar output
+  comparison for a C-openable Type1/CFF face across pinned C, Rust FFI, thin C
+  ABI, and WASM ABI.
+- `FT_Get_PS_Font_Private` requires exact `PS_PrivateRec` dictionary scalar and
+  array output comparison across the same ABI lanes.
+- Existing Type1 table coverage around selected `FT_Get_PS_Font_Value`
+  encoding keys is a narrower route. It does not prove the public info/private
+  record layout, field initialization, missing-field defaults, string pointer
+  lifetime, or driver-specific error behavior.
+
+Required follow-up:
+
+1. Choose maintained C-openable Type1 and/or CFF inputs with populated public
+   PS info/private fields.
+2. Add oracle records for every public field and preserve inactive or absent
+   field behavior exactly.
+3. Keep the C and WASM layers thin: they may copy public records but must not
+   synthesize dictionary semantics outside `fontdone` core.
 
 ### Issue Set Current: FT_Glyph_Transform owned outline glyph success route
 
