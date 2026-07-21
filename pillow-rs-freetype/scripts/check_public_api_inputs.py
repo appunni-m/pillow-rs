@@ -2117,11 +2117,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "a manager-created CMap cache is destroyed through FTC_Manager_Done "
             "with the same ownership side effects as pinned C"
         ),
-        "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit": (
-            "FTC_CMapCache_New registration-limit parity needs a maintained "
-            "route proving repeated cache registration fails at the same "
-            "manager limit and preserves prior caches like pinned C"
-        ),
         "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset": (
             "FTC_CMapCache_New reset parity needs a maintained route proving "
             "manager reset preserves the cache handle while clearing cached CMap "
@@ -5346,13 +5341,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         in {
             "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope",
             "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager",
+            "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit",
             "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset",
         }
     ):
         return (
             "FTC_CMapCache_New create, manager-owned destruction, lookup "
-            "usability, and reset-preserved cache handle behavior validate "
-            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            "usability, registration limit, and reset-preserved cache handle "
+            "behavior validate through pinned C oracle, Rust FFI, C ABI, and "
+            "WASM ABI"
         )
     if (
         row.operation == "ftcache.image_cache_lookup"

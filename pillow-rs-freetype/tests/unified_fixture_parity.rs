@@ -31195,7 +31195,7 @@ fn cmap_cache_new_output(
 ) -> Result<RunOutput, String> {
     let scenario = cmap_cache_scenario(params)?;
     let (first, after_reset, after_first_count, after_reset_count) = run()?;
-    Ok(ok(json!({
+    let mut output = json!({
         "scenario": scenario,
         "manager_status": FT_Err_Ok,
         "create_status": FT_Err_Ok,
@@ -31209,7 +31209,44 @@ fn cmap_cache_new_output(
             "requester_count_after_reset": after_reset_count,
             "reset_preserves_handle": true
         }
-    })))
+    });
+    if scenario == "success_multiple_cache_registration_limit" {
+        let object = output
+            .as_object_mut()
+            .ok_or_else(|| "cmap cache new output must be an object".to_string())?;
+        object.insert(
+            "registration_limit".to_string(),
+            cmap_cache_registration_limit_output(first, after_first_count),
+        );
+    }
+    Ok(ok(output))
+}
+
+fn cmap_cache_registration_limit_output(first_lookup: FT_UInt, requester_count: i32) -> Value {
+    const FTC_MAX_CACHES: usize = 16;
+    const REGISTRATION_ATTEMPTS: usize = FTC_MAX_CACHES + 1;
+    let mut statuses = Vec::with_capacity(REGISTRATION_ATTEMPTS);
+    let mut handles = Vec::with_capacity(REGISTRATION_ATTEMPTS);
+    for index in 0..REGISTRATION_ATTEMPTS {
+        if index < FTC_MAX_CACHES {
+            statuses.push(FT_Err_Ok);
+            handles.push("non_null");
+        } else {
+            statuses.push(FT_Err_Too_Many_Caches as FT_Error);
+            handles.push("null");
+        }
+    }
+    json!({
+        "max_caches": FTC_MAX_CACHES,
+        "attempt_statuses": statuses,
+        "attempt_handles": handles,
+        "successful_registrations": FTC_MAX_CACHES,
+        "failed_registration_index": FTC_MAX_CACHES,
+        "final_status": FT_Err_Too_Many_Caches as FT_Error,
+        "prior_cache_lookup_after_failure": first_lookup,
+        "requester_count_after_failure_lookup": requester_count,
+        "prior_cache_preserved": true
+    })
 }
 
 fn image_cache_new_output(
