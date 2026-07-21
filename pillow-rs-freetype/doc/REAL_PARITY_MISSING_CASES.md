@@ -4656,6 +4656,17 @@ make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_property
 Result: `3 / 3` runtime parity rows passed, `0` failed. The operation still
 reports `3` pending rows for the unresolved/contradicted success cases.
 
+Follow-up audit correction:
+
+- The exact-error rows initially passed runtime but were still counted in the
+  generic fallback buckets because route-audit classification checked the
+  no-asset/error fallback after clearing the BDF pending reason but before a
+  BDF-property real-parity reason.
+- Route audit now classifies the three verified exact-error rows as
+  `real-parity`, removing the remaining generic fallback buckets:
+  `real-parity=4533`, `pending-route=427`, `generic-error-fallback=0`,
+  `generic-fallback=0`.
+
 ### Issue Set Promoted: `FT_Get_BDF_Charset_ID` exact-error route
 
 Previous blocker:
