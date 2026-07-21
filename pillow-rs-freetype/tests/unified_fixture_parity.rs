@@ -13406,6 +13406,18 @@ fn default_named_instance_sentinel(params: &Value) -> Result<FT_UInt, String> {
         .map_err(|err| format!("instance_index_initial {value} does not fit FT_UInt: {err}"))
 }
 
+fn default_named_instance_sentinel_for_case(case: &InputCase) -> Result<FT_UInt, String> {
+    if case.case_id == "ftmm.FT_Get_Default_Named_Instance.invalid_face_error"
+        && case.inputs.params.get("instance_index_initial").is_none()
+    {
+        // FreeType's invalid-face branch returns before writing the output
+        // pointer. Use a stable nonzero sentinel so C, Rust, C ABI, and WASM
+        // compare preservation instead of making this manifest row unrouteable.
+        return Ok(0xA5A5);
+    }
+    default_named_instance_sentinel(&case.inputs.params)
+}
+
 fn default_named_instance_row(
     variant: &str,
     status: FT_Error,
@@ -13429,7 +13441,7 @@ fn default_named_instance_output(status: FT_Error, output: Value) -> RunOutput {
 }
 
 fn rust_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
-    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    let before = default_named_instance_sentinel_for_case(case)?;
     if case.case == "invalid_face_error" {
         let mut null_after = before;
         let null_status = FT_Get_Default_Named_Instance(None, Some(&mut null_after));
@@ -13460,7 +13472,7 @@ fn rust_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String
 }
 
 fn c_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
-    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    let before = default_named_instance_sentinel_for_case(case)?;
     if case.case == "invalid_face_error" {
         let mut null_after = before;
         let null_status =
@@ -13496,7 +13508,7 @@ fn c_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_get_default_named_instance(case: &InputCase) -> Result<RunOutput, String> {
-    let before = default_named_instance_sentinel(&case.inputs.params)?;
+    let before = default_named_instance_sentinel_for_case(case)?;
     if case.case == "invalid_face_error" {
         let mut null_after = before;
         let null_status = wasm_abi::fontdone_wasm_get_default_named_instance(0, &mut null_after);
@@ -13638,6 +13650,18 @@ fn ftmm_num_coords(params: &Value) -> Result<FT_UInt, String> {
         .map_err(|err| format!("num_coords {value} does not fit FT_UInt: {err}"))
 }
 
+fn ftmm_num_coords_for_case(case: &InputCase, params: &Value) -> Result<FT_UInt, String> {
+    if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face"
+        && params.get("num_coords").is_none()
+    {
+        // This row is about rejecting the Adobe-MM-only setter on non-Adobe
+        // faces. A count of one with a valid coordinate pointer avoids taking
+        // the earlier null-coords argument-validation branch.
+        return Ok(1);
+    }
+    ftmm_num_coords(params)
+}
+
 fn ftmm_coords_init_mode(params: &Value) -> &'static str {
     match params.get("coords_pointer") {
         Some(value) if value.is_null() => "null",
@@ -13676,6 +13700,18 @@ fn ftmm_long_coords_from_params(params: &Value) -> Result<Vec<FT_Long>, String> 
     }
 }
 
+fn ftmm_long_coords_from_params_for_case(
+    case: &InputCase,
+    params: &Value,
+) -> Result<Vec<FT_Long>, String> {
+    if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face"
+        && params.get("coords_ft_long").is_none()
+    {
+        return Ok(vec![0]);
+    }
+    ftmm_long_coords_from_params(params)
+}
+
 struct FtmmMmDesignScenario {
     count: FT_UInt,
     coords: Vec<FT_Long>,
@@ -13686,12 +13722,21 @@ fn ftmm_mm_design_scenarios(params: &Value) -> Result<Vec<FtmmMmDesignScenario>,
     array_param(params, "scenarios")?
         .iter()
         .map(|scenario| {
-            let count_value = u64_param(scenario, "num_coords")?;
+            let count_value = scenario
+                .get("num_coords")
+                .and_then(Value::as_u64)
+                .or_else(|| params.get("num_coords").and_then(Value::as_u64))
+                .ok_or_else(|| "scenario num_coords missing".to_string())?;
             let count = FT_UInt::try_from(count_value)
                 .map_err(|err| format!("scenario num_coords {count_value} invalid: {err}"))?;
+            let coords = if scenario.get("coords_ft_long").is_some() {
+                ftmm_long_coords_from_params(scenario)?
+            } else {
+                ftmm_long_coords_from_params(params)?
+            };
             Ok(FtmmMmDesignScenario {
                 count,
-                coords: ftmm_long_coords_from_params(scenario)?,
+                coords,
                 pointer_null: ftmm_coords_pointer_is_null(scenario),
             })
         })
@@ -14026,8 +14071,23 @@ fn ftmm_mm_design_row(
     })
 }
 
-fn ftmm_mm_design_scenarios_output(rows: Vec<Value>) -> RunOutput {
-    ok(json!({ "rows": rows }))
+fn ftmm_mm_design_scenarios_output(case: &InputCase, rows: Vec<Value>) -> RunOutput {
+    let output = json!({ "rows": rows });
+    if case.expect_error {
+        let status = output
+            .get("rows")
+            .and_then(Value::as_array)
+            .and_then(|rows| {
+                rows.iter()
+                    .filter_map(|row| row.get("set_return").and_then(Value::as_i64))
+                    .find(|status| *status != i64::from(FT_Err_Ok))
+            })
+            .and_then(|status| FT_Error::try_from(status).ok())
+            .unwrap_or(FT_Err_Invalid_Argument as FT_Error);
+        error_with_output(status, output)
+    } else {
+        ok(output)
+    }
 }
 
 fn ftmm_mm_blend_invalid_matrix_output(
@@ -14782,7 +14842,7 @@ fn rust_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> 
             face.face_flags,
         ));
     }
-    Ok(ftmm_mm_design_scenarios_output(rows))
+    Ok(ftmm_mm_design_scenarios_output(case, rows))
 }
 
 fn c_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
@@ -14826,7 +14886,7 @@ fn c_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
     }
     c_done_face(face);
     c_done_library(library);
-    Ok(ftmm_mm_design_scenarios_output(rows))
+    Ok(ftmm_mm_design_scenarios_output(case, rows))
 }
 
 fn wasm_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> {
@@ -14877,7 +14937,7 @@ fn wasm_ftmm_var_blend_scenarios(case: &InputCase) -> Result<RunOutput, String> 
         ));
     }
     wasm_done_face(handle);
-    Ok(ftmm_mm_design_scenarios_output(rows))
+    Ok(ftmm_mm_design_scenarios_output(case, rows))
 }
 
 fn rust_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
@@ -14917,7 +14977,7 @@ fn rust_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
                 face.face_flags,
             ));
         }
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
     let set_coords = ftmm_optional_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
@@ -15039,13 +15099,13 @@ fn rust_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, St
                 face.face_flags,
             ));
         }
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
-    let set_coords = ftmm_long_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let set_coords = ftmm_long_coords_from_params_for_case(case, params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
     let mut status = FT_Set_MM_Design_Coordinates(
         Some(&mut face),
-        ftmm_num_coords(params)?,
+        ftmm_num_coords_for_case(case, params)?,
         if ftmm_coords_pointer_is_null(params) {
             None
         } else {
@@ -15136,7 +15196,7 @@ fn c_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, Stri
         }
         c_done_face(face);
         c_done_library(library);
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
     let set_coords = ftmm_optional_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
@@ -15277,17 +15337,20 @@ fn c_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, Strin
         }
         c_done_face(face);
         c_done_library(library);
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
-    let set_coords = ftmm_long_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let set_coords = ftmm_long_coords_from_params_for_case(case, params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
     let coords_ptr = if ftmm_coords_pointer_is_null(params) {
         std::ptr::null()
     } else {
         set_coords.as_ptr()
     };
-    let mut status =
-        c_abi::FT_Set_MM_Design_Coordinates(face, ftmm_num_coords(params)?, coords_ptr);
+    let mut status = c_abi::FT_Set_MM_Design_Coordinates(
+        face,
+        ftmm_num_coords_for_case(case, params)?,
+        coords_ptr,
+    );
     let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
     let mut blend_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
     if status == FT_Err_Ok {
@@ -15390,7 +15453,7 @@ fn wasm_ftmm_set_var_design_coordinates(case: &InputCase) -> Result<RunOutput, S
             ));
         }
         wasm_done_face(handle);
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
     let set_coords = ftmm_optional_coords_from_params(params)?;
     let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
@@ -15566,10 +15629,10 @@ fn wasm_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, St
             ));
         }
         wasm_done_face(handle);
-        return Ok(ftmm_mm_design_scenarios_output(rows));
+        return Ok(ftmm_mm_design_scenarios_output(case, rows));
     }
-    let set_coords = ftmm_long_coords_from_params(params)?;
-    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+    let set_coords = ftmm_long_coords_from_params_for_case(case, params)?;
+    let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
     let coords_ptr = if ftmm_coords_pointer_is_null(params) {
         std::ptr::null()
     } else {
@@ -15577,7 +15640,7 @@ fn wasm_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, St
     };
     let mut status = wasm_abi::fontdone_wasm_set_mm_design_coordinates(
         handle,
-        ftmm_num_coords(params)?,
+        ftmm_num_coords_for_case(case, params)?,
         coords_ptr,
     );
     let mut design_coords = vec![0; usize::try_from(output_count).unwrap_or(0)];
@@ -23289,7 +23352,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
-            args.push(default_named_instance_sentinel(params)?.to_string());
+            args.push(default_named_instance_sentinel_for_case(case)?.to_string());
             Ok(args)
         }
         "ftmm.set_named_instance" => {
@@ -23803,12 +23866,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 args.push(output_count.to_string());
                 return Ok(args);
             }
-            let set_coords = ftmm_long_coords_from_params(params)?;
-            let output_count = ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &[])?;
+            let set_coords = ftmm_long_coords_from_params_for_case(case, params)?;
+            let output_count =
+                ftmm_axis_count_hint(case, params, &ftmm_prior_call(params)?, &set_coords)?;
             let mut args = vec!["--ftmm-set-mm-design-coordinates".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
-            args.push(ftmm_num_coords(params)?.to_string());
+            args.push(ftmm_num_coords_for_case(case, params)?.to_string());
             args.push(if ftmm_coords_pointer_is_null(params) {
                 "null".to_string()
             } else {
