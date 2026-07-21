@@ -177,6 +177,39 @@ make -C pillow-rs-freetype test-op OP=ftoutln.outline_get_bitmap
 make -C pillow-rs-freetype route-audit
 ```
 
+After the `FT_OUTLINE_INCLUDE_STUBS` mono dropout route:
+
+```text
+route audit concrete_cases=7242 category_counts={'compile-contract': 2266, 'pending-route': 235, 'real-null-validation': 9, 'real-parity': 4732}
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+```
+
+The existing `FT_Outline_Get_Bitmap` dropout route now includes
+`ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior`. The maintained
+synthetic outline fixture `outlines/synthetic/dropout-stubs-scantype.json`
+exists, and the route compares exact MONO bitmap bytes for
+`FT_OUTLINE_NONE`, `FT_OUTLINE_INCLUDE_STUBS`,
+`FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_SMART_DROPOUTS`, and
+`FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_IGNORE_DROPOUTS` through pinned C, Rust
+FFI, thin C ABI, and WASM ABI. This is not a constant-only route; the public
+flag is proven through rendered bitmap output.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior
+```
+
+Rejected in the same issue set:
+
+- `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` remains
+  pending. Pinned FreeType 2.14.3 returns error `-2` for
+  `FT_Set_MM_Blend_Coordinates` on the current `gvar-hvar-wght.ttf` row with
+  `coords=[65536]`; the sibling Var-blend row succeeds only for its declared
+  glyph. Reusing the Var route or changing the expected output would be a
+  green placeholder. The correct future fix is a maintained MM fixture whose
+  pinned C route is an observable glyph-output success row.
+
 After the `FT_Get_PS_Font_Value` selector-matrix route:
 
 ```text

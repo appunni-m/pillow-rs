@@ -9522,8 +9522,8 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
         }
     } else if (streq(mode, "dropout-thin-stems")) {
         const char* case_id = argv[3];
-        const char* flag_names[3] = {"FT_OUTLINE_NONE", "", ""};
-        int flag_values[3] = {0, 0, 0};
+        const char* flag_names[4] = {"FT_OUTLINE_NONE", "", "", ""};
+        int flag_values[4] = {0, 0, 0, 0};
         int count = 0;
         if (streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior")) {
             flag_names[0] = "FT_OUTLINE_NONE";
@@ -9539,6 +9539,16 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
             flag_names[2] = "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS";
             flag_values[2] = FT_OUTLINE_SMART_DROPOUTS | FT_OUTLINE_IGNORE_DROPOUTS;
             count = 3;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_INCLUDE_STUBS";
+            flag_values[1] = FT_OUTLINE_INCLUDE_STUBS;
+            flag_names[2] = "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_SMART_DROPOUTS";
+            flag_values[2] = FT_OUTLINE_INCLUDE_STUBS | FT_OUTLINE_SMART_DROPOUTS;
+            flag_names[3] = "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[3] = FT_OUTLINE_INCLUDE_STUBS | FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 4;
         }
         printf("{");
         print_status(0);

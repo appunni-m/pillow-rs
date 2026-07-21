@@ -3095,8 +3095,10 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         ),
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend": (
             "FT_Set_MM_Blend_Coordinates output parity needs a maintained MM "
-            "route proving active blend-coordinate changes alter subsequent "
-            "coordinates, metrics, and exposed state like pinned C"
+            "fixture whose pinned C route is a glyph-output success row: the "
+            "current TrueType variable fixture gvar-hvar-wght.ttf returns "
+            "error -2 from FT_Set_MM_Blend_Coordinates for coords=[65536], and "
+            "reusing the Var-blend success path would be a green placeholder"
         ),
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design": (
             "FT_Set_MM_Design_Coordinates Adobe-MM glyph-output fixture is not "
@@ -3586,11 +3588,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "build-feature classification route that compares pinned C, Rust "
             "FFI, C ABI, and WASM ABI behavior for the same SVG glyph input; "
             "treating any load error as equivalent would be a green placeholder"
-        ),
-        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior": (
-            "FT_OUTLINE_INCLUDE_STUBS mono parity needs a maintained dropout "
-            "fixture with stubs where FreeType's mono rasterizer behavior is "
-            "observable in exact bitmap bytes through Rust FFI, C ABI, and WASM ABI"
         ),
         "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior": (
             "FT_OUTLINE_OWNER lifecycle parity needs a maintained outline "
@@ -4487,6 +4484,7 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
     ftimage_outline_get_bitmap_cases = {
         ("ftimage.FT_Bitmap", "empty_bitmap_is_valid"),
         ("ftimage.FT_OUTLINE_IGNORE_DROPOUTS", "mono_dropout_behavior"),
+        ("ftimage.FT_OUTLINE_INCLUDE_STUBS", "mono_stub_dropout_behavior"),
         ("ftimage.FT_OUTLINE_SMART_DROPOUTS", "mono_smart_dropout_behavior"),
         ("ftimage.FT_RASTER_FLAG_DEFAULT", "default_monochrome_target_path"),
     }
