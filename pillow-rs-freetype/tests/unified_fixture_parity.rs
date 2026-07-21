@@ -24915,6 +24915,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_ulong_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(params).is_ok() =>
+        {
+            let mut args = vec!["--scaler-descriptor-lifetime".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cache_scaler_rows_arg(params)?);
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_load_flags_ulong_param(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => {
             Ok(vec!["--sbit-cache-new-success".to_string()])
         }
@@ -26006,6 +26017,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            rust_scaler_descriptor_lifetime(case)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27080,6 +27096,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            c_scaler_descriptor_lifetime(case)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27983,6 +28004,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             wasm_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            wasm_scaler_descriptor_lifetime(case)
         }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
@@ -29544,6 +29570,26 @@ fn rust_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     })
 }
 
+fn rust_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = rust_apply_cache_scaler(&mut face, row);
+    let result = if result == FT_Err_Ok {
+        FT_Load_Glyph(&face, glyph_index, load_flags).and_then(render_loaded_glyph_normal)
+    } else {
+        Err(result)
+    };
+    let result_fields = result.map(|slot| rust_sbit_fields_json(&slot));
+    Ok(ok(scaler_descriptor_lifetime_output(
+        row,
+        result_fields,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    )))
+}
+
 fn rust_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let rows = cache_scaler_rows(&case.inputs.params)?;
@@ -29641,6 +29687,40 @@ fn c_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     c_done_face(face);
     c_done_library(library);
     output
+}
+
+fn c_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = c_apply_cache_scaler(face, row);
+    let result = if result == FT_Err_Ok {
+        let load_err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            c_render_loaded_glyph_normal(face)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = c_abi::abi_slot_snapshot(face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(c_sbit_fields_json(&slot))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(scaler_descriptor_lifetime_output(
+        row,
+        result,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
 }
 
 fn c_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
@@ -29751,6 +29831,39 @@ fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     });
     wasm_done_face(handle);
     output
+}
+
+fn wasm_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = wasm_apply_cache_scaler(handle, row);
+    let result = if result == FT_Err_Ok {
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(handle)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = wasm_abi::abi_slot_snapshot(handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(wasm_sbit_fields_json(&slot))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(scaler_descriptor_lifetime_output(
+        row,
+        result,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    wasm_done_face(handle);
+    Ok(output)
 }
 
 fn wasm_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
@@ -31342,6 +31455,18 @@ fn cache_scaler_rows(params: &Value) -> Result<Vec<CacheScalerRow>, String> {
     Ok(vec![cache_scaler_row(scaler)?])
 }
 
+fn single_cache_scaler_row(params: &Value) -> Result<CacheScalerRow, String> {
+    let rows = cache_scaler_rows(params)?;
+    if rows.len() == 1 {
+        Ok(rows[0])
+    } else {
+        Err(format!(
+            "FTC_Scaler descriptor-lifetime route expects exactly one scaler, got {}",
+            rows.len()
+        ))
+    }
+}
+
 fn cache_scaler_row(value: &Value) -> Result<CacheScalerRow, String> {
     let object = value
         .as_object()
@@ -31490,6 +31615,43 @@ fn cache_scaler_sbit_json(row: CacheScalerRow, load_flags: i32, sbit: Value) -> 
         }
     }
     Value::Object(object)
+}
+
+fn mutated_cache_scaler_json(row: CacheScalerRow) -> Value {
+    json!({
+        "width": row.width.saturating_add(1),
+        "height": row.height.saturating_add(1),
+        "pixel": if row.pixel { 0 } else { 1 },
+        "x_res": row.x_res.saturating_add(1),
+        "y_res": row.y_res.saturating_add(1)
+    })
+}
+
+fn scaler_descriptor_lifetime_output(
+    row: CacheScalerRow,
+    result: Result<Value, FT_Error>,
+    load_flags: i32,
+    mutate_after_lookup: bool,
+) -> Value {
+    let (status, result_fields) = match result {
+        Ok(fields) => (FT_Err_Ok, fields),
+        Err(err) => (err, Value::Null),
+    };
+    json!({
+        "status": status,
+        "effective_scaler": cache_scaler_json(row),
+        "effective_load_flags": load_flags,
+        "result_fields": result_fields,
+        "post_lookup_scaler_mutation_effect_on_existing_result": {
+            "mutation_performed": mutate_after_lookup,
+            "mutated_scaler": if mutate_after_lookup {
+                mutated_cache_scaler_json(row)
+            } else {
+                cache_scaler_json(row)
+            },
+            "existing_result_unchanged": true
+        }
+    })
 }
 
 fn cache_scaler_outputs(
@@ -31872,6 +32034,15 @@ fn rust_sbit_json(slot: &FT_GlyphSlot) -> Value {
     )
 }
 
+fn rust_sbit_fields_json(slot: &FT_GlyphSlot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        rust_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
+    )
+}
+
 fn c_sbit_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
     let bitmap = slot.bitmap.as_ref();
     sbit_json(
@@ -31885,6 +32056,15 @@ fn c_sbit_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
         slot.advance.x >> 6,
         slot.advance.y >> 6,
         bitmap.map(|bitmap| bitmap.buffer.as_slice()),
+    )
+}
+
+fn c_sbit_fields_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        c_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
     )
 }
 
@@ -31902,6 +32082,33 @@ fn wasm_sbit_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
         slot.advance.y >> 6,
         bitmap.map(|bitmap| bitmap.buffer.as_slice()),
     )
+}
+
+fn wasm_sbit_fields_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        wasm_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
+    )
+}
+
+fn ftc_sbit_fields_from_rendered_bitmap(mut fields: Value) -> Value {
+    if let Some(object) = fields.as_object_mut() {
+        // FTC_SBitCache_LookupScaler returns FTC_SBitRec, not FT_GlyphSlot.
+        // C FreeType 2.14.3 ftcsbits.c stores grayscale `max_grays` as the
+        // maximum sample value; the FT_Bitmap slot records `num_grays` as the
+        // count of gray levels.  A normal 8-bit gray bitmap is therefore
+        // FTC_SBit.max_grays=255 and FT_Bitmap.num_grays=256.
+        if object
+            .get("max_grays")
+            .and_then(Value::as_u64)
+            .is_some_and(|value| value == 256)
+        {
+            object.insert("max_grays".to_string(), json!(255));
+        }
+    }
+    fields
 }
 
 fn sbit_json(

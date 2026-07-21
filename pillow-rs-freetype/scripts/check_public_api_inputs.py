@@ -1813,12 +1813,6 @@ def ftcache_manager_lookup_size_pending_reason(row: ConcreteInput) -> str | None
             "pixel=0 interprets width/height as 26.6 point sizes with x/y "
             "resolution exactly like pinned C"
         ),
-        "ftcache.FTC_Scaler.points_to_call_owned_scaler": (
-            "FTC_Scaler pointer-lifetime parity needs a maintained route "
-            "proving the public FTC_Scaler argument is a call-owned descriptor "
-            "whose pointed fields are copied or consumed with pinned C lifetime "
-            "semantics"
-        ),
     }
     return exact_cases.get(row.case_id)
 
@@ -5588,6 +5582,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup"
     ):
         return "FTC_SBitCache_LookupScaler output-clearing behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.scaler_descriptor_lifetime"
+        and row.case_id == "ftcache.FTC_Scaler.points_to_call_owned_scaler"
+    ):
+        return "FTC_Scaler caller-owned descriptor lifetime validates through actual pinned C FTC_SBitCache_LookupScaler, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcache.sbit_cache_new"
         and row.case_id == "ftcache.FTC_SBitCache_New.error_outputs_null_cache"

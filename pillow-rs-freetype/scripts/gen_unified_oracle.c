@@ -5991,6 +5991,106 @@ static void print_sbit_object(FT_GlyphSlot slot) {
     printf("\"},\"node\":{\"locked\":false}");
 }
 
+typedef struct SBitSnapshot_ {
+    FT_Bool present;
+    FT_UInt width;
+    FT_UInt height;
+    FT_Int left;
+    FT_Int top;
+    FT_Byte format;
+    FT_Byte max_grays;
+    FT_Short pitch;
+    FT_Short xadvance;
+    FT_Short yadvance;
+    FT_Bool buffer_null;
+    long buffer_len;
+    unsigned char* buffer;
+} SBitSnapshot;
+
+static int snapshot_ftc_sbit(FTC_SBit sbit, SBitSnapshot* snapshot) {
+    memset(snapshot, 0, sizeof(*snapshot));
+    if (!sbit) {
+        return 0;
+    }
+    snapshot->present = 1;
+    snapshot->width = sbit->width;
+    snapshot->height = sbit->height;
+    snapshot->left = sbit->left;
+    snapshot->top = sbit->top;
+    snapshot->format = sbit->format;
+    snapshot->max_grays = sbit->max_grays;
+    snapshot->pitch = sbit->pitch;
+    snapshot->xadvance = sbit->xadvance;
+    snapshot->yadvance = sbit->yadvance;
+    snapshot->buffer_null = !sbit->buffer;
+    if (sbit->buffer && sbit->height > 0) {
+        snapshot->buffer_len = labs((long)sbit->pitch) * (long)sbit->height;
+        if (snapshot->buffer_len > 0) {
+            snapshot->buffer = (unsigned char*)malloc((size_t)snapshot->buffer_len);
+            if (!snapshot->buffer) {
+                return 1;
+            }
+            memcpy(snapshot->buffer, sbit->buffer, (size_t)snapshot->buffer_len);
+        }
+    }
+    return 0;
+}
+
+static void free_sbit_snapshot(SBitSnapshot* snapshot) {
+    free(snapshot->buffer);
+    snapshot->buffer = NULL;
+}
+
+static int ftc_sbit_snapshot_still_matches(FTC_SBit sbit, const SBitSnapshot* snapshot) {
+    if (!snapshot->present) {
+        return sbit == NULL;
+    }
+    if (!sbit) {
+        return 0;
+    }
+    if (snapshot->width != sbit->width ||
+        snapshot->height != sbit->height ||
+        snapshot->left != sbit->left ||
+        snapshot->top != sbit->top ||
+        snapshot->format != sbit->format ||
+        snapshot->max_grays != sbit->max_grays ||
+        snapshot->pitch != sbit->pitch ||
+        snapshot->xadvance != sbit->xadvance ||
+        snapshot->yadvance != sbit->yadvance ||
+        snapshot->buffer_null != (FT_Bool)!sbit->buffer) {
+        return 0;
+    }
+    if (!snapshot->buffer || snapshot->buffer_len == 0) {
+        return 1;
+    }
+    return sbit->buffer && memcmp(snapshot->buffer, sbit->buffer, (size_t)snapshot->buffer_len) == 0;
+}
+
+static void print_ftc_sbit_snapshot_fields(const SBitSnapshot* snapshot) {
+    if (!snapshot->present) {
+        printf("null");
+        return;
+    }
+    printf("{\"width\":%u,\"height\":%u,\"left\":%d,\"top\":%d,",
+           snapshot->width,
+           snapshot->height,
+           snapshot->left,
+           snapshot->top);
+    printf("\"format\":%u,\"max_grays\":%u,\"pitch\":%d,",
+           snapshot->format,
+           snapshot->max_grays,
+           snapshot->pitch);
+    printf("\"xadvance\":%d,\"yadvance\":%d,",
+           snapshot->xadvance,
+           snapshot->yadvance);
+    printf("\"buffer_null\":%s,\"buffer_hex\":\"",
+           snapshot->buffer_null || snapshot->buffer_len == 0 ? "true" : "false");
+    if (snapshot->buffer && snapshot->buffer_len > 0) {
+        print_hex_bytes(snapshot->buffer, snapshot->buffer_len);
+    }
+    printf("\"}");
+}
+
 typedef struct ImageCacheRequesterData_ {
     unsigned char* data;
     long data_len;
@@ -6463,6 +6563,155 @@ static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     free(data);
     free(scalers_arg);
     (void)first_error;
+    return 0;
+}
+
+static int emit_scaler_descriptor_lifetime(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    char* scalers_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!scalers_arg) {
+        return 1;
+    }
+    memcpy(scalers_arg, argv[5], strlen(argv[5]) + 1);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong load_flags_ulong = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_Int32 load_flags = (FT_Int32)load_flags_ulong;
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(scalers_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(scalers_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(scalers_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_SBitCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_SBitCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    FTC_ScalerRec scaler;
+    unsigned int pixel = 0;
+    memset(&scaler, 0, sizeof(scaler));
+    if (sscanf(scalers_arg, "%u:%u:%u:%u:%u",
+               &scaler.width,
+               &scaler.height,
+               &pixel,
+               &scaler.x_res,
+               &scaler.y_res) != 5) {
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 2;
+    }
+    scaler.face_id = (FTC_FaceID)&requester;
+    scaler.pixel = (FT_UInt)pixel;
+    FT_UInt original_width = scaler.width;
+    FT_UInt original_height = scaler.height;
+    FT_UInt original_pixel = scaler.pixel;
+    FT_UInt original_x_res = scaler.x_res;
+    FT_UInt original_y_res = scaler.y_res;
+
+    FTC_SBit sbit = NULL;
+    FTC_Node node = NULL;
+    FT_Error error = FTC_SBitCache_LookupScaler(cache, &scaler, load_flags, glyph_index, &sbit, &node);
+    SBitSnapshot snapshot;
+    if (snapshot_ftc_sbit(error ? NULL : sbit, &snapshot) != 0) {
+        if (node) {
+            FTC_Node_Unref(node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 1;
+    }
+
+    scaler.width += 1;
+    scaler.height += 1;
+    scaler.pixel = scaler.pixel ? 0 : 1;
+    scaler.x_res += 1;
+    scaler.y_res += 1;
+    int unchanged = ftc_sbit_snapshot_still_matches(error ? NULL : sbit, &snapshot);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":%d,", error);
+    printf("\"effective_scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},",
+           original_width,
+           original_height,
+           original_pixel,
+           original_x_res,
+           original_y_res);
+    printf("\"effective_load_flags\":%ld,", (long)load_flags);
+    printf("\"result_fields\":");
+    print_ftc_sbit_snapshot_fields(&snapshot);
+    printf(",\"post_lookup_scaler_mutation_effect_on_existing_result\":{");
+    printf("\"mutation_performed\":true,");
+    printf("\"mutated_scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},",
+           scaler.width,
+           scaler.height,
+           scaler.pixel,
+           scaler.x_res,
+           scaler.y_res);
+    printf("\"existing_result_unchanged\":%s", unchanged ? "true" : "false");
+    printf("}}}\n");
+
+    free_sbit_snapshot(&snapshot);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    free(scalers_arg);
     return 0;
 }
 
@@ -21565,6 +21814,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--scaler-descriptor-lifetime")) {
+        return emit_scaler_descriptor_lifetime(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--sbit-cache-new-success")) {
         return emit_sbit_cache_new_success();
