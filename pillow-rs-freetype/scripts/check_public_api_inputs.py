@@ -3881,6 +3881,20 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftbdf.get_bdf_charset_id":
+        unresolved = unresolved_assets_reason(row)
+        if unresolved:
+            return (
+                f"{unresolved}; FT_Get_BDF_Charset_ID cannot count as real "
+                "parity until the BDF/SFNT-BDF fixture is present and the "
+                "same-input Rust FFI, C ABI, and WASM ABI routes compare exact "
+                "pinned FreeType output"
+            )
+        return (
+            "FT_Get_BDF_Charset_ID has fixture rows but no maintained Rust FFI, "
+            "C ABI, or WASM runtime route; classifying charset output as real "
+            "parity would be a green placeholder"
+        )
     if row.operation == "ftbdf.get_bdf_property":
         return (
             "FT_Get_BDF_Property has fixture rows but no maintained native oracle "
@@ -4450,8 +4464,6 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT debug logging output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     case_reasons = {
-        "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
-        "ftbdf.FT_Get_BDF_Charset_ID.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Charset_ID output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip": "FT_Property_Set/Get autofitter fallback-script CJK scalar roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation": "FT_Property_Set/Get autofitter fallback-script Indic scalar validation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip": "FT_Property_Set/Get autofitter default-script Latin scalar roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -6551,6 +6563,12 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     pending = pending_core_reason(row)
     if pending:
         return ("pending-core", pending)
+    bdf_route_pending = pending_route_reason(row)
+    if bdf_route_pending and row.operation in {
+        "ftbdf.get_bdf_charset_id",
+        "ftbdf.get_bdf_property",
+    }:
+        return ("pending-route", bdf_route_pending)
     otvalid_unresolved_pending = otvalid_unresolved_asset_pending_reason(row)
     if otvalid_unresolved_pending:
         return ("pending-route", otvalid_unresolved_pending)
