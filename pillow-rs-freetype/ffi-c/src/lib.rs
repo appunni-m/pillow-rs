@@ -652,6 +652,11 @@ pub extern "C" fn FT_Gzip_Uncompress(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stream_OpenBzip2(stream: FT_Stream, source: FT_Stream) -> FT_Error {
+    rust_ffi::FT_Stream_OpenBzip2(unsafe { stream.as_mut() }, unsafe { source.as_ref() })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stream_OpenGzip(stream: FT_Stream, source: FT_Stream) -> FT_Error {
     let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
         return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;

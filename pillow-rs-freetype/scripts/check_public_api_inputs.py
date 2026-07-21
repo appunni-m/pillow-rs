@@ -122,6 +122,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
     "fontdone_wasm_gzip_uncompress",
+    "fontdone_wasm_stream_open_bzip2",
     "fontdone_wasm_stream_open_gzip",
     "fontdone_wasm_open_face",
     "fontdone_wasm_open_external_stream_face",
@@ -1059,8 +1060,6 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
         "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
         "freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face",
-        "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source",
-        "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header",
         "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments",
         "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table",
         "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table",
@@ -3555,6 +3554,20 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
 def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for compressed and external stream behavior without a maintained route."""
     bzip2_stream_rows_without_maintained_route = {
+        "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source": (
+            "FT_Stream_OpenBzip2 null stream/source validation is enabled-build "
+            "behavior. The active pinned oracle build disables bzip2 and returns "
+            "Unimplemented_Feature before null validation, so this row must stay "
+            "pending until split by build configuration or a bzip2-enabled oracle "
+            "variant is maintained"
+        ),
+        "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header": (
+            "FT_Stream_OpenBzip2 invalid/truncated header validation is enabled-build "
+            "behavior. The active pinned oracle build disables bzip2 and returns "
+            "Unimplemented_Feature before reading source bytes, so this row must stay "
+            "pending until split by build configuration or a bzip2-enabled oracle "
+            "variant is maintained"
+        ),
         "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream": (
             "FT_Stream_OpenBzip2 open parity needs maintained compressed/raw "
             "fixtures plus a pure-Rust bzip2 stream route proving target stream "
@@ -3578,6 +3591,11 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         ),
     }
     if row.case_id in bzip2_stream_rows_without_maintained_route:
+        if (
+            row.case_id
+            == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return bzip2_stream_rows_without_maintained_route[row.case_id]
@@ -5676,15 +5694,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FTC_FaceID raw pointer identity, same-bytes distinct-pointer miss, and same-address alias hit behavior validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbzip2.stream_open_bzip2"
-        and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
-    ):
-        return "FT_Stream_OpenBzip2 null-stream/source errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftbzip2.stream_open_bzip2"
         and row.case_id
-        == "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header"
+        == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
     ):
-        return "FT_Stream_OpenBzip2 invalid/truncated-header errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        return "FT_Stream_OpenBzip2 disabled-bzip2 build policy validates Unimplemented_Feature through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.classic_kern_validate"
         and row.case_id == "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments"

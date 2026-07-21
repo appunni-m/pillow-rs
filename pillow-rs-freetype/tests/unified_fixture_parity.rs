@@ -2533,6 +2533,12 @@ impl BackendComparisonWorker {
             {
                 gzip_stream_open_output(case, GzipStreamBackend::Rust)
             }
+            "ftbzip2.stream_open_bzip2"
+                if case.case_id
+                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
+            {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust))
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2883,6 +2889,12 @@ impl BackendComparisonWorker {
             {
                 gzip_stream_open_output(case, GzipStreamBackend::CAbi)
             }
+            "ftbzip2.stream_open_bzip2"
+                if case.case_id
+                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
+            {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3230,6 +3242,12 @@ impl BackendComparisonWorker {
                 if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
             {
                 gzip_stream_open_output(case, GzipStreamBackend::Wasm)
+            }
+            "ftbzip2.stream_open_bzip2"
+                if case.case_id
+                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
+            {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
             }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
@@ -23468,6 +23486,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         return Ok(args);
     }
+    if case.case_id == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" {
+        return Ok(vec!["--bzip2-stream-disabled-policy".to_string()]);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let output_count =
@@ -26069,6 +26090,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
     if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
         return gzip_stream_open_output(case, GzipStreamBackend::Rust);
     }
+    if case.case_id == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" {
+        return Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust));
+    }
     // Handle null-param error tests: only for operations without explicit implementation.
     // Exclude operations that have dedicated match arms below but lack font assets.
     if has_no_font_assets(case)
@@ -26989,6 +27013,12 @@ fn catch_font_error(err: String) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftbzip2.stream_open_bzip2"
+            if case.case_id
+                == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
+        {
+            Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
+        }
         "sfnt.get_sfnt_table.record"
             if case.case_id
                 == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
@@ -27996,6 +28026,12 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftbzip2.stream_open_bzip2"
+            if case.case_id
+                == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
+        {
+            Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
+        }
         "sfnt.get_sfnt_table.record"
             if case.case_id
                 == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
@@ -41104,6 +41140,13 @@ enum GzipStreamBackend {
     Wasm,
 }
 
+#[derive(Clone, Copy)]
+enum Bzip2StreamBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
 fn gzip_stream_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String> {
     let asset = case
         .inputs
@@ -41115,6 +41158,37 @@ fn gzip_stream_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String>
     let text = fs::read_to_string(fixture_dir().join(path))
         .map_err(|err| format!("read gzip stream manifest {path}: {err}"))?;
     serde_json::from_str(&text).map_err(|err| format!("parse gzip stream manifest {path}: {err}"))
+}
+
+fn bzip2_disabled_stream_output(backend: Bzip2StreamBackend) -> RunOutput {
+    let mut source = FT_StreamRec::default();
+    let mut stream = FT_StreamRec::default();
+    let status = match backend {
+        Bzip2StreamBackend::Rust => FT_Stream_OpenBzip2(Some(&mut stream), Some(&source)),
+        Bzip2StreamBackend::CAbi => c_abi::FT_Stream_OpenBzip2(&mut stream, &mut source),
+        Bzip2StreamBackend::Wasm => wasm_abi::fontdone_wasm_stream_open_bzip2(&mut stream, &source),
+    };
+    RunOutput {
+        status: Status {
+            kind: if status == FT_Err_Ok {
+                StatusKind::Ok
+            } else {
+                StatusKind::Error
+            },
+            error_code: i64::from(status),
+        },
+        output: json!({
+            "build_features": {
+                "bzip2": false,
+            },
+            "error": status,
+            "stream": {
+                "base_class": pointer_class(stream.base.cast_const()),
+                "read_class": pointer_class(stream.read.cast_const()),
+                "close_class": pointer_class(stream.close.cast_const()),
+            },
+        }),
+    }
 }
 
 fn gzip_stream_open_output(
