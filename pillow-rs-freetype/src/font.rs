@@ -51,6 +51,7 @@ pub struct Font {
     pub size_pt: f32,
     pub load_mode: LoadMode,
     face_kind: FaceKind,
+    type1_private: Option<Type1PrivateDict>,
     type1_multi_master: Option<Arc<Type1MultiMaster>>,
     type1_mm_weight_vector: Option<Vec<i32>>,
     type1_mm_variation_active: bool,
@@ -147,6 +148,35 @@ struct Type1Metadata {
     underline_position: i16,
     underline_thickness: i16,
     bbox: BBox,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct Type1PrivateDict {
+    pub unique_id: i32,
+    pub len_iv: i32,
+    pub num_blue_values: u8,
+    pub num_other_blues: u8,
+    pub num_family_blues: u8,
+    pub num_family_other_blues: u8,
+    pub blue_values: [i16; 14],
+    pub other_blues: [i16; 10],
+    pub family_blues: [i16; 14],
+    pub family_other_blues: [i16; 10],
+    pub blue_scale: i32,
+    pub blue_shift: i32,
+    pub blue_fuzz: i32,
+    pub standard_width: [u16; 1],
+    pub standard_height: [u16; 1],
+    pub num_snap_widths: u8,
+    pub num_snap_heights: u8,
+    pub force_bold: bool,
+    pub round_stem_up: bool,
+    pub snap_widths: [i16; 13],
+    pub snap_heights: [i16; 13],
+    pub expansion_factor: i32,
+    pub language_group: i64,
+    pub password: i64,
+    pub min_feature: [i16; 2],
 }
 
 struct BdfMetadata {
@@ -870,6 +900,42 @@ fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
     data.starts_with(b"%!").then_some(data)
 }
 
+fn type1_eexec_private_text(data: &[u8]) -> Option<String> {
+    // PFB segment type 2 is the eexec-encrypted private program.  FreeType's
+    // Type 1 loader decrypts this program before filling `PS_PrivateRec`.
+    let mut offset = 0usize;
+    while offset.checked_add(6)? <= data.len() && data[offset] == 0x80 {
+        let segment_type = data[offset + 1];
+        let len = u32::from_le_bytes([
+            data[offset + 2],
+            data[offset + 3],
+            data[offset + 4],
+            data[offset + 5],
+        ]) as usize;
+        let start = offset.checked_add(6)?;
+        let end = start.checked_add(len)?;
+        let segment = data.get(start..end)?;
+        if segment_type == 2 {
+            return type1_decrypt_eexec(segment);
+        }
+        offset = end;
+    }
+    None
+}
+
+fn type1_decrypt_eexec(cipher: &[u8]) -> Option<String> {
+    const C1: u32 = 52845;
+    const C2: u32 = 22719;
+    let mut r = 55665u32;
+    let mut plain = Vec::with_capacity(cipher.len());
+    for &cipher_byte in cipher {
+        let plain_byte = cipher_byte ^ ((r >> 8) as u8);
+        r = ((u32::from(cipher_byte) + r) * C1 + C2) & 0xffff;
+        plain.push(plain_byte);
+    }
+    Some(String::from_utf8_lossy(plain.get(4..)?).into_owned())
+}
+
 fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
     let text = std::str::from_utf8(cleartext)
         .map_err(|_| FontError::InvalidFont("Type 1 clear-text dictionary is not UTF-8".into()))?;
@@ -889,6 +955,84 @@ fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
         underline_thickness: type1_i16_value(text, "UnderlineThickness").unwrap_or(0),
         bbox,
     })
+}
+
+fn parse_type1_private(data: &[u8]) -> Option<Type1PrivateDict> {
+    let text = type1_eexec_private_text(data)?;
+    let mut private = Type1PrivateDict {
+        len_iv: type1_i32_value(&text, "lenIV").unwrap_or(4),
+        // FreeType Type 1 `t1tokens.h` declares BlueScale as
+        // `T1_FIELD_FIXED_1000`; `t1load.c` initializes the default as
+        // `0.039625 * 0x10000 * 1000`, so public `PS_PrivateRec` stores
+        // 1000x the normal 16.16 fixed value.
+        blue_scale: type1_fixed_1000_value(&text, "BlueScale").unwrap_or(2_596_864),
+        blue_shift: type1_i32_value(&text, "BlueShift").unwrap_or(7),
+        blue_fuzz: type1_i32_value(&text, "BlueFuzz").unwrap_or(1),
+        force_bold: type1_bool_value(&text, "ForceBold").unwrap_or(false),
+        expansion_factor: type1_fixed_value(&text, "ExpansionFactor").unwrap_or(3_932),
+        language_group: i64::from(type1_i32_value(&text, "LanguageGroup").unwrap_or(0)),
+        password: i64::from(type1_i32_value(&text, "password").unwrap_or(5839)),
+        ..Type1PrivateDict::default()
+    };
+    if let Some(unique_id) = type1_i32_value(&text, "UniqueID") {
+        private.unique_id = unique_id;
+    }
+    copy_i16_array(
+        type1_number_array(&text, "BlueValues").as_deref(),
+        &mut private.blue_values,
+        &mut private.num_blue_values,
+    );
+    copy_i16_array(
+        type1_number_array(&text, "OtherBlues").as_deref(),
+        &mut private.other_blues,
+        &mut private.num_other_blues,
+    );
+    copy_i16_array(
+        type1_number_array(&text, "FamilyBlues").as_deref(),
+        &mut private.family_blues,
+        &mut private.num_family_blues,
+    );
+    copy_i16_array(
+        type1_number_array(&text, "FamilyOtherBlues").as_deref(),
+        &mut private.family_other_blues,
+        &mut private.num_family_other_blues,
+    );
+    if let Some(std_hw) = first_u16(&text, "StdHW") {
+        private.standard_width[0] = std_hw;
+    }
+    if let Some(std_vw) = first_u16(&text, "StdVW") {
+        private.standard_height[0] = std_vw;
+    }
+    copy_i16_array(
+        type1_number_array(&text, "StemSnapV").as_deref(),
+        &mut private.snap_heights,
+        &mut private.num_snap_heights,
+    );
+    copy_i16_array(
+        type1_number_array(&text, "StemSnapH").as_deref(),
+        &mut private.snap_widths,
+        &mut private.num_snap_widths,
+    );
+    Some(private)
+}
+
+fn copy_i16_array(values: Option<&[f64]>, out: &mut [i16], count: &mut u8) {
+    let Some(values) = values else {
+        return;
+    };
+    let mut written = 0usize;
+    for (dst, value) in out.iter_mut().zip(values.iter().copied()) {
+        if let Some(parsed) = i16_from_f64(value) {
+            *dst = parsed;
+            written += 1;
+        }
+    }
+    *count = u8::try_from(written).unwrap_or(u8::MAX);
+}
+
+fn first_u16(text: &str, key: &str) -> Option<u16> {
+    let value = type1_number_array(text, key)?.first().copied()?;
+    u16_from_f64(value)
 }
 
 fn parse_type1_multi_master(cleartext: &[u8]) -> Option<Type1MultiMaster> {
@@ -1123,6 +1267,27 @@ fn i32_from_f64(value: f64) -> Option<i32> {
     i32::try_from(value as i64).ok()
 }
 
+fn i16_from_f64(value: f64) -> Option<i16> {
+    if !value.is_finite() || value.fract() != 0.0 {
+        return None;
+    }
+    i16::try_from(value as i64).ok()
+}
+
+fn u16_from_f64(value: f64) -> Option<u16> {
+    if !value.is_finite() || value.fract() != 0.0 {
+        return None;
+    }
+    u16::try_from(value as i64).ok()
+}
+
+fn type1_real_to_fixed(value: f64) -> Option<i32> {
+    if !value.is_finite() {
+        return None;
+    }
+    i32::try_from((value * 65_536.0).round() as i64).ok()
+}
+
 fn type1_weight_to_fixed(value: f64) -> Option<i32> {
     if !value.is_finite() {
         return None;
@@ -1132,6 +1297,14 @@ fn type1_weight_to_fixed(value: f64) -> Option<i32> {
         return None;
     }
     i32::try_from(fixed as i64).ok()
+}
+
+fn type1_fixed_value(text: &str, key: &str) -> Option<i32> {
+    type1_real_to_fixed(type1_number_token(text, key)?.parse::<f64>().ok()?)
+}
+
+fn type1_fixed_1000_value(text: &str, key: &str) -> Option<i32> {
+    type1_real_to_fixed(type1_number_token(text, key)?.parse::<f64>().ok()? * 1000.0)
 }
 
 fn type1_mm_design_to_blend(map: &[Type1DesignMapPoint], design: i32) -> i32 {
@@ -1266,6 +1439,10 @@ fn type1_string_value(text: &str, key: &str) -> Option<String> {
 }
 
 fn type1_i16_value(text: &str, key: &str) -> Option<i16> {
+    type1_number_token(text, key)?.parse().ok()
+}
+
+fn type1_i32_value(text: &str, key: &str) -> Option<i32> {
     type1_number_token(text, key)?.parse().ok()
 }
 
@@ -1619,6 +1796,7 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing Type 1 clear-text dictionary".into()))?;
         let metadata = parse_type1_metadata(cleartext)?;
         let type1_multi_master = parse_type1_multi_master(cleartext).map(Arc::new);
+        let type1_private = parse_type1_private(data);
         let type1_mm_weight_vector = type1_multi_master
             .as_ref()
             .map(|master| master.default_weight_vector.clone());
@@ -1643,6 +1821,7 @@ impl Font {
             face_kind: FaceKind::Type1 {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
+            type1_private,
             type1_multi_master,
             type1_mm_weight_vector,
             type1_mm_variation_active: false,
@@ -1684,6 +1863,7 @@ impl Font {
             size_pt,
             load_mode: LoadMode::Default,
             face_kind: FaceKind::Bdf,
+            type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -1725,6 +1905,7 @@ impl Font {
             size_pt,
             load_mode: LoadMode::Default,
             face_kind: FaceKind::WinFnt { header },
+            type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -2000,6 +2181,7 @@ impl Font {
             size_pt,
             load_mode,
             face_kind: FaceKind::Sfnt,
+            type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -2121,6 +2303,10 @@ impl Font {
 
     pub(crate) fn type1_multi_master(&self) -> Option<&Type1MultiMaster> {
         self.type1_multi_master.as_deref()
+    }
+
+    pub(crate) fn type1_private(&self) -> Option<&Type1PrivateDict> {
+        self.type1_private.as_ref()
     }
 
     pub(crate) fn type1_mm_weight_vector(&self) -> Result<&[i32], FontError> {

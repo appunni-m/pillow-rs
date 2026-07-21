@@ -11321,6 +11321,52 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Type1 PS Private dictionary route promotion
+
+Promoted rows:
+
+- `t1tables.T1_BLEND_BLUE_SCALE.private_blue_scale_runtime_value`
+- `t1tables.T1_BLEND_BLUE_SHIFT.private_blue_shift_runtime_value`
+- `t1tables.T1_BLEND_BLUE_VALUES.private_blue_values_runtime_array`
+- `t1tables.T1_BLEND_OTHER_BLUES.private_other_blues_runtime_array`
+- `t1tables.T1_BLEND_FAMILY_BLUES.private_family_blues_runtime_array`
+- `t1tables.T1_BLEND_FAMILY_OTHER_BLUES.private_family_other_blues_runtime_array`
+- `t1tables.T1_BLEND_STANDARD_WIDTH.private_standard_width_runtime_value`
+- `t1tables.T1_BLEND_STANDARD_HEIGHT.private_standard_height_runtime_value`
+- `t1tables.T1_BLEND_STEM_SNAP_WIDTHS.private_snap_widths_runtime_array`
+- `t1tables.T1_BLEND_STEM_SNAP_HEIGHTS.private_snap_heights_runtime_array`
+
+First divergences fixed:
+
+- `BlueScale`: FreeType Type1 `t1tokens.h` uses `T1_FIELD_FIXED_1000`, so
+  `PS_PrivateRec.blue_scale` is 1000x normal 16.16 fixed. Rust previously
+  returned `3080`; pinned C returned `3080192`.
+- `ExpansionFactor`: FreeType Type1 `t1load.c` initializes the default to
+  `0.06 * 0x10000` (`3932`). Rust previously left it at zero.
+- Private width/height snap mapping: FreeType maps `StdHW` to
+  `standard_width`, `StdVW` to `standard_height`, `StemSnapH` to
+  `snap_widths`, and `StemSnapV` to `snap_heights`. Rust previously used the
+  intuitive but wrong opposite mapping.
+
+The route now compares the full `PS_PrivateRec` record through pinned C
+FreeType, Rust FFI, thin C ABI, and WASM ABI for the generated Type1 fixture.
+`T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value` remains pending because
+it declares a two-face MM/non-MM control comparison and still needs a maintained
+multi-row oracle route.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_private_mm_blend
+```
+
+Result:
+
+- `runtime_cases: runnable=10 pending=1`
+- `runtime_parity: passed=10 failed=0 total=10`
+- route audit moved from `real-parity=4536 pending-route=424` to
+  `real-parity=4546 pending-route=414`.
+
 ## Aggressive batch plan: FTC cache subsystem rows
 
 Status on 2026-07-21: selected as the next 10+ row implementation batch, but

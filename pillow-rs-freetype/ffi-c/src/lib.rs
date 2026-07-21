@@ -90,6 +90,9 @@ pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
 pub type BDF_Property = *mut BDF_PropertyRec;
+pub type PS_PrivateRec = rust_ffi::PS_PrivateRec;
+pub type PS_Private = *mut PS_PrivateRec;
+pub type T1_Private = PS_PrivateRec;
 pub type FT_Pointer = *mut c_void;
 pub type FT_Module_Interface = FT_Pointer;
 pub type FT_Generic_Finalizer = FT_Pointer;
@@ -1371,6 +1374,28 @@ pub extern "C" fn FT_OpenType_Validate(
         write_ft_bytes(gpos_table, gpos);
         write_ft_bytes(gsub_table, gsub);
         write_ft_bytes(jstf_table, jstf);
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_PS_Font_Private(
+    face: FT_Face,
+    afont_private: PS_Private,
+) -> FT_Error {
+    let face = face_state(face).map(|state| &state.inner);
+    let mut private = PS_PrivateRec::default();
+    let err = rust_ffi::FT_Get_PS_Font_Private(
+        face,
+        (!afont_private.is_null()).then_some(&mut private),
+    );
+    if err == rust_ffi::FT_Err_Ok && !afont_private.is_null() {
+        // SAFETY: C ABI caller supplied a non-null `PS_PrivateRec*` output
+        // pointer; copying the repr(C) public record is the wrapper's only
+        // responsibility.
+        unsafe {
+            *afont_private = private;
+        }
     }
     err
 }

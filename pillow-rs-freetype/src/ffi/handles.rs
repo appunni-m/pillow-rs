@@ -10,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::casts::usize_from_i32;
 use crate::font::{
     ActiveSizeState, BdfPropertyValue, KerningMode, SelectSizeError, SizeRequest, SizeRequestError,
-    SizeRequestType, WinFntHeader,
+    SizeRequestType, Type1PrivateDict, WinFntHeader,
 };
 use crate::{api, grays, render};
 
@@ -29,8 +29,8 @@ use super::types::{
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
     FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
     FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
-    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_PrivateRec,
+    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -2791,6 +2791,54 @@ pub fn FT_Outline_Translate(
 }
 
 pub fn FT_OpenType_Free(_face: Option<&FT_Face>, _table: FT_Bytes) {}
+
+fn ps_private_to_ffi(private: &Type1PrivateDict) -> PS_PrivateRec {
+    PS_PrivateRec {
+        unique_id: private.unique_id,
+        lenIV: private.len_iv,
+        num_blue_values: private.num_blue_values,
+        num_other_blues: private.num_other_blues,
+        num_family_blues: private.num_family_blues,
+        num_family_other_blues: private.num_family_other_blues,
+        blue_values: private.blue_values,
+        other_blues: private.other_blues,
+        family_blues: private.family_blues,
+        family_other_blues: private.family_other_blues,
+        blue_scale: i64::from(private.blue_scale),
+        blue_shift: private.blue_shift,
+        blue_fuzz: private.blue_fuzz,
+        standard_width: private.standard_width,
+        standard_height: private.standard_height,
+        num_snap_widths: private.num_snap_widths,
+        num_snap_heights: private.num_snap_heights,
+        force_bold: FT_Bool::from(private.force_bold),
+        round_stem_up: FT_Bool::from(private.round_stem_up),
+        snap_widths: private.snap_widths,
+        snap_heights: private.snap_heights,
+        expansion_factor: i64::from(private.expansion_factor),
+        language_group: private.language_group,
+        password: private.password,
+        min_feature: private.min_feature,
+    }
+}
+
+pub fn FT_Get_PS_Font_Private(
+    face: Option<&FT_Face>,
+    afont_private: Option<&mut PS_PrivateRec>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(afont_private) = afont_private else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let Some(private) = inner.font().type1_private() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *afont_private = ps_private_to_ffi(private);
+    FT_Err_Ok
+}
 
 pub fn FT_OpenType_Validate(
     face: Option<&FT_Face>,

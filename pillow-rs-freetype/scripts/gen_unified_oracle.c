@@ -10331,6 +10331,84 @@ static int emit_open_type_validate_service_missing(int argc, char** argv) {
     return 0;
 }
 
+static void print_short_array(const FT_Short* values, int len) {
+    printf("[");
+    for (int i = 0; i < len; i++) {
+        if (i) printf(",");
+        printf("%d", values[i]);
+    }
+    printf("]");
+}
+
+static void print_ps_ushort_array(const FT_UShort* values, int len) {
+    printf("[");
+    for (int i = 0; i < len; i++) {
+        if (i) printf(",");
+        printf("%u", values[i]);
+    }
+    printf("]");
+}
+
+static void print_ps_private_json(const PS_PrivateRec* private_rec) {
+    printf("{\"unique_id\":%d,\"lenIV\":%d", private_rec->unique_id, private_rec->lenIV);
+    printf(",\"num_blue_values\":%u", private_rec->num_blue_values);
+    printf(",\"num_other_blues\":%u", private_rec->num_other_blues);
+    printf(",\"num_family_blues\":%u", private_rec->num_family_blues);
+    printf(",\"num_family_other_blues\":%u", private_rec->num_family_other_blues);
+    printf(",\"blue_values\":");
+    print_short_array(private_rec->blue_values, 14);
+    printf(",\"other_blues\":");
+    print_short_array(private_rec->other_blues, 10);
+    printf(",\"family_blues\":");
+    print_short_array(private_rec->family_blues, 14);
+    printf(",\"family_other_blues\":");
+    print_short_array(private_rec->family_other_blues, 10);
+    printf(",\"blue_scale\":%ld", (long)private_rec->blue_scale);
+    printf(",\"blue_shift\":%d", private_rec->blue_shift);
+    printf(",\"blue_fuzz\":%d", private_rec->blue_fuzz);
+    printf(",\"standard_width\":");
+    print_ps_ushort_array(private_rec->standard_width, 1);
+    printf(",\"standard_height\":");
+    print_ps_ushort_array(private_rec->standard_height, 1);
+    printf(",\"num_snap_widths\":%u", private_rec->num_snap_widths);
+    printf(",\"num_snap_heights\":%u", private_rec->num_snap_heights);
+    printf(",\"force_bold\":%u", private_rec->force_bold);
+    printf(",\"round_stem_up\":%u", private_rec->round_stem_up);
+    printf(",\"snap_widths\":");
+    print_short_array(private_rec->snap_widths, 13);
+    printf(",\"snap_heights\":");
+    print_short_array(private_rec->snap_heights, 13);
+    printf(",\"expansion_factor\":%ld", (long)private_rec->expansion_factor);
+    printf(",\"language_group\":%ld", private_rec->language_group);
+    printf(",\"password\":%ld", private_rec->password);
+    printf(",\"min_feature\":");
+    print_short_array(private_rec->min_feature, 2);
+    printf("}");
+}
+
+static int emit_ps_font_private(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    PS_PrivateRec private_rec;
+    memset(&private_rec, 0, sizeof(private_rec));
+    FT_Error err = FT_Get_PS_Font_Private(face.face, &private_rec);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":");
+    if (err == FT_Err_Ok) {
+        print_ps_private_json(&private_rec);
+    } else {
+        printf("null");
+    }
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_open_type_free_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -18681,6 +18759,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--open-type-validate-service-missing")) {
         return emit_open_type_validate_service_missing(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-private")) {
+        return emit_ps_font_private(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
         return emit_open_type_free_null_face(argc, argv);

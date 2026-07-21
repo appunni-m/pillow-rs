@@ -2750,6 +2750,7 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => rust_open_type_validate(case),
             "ftotval.open_type_free" => rust_open_type_free(case),
+            "t1tables.get_ps_font_private_mm_blend" => rust_get_ps_font_private(case),
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 rust_gxval_free_null_face(case)
             }
@@ -3062,6 +3063,7 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => c_open_type_validate(case),
             "ftotval.open_type_free" => c_open_type_free(case),
+            "t1tables.get_ps_font_private_mm_blend" => c_get_ps_font_private(case),
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 c_gxval_free_null_face(case)
             }
@@ -3378,6 +3380,7 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => wasm_open_type_validate(case),
             "ftotval.open_type_free" => wasm_open_type_free(case),
+            "t1tables.get_ps_font_private_mm_blend" => wasm_get_ps_font_private(case),
             "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => {
                 wasm_gxval_free_null_face(case)
             }
@@ -8919,6 +8922,106 @@ where
         })
         .collect::<Vec<_>>();
     error_with_output(first_error, json!({"rows": rows}))
+}
+
+fn font_bytes_for_face_source(case: &InputCase) -> Result<Arc<[u8]>, String> {
+    font_asset_bytes(font_asset_for_source(case, &case.inputs.params)?)
+}
+
+fn ps_private_output(error_code: FT_Error, private: Value) -> RunOutput {
+    if error_code == FT_Err_Ok {
+        ok(private)
+    } else {
+        error_with_output(error_code, Value::Null)
+    }
+}
+
+fn ps_private_json(private: &PS_PrivateRec) -> Value {
+    json!({
+        "unique_id": private.unique_id,
+        "lenIV": private.lenIV,
+        "num_blue_values": private.num_blue_values,
+        "num_other_blues": private.num_other_blues,
+        "num_family_blues": private.num_family_blues,
+        "num_family_other_blues": private.num_family_other_blues,
+        "blue_values": private.blue_values,
+        "other_blues": private.other_blues,
+        "family_blues": private.family_blues,
+        "family_other_blues": private.family_other_blues,
+        "blue_scale": private.blue_scale,
+        "blue_shift": private.blue_shift,
+        "blue_fuzz": private.blue_fuzz,
+        "standard_width": private.standard_width,
+        "standard_height": private.standard_height,
+        "num_snap_widths": private.num_snap_widths,
+        "num_snap_heights": private.num_snap_heights,
+        "force_bold": private.force_bold,
+        "round_stem_up": private.round_stem_up,
+        "snap_widths": private.snap_widths,
+        "snap_heights": private.snap_heights,
+        "expansion_factor": private.expansion_factor,
+        "language_group": private.language_group,
+        "password": private.password,
+        "min_feature": private.min_feature
+    })
+}
+
+fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
+    json!({
+        "unique_id": private.unique_id,
+        "lenIV": private.lenIV,
+        "num_blue_values": private.num_blue_values,
+        "num_other_blues": private.num_other_blues,
+        "num_family_blues": private.num_family_blues,
+        "num_family_other_blues": private.num_family_other_blues,
+        "blue_values": private.blue_values,
+        "other_blues": private.other_blues,
+        "family_blues": private.family_blues,
+        "family_other_blues": private.family_other_blues,
+        "blue_scale": private.blue_scale,
+        "blue_shift": private.blue_shift,
+        "blue_fuzz": private.blue_fuzz,
+        "standard_width": private.standard_width,
+        "standard_height": private.standard_height,
+        "num_snap_widths": private.num_snap_widths,
+        "num_snap_heights": private.num_snap_heights,
+        "force_bold": private.force_bold,
+        "round_stem_up": private.round_stem_up,
+        "snap_widths": private.snap_widths,
+        "snap_heights": private.snap_heights,
+        "expansion_factor": private.expansion_factor,
+        "language_group": private.language_group,
+        "password": private.password,
+        "min_feature": private.min_feature
+    })
+}
+
+fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_face_source(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut private = PS_PrivateRec::default();
+    let err = FT_Get_PS_Font_Private(Some(&face), Some(&mut private));
+    Ok(ps_private_output(err, ps_private_json(&private)))
+}
+
+fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_face_source(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut private = c_abi::PS_PrivateRec::default();
+    let err = c_abi::FT_Get_PS_Font_Private(face, &mut private);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ps_private_output(err, ps_private_json(&private)))
+}
+
+fn wasm_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes_for_face_source(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
+    let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, &mut private);
+    wasm_done_face(handle);
+    Ok(ps_private_output(err, wasm_ps_private_json(&private)))
 }
 
 fn rust_open_type_validate(case: &InputCase) -> Result<RunOutput, String> {
@@ -21934,6 +22037,18 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "t1tables.get_ps_font_private_mm_blend" => {
+            if params.get("rows").is_some() {
+                return Err(
+                    "PS private multi-source rows require a maintained multi-row oracle route"
+                        .to_string(),
+                );
+            }
+            let mut args = vec!["--ps-font-private".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftotval.open_type_free" => {
             if param_is_null(params, "face") {
                 return Ok(vec!["--open-type-free-null-face".to_string()]);
@@ -23499,6 +23614,25 @@ fn push_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), Stri
     }
 }
 
+fn font_asset_for_source<'a>(case: &'a InputCase, params: &Value) -> Result<&'a Asset, String> {
+    let source = string_param(params, "face_source")?;
+    if source == "null" {
+        return Err("null face_source has no font asset".to_string());
+    }
+    case.inputs
+        .assets
+        .get(source)
+        .ok_or_else(|| format!("missing face_source asset {source}"))
+}
+
+fn push_font_source_from_param(
+    case: &InputCase,
+    params: &Value,
+    args: &mut Vec<String>,
+) -> Result<(), String> {
+    push_asset_source(font_asset_for_source(case, params)?, args)
+}
+
 fn push_pfr_kerning_font_source(case: &InputCase, args: &mut Vec<String>) -> Result<(), String> {
     let font = pfr_kerning_font_asset(case)?;
     push_asset_source(font, args)
@@ -24367,6 +24501,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
+        "t1tables.get_ps_font_private_mm_blend" => rust_get_ps_font_private(case),
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => rust_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
@@ -24499,6 +24634,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
+        "t1tables.get_ps_font_private_mm_blend" => c_get_ps_font_private(case),
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => c_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
@@ -25420,6 +25556,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
+        "t1tables.get_ps_font_private_mm_blend" => wasm_get_ps_font_private(case),
         "ftgxval.classic_kern_free" | "ftgxval.truetype_gx_free" => wasm_gxval_free_null_face(case),
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"

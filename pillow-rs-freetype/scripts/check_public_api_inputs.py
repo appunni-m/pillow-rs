@@ -185,6 +185,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
     "fontdone_wasm_error_string",
+    "fontdone_wasm_get_ps_font_private",
     "fontdone_wasm_open_type_validate",
     "fontdone_wasm_open_type_free",
     "fontdone_wasm_truetype_gx_free",
@@ -4366,6 +4367,16 @@ def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str |
 
 
 def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
+    if (
+        row.operation == "t1tables.get_ps_font_private_mm_blend"
+        and row.case_id != "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value"
+        and "rows" not in row.params
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private Type1 private dictionary fields validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     case_reasons = {
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
