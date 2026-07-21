@@ -7331,14 +7331,40 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
                                              &manager);
     FTC_CMapCache cache = NULL;
     FT_Error cache_error = manager_error ? manager_error : FTC_CMapCache_New(manager, &cache);
+    FTC_CMapCache registration_caches[17];
+    FT_Error registration_statuses[17];
+    memset(registration_caches, 0, sizeof(registration_caches));
+    memset(registration_statuses, 0, sizeof(registration_statuses));
 
     FT_UInt first = 0;
     FT_UInt after_reset = 0;
+    FT_UInt after_registration_limit = 0;
     int after_first_count = requester.request_count;
     int after_reset_count = requester.request_count;
+    int after_registration_limit_count = requester.request_count;
+    int registration_probe = streq(scenario, "success_multiple_cache_registration_limit");
+    int successful_registrations = 0;
+    int failed_registration_index = -1;
     if (!cache_error) {
         first = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
         after_first_count = requester.request_count;
+        if (registration_probe) {
+            registration_caches[0] = cache;
+            registration_statuses[0] = cache_error;
+            successful_registrations = 1;
+            for (int index = 1; index < 17; index++) {
+                FT_Error status = FTC_CMapCache_New(manager, &registration_caches[index]);
+                registration_statuses[index] = status;
+                if (status) {
+                    failed_registration_index = index;
+                    break;
+                }
+                successful_registrations++;
+            }
+            after_registration_limit =
+                FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
+            after_registration_limit_count = requester.request_count;
+        }
         FTC_Manager_Reset(manager);
         after_reset = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
         after_reset_count = requester.request_count;
@@ -7352,7 +7378,7 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
            "\"cache_handle\":\"%s\",\"destroyed_by_manager_done\":true,"
            "\"lookup\":{\"char_code\":65,\"first\":%u,\"after_reset\":%u,"
            "\"requester_count_after_first\":%d,\"requester_count_after_reset\":%d,"
-           "\"reset_preserves_handle\":%s}}}\n",
+           "\"reset_preserves_handle\":%s}",
            manager_error,
            cache_error,
            cache ? "non_null" : "null",
@@ -7361,6 +7387,35 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
            after_first_count,
            after_reset_count,
            cache ? "true" : "false");
+    if (registration_probe) {
+        printf(",\"registration_limit\":{\"max_caches\":16,\"attempt_statuses\":[");
+        for (int index = 0; index < 17; index++) {
+            if (index) {
+                printf(",");
+            }
+            printf("%d", registration_statuses[index]);
+        }
+        printf("],\"attempt_handles\":[");
+        for (int index = 0; index < 17; index++) {
+            if (index) {
+                printf(",");
+            }
+            printf("\"%s\"", registration_caches[index] ? "non_null" : "null");
+        }
+        printf("],\"successful_registrations\":%d,"
+               "\"failed_registration_index\":%d,"
+               "\"final_status\":%d,"
+               "\"prior_cache_lookup_after_failure\":%u,"
+               "\"requester_count_after_failure_lookup\":%d,"
+               "\"prior_cache_preserved\":%s}",
+               successful_registrations,
+               failed_registration_index,
+               failed_registration_index >= 0 ? registration_statuses[failed_registration_index] : 0,
+               after_registration_limit,
+               after_registration_limit_count,
+               after_registration_limit == first ? "true" : "false");
+    }
+    printf("}}\n");
 
     if (manager) {
         FTC_Manager_Done(manager);
