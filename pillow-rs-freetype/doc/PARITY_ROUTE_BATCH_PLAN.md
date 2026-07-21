@@ -1337,6 +1337,42 @@ Remaining nearby blocker:
   pending until those separate inputs exist or the manifest is deliberately
   split into a static-success row and future variable/malformed rows.
 
+### Route FT_Palette_Set_Foreground_Color default policy: 2026-07-22
+
+Status: implemented as a real route promotion for the existing manifest row.
+
+Scope:
+
+- Promoted
+  `ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy`
+  from pending-route to real-parity.
+- Added pinned-C oracle, Rust FFI, C ABI, and WASM ABI runtime output for all
+  CPAL palettes in `tests/fixtures/fonts/color/colr-v1-all-paints.ttf`.
+- The route selects each palette without calling
+  `FT_Palette_Set_Foreground_Color`, compares the selected palette flags, the
+  C-compatible default BGRA foreground color, and the public COLR v1
+  foreground `0xFFFF` `PaintSolid` reference.
+
+C behavior pinned:
+
+- FreeType 2.14.3 `src/sfnt/ttcolr.c:1834-1851` resolves COLR palette index
+  `0xFFFF` to opaque white when the selected CPAL palette has
+  `FT_PALETTE_FOR_DARK_BACKGROUND`; otherwise it resolves to opaque black.
+
+Observed impact:
+
+- Route audit: `pending-route` 238 → 237, `real-parity` 4729 → 4730.
+- Focused runtime:
+  `make -C pillow-rs-freetype test-op OP=ftcolor.palette_set_foreground_color`
+  passed 4/4 across Rust FFI, C ABI, and WASM ABI.
+
+Remaining nearby blocker:
+
+- `ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled`
+  remains pending because this build does not provide a maintained same-input
+  runtime condition with `TT_CONFIG_OPTION_COLOR_LAYERS` disabled. Promoting it
+  in the enabled-color build would be a green placeholder.
+
 ### Split static FT_PaintLinearGradient public-record row: 2026-07-22
 
 Status: implemented as an additive split row; the original broad row remains
