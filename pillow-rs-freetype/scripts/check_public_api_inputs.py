@@ -6876,6 +6876,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_MM_Design_Coordinates partial, extra, and reset scenarios validate generated Type 1 MM design-coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_mm_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph"
+    ):
+        return "FT_Set_MM_Design_Coordinates loadable Type 1 MM glyph output validates design-coordinate mutation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmm.set_named_instance"
         and row.case_id == "ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default"
     ):

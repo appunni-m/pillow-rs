@@ -341,7 +341,8 @@ impl OwnedBitmapGlyph {
     }
 
     fn refresh_record(&mut self) {
-        self.record.root = c_glyph_root_from_core_with_class(&self.core.root, owned_bitmap_glyph_class());
+        self.record.root =
+            c_glyph_root_from_core_with_class(&self.core.root, owned_bitmap_glyph_class());
         self.record.left = self.core.left;
         self.record.top = self.core.top;
         self.buffer = self.core.bitmap.buffer.clone().into_boxed_slice();
@@ -3669,13 +3670,11 @@ pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_
     // glyph creation copies the private Rust slot payload into an owned glyph.
     let slot = unsafe { slot.as_ref() };
     let glyph_result = if slot.rust_slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP {
-        rust_ffi::FT_Get_Bitmap_Glyph(Some(&slot.rust_slot)).map(|core| {
-            Box::into_raw(Box::new(OwnedBitmapGlyph::new(core))).cast::<FT_GlyphRec>()
-        })
+        rust_ffi::FT_Get_Bitmap_Glyph(Some(&slot.rust_slot))
+            .map(|core| Box::into_raw(Box::new(OwnedBitmapGlyph::new(core))).cast::<FT_GlyphRec>())
     } else {
-        rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot)).map(|core| {
-            Box::into_raw(Box::new(OwnedOutlineGlyph::new(core))).cast::<FT_GlyphRec>()
-        })
+        rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot))
+            .map(|core| Box::into_raw(Box::new(OwnedOutlineGlyph::new(core))).cast::<FT_GlyphRec>())
     };
     match glyph_result {
         Ok(glyph) => {
