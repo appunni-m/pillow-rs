@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Result: FT_BitmapGlyphRec dual creation-path record fields
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap`
+
+Finding:
+
+- Pinned FreeType 2.14.3 exposes the same public `FT_BitmapGlyphRec` field
+  shape through both maintained creation paths: `FT_Get_Glyph` on a bitmap
+  glyph slot and `FT_Glyph_To_Bitmap` on an outline glyph.
+- The two concrete fixture variants now compare the root format/advance,
+  library/class pointer presence, left/top placement, bitmap descriptor, and
+  bitmap bytes through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+
+Implementation note:
+
+- The route is scoped to the concrete `@m1` and `@m2` runtime rows generated
+  from the fixture variants. It does not promote SVG glyph-record rows or broad
+  glyph lifetime rows.
+- The bitmap-strike semantic glyph selector is resolved to the maintained
+  bitmap glyph index before calling the oracle. The C oracle also guards the
+  bitmap cast by checking `FT_GLYPH_FORMAT_BITMAP`.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=2 failed=0 total=2
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 233, 'real-null-validation': 9, 'real-parity': 4754}
+```
+
 ### Issue Set Result: FT_PARAM_TAG_INCREMENTAL parameter-route absent/null behavior
 
 Status: promoted on 2026-07-22.

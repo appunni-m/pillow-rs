@@ -6122,6 +6122,156 @@ static void print_get_glyph_payload(FT_GlyphSlot slot, const char* action) {
     }
 }
 
+static int load_record_source_bytes(const char* source_kind,
+                                    const char* source_value,
+                                    unsigned char** data,
+                                    long* data_len) {
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 1;
+        }
+        return 0;
+    }
+    if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 1;
+        }
+        return 0;
+    }
+    fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+    return 1;
+}
+
+static FT_Error open_record_face(FT_Library library,
+                                 const char* source_kind,
+                                 const char* source_value,
+                                 FT_Long face_index,
+                                 FT_UInt pixel_x,
+                                 FT_UInt pixel_y,
+                                 unsigned char** data,
+                                 FT_Face* face) {
+    long data_len = 0;
+    if (load_record_source_bytes(source_kind, source_value, data, &data_len) != 0) {
+        return FT_Err_Invalid_Argument;
+    }
+    FT_Error err = FT_New_Memory_Face(library, *data, data_len, face_index, face);
+    if (!err) {
+        err = FT_Set_Pixel_Sizes(*face, pixel_x, pixel_y);
+    }
+    return err;
+}
+
+static void print_bitmap_glyph_record_row(const char* creation_path, FT_BitmapGlyph glyph) {
+    FT_Bitmap* bitmap = &glyph->bitmap;
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("{\"creation_path\":\"%s\",\"glyph\":{", creation_path);
+    printf("\"format\":%ld,", (long)glyph->root.format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->root.advance.x, glyph->root.advance.y);
+    printf("\"library_present\":%s,", glyph->root.library ? "true" : "false");
+    printf("\"clazz_present\":%s,", glyph->root.clazz ? "true" : "false");
+    printf("\"bitmap\":{");
+    printf("\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"left\":%d,\"top\":%d,\"buffer_hex\":\"",
+           bitmap->width,
+           bitmap->rows,
+           bitmap->pitch,
+           bitmap->pixel_mode,
+           bitmap->num_grays,
+           glyph->left,
+           glyph->top);
+    if (bitmap->buffer && len > 0) {
+        print_hex_bytes(bitmap->buffer, len);
+    }
+    printf("\"}}}");
+}
+
+static int emit_bitmap_glyph_record_paths(int argc, char** argv) {
+    (void)argc;
+    const char* outline_kind = argv[2];
+    const char* outline_value = argv[3];
+    const char* bitmap_kind = argv[4];
+    const char* bitmap_value = argv[5];
+    FT_Long face_index = (FT_Long)strtol(argv[6], NULL, 10);
+    FT_UInt pixel_x = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_y = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt bitmap_glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_UInt outline_glyph_index = (FT_UInt)strtoul(argv[10], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[11], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[12], NULL, 10);
+
+    FT_Library library = NULL;
+    FT_Face bitmap_face = NULL;
+    FT_Face outline_face = NULL;
+    FT_Glyph bitmap_glyph = NULL;
+    FT_Glyph outline_glyph = NULL;
+    unsigned char* bitmap_data = NULL;
+    unsigned char* outline_data = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+
+    if (!err) {
+        err = open_record_face(library, bitmap_kind, bitmap_value, face_index, pixel_x, pixel_y, &bitmap_data, &bitmap_face);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(bitmap_face, bitmap_glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Get_Glyph(bitmap_face->glyph, &bitmap_glyph);
+    }
+    if (!err && (!bitmap_glyph || bitmap_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        err = FT_Err_Invalid_Glyph_Format;
+    }
+    if (!err) {
+        err = open_record_face(library, outline_kind, outline_value, face_index, pixel_x, pixel_y, &outline_data, &outline_face);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(outline_face, outline_glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Get_Glyph(outline_face->glyph, &outline_glyph);
+    }
+    if (!err) {
+        err = FT_Glyph_To_Bitmap(&outline_glyph, render_mode, NULL, 0);
+    }
+    if (!err && (!outline_glyph || outline_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"rows\":[");
+        print_bitmap_glyph_record_row("FT_Get_Glyph bitmap", (FT_BitmapGlyph)bitmap_glyph);
+        printf(",");
+        print_bitmap_glyph_record_row("FT_Glyph_To_Bitmap outline", (FT_BitmapGlyph)outline_glyph);
+        printf("]}}\n");
+    }
+
+    if (bitmap_glyph) {
+        FT_Done_Glyph(bitmap_glyph);
+    }
+    if (outline_glyph) {
+        FT_Done_Glyph(outline_glyph);
+    }
+    if (bitmap_face) {
+        FT_Done_Face(bitmap_face);
+    }
+    if (outline_face) {
+        FT_Done_Face(outline_face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(bitmap_data);
+    free(outline_data);
+    return 0;
+}
+
 static void print_done_outline_glyph_payload(FT_GlyphSlot slot) {
     FT_Glyph glyph = NULL;
     FT_Error err = FT_Get_Glyph(slot, &glyph);
@@ -24893,6 +25043,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 10 && streq(argv[1], "--glyph-record")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 13 && streq(argv[1], "--bitmap-glyph-record-paths")) {
+        return emit_bitmap_glyph_record_paths(argc, argv);
     }
     if (argc == 9 && (streq(argv[1], "--done-glyph-outline") ||
                       streq(argv[1], "--done-glyph-bitmap"))) {
