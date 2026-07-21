@@ -763,6 +763,72 @@ def build_colr_v1_variable_gradients_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def clip_box(x_min: int, y_min: int, x_max: int, y_max: int, fmt: int = 1) -> ot.ClipBox:
+    box = ot.ClipBox()
+    box.Format = fmt
+    box.xMin = x_min
+    box.yMin = y_min
+    box.xMax = x_max
+    box.yMax = y_max
+    if fmt == 2:
+        box.VarIndexBase = 0
+    return box
+
+
+def build_colr_v1_clipbox_font(path: Path, include_clip_list: bool) -> None:
+    """Build deterministic COLRv1 ClipList fixtures for FT_Get_Color_Glyph_ClipBox.
+
+    The success fixture includes a tested format 1 ClipBox plus a format 2
+    record kept as an explicit future variation row input.  The current routed
+    parity cases call the format 1 glyph because no variable ClipBox row is
+    classified as real parity until it has a dedicated expected-output case.
+    """
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:39]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 2
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x20, 0x40, 0x60, 0xFF),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: solid_paint(1),
+        base_names[1]: solid_paint(1),
+    }
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    if include_clip_list:
+        glyph_map = font.getReverseGlyphMap()
+        clip_list = ot.ClipList()
+        clip_list.Format = 1
+        clip_list.ClipRecord = []
+        for glyph_name, box in (
+            (base_names[0], clip_box(-120, -80, 340, 510)),
+            (base_names[1], clip_box(-64, -32, 256, 384, fmt=2)),
+        ):
+            record = ot.ClipRecord()
+            record.StartGlyphID = glyph_map[glyph_name]
+            record.EndGlyphID = glyph_map[glyph_name]
+            record.ClipBox = box
+            clip_list.ClipRecord.append(record)
+        font["COLR"].table.ClipList = clip_list
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def main() -> None:
     for name in (
         "cpal-palettes-names-flags.ttf",
@@ -779,6 +845,8 @@ def main() -> None:
     build_colr_v1_all_paints_font(COLOR_OUTPUT_DIR / "colr-v1-all-paints.ttf")
     build_colr_v1_static_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-static-gradients.ttf")
     build_colr_v1_variable_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-variable-gradients.ttf")
+    build_colr_v1_clipbox_font(COLOR_OUTPUT_DIR / "colr-v1-clipbox-format1-format2.ttf", True)
+    build_colr_v1_clipbox_font(COLOR_OUTPUT_DIR / "colr-v1-no-clipbox-control.ttf", False)
 
 
 if __name__ == "__main__":

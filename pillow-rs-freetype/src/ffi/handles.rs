@@ -24,20 +24,20 @@ use super::convert::{
 use super::types::{
     BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
     FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Color, FT_ColorIndex, FT_ColorLine, FT_ColorStop, FT_ColorStopIterator,
-    FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
-    FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec, FT_Int, FT_Int32, FT_LayerIterator,
-    FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis,
-    FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface, FT_Multi_Master,
-    FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot, FT_PaintColrGlyph,
-    FT_PaintColrLayers, FT_PaintComposite, FT_PaintFormat, FT_PaintGlyph, FT_PaintLinearGradient,
-    FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale, FT_PaintSkew, FT_PaintSolid,
-    FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate, FT_Palette_Data, FT_Pointer,
-    FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
-    FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc, FT_StreamRec, FT_String,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
-    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
+    FT_CharMapRecPublic, FT_ClipBox, FT_Color, FT_ColorIndex, FT_ColorLine, FT_ColorStop,
+    FT_ColorStopIterator, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14, FT_F26Dot6,
+    FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec, FT_Int,
+    FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
+    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
+    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintFormat,
+    FT_PaintGlyph, FT_PaintLinearGradient, FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale,
+    FT_PaintSkew, FT_PaintSolid, FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate,
+    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
+    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
+    FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
+    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
     PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
     TT_VertHeader,
 };
@@ -1324,7 +1324,19 @@ struct ColrV0State {
 #[derive(Clone, Debug)]
 struct ColrV1State {
     root_paints: BTreeMap<FT_UInt, ColrV1Paint>,
+    clip_boxes: Vec<ColrV1ClipBox>,
     var_store: Option<ItemVariationStore>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ClipBox {
+    start_glyph: FT_UInt,
+    end_glyph: FT_UInt,
+    x_min: FT_Short,
+    y_min: FT_Short,
+    x_max: FT_Short,
+    y_max: FT_Short,
+    var_index_base: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3874,6 +3886,7 @@ fn parse_colr_v1_table(data: &[u8], variation_axis_count: usize) -> Option<ColrV
     }
     let base_glyph_list_offset = usize::try_from(read_u32_be(data, 14)?).ok()?;
     let layer_list_offset = usize::try_from(read_u32_be(data, 18)?).ok()?;
+    let clip_list_offset = usize::try_from(read_u32_be(data, 22)?).ok()?;
     if base_glyph_list_offset == 0 {
         return None;
     }
@@ -3900,8 +3913,62 @@ fn parse_colr_v1_table(data: &[u8], variation_axis_count: usize) -> Option<ColrV
     }
     Some(ColrV1State {
         root_paints,
+        clip_boxes: parse_colr_v1_clip_boxes(data, clip_list_offset)?,
         var_store,
     })
+}
+
+fn parse_colr_v1_clip_boxes(data: &[u8], clip_list_offset: usize) -> Option<Vec<ColrV1ClipBox>> {
+    if clip_list_offset == 0 {
+        return Some(Vec::new());
+    }
+    let format = *data.get(clip_list_offset)?;
+    if format != 1 {
+        return None;
+    }
+    let count = usize::try_from(read_u32_be(data, clip_list_offset + 1)?).ok()?;
+    let records_offset = clip_list_offset.checked_add(5)?;
+    let records_end = records_offset.checked_add(count.checked_mul(7)?)?;
+    if records_end > data.len() {
+        return None;
+    }
+    (0..count)
+        .map(|index| {
+            let record_offset = records_offset.checked_add(index.checked_mul(7)?)?;
+            let start_glyph = FT_UInt::from(read_u16_be(data, record_offset)?);
+            let end_glyph = FT_UInt::from(read_u16_be(data, record_offset + 2)?);
+            let box_offset = usize::try_from(read_u24_be(data, record_offset + 4)?).ok()?;
+            let box_start = clip_list_offset.checked_add(box_offset)?;
+            let box_format = *data.get(box_start)?;
+            if box_format == 0 || box_format > 2 {
+                return None;
+            }
+            let coords_offset = box_start.checked_add(1)?;
+            let coords_end = coords_offset.checked_add(8)?;
+            if coords_end > data.len() {
+                return None;
+            }
+            let var_index_base = if box_format == 2 {
+                let var_offset = coords_end;
+                let var_end = var_offset.checked_add(4)?;
+                if var_end > data.len() {
+                    return None;
+                }
+                read_u32_be(data, var_offset)
+            } else {
+                None
+            };
+            Some(ColrV1ClipBox {
+                start_glyph,
+                end_glyph,
+                x_min: read_i16_be(data, coords_offset)?,
+                y_min: read_i16_be(data, coords_offset + 2)?,
+                x_max: read_i16_be(data, coords_offset + 4)?,
+                y_max: read_i16_be(data, coords_offset + 6)?,
+                var_index_base,
+            })
+        })
+        .collect()
 }
 
 fn parse_colr_v1_layer_offsets(data: &[u8], layer_list_offset: usize) -> Option<Vec<usize>> {
@@ -4305,6 +4372,80 @@ pub fn FT_Get_Color_Glyph_Layer(
     *aglyph_index = layer.glyph_index;
     *acolor_index = layer.color_index;
     iterator.layer = iterator.layer.saturating_add(1);
+    1
+}
+
+pub fn FT_Get_Color_Glyph_ClipBox(
+    face: Option<&FT_Face>,
+    base_glyph: FT_UInt,
+    clip_box: Option<&mut FT_ClipBox>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(clip_box) = clip_box else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(record) = colr
+        .clip_boxes
+        .iter()
+        .find(|record| base_glyph >= record.start_glyph && base_glyph <= record.end_glyph)
+    else {
+        return 0;
+    };
+
+    // FreeType 2.14.3 `src/sfnt/ttcolr.c:1353-1489` reads ClipBox FWORDs,
+    // scales them with the active size metrics to 26.6, then transforms all
+    // four corners with the face transform before writing the public record.
+    let mut x_min = FT_MulFix(FT_Long::from(record.x_min), face.size_metrics.x_scale);
+    let mut y_min = FT_MulFix(FT_Long::from(record.y_min), face.size_metrics.y_scale);
+    let mut x_max = FT_MulFix(FT_Long::from(record.x_max), face.size_metrics.x_scale);
+    let mut y_max = FT_MulFix(FT_Long::from(record.y_max), face.size_metrics.y_scale);
+
+    if let Some(var_index_base) = record.var_index_base {
+        let Some(var_store) = &colr.var_store else {
+            return 0;
+        };
+        let normalized_coords = face.inner.borrow();
+        let normalized_coords = normalized_coords.font().normalized_variation_coords();
+        let outer_index = (var_index_base >> 16) as u16;
+        let inner_index = var_index_base as u16;
+        let delta = |index: u16| {
+            var_store
+                .item_delta(
+                    outer_index,
+                    inner_index.saturating_add(index),
+                    normalized_coords,
+                )
+                .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as FT_Long
+        };
+        x_min = x_min.saturating_add(FT_MulFix(delta(0), face.size_metrics.x_scale));
+        y_min = y_min.saturating_add(FT_MulFix(delta(1), face.size_metrics.y_scale));
+        x_max = x_max.saturating_add(FT_MulFix(delta(2), face.size_metrics.x_scale));
+        y_max = y_max.saturating_add(FT_MulFix(delta(3), face.size_metrics.y_scale));
+    }
+
+    let mut corners = [
+        FT_Vector { x: x_min, y: y_min },
+        FT_Vector { x: x_min, y: y_max },
+        FT_Vector { x: x_max, y: y_max },
+        FT_Vector { x: x_max, y: y_min },
+    ];
+    for corner in &mut corners {
+        FT_Vector_Transform(Some(corner), Some(&face.transform_matrix));
+        corner.x = corner.x.saturating_add(face.transform_delta.x);
+        corner.y = corner.y.saturating_add(face.transform_delta.y);
+    }
+
+    *clip_box = FT_ClipBox {
+        bottom_left: corners[0],
+        top_left: corners[1],
+        top_right: corners[2],
+        bottom_right: corners[3],
+    };
     1
 }
 

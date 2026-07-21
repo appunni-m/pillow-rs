@@ -188,6 +188,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_palette_select",
     "fontdone_wasm_palette_set_foreground_color",
     "fontdone_wasm_get_color_glyph_layer",
+    "fontdone_wasm_get_color_glyph_clipbox",
     "fontdone_wasm_get_color_glyph_paint",
     "fontdone_wasm_get_paint",
     "fontdone_wasm_get_paint_layers",
@@ -2595,6 +2596,18 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
 def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcolor."):
         return None
+    if row.operation == "ftcolor.get_color_glyph_clipbox" and row.case_id in {
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output",
+    }:
+        return (
+            "FT_Get_Color_Glyph_ClipBox validates ClipList format 1 scaling, "
+            "active face transform application, public FT_ClipBox field "
+            "copying, and false-return output preservation through the "
+            "maintained COLRv1 clipbox fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
     # These rows are routed by `emit_colr_all_paints_case` and the matching
     # Rust/C-ABI/WASM all-paints harness path.  Their fixture JSON still
     # declares a future malformed-font asset, but this maintained public
