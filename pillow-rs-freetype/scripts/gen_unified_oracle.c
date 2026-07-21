@@ -22733,6 +22733,31 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     return 0;
 }
 
+static void print_incremental_absent_output(FT_Error open_error, FT_Error load_error) {
+    printf("{");
+    print_status(open_error ? open_error : load_error);
+    printf(",\"output\":{\"open_error\":%d,\"load_error\":%d,"
+           "\"callback_count\":0,\"embedded_data_used\":",
+           open_error,
+           load_error);
+    print_json_bool(open_error == FT_Err_Ok && load_error == FT_Err_Ok);
+    printf("}}\n");
+}
+
+static int emit_incremental_absent_open(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Error load_error = FT_Load_Glyph(face.face, glyph_index, FT_LOAD_DEFAULT);
+    print_incremental_absent_output(FT_Err_Ok, load_error);
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_new_face_variants(int argc, char** argv) {
     (void)argc;
     const char* pathname = argv[2];
@@ -23999,6 +24024,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--new-memory-face-variants")) {
         return emit_new_memory_face_variants(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--incremental-absent-open")) {
+        return emit_incremental_absent_open(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--new-face-variants")) {
         return emit_new_face_variants(argc, argv);

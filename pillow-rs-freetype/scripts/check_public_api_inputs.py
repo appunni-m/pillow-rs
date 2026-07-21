@@ -3315,12 +3315,6 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "logs proving the client object pointer/value round-trips into "
             "glyph-data and metrics callbacks exactly like pinned C"
         ),
-        "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data": (
-            "absent FT_PARAM_TAG_INCREMENTAL parity needs the same open-face "
-            "fixture proving pinned C uses embedded font data and does not call "
-            "incremental callbacks, with matching Rust FFI, C ABI, and WASM "
-            "glyph output"
-        ),
         "ftincrem.FT_Incremental_Metrics.null_not_passed_by_c": (
             "FT_Incremental_Metrics nullness parity needs a maintained metrics "
             "callback route proving pinned C never passes a null metrics "
@@ -6460,6 +6454,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Done_Library.decrements_reference_without_destroying"
     ):
         return "FT_Done_Library refcount decrement without destruction validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftincrem.open_face_without_incremental_parameter"
+        and row.case_id
+        == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data"
+    ):
+        return "Absent FT_PARAM_TAG_INCREMENTAL open/load behavior validates embedded font data use and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.face_driver_name"
         and row.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name"

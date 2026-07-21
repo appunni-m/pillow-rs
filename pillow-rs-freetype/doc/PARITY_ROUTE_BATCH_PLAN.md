@@ -210,6 +210,41 @@ Rejected in the same issue set:
   green placeholder. The correct future fix is a maintained MM fixture whose
   pinned C route is an observable glyph-output success row.
 
+After the absent incremental parameter embedded-data route:
+
+```text
+route audit concrete_cases=7242 category_counts={'compile-contract': 2266, 'pending-route': 234, 'real-null-validation': 9, 'real-parity': 4733}
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+```
+
+The row
+`ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data` now
+has a maintained same-input route. The route opens the existing
+`input/fonts/DejaVuSans.ttf` fixture with `FT_New_Memory_Face` and no
+`FT_PARAM_TAG_INCREMENTAL` parameter, loads glyph 36, and compares
+`open_error`, `load_error`, `callback_count=0`, and `embedded_data_used`
+through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+
+Pinned C behavior checked before routing: FreeType 2.14.3 returns `open=0` and
+`load=0` for `FT_New_Memory_Face` followed by `FT_Load_Glyph(face, 36,
+FT_LOAD_DEFAULT)` on this fixture without an explicit size call. Therefore the
+row proves embedded font data is used and no incremental callbacks are involved.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data
+```
+
+Rejected in the same issue set:
+
+- `ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior`
+  remains pending. It includes a `FT_PARAM_TAG_INCREMENTAL` row with
+  `data=NULL`; the thin C ABI can express that parameter, but the current Rust
+  FFI and WASM ABI do not expose arbitrary `FT_Open_Face` parameter records.
+  Counting it by treating null-parameter open as identical to absent-parameter
+  open would not prove the declared same input across all ABI lanes.
+
 After the `FT_Get_PS_Font_Value` selector-matrix route:
 
 ```text
