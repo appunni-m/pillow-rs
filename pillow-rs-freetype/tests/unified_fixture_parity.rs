@@ -11070,6 +11070,67 @@ fn color_glyph_layer_output_for_open_face(
     }
 }
 
+fn color_glyph_layer_sequence_for_base_glyph_json(
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    max_calls: usize,
+) -> Value {
+    let mut iterator = FT_LayerIterator::default();
+    let mut glyph_index = 0xDEAD;
+    let mut color_index = 0xBEEF;
+    let calls = (0..max_calls)
+        .map(|index| {
+            let result = color_glyph_layer_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                &mut glyph_index,
+                &mut color_index,
+                &mut iterator,
+            );
+            color_glyph_layer_call_json(
+                &format!("call_{}", index + 1),
+                result,
+                glyph_index,
+                color_index,
+                iterator,
+            )
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "base_glyph": base_glyph,
+        "calls": calls,
+    })
+}
+
+fn color_layer_iterator_combined_output_for_open_face(
+    paint_backend: ColorPaintBackend,
+    glyph_backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    json!({
+        "color_glyph_layers_v0": color_glyph_layer_sequence_for_base_glyph_json(
+            glyph_backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            36,
+            4,
+        ),
+        "paint_layers_v1": [
+            color_paint_layers_sequence_json(paint_backend, rust_face, c_face, wasm_handle, 36, 3),
+            color_paint_layers_sequence_json(paint_backend, rust_face, c_face, wasm_handle, 37, 4),
+        ],
+    })
+}
+
 fn rust_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     color_glyph_layer_output_for_open_face(
@@ -11819,13 +11880,26 @@ fn color_paint_layers_output_for_open_face(
             ),
         }))),
         "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
-        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1"
-        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis" => Ok(ok(json!({
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1" => Ok(ok(json!({
             "sequences": [
                 color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 36, 3),
                 color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 37, 4),
             ],
         }))),
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis" => {
+            let glyph_backend = match backend {
+                ColorPaintBackend::Rust => ColorGlyphLayerBackend::Rust,
+                ColorPaintBackend::CAbi => ColorGlyphLayerBackend::CAbi,
+                ColorPaintBackend::Wasm => ColorGlyphLayerBackend::Wasm,
+            };
+            Ok(ok(color_layer_iterator_combined_output_for_open_face(
+                backend,
+                glyph_backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+            )))
+        }
         "ftcolor.FT_Get_Paint_Layers.end_of_iteration" => Ok(ok(json!({
             "sequence": color_paint_layers_sequence_json(
                 backend,

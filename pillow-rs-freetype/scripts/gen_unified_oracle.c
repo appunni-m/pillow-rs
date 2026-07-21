@@ -14105,6 +14105,26 @@ static int emit_color_glyph_layer_case(int argc, char** argv) {
     return 0;
 }
 
+static void print_color_glyph_layer_sequence_for_base_glyph_json(FT_Face face,
+                                                                 FT_UInt base_glyph,
+                                                                 int max_calls) {
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    FT_UInt glyph_index = 0xDEAD;
+    FT_UInt color_index = 0xBEEF;
+    printf("{\"base_glyph\":%u,\"calls\":[", base_glyph);
+    for (int i = 0; i < max_calls; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_Bool result = FT_Get_Color_Glyph_Layer(face, base_glyph, &glyph_index, &color_index, &iterator);
+        char label[16];
+        snprintf(label, sizeof(label), "call_%d", i + 1);
+        print_color_layer_call_json(label, result, glyph_index, color_index, iterator);
+    }
+    printf("]}");
+}
+
 static FT_ClipBox sentinel_clip_box(void) {
     FT_ClipBox box;
     box.bottom_left.x = -0x1111;
@@ -14436,11 +14456,22 @@ static int emit_color_paint_layers_case(const char* case_id, OracleFace* face) {
         return 0;
     }
     if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
-        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1") ||
-        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis")) {
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1")) {
         printf("{");
         print_status(0);
         printf(",\"output\":{\"sequences\":[");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf(",");
+        print_colr_paint_layers_sequence_json(face->face, 37, 4);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"color_glyph_layers_v0\":");
+        print_color_glyph_layer_sequence_for_base_glyph_json(face->face, 36, 4);
+        printf(",\"paint_layers_v1\":[");
         print_colr_paint_layers_sequence_json(face->face, 36, 3);
         printf(",");
         print_colr_paint_layers_sequence_json(face->face, 37, 4);

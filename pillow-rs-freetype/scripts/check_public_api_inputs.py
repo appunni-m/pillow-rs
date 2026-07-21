@@ -2563,11 +2563,6 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
             "proving false return after the final v1 paint layer preserves "
             "output paint and iterator fields like pinned C"
         ),
-        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis": (
-            "FT_LayerIterator parity needs a maintained route proving public "
-            "iterator fields are initialized and advanced by COLR v0 and v1 "
-            "layer APIs with pinned C counter and opaque-state semantics"
-        ),
         "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload": (
             "FT_COLR_PAINTFORMAT_COLR_LAYERS parity needs a maintained "
             "FT_Get_Paint route proving COLR_LAYERS payload initializes the "
@@ -5509,6 +5504,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy"
     ):
         return "FT_Get_Paint_Layers null-argument policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_layers"
+        and row.case_id
+        == "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
+    ):
+        return "FT_LayerIterator COLR v0 FT_Get_Color_Glyph_Layer and COLR v1 FT_Get_Paint_Layers iterator advancement validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_data_get"
         and row.case_id == "ftcolor.FT_Palette_Data_Get.error_null_face_or_output"
