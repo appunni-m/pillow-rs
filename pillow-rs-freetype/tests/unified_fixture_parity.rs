@@ -10943,7 +10943,9 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
             | "ftcolor.FT_PaintExtend.gradient_extend_runtime"
             | "ftcolor.FT_ColorLine.gradient_colorline_values"
+            | "ftcolor.FT_ColorStop.iterator_output_values"
             | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops"
             | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
             | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
             | "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
@@ -12108,6 +12110,86 @@ fn color_static_gradient_output_for_open_face(
     }
 }
 
+fn color_variable_gradient_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_ColorStop.iterator_output_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops"
+    )
+}
+
+fn color_variable_design_coords() -> [FT_Fixed; 2] {
+    [900 << 16, 1 << 16]
+}
+
+fn set_color_variable_design_coords(
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> FT_Error {
+    let coords = color_variable_design_coords();
+    match backend {
+        ColorPaintBackend::Rust => {
+            rust_face.map_or(FT_Err_Invalid_Face_Handle as FT_Error, |face| {
+                FT_Set_Var_Design_Coordinates(Some(face), coords.len() as FT_UInt, Some(&coords))
+            })
+        }
+        ColorPaintBackend::CAbi => c_abi::FT_Set_Var_Design_Coordinates(
+            c_face,
+            coords.len() as c_abi::FT_UInt,
+            coords.as_ptr(),
+        ),
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_set_var_design_coordinates(
+            wasm_handle,
+            coords.len() as wasm_abi::FT_UInt,
+            coords.as_ptr(),
+        ),
+    }
+}
+
+fn color_variable_gradient_output_for_open_face(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let default_sequence = gradient_colorline_sequence_json(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        "default",
+        36,
+        1,
+    );
+    let set_status =
+        set_color_variable_design_coords(backend, rust_face.as_deref_mut(), c_face, wasm_handle);
+    let varied_sequence = gradient_colorline_sequence_json(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        "wght_900_grad_1",
+        36,
+        1,
+    );
+    ok(json!({
+        "coordinate_runs": [
+            {
+                "label": "default",
+                "set_var_status": 0,
+                "sequence": default_sequence,
+            },
+            {
+                "label": "wght_900_grad_1",
+                "set_var_status": set_status,
+                "sequence": varied_sequence,
+            },
+        ],
+    }))
+}
+
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = open_face(case)?;
     if color_all_paints_case(&case.case_id) {
@@ -12151,6 +12233,14 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
         return Ok(color_transform_paint_output_for_open_face(
             ColorPaintBackend::Rust,
             Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        return Ok(color_variable_gradient_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&mut face),
             ptr::null_mut(),
             0,
         ));
@@ -12206,6 +12296,13 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     if color_transform_paint_case(&case.case_id) {
         let output =
             color_transform_paint_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        let output =
+            color_variable_gradient_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
         c_done_face(face);
         c_done_library(library);
         return Ok(output);
@@ -12277,6 +12374,16 @@ fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     }
     if color_transform_paint_case(&case.case_id) {
         let output = color_transform_paint_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        let output = color_variable_gradient_output_for_open_face(
             ColorPaintBackend::Wasm,
             None,
             ptr::null_mut(),

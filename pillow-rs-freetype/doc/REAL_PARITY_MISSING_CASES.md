@@ -11990,6 +11990,62 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: COLRv1 variable ColorLine and VarColorStop parity
+
+Previous blocker:
+
+- `ftcolor.FT_ColorStop.iterator_output_values` and
+  `ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops`
+  remained pending because `fonts/color/colr-v1-variable-gradients.ttf` was not
+  a maintained fixture and the runtime route only covered static ColorLine
+  stops.
+
+First divergence after adding the maintained route:
+
+- Pinned C FreeType 2.14.3 returned the first variable color stop alpha as
+  `8192` for the default coordinate run.
+- Rust FFI left the sentinel output alpha `-291`, so C ABI and WASM ABI were
+  also unproven for the same variable route.
+- Source behavior compared:
+  - `freetype/src/sfnt/ttcolr.c:502-523` initializes
+    `FT_ColorStopIterator.read_variable` from the paint's variable colorline
+    class.
+  - `freetype/src/sfnt/ttcolr.c:1584-1645` reads 10-byte VarColorStop records,
+    advances past `VarIndexBase`, and applies two COLR VarStore deltas to
+    `stop_offset` and `alpha`.
+
+Fix:
+
+1. Extended the deterministic COLR/CPAL fixture generator to produce
+   `fonts/color/colr-v1-variable-gradients.ttf` with `wght` and `GRAD` axes,
+   a `PaintVarLinearGradient`, two `VarColorStop` records, and a COLR
+   `VarStore`.
+2. Added pinned-C, Rust FFI, thin C ABI, and WASM ABI runtime routes that
+   compare default and `wght=900, GRAD=1` design-coordinate runs.
+3. Updated pure Rust COLR parsing to preserve variable colorline state, parse
+   10-byte VarColorStop records, and evaluate COLR item variation deltas via
+   the shared pure-Rust item variation store.
+
+Verified result:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_colorline_stops
+```
+
+- Before: `runtime_parity_progress compared=7 total=7 passed=5 failed=2`,
+  pending rows visible in route audit.
+- After: `runtime_parity_progress compared=7 total=7 passed=7 failed=0`;
+  route audit moved `pending-route 247 -> 245` and `real-parity 4716 -> 4718`.
+
+Remaining nearby blockers:
+
+- `ftcolor.FT_ColorStopIterator.initialized_by_get_paint` is already covered by
+  the all-paints route, but broader root-transform/clipbox/foreground rows still
+  require their own same-input public routes.
+- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` still needs maintained clipbox
+  success/no-clipbox fixtures and route output for scaled/transformed
+  `FT_ClipBox` values.
+
 ### Issue Set Current: `FT_Open_Args` abstract open-face route
 
 Status:

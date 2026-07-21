@@ -9,7 +9,9 @@ from fontTools.colorLib.builder import buildCOLR
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables.C_O_L_R_ import LayerRecord
 from fontTools.ttLib.tables.C_P_A_L_ import Color
+from fontTools.ttLib.tables._f_v_a_r import Axis
 from fontTools.ttLib.tables import otTables as ot
+from fontTools.varLib import builder as var_builder
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -563,6 +565,57 @@ def color_line(extend: ot.ExtendMode, stops: list[tuple[float, int, float]]) -> 
     }
 
 
+def add_color_variation_axes(font: TTFont) -> None:
+    """Add the compact `wght` and `GRAD` axes used by COLR VarStore fixtures."""
+    fvar = newTable("fvar")
+    fvar.axes = []
+    fvar.instances = []
+    for tag, minimum, default, maximum, name_id, label in (
+        ("wght", 100.0, 400.0, 900.0, 300, "Weight"),
+        ("GRAD", 0.0, 0.0, 1.0, 301, "Gradient"),
+    ):
+        axis = Axis()
+        axis.axisTag = tag
+        axis.minValue = minimum
+        axis.defaultValue = default
+        axis.maxValue = maximum
+        axis.flags = 0
+        axis.axisNameID = name_id
+        fvar.axes.append(axis)
+        font["name"].setName(label, name_id, 3, 1, 0x0409)
+        font["name"].setName(label, name_id, 1, 0, 0)
+    font["fvar"] = fvar
+
+
+def colr_v1_color_var_store(font: TTFont) -> ot.VarStore:
+    """Build a deterministic COLR VarStore for VarColorStop/gradient deltas.
+
+    The single region peaks at `wght=max, GRAD=max`.  FreeType applies COLR
+    variation deltas through the COLR VarStore using the public VarIndexBase
+    fields documented for VarColorStop and PaintVarLinearGradient in the
+    OpenType COLR v1 format.
+    """
+    axis_tags = [axis.axisTag for axis in font["fvar"].axes]
+    region_list = var_builder.buildVarRegionList(
+        [{"wght": (0.0, 1.0, 1.0), "GRAD": (0.0, 1.0, 1.0)}],
+        axis_tags,
+    )
+    deltas = [
+        [4096],  # stop 0 offset: +0.25 in F2Dot14 units.
+        [1024],  # stop 0 alpha: +0.0625 in F2Dot14 units.
+        [-2048],  # stop 1 offset: -0.125 in F2Dot14 units.
+        [-2048],  # stop 1 alpha: -0.125 in F2Dot14 units.
+        [5],  # PaintVarLinearGradient x0.
+        [0],  # PaintVarLinearGradient y0.
+        [10],  # PaintVarLinearGradient x1.
+        [0],  # PaintVarLinearGradient y1.
+        [10],  # PaintVarLinearGradient x2.
+        [5],  # PaintVarLinearGradient y2.
+    ]
+    var_data = var_builder.buildVarData([0], deltas, optimize=False)
+    return var_builder.buildVarStore(region_list, [var_data])
+
+
 def build_colr_v1_static_gradients_font(path: Path) -> None:
     """Build compact static COLRv1 gradient and ColorLine fixture.
 
@@ -649,6 +702,67 @@ def build_colr_v1_static_gradients_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def build_colr_v1_variable_gradients_font(path: Path) -> None:
+    """Build compact variable COLRv1 gradient and VarColorStop fixture."""
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    add_color_variation_axes(font)
+    glyph_order = font.getGlyphOrder()
+    base_name = glyph_order[36]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 4
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+            Color(0x70, 0x80, 0x90, 0x40),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_name: {
+            "Format": int(ot.PaintFormat.PaintVarLinearGradient),
+            "ColorLine": {
+                "Extend": int(ot.ExtendMode.PAD),
+                "ColorStop": [
+                    {
+                        "StopOffset": 0.0,
+                        "PaletteIndex": 1,
+                        "Alpha": 0.5,
+                        "VarIndexBase": 0,
+                    },
+                    {
+                        "StopOffset": 1.0,
+                        "PaletteIndex": 2,
+                        "Alpha": 1.0,
+                        "VarIndexBase": 2,
+                    },
+                ],
+            },
+            "x0": 0,
+            "y0": 0,
+            "x1": 40,
+            "y1": 0,
+            "x2": 40,
+            "y2": 20,
+            "VarIndexBase": 4,
+        }
+    }
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        varStore=colr_v1_color_var_store(font),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def main() -> None:
     for name in (
         "cpal-palettes-names-flags.ttf",
@@ -664,6 +778,7 @@ def main() -> None:
     build_colr_v1_root_transform_font(COLOR_OUTPUT_DIR / "colr-v1-root-transform.ttf")
     build_colr_v1_all_paints_font(COLOR_OUTPUT_DIR / "colr-v1-all-paints.ttf")
     build_colr_v1_static_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-static-gradients.ttf")
+    build_colr_v1_variable_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-variable-gradients.ttf")
 
 
 if __name__ == "__main__":

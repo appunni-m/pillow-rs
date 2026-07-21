@@ -2742,6 +2742,16 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "gradient fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id in {
+        "ftcolor.FT_ColorStop.iterator_output_values",
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
+    }:
+        return (
+            "COLRv1 variable gradient VarColorStop iteration validates default "
+            "and non-default wght/GRAD design-coordinate runs through the "
+            "maintained variable-gradient fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if row.case_id in {
         "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",
         "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime",
         "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint",

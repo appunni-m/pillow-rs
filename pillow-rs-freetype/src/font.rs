@@ -2652,6 +2652,10 @@ impl Font {
         self.data.mvar_vertical_header_deltas()
     }
 
+    pub(crate) fn normalized_variation_coords(&self) -> &[i16] {
+        &self.data.normalized_variation_coords
+    }
+
     /// Return the number of faces in the original font resource.
     pub fn num_faces(&self) -> usize {
         self.data.num_faces
