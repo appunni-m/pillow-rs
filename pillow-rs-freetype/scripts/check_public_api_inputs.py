@@ -5358,6 +5358,20 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_CMapCache_New null-manager/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.cmap_cache_new"
+        and row.case_id
+        in {
+            "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager",
+            "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset",
+        }
+    ):
+        return (
+            "FTC_CMapCache_New create, manager-owned destruction, lookup "
+            "usability, and reset-preserved cache handle behavior validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.image_cache_lookup"
         and row.case_id == "ftcache.FTC_ImageCache_Lookup.error_null_aglyph"
     ):
@@ -5411,6 +5425,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_ImageCache_New.error_too_many_caches"
     ):
         return "FTC_ImageCache_New too-many-caches errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_cache_new"
+        and row.case_id
+        in {
+            "ftcache.FTC_ImageCache_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_New.success_create_lookup_destroy_lifecycle",
+            "ftcache.FTC_ImageCache_New.success_manager_reset_preserves_handle",
+        }
+    ):
+        return (
+            "FTC_ImageCache_New create, glyph lookup, manager-owned "
+            "destruction, node-unref classification, and reset-preserved cache "
+            "handle behavior validate through pinned C oracle, Rust FFI, C "
+            "ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftcache.manager_lookup_face"
         and row.case_id == "ftcache.FTC_Manager_LookupFace.error_null_output_or_manager"
@@ -5481,6 +5510,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_Manager_New.error_null_requester_or_output"
     ):
         return "FTC_Manager_New null-requester/output errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_new"
+        and row.case_id
+        in {
+            "ftcache.FTC_Manager_New.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_New.success_defaults_for_zero_limits",
+            "ftcache.FTC_Manager_New.success_custom_limits_and_req_data",
+            "ftcache.FTC_Manager_New.lifecycle_create_lookup_reset_done",
+        }
+    ):
+        return (
+            "FTC_Manager_New zero/custom limit creation, req_data forwarding, "
+            "lookup requester count, reset, and manager-done lifecycle validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftcache.sbit_cache_lookup_scaler"
         and row.case_id
