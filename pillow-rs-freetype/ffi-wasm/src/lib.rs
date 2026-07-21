@@ -2531,6 +2531,50 @@ pub extern "C" fn fontdone_wasm_property_increase_x_height_set_then_get(
     get_status
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_property_glyph_to_script_map_invalid_face(
+    map_is_null: *mut i32,
+) -> FT_Error {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut prop = rust_ffi::FT_Prop_GlyphToScriptMap {
+        face: std::ptr::null_mut(),
+        map: std::ptr::without_provenance_mut(1),
+    };
+    let error = rust_ffi::FT_Property_Get_GlyphToScriptMap(
+        Some(&library),
+        Some("autofitter"),
+        Some("glyph-to-script-map"),
+        None,
+        Some(&mut prop),
+    );
+    if let Some(map_is_null) = unsafe { map_is_null.as_mut() } {
+        *map_is_null = i32::from(prop.map.is_null());
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_property_increase_x_height_invalid_face(
+    out_limit: *mut FT_UInt,
+) -> FT_Error {
+    let library = rust_ffi::FT_Init_FreeType();
+    let prop = rust_ffi::FT_Prop_IncreaseXHeight {
+        face: std::ptr::null_mut(),
+        limit: PROPERTY_SENTINEL,
+    };
+    let error = rust_ffi::FT_Property_Set_IncreaseXHeight(
+        Some(&library),
+        Some("autofitter"),
+        Some("increase-x-height"),
+        None,
+        Some(&prop),
+    );
+    if let Some(out_limit) = unsafe { out_limit.as_mut() } {
+        *out_limit = prop.limit;
+    }
+    error
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_set_default_properties(
     library_present: i32,

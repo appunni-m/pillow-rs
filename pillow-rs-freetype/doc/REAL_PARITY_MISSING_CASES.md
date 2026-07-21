@@ -307,44 +307,41 @@ make -C pillow-rs-freetype test
 make -C pillow-rs-freetype route-audit
 ```
 
-### Issue Set Current: Autofitter typed property invalid-face rows demoted
+### Issue Set Current: Autofitter typed property invalid-face rows executed
 
-Status: corrected on 2026-07-21. These rows were previously counted as
-`real-parity` by broad exact-error classifiers, but the runtime selector
-skipped them because maintained typed `FT_Property_Get/Set` routes do not yet
-exist for the public autofitter property payloads.
+Status: completed on 2026-07-21. These rows now execute as exact
+invalid-face parity through the pinned C oracle, Rust FFI, thin C ABI, and WASM
+ABI instead of using the generic null-face fallback.
 
-Demoted rows:
+Promoted rows:
 
 - `ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c`
 - `ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c`
 
 Finding:
 
-- Focused runtime selection for both rows reported zero executable cases:
-  `FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI
-  property APIs; generic fallback would be a green placeholder`.
-- The classifier already had precise pending reasons for these rows, but route
-  ordering allowed broad exact-error real classification to win first.
-- Route ordering now checks typed property route blockers before exact-error
-  real classifications.
+- Pinned FreeType 2.14.3 `src/autofit/afmodule.c:73-88` returns
+  `Invalid_Face_Handle` from `af_property_get_face_globals` when
+  `prop.face == NULL`.
+- `glyph-to-script-map` preserves the caller's sentinel `prop.map` because
+  `af_property_get` returns before assigning `globals->glyph_styles`.
+- `increase-x-height` preserves the caller's sentinel `prop.limit` because
+  `af_property_set` returns before assigning `globals->increase_x_height`.
+- The Rust FFI now has a typed `FT_Property_Get_GlyphToScriptMap` invalid-face
+  route.  The C ABI dispatches `glyph-to-script-map` through the typed payload
+  instead of treating it as an `FT_UInt*`.  The WASM ABI has thin invalid-face
+  probes for these two payloads.
+- The harness excludes `FT_Property_Set_or_Get` from the generic no-font
+  expected-error shortcut so the typed route preserves exact output.
 
 Impact:
 
-- `real-parity`: `4512 -> 4510`
-- `pending-route`: `448 -> 450`
+- `real-parity`: `4510 -> 4512`
+- `pending-route`: `450 -> 448`
 - `compile-contract`: stays `2266`
 - `real-null-validation`: stays `9`
-- Runtime pending/route-audit cross-check now reports zero pending samples
-  classified as `real-parity`.
-
-Required follow-up:
-
-1. Add maintained typed property routes for glyph-to-script-map and
-   increase-x-height, including invalid/null face payload behavior.
-2. Compare exact pinned C error code and caller-visible output preservation
-   through Rust FFI, thin C ABI, and WASM ABI.
-3. Promote only after the focused runtime rows execute.
+- Focused runtime parity: each row now reports `runnable=1 pending=0` and
+  `passed=1 failed=0`.
 
 Verification evidence:
 

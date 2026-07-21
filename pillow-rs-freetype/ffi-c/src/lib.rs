@@ -2297,6 +2297,10 @@ fn is_increase_x_height_property(module_name: Option<&str>, property_name: Optio
     module_name == Some("autofitter") && property_name == Some("increase-x-height")
 }
 
+fn is_glyph_to_script_map_property(module_name: Option<&str>, property_name: Option<&str>) -> bool {
+    module_name == Some("autofitter") && property_name == Some("glyph-to-script-map")
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Property_Get(
     library: FT_Library,
@@ -2306,6 +2310,26 @@ pub extern "C" fn FT_Property_Get(
 ) -> FT_Error {
     let module_name = property_name_arg(module_name);
     let property_name = property_name_arg(property_name);
+    if is_glyph_to_script_map_property(module_name.as_deref(), property_name.as_deref()) {
+        let Some(prop) = (unsafe { value.cast::<rust_ffi::FT_Prop_GlyphToScriptMap>().as_mut() })
+        else {
+            return rust_ffi::FT_Property_Get_GlyphToScriptMap(
+                library_ref(library),
+                module_name.as_deref(),
+                property_name.as_deref(),
+                None,
+                None,
+            );
+        };
+        let face = face_state(prop.face.cast::<FT_FaceRec>()).map(|state| &state.inner);
+        return rust_ffi::FT_Property_Get_GlyphToScriptMap(
+            library_ref(library),
+            module_name.as_deref(),
+            property_name.as_deref(),
+            face,
+            Some(prop),
+        );
+    }
     if is_increase_x_height_property(module_name.as_deref(), property_name.as_deref()) {
         let Some(prop) = (unsafe { value.cast::<rust_ffi::FT_Prop_IncreaseXHeight>().as_mut() })
         else {
