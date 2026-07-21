@@ -7060,7 +7060,6 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success",
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success",
         "ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match",
-        "ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match",
         "ttnameid.TT_PLATFORM_ADOBE.representative_adobe_charmap_match",
     }
     if row.case_id in runtime_skipped_needs_input_cases:
