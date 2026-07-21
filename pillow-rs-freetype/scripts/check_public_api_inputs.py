@@ -7309,7 +7309,6 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c",
         # SFNT-wrapped CID keyed-state row is backed by the maintained
         # FDArrayTest257 OpenType/CFF CID fixture.
-        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern",
