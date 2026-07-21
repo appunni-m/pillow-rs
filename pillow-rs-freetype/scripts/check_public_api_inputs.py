@@ -122,6 +122,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
     "fontdone_wasm_gzip_uncompress",
+    "fontdone_wasm_stream_open_gzip",
     "fontdone_wasm_open_face",
     "fontdone_wasm_open_external_stream_face",
     "fontdone_wasm_open_face_with_name_options",
@@ -1170,7 +1171,6 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmoderr.FT_Mod_Err_Winfonts.prefixed_error_base",
         "ftgxval.FT_TrueTypeGX_Validate.rejects_invalid_arguments",
         "ftgxval.FT_TrueTypeGX_Validate.reports_unimplemented_or_invalid_table",
-        "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer",
         "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments",
         "ftgzip.FT_Gzip_Uncompress.reports_buffer_too_small",
         "ftgzip.FT_Gzip_Uncompress.reports_invalid_compressed_data",
@@ -3593,6 +3593,8 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "gzip routing"
         )
     if row.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream":
+        if row.operation == "ftgzip.stream_open_gzip":
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -5879,6 +5881,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib"
     ):
         return "FT_Gzip_Uncompress no-zlib unimplemented errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.stream_open_gzip"
+        and row.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream"
+    ):
+        return "FT_Stream_OpenGzip small/large gzip stream success validates stream classes and exact range reads through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgzip.stream_open_gzip"
         and row.case_id == "ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles"
