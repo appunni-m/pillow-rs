@@ -86,6 +86,10 @@ pub type FT_Var_Axis = rust_ffi::FT_Var_Axis;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
+pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
+pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
+pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
+pub type BDF_Property = *mut BDF_PropertyRec;
 pub type FT_Pointer = *mut c_void;
 pub type FT_Module_Interface = FT_Pointer;
 pub type FT_Generic_Finalizer = FT_Pointer;
@@ -4237,6 +4241,27 @@ pub extern "C" fn FT_Get_WinFNT_Header(
     // SAFETY: the caller provides writable storage for the header output or null.
     let header = unsafe { header.as_mut() };
     rust_ffi::FT_Get_WinFNT_Header(face_state(face).map(|state| &state.inner), header)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_BDF_Property(
+    face: FT_Face,
+    prop_name: *const c_char,
+    aproperty: *mut BDF_PropertyRec,
+) -> FT_Error {
+    let prop_name = property_name_arg(prop_name);
+    let property = if aproperty.is_null() {
+        None
+    } else {
+        // SAFETY: the caller provides writable storage for the BDF property
+        // output or null.
+        Some(unsafe { &mut *aproperty })
+    };
+    rust_ffi::FT_Get_BDF_Property(
+        face_state(face).map(|state| &state.inner),
+        prop_name.as_deref(),
+        property,
+    )
 }
 
 #[unsafe(no_mangle)]

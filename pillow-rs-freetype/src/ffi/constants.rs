@@ -23,6 +23,11 @@ pub const FT_Err_Invalid_CharMap_Format: FT_Error = 0x96;
 pub const FT_Err_Max: FT_Error = 0xBB;
 pub const FT_CONFIG_OPTION_ERROR_STRINGS_ENABLED: bool = false;
 
+pub const BDF_PROPERTY_TYPE_NONE: i32 = 0;
+pub const BDF_PROPERTY_TYPE_ATOM: i32 = 1;
+pub const BDF_PROPERTY_TYPE_INTEGER: i32 = 2;
+pub const BDF_PROPERTY_TYPE_CARDINAL: i32 = 3;
+
 pub const FT_LOAD_DEFAULT: FT_Int32 = 0;
 pub const FT_LOAD_NO_SCALE: FT_Int32 = 1 << 0;
 pub const FT_LOAD_NO_HINTING: FT_Int32 = 1 << 1;

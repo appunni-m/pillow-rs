@@ -6,7 +6,7 @@
 use std::alloc::{Layout, alloc, alloc_zeroed, dealloc};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::ffi::{c_uchar, c_void};
+use std::ffi::{CStr, c_uchar, c_void};
 use std::ptr;
 use std::slice;
 
@@ -194,6 +194,16 @@ impl Default for FontdoneWasmWinFNTHeader {
             reserved1: [0; 4],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmBdfProperty {
+    pub type_: FT_Int,
+    pub atom: *const FT_Byte,
+    pub atom_len: FT_UInt,
+    pub integer: FT_Int32,
+    pub cardinal: FT_UInt32,
 }
 
 #[repr(C)]
@@ -3803,6 +3813,57 @@ pub extern "C" fn fontdone_wasm_get_winfnt_header(
                 color_table_offset: rust_header.color_table_offset,
                 reserved1: rust_header.reserved1,
             };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_bdf_property(
+    handle: usize,
+    prop_name: *const FT_Byte,
+    prop_name_len: FT_UInt,
+    property: *mut FontdoneWasmBdfProperty,
+) -> FT_Error {
+    let prop_name = if prop_name.is_null() {
+        None
+    } else {
+        // SAFETY: the caller provides a readable linear-memory property-name
+        // byte range.
+        let bytes = unsafe { slice::from_raw_parts(prop_name, prop_name_len as usize) };
+        std::str::from_utf8(bytes).ok()
+    };
+    let face = face_ref(handle);
+    let mut rust_property = rust_ffi::BDF_PropertyRec::default();
+    let err = rust_ffi::FT_Get_BDF_Property(
+        face.map(|face| &face.face),
+        prop_name,
+        (!property.is_null()).then_some(&mut rust_property),
+    );
+    if face.is_some() && !property.is_null() {
+        // SAFETY: null was checked above and the caller provided writable
+        // linear-memory storage for the flat WASM record.
+        unsafe {
+            (*property).type_ = rust_property.type_;
+            if err == rust_ffi::FT_Err_Ok
+                && rust_property.type_ == rust_ffi::BDF_PROPERTY_TYPE_ATOM
+            {
+                let atom = rust_property.u.atom;
+                (*property).atom = atom.cast::<FT_Byte>();
+                (*property).atom_len = if atom.is_null() {
+                    0
+                } else {
+                    CStr::from_ptr(atom).to_bytes().len() as FT_UInt
+                };
+            } else if err == rust_ffi::FT_Err_Ok
+                && rust_property.type_ == rust_ffi::BDF_PROPERTY_TYPE_INTEGER
+            {
+                (*property).integer = rust_property.u.integer;
+            } else if err == rust_ffi::FT_Err_Ok
+                && rust_property.type_ == rust_ffi::BDF_PROPERTY_TYPE_CARDINAL
+            {
+                (*property).cardinal = rust_property.u.cardinal;
+            }
         }
     }
     err

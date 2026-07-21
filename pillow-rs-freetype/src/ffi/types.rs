@@ -346,6 +346,33 @@ pub struct FT_Parameter {
     pub data: FT_Pointer,
 }
 
+pub type BDF_PropertyType = i32;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union BDF_PropertyValue {
+    pub atom: *const FT_String,
+    pub integer: FT_Int32,
+    pub cardinal: FT_UInt32,
+}
+
+impl Default for BDF_PropertyValue {
+    fn default() -> Self {
+        Self {
+            atom: std::ptr::null(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct BDF_PropertyRec {
+    pub type_: BDF_PropertyType,
+    pub u: BDF_PropertyValue,
+}
+
+pub type BDF_Property = *mut BDF_PropertyRec;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_Open_Args {

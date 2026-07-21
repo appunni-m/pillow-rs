@@ -180,6 +180,24 @@ typedef struct FT_WinFNT_HeaderRec_ {
 
 typedef FT_WinFNT_HeaderRec* FT_WinFNT_Header;
 
+typedef enum BDF_PropertyType_ {
+  BDF_PROPERTY_TYPE_NONE = 0,
+  BDF_PROPERTY_TYPE_ATOM = 1,
+  BDF_PROPERTY_TYPE_INTEGER = 2,
+  BDF_PROPERTY_TYPE_CARDINAL = 3
+} BDF_PropertyType;
+
+typedef struct BDF_PropertyRec_ {
+  BDF_PropertyType type;
+  union {
+    const char* atom;
+    FT_Int32 integer;
+    FT_UInt32 cardinal;
+  } u;
+} BDF_PropertyRec;
+
+typedef BDF_PropertyRec* BDF_Property;
+
 typedef struct FT_Open_Args_ {
   FT_UInt flags;
   const FT_Byte* memory_base;
@@ -531,6 +549,7 @@ FT_Error FT_Set_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed
 FT_Error FT_Set_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed* coords);
 FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
 FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
+FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRec* aproperty);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);
 void* FT_Get_Sfnt_Table(FT_Face face, FT_Sfnt_Tag tag);
