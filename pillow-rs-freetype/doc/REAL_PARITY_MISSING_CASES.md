@@ -1,5 +1,42 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FT module interface requester route
+
+Status: completed on 2026-07-21 for the public `FT_Module_Interface` requester
+classification row.
+
+Implemented real parity row:
+
+- `ftmodapi.FT_Module_Interface.requester_return_type`
+
+Findings:
+
+- FreeType 2.14.3 `src/base/ftobjs.c:5199-5209` implements the internal
+  `FT_Get_Module_Interface` lookup as `FT_Get_Module` followed by returning
+  `module->clazz->module_interface` for found modules, otherwise `NULL`.
+- `FT_Module_Interface` itself is a public `ftmodapi.h` typedef, but
+  `FT_Get_Module_Interface` is declared in FreeType internal headers. The C and
+  WASM routes therefore use feature-gated, non-exported ABI inspection helpers
+  and do not add public C header symbols or `no_mangle` exports for the
+  internal lookup.
+- Default module interface nullness now matches pinned C for the probed modules:
+  `sfnt`, `psnames`, and `psaux` are non-null; `truetype` and missing modules
+  are null. Requester service availability is compared as pointer/null class
+  only, without dereferencing private service structs.
+
+Impact:
+
+- `real-parity`: `4537 -> 4538`
+- `pending-route`: `424 -> 423`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `8`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Module_Interface.requester_return_type
+```
+
 ### Issue Set Current: CPAL palette data and select public routes
 
 Status: completed on 2026-07-21 for seven CPAL palette metadata/select rows.
@@ -2402,10 +2439,6 @@ Residual module-lifecycle blocker detail:
   `module_interface`, `module_init`, and `module_done` through add, interface
   lookup, remove, and final library destruction. Layout/import checks alone are
   not lifecycle parity.
-- `ftmodapi.FT_Module_Interface.requester_return_type` requires a route matching
-  `FT_Get_Module_Interface` in `freetype/src/base/ftobjs.c:5199-5207`: named
-  module lookup returns exactly `clazz->module_interface`, with null and
-  missing-module cases still visible.
 - `ftmodapi.FT_Remove_Module.removes_installed_module` requires an
   add-get-remove route matching `freetype/src/base/ftobjs.c:5261-5298`: exact
   pointer lookup, table compaction, tail nulling, `Destroy_Module`/`module_done`,

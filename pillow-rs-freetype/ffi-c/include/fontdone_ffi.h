@@ -37,6 +37,7 @@ typedef char FT_String;
 typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
 typedef void* FT_Pointer;
+typedef FT_Pointer FT_Module_Interface;
 typedef FT_Pointer FT_Generic_Finalizer;
 
 typedef struct FT_LibraryRec_* FT_Library;

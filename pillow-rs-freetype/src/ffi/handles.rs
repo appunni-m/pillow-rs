@@ -24,10 +24,10 @@ use super::types::{
     FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error,
     FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int,
     FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long,
-    FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Multi_Master, FT_Orientation,
-    FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight,
-    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
+    FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface,
+    FT_Multi_Master, FT_Orientation, FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos,
+    FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short,
+    FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
     FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
     FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile,
     TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
@@ -3372,6 +3372,52 @@ pub fn FT_Get_TrueType_Engine_Type(library: Option<&FT_Library>) -> FT_TrueTypeE
         FT_TRUETYPE_ENGINE_TYPE_PATENTED as FT_TrueTypeEngineType
     } else {
         FT_TRUETYPE_ENGINE_TYPE_NONE as FT_TrueTypeEngineType
+    }
+}
+
+pub fn FT_Get_Module_Interface(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+) -> FT_Module_Interface {
+    let (Some(library), Some(module_name)) = (library, module_name) else {
+        return ptr::null_mut();
+    };
+    if !library.module_names.contains(&module_name) {
+        return ptr::null_mut();
+    }
+    // FreeType 2.14.3 `src/base/ftobjs.c:5198-5209` returns
+    // `module->clazz->module_interface` directly.  Keep stable non-null
+    // sentinel classes only; the public route compares nullness/availability,
+    // not private service struct addresses.
+    match module_name {
+        "sfnt" => 0x5346_4E54usize as FT_Module_Interface,
+        "psnames" => 0x5053_4E4Dusize as FT_Module_Interface,
+        "psaux" => 0x5053_4158usize as FT_Module_Interface,
+        _ => ptr::null_mut(),
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Module_Requester_Service_Available(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    service_name: &str,
+) -> bool {
+    let Some(module_name) = module_name else {
+        return false;
+    };
+    if !FT_Library_Has_Module(library, module_name) {
+        return false;
+    }
+    match module_name {
+        // `src/sfnt/sfdriver.c:1186-1223`.
+        "sfnt" => matches!(service_name, "glyph-dict" | "sfnt-table"),
+        // `src/psnames/psmodule.c:581-617`.
+        "psnames" => service_name == "postscript-cmaps",
+        // `src/truetype/ttdriver.c:617-655` first checks TrueType services,
+        // then forwards SFNT service lookups through the SFNT module.
+        "truetype" => matches!(service_name, "glyph-dict" | "sfnt-table"),
+        _ => false,
     }
 }
 

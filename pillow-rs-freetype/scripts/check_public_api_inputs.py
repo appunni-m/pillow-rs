@@ -83,6 +83,7 @@ FTDRIVER_SUCCESS_OPERATIONS = {
 }
 
 FTMODAPI_SUCCESS_OPERATIONS = {
+    "freetype.module_interface_probe",
     "ftmodapi.inspect_module_flags",
 }
 
@@ -4325,6 +4326,8 @@ def inspect_module_flags_real_parity_reason(row: ConcreteInput) -> str | None:
 def get_module_real_parity_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftmodapi.get_module":
         return "FT_Get_Module module nullness and class names validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.operation == "freetype.module_interface_probe":
+        return "FT_Get_Module_Interface module-interface nullness and requester service availability validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
 

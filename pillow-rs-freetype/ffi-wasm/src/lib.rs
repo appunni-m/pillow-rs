@@ -35,6 +35,7 @@ pub type FT_TrueTypeEngineType = i32;
 pub type FT_Orientation = i32;
 pub type FT_StrokerBorder = i32;
 pub type FT_Pointer = *mut c_void;
+pub type FT_Module_Interface = FT_Pointer;
 pub type FT_ListNode = *mut FontdoneWasmListNode;
 pub type FT_List = *mut FontdoneWasmList;
 pub type FT_List_Iterator = Option<extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
@@ -2385,6 +2386,32 @@ pub fn abi_support_default_module_present(library_present: i32, name: &str) -> b
     }
     let library = rust_ffi::FT_Init_FreeType();
     rust_ffi::FT_Library_Has_Module(Some(&library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_module_interface_present(library_present: i32, module_name: Option<&str>) -> bool {
+    let library = match library_present {
+        0 => None,
+        _ => Some(rust_ffi::FT_Init_FreeType()),
+    };
+    !rust_ffi::FT_Get_Module_Interface(library.as_ref(), module_name).is_null()
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_module_requester_service_available(
+    library_present: i32,
+    module_name: Option<&str>,
+    service_name: &str,
+) -> bool {
+    let library = match library_present {
+        0 => None,
+        _ => Some(rust_ffi::FT_Init_FreeType()),
+    };
+    rust_ffi::FT_Module_Requester_Service_Available(
+        library.as_ref(),
+        module_name,
+        service_name,
+    )
 }
 
 #[cfg(feature = "abi-test-support")]

@@ -14180,6 +14180,91 @@ static int emit_get_module(int argc, char** argv) {
     return 0;
 }
 
+static int module_requester_has_service(FT_Module module, const char* service_name) {
+    if (!module || !module->clazz || !module->clazz->get_interface || !service_name) {
+        return 0;
+    }
+    return module->clazz->get_interface(module, service_name) != NULL;
+}
+
+static void print_module_interface_row(FT_Library library, const char* name, const char* services_csv) {
+    const char* module_name = (name && streq(name, "null")) ? NULL : name;
+    FT_Module module = (library && module_name) ? FT_Get_Module(library, module_name) : NULL;
+    int interface_present = module && module->clazz && module->clazz->module_interface;
+    printf("{\"module\":\"%s\",\"module_found\":%s,\"module_interface_nullness\":%s,\"requester_result_class\":{",
+           name ? name : "null",
+           module ? "true" : "false",
+           interface_present ? "false" : "true");
+    int first = 1;
+    const char* cursor = services_csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        char service[96];
+        if (len >= sizeof(service)) len = sizeof(service) - 1;
+        memcpy(service, cursor, len);
+        service[len] = '\0';
+        if (!first) printf(",");
+        first = 0;
+        printf("\"%s\":\"%s\"", service,
+               module_requester_has_service(module, service) ? "service_pointer" : "null");
+        if (!end) break;
+        cursor = end + 1;
+    }
+    printf("},\"callback_invocations\":[");
+    first = 1;
+    cursor = services_csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        char service[96];
+        if (len >= sizeof(service)) len = sizeof(service) - 1;
+        memcpy(service, cursor, len);
+        service[len] = '\0';
+        if (!first) printf(",");
+        first = 0;
+        printf("{\"typedef\":\"FT_Module_Requester\",\"name\":\"%s\",\"status_or_nullness\":\"%s\"}",
+               service,
+               module_requester_has_service(module, service) ? "service_pointer" : "null");
+        if (!end) break;
+        cursor = end + 1;
+    }
+    printf("]}");
+}
+
+static int emit_module_interface_probe(int argc, char** argv) {
+    if (argc != 5) return 2;
+    int library_present = atoi(argv[2]);
+    const char* modules_csv = argv[3];
+    const char* services_csv = argv[4];
+    FT_Library library = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (library_present) {
+        err = FT_Init_FreeType(&library);
+    }
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"modules\":[");
+    int first = 1;
+    const char* cursor = modules_csv;
+    while (*cursor) {
+        const char* end = strchr(cursor, ',');
+        size_t len = end ? (size_t)(end - cursor) : strlen(cursor);
+        char name[64];
+        if (len >= sizeof(name)) len = sizeof(name) - 1;
+        memcpy(name, cursor, len);
+        name[len] = '\0';
+        if (!first) printf(",");
+        first = 0;
+        print_module_interface_row(library, name, services_csv);
+        if (!end) break;
+        cursor = end + 1;
+    }
+    printf("]}}\n");
+    if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
 static void print_renderer_row(FT_Library library, long format) {
     FT_Renderer renderer = FT_Get_Renderer(library, (FT_Glyph_Format)format);
     printf("{\"format\":%ld,\"renderer_present\":%s,\"renderer_class\":",
@@ -17921,6 +18006,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--get-module")) {
         return emit_get_module(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--module-interface-probe")) {
+        return emit_module_interface_probe(argc, argv);
     }
     // Generic null-source handler: intercept commands with "null" in handle-level
     // parameters (source kind, source value, or face).
