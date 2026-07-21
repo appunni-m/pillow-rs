@@ -1481,6 +1481,40 @@ make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype lint
 ```
 
+### Issue Set Completed: COLRv1 `FT_PaintFormat` all-paint union route
+
+Status: one-row runtime route completed on 2026-07-21 for
+`ftcolor.FT_PaintFormat.paint_union_shape_runtime`.
+
+Finding:
+
+- The public input preserved the historical logical fixture id
+  `fonts/color/colr_v1_all_paint_formats.ttf`, while the maintained generated
+  fixture is `fonts/color/colr-v1-all-paints.ttf`. No duplicate fixture was
+  added; the resolver now maps the legacy id to the maintained file.
+- The C oracle and Rust harness already had a maintained COLRv1 all-paints
+  walker that decodes the supported `FT_COLR_Paint` format tags and payload
+  classes through `FT_Get_Color_Glyph_Paint` and `FT_Get_Paint`. The missing
+  piece was routing the `FT_PaintFormat` record/enum row through that same
+  all-paints comparison instead of leaving it pending.
+- This is not a placeholder promotion: the exact case now compares the same
+  all-paints fixture through pinned C FreeType 2.14.3, Rust FFI, thin C ABI,
+  and WASM ABI.
+
+Impact:
+
+- `real-parity`: `4718 -> 4719`
+- `pending-route`: `245 -> 244`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PaintFormat.paint_union_shape_runtime
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: GX null free and palette data without CPAL
 
 Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
