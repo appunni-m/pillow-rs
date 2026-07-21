@@ -568,12 +568,12 @@ Scope:
   `num_layers`, `layer`, pointer/null identity class, and returned
   `FT_OpaquePaint` fields.
 
-Why this is split instead of promoting the older broad row:
+Why this was split instead of promoting the older broad row:
 
 - `ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis` declares
   both `FT_Get_Color_Glyph_Layer` COLR v0 and `FT_Get_Paint_Layers` COLR v1
-  behavior.  The maintained route proves only the COLR v1 side.  Counting it as
-  the broad row would hide the remaining COLR v0 iterator work.
+  behavior.  This row proved only the COLR v1 side.  Counting it as the broad
+  row would have hidden the missing same-input COLR v0 proof.
 
 Observed impact:
 
@@ -582,6 +582,31 @@ Observed impact:
 - Focused runtime:
   `make -C pillow-rs-freetype test-case CASE=ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1`
   passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+### Split COLR v0 FT_LayerIterator public-record row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad row remains
+pending.
+
+Scope:
+
+- Added
+  `ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0`
+  for the maintained
+  `tests/fixtures/fonts/color/colr-v0-layers-cpal.ttf` fixture.
+- Reused the existing pinned-C/Rust/C ABI/WASM `FT_Get_Color_Glyph_Layer` route
+  for the three-layer COLR v0 base glyph, comparing the return sequence, layer
+  glyph indexes, layer color indexes, and public `FT_LayerIterator` fields
+  `num_layers`, `layer`, and pointer/null identity class.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis` declares
+  both `FT_Get_Color_Glyph_Layer` COLR v0 and `FT_Get_Paint_Layers` COLR v1
+  behavior in one row.  The v0 and v1 sides are now separately proved, but the
+  broad mixed row still lacks a maintained same-input route proving both API
+  families together under its exact declared input shape.
+- The split row names exactly the COLR v0 layer iterator input it proves.
 
 ## Next 10+ row batches
 

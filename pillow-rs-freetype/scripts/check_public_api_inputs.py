@@ -5447,6 +5447,7 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
         "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
         "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0",
     }:
         return "FT_Get_Color_Glyph_Layer COLR v0 layer iterator output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
