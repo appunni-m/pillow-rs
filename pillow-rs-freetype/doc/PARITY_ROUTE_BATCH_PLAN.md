@@ -13,13 +13,13 @@ route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pend
 Current post-merge baseline on `main`:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 354, 'real-null-validation': 9, 'real-parity': 4606}
-runtime_parity: passed=6877 failed=0 total=6877 covered_manifest_cases=3784
-runtime_cases: runnable=6877 pending=358
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 352, 'real-null-validation': 9, 'real-parity': 4608}
+runtime_parity: passed=6879 failed=0 total=6879 covered_manifest_cases=3786
+runtime_cases: runnable=6879 pending=356
 ```
 
 This baseline means the maintained same-input routes are green; it does not mean
-full public API parity is complete. The 354 route-pending rows remain outside
+full public API parity is complete. The 352 route-pending rows remain outside
 the real same-input Rust FFI / C ABI / WASM ABI comparison set.
 
 After the FTC manager/cache creation route batch:
@@ -106,6 +106,29 @@ the retained parsed table directory rather than defaulting it to zero.
 Verification command:
 
 ```bash
+make -C pillow-rs-freetype route-audit
+```
+
+After the `FT_Outline_Get_Bitmap` mono dropout flag route:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 352, 'real-null-validation': 9, 'real-parity': 4608}
+runtime_parity: passed=6879 failed=0 total=6879 covered_manifest_cases=3786
+runtime_cases: runnable=6879 pending=356
+```
+
+The route compares exact MONO bitmap bytes for the maintained
+`dropout-thin-stems` outline across `FT_OUTLINE_NONE`,
+`FT_OUTLINE_IGNORE_DROPOUTS`, `FT_OUTLINE_SMART_DROPOUTS`, and the combined
+smart+ignore flag scenario through pinned C, Rust FFI, C ABI, and WASM ABI.
+`FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior` remains pending because
+the maintained `outlines/synthetic/dropout-stubs-scantype.json` fixture is
+absent.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftoutln.outline_get_bitmap
 make -C pillow-rs-freetype route-audit
 ```
 

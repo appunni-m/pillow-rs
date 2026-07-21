@@ -3384,12 +3384,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FFI, C ABI, and WASM ABI behavior for the same SVG glyph input; "
             "treating any load error as equivalent would be a green placeholder"
         ),
-        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior": (
-            "FT_OUTLINE_IGNORE_DROPOUTS mono parity needs a maintained "
-            "FT_Outline_Get_Bitmap or glyph render route carrying this outline "
-            "flag into the mono rasterizer and comparing exact bitmap bytes "
-            "against pinned C across all ABI lanes"
-        ),
         "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior": (
             "FT_OUTLINE_INCLUDE_STUBS mono parity needs a maintained dropout "
             "fixture with stubs where FreeType's mono rasterizer behavior is "
@@ -3400,11 +3394,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "allocation/free route that proves owner-bit destruction semantics "
             "and allocator ownership across pinned C, Rust FFI, C ABI, and "
             "WASM ABI; generic drop behavior would not prove the public flag"
-        ),
-        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior": (
-            "FT_OUTLINE_SMART_DROPOUTS mono parity needs a maintained smart "
-            "dropout fixture and exact C/Rust/C-ABI/WASM bitmap comparison; "
-            "smooth-raster or flag-value checks do not prove mono behavior"
         ),
         "ftimage.FT_Raster.lifecycle_callback_contract": (
             "FT_Raster lifecycle parity needs a maintained custom renderer "
@@ -4271,6 +4260,8 @@ def font_format_real_parity_reason(row: ConcreteInput) -> str | None:
 def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
     ftimage_outline_get_bitmap_cases = {
         ("ftimage.FT_Bitmap", "empty_bitmap_is_valid"),
+        ("ftimage.FT_OUTLINE_IGNORE_DROPOUTS", "mono_dropout_behavior"),
+        ("ftimage.FT_OUTLINE_SMART_DROPOUTS", "mono_smart_dropout_behavior"),
         ("ftimage.FT_RASTER_FLAG_DEFAULT", "default_monochrome_target_path"),
     }
     if (

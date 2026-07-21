@@ -44391,6 +44391,11 @@ impl WasmRenderOutlineStorage {
 
 fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
     case.subject == "ftoutln.FT_Outline_Get_Bitmap"
+        || matches!(
+            case.case_id.as_str(),
+            "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior"
+                | "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior"
+        )
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE" && case.case == "empty_bitmap_state")
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
             && case.case == "invalid_render_target_errors")
@@ -44417,6 +44422,7 @@ fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
             "invalid-none"
         }
         "invalid_target_buffer_errors" if case.subject == "ftimage.FT_Bitmap" => "invalid-buffer",
+        "mono_dropout_behavior" | "mono_smart_dropout_behavior" => "dropout-thin-stems",
         _ => "unsupported",
     }
 }
@@ -44455,6 +44461,30 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(0, 0, &rendered))),
                 Err(err) => Ok(error(err)),
             }
+        }
+        "dropout-thin-stems" => {
+            let library = FT_Init_FreeType();
+            let rows = outline_get_bitmap_dropout_flag_rows(case);
+            let results = rows
+                .into_iter()
+                .map(|(label, flags)| {
+                    let outline = rust_outline_get_bitmap_dropout_thin_stems(flags);
+                    let mut buffer = vec![0u8; 16 * 16];
+                    let target = rust_outline_get_bitmap_target_with_buffer(
+                        FT_PIXEL_MODE_MONO as u8,
+                        buffer.as_mut_ptr(),
+                    );
+                    let rendered =
+                        FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
+                            .map_err(|err| format!("FT_Outline_Get_Bitmap failed: {err}"))?;
+                    Ok(json!({
+                        "flags": label,
+                        "status": FT_Err_Ok,
+                        "bitmap": outline_get_bitmap_result_json(0, 0, &rendered)["bitmap"].clone()
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(ok(json!({ "results": results })))
         }
         "empty" => {
             let library = FT_Init_FreeType();
@@ -44563,6 +44593,28 @@ fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 Ok(error(err))
             }
+        }
+        "dropout-thin-stems" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut results = Vec::new();
+            for (label, flags) in outline_get_bitmap_dropout_flag_rows(case) {
+                let mut outline = c_outline_get_bitmap_dropout_thin_stems(flags);
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap =
+                    c_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+                let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+                results.push(json!({
+                    "flags": label,
+                    "status": err,
+                    "bitmap": c_outline_get_bitmap_result_json(err, 0, &bitmap, &buffer)["bitmap"].clone()
+                }));
+            }
+            c_done_library(library);
+            Ok(ok(json!({ "results": results })))
         }
         "empty" => {
             let mut library = ptr::null_mut();
@@ -44673,6 +44725,23 @@ fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "dropout-thin-stems" => {
+            let mut results = Vec::new();
+            for (label, flags) in outline_get_bitmap_dropout_flag_rows(case) {
+                let mut outline = wasm_outline_get_bitmap_dropout_thin_stems(flags);
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap =
+                    wasm_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+                let err =
+                    wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+                results.push(json!({
+                    "flags": label,
+                    "status": err,
+                    "bitmap": wasm_outline_get_bitmap_result_json(err, 0, &bitmap, &buffer)["bitmap"].clone()
+                }));
+            }
+            Ok(ok(json!({ "results": results })))
+        }
         "empty" => {
             let mut outline = wasm_outline_get_bitmap_empty();
             let mut bitmap = wasm_outline_get_bitmap_empty_target();
@@ -44756,6 +44825,41 @@ fn rust_outline_get_bitmap_empty() -> FT_OutlineSnapshot {
         tags: Vec::new(),
         contours: Vec::new(),
         flags: 0,
+    }
+}
+
+fn outline_get_bitmap_dropout_flag_rows(case: &InputCase) -> Vec<(&'static str, FT_Int)> {
+    match case.case_id.as_str() {
+        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior" => {
+            vec![("FT_OUTLINE_NONE", 0), ("FT_OUTLINE_IGNORE_DROPOUTS", 0x8)]
+        }
+        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior" => vec![
+            ("FT_OUTLINE_NONE", 0),
+            ("FT_OUTLINE_SMART_DROPOUTS", 0x10),
+            (
+                "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS",
+                0x10 | 0x8,
+            ),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+fn rust_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: vec![
+            FT_Vector { x: 512, y: 512 },
+            FT_Vector { x: 576, y: 512 },
+            FT_Vector { x: 576, y: 1536 },
+            FT_Vector { x: 512, y: 1536 },
+            FT_Vector { x: 768, y: 512 },
+            FT_Vector { x: 832, y: 512 },
+            FT_Vector { x: 832, y: 1536 },
+            FT_Vector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        flags,
     }
 }
 
@@ -44857,16 +44961,17 @@ fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
         24 * 64
     };
     let mut storage = COutlineStorage {
-        points: [
+        points: vec![
             c_abi::FT_Vector { x: lo, y: lo },
             c_abi::FT_Vector { x: hi, y: lo },
             c_abi::FT_Vector { x: hi, y: hi },
             c_abi::FT_Vector { x: lo, y: hi },
         ],
-        tags: [1, 1, 1, 1],
-        contours: [3],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![3],
         n_contours: 1,
         n_points: 4,
+        flags: 0,
         outline: c_abi::FT_Outline::default(),
     };
     storage.refresh();
@@ -44875,16 +44980,40 @@ fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
 
 fn c_outline_get_bitmap_empty() -> COutlineStorage {
     let mut storage = COutlineStorage {
-        points: [
+        points: vec![
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
         ],
-        tags: [0; 4],
-        contours: [0],
+        tags: vec![0; 4],
+        contours: vec![0],
         n_contours: 0,
         n_points: 0,
+        flags: 0,
+        outline: c_abi::FT_Outline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn c_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> COutlineStorage {
+    let mut storage = COutlineStorage {
+        points: vec![
+            c_abi::FT_Vector { x: 512, y: 512 },
+            c_abi::FT_Vector { x: 576, y: 512 },
+            c_abi::FT_Vector { x: 576, y: 1536 },
+            c_abi::FT_Vector { x: 512, y: 1536 },
+            c_abi::FT_Vector { x: 768, y: 512 },
+            c_abi::FT_Vector { x: 832, y: 512 },
+            c_abi::FT_Vector { x: 832, y: 1536 },
+            c_abi::FT_Vector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        n_contours: 2,
+        n_points: 8,
+        flags,
         outline: c_abi::FT_Outline::default(),
     };
     storage.refresh();
@@ -44892,11 +45021,12 @@ fn c_outline_get_bitmap_empty() -> COutlineStorage {
 }
 
 struct COutlineStorage {
-    points: [c_abi::FT_Vector; 4],
-    tags: [u8; 4],
-    contours: [u16; 1],
+    points: Vec<c_abi::FT_Vector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
     n_contours: u16,
     n_points: u16,
+    flags: FT_Int,
     outline: c_abi::FT_Outline,
 }
 
@@ -44908,7 +45038,7 @@ impl COutlineStorage {
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
-            flags: 0,
+            flags: self.flags,
         };
     }
 
@@ -45012,16 +45142,17 @@ fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
         24 * 64
     };
     let mut storage = WasmOutlineStorage {
-        points: [
+        points: vec![
             wasm_abi::FontdoneWasmVector { x: lo, y: lo },
             wasm_abi::FontdoneWasmVector { x: hi, y: lo },
             wasm_abi::FontdoneWasmVector { x: hi, y: hi },
             wasm_abi::FontdoneWasmVector { x: lo, y: hi },
         ],
-        tags: [1, 1, 1, 1],
-        contours: [3],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![3],
         n_contours: 1,
         n_points: 4,
+        flags: 0,
         outline: wasm_abi::FontdoneWasmOutline::default(),
     };
     storage.refresh();
@@ -45030,16 +45161,40 @@ fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
 
 fn wasm_outline_get_bitmap_empty() -> WasmOutlineStorage {
     let mut storage = WasmOutlineStorage {
-        points: [
+        points: vec![
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
         ],
-        tags: [0; 4],
-        contours: [0],
+        tags: vec![0; 4],
+        contours: vec![0],
         n_contours: 0,
         n_points: 0,
+        flags: 0,
+        outline: wasm_abi::FontdoneWasmOutline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn wasm_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> WasmOutlineStorage {
+    let mut storage = WasmOutlineStorage {
+        points: vec![
+            wasm_abi::FontdoneWasmVector { x: 512, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 576, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 576, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 512, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 768, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 832, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 832, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        n_contours: 2,
+        n_points: 8,
+        flags,
         outline: wasm_abi::FontdoneWasmOutline::default(),
     };
     storage.refresh();
@@ -45047,11 +45202,12 @@ fn wasm_outline_get_bitmap_empty() -> WasmOutlineStorage {
 }
 
 struct WasmOutlineStorage {
-    points: [wasm_abi::FontdoneWasmVector; 4],
-    tags: [u8; 4],
-    contours: [u16; 1],
+    points: Vec<wasm_abi::FontdoneWasmVector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
     n_contours: u16,
     n_points: u16,
+    flags: FT_Int,
     outline: wasm_abi::FontdoneWasmOutline,
 }
 
@@ -45063,7 +45219,7 @@ impl WasmOutlineStorage {
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
-            flags: 0,
+            flags: self.flags,
         };
     }
 
