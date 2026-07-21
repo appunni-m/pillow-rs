@@ -198,6 +198,37 @@ typedef struct BDF_PropertyRec_ {
 
 typedef BDF_PropertyRec* BDF_Property;
 
+typedef struct PS_PrivateRec_ {
+  FT_Int unique_id;
+  FT_Int lenIV;
+  FT_Byte num_blue_values;
+  FT_Byte num_other_blues;
+  FT_Byte num_family_blues;
+  FT_Byte num_family_other_blues;
+  FT_Short blue_values[14];
+  FT_Short other_blues[10];
+  FT_Short family_blues[14];
+  FT_Short family_other_blues[10];
+  FT_Fixed blue_scale;
+  FT_Int blue_shift;
+  FT_Int blue_fuzz;
+  FT_UShort standard_width[1];
+  FT_UShort standard_height[1];
+  FT_Byte num_snap_widths;
+  FT_Byte num_snap_heights;
+  FT_Bool force_bold;
+  FT_Bool round_stem_up;
+  FT_Short snap_widths[13];
+  FT_Short snap_heights[13];
+  FT_Fixed expansion_factor;
+  FT_Long language_group;
+  FT_Long password;
+  FT_Short min_feature[2];
+} PS_PrivateRec;
+
+typedef PS_PrivateRec* PS_Private;
+typedef PS_PrivateRec T1_Private;
+
 typedef struct FT_Open_Args_ {
   FT_UInt flags;
   const FT_Byte* memory_base;
@@ -551,6 +582,7 @@ FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
 FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
 FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRec* aproperty);
 FT_Error FT_Get_BDF_Charset_ID(FT_Face face, const char** acharset_encoding, const char** acharset_registry);
+FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);
 void* FT_Get_Sfnt_Table(FT_Face face, FT_Sfnt_Tag tag);

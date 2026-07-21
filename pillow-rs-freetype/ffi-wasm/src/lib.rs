@@ -198,6 +198,64 @@ impl Default for FontdoneWasmWinFNTHeader {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmPSPrivate {
+    pub unique_id: FT_Int,
+    pub lenIV: FT_Int,
+    pub num_blue_values: FT_Byte,
+    pub num_other_blues: FT_Byte,
+    pub num_family_blues: FT_Byte,
+    pub num_family_other_blues: FT_Byte,
+    pub blue_values: [FT_Short; 14],
+    pub other_blues: [FT_Short; 10],
+    pub family_blues: [FT_Short; 14],
+    pub family_other_blues: [FT_Short; 10],
+    pub blue_scale: FT_Fixed,
+    pub blue_shift: FT_Int,
+    pub blue_fuzz: FT_Int,
+    pub standard_width: [FT_UShort; 1],
+    pub standard_height: [FT_UShort; 1],
+    pub num_snap_widths: FT_Byte,
+    pub num_snap_heights: FT_Byte,
+    pub force_bold: FT_Bool,
+    pub round_stem_up: FT_Bool,
+    pub snap_widths: [FT_Short; 13],
+    pub snap_heights: [FT_Short; 13],
+    pub expansion_factor: FT_Fixed,
+    pub language_group: FT_Long,
+    pub password: FT_Long,
+    pub min_feature: [FT_Short; 2],
+}
+
+fn copy_rust_ps_private_to_wasm(out: &mut FontdoneWasmPSPrivate, value: rust_ffi::PS_PrivateRec) {
+    out.unique_id = value.unique_id;
+    out.lenIV = value.lenIV;
+    out.num_blue_values = value.num_blue_values;
+    out.num_other_blues = value.num_other_blues;
+    out.num_family_blues = value.num_family_blues;
+    out.num_family_other_blues = value.num_family_other_blues;
+    out.blue_values = value.blue_values;
+    out.other_blues = value.other_blues;
+    out.family_blues = value.family_blues;
+    out.family_other_blues = value.family_other_blues;
+    out.blue_scale = value.blue_scale;
+    out.blue_shift = value.blue_shift;
+    out.blue_fuzz = value.blue_fuzz;
+    out.standard_width = value.standard_width;
+    out.standard_height = value.standard_height;
+    out.num_snap_widths = value.num_snap_widths;
+    out.num_snap_heights = value.num_snap_heights;
+    out.force_bold = value.force_bold;
+    out.round_stem_up = value.round_stem_up;
+    out.snap_widths = value.snap_widths;
+    out.snap_heights = value.snap_heights;
+    out.expansion_factor = value.expansion_factor;
+    out.language_group = value.language_group;
+    out.password = value.password;
+    out.min_feature = value.min_feature;
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmBdfProperty {
     pub type_: FT_Int,
     pub atom: *const FT_Byte,
@@ -3822,6 +3880,26 @@ pub extern "C" fn fontdone_wasm_get_winfnt_header(
                 color_table_offset: rust_header.color_table_offset,
                 reserved1: rust_header.reserved1,
             };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_ps_font_private(
+    handle: usize,
+    private: *mut FontdoneWasmPSPrivate,
+) -> FT_Error {
+    let mut rust_private = rust_ffi::PS_PrivateRec::default();
+    let err = rust_ffi::FT_Get_PS_Font_Private(
+        face_ref(handle).map(|face| &face.face),
+        (!private.is_null()).then_some(&mut rust_private),
+    );
+    if err == rust_ffi::FT_Err_Ok && !private.is_null() {
+        // SAFETY: null was checked above and the caller provided writable
+        // linear-memory storage for the flat public WASM record.
+        unsafe {
+            copy_rust_ps_private_to_wasm(&mut *private, rust_private);
         }
     }
     err
