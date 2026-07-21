@@ -11317,6 +11317,87 @@ returns the unchanged interpreter version.  The WASM parity helper must use the
 same module/property selectors for that follow-up get instead of always reading
 the valid `truetype:interpreter-version` property.
 
+## Pending route batch snapshot after property/BDF audit
+
+Status: current route audit after commit `01f3ff65f`.
+
+Current concrete counts:
+
+- `real-parity`: 4535
+- `pending-route`: 425
+- `compile-contract`: 2266
+- `real-null-validation`: 9
+- generic fallback categories: 0
+
+The largest remaining pending surfaces are not interchangeable.  Each needs a
+same-input pinned C oracle route, a pure-Rust implementation route, and thin C
+ABI/WASM copying before promotion:
+
+1. `ftcache.image_cache_lookup_scaler` — 20 rows.
+   - Required route: manager-owned image cache with scaler interpretation,
+     requester calls, node acquisition, `FTC_Node_Unref`, repeated hit/miss
+     behavior, and load-flag truncation compared against pinned C.
+   - Do not promote from scalar `FT_Load_Glyph` or generic cache-handle output.
+2. `ftcolor.get_paint_graph` — 20 rows.
+   - Required route: COLR v1 paint graph traversal with exact offsets, format
+     selection, child paint references, transform fields, and null/invalid
+     iterator behavior through all ABI lanes.
+   - Do not collapse graph traversal into isolated `FT_Get_Paint` success.
+3. `ftotval.open_type_validate` — 16 rows.
+   - Required route: active pinned build behavior for selected validation flags,
+     output pointer sentinel preservation, table buffer ownership, and
+     `FT_OpenType_Free`.
+   - Rows contradicted by the pinned build must stay pending until fixture or
+     build expectations are corrected.
+4. `ftcache.cmap_cache_lookup` — 15 rows.
+   - Required route: manager-owned CMap cache, requester identity, charmap index
+     selection including `-1` current-charmap behavior, repeated lookup hit/miss
+     observations, and remove/reset lifecycle.
+   - Do not treat `FT_Get_Char_Index` parity as cache parity.
+5. `t1tables.get_ps_font_private_mm_blend` — 11 rows.
+   - Required route: C-openable Multiple Master Type1 fixture and exact private
+     dictionary blend values for scalar and array fields.
+   - Do not use static Type1 dictionary defaults as MM blend evidence.
+6. `ftcolor.get_paint` — 9 rows.
+   - Required route: exact `FT_Get_Paint` public output for root, nested, null,
+     unsupported, and malformed paint references.
+   - Do not promote from format constants or non-graph color table presence.
+7. `ftgxval.truetype_gx_validate` — 9 rows.
+   - Required route: C-openable GX/AAT fixture with requested table flags,
+     output slot ownership, selected/all table behavior, and free lifecycle.
+   - Missing or synthetic table probes are not enough.
+8. `ftcolor.get_color_glyph_paint_and_get_paint` — 8 rows.
+   - Required route: compose `FT_Get_Color_Glyph_Paint` with follow-up
+     `FT_Get_Paint` on the same opaque paint handle, preserving handle identity
+     and output fields across ABIs.
+9. `ftstroke.export_border` — 7 rows.
+   - Required route: non-null stroker object, border selection, point/contour
+     count preflight, export buffer layout, and done cleanup.
+   - Null/no-op stroker rows do not prove export semantics.
+10. `ftbdf.get_bdf_property` — 6 rows.
+    - Required route: correct the current BDF property fixture expectations
+      first, then add native oracle plus Rust/C ABI/WASM property-record output.
+    - Do not promote while `FAMILY_NAME` and `PIXEL_SIZE` contradict pinned C.
+11. `ftcache.manager_lookup_size` and `ftcache.manager_remove_face_id` — 6 rows
+    each.
+    - Required route: manager-owned face/size lifecycle, requester calls,
+      lookup identity, reset/remove side effects, and post-removal cache state.
+12. `ftcolor.get_gradient_paint_and_stops` and
+    `ftcolor.get_color_glyph_paint_then_get_paint` — 6 rows each.
+    - Required route: same opaque paint/iterator object across calls, exact
+      gradient stop values, stop ordering, and iterator exhaustion behavior.
+
+Batch verification command:
+
+```bash
+make -C pillow-rs-freetype route-audit
+```
+
+Promotion rule for every item above: a row can move out of `pending-route` only
+after the exact same input is compared against pinned C, Rust FFI, thin C ABI,
+and WASM ABI.  If the fixture expectation contradicts pinned C, document the
+C-observed behavior and correction plan here before implementing.
+
 ### Issue Set Current: core stream/SVG/parameter runtime route blockers
 
 Status: focused route probes classified on 2026-07-20.
