@@ -9553,6 +9553,14 @@ fn ps_font_value_signature_matrix_case(case: &InputCase) -> bool {
     case.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
 }
 
+fn direct_ps_font_info_case(case: &InputCase) -> bool {
+    case.case_id == "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success"
+}
+
+fn direct_ps_font_private_case(case: &InputCase) -> bool {
+    case.case_id == "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success"
+}
+
 fn ps_font_value_matrix_scenarios(case: &InputCase) -> Result<Vec<&Value>, String> {
     case.inputs
         .params
@@ -26520,6 +26528,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            let mut args = vec!["--ps-font-private".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "t1tables.get_ps_font_private_mm_blend" => {
             if params.get("rows").is_some() {
                 let rows = ps_font_value_standard_rows(case)?;
@@ -26534,6 +26548,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 return Ok(args);
             }
             let mut args = vec!["--ps-font-private".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            let mut args = vec!["--ps-font-info".to_string()];
             push_font_source_from_param(case, params, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
@@ -29471,6 +29491,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            rust_get_ps_font_info(case)
+        }
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             rust_get_ps_font_info(case)
         }
@@ -29479,6 +29502,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             if ps_font_value_encoding_case(case) =>
         {
             rust_get_ps_font_value_encoding(case)
+        }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            rust_get_ps_font_private(case)
         }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             rust_get_ps_font_private(case)
@@ -29627,6 +29653,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => c_get_ps_font_info(case),
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             c_get_ps_font_info(case)
         }
@@ -29635,6 +29662,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             if ps_font_value_encoding_case(case) =>
         {
             c_get_ps_font_value_encoding(case)
+        }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            c_get_ps_font_private(case)
         }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             c_get_ps_font_private(case)
@@ -30665,6 +30695,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            wasm_get_ps_font_info(case)
+        }
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             wasm_get_ps_font_info(case)
         }
@@ -30673,6 +30706,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if ps_font_value_encoding_case(case) =>
         {
             wasm_get_ps_font_value_encoding(case)
+        }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            wasm_get_ps_font_private(case)
         }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             wasm_get_ps_font_private(case)

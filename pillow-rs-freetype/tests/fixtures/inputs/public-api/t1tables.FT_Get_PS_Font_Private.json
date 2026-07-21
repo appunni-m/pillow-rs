@@ -44,6 +44,36 @@
       }
     },
     {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "type1_success_copies_private_dict",
+      "covers_manifest_cases": ["type1_success_copies_private_dict"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "type1_font",
+            "path": "input/fonts/type1/font-value-populated.pfb"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "Type 1 t1_ps_get_font_private copies the face private dictionary into PS_PrivateRec."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "asset:existing"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"status": "FT_Error", "private": {"unique_id": "FT_Int", "lenIV": "FT_Int", "blue_values": "FT_Short[14]", "other_blues": "FT_Short[10]", "family_blues": "FT_Short[14]", "family_other_blues": "FT_Short[10]", "blue_scale": "FT_Fixed", "blue_shift": "FT_Int", "blue_fuzz": "FT_Int", "standard_width": "FT_UShort[1]", "standard_height": "FT_UShort[1]", "snap_widths": "FT_Short[13]", "snap_heights": "FT_Short[13]", "force_bold": "FT_Bool", "round_stem_up": "FT_Bool", "language_group": "FT_Long", "password": "FT_Long", "min_feature": "FT_Short[2]"}},
+        "compare": {"mode": "exact", "paths": ["status", "private"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Get_PS_Font_Private"]
+      }
+    },
+    {
       "case_id": "t1tables.FT_Get_PS_Font_Private.cff_invalid_argument",
       "subject": "t1tables.FT_Get_PS_Font_Private",
       "case": "unsupported_postscript_formats_invalid_argument",

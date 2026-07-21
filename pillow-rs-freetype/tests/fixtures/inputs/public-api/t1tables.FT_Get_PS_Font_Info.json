@@ -46,6 +46,36 @@
       }
     },
     {
+      "case_id": "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success",
+      "subject": "t1tables.FT_Get_PS_Font_Info",
+      "case": "type1_success_copies_font_info",
+      "covers_manifest_cases": ["type1_success_copies_font_info"],
+      "operation": "t1tables.get_ps_font_info",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "type1_font",
+            "path": "input/fonts/type1/font-value-populated.pfb"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "Type 1 t1_ps_get_font_info copies face-owned PS_FontInfoRec strings and numeric fields."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_font_info", "asset:existing"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"status": "FT_Error", "font_info": {"version": "nullable FT_String*", "notice": "nullable FT_String*", "full_name": "nullable FT_String*", "family_name": "nullable FT_String*", "weight": "nullable FT_String*", "italic_angle": "FT_Fixed", "is_fixed_pitch": "FT_Bool", "underline_position": "FT_Short", "underline_thickness": "FT_UShort"}},
+        "compare": {"mode": "exact", "paths": ["status", "font_info.version", "font_info.notice", "font_info.full_name", "font_info.family_name", "font_info.weight", "font_info.italic_angle", "font_info.is_fixed_pitch", "font_info.underline_position", "font_info.underline_thickness"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Get_PS_Font_Info"]
+      }
+    },
+    {
       "case_id": "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
       "subject": "t1tables.FT_Get_PS_Font_Info",
       "case": "non_postscript_or_missing_service_invalid_argument",
