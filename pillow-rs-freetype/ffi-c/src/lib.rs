@@ -3690,6 +3690,30 @@ pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_E
         unsafe { !(*source).clazz.is_null() }
     };
     let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = owned_outline_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Outline_Glyph_Copy(&source.core);
+        let copy = Box::into_raw(Box::new(OwnedOutlineGlyph::new(copy))).cast::<FT_GlyphRec>();
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = copy;
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = owned_bitmap_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Bitmap_Glyph_Copy(&source.core);
+        let copy = Box::into_raw(Box::new(OwnedBitmapGlyph::new(copy))).cast::<FT_GlyphRec>();
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = copy;
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
     if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
         // SAFETY: `target` is non-null and points to caller-provided output storage.
         unsafe {

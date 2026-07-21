@@ -3407,12 +3407,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_BitmapGlyphRec and compare root, left, top, bitmap descriptor, "
             "and buffer bytes across pinned C, Rust FFI, C ABI, and WASM ABI"
         ),
-        "ftglyph.FT_Glyph_Copy.success_bitmap_copy_is_independent": (
-            "FT_Glyph_Copy bitmap success parity needs a real bitmap glyph "
-            "copy route proving copied FT_BitmapGlyphRec fields and bitmap "
-            "buffer ownership remain independent after the source glyph is "
-            "destroyed"
-        ),
         "ftglyph.FT_Glyph_Copy.success_svg_copy_is_independent": (
             "FT_Glyph_Copy SVG success parity needs an SVG-enabled glyph copy "
             "route proving document bytes, metrics, glyph range, transform, "

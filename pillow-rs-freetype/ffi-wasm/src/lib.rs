@@ -2218,6 +2218,28 @@ pub extern "C" fn fontdone_wasm_glyph_copy(
         unsafe { !(*source).clazz.is_null() }
     };
     let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = wasm_owned_outline_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Outline_Glyph_Copy(&source.core);
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(copy))).addr();
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = wasm_owned_bitmap_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Bitmap_Glyph_Copy(&source.core);
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(copy))).addr();
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
     if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
         // SAFETY: `target` is non-null and points to caller-provided output storage.
         unsafe {
