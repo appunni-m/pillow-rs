@@ -260,6 +260,30 @@ runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
 runtime_cases: runnable=1 pending=0
 ```
 
+After the FTC manager reset/done lifecycle route:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 348, 'real-null-validation': 9, 'real-parity': 4615}
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+runtime_cases: runnable=1 pending=0
+```
+
+The route compares `ftcache.FTC_Manager.reset_and_done_lifecycle` on the
+maintained `input/fonts/DejaVuSans.ttf` same input. It proves the public
+void-return lifecycle shape, reset usability/requester counts, and populated
+manager-done cache/face/size/node observations through pinned C, Rust FFI,
+thin C ABI, and WASM ABI. This promotes the concrete reset/done lifecycle row;
+`ftcache.FTC_Manager.owns_faces_sizes_and_cache_nodes` remains pending because
+its face/size/node finalizer-count requirement is broader than this route.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcache.FTC_Manager.reset_and_done_lifecycle
+make -C pillow-rs-freetype test-op OP=ftcache.manager_lifecycle
+make -C pillow-rs-freetype route-audit
+```
+
 Pinned FreeType 2.14.3 keeps both generated malformed faces open and exposes a
 non-null `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` record. For the truncated table,
 `tt_face_load_maxp` reads from the `maxp` stream offset beyond the declared
@@ -500,3 +524,56 @@ make -C pillow-rs-freetype route-audit
   parity.
 - CID semantic rows: need real CID-keyed same-input assets, not fallback
   non-CID error rows.
+
+## Missing fixture internet audit: 2026-07-21 exact inventory
+
+Current local extraction from `tests/manifest.yaml` and public API input JSONs
+finds 84 unique unresolved fixture-like references. Exact basename checks
+against likely upstream corpora found zero direct matches in:
+
+- `googlefonts/color-fonts`
+- `fonttools/fonttools`
+- `freetype/freetype`
+- `dejavu-fonts/dejavu-fonts`
+- `adobe-fonts/source-han-sans`
+- `adobe-type-tools/afdko`
+- `simoncozens/test-fonts`
+- `harfbuzz/harfbuzz`
+
+Internet search found family-level candidates, not exact declared fixtures:
+
+- COLRv1: `googlefonts/color-fonts` has generated wide-coverage COLRv1 test
+  fonts, including paint formats not expressible from SVG, but not our declared
+  `colr_v1_*` file names. Use these only after license review and pinned-C
+  output capture, or write a local generator.
+- CID/CJK: Source Han / Noto CJK family fonts exist and are CID/CJK-scale
+  candidates, but they are large corpus assets rather than compact declared
+  fixtures. Prefer a subset/generator with recorded provenance.
+- PFR: public conversion tooling exists, but no exact `basic-metrics.pfr` or
+  `basic-kerning.pfr` was found. Prefer deterministic generation from a
+  checked-in small TTF if PFR support is pursued.
+- SVG/SBIX: public color emoji/SVGinOT/SBIX fonts exist, but exact same-input
+  rows should not use arbitrary emoji fonts unless the row is rewritten with
+  provenance and pinned-C behavior.
+
+Current missing-reference buckets:
+
+| Bucket | Count | Acquisition decision |
+|---|---:|---|
+| name/cmap language fixtures | 20 | Generate locally with FontTools/name-table scripts; external fonts would add licensing and unrelated glyph data. |
+| OS/2 unicode-range fixtures | 17 | Generate locally by mutating OS/2 `ulUnicodeRange` bits. |
+| misc/control fixtures | 9 | Mostly deliberate missing-path/control aliases; resolve by manifest cleanup or standard path mapping, not internet downloads. |
+| ABI probe source snippets | 7 | Repo-owned C probe sources; write tracked inputs if the route is implemented. |
+| Type1/AFM/PS fixtures | 7 | Generate with the existing Type1 builder or keep pending until pinned C opens the exact bytes. |
+| synthetic outline/path fixtures | 6 | Repo-owned JSON/outline fixtures; generate locally. |
+| CFF/charmap fixtures | 4 | Generate compact CFF/charmap variants locally unless a license-reviewed corpus asset is intentionally selected. |
+| COLRv1 color fixtures | 4 | Candidate upstream exists, but exact fixtures should be generated/subset before promotion. |
+| CID-keyed fixtures | 3 | Candidate upstream exists, but needs compact CID-keyed same-input asset and pinned-C capture. |
+| SBIX/SVG color fixtures | 3 | Candidate upstream exists, but route-specific compact fixtures are preferred. |
+| BDF/OTB fixtures | 2 | Generate locally; the BDF malformed generator already covers neighboring BDF rows. |
+| PFR fixtures | 2 | Generate locally or keep pending; no exact public fixtures found. |
+
+Do not import a downloaded font just because it exercises the same broad table
+family. A missing fixture becomes real parity only when the manifest row names
+the exact input bytes, the license/provenance is acceptable, pinned C output is
+captured, and Rust FFI, C ABI, and WASM ABI compare the same public result.
