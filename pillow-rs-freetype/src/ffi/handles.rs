@@ -22,15 +22,15 @@ use super::convert::{
 use super::types::{
     FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte, FT_Bytes, FT_Char,
     FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error,
-    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_Int,
-    FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long,
-    FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface,
-    FT_Multi_Master, FT_Orientation, FT_OutlineSnapshot, FT_Palette_Data, FT_Pointer, FT_Pos,
-    FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short,
-    FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
-    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader, TT_MaxProfile,
-    TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec,
+    FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec,
+    FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface,
+    FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot, FT_Palette_Data,
+    FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
+    FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
+    FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
+    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader,
+    TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1711,6 +1711,83 @@ pub fn FT_Get_Glyph(slot_present: bool, aglyph_present: bool) -> FT_Error {
         return FT_Err_Invalid_Argument;
     }
     FT_Err_Unimplemented_Feature as FT_Error
+}
+
+pub fn FT_Get_Outline_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_OutlineGlyphOwned, FT_Error> {
+    let Some(slot) = slot else {
+        return Err(FT_Err_Invalid_Slot_Handle as FT_Error);
+    };
+    let Some(outline) = slot.outline.clone() else {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    };
+    if slot.format != FT_GLYPH_FORMAT_OUTLINE {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    }
+    // FreeType `src/base/ftglyph.c:647-661` rejects slot advances that cannot
+    // be converted from 26.6 to a signed 16.16 `FT_GlyphRec.advance`.
+    const MAX_ADVANCE_26_6_EXCLUSIVE: FT_Pos = 0x8000 * 64;
+    if slot.advance.x >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.x <= -MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y <= -MAX_ADVANCE_26_6_EXCLUSIVE
+    {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    Ok(FT_OutlineGlyphOwned {
+        root: FT_GlyphRec {
+            library: ptr::dangling_mut(),
+            // This safe owned representation models the public root record;
+            // raw C/WASM wrappers attach their own class pointer when exposing
+            // the record through ABI memory.
+            clazz: ptr::dangling(),
+            format: slot.format,
+            advance: FT_Vector {
+                x: slot.advance.x * 1024,
+                y: slot.advance.y * 1024,
+            },
+        },
+        outline,
+    })
+}
+
+pub fn FT_Outline_Glyph_CBox(
+    glyph: Option<&FT_OutlineGlyphOwned>,
+    bbox_mode: FT_UInt,
+    acbox: Option<&mut FT_BBox>,
+) {
+    let mut cbox = FT_BBox::default();
+    if let Some(glyph) = glyph {
+        FT_Outline_Get_CBox(Some(&glyph.outline), Some(&mut cbox));
+    }
+    let snapshot = glyph.map(|_| FT_GlyphCBoxSnapshot {
+        has_class: true,
+        has_bbox_hook: true,
+        cbox: Some(cbox),
+    });
+    FT_Glyph_Get_CBox(snapshot, bbox_mode, acbox);
+}
+
+pub fn FT_Glyph_Transform_Outline(
+    glyph: Option<&mut FT_OutlineGlyphOwned>,
+    matrix: Option<&FT_Matrix>,
+    delta: Option<&FT_Vector>,
+) -> FT_Error {
+    let Some(glyph) = glyph else {
+        return FT_Err_Invalid_Argument;
+    };
+    // FreeType `src/base/ftglyph.c:672-714` dispatches the outline class
+    // transform hook first, then transforms root advance only when matrix is
+    // non-null.  `src/base/ftglyph.c:209-224` applies delta to outline only.
+    if let Some(matrix) = matrix {
+        FT_Outline_Transform(Some(&mut glyph.outline), Some(matrix));
+    }
+    if let Some(delta) = delta {
+        FT_Outline_Translate(Some(&mut glyph.outline), delta.x, delta.y);
+    }
+    if let Some(matrix) = matrix {
+        FT_Vector_Transform(Some(&mut glyph.root.advance), Some(matrix));
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_Glyph_Copy(

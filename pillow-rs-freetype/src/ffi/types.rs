@@ -815,6 +815,12 @@ pub struct FT_GlyphCBoxSnapshot {
     pub cbox: Option<FT_BBox>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_OutlineGlyphOwned {
+    pub root: FT_GlyphRec,
+    pub outline: FT_OutlineSnapshot,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_BitmapGlyphRec {

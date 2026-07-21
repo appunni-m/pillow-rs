@@ -223,6 +223,111 @@ pub struct FT_GlyphRec {
 }
 
 #[repr(C)]
+pub struct FT_OutlineGlyphRec {
+    pub root: FT_GlyphRec,
+    pub outline: FT_Outline,
+}
+
+#[repr(C)]
+struct OwnedOutlineGlyph {
+    record: FT_OutlineGlyphRec,
+    core: rust_ffi::FT_OutlineGlyphOwned,
+    points: Box<[FT_Vector]>,
+    tags: Box<[FT_Byte]>,
+    contours: Box<[FT_UShort]>,
+}
+
+impl OwnedOutlineGlyph {
+    fn new(core: rust_ffi::FT_OutlineGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FT_OutlineGlyphRec {
+                root: c_glyph_root_from_core(&core.root),
+                outline: FT_Outline::default(),
+            },
+            core,
+            points: Box::new([]),
+            tags: Box::new([]),
+            contours: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root = c_glyph_root_from_core(&self.core.root);
+        self.record.root.clazz = owned_outline_glyph_class();
+        self.points = self
+            .core
+            .outline
+            .points
+            .iter()
+            .map(|point| FT_Vector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        self.tags = self.core.outline.tags.clone().into_boxed_slice();
+        self.contours = self.core.outline.contours.clone().into_boxed_slice();
+        self.record.outline = FT_Outline {
+            n_contours: u16::try_from(self.contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(self.points.len()).unwrap_or(u16::MAX),
+            points: self.points.as_mut_ptr(),
+            tags: self.tags.as_mut_ptr(),
+            contours: self.contours.as_mut_ptr(),
+            flags: self.core.outline.flags,
+        };
+    }
+}
+
+fn c_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FT_GlyphRec {
+    FT_GlyphRec {
+        library: root.library,
+        clazz: owned_outline_glyph_class(),
+        format: root.format,
+        advance: FT_Vector {
+            x: root.advance.x,
+            y: root.advance.y,
+        },
+    }
+}
+
+static OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+
+fn owned_outline_glyph_class() -> *const FT_Glyph_Class {
+    // Private marker used only for pointer identity.  We never dereference this
+    // address as an `FT_Glyph_Class`; real class facades continue down the
+    // caller-owned public-record path.
+    ptr::addr_of!(OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FT_Glyph_Class>()
+}
+
+fn owned_outline_glyph_from_root(glyph: FT_Glyph) -> Option<&'static OwnedOutlineGlyph> {
+    let glyph = non_null_mut(glyph)?;
+    // SAFETY: checked non-null and only reads the public root class pointer.
+    let root = unsafe { glyph.as_ref() };
+    if root.clazz != owned_outline_glyph_class() {
+        return None;
+    }
+    // SAFETY: this sentinel is assigned only for `Box<OwnedOutlineGlyph>`
+    // allocations whose first field is an `FT_OutlineGlyphRec`, whose first
+    // field is the public `FT_GlyphRec` root.
+    Some(unsafe { &*glyph.as_ptr().cast::<OwnedOutlineGlyph>() })
+}
+
+fn owned_outline_glyph_from_root_mut(glyph: FT_Glyph) -> Option<&'static mut OwnedOutlineGlyph> {
+    let glyph = non_null_mut(glyph)?;
+    // SAFETY: checked non-null and only reads the public root class pointer.
+    let root = unsafe { glyph.as_ref() };
+    if root.clazz != owned_outline_glyph_class() {
+        return None;
+    }
+    // SAFETY: this sentinel is assigned only for `Box<OwnedOutlineGlyph>`
+    // allocations whose first field is an `FT_OutlineGlyphRec`, whose first
+    // field is the public `FT_GlyphRec` root.
+    Some(unsafe { &mut *glyph.as_ptr().cast::<OwnedOutlineGlyph>() })
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FT_UnitVector {
     pub x: FT_F2Dot14,
@@ -2711,18 +2816,28 @@ fn c_glyph_cbox_snapshot(glyph: FT_Glyph) -> Option<rust_ffi::FT_GlyphCBoxSnapsh
     // SAFETY: the public C ABI accepts caller-owned `FT_Glyph` records; this
     // thin wrapper reads only the root record and the class pointer nullness
     // needed to reproduce FreeType's `FT_Glyph_Get_CBox` early-return order.
-    let glyph = unsafe { glyph.as_ref() };
-    if glyph.clazz.is_null() {
+    let root = unsafe { glyph.as_ref() };
+    if root.clazz.is_null() {
         return Some(rust_ffi::FT_GlyphCBoxSnapshot {
             has_class: false,
             has_bbox_hook: false,
             cbox: None,
         });
     }
+    if root.clazz == owned_outline_glyph_class() {
+        let owned = owned_outline_glyph_from_root(glyph.as_ptr())?;
+        let mut cbox = rust_ffi::FT_BBox::default();
+        rust_ffi::FT_Outline_Get_CBox(Some(&owned.core.outline), Some(&mut cbox));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(cbox),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  The wrapper reads the public-sized
     // class facade to observe whether `glyph_bbox` is present, then delegates
     // the zero/no-bbox behavior to safe Rust.
-    let clazz = unsafe { &*glyph.clazz };
+    let clazz = unsafe { &*root.clazz };
     Some(rust_ffi::FT_GlyphCBoxSnapshot {
         has_class: true,
         has_bbox_hook: !clazz.glyph_bbox.is_null(),
@@ -2752,13 +2867,32 @@ pub extern "C" fn FT_Glyph_Get_CBox(glyph: FT_Glyph, bbox_mode: FT_UInt, acbox: 
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_Error {
     let err = rust_ffi::FT_Get_Glyph(!slot.is_null(), !aglyph.is_null());
-    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !aglyph.is_null() {
-        // SAFETY: `aglyph` is non-null and points to caller-provided output storage.
-        unsafe {
-            *aglyph = ptr::null_mut();
+    if err != rust_ffi::FT_Err_Unimplemented_Feature as FT_Error {
+        return err;
+    }
+    let Some(out) = non_null_mut(aglyph) else {
+        return err;
+    };
+    let Some(slot) = non_null_mut(slot) else {
+        return err;
+    };
+    // SAFETY: `slot` is a live slot allocated by this wrapper.  Successful
+    // glyph creation copies the private Rust slot payload into an owned glyph.
+    let slot = unsafe { slot.as_ref() };
+    match rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot)) {
+        Ok(core) => {
+            let glyph = Box::new(OwnedOutlineGlyph::new(core));
+            let glyph = Box::into_raw(glyph).cast::<FT_GlyphRec>();
+            // SAFETY: `out` is non-null and points to caller-provided output storage.
+            unsafe { *out.as_ptr() = glyph };
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => {
+            // SAFETY: `out` is non-null and points to caller-provided output storage.
+            unsafe { *out.as_ptr() = ptr::null_mut() };
+            error
         }
     }
-    err
 }
 
 #[unsafe(no_mangle)]
@@ -2782,7 +2916,56 @@ pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_E
 
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Done_Glyph(glyph: FT_Glyph) {
+    if owned_outline_glyph_from_root(glyph).is_some() {
+        // SAFETY: the class sentinel proves this pointer came from
+        // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
+        unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+        return;
+    }
     rust_ffi::FT_Done_Glyph(!glyph.is_null());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Glyph_Transform(
+    glyph: FT_Glyph,
+    matrix: *const FT_Matrix,
+    delta: *const FT_Vector,
+) -> FT_Error {
+    if glyph.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(owned) = owned_outline_glyph_from_root_mut(glyph) else {
+        let has_class = unsafe { !(*glyph).clazz.is_null() };
+        return if has_class {
+            rust_ffi::FT_Err_Invalid_Glyph_Format
+        } else {
+            rust_ffi::FT_Err_Invalid_Argument
+        };
+    };
+    let matrix = non_null(matrix).map(|matrix| {
+        // SAFETY: `matrix` is non-null and copied by value.
+        let matrix = unsafe { matrix.as_ref() };
+        rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        }
+    });
+    let delta = non_null(delta).map(|delta| {
+        // SAFETY: `delta` is non-null and copied by value.
+        let delta = unsafe { delta.as_ref() };
+        rust_ffi::FT_Vector {
+            x: delta.x,
+            y: delta.y,
+        }
+    });
+    let error =
+        rust_ffi::FT_Glyph_Transform_Outline(Some(&mut owned.core), matrix.as_ref(), delta.as_ref());
+    if error == rust_ffi::FT_Err_Ok {
+        owned.refresh_record();
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
