@@ -1,7 +1,11 @@
 {
   "version": 1,
   "subject": "ttnameid.TT_PLATFORM_ISO",
-  "manifest_cases": ["value_matches_header", "import_contract", "deprecated_iso_platform_runtime"],
+  "manifest_cases": [
+    "value_matches_header",
+    "import_contract",
+    "deprecated_iso_platform_runtime"
+  ],
   "cases": [
     {
       "case_id": "ttnameid.TT_PLATFORM_ISO.value_matches_header",
@@ -10,10 +14,49 @@
       "operation": "constant",
       "schema": "constant_value",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"header": "freetype/ttnameid.h", "symbol": "TT_PLATFORM_ISO", "expected_value_from_pinned_header": 2, "expected_value_hex": "0x0002", "value_type": "FT_UShort-compatible platform ID", "deprecated": true, "semantic_area": "SFNT cmap and name platform_id"}},
-      "classifiers": ["kind:constant", "header:ttnameid", "area:tt_platform", "deprecated"],
-      "metadata": {"abi": {"header": "freetype/ttnameid.h", "symbol": "TT_PLATFORM_ISO", "kind": "object_like_macro", "result_type": "integer constant expression"}},
-      "expectation": {"status": "ok", "output_shape": {"symbol": "string", "constant_value": "uint16"}, "compare": {"mode": "exact", "paths": ["symbol", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:79"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_PLATFORM_ISO",
+          "expected_value_from_pinned_header": 2,
+          "expected_value_hex": "0x0002",
+          "value_type": "FT_UShort-compatible platform ID",
+          "deprecated": true,
+          "semantic_area": "SFNT cmap and name platform_id"
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:tt_platform",
+        "deprecated"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_PLATFORM_ISO",
+          "kind": "object_like_macro",
+          "result_type": "integer constant expression"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "symbol": "string",
+          "constant_value": "uint16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "symbol",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:79"
+        ]
+      }
     },
     {
       "case_id": "ttnameid.TT_PLATFORM_ISO.import_contract",
@@ -22,22 +65,135 @@
       "operation": "constant",
       "schema": "api_import",
       "expect_error": false,
-      "inputs": {"assets": {}, "params": {"include": "<freetype/ttnameid.h>", "symbol": "TT_PLATFORM_ISO", "use_expression": "FT_UShort platform_id = TT_PLATFORM_ISO;", "expected_value": 2}},
-      "classifiers": ["kind:constant", "header:ttnameid", "area:public_import", "deprecated"],
-      "metadata": {"abi": {"header": "freetype/ttnameid.h", "symbol": "TT_PLATFORM_ISO", "visibility": "public C macro"}},
-      "expectation": {"status": "ok", "output_shape": {"include_compiles": "bool", "symbol_visible": "bool", "constant_value": "uint16"}, "compare": {"mode": "exact", "paths": ["include_compiles", "symbol_visible", "constant_value"]}, "source_refs": ["freetype/include/freetype/ttnameid.h:55-82"]}
+      "inputs": {
+        "assets": {},
+        "params": {
+          "include": "<freetype/ttnameid.h>",
+          "symbol": "TT_PLATFORM_ISO",
+          "use_expression": "FT_UShort platform_id = TT_PLATFORM_ISO;",
+          "expected_value": 2
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "area:public_import",
+        "deprecated"
+      ],
+      "metadata": {
+        "abi": {
+          "header": "freetype/ttnameid.h",
+          "symbol": "TT_PLATFORM_ISO",
+          "visibility": "public C macro"
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "include_compiles": "bool",
+          "symbol_visible": "bool",
+          "constant_value": "uint16"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "include_compiles",
+            "symbol_visible",
+            "constant_value"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ttnameid.h:55-82"
+        ]
+      }
     },
     {
       "case_id": "ttnameid.TT_PLATFORM_ISO.deprecated_iso_platform_runtime",
       "subject": "ttnameid.TT_PLATFORM_ISO",
       "case": "deprecated_iso_platform_runtime",
-      "operation": "sfnt.enumerate_charmaps_and_names",
+      "operation": "sfnt.mac_encoding_record",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "input/fonts/name-cmap/deprecated-iso-platform.ttf"}}, "params": {"face_index": 0, "platform_id_symbol": "TT_PLATFORM_ISO", "platform_id": 2, "required_charmap": {"platform_id": 2}, "required_name_record": {"platform_id": 2}}},
-      "classifiers": ["kind:constant", "header:ttnameid", "runtime:sfnt_charmap", "runtime:sfnt_name", "deprecated"],
-      "metadata": {"source_behavior": "FreeType keeps deprecated platform 2 records observable through FT_CharMapRec and FT_SfntName fields."},
-      "expectation": {"status": "ok", "fixture_requirements": ["input/fonts/name-cmap/deprecated-iso-platform.ttf must contain platform 2 cmap and name records."], "output_shape": {"error": "FT_Error", "matched_charmap": {"index": "FT_Int", "platform_id": "FT_UShort", "encoding_id": "FT_UShort"}, "matched_name": {"name_index": "FT_UInt", "platform_id": "FT_UShort", "encoding_id": "FT_UShort", "language_id": "FT_UShort", "name_id": "FT_UShort", "string_len": "FT_UInt", "string_bytes": "bytes"}}, "compare": {"mode": "exact", "paths": ["error", "matched_charmap.platform_id", "matched_charmap.encoding_id", "matched_name.platform_id", "matched_name.encoding_id", "matched_name.language_id", "matched_name.name_id", "matched_name.string_len", "matched_name.string_bytes"]}, "source_refs": ["freetype/include/freetype/freetype.h:985-1009", "freetype/src/base/ftsnames.c:43-89"]}
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/name-cmap/deprecated-iso-platform.ttf",
+            "role": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "platform_id_symbol": "TT_PLATFORM_ISO",
+          "platform_id": 2,
+          "required_charmap": {
+            "platform_id": 2
+          },
+          "required_name_record": {
+            "platform_id": 2
+          },
+          "encoding_id": 1,
+          "language_id": 0,
+          "name_id": 1,
+          "codepoints": [
+            65
+          ],
+          "representative_codepoints": [
+            65
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:constant",
+        "header:ttnameid",
+        "runtime:sfnt_charmap",
+        "runtime:sfnt_name",
+        "deprecated"
+      ],
+      "metadata": {
+        "source_behavior": "FreeType keeps deprecated platform 2 records observable through FT_CharMapRec and FT_SfntName fields."
+      },
+      "expectation": {
+        "status": "ok",
+        "fixture_requirements": [
+          "input/fonts/name-cmap/deprecated-iso-platform.ttf must contain platform 2 cmap and name records."
+        ],
+        "output_shape": {
+          "error": "FT_Error",
+          "matched_charmap": {
+            "index": "FT_Int",
+            "platform_id": "FT_UShort",
+            "encoding_id": "FT_UShort"
+          },
+          "matched_name": {
+            "name_index": "FT_UInt",
+            "platform_id": "FT_UShort",
+            "encoding_id": "FT_UShort",
+            "language_id": "FT_UShort",
+            "name_id": "FT_UShort",
+            "string_len": "FT_UInt",
+            "string_bytes": "bytes"
+          }
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "matched_charmap.platform_id",
+            "matched_charmap.encoding_id",
+            "matched_name.platform_id",
+            "matched_name.encoding_id",
+            "matched_name.language_id",
+            "matched_name.name_id",
+            "matched_name.string_len",
+            "matched_name.string_bytes"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/freetype.h:985-1009",
+          "freetype/src/base/ftsnames.c:43-89"
+        ]
+      }
     }
   ]
 }
