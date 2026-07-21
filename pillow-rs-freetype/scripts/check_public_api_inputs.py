@@ -1000,9 +1000,6 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "freetype.FT_New_Face.error_null_library_or_aface",
-        "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
-        "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
-        "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
         "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
         "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior",
         "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false",
@@ -3884,6 +3881,12 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
+    if row.operation == "ftbdf.get_bdf_property":
+        return (
+            "FT_Get_BDF_Property has fixture rows but no maintained native oracle "
+            "command or Rust/C ABI/WASM route; classifying BDF property output as "
+            "real parity would be a green placeholder"
+        )
     if not operation_is_real_parity(row.operation):
         return None
     if row.case_id == "ftglyph.FT_Glyph_Copy.error_copy_hook_failure_cleans_target":
@@ -4329,9 +4332,6 @@ def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str |
 
 def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
     case_reasons = {
-        "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties": "FT_Get_BDF_Property BDF string/integer/cardinal values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
-        "ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only": "FT_Get_BDF_Property PCF property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
-        "ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike": "FT_Get_BDF_Property SFNT embedded bitmap property values validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
@@ -5001,22 +5001,6 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "fterrdef.FT_Err_Missing_SVG_Hooks.svg_render_without_hooks"
     ):
         return "FT_Render_Glyph missing-SVG-hooks error validates public FT_Error in output.status through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftbdf.get_bdf_property"
-        and row.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
-    ):
-        return "FT_Get_BDF_Property null-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftbdf.get_bdf_property"
-        and row.case_id == "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none"
-    ):
-        return "FT_Get_BDF_Property missing-property errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftbdf.get_bdf_property"
-        and row.case_id
-        == "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
-    ):
-        return "FT_Get_BDF_Property unsupported-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbdf.get_bdf_charset_id"
         and row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
