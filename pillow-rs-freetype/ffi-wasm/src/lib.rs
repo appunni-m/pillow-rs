@@ -222,6 +222,111 @@ pub struct FontdoneWasmGlyph {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmOutlineGlyph {
+    pub root: FontdoneWasmGlyph,
+    pub outline: FontdoneWasmOutline,
+}
+
+#[repr(C)]
+struct WasmOwnedOutlineGlyph {
+    record: FontdoneWasmOutlineGlyph,
+    core: rust_ffi::FT_OutlineGlyphOwned,
+    points: Box<[FontdoneWasmVector]>,
+    tags: Box<[FT_Byte]>,
+    contours: Box<[FT_UShort]>,
+}
+
+impl WasmOwnedOutlineGlyph {
+    fn new(core: rust_ffi::FT_OutlineGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FontdoneWasmOutlineGlyph {
+                root: wasm_glyph_root_from_core(&core.root),
+                outline: FontdoneWasmOutline::default(),
+            },
+            core,
+            points: Box::new([]),
+            tags: Box::new([]),
+            contours: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root = wasm_glyph_root_from_core(&self.core.root);
+        self.record.root.clazz = wasm_owned_outline_glyph_class();
+        self.points = self
+            .core
+            .outline
+            .points
+            .iter()
+            .map(|point| FontdoneWasmVector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        self.tags = self.core.outline.tags.clone().into_boxed_slice();
+        self.contours = self.core.outline.contours.clone().into_boxed_slice();
+        self.record.outline = FontdoneWasmOutline {
+            n_contours: u16::try_from(self.contours.len()).unwrap_or(u16::MAX),
+            n_points: u16::try_from(self.points.len()).unwrap_or(u16::MAX),
+            points: self.points.as_mut_ptr(),
+            tags: self.tags.as_mut_ptr(),
+            contours: self.contours.as_mut_ptr(),
+            flags: self.core.outline.flags,
+        };
+    }
+}
+
+fn wasm_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FontdoneWasmGlyph {
+    FontdoneWasmGlyph {
+        clazz: wasm_owned_outline_glyph_class(),
+        format: root.format,
+        advance: FontdoneWasmVector {
+            x: root.advance.x,
+            y: root.advance.y,
+        },
+    }
+}
+
+static WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+
+fn wasm_owned_outline_glyph_class() -> *const FontdoneWasmGlyphClass {
+    // Private marker used only for pointer identity.  It is never dereferenced
+    // as `FontdoneWasmGlyphClass`; caller-owned facades still use the public
+    // class-record path.
+    ptr::addr_of!(WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FontdoneWasmGlyphClass>()
+}
+
+fn wasm_owned_outline_glyph_from_root(
+    glyph: *const FontdoneWasmGlyph,
+) -> Option<&'static WasmOwnedOutlineGlyph> {
+    let glyph = unsafe { glyph.as_ref() }?;
+    if glyph.clazz != wasm_owned_outline_glyph_class() {
+        return None;
+    }
+    // SAFETY: this private class marker is assigned only to
+    // `Box<WasmOwnedOutlineGlyph>` records, whose first field starts with the
+    // public `FontdoneWasmGlyph` root.
+    Some(unsafe { &*ptr::from_ref(glyph).cast::<WasmOwnedOutlineGlyph>() })
+}
+
+fn wasm_owned_outline_glyph_from_root_mut(
+    glyph: *mut FontdoneWasmGlyph,
+) -> Option<&'static mut WasmOwnedOutlineGlyph> {
+    let glyph_ref = unsafe { glyph.as_ref() }?;
+    if glyph_ref.clazz != wasm_owned_outline_glyph_class() {
+        return None;
+    }
+    // SAFETY: this private class marker is assigned only to
+    // `Box<WasmOwnedOutlineGlyph>` records, whose first field starts with the
+    // public `FontdoneWasmGlyph` root.
+    Some(unsafe { &mut *glyph.cast::<WasmOwnedOutlineGlyph>() })
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FT_UnitVector {
     pub x: FT_F2Dot14,
     pub y: FT_F2Dot14,
@@ -1436,6 +1541,16 @@ fn wasm_glyph_cbox_snapshot(
             cbox: None,
         });
     }
+    if glyph.clazz == wasm_owned_outline_glyph_class() {
+        let owned = wasm_owned_outline_glyph_from_root(glyph)?;
+        let mut cbox = rust_ffi::FT_BBox::default();
+        rust_ffi::FT_Outline_Get_CBox(Some(&owned.core.outline), Some(&mut cbox));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(cbox),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  This thin WASM ABI wrapper reads
     // only the class facade's bbox-hook presence and delegates FreeType's
     // zero-first `FT_Glyph_Get_CBox` contract to safe Rust.
@@ -1480,6 +1595,32 @@ pub extern "C" fn fontdone_wasm_get_glyph(slot_present: i32, aglyph: *mut usize)
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_glyph_from_face(
+    face_handle: usize,
+    aglyph: *mut usize,
+) -> FT_Error {
+    let slot = face_ref(face_handle).and_then(|face| face.slot.as_ref());
+    let err = rust_ffi::FT_Get_Glyph(slot.is_some(), !aglyph.is_null());
+    if err != rust_ffi::FT_Err_Unimplemented_Feature as FT_Error {
+        return err;
+    }
+    let Some(out) = (unsafe { aglyph.as_mut() }) else {
+        return err;
+    };
+    match rust_ffi::FT_Get_Outline_Glyph(slot) {
+        Ok(core) => {
+            let glyph = Box::new(WasmOwnedOutlineGlyph::new(core));
+            *out = Box::into_raw(glyph).addr();
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => {
+            *out = 0;
+            error
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_glyph_copy(
     source: *const FontdoneWasmGlyph,
     target: *mut usize,
@@ -1504,6 +1645,52 @@ pub extern "C" fn fontdone_wasm_glyph_copy(
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_done_glyph(glyph_present: i32) {
     rust_ffi::FT_Done_Glyph(glyph_present != 0);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_done_glyph_handle(glyph: *mut FontdoneWasmGlyph) {
+    if wasm_owned_outline_glyph_from_root(glyph).is_some() {
+        // SAFETY: the private class marker proves this pointer came from
+        // `Box<WasmOwnedOutlineGlyph>` in `fontdone_wasm_get_glyph_from_face`.
+        unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedOutlineGlyph>())) };
+        return;
+    }
+    rust_ffi::FT_Done_Glyph(!glyph.is_null());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_transform(
+    glyph: *mut FontdoneWasmGlyph,
+    matrix: *const FontdoneWasmMatrix,
+    delta: *const FontdoneWasmVector,
+) -> FT_Error {
+    if glyph.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(owned) = wasm_owned_outline_glyph_from_root_mut(glyph) else {
+        let has_class = unsafe { !(*glyph).clazz.is_null() };
+        return if has_class {
+            rust_ffi::FT_Err_Invalid_Glyph_Format
+        } else {
+            rust_ffi::FT_Err_Invalid_Argument
+        };
+    };
+    let matrix = (unsafe { matrix.as_ref() }).map(|matrix| rust_ffi::FT_Matrix {
+        xx: matrix.xx,
+        xy: matrix.xy,
+        yx: matrix.yx,
+        yy: matrix.yy,
+    });
+    let delta = (unsafe { delta.as_ref() }).map(|delta| rust_ffi::FT_Vector {
+        x: delta.x,
+        y: delta.y,
+    });
+    let error =
+        rust_ffi::FT_Glyph_Transform_Outline(Some(&mut owned.core), matrix.as_ref(), delta.as_ref());
+    if error == rust_ffi::FT_Err_Ok {
+        owned.refresh_record();
+    }
+    error
 }
 
 #[unsafe(no_mangle)]

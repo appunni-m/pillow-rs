@@ -24,10 +24,13 @@ Current evidence:
   support for those glyphs, and `FT_Done_Glyph` release for wrapper-owned
   outline glyphs. The wrapper owns pointer validation, record copying, and
   lifetime only; transform math remains in `fontdone`.
-- The success rows remain pending because the C and WASM thin ABI layers do not
-  both expose the full owned-glyph route. The WASM ABI still needs an owned
-  outline glyph handle/record path, and the unified harness/oracle still needs
-  to compare this operation across all lanes. Using only outline snapshot
+- The thin WASM ABI now has an explicit live-slot `FT_Get_Glyph` route,
+  wrapper-owned outline glyph record/handle storage, `fontdone_wasm_glyph_transform`,
+  CBox support for wrapper-owned glyphs, and explicit release. The wrapper owns
+  opaque handle lifetime and linear-memory record copying only; transform math
+  remains in `fontdone`.
+- The success rows remain pending because the unified harness/oracle still needs
+  to compare this operation through all lanes. Using only outline snapshot
   helpers would not prove the public `FT_Glyph_Transform` endpoint or glyph
   ownership contract.
 - Pinned C behavior to match:
@@ -43,14 +46,13 @@ Implementation plan:
 
 1. [done] Add an owned glyph representation in `fontdone` that can hold the public
    `FT_GlyphRec` root plus outline payload copied from a loaded glyph slot.
-2. [partial] Teach Rust FFI/C ABI `FT_Get_Glyph` success to allocate/copy an outline glyph for
+2. [done] Teach Rust FFI/C ABI/WASM ABI `FT_Get_Glyph` success to allocate/copy an outline glyph for
    scalable outline slots, preserving root format, advance, library/class
-   presence, outline points/tags/contours, and CBox. Core and C ABI are present;
-   WASM is still pending.
+   presence, outline points/tags/contours, and CBox.
 3. [partial] Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only
    after the owned glyph object exists; wrappers may validate raw pointers and
-   copy records, but must not implement transform logic independently. C ABI is
-   present; WASM is still pending.
+   copy records, but must not implement transform logic independently. C ABI and
+   WASM ABI are present; unified route comparison is still pending.
 4. Route `ftglyph.glyph_transform` success through pinned C oracle, Rust FFI,
    C ABI, and WASM ABI, comparing status, transformed outline points, root
    advance, CBox, and mutation class for matrix+delta, delta-only, matrix-only,
