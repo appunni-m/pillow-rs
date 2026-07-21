@@ -16918,6 +16918,71 @@ static int emit_stroker_null_noop(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_lifecycle_output(const char* action) {
+    if (streq(action, "new") || streq(action, "done")) {
+        printf("{\"error\":0,\"stroker_nonnull\":true,\"crash\":false}");
+    } else if (streq(action, "export")) {
+        printf("{\"rows\":[");
+        printf("{\"scenario\":\"null_stroker_outline\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_null_outline\",\"target_outline_after\":null,\"crash\":false}");
+        printf("]}");
+    } else if (streq(action, "export-border")) {
+        printf("{\"rows\":[");
+        printf("{\"scenario\":\"null_stroker_left\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_null_outline\",\"target_outline_after\":null,\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_invalid_border\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_unparsed_left\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false}");
+        printf("]}");
+    }
+}
+
+static int emit_stroker_lifecycle(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":{\"error\":%d,\"stroker_nonnull\":false,\"crash\":false}}\n", new_error);
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Vector point = { 111, 222 };
+    unsigned char tag = FT_CURVE_TAG_ON;
+    unsigned short contour = 0;
+    FT_Outline outline = { 1, 1, &point, &tag, &contour, 0 };
+    if (streq(action, "export")) {
+        FT_Stroker_Export(NULL, &outline);
+        FT_Stroker_Export(stroker, NULL);
+    } else if (streq(action, "export-border")) {
+        FT_Stroker_ExportBorder(NULL, FT_STROKER_BORDER_LEFT, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, NULL);
+        FT_Stroker_ExportBorder(stroker, (FT_StrokerBorder)2, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+    } else if (!streq(action, "new") && !streq(action, "done")) {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":");
+    print_stroker_lifecycle_output(action);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_truetype_engine_type(int argc, char** argv) {
     (void)argc;
     int library_kind = atoi(argv[2]);
@@ -22530,6 +22595,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--stroker-null-noop")) {
         return emit_stroker_null_noop(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-lifecycle")) {
+        return emit_stroker_lifecycle(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);

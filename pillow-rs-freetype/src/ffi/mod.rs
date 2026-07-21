@@ -58,9 +58,10 @@ pub use handles::{
     FT_Set_Default_Properties_From_Env, FT_Set_MM_Blend_Coordinates, FT_Set_MM_Design_Coordinates,
     FT_Set_MM_WeightVector, FT_Set_Named_Instance, FT_Set_Pixel_Sizes, FT_Set_Transform,
     FT_Set_Var_Blend_Coordinates, FT_Set_Var_Design_Coordinates, FT_Sfnt_Table_Info, FT_Sin,
-    FT_Stroker, FT_Stroker_Done, FT_Stroker_Rewind, FT_Stroker_Set, FT_Tan, FT_TrueTypeGX_Free,
-    FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate,
-    FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
+    FT_Stroker, FT_Stroker_Done, FT_Stroker_Export, FT_Stroker_ExportBorder, FT_Stroker_New,
+    FT_Stroker_Rewind, FT_Stroker_Set, FT_Tan, FT_TrueTypeGX_Free, FT_Vector_From_Polar,
+    FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit,
+    FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
 };
 pub use handles::{FT_Done_Library, FT_Library_Memory, FT_Library_Refcount, FT_New_Library};
 #[cfg(any(test, feature = "abi-test-support"))]

@@ -2265,6 +2265,37 @@ pub fn abi_support_stroker_null_noop(action: i32) -> bool {
     true
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_lifecycle(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    match action {
+        1 => {}
+        2 => rust_ffi::FT_Stroker_Export(stroker, None),
+        3 => {
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+        }
+        4 => {
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
+        }
+        _ => return false,
+    }
+    rust_ffi::FT_Stroker_Done(stroker);
+    true
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_new(
     library_handle: usize,
