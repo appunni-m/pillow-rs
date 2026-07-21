@@ -4,10 +4,10 @@ Current objective: exact same-input parity with pinned C FreeType for Rust FFI,
 thin C ABI, and WASM ABI. Do not count coverage-only tests, generic fallback,
 fixture substitutions, or green placeholders as parity.
 
-Current live baseline on `main` after the Type1 OpenType missing-service split:
+Current live baseline on `main` after the Type1/CFF OpenType missing-service split:
 
 ```text
-route audit concrete_cases=7259 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4747}
+route audit concrete_cases=7260 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4748}
 pending_route_rows=237
 duplicate_operation_input_buckets=42
 ```
@@ -992,11 +992,16 @@ Promoted disabled/missing-service split:
   `OPENTYPE_VALIDATE` service through pinned C, Rust FFI, C ABI, and WASM ABI.
   This does not prove selected-table, malformed-table, or validation-buffer
   ownership behavior.
+- `ftotval.FT_OpenType_Validate.cff_fontinfo_service_missing_error` uses
+  maintained `input/fonts/cff/fontinfo-populated.otf` and compares the same
+  active-build `FT_Err_Unimplemented_Feature` missing-service result for a CFF
+  face through pinned C, Rust FFI, C ABI, and WASM ABI. This broadens exact
+  face-format coverage without claiming OpenType validator table success.
 
-After the Type1 OpenType missing-service split:
+After the Type1/CFF OpenType missing-service split:
 
 ```text
-route audit concrete_cases=7259 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4747}
+route audit concrete_cases=7260 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4748}
 runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
 runtime_cases: runnable=1 pending=0
 ```
