@@ -187,6 +187,12 @@
           }
         },
         "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
           "creation_paths": [
             "FT_Get_Glyph outline",
             "FT_Glyph_Copy outline"

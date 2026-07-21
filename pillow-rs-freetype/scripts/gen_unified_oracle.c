@@ -5842,6 +5842,44 @@ static void print_get_glyph_payload(FT_GlyphSlot slot, const char* action) {
     }
 }
 
+static void print_done_outline_glyph_payload(FT_GlyphSlot slot) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    FT_Glyph_Format format = 0;
+    FT_Bool owner = 0;
+    short n_points = 0;
+    short n_contours = 0;
+    if (!err && glyph) {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        format = glyph->format;
+        owner = (outline_glyph->outline.flags & FT_OUTLINE_OWNER) != 0;
+        n_points = outline_glyph->outline.n_points;
+        n_contours = outline_glyph->outline.n_contours;
+    }
+    print_status(0);
+    printf(",\"output\":{");
+    printf("\"void\":true,");
+    printf("\"created_glyph_pointer_class\":\"%s\",", glyph ? "non_null" : "null");
+    printf("\"create_error\":%d,", err);
+    if (!err && glyph) {
+        printf("\"format_before_done\":%ld,", (long)format);
+        printf("\"outline_owner_class\":\"%s\",", owner ? "owned" : "borrowed");
+        printf("\"outline_counts_before_done\":{\"n_points\":%d,\"n_contours\":%d},",
+               n_points,
+               n_contours);
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned outline glyph\"");
+    } else {
+        printf("\"format_before_done\":null,");
+        printf("\"outline_owner_class\":null,");
+        printf("\"outline_counts_before_done\":null,");
+        printf("\"free_events\":\"none\"");
+    }
+    printf("}}\n");
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
 static void print_get_glyph_error_row(const char* probe, FT_Error err, FT_Glyph glyph) {
     printf("{\"probe\":\"%s\",\"error\":%d,\"output_pointer_class\":\"%s\"}",
            probe,
@@ -20187,7 +20225,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--done-glyph-outline") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -20242,6 +20280,13 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     if (!err && streq(command, "--glyph-record")) {
         print_get_glyph_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--done-glyph-outline")) {
+        print_done_outline_glyph_payload(face->glyph);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -22817,6 +22862,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--glyph-record")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--done-glyph-outline")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--get-glyph-advance-boundaries")) {

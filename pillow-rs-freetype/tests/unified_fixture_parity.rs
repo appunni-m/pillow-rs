@@ -19931,7 +19931,9 @@ fn property_name_cstr(selector: i32) -> *const std::ffi::c_char {
 }
 
 fn debug_hook_action(case: &InputCase) -> Result<i32, String> {
-    if case.case_id.contains(".stores_valid_hook") {
+    if case.case_id.contains(".stores_valid_hook")
+        || case.case_id.contains(".debug_hook_index_import_contract")
+    {
         Ok(1)
     } else if case.case_id.contains(".null_library_noop") {
         Ok(2)
@@ -25275,6 +25277,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftglyph.done_glyph" => {
             if params.get("glyph").is_some_and(Value::is_null) {
                 return Ok(vec!["--done-glyph-null".to_string()]);
+            }
+            if case.case_id == "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
+                let mut args = vec!["--done-glyph-outline".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
             }
             Err("ftglyph.done_glyph non-null ownership facade route is pending".to_string())
         }
@@ -34274,28 +34284,169 @@ fn done_glyph_null_output() -> RunOutput {
     }))
 }
 
+fn done_outline_glyph_output(
+    create_error: FT_Error,
+    pointer_class: &str,
+    format: Option<i32>,
+    outline_owner: Option<bool>,
+    outline_counts: Option<(i16, i16)>,
+) -> RunOutput {
+    ok(json!({
+        "void": true,
+        "created_glyph_pointer_class": pointer_class,
+        "create_error": create_error,
+        "format_before_done": format,
+        "outline_owner_class": outline_owner.map(|owner| if owner { "owned" } else { "borrowed" }),
+        "outline_counts_before_done": outline_counts.map(|(points, contours)| json!({
+            "n_points": points,
+            "n_contours": contours
+        })),
+        "free_events": if create_error == FT_Err_Ok {
+            "FT_Done_Glyph called once for owned outline glyph"
+        } else {
+            "none"
+        }
+    }))
+}
+
 fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        FT_Done_Glyph(false);
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    FT_Done_Glyph(false);
-    Ok(done_glyph_null_output())
+    let face = open_face(case)?;
+    let loaded = FT_Load_Glyph(
+        &face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let (create_error, pointer_class, format, outline_owner, outline_counts) = match loaded {
+        Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let counts = (
+                    glyph.outline.points.len() as i16,
+                    glyph.outline.contours.len() as i16,
+                );
+                let owner = (glyph.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0;
+                let format = glyph.root.format;
+                FT_Done_Glyph(true);
+                (
+                    FT_Err_Ok,
+                    "non_null",
+                    Some(format),
+                    Some(owner),
+                    Some(counts),
+                )
+            }
+            Err(error) => (error, "null", None, None, None),
+        },
+        Err(error) => (error, "null", None, None, None),
+    };
+    Ok(done_outline_glyph_output(
+        create_error,
+        pointer_class,
+        format,
+        outline_owner,
+        outline_counts,
+    ))
 }
 
 fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        c_abi::FT_Done_Glyph(ptr::null_mut());
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    c_abi::FT_Done_Glyph(ptr::null_mut());
-    Ok(done_glyph_null_output())
+    let (_library, face) = c_open_face(case)?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut create_error = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if create_error == FT_Err_Ok {
+        create_error = c_abi::abi_get_glyph_from_face(face, &mut glyph);
+    }
+    let (format, outline_owner, outline_counts) = if create_error == FT_Err_Ok {
+        let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+        (
+            Some(FT_GLYPH_FORMAT_OUTLINE),
+            Some((snapshot.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0),
+            Some((
+                snapshot.outline.points.len() as i16,
+                snapshot.outline.contours.len() as i16,
+            )),
+        )
+    } else {
+        (None, None, None)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    Ok(done_outline_glyph_output(
+        create_error,
+        if glyph.is_null() { "null" } else { "non_null" },
+        format,
+        outline_owner,
+        outline_counts,
+    ))
 }
 
 fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        wasm_abi::fontdone_wasm_done_glyph(0);
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    wasm_abi::fontdone_wasm_done_glyph(0);
-    Ok(done_glyph_null_output())
+    let handle = wasm_open_face(case)?;
+    let mut glyph_handle = 0usize;
+    let mut create_error = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if create_error == FT_Err_Ok {
+        create_error = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+    }
+    let (format, outline_owner, outline_counts) = if create_error == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+        (
+            Some(FT_GLYPH_FORMAT_OUTLINE),
+            Some((snapshot.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0),
+            Some((
+                snapshot.outline.points.len() as i16,
+                snapshot.outline.contours.len() as i16,
+            )),
+        )
+    } else {
+        (None, None, None)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(handle);
+    Ok(done_outline_glyph_output(
+        create_error,
+        if glyph_handle == 0 {
+            "null"
+        } else {
+            "non_null"
+        },
+        format,
+        outline_owner,
+        outline_counts,
+    ))
 }
 
 fn glyph_copy_error_row(probe: &str, error: FT_Error, target_pointer_class: &str) -> Value {

@@ -3143,6 +3143,11 @@ def done_glyph_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
     """Case-specific non-null FT_Done_Glyph rows that need owned glyph routing."""
     if row.operation != "ftglyph.done_glyph":
         return None
+    if row.case_id == "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays":
+        if {"glyph_index", "load_flags"} <= row.params.keys() and (
+            "font" in row.assets or "outline_font" in row.assets
+        ):
+            return None
     if (
         row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
         and row.params.get("glyph") is None
@@ -4272,7 +4277,10 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def set_debug_hook_real_parity_reason(row: ConcreteInput) -> str | None:
-    if row.operation == "ftmodapi.set_debug_hook" and row.subject == "ftmodapi.FT_Set_Debug_Hook":
+    if row.operation == "ftmodapi.set_debug_hook" and row.subject in {
+        "ftmodapi.FT_Set_Debug_Hook",
+        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE",
+    }:
         return "FT_Set_Debug_Hook slot mutation/no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
@@ -4732,6 +4740,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.done_glyph",
             "ftglyph.FT_Done_Glyph.success_null_is_noop",
         ): "FT_Done_Glyph(NULL) void no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays",
+        ): "FT_Done_Glyph outline-glyph ownership validates a real FT_Get_Glyph outline, owned outline flags/counts before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
@@ -6929,7 +6941,6 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot",
         "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot",
         "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot",
-        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract",
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success",
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success",
         "ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match",
