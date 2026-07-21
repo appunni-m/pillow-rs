@@ -13966,8 +13966,17 @@ static int emit_bdf_property_case(int argc, char** argv) {
 }
 
 static void print_bdf_charset_pointer(const char* value) {
-    printf("{\"is_null\":");
+    printf("{\"null\":");
     print_json_bool(value == NULL);
+    printf(",\"bytes\":");
+    if (value) {
+        printf("\"");
+        print_hex_bytes((const unsigned char*)value, (long)strlen(value));
+        printf("\"");
+    } else {
+        printf("\"\"");
+    }
+    printf(",\"length\":%ld", value ? (long)strlen(value) : 0L);
     printf("}");
 }
 
@@ -13977,7 +13986,8 @@ static int emit_bdf_charset_case(int argc, char** argv) {
         fprintf(stderr, "--bdf-charset-case requires case_id source_kind source_value face_index\n");
         return 2;
     }
-    if (!streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face")) {
+    if (!streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face") &&
+        !streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset")) {
         fprintf(stderr, "unsupported BDF charset case: %s\n", case_id);
         return 2;
     }

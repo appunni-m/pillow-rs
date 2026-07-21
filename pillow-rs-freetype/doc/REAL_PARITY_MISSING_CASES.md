@@ -11340,6 +11340,40 @@ Audit correction:
 - Counting these rows as `real-parity` is a green placeholder because the
   focused runtime test does not run any comparison.
 
+Follow-up on 2026-07-21:
+
+- Added the maintained BDF fixture
+  `tests/fixtures/input/fonts/bdf/charset-registry.bdf` with
+  `CHARSET_REGISTRY "ISO10646"` and `CHARSET_ENCODING "1"`.
+- Implemented `FT_Get_BDF_Charset_ID` success behavior in Rust FFI by returning
+  face-owned atom strings parsed from the BDF properties, matching
+  `freetype/src/base/ftbdf.c:FT_Get_BDF_Charset_ID` and
+  `freetype/src/bdf/bdfdrivr.c:bdf_get_charset_id`.
+- First divergence during promotion was in the harness, not core behavior:
+  the C ABI lane copied charset bytes after `FT_Done_Face`, but pinned C owns
+  the returned charset strings on the face.  The harness now copies the C ABI
+  and WASM ABI bytes before face teardown.
+- The row `ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset` now validates
+  exact charset string bytes through pinned C oracle, Rust FFI, thin C ABI, and
+  WASM ABI for the same BDF fixture.
+- The rows requiring `input/fonts/bdf/sfnt-bdf-table.otb` remain pending until
+  that SFNT-BDF fixture exists.  The null-output matrix also remains pending:
+  its one-output-null C pointer variants need a maintained WASM-compatible
+  route shape before they can be counted without faking the public ABI input.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
+make -C pillow-rs-freetype route-audit
+```
+
+Current focused result:
+
+- `ftbdf.get_bdf_charset_id`: `2 / 2` runnable rows passed, `3` pending for the
+  unresolved SFNT-BDF fixture and null-output route shape.
+- Route audit after promotion: `real-parity=4535`, `pending-route=425`.
+
 ## FT_Get_BDF_Property route audit correction
 
 `ftbdf.get_bdf_property` fixture rows are present, but they are not real parity
