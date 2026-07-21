@@ -187,6 +187,21 @@ Rows checked before selecting the next implementation batch:
 | `ftcache.FTC_ImageTypeRec` image/sbit lookup fields | `make -C pillow-rs-freetype test-op OP=ftcache.image_type_lookup_probe` | `passed=1 pending=0` | Completed. Route compares actual pinned C `FTC_ImageCache_Lookup` and `FTC_SBitCache_Lookup` driven by the same `FTC_ImageTypeRec` face-id, width, height, flags, and glyph index against Rust FFI, C ABI, and WASM ABI. The sbit side models cache materialization by loading without the descriptor's `FT_LOAD_RENDER` bit and rendering once to the `FTC_SBit` public field shape. |
 | `ftcache.FTC_Node` / `FTC_Node_Unref` lifecycle | `make -C pillow-rs-freetype test-op OP=ftcache.node_lifecycle`, `make -C pillow-rs-freetype test-op OP=ftcache.node_unref` | `node_lifecycle passed=1 pending=0`; `node_unref passed=2 pending=1` | Completed for lookup-acquired nodes. Route compares actual pinned C `FTC_SBitCache_Lookup` with non-null `anode`, public `FTC_SBitRec` fields, node cache index, refcount before/after one `FTC_Node_Unref`, pressure lookup statuses, and post-unref survival class against Rust FFI, C ABI, and WASM ABI. `FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending because the fixture includes a foreign/bad-cache-index node that requires a maintained safe layout facade instead of a generic no-op. |
 
+## Missing fixture sourcing sweep: 2026-07-21
+
+Internet search was used only to classify fixture acquisition strategy. Do not
+import third-party binaries until license, provenance, and pinned-C output are
+checked into a maintained generator or fixture note.
+
+| Fixture family | Search result | Plan |
+|---|---|---|
+| OT-SVG / SBIX color fonts | Public candidates exist in `simoncozens/test-fonts` and `googlefonts/color-fonts`. | Use only after license review and pinned-C output capture. If output shape must be minimal, generate repo-local fixtures instead. |
+| PCF and SFNT-BDF/OTB | No exact declared files found. `monobit` can generate SFNT bitmap outputs; BDF-to-PCF workflows exist via `bdftopcf`. | Prefer deterministic repo-local generators. Do not add arbitrary public PCF/OTB files. |
+| OpenType validation BASE/GDEF/GPOS/GSUB/JSTF/MATH | Public test fonts exist for some layout tables, but exact malformed rows are not available under the declared names. | Generate minimal valid/malformed FontTools fixtures per table, then implement `FT_OpenType_Validate` behavior before promoting. |
+| CID/PFR/GX/AAT | Public corpus fonts exist, but no compact exact declared fixtures were found. | Generate/subset controlled fixtures where possible; otherwise keep rows pending until a license-compatible compact corpus asset is selected and pinned-C behavior is recorded. |
+| TrueType phantom-point backward-compatibility and synthetic outline JSON | No public exact fixtures found. | Generate locally; these are behavior-specific fixtures, not internet corpus assets. |
+| malformed `maxp` | Exact declared files were placeholder symlinks; no internet asset should be used. | Completed asset step in `scripts/build_sfnt_fixtures.py`: `truncated-maxp.ttf` and `invalid-maxp.ttf` are now generated malformed SFNTs. Remaining work is route wiring for `face.load_then_get_sfnt_table.maxp`. |
+
 ## Post-merge triage: 2026-07-21
 
 Rows checked after `main` moved to `293f1c151`:
