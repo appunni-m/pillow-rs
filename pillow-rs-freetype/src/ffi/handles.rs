@@ -3585,8 +3585,9 @@ pub fn FT_TrueTypeGX_Free(face: Option<&FT_Face>, table: FT_Bytes) {
 
 pub fn FT_ClassicKern_Free(face: Option<&FT_Face>, table: FT_Bytes) {
     // FreeType 2.14.3 `src/base/ftgxval.c:125-136` returns before touching the
-    // table pointer when `face` is null.  Non-null ckern buffer freeing remains
-    // pending.
+    // table pointer when `face` is null.  The pinned oracle build has no
+    // CLASSICKERN_VALIDATE service, so non-null validation buffers are not
+    // produced by any real parity route.
     let _ = (face, table);
 }
 
@@ -3596,6 +3597,25 @@ fn face_has_sfnt_table(face: &FT_Face, tag: [u8; 4]) -> bool {
         .font()
         .load_sfnt_table(u32::from_be_bytes(tag), 0, None)
         .is_ok()
+}
+
+pub fn FT_ClassicKern_Validate(
+    face: Option<&FT_Face>,
+    validation_flags: FT_UInt,
+    ckern_table: Option<&mut FT_Bytes>,
+) -> FT_Error {
+    if face.is_none() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
+    let Some(ckern_table) = ckern_table else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *ckern_table = std::ptr::null();
+    let _ = validation_flags;
+    // The pinned FreeType build used by the oracle does not register the
+    // CLASSICKERN_VALIDATE service; `src/base/ftgxval.c:110-121` therefore
+    // returns Unimplemented_Feature after argument validation.
+    FT_Err_Unimplemented_Feature
 }
 
 fn read_u16_be(data: &[u8], offset: usize) -> Option<u16> {
