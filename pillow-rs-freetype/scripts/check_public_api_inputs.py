@@ -5526,6 +5526,41 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "ftcache.manager_remove_face_id"
+        and row.case_id
+        in {
+            "ftcache.FTC_Manager_RemoveFaceID.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_RemoveFaceID.success_removes_unreferenced_face_size_and_nodes",
+            "ftcache.FTC_Manager_RemoveFaceID.success_referenced_nodes_hidden_until_unref",
+            "ftcache.FTC_Manager_RemoveFaceID.success_other_face_ids_unchanged",
+            "ftcache.FTC_Manager_RemoveFaceID.success_null_manager_noop",
+            "ftcache.FTC_Manager_RemoveFaceID.success_null_or_unknown_face_id",
+        }
+    ):
+        return (
+            "FTC_Manager_RemoveFaceID face-id eviction, distinct face-id "
+            "isolation, referenced-node unref sequencing, unknown/null face-id "
+            "no-ops, and null-manager no-op behavior validate through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftcache.manager_done"
+        and row.case_id
+        in {
+            "ftcache.FTC_Manager_Done.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_Done.success_destroy_empty_manager",
+            "ftcache.FTC_Manager_Done.success_destroy_populated_manager",
+            "ftcache.FTC_Manager_Done.success_null_or_invalid_library_noop",
+            "ftcache.FTC_Manager_Done.node_reference_lifecycle_on_done",
+        }
+    ):
+        return (
+            "FTC_Manager_Done null-manager no-op, empty-manager teardown, "
+            "populated cache/face/size/node release-before-done lifecycle, and "
+            "void-return ownership behavior validate through pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.sbit_cache_lookup_scaler"
         and row.case_id
         == "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler"
