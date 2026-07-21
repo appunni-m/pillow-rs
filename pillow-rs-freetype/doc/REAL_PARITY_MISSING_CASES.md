@@ -17,11 +17,15 @@ Focused runtime evidence:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index
 ```
 
 ```text
 runtime_cases: runnable=0 pending=1
 pending_reasons=ftcolor.get_color_glyph_clipbox:FT_Get_Color_Glyph_ClipBox success parity needs a maintained route for variant s12 proving scaled size coordinates and active transform effects match pinned C output exactly:1
+
+runtime_cases: runnable=0 pending=1
+pending_reasons=ftcolor.get_color_glyph_layer:FT_Get_Color_Glyph_Layer foreground parity needs a maintained route proving foreground color index sentinel values are emitted and preserved exactly like pinned C:1
 ```
 
 Inspected blockers:
@@ -66,6 +70,21 @@ Inspected blockers:
   palette subsystem is routed, but foreground-color parity requires observing a
   public foreground `0xFFFF` paint/layer output after mutation, not merely
   returning success from `FT_Palette_Set_Foreground_Color`.
+- `ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index` remains pending.
+  The fixture `tests/fixtures/fonts/color/colr-v0-foreground-layer-ffff.ttf`
+  exists, but there is no maintained `FT_Get_Color_Glyph_Layer` runtime route in
+  the Rust FFI, C ABI, or WASM ABI. This row must compare the layer iterator's
+  emitted glyph index and foreground color index sentinel `0xFFFF`; crediting
+  CPAL palette selection or scalar constant parity would not prove the public
+  layer API.
+- `ftsystem.FT_StreamRec.memory_stream_field_contract` remains pending even
+  though `input/fonts/DejaVuSans.ttf` exists and external-stream ownership is
+  routed. The missing piece is a maintained memory-stream probe that opens the
+  same bytes with `FT_New_Memory_Face` and compares `face->stream` observable
+  fields (`base`, `size`, `pos`, `cursor`, `limit`) plus frame-read behavior
+  across pinned C, Rust FFI, thin C ABI, and WASM ABI. Layout parity for
+  `FT_StreamRec` and `FT_OPEN_STREAM` close-callback ownership do not prove
+  this memory-stream field contract.
 - `fterrdef.FT_Err_Missing_Property.known_property_success` remains pending
   because the declared success input asks for module `svg` property `svg-hooks`,
   while pinned FreeType exposes the maintained property on module `ot-svg`.
@@ -82,10 +101,17 @@ Required fix plan:
 3. For COLR v1 clipbox/foreground, add deterministic compact COLR v1 fixtures
    and implement the pure-Rust COLR clipbox/foreground-paint route before
    wiring C/WASM ABI helpers.
-4. For FTMM residuals, fix the declared input shape first: use C-loadable Type1
+4. For COLR v0 foreground layers, implement `FT_Get_Color_Glyph_Layer` in the
+   pure-Rust FFI first and add thin C/WASM record-copy helpers; compare the
+   exact iterator sequence and `0xFFFF` foreground color index against pinned C.
+5. For `FT_StreamRec.memory_stream_field_contract`, add a memory-stream
+   inspection route that exposes only public C-observable stream fields and
+   frame-read behavior; do not reuse the external-stream close-callback route as
+   evidence.
+6. For FTMM residuals, fix the declared input shape first: use C-loadable Type1
    MM glyphs for output rows and avoid treating pinned-C adjacent-memory reads
    as safe Rust parity.
-5. For the known-property row, either change the manifest/input through a
+7. For the known-property row, either change the manifest/input through a
    reviewed fixture-plan update to the pinned-C `ot-svg` property, or keep the
    current `svg` row pending as an invalid declared success input.
 
