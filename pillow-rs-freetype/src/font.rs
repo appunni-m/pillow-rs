@@ -51,6 +51,7 @@ pub struct Font {
     pub size_pt: f32,
     pub load_mode: LoadMode,
     face_kind: FaceKind,
+    type1_font_info: Option<Type1FontInfo>,
     type1_private: Option<Type1PrivateDict>,
     type1_multi_master: Option<Arc<Type1MultiMaster>>,
     type1_mm_weight_vector: Option<Vec<i32>>,
@@ -140,6 +141,9 @@ pub struct WinFntHeader {
 }
 
 struct Type1Metadata {
+    version: Option<String>,
+    notice: Option<String>,
+    full_name: Option<String>,
     font_name: String,
     family_name: String,
     style_name: String,
@@ -148,6 +152,19 @@ struct Type1Metadata {
     underline_position: i16,
     underline_thickness: i16,
     bbox: BBox,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Type1FontInfo {
+    pub version: Option<String>,
+    pub notice: Option<String>,
+    pub full_name: Option<String>,
+    pub family_name: Option<String>,
+    pub weight: Option<String>,
+    pub italic_angle: i32,
+    pub is_fixed_pitch: bool,
+    pub underline_position: i16,
+    pub underline_thickness: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -941,11 +958,17 @@ fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
         .map_err(|_| FontError::InvalidFont("Type 1 clear-text dictionary is not UTF-8".into()))?;
     let font_name = type1_name_token(text, "FontName")
         .ok_or_else(|| FontError::InvalidFont("Type 1 missing FontName".into()))?;
+    let version = type1_string_value(text, "version");
+    let notice = type1_string_value(text, "Notice");
+    let full_name = type1_string_value(text, "FullName");
     let family_name = type1_string_value(text, "FamilyName").unwrap_or_else(|| font_name.clone());
     let style_name = type1_string_value(text, "Weight").unwrap_or_else(|| "Regular".into());
     let bbox =
         type1_bbox(text).ok_or_else(|| FontError::InvalidFont("Type 1 missing FontBBox".into()))?;
     Ok(Type1Metadata {
+        version,
+        notice,
+        full_name,
         font_name,
         family_name,
         style_name,
@@ -1796,6 +1819,19 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing Type 1 clear-text dictionary".into()))?;
         let metadata = parse_type1_metadata(cleartext)?;
         let type1_multi_master = parse_type1_multi_master(cleartext).map(Arc::new);
+        let type1_font_info = Type1FontInfo {
+            version: metadata.version.clone(),
+            notice: metadata.notice.clone(),
+            full_name: metadata.full_name.clone(),
+            family_name: Some(metadata.family_name.clone()),
+            weight: Some(metadata.style_name.clone()),
+            // FreeType Type 1 `t1tokens.h` stores FontInfo `ItalicAngle` as
+            // fixed-point; the public `PS_FontInfoRec` exposes 16.16 units.
+            italic_angle: i32::from(metadata.italic_angle) << 16,
+            is_fixed_pitch: metadata.is_fixed_pitch,
+            underline_position: metadata.underline_position,
+            underline_thickness: u16::try_from(metadata.underline_thickness.max(0)).unwrap_or(0),
+        };
         let type1_private = parse_type1_private(data);
         let type1_mm_weight_vector = type1_multi_master
             .as_ref()
@@ -1821,6 +1857,7 @@ impl Font {
             face_kind: FaceKind::Type1 {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
+            type1_font_info: Some(type1_font_info),
             type1_private,
             type1_multi_master,
             type1_mm_weight_vector,
@@ -1863,6 +1900,7 @@ impl Font {
             size_pt,
             load_mode: LoadMode::Default,
             face_kind: FaceKind::Bdf,
+            type1_font_info: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -1905,6 +1943,7 @@ impl Font {
             size_pt,
             load_mode: LoadMode::Default,
             face_kind: FaceKind::WinFnt { header },
+            type1_font_info: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -2181,6 +2220,7 @@ impl Font {
             size_pt,
             load_mode,
             face_kind: FaceKind::Sfnt,
+            type1_font_info: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -2303,6 +2343,10 @@ impl Font {
 
     pub(crate) fn type1_multi_master(&self) -> Option<&Type1MultiMaster> {
         self.type1_multi_master.as_deref()
+    }
+
+    pub(crate) fn type1_font_info(&self) -> Option<&Type1FontInfo> {
+        self.type1_font_info.as_ref()
     }
 
     pub(crate) fn type1_private(&self) -> Option<&Type1PrivateDict> {

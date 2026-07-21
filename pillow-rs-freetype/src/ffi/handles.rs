@@ -10,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::casts::usize_from_i32;
 use crate::font::{
     ActiveSizeState, BdfPropertyValue, KerningMode, SelectSizeError, SizeRequest, SizeRequestError,
-    SizeRequestType, Type1PrivateDict, WinFntHeader,
+    SizeRequestType, Type1FontInfo, Type1PrivateDict, WinFntHeader,
 };
 use crate::{api, grays, render};
 
@@ -29,8 +29,9 @@ use super::types::{
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
     FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
     FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_PrivateRec,
-    TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_FontInfoRec,
+    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
+    TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1239,6 +1240,7 @@ pub struct FT_Face {
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
     postscript_name: Option<String>,
+    type1_font_info_strings: Option<Type1FontInfoStrings>,
     type1_mm_axis_names: Vec<CString>,
     sfnt_os2: Option<Box<TT_OS2>>,
     sfnt_head: Option<Box<TT_Header>>,
@@ -1255,6 +1257,15 @@ pub struct FT_Face {
     random_seed: FT_Int32,
     increase_x_height: FT_UInt,
     refcount: usize,
+}
+
+#[derive(Clone)]
+struct Type1FontInfoStrings {
+    version: Option<CString>,
+    notice: Option<CString>,
+    full_name: Option<CString>,
+    family_name: Option<CString>,
+    weight: Option<CString>,
 }
 
 #[derive(Clone)]
@@ -2820,6 +2831,66 @@ fn ps_private_to_ffi(private: &Type1PrivateDict) -> PS_PrivateRec {
         password: private.password,
         min_feature: private.min_feature,
     }
+}
+
+fn optional_cstring(value: Option<&str>) -> Option<CString> {
+    CString::new(value?).ok()
+}
+
+fn type1_font_info_strings(info: Option<&Type1FontInfo>) -> Option<Type1FontInfoStrings> {
+    let info = info?;
+    Some(Type1FontInfoStrings {
+        version: optional_cstring(info.version.as_deref()),
+        notice: optional_cstring(info.notice.as_deref()),
+        full_name: optional_cstring(info.full_name.as_deref()),
+        family_name: optional_cstring(info.family_name.as_deref()),
+        weight: optional_cstring(info.weight.as_deref()),
+    })
+}
+
+fn cstring_mut_ptr(value: &Option<CString>) -> *mut FT_String {
+    value
+        .as_ref()
+        .map_or(ptr::null_mut(), |string| string.as_ptr().cast_mut().cast())
+}
+
+fn ps_font_info_to_ffi(
+    info: &Type1FontInfo,
+    strings: Option<&Type1FontInfoStrings>,
+) -> Option<PS_FontInfoRec> {
+    let strings = strings?;
+    Some(PS_FontInfoRec {
+        version: cstring_mut_ptr(&strings.version),
+        notice: cstring_mut_ptr(&strings.notice),
+        full_name: cstring_mut_ptr(&strings.full_name),
+        family_name: cstring_mut_ptr(&strings.family_name),
+        weight: cstring_mut_ptr(&strings.weight),
+        italic_angle: i64::from(info.italic_angle),
+        is_fixed_pitch: FT_Bool::from(info.is_fixed_pitch),
+        underline_position: info.underline_position,
+        underline_thickness: info.underline_thickness,
+    })
+}
+
+pub fn FT_Get_PS_Font_Info(
+    face: Option<&FT_Face>,
+    afont_info: Option<&mut PS_FontInfoRec>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(afont_info) = afont_info else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let inner = face.inner.borrow();
+    let Some(info) = inner.font().type1_font_info() else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(info) = ps_font_info_to_ffi(info, face.type1_font_info_strings.as_ref()) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *afont_info = info;
+    FT_Err_Ok
 }
 
 pub fn FT_Get_PS_Font_Private(
@@ -5244,6 +5315,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
     let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
+    let type1_font_info_strings = type1_font_info_strings(font.type1_font_info());
     let type1_mm_axis_names = font
         .type1_multi_master()
         .map(|master| {
@@ -5346,6 +5418,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sizes,
         probe_only,
         postscript_name,
+        type1_font_info_strings,
         type1_mm_axis_names,
         sfnt_os2,
         sfnt_head,

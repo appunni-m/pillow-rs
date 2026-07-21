@@ -11321,6 +11321,44 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: Type1 PS FontInfo route and blend flag groups
+
+Batch target:
+
+- Promote the Type1 `FT_Get_PS_Font_Info` route through pinned C FreeType,
+  Rust FFI, thin C ABI, and WASM ABI.
+- Reuse the same maintained Type1 MM fixture route for the grouped
+  `T1_Blend_Flags` FontInfo and Private dictionary rows.
+- Keep broad signature matrices pending when they still require future
+  Type1/CFF/CID/Type42/CFF2 fixture coverage or `FT_Get_PS_Font_Value`.
+
+Rows promoted in this batch:
+
+- `t1tables.T1_BLEND_ITALIC_ANGLE.font_info_italic_angle_runtime_value`
+- `t1tables.T1_Blend_Flags.font_info_blend_group`
+- `t1tables.T1_Blend_Flags.private_blend_group`
+
+Implementation notes:
+
+- The core Type1 loader now preserves `FontInfo` strings and scalar fields.
+- `FT_Get_PS_Font_Info` returns face-owned C string pointers, matching the
+  FreeType service contract; harness snapshots must copy string bytes before
+  destroying C/WASM face handles.
+- Type1 `ItalicAngle` is exported as 16.16 `FT_Fixed`, matching the pinned C
+  Type1 token handling rather than the raw dictionary integer.
+- C and WASM ABI layers only copy flat public records and string pointer/length
+  metadata; all Type1 parsing remains in core Rust.
+
+Why this batch is smaller than 10 rows:
+
+- The larger 20-row cache/color pending groups are separate subsystem work, not
+  route-complete Type1 table rows.
+- The remaining t1tables encoding rows are a separate `FT_Get_PS_Font_Value`
+  surface and should be handled as the next issue-set batch.
+- Broad `FT_Get_PS_Font_Info` / `FT_Get_PS_Font_Private` signature matrices
+  remain pending until the required Type1/CFF/CID/Type42/CFF2 assets and
+  same-input runtime rows exist.
+
 ### Type1 PS Private dictionary route promotion
 
 Promoted rows:
