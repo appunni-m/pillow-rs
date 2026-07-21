@@ -1187,6 +1187,25 @@ pub extern "C" fn fontdone_wasm_classic_kern_free(handle: usize, table: FT_Bytes
     rust_ffi::FT_ClassicKern_Free(face_ref(handle).map(|face| &face.face), table);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_classic_kern_validate(
+    handle: usize,
+    validation_flags: FT_UInt,
+    ckern_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_ref(handle).map(|face| &face.face);
+    let mut table = ptr::null();
+    let err = rust_ffi::FT_ClassicKern_Validate(
+        face,
+        validation_flags,
+        (!ckern_table.is_null()).then_some(&mut table),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(ckern_table, table);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmGlyphSlot {

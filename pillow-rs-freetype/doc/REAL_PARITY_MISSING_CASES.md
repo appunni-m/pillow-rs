@@ -1438,6 +1438,49 @@ Verification:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: Classic kern validate ABI export and service-missing route
+
+Status: ABI surface cleanup completed on 2026-07-21 for
+`FT_ClassicKern_Validate`; success/lifetime validation rows remain pending.
+
+Finding:
+
+- Pinned FreeType 2.14.3 `FT_ClassicKern_Validate` validates null arguments,
+  clears the output table slot, then looks up the `CLASSICKERN_VALIDATE`
+  service in `src/base/ftgxval.c`. The current oracle build does not provide
+  that service, so valid classic kern inputs return `FT_Err_Unimplemented_Feature`
+  (`7`) instead of a copied validation table.
+- Rust previously modeled `FT_ClassicKern_Free` but had no core
+  `FT_ClassicKern_Validate` facade, and the thin C/WASM ABI surfaces exported
+  `FT_ClassicKern_Free` without the matching public validate function.
+- The fix adds the core facade plus thin C and WASM exports, preserving the
+  pinned-C service-missing behavior and null output-slot clearing. It does not
+  promote the success/lifetime rows because targeted same-input C oracle probes
+  return error `7`; crediting them as successful validation would be a green
+  placeholder.
+
+Remaining related blockers:
+
+- `ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern`
+- `ftgxval.FT_VALIDATE_CKERN.output_table_lifetime`
+- `ftgxval.FT_ClassicKern_Free.frees_classic_kern_validation_buffer`
+
+Impact:
+
+- `real-parity`: stays `4718`
+- `pending-route`: stays `245`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftgxval.classic_kern_validate
+make -C pillow-rs-freetype test-ffi
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype lint
+```
+
 ### Issue Set Current: GX null free and palette data without CPAL
 
 Status: three-row runtime route completed on 2026-07-20 for pinned FreeType

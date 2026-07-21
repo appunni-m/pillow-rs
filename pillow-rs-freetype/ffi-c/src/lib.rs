@@ -1212,6 +1212,25 @@ pub extern "C" fn FT_ClassicKern_Free(face: FT_Face, table: FT_Bytes) {
     rust_ffi::FT_ClassicKern_Free(face_state(face).map(|state| &state.inner), table);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_ClassicKern_Validate(
+    face: FT_Face,
+    validation_flags: FT_UInt,
+    ckern_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_state(face).map(|state| &state.inner);
+    let mut table = ptr::null();
+    let err = rust_ffi::FT_ClassicKern_Validate(
+        face,
+        validation_flags,
+        (!ckern_table.is_null()).then_some(&mut table),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(ckern_table, table);
+    }
+    err
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct FT_SfntName {

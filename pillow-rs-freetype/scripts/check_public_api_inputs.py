@@ -203,6 +203,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_open_type_free",
     "fontdone_wasm_truetype_gx_free",
     "fontdone_wasm_classic_kern_free",
+    "fontdone_wasm_classic_kern_validate",
     "fontdone_wasm_round_fix",
     "fontdone_wasm_ceil_fix",
     "fontdone_wasm_floor_fix",
