@@ -3192,6 +3192,14 @@ pub fn FT_Get_BDF_Property(
         return FT_Err_Invalid_Argument;
     };
     let inner = face.inner.borrow();
+    // FreeType 2.14.3 `src/base/ftbdf.c` routes through the face's BDF
+    // service.  For a non-BDF face the service lookup fails before property
+    // lookup and returns the public error observed as `FT_Err_Invalid_Table`
+    // in this build; a missing property on an actual BDF face remains
+    // `FT_Err_Invalid_Argument`.
+    if inner.font().font_format() != "BDF" {
+        return FT_Err_Invalid_Table;
+    }
     match inner.font().bdf_property(prop_name) {
         Some(BdfPropertyValue::Atom(_)) => {
             output.type_ = BDF_PROPERTY_TYPE_ATOM;

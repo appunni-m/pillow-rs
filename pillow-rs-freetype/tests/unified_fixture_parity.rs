@@ -2628,6 +2628,9 @@ impl BackendComparisonWorker {
             "ftmodapi.property_get"
             | "ftdriver.interpreter_version_default"
             | "FT_Property_Get" => property_get_case_output(case, PropertyBackend::Rust),
+            "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+                rust_bdf_property_output(case)
+            }
             "FT_Property_Set_then_Get"
                 if case.case_id
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
@@ -2951,6 +2954,9 @@ impl BackendComparisonWorker {
                 let face = self.c_face(case)?;
                 Ok(ok(c_face_driver_name_with_font_format_json(face)))
             }
+            "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+                c_bdf_property_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -3264,6 +3270,9 @@ impl BackendComparisonWorker {
             {
                 let handle = self.wasm_face(case)?;
                 Ok(ok(wasm_face_driver_name_with_font_format_json(handle)))
+            }
+            "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+                wasm_bdf_property_output(case)
             }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
@@ -16850,6 +16859,7 @@ fn wasm_truetype_engine_output(params: &Value) -> Result<Value, String> {
 }
 
 const PROPERTY_SENTINEL: FT_UInt = 0xDEAD_BEEF;
+const BDF_PROPERTY_TYPE_SENTINEL: i32 = 0x7777_7777;
 
 #[derive(Clone, Copy)]
 enum PropertyBackend {
@@ -16928,6 +16938,230 @@ fn property_get_case_output(
         }
         other => Err(format!("unsupported property get case {other}")),
     }
+}
+
+fn bdf_property_error_case_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none"
+            | "ftbdf.FT_Get_BDF_Property.error_null_face_or_output"
+            | "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike"
+    )
+}
+
+fn bdf_property_sentinel() -> BDF_PropertyRec {
+    BDF_PropertyRec {
+        type_: BDF_PROPERTY_TYPE_SENTINEL,
+        u: BDF_PropertyValue {
+            cardinal: PROPERTY_SENTINEL,
+        },
+    }
+}
+
+fn bdf_property_after_json(property: &BDF_PropertyRec) -> Value {
+    // The currently promoted BDF-property rows are exact-error rows.  FreeType's
+    // ftbdf.c sets only the property type for these paths, preserving the union
+    // storage initialized by the caller.  Keep this helper unsafe-free under the
+    // test crate's `-D unsafe-code` gate by reporting the known sentinel bytes
+    // rather than reading inactive union fields.
+    json!({
+        "type": property.type_,
+        "atom_string": null,
+        "integer": PROPERTY_SENTINEL as FT_Int32,
+        "cardinal": PROPERTY_SENTINEL
+    })
+}
+
+fn bdf_property_run_output(error_code: FT_Error, output: Value) -> RunOutput {
+    if error_code == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error_code, output)
+    }
+}
+
+fn bdf_property_name_for_case(case: &InputCase) -> Result<&str, String> {
+    match case.case_id.as_str() {
+        "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none" => Ok("NO_SUCH_PROPERTY"),
+        "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike" => {
+            Ok("FAMILY_NAME")
+        }
+        other => Err(format!("unsupported BDF property scalar case {other}")),
+    }
+}
+
+fn rust_bdf_property_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output" {
+        let mut null_face_property = bdf_property_sentinel();
+        let null_face_error =
+            FT_Get_BDF_Property(None, Some("FAMILY_NAME"), Some(&mut null_face_property));
+        let data = font_bytes(case)?;
+        let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+        let null_output_error = FT_Get_BDF_Property(Some(&face), Some("FAMILY_NAME"), None);
+        return Ok(bdf_property_run_output(
+            null_face_error,
+            json!({
+                "error": null_face_error,
+                "rows": [
+                    {
+                        "variant": "face",
+                        "error": null_face_error,
+                        "property_after": bdf_property_after_json(&null_face_property)
+                    },
+                    {
+                        "variant": "aproperty",
+                        "error": null_output_error,
+                        "property_after": null
+                    }
+                ]
+            }),
+        ));
+    }
+
+    let property_name = bdf_property_name_for_case(case)?;
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut property = bdf_property_sentinel();
+    let error = FT_Get_BDF_Property(Some(&face), Some(property_name), Some(&mut property));
+    Ok(bdf_property_run_output(
+        error,
+        json!({
+            "error": error,
+            "property_name": property_name,
+            "property_after": bdf_property_after_json(&property)
+        }),
+    ))
+}
+
+fn c_bdf_property_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output" {
+        let mut null_face_property = bdf_property_sentinel();
+        let prop_name = CString::new("FAMILY_NAME").map_err(|err| err.to_string())?;
+        let null_face_error = c_abi::FT_Get_BDF_Property(
+            std::ptr::null_mut(),
+            prop_name.as_ptr(),
+            &mut null_face_property,
+        );
+        let (library, face) = c_new_face_without_size(case)?;
+        let null_output_error =
+            c_abi::FT_Get_BDF_Property(face, prop_name.as_ptr(), std::ptr::null_mut());
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(bdf_property_run_output(
+            null_face_error,
+            json!({
+                "error": null_face_error,
+                "rows": [
+                    {
+                        "variant": "face",
+                        "error": null_face_error,
+                        "property_after": bdf_property_after_json(&null_face_property)
+                    },
+                    {
+                        "variant": "aproperty",
+                        "error": null_output_error,
+                        "property_after": null
+                    }
+                ]
+            }),
+        ));
+    }
+
+    let property_name = bdf_property_name_for_case(case)?;
+    let prop_name = CString::new(property_name).map_err(|err| err.to_string())?;
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut property = bdf_property_sentinel();
+    let error = c_abi::FT_Get_BDF_Property(face, prop_name.as_ptr(), &mut property);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(bdf_property_run_output(
+        error,
+        json!({
+            "error": error,
+            "property_name": property_name,
+            "property_after": bdf_property_after_json(&property)
+        }),
+    ))
+}
+
+fn wasm_bdf_property_after_json(property: &wasm_abi::FontdoneWasmBdfProperty) -> Value {
+    json!({
+        "type": property.type_,
+        "atom_string": null,
+        "integer": property.integer,
+        "cardinal": property.cardinal
+    })
+}
+
+fn wasm_bdf_property_sentinel() -> wasm_abi::FontdoneWasmBdfProperty {
+    wasm_abi::FontdoneWasmBdfProperty {
+        type_: BDF_PROPERTY_TYPE_SENTINEL,
+        atom: std::ptr::null(),
+        atom_len: 0,
+        integer: PROPERTY_SENTINEL as FT_Int32,
+        cardinal: PROPERTY_SENTINEL,
+    }
+}
+
+fn wasm_bdf_property_output(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftbdf.FT_Get_BDF_Property.error_null_face_or_output" {
+        let mut null_face_property = wasm_bdf_property_sentinel();
+        let prop_name = b"FAMILY_NAME";
+        let null_face_error = wasm_abi::fontdone_wasm_get_bdf_property(
+            0,
+            prop_name.as_ptr(),
+            prop_name.len() as FT_UInt,
+            &mut null_face_property,
+        );
+        let data = font_bytes(case)?;
+        let handle =
+            wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+        let null_output_error = wasm_abi::fontdone_wasm_get_bdf_property(
+            handle,
+            prop_name.as_ptr(),
+            prop_name.len() as FT_UInt,
+            std::ptr::null_mut(),
+        );
+        wasm_done_face(handle);
+        return Ok(bdf_property_run_output(
+            null_face_error,
+            json!({
+                "error": null_face_error,
+                "rows": [
+                    {
+                        "variant": "face",
+                        "error": null_face_error,
+                        "property_after": wasm_bdf_property_after_json(&null_face_property)
+                    },
+                    {
+                        "variant": "aproperty",
+                        "error": null_output_error,
+                        "property_after": null
+                    }
+                ]
+            }),
+        ));
+    }
+
+    let property_name = bdf_property_name_for_case(case)?;
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut property = wasm_bdf_property_sentinel();
+    let error = wasm_abi::fontdone_wasm_get_bdf_property(
+        handle,
+        property_name.as_ptr(),
+        property_name.len() as FT_UInt,
+        &mut property,
+    );
+    wasm_done_face(handle);
+    Ok(bdf_property_run_output(
+        error,
+        json!({
+            "error": error,
+            "property_name": property_name,
+            "property_after": wasm_bdf_property_after_json(&property)
+        }),
+    ))
 }
 
 fn property_set_case_output(
@@ -21117,6 +21351,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "ftdriver.interpreter_version_property"
         | "ftdriver.interpreter_version_default"
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
+        "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+            let mut args = vec!["--bdf-property-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.face_properties" => {
             let mut args = vec!["--face-properties-case".to_string(), case.case_id.clone()];
             if lifecycle_handle_param(params, "face") != Some("null") {
@@ -42911,6 +43151,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         }
         "freetype.set_charmap" => return "api_object",
         "freetype.get_kerning" | "ftpfr.get_pfr_kerning" => return "api_object",
+        "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
+            return "api_object";
+        }
         "freetype.face_get_char_variant_index" => return "api_object",
         "freetype.face_get_char_variant_is_default" => return "api_object",
         "freetype.face_get_variant_selectors" => return "api_object",

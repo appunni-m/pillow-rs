@@ -10,6 +10,7 @@
 #include <freetype/ftadvanc.h>
 #include <freetype/ftbbox.h>
 #include <freetype/ftbitmap.h>
+#include <freetype/ftbdf.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftfntfmt.h>
@@ -13901,6 +13902,69 @@ static int emit_face_properties_case(int argc, char** argv) {
     return 0;
 }
 
+static void print_bdf_property_after(const BDF_PropertyRec* property) {
+    if (!property) {
+        printf("null");
+        return;
+    }
+    printf("{\"type\":%d,\"atom_string\":", property->type);
+    if (property->type == BDF_PROPERTY_TYPE_ATOM) {
+        print_json_c_string_or_null(property->u.atom);
+    } else {
+        printf("null");
+    }
+    printf(",\"integer\":%d,\"cardinal\":%u}", property->u.integer, property->u.cardinal);
+}
+
+static BDF_PropertyRec bdf_property_sentinel(void) {
+    BDF_PropertyRec property;
+    property.type = 0x77777777;
+    property.u.cardinal = PROPERTY_SENTINEL;
+    return property;
+}
+
+static int emit_bdf_property_case(int argc, char** argv) {
+    const char* case_id = argv[2];
+    if (argc != 6) {
+        fprintf(stderr, "--bdf-property-case requires case_id source_kind source_value face_index\n");
+        return 2;
+    }
+
+    OracleFace face = {0};
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened) {
+        return opened;
+    }
+
+    if (streq(case_id, "ftbdf.FT_Get_BDF_Property.error_null_face_or_output")) {
+        BDF_PropertyRec null_face_property = bdf_property_sentinel();
+        FT_Error null_face_error = FT_Get_BDF_Property(NULL, "FAMILY_NAME", &null_face_property);
+        FT_Error null_output_error = FT_Get_BDF_Property(face.face, "FAMILY_NAME", NULL);
+        printf("{");
+        print_status(null_face_error);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", null_face_error);
+        printf("{\"variant\":\"face\",\"error\":%d,\"property_after\":", null_face_error);
+        print_bdf_property_after(&null_face_property);
+        printf("},{\"variant\":\"aproperty\",\"error\":%d,\"property_after\":null}", null_output_error);
+        printf("]}}\n");
+        close_oracle_face(&face);
+        return 0;
+    }
+
+    const char* property_name = streq(case_id, "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none")
+        ? "NO_SUCH_PROPERTY"
+        : "FAMILY_NAME";
+    BDF_PropertyRec property = bdf_property_sentinel();
+    FT_Error error = FT_Get_BDF_Property(face.face, property_name, &property);
+    printf("{");
+    print_status(error);
+    printf(",\"output\":{\"error\":%d,\"property_name\":\"%s\",\"property_after\":", error, property_name);
+    print_bdf_property_after(&property);
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_property_case(int argc, char** argv) {
     const char* case_id = argv[2];
     printf("{");
@@ -18639,6 +18703,9 @@ static int dispatch(int argc, char** argv) {
     }
     if ((argc == 3 || argc == 6) && streq(argv[1], "--face-properties-case")) {
         return emit_face_properties_case(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--bdf-property-case")) {
+        return emit_bdf_property_case(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--set-debug-hook")) {
         return emit_set_debug_hook(argc, argv);
