@@ -2753,6 +2753,11 @@ impl BackendComparisonWorker {
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 rust_get_ps_font_info(case)
             }
+            "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+                if ps_font_value_encoding_case(case) =>
+            {
+                rust_get_ps_font_value_encoding(case)
+            }
             "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
                 rust_get_ps_font_private(case)
             }
@@ -3070,6 +3075,11 @@ impl BackendComparisonWorker {
             "ftotval.open_type_free" => c_open_type_free(case),
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 c_get_ps_font_info(case)
+            }
+            "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+                if ps_font_value_encoding_case(case) =>
+            {
+                c_get_ps_font_value_encoding(case)
             }
             "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
                 c_get_ps_font_private(case)
@@ -3392,6 +3402,11 @@ impl BackendComparisonWorker {
             "ftotval.open_type_free" => wasm_open_type_free(case),
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 wasm_get_ps_font_info(case)
+            }
+            "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+                if ps_font_value_encoding_case(case) =>
+            {
+                wasm_get_ps_font_value_encoding(case)
             }
             "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
                 wasm_get_ps_font_private(case)
@@ -9102,6 +9117,273 @@ fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     let output = ps_font_info_output(err, wasm_ps_font_info_json(&info));
     wasm_done_face(handle);
     Ok(output)
+}
+
+fn ps_font_value_asset_bytes(case: &InputCase, params: &Value) -> Result<Arc<[u8]>, String> {
+    if params.get("face_source").is_some() {
+        return font_asset_bytes(font_asset_for_source(case, params)?);
+    }
+    let asset = case
+        .inputs
+        .assets
+        .get("font")
+        .ok_or_else(|| "missing font asset".to_string())?;
+    font_asset_bytes(asset)
+}
+
+fn ps_font_value_encoding_case(case: &InputCase) -> bool {
+    case.case_id.starts_with("t1tables.T1_ENCODING_TYPE_")
+        || case.case_id.starts_with("t1tables.T1_EncodingType.")
+}
+
+fn ps_font_value_entry_indexes(params: &Value) -> Result<Vec<FT_UInt>, String> {
+    params
+        .get("encoding_entry_indexes")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .map(|item| {
+                    item.as_u64()
+                        .and_then(|value| FT_UInt::try_from(value).ok())
+                        .ok_or_else(|| format!("invalid encoding_entry_index {item}"))
+                })
+                .collect()
+        })
+        .unwrap_or_else(|| Ok(Vec::new()))
+}
+
+fn ps_font_value_encoding_output(
+    encoding_return: FT_Long,
+    encoding_value: i32,
+    encoding_bytes: &[u8],
+    entries: Vec<Value>,
+) -> RunOutput {
+    let mut output = json!({
+        "encoding_type": {
+            "return": encoding_return,
+            "encoding_type": encoding_value,
+            "bytes": hex_bytes(encoding_bytes)
+        }
+    });
+    if !entries.is_empty() {
+        output["entries"] = Value::Array(entries);
+    }
+    ok(output)
+}
+
+fn ps_font_value_entry_json(index: FT_UInt, return_value: FT_Long, buffer: &[u8]) -> Value {
+    let bytes = usize::try_from(return_value)
+        .ok()
+        .filter(|len| *len <= buffer.len())
+        .map_or_else(String::new, |len| hex_bytes(&buffer[..len]));
+    json!({
+        "index": index,
+        "return": return_value,
+        "bytes": bytes
+    })
+}
+
+fn rust_ps_font_value_encoding_for_bytes(
+    bytes: &[u8],
+    face_index: i64,
+    entries: &[FT_UInt],
+) -> Result<RunOutput, String> {
+    let face = rust_new_face_from_bytes(bytes, face_index)?;
+    let mut encoding = 0i32;
+    let encoding_bytes = encoding.to_ne_bytes();
+    let mut encoding_buffer = encoding_bytes;
+    let encoding_buffer_len = i64::try_from(encoding_buffer.len()).unwrap_or(i64::MAX);
+    let encoding_return = FT_Get_PS_Font_Value(
+        Some(&face),
+        PS_DICT_ENCODING_TYPE,
+        0,
+        Some(&mut encoding_buffer),
+        encoding_buffer_len,
+    );
+    encoding = i32::from_ne_bytes(encoding_buffer);
+    let entry_rows = entries
+        .iter()
+        .map(|index| {
+            let mut buffer = [0u8; 256];
+            let buffer_len = i64::try_from(buffer.len()).unwrap_or(i64::MAX);
+            let ret = FT_Get_PS_Font_Value(
+                Some(&face),
+                PS_DICT_ENCODING_ENTRY,
+                *index,
+                Some(&mut buffer),
+                buffer_len,
+            );
+            ps_font_value_entry_json(*index, ret, &buffer)
+        })
+        .collect();
+    Ok(ps_font_value_encoding_output(
+        encoding_return,
+        encoding,
+        &encoding_buffer,
+        entry_rows,
+    ))
+}
+
+fn c_ps_font_value_encoding_for_bytes(
+    bytes: &[u8],
+    face_index: i64,
+    entries: &[FT_UInt],
+) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_from_bytes(bytes, face_index)?;
+    let mut encoding = 0i32;
+    let ret = c_abi::FT_Get_PS_Font_Value(
+        face,
+        PS_DICT_ENCODING_TYPE,
+        0,
+        (&mut encoding as *mut i32).cast::<c_void>(),
+        i64::try_from(size_of::<i32>()).unwrap_or(i64::MAX),
+    );
+    let encoding_bytes = encoding.to_ne_bytes();
+    let entry_rows = entries
+        .iter()
+        .map(|index| {
+            let mut buffer = [0u8; 256];
+            let ret = c_abi::FT_Get_PS_Font_Value(
+                face,
+                PS_DICT_ENCODING_ENTRY,
+                *index,
+                buffer.as_mut_ptr().cast::<c_void>(),
+                i64::try_from(buffer.len()).unwrap_or(i64::MAX),
+            );
+            ps_font_value_entry_json(*index, ret, &buffer)
+        })
+        .collect();
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ps_font_value_encoding_output(
+        ret,
+        encoding,
+        &encoding_bytes,
+        entry_rows,
+    ))
+}
+
+fn wasm_ps_font_value_encoding_for_bytes(
+    bytes: &[u8],
+    face_index: i64,
+    entries: &[FT_UInt],
+) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_from_bytes(bytes, face_index)?;
+    let mut encoding = 0i32;
+    let ret = wasm_abi::fontdone_wasm_get_ps_font_value(
+        handle,
+        PS_DICT_ENCODING_TYPE,
+        0,
+        (&mut encoding as *mut i32).cast::<c_void>(),
+        i64::try_from(size_of::<i32>()).unwrap_or(i64::MAX),
+    );
+    let encoding_bytes = encoding.to_ne_bytes();
+    let entry_rows = entries
+        .iter()
+        .map(|index| {
+            let mut buffer = [0u8; 256];
+            let ret = wasm_abi::fontdone_wasm_get_ps_font_value(
+                handle,
+                PS_DICT_ENCODING_ENTRY,
+                *index,
+                buffer.as_mut_ptr().cast::<c_void>(),
+                i64::try_from(buffer.len()).unwrap_or(i64::MAX),
+            );
+            ps_font_value_entry_json(*index, ret, &buffer)
+        })
+        .collect();
+    wasm_done_face(handle);
+    Ok(ps_font_value_encoding_output(
+        ret,
+        encoding,
+        &encoding_bytes,
+        entry_rows,
+    ))
+}
+
+fn ps_font_value_standard_rows(case: &InputCase) -> Result<Vec<&Value>, String> {
+    case.inputs
+        .params
+        .get("rows")
+        .and_then(Value::as_array)
+        .map(|rows| rows.iter().collect())
+        .ok_or_else(|| "missing PS font-value rows".to_string())
+}
+
+fn rust_get_ps_font_value_encoding(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "t1tables.T1_EncodingType.standard_or_expert_runtime_cases" {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = ps_font_value_asset_bytes(case, row)?;
+                rust_ps_font_value_encoding_for_bytes(
+                    bytes.as_ref(),
+                    face_index_param(&case.inputs.params)?,
+                    &[],
+                )
+                .map(|output| output.output)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
+    let entries = ps_font_value_entry_indexes(&case.inputs.params)?;
+    let bytes = ps_font_value_asset_bytes(case, &case.inputs.params)?;
+    rust_ps_font_value_encoding_for_bytes(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        &entries,
+    )
+}
+
+fn c_get_ps_font_value_encoding(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "t1tables.T1_EncodingType.standard_or_expert_runtime_cases" {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = ps_font_value_asset_bytes(case, row)?;
+                c_ps_font_value_encoding_for_bytes(
+                    bytes.as_ref(),
+                    face_index_param(&case.inputs.params)?,
+                    &[],
+                )
+                .map(|output| output.output)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
+    let entries = ps_font_value_entry_indexes(&case.inputs.params)?;
+    let bytes = ps_font_value_asset_bytes(case, &case.inputs.params)?;
+    c_ps_font_value_encoding_for_bytes(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        &entries,
+    )
+}
+
+fn wasm_get_ps_font_value_encoding(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "t1tables.T1_EncodingType.standard_or_expert_runtime_cases" {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = ps_font_value_asset_bytes(case, row)?;
+                wasm_ps_font_value_encoding_for_bytes(
+                    bytes.as_ref(),
+                    face_index_param(&case.inputs.params)?,
+                    &[],
+                )
+                .map(|output| output.output)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
+    let entries = ps_font_value_entry_indexes(&case.inputs.params)?;
+    let bytes = ps_font_value_asset_bytes(case, &case.inputs.params)?;
+    wasm_ps_font_value_encoding_for_bytes(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        &entries,
+    )
 }
 
 fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
@@ -22175,6 +22457,41 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "t1tables.get_ps_font_value" if ps_font_value_encoding_case(case) => {
+            let mut args = vec!["--ps-font-value-encoding".to_string()];
+            push_named_font_source(case, "font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.get_ps_font_value_encoding"
+            if case.case_id == "t1tables.T1_EncodingType.array_encoding_runtime_case" =>
+        {
+            let mut args = vec!["--ps-font-value-encoding".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(
+                ps_font_value_entry_indexes(params)?
+                    .into_iter()
+                    .map(|index| index.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+            Ok(args)
+        }
+        "t1tables.get_ps_font_value_encoding"
+            if case.case_id == "t1tables.T1_EncodingType.standard_or_expert_runtime_cases" =>
+        {
+            let rows = ps_font_value_standard_rows(case)?;
+            let mut args = vec![
+                "--ps-font-value-encoding-rowset".to_string(),
+                rows.len().to_string(),
+            ];
+            for row in rows {
+                push_font_source_from_param(case, row, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+            }
+            Ok(args)
+        }
         "ftotval.open_type_free" => {
             if param_is_null(params, "face") {
                 return Ok(vec!["--open-type-free-null-face".to_string()]);
@@ -24643,6 +24960,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             rust_get_ps_font_info(case)
         }
+        "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+            if ps_font_value_encoding_case(case) =>
+        {
+            rust_get_ps_font_value_encoding(case)
+        }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             rust_get_ps_font_private(case)
         }
@@ -24780,6 +25102,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftotval.open_type_free" => c_open_type_free(case),
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             c_get_ps_font_info(case)
+        }
+        "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+            if ps_font_value_encoding_case(case) =>
+        {
+            c_get_ps_font_value_encoding(case)
         }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             c_get_ps_font_private(case)
@@ -25707,6 +26034,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftotval.open_type_free" => wasm_open_type_free(case),
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             wasm_get_ps_font_info(case)
+        }
+        "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
+            if ps_font_value_encoding_case(case) =>
+        {
+            wasm_get_ps_font_value_encoding(case)
         }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             wasm_get_ps_font_private(case)

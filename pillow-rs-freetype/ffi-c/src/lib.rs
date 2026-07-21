@@ -76,6 +76,8 @@ pub type FT_Encoding = c_int;
 pub type FT_Sfnt_Tag = c_uint;
 pub type FT_LcdFilter = c_int;
 pub type FT_TrueTypeEngineType = c_int;
+pub type PS_Dict_Keys = c_int;
+pub type T1_EncodingType = c_int;
 pub type FT_DebugHook_Func = rust_ffi::FT_DebugHook_Func;
 pub type FT_StrokerBorder = c_int;
 pub type FT_Stroker = *mut c_void;
@@ -1417,6 +1419,28 @@ pub extern "C" fn FT_Get_PS_Font_Private(
         }
     }
     err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_PS_Font_Value(
+    face: FT_Face,
+    key: PS_Dict_Keys,
+    idx: FT_UInt,
+    value: *mut c_void,
+    value_len: FT_Long,
+) -> FT_Long {
+    let face = face_state(face).map(|state| &state.inner);
+    let effective_value_len = value_len.max(0);
+    let value_len = usize::try_from(effective_value_len).unwrap_or(usize::MAX);
+    let value = if value.is_null() {
+        None
+    } else {
+        // SAFETY: C ABI caller supplies `value_len` writable bytes at `value`
+        // when the pointer is non-null; this wrapper only exposes those bytes
+        // to the safe Rust FFI implementation.
+        Some(unsafe { slice::from_raw_parts_mut(value.cast::<u8>(), value_len) })
+    };
+    rust_ffi::FT_Get_PS_Font_Value(face, key, idx, value, effective_value_len)
 }
 
 #[unsafe(no_mangle)]

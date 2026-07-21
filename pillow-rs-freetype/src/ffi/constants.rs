@@ -28,6 +28,9 @@ pub const BDF_PROPERTY_TYPE_ATOM: i32 = 1;
 pub const BDF_PROPERTY_TYPE_INTEGER: i32 = 2;
 pub const BDF_PROPERTY_TYPE_CARDINAL: i32 = 3;
 
+pub const PS_DICT_ENCODING_TYPE: i32 = 9;
+pub const PS_DICT_ENCODING_ENTRY: i32 = 10;
+
 pub const FT_LOAD_DEFAULT: FT_Int32 = 0;
 pub const FT_LOAD_NO_SCALE: FT_Int32 = 1 << 0;
 pub const FT_LOAD_NO_HINTING: FT_Int32 = 1 << 1;

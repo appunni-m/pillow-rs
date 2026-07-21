@@ -198,6 +198,19 @@ typedef struct BDF_PropertyRec_ {
 
 typedef BDF_PropertyRec* BDF_Property;
 
+typedef enum T1_EncodingType_ {
+  T1_ENCODING_TYPE_NONE = 0,
+  T1_ENCODING_TYPE_ARRAY = 1,
+  T1_ENCODING_TYPE_STANDARD = 2,
+  T1_ENCODING_TYPE_ISOLATIN1 = 3,
+  T1_ENCODING_TYPE_EXPERT = 4
+} T1_EncodingType;
+
+typedef enum PS_Dict_Keys_ {
+  PS_DICT_ENCODING_TYPE = 9,
+  PS_DICT_ENCODING_ENTRY = 10
+} PS_Dict_Keys;
+
 typedef struct PS_FontInfoRec_ {
   char* version;
   char* notice;
@@ -599,6 +612,7 @@ FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRe
 FT_Error FT_Get_BDF_Charset_ID(FT_Face face, const char** acharset_encoding, const char** acharset_registry);
 FT_Error FT_Get_PS_Font_Info(FT_Face face, PS_FontInfo afont_info);
 FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private);
+FT_Long FT_Get_PS_Font_Value(FT_Face face, PS_Dict_Keys key, FT_UInt idx, void* value, FT_Long value_len);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);
 void* FT_Get_Sfnt_Table(FT_Face face, FT_Sfnt_Tag tag);

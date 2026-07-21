@@ -29,9 +29,9 @@ use super::types::{
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
     FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
     FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_FontInfoRec,
-    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
-    TT_VertHeader,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys,
+    PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
+    TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -2909,6 +2909,63 @@ pub fn FT_Get_PS_Font_Private(
     };
     *afont_private = ps_private_to_ffi(private);
     FT_Err_Ok
+}
+
+fn copy_value_bytes(value: Option<&mut [u8]>, required_len: usize, source: &[u8]) -> FT_Long {
+    if let Some(value) = value.filter(|value| value.len() >= required_len) {
+        value[..required_len].copy_from_slice(source);
+    }
+    FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
+}
+
+pub fn FT_Get_PS_Font_Value(
+    face: Option<&FT_Face>,
+    key: PS_Dict_Keys,
+    idx: FT_UInt,
+    value: Option<&mut [u8]>,
+    value_len: FT_Long,
+) -> FT_Long {
+    let Some(face) = face else {
+        return 0;
+    };
+    let inner = face.inner.borrow();
+    let Some(encoding) = inner.font().type1_encoding() else {
+        return 0;
+    };
+    let value_len = usize::try_from(value_len.max(0)).unwrap_or(usize::MAX);
+    let value = value.map(|buffer| {
+        let len = buffer.len().min(value_len);
+        &mut buffer[..len]
+    });
+    match key {
+        // FreeType `src/type1/t1driver.c:t1_ps_get_font_value` copies
+        // `type1->encoding_type` as a public `T1_EncodingType` enum and
+        // returns its required byte length even for sizing queries.
+        PS_DICT_ENCODING_TYPE => copy_value_bytes(
+            value,
+            std::mem::size_of::<PS_Dict_Keys>(),
+            &encoding.encoding_type.to_ne_bytes(),
+        ),
+        PS_DICT_ENCODING_ENTRY
+            if encoding.encoding_type == 1
+                && usize::try_from(idx)
+                    .ok()
+                    .and_then(|index| encoding.entries.get(index))
+                    .and_then(Option::as_deref)
+                    .is_some() =>
+        {
+            let name = encoding.entries[usize::try_from(idx).unwrap_or(0)]
+                .as_deref()
+                .unwrap_or("");
+            let required_len = name.len().saturating_add(1);
+            if let Some(value) = value.filter(|value| value.len() >= required_len) {
+                value[..name.len()].copy_from_slice(name.as_bytes());
+                value[name.len()] = 0;
+            }
+            FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
+        }
+        _ => -1,
+    }
 }
 
 pub fn FT_OpenType_Validate(

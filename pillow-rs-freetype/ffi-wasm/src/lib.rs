@@ -33,6 +33,8 @@ pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
 pub type FT_TrueTypeEngineType = i32;
+pub type PS_Dict_Keys = i32;
+pub type T1_EncodingType = i32;
 pub type FT_Orientation = i32;
 pub type FT_StrokerBorder = i32;
 pub type FT_Pointer = *mut c_void;
@@ -3964,6 +3966,32 @@ pub extern "C" fn fontdone_wasm_get_ps_font_private(
         }
     }
     err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_ps_font_value(
+    handle: usize,
+    key: PS_Dict_Keys,
+    idx: FT_UInt,
+    value: *mut c_void,
+    value_len: FT_Long,
+) -> FT_Long {
+    let effective_value_len = value_len.max(0);
+    let value_len = usize::try_from(effective_value_len).unwrap_or(usize::MAX);
+    let value = if value.is_null() {
+        None
+    } else {
+        // SAFETY: caller supplies `value_len` writable linear-memory bytes at
+        // `value`; this wrapper only lends those bytes to the safe Rust FFI.
+        Some(unsafe { slice::from_raw_parts_mut(value.cast::<u8>(), value_len) })
+    };
+    rust_ffi::FT_Get_PS_Font_Value(
+        face_ref(handle).map(|face| &face.face),
+        key,
+        idx,
+        value,
+        effective_value_len,
+    )
 }
 
 #[unsafe(no_mangle)]
