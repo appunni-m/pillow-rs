@@ -14201,6 +14201,23 @@ Follow-up finding for blend-coordinate state rows:
   Keep the route guard in place.  The required next fix is an oracle-backed
   success fixture and glyph-output runner; classifier movement alone is not a
   valid parity gain.
+- Follow-up on 2026-07-22: added a separate
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend`
+  row instead of reclassifying the pending blend-dependent row.  Pinned
+  FreeType 2.14.3 accepts
+  `FT_Set_MM_Blend_Coordinates(adobe-mm-two-axis.pfb, [49152,16384])`, then
+  loads and renders glyph 1 successfully.  Rust FFI, thin C ABI, and WASM ABI
+  match the exact glyph metrics, outline cbox, bitmap descriptor, and bitmap
+  bytes.  This proves glyph output after the MM blend setter for a C-loadable
+  Type 1 MM glyph; it deliberately does not claim
+  `output_changes_for_active_blend`, because the maintained minimal Type 1
+  fixture does not yet have blend-dependent charstring interpolation.
+  Verification:
+  `make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend`
+  passed `runtime_parity: passed=1 failed=0 total=1`, and
+  `make -C pillow-rs-freetype test-op OP=ftmm.set_mm_blend_coordinates`
+  passed `runtime_parity: passed=5 failed=0 total=5` with the original
+  blend-dependent row still pending.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set
