@@ -4611,21 +4611,38 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
         row.operation == "t1tables.get_ps_font_private"
         and row.case_id
-        == "t1tables.FT_Get_PS_Font_Private.cff_invalid_argument"
+        in {
+            "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success",
+            "t1tables.FT_Get_PS_Font_Private.cff_invalid_argument",
+        }
         and unresolved_assets_reason(row) is None
     ):
+        if row.expect_error:
+            return (
+                "FT_Get_PS_Font_Private CFF unsupported-service Invalid_Argument validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         return (
-            "FT_Get_PS_Font_Private CFF unsupported-service Invalid_Argument validates "
+            "FT_Get_PS_Font_Private Type1 private dictionary record validates "
             "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_info"
-        and row.case_id == "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument"
+        and row.case_id
+        in {
+            "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success",
+            "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
+        }
         and unresolved_assets_reason(row) is None
     ):
+        if row.expect_error:
+            return (
+                "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
+                "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         return (
-            "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
-            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            "FT_Get_PS_Font_Info Type1 FontInfo string/scalar record validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_private"

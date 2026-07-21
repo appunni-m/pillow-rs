@@ -43,6 +43,37 @@ Rejected same-turn promotions:
   also includes a non-null foreign/bad-cache-index node, where pinned C reads
   `node->cache_index`; null-only behavior cannot be generalized.
 
+After the Type1 PS FontInfo/Private concrete split:
+
+```text
+route audit concrete_cases=7249 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4737}
+focused runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+full fontdone-test runtime_parity: passed=7007 failed=0 total=7007 covered_manifest_cases=3908
+full fontdone-test runtime_cases: runnable=7007 pending=242
+```
+
+Added same-input rows:
+
+- `t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success`
+- `t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success`
+
+Both rows use the maintained generated Type1 fixture
+`input/fonts/type1/font-value-populated.pfb` and compare exact public
+`PS_FontInfoRec` / `PS_PrivateRec` outputs through pinned C, Rust FFI, thin C
+ABI, and WASM ABI. The broad
+`t1tables.FT_Get_PS_Font_Info.signature_and_behavior_matrix`,
+`t1tables.FT_Get_PS_Font_Private.signature_and_behavior_matrix`, and
+`t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix` rows remain
+pending because they still include CFF2, CID, Type42, CFF glyph-name, and
+other future assets or unimplemented public functions.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success
+```
+
 Historical route-audit baseline before the FTC route batches:
 
 ```text
