@@ -3890,6 +3890,7 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         if row.case_id in {
             "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
             "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset",
+            "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs",
         }:
             return None
         unresolved = unresolved_assets_reason(row)

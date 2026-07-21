@@ -16963,10 +16963,19 @@ fn bdf_charset_case_supported(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
             | "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset"
+            | "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs"
     )
 }
 
 fn bdf_charset_pointer_json<T>(pointer: *const T) -> Value {
+    if pointer.addr() == 1 {
+        return json!({
+            "null": false,
+            "bytes": "",
+            "length": PROPERTY_SENTINEL,
+            "sentinel": true
+        });
+    }
     ffi_nullable_c_string_json(pointer.cast())
 }
 
@@ -16987,9 +16996,81 @@ fn bdf_charset_run_output(
     }
 }
 
+fn bdf_charset_null_matrix_output(
+    null_face_error: FT_Error,
+    null_face_encoding: Value,
+    null_face_registry: Value,
+    null_encoding_error: FT_Error,
+    registry_only: Value,
+    null_registry_error: FT_Error,
+    encoding_only: Value,
+    both_outputs_null_error: FT_Error,
+) -> RunOutput {
+    let output = json!({
+        "error": null_face_error,
+        "rows": [
+            {
+                "variant": "face",
+                "error": null_face_error,
+                "charset_encoding": null_face_encoding,
+                "charset_registry": null_face_registry
+            },
+            {
+                "variant": "charset_encoding",
+                "error": null_encoding_error,
+                "charset_encoding": null,
+                "charset_registry": registry_only
+            },
+            {
+                "variant": "charset_registry",
+                "error": null_registry_error,
+                "charset_encoding": encoding_only,
+                "charset_registry": null
+            },
+            {
+                "variant": "both_outputs",
+                "error": both_outputs_null_error,
+                "charset_encoding": null,
+                "charset_registry": null
+            }
+        ]
+    });
+    if null_face_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(null_face_error, output)
+    }
+}
+
 fn rust_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
     let data = font_bytes(case)?;
     let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    if case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs" {
+        let mut null_face_encoding = std::ptr::without_provenance::<FT_String>(1);
+        let mut null_face_registry = std::ptr::without_provenance::<FT_String>(1);
+        let null_face_error = FT_Get_BDF_Charset_ID(
+            None,
+            Some(&mut null_face_encoding),
+            Some(&mut null_face_registry),
+        );
+        let mut registry_only = std::ptr::without_provenance::<FT_String>(1);
+        let null_encoding_error =
+            FT_Get_BDF_Charset_ID(Some(&face), None, Some(&mut registry_only));
+        let mut encoding_only = std::ptr::without_provenance::<FT_String>(1);
+        let null_registry_error =
+            FT_Get_BDF_Charset_ID(Some(&face), Some(&mut encoding_only), None);
+        let both_outputs_null_error = FT_Get_BDF_Charset_ID(Some(&face), None, None);
+        return Ok(bdf_charset_null_matrix_output(
+            null_face_error,
+            bdf_charset_pointer_json(null_face_encoding),
+            bdf_charset_pointer_json(null_face_registry),
+            null_encoding_error,
+            bdf_charset_pointer_json(registry_only),
+            null_registry_error,
+            bdf_charset_pointer_json(encoding_only),
+            both_outputs_null_error,
+        ));
+    }
     let mut encoding = std::ptr::without_provenance::<FT_String>(1);
     let mut registry = std::ptr::without_provenance::<FT_String>(1);
     let error = FT_Get_BDF_Charset_ID(Some(&face), Some(&mut encoding), Some(&mut registry));
@@ -17002,6 +17083,36 @@ fn rust_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
+    if case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs" {
+        let mut null_face_encoding = std::ptr::without_provenance::<c_abi::FT_String>(1);
+        let mut null_face_registry = std::ptr::without_provenance::<c_abi::FT_String>(1);
+        let null_face_error = c_abi::FT_Get_BDF_Charset_ID(
+            std::ptr::null_mut(),
+            &mut null_face_encoding,
+            &mut null_face_registry,
+        );
+        let mut registry_only = std::ptr::without_provenance::<c_abi::FT_String>(1);
+        let null_encoding_error =
+            c_abi::FT_Get_BDF_Charset_ID(face, std::ptr::null_mut(), &mut registry_only);
+        let mut encoding_only = std::ptr::without_provenance::<c_abi::FT_String>(1);
+        let null_registry_error =
+            c_abi::FT_Get_BDF_Charset_ID(face, &mut encoding_only, std::ptr::null_mut());
+        let both_outputs_null_error =
+            c_abi::FT_Get_BDF_Charset_ID(face, std::ptr::null_mut(), std::ptr::null_mut());
+        let output = bdf_charset_null_matrix_output(
+            null_face_error,
+            bdf_charset_pointer_json(null_face_encoding),
+            bdf_charset_pointer_json(null_face_registry),
+            null_encoding_error,
+            bdf_charset_pointer_json(registry_only),
+            null_registry_error,
+            bdf_charset_pointer_json(encoding_only),
+            both_outputs_null_error,
+        );
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
     let mut encoding = std::ptr::without_provenance::<c_abi::FT_String>(1);
     let mut registry = std::ptr::without_provenance::<c_abi::FT_String>(1);
     let error = c_abi::FT_Get_BDF_Charset_ID(face, &mut encoding, &mut registry);
@@ -17018,6 +17129,45 @@ fn c_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
     let data = font_bytes(case)?;
     let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    if case.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs" {
+        let mut null_face_output = wasm_abi::FontdoneWasmBdfCharset {
+            charset_encoding: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_encoding_len: PROPERTY_SENTINEL,
+            charset_registry: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_registry_len: PROPERTY_SENTINEL,
+        };
+        let null_face_error = wasm_abi::fontdone_wasm_get_bdf_charset_id(0, &mut null_face_output);
+        let mut registry_only = wasm_abi::FontdoneWasmBdfCharset {
+            charset_encoding: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_encoding_len: PROPERTY_SENTINEL,
+            charset_registry: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_registry_len: PROPERTY_SENTINEL,
+        };
+        let null_encoding_error =
+            wasm_abi::fontdone_wasm_get_bdf_charset_id(handle, &mut registry_only);
+        let mut encoding_only = wasm_abi::FontdoneWasmBdfCharset {
+            charset_encoding: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_encoding_len: PROPERTY_SENTINEL,
+            charset_registry: std::ptr::without_provenance::<FT_Byte>(1),
+            charset_registry_len: PROPERTY_SENTINEL,
+        };
+        let null_registry_error =
+            wasm_abi::fontdone_wasm_get_bdf_charset_id(handle, &mut encoding_only);
+        let both_outputs_null_error =
+            wasm_abi::fontdone_wasm_get_bdf_charset_id(handle, std::ptr::null_mut());
+        let output = bdf_charset_null_matrix_output(
+            null_face_error,
+            bdf_charset_pointer_json(null_face_output.charset_encoding),
+            bdf_charset_pointer_json(null_face_output.charset_registry),
+            null_encoding_error,
+            bdf_charset_pointer_json(registry_only.charset_registry),
+            null_registry_error,
+            bdf_charset_pointer_json(encoding_only.charset_encoding),
+            both_outputs_null_error,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
     let mut output = wasm_abi::FontdoneWasmBdfCharset {
         charset_encoding: std::ptr::without_provenance::<FT_Byte>(1),
         charset_encoding_len: PROPERTY_SENTINEL,
