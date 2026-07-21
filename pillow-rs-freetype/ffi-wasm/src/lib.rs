@@ -1483,6 +1483,43 @@ pub extern "C" fn fontdone_wasm_open_face(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_open_external_stream_face(
+    file_base: *const c_uchar,
+    file_size: usize,
+    face_index: FT_Long,
+    size_pt: f32,
+) -> FontdoneWasmStatus {
+    if file_base.is_null() {
+        return FontdoneWasmStatus {
+            error: rust_ffi::FT_Err_Invalid_Argument,
+            handle: 0,
+        };
+    }
+    // SAFETY: `file_base` is non-null and caller promises `file_size` readable bytes.
+    let data = unsafe { slice::from_raw_parts(file_base, file_size) };
+    let library = rust_ffi::FT_Init_FreeType();
+    match rust_ffi::FT_Open_External_Stream_Face_With_Name_Options(
+        &library,
+        data,
+        face_index,
+        size_pt,
+        rust_ffi::FT_Open_Face_Name_Options::default(),
+    ) {
+        Ok(face) => {
+            let state = make_wasm_face_state(face);
+            let active_size = state.active_size;
+            let handle = Box::into_raw(state).addr();
+            register_wasm_size_handle(handle, active_size);
+            FontdoneWasmStatus {
+                error: rust_ffi::FT_Err_Ok,
+                handle,
+            }
+        }
+        Err(error) => FontdoneWasmStatus { error, handle: 0 },
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_open_face_with_name_options(
     file_base: *const c_uchar,
     file_size: usize,
@@ -1827,8 +1864,11 @@ pub extern "C" fn fontdone_wasm_glyph_transform(
         x: delta.x,
         y: delta.y,
     });
-    let error =
-        rust_ffi::FT_Glyph_Transform_Outline(Some(&mut owned.core), matrix.as_ref(), delta.as_ref());
+    let error = rust_ffi::FT_Glyph_Transform_Outline(
+        Some(&mut owned.core),
+        matrix.as_ref(),
+        delta.as_ref(),
+    );
     if error == rust_ffi::FT_Err_Ok {
         owned.refresh_record();
     }
@@ -2718,7 +2758,10 @@ pub fn abi_support_default_module_present(library_present: i32, name: &str) -> b
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_module_interface_present(library_present: i32, module_name: Option<&str>) -> bool {
+pub fn abi_support_module_interface_present(
+    library_present: i32,
+    module_name: Option<&str>,
+) -> bool {
     let library = match library_present {
         0 => None,
         _ => Some(rust_ffi::FT_Init_FreeType()),
@@ -2736,11 +2779,7 @@ pub fn abi_support_module_requester_service_available(
         0 => None,
         _ => Some(rust_ffi::FT_Init_FreeType()),
     };
-    rust_ffi::FT_Module_Requester_Service_Available(
-        library.as_ref(),
-        module_name,
-        service_name,
-    )
+    rust_ffi::FT_Module_Requester_Service_Available(library.as_ref(), module_name, service_name)
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -3704,15 +3743,13 @@ pub extern "C" fn fontdone_wasm_get_x11_font_format(
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_face_driver_name(
-    handle: usize,
-    out: *mut FontdoneWasmString,
-) -> FT_Bool {
+pub fn abi_support_face_driver_name(handle: usize, out: *mut FontdoneWasmString) -> FT_Bool {
     // SAFETY: the caller provides writable storage for the output record or null.
     let Some(out) = (unsafe { out.as_mut() }) else {
         return 0;
     };
-    let Some(name) = face_ref(handle).and_then(|face| rust_ffi::FT_FACE_DRIVER_NAME(Some(&face.face)))
+    let Some(name) =
+        face_ref(handle).and_then(|face| rust_ffi::FT_FACE_DRIVER_NAME(Some(&face.face)))
     else {
         *out = FontdoneWasmString::default();
         return 0;
@@ -4021,8 +4058,7 @@ pub extern "C" fn fontdone_wasm_get_bdf_property(
         // linear-memory storage for the flat WASM record.
         unsafe {
             (*property).type_ = rust_property.type_;
-            if err == rust_ffi::FT_Err_Ok
-                && rust_property.type_ == rust_ffi::BDF_PROPERTY_TYPE_ATOM
+            if err == rust_ffi::FT_Err_Ok && rust_property.type_ == rust_ffi::BDF_PROPERTY_TYPE_ATOM
             {
                 let atom = rust_property.u.atom;
                 (*property).atom = atom.cast::<FT_Byte>();

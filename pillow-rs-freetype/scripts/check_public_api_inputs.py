@@ -122,6 +122,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
     "fontdone_wasm_open_face",
+    "fontdone_wasm_open_external_stream_face",
     "fontdone_wasm_open_face_with_name_options",
     "fontdone_wasm_done_face",
     "fontdone_wasm_new_size",
@@ -3502,17 +3503,6 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for core FreeType face/size/slot behavior without a maintained route."""
-    if row.case_id == "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership":
-        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
-            return None
-        return (
-            "FT_FACE_FLAG_EXTERNAL_STREAM runtime parity uses the maintained "
-            "input/fonts/DejaVuSans.ttf asset, but still needs a maintained "
-            "FT_Open_Face/FT_OPEN_STREAM route that preserves caller-owned "
-            "stream identity, observes stream close calls, and compares the "
-            "face_flags bit across pinned C, Rust FFI, C ABI, and WASM; "
-            "reusing the constant-value flag route would be a green placeholder"
-        )
     if row.case_id == "freetype.FT_LOAD_SVG_ONLY.svg_only_behavior":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
@@ -6382,6 +6372,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_FACE_FLAG_VARIATION.face_property_variation_selection"
     ):
         return "FT_FACE_FLAG_VARIATION set and declared named-instance reset probe validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_stream"
+        and row.case_id == "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership"
+    ):
+        return "FT_OPEN_STREAM external-stream ownership validates face_flags, external-stream bit, close-call count, and caller stream lifetime through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "freetype.active_size_handle"
         and row.case_id == "freetype.FT_Size.active_size_handle_runtime"

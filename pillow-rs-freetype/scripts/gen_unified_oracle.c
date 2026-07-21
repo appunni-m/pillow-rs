@@ -17321,6 +17321,90 @@ static void print_open_face_name_output(FT_Error err, FT_Face face) {
     printf("}");
 }
 
+typedef struct OpenFaceStreamState_ {
+    int close_calls;
+    unsigned int magic;
+} OpenFaceStreamState;
+
+static void open_face_stream_close(FT_Stream stream) {
+    if (stream && stream->descriptor.pointer) {
+        OpenFaceStreamState* state = (OpenFaceStreamState*)stream->descriptor.pointer;
+        state->close_calls++;
+    }
+}
+
+static int emit_open_face_stream_ownership(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    OpenFaceStreamState state;
+    state.close_calls = 0;
+    state.magic = 0xF75EA123u;
+    FT_StreamRec stream;
+    memset(&stream, 0, sizeof(stream));
+    stream.base = data;
+    stream.size = (unsigned long)data_len;
+    stream.descriptor.pointer = &state;
+    stream.close = open_face_stream_close;
+
+    FT_Open_Args args;
+    memset(&args, 0, sizeof(args));
+    args.flags = FT_OPEN_STREAM;
+    args.stream = &stream;
+
+    FT_Face face = NULL;
+    FT_Error err = FT_Open_Face(library, &args, face_index, &face);
+    long face_flags = face ? (long)face->face_flags : 0;
+    int bit_set = face && ((face->face_flags & FT_FACE_FLAG_EXTERNAL_STREAM) != 0);
+    if (!err && face) {
+        FT_Done_Face(face);
+    }
+    int alive = state.magic == 0xF75EA123u;
+
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{\"return\":%d,\"status\":%d,\"opened\":", err, err);
+    print_json_bool(err == FT_Err_Ok);
+    printf(",\"face_flags\":%ld,\"bit_set\":", face_flags);
+    print_json_bool(bit_set);
+    printf(",\"stream_close_calls\":%d,\"client_stream_alive_after_done_face\":", state.close_calls);
+    print_json_bool(alive);
+    printf("}}\n");
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static void print_face_style_flag_output(FT_Error err, FT_Face face) {
     printf("{\"status\":%d,\"family_name\":", err);
     print_nullable_c_string_result(face ? face->family_name : NULL);
@@ -19415,6 +19499,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--active-size-handle")) {
         return emit_active_size_handle(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--open-face-stream-ownership")) {
+        return emit_open_face_stream_ownership(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--face-owned-handles")) {
         return emit_face_owned_handles(argc, argv);
