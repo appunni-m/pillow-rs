@@ -3742,6 +3742,22 @@ pub extern "C" fn FT_Outline_GetOutsideBorder(outline: *const FT_Outline) -> FT_
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_New(library: FT_Library, astroker: *mut FT_Stroker) -> FT_Error {
+    let Some(out) = non_null_mut(astroker) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut stroker = ptr::null_mut();
+    let err = rust_ffi::FT_Stroker_New(library_ref(library), Some(&mut stroker));
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and points to caller-provided output storage.
+        unsafe {
+            *out.as_ptr() = stroker;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Set(
     stroker: FT_Stroker,
     radius: FT_Fixed,
@@ -3760,6 +3776,31 @@ pub extern "C" fn FT_Stroker_Rewind(stroker: FT_Stroker) {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Done(stroker: FT_Stroker) {
     rust_ffi::FT_Stroker_Done(stroker);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ExportBorder(
+    stroker: FT_Stroker,
+    border: FT_StrokerBorder,
+    outline: *mut FT_Outline,
+) {
+    // The core route maintained so far covers FreeType's no-op cases for null
+    // inputs, invalid border, and newly allocated/unparsed strokers.  Geometry
+    // export remains pending and must not be implemented in this ABI wrapper.
+    let mut snapshot = rust_ffi::FT_OutlineSnapshot::default();
+    rust_ffi::FT_Stroker_ExportBorder(
+        stroker,
+        border,
+        (!outline.is_null()).then_some(&mut snapshot),
+    );
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_Export(stroker: FT_Stroker, outline: *mut FT_Outline) {
+    // See `FT_Stroker_ExportBorder`; this wrapper intentionally delegates only
+    // the currently maintained no-op route to core.
+    let mut snapshot = rust_ffi::FT_OutlineSnapshot::default();
+    rust_ffi::FT_Stroker_Export(stroker, (!outline.is_null()).then_some(&mut snapshot));
 }
 
 #[unsafe(no_mangle)]

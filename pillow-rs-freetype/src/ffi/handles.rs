@@ -2721,6 +2721,69 @@ pub fn FT_Outline_GetOutsideBorder(outline: Option<&FT_OutlineSnapshot>) -> FT_I
 
 pub type FT_Stroker = *mut core::ffi::c_void;
 
+struct StrokerToken {
+    _identity: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StrokerState {
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+}
+
+struct StrokerEntry {
+    _token: Box<StrokerToken>,
+    handle: FT_Stroker,
+    state: StrokerState,
+}
+
+type StrokerRegistry = BTreeMap<usize, StrokerEntry>;
+
+thread_local! {
+    static STROKER_REGISTRY: RefCell<StrokerRegistry> = const { RefCell::new(BTreeMap::new()) };
+}
+
+impl StrokerEntry {
+    fn new() -> Self {
+        let mut token = Box::new(StrokerToken { _identity: 0 });
+        let handle = (&mut *token as *mut StrokerToken).cast::<core::ffi::c_void>();
+        Self {
+            _token: token,
+            handle,
+            state: StrokerState {
+                // FreeType 2.14.3 `src/base/ftstroke.c:814-818` immediately
+                // calls `FT_Stroker_Set(stroker, 0, ROUND, ROUND, 0x10000)`.
+                radius: 0,
+                line_cap: FT_STROKER_LINECAP_ROUND as FT_Int,
+                line_join: FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                miter_limit: 65_536,
+            },
+        }
+    }
+
+    fn key(&self) -> usize {
+        self.handle as usize
+    }
+}
+
+pub fn FT_Stroker_New(library: Option<&FT_Library>, astroker: Option<&mut FT_Stroker>) -> FT_Error {
+    if library.is_none() {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(astroker) = astroker else {
+        return FT_Err_Invalid_Argument;
+    };
+    let entry = StrokerEntry::new();
+    let handle = entry.handle;
+    STROKER_REGISTRY.with(|registry| {
+        registry.borrow_mut().insert(entry.key(), entry);
+    });
+    *astroker = handle;
+    FT_Err_Ok
+}
+
 pub fn FT_Stroker_Set(
     stroker: FT_Stroker,
     radius: FT_Fixed,
@@ -2728,11 +2791,21 @@ pub fn FT_Stroker_Set(
     line_join: FT_Int,
     miter_limit: FT_Fixed,
 ) {
-    // FreeType 2.14.3 `src/base/ftstroke.c:824-831` returns immediately for
-    // a null stroker before touching allocation-backed border state.  The
-    // maintained parity route currently covers only that null-handle no-op;
-    // non-null stroker object/path rows remain pending in the route audit.
-    let _ = (stroker, radius, line_cap, line_join, miter_limit);
+    if stroker.is_null() {
+        // FreeType 2.14.3 `src/base/ftstroke.c:824-831` returns immediately
+        // for a null stroker before touching allocation-backed border state.
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow_mut().get_mut(&(stroker as usize)) {
+            entry.state = StrokerState {
+                radius,
+                line_cap,
+                line_join,
+                miter_limit: miter_limit.max(65_536),
+            };
+        }
+    });
 }
 
 pub fn FT_Stroker_Rewind(stroker: FT_Stroker) {
@@ -2743,10 +2816,58 @@ pub fn FT_Stroker_Rewind(stroker: FT_Stroker) {
 }
 
 pub fn FT_Stroker_Done(stroker: FT_Stroker) {
-    // FreeType 2.14.3 `src/base/ftstroke.c:866-881` frees borders and the
-    // stroker only when the handle is non-null.  The no-op null route is exact;
-    // non-null ownership/freeing is not classified as parity yet.
-    let _ = stroker;
+    if stroker.is_null() {
+        // FreeType 2.14.3 `src/base/ftstroke.c:866-881` frees borders and the
+        // stroker only when the handle is non-null.
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        registry.borrow_mut().remove(&(stroker as usize));
+    });
+}
+
+pub fn FT_Stroker_ExportBorder(
+    stroker: FT_Stroker,
+    border: FT_Int,
+    outline: Option<&mut FT_OutlineSnapshot>,
+) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:2011-2028` returns before touching
+    // output for null stroker/null outline/invalid border.  Newly allocated
+    // but unparsed strokers have invalid borders, so export is also a no-op.
+    let _ = outline;
+    if stroker.is_null()
+        || !matches!(
+            border,
+            x if x == FT_STROKER_BORDER_LEFT as FT_Int || x == FT_STROKER_BORDER_RIGHT as FT_Int
+        )
+    {
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow().get(&(stroker as usize)) {
+            let _ = (
+                entry.state.radius,
+                entry.state.line_cap,
+                entry.state.line_join,
+                entry.state.miter_limit,
+            );
+        }
+    });
+}
+
+pub fn FT_Stroker_Export(stroker: FT_Stroker, outline: Option<&mut FT_OutlineSnapshot>) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:2033-2038` delegates left then
+    // right to `FT_Stroker_ExportBorder`; the no-op cases inherit that logic.
+    if outline.is_none() {
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, None);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, None);
+        return;
+    }
+    // This minimal maintained route covers only newly allocated/unparsed
+    // strokers and invalid/null inputs, for which both borders remain invalid
+    // and output is unchanged.  Full geometry export remains pending.
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, None);
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, None);
 }
 
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {

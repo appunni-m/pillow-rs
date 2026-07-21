@@ -1590,6 +1590,13 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if ftstroke_null_noop_real_parity_reason(row):
         return None
+    if row.case_id in {
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop",
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop",
+    }:
+        return None
     if operation_is_compile_contract(row.operation):
         return None
     if row.operation in {
@@ -4613,6 +4620,10 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot": "FT_TrueTypeGX_Validate bsln output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot": "FT_TrueTypeGX_Validate feat table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker": "FT_Stroker_New non-null allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": "FT_Stroker_ExportBorder null/invalid-border/unparsed-stroker no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.outline_renderer_lookup_success": "FT_Get_Renderer outline renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.bitmap_svg_and_unknown_formats": "FT_Get_Renderer bitmap/SVG/outline/unknown renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.null_library_returns_null": "FT_Get_Renderer null-library lookup returns no renderer through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

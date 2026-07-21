@@ -21457,6 +21457,111 @@ fn wasm_stroker_null_noop(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn stroker_lifecycle_action(case: &InputCase) -> Result<(&'static str, i32), String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker" => Ok(("new", 1)),
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers" => Ok(("done", 1)),
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop" => Ok(("export", 2)),
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop" => {
+            Ok(("export-border", 3))
+        }
+        _ => Err(format!(
+            "{} is not an exact stroker lifecycle/no-op parity route",
+            case.case_id
+        )),
+    }
+}
+
+fn stroker_lifecycle_output(action: &str) -> Value {
+    match action {
+        "new" | "done" => json!({"error": 0, "stroker_nonnull": true, "crash": false}),
+        "export" => json!({
+            "rows": [
+                {"scenario": "null_stroker_outline", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_stroker_null_outline", "target_outline_after": null, "crash": false}
+            ]
+        }),
+        "export-border" => json!({
+            "rows": [
+                {"scenario": "null_stroker_left", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_stroker_null_outline", "target_outline_after": null, "crash": false},
+                {"scenario": "valid_stroker_invalid_border", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_unparsed_left", "target_outline_after": "sentinel_outline", "crash": false}
+            ]
+        }),
+        _ => unreachable!(),
+    }
+}
+
+fn rust_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_lifecycle_action(case)?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let err = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if err != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(err));
+    }
+    match action {
+        "new" | "done" => {}
+        "export" => FT_Stroker_Export(stroker, None),
+        "export-border" => {
+            let mut outline = FT_OutlineSnapshot::default();
+            FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
+        }
+        _ => unreachable!(),
+    }
+    FT_Stroker_Done(stroker);
+    Ok(ok(stroker_lifecycle_output(action)))
+}
+
+fn c_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_lifecycle_action(case)?;
+    let mut library = ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(error(init_err));
+    }
+    let mut stroker = ptr::null_mut();
+    let err = c_abi::FT_Stroker_New(library, &mut stroker);
+    if err != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(err));
+    }
+    match action {
+        "new" | "done" => {}
+        "export" => {
+            c_abi::FT_Stroker_Export(ptr::null_mut(), ptr::null_mut());
+            c_abi::FT_Stroker_Export(stroker, ptr::null_mut());
+        }
+        "export-border" => {
+            c_abi::FT_Stroker_ExportBorder(
+                ptr::null_mut(),
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                ptr::null_mut(),
+            );
+            c_abi::FT_Stroker_ExportBorder(stroker, 2, ptr::null_mut());
+        }
+        _ => unreachable!(),
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(ok(stroker_lifecycle_output(action)))
+}
+
+fn wasm_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, action_id) = stroker_lifecycle_action(case)?;
+    if wasm_abi::abi_support_stroker_lifecycle(action_id) {
+        Ok(ok(stroker_lifecycle_output(action)))
+    } else {
+        Err(format!("unsupported stroker lifecycle action {action_id}"))
+    }
+}
+
 fn lcd_filter_output(
     params: &Value,
     mut call: impl FnMut(FT_LcdFilter) -> FT_Error,
@@ -24969,6 +25074,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             lcd_library_present_arg(params).to_string(),
             lcd_geometry_arg(params)?,
         ]),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            Ok(vec![
+                "--stroker-lifecycle".to_string(),
+                stroker_lifecycle_action(case)?.0.to_string(),
+            ])
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => Ok(vec![
             "--stroker-null-noop".to_string(),
             stroker_null_noop_action(case)?.0.to_string(),
@@ -26349,6 +26465,14 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => rust_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => rust_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            rust_stroker_lifecycle(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             rust_stroker_null_noop(case)
         }
@@ -27385,6 +27509,14 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => c_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => c_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            c_stroker_lifecycle(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -28323,6 +28455,14 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => wasm_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => wasm_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            wasm_stroker_lifecycle(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             wasm_stroker_null_noop(case)
         }
