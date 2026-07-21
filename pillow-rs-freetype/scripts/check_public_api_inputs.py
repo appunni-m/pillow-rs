@@ -2641,6 +2641,7 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
         "ftcolor.FT_Get_Paint.success_inserts_root_transform",
         "ftcolor.FT_Affine23.root_transform_values",
         "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
+        "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
         "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
         "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
     }:
@@ -2700,6 +2701,8 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
         "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
         "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
         "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
+        "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",
+        "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values",
         "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad",
         "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat",
         "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect",
