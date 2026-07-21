@@ -902,3 +902,78 @@ Remaining nearby blocker:
   `fonts/color/colr-v1-all-paints.ttf` fixture surface.  Do not count it until
   the all-paints fixture exists and proves its direct `FT_Get_Paint` output
   with the same C/Rust/C-ABI/WASM comparison.
+
+## Batch: COLRv1 explicit transform paint routes
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- Operation `ftcolor.get_normalized_transform_paint`
+  - `ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload`
+  - `ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload`
+  - `ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload`
+  - `ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload`
+  - `ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload`
+- Operation `ftcolor.get_color_glyph_paint_and_get_paint`
+  - `ftcolor.FT_PaintRotate.get_paint_rotate_values`
+  - `ftcolor.FT_PaintScale.get_paint_scale_values`
+  - `ftcolor.FT_PaintSkew.get_paint_skew_values`
+  - `ftcolor.FT_PaintTransform.get_paint_transform_values`
+  - `ftcolor.FT_PaintTranslate.get_paint_translate_values`
+
+Fix:
+
+- Added one deterministic FontTools-generated fixture at
+  `tests/fixtures/fonts/color/colr-v1-transform-paints.ttf` through the
+  maintained `font-fixture-color` target.  The fixture covers explicit
+  PaintTransform, PaintTranslate, non-uniform scale, centered scale, uniform
+  scale, centered uniform scale, rotate, centered rotate, skew, and centered
+  skew roots.
+- Updated the normalized enum rows that previously referenced separate future
+  per-format fixture names to use the shared maintained transform fixture
+  instead of creating duplicate font files.
+- Extended the safe Rust COLRv1 parser with non-variable transform formats
+  12, 14, 16, 18, 20, 22, 24, 26, 28, and 30.  FreeType 2.14.3
+  `src/sfnt/ttcolr.c:903-926` reads explicit Affine2x3 matrices as 16.16
+  fixed-point fields; `:973-1079`, `:1081-1154`, and `:1158-1227` normalize
+  the scale, rotate, and skew table families to public `FT_PaintScale`,
+  `FT_PaintRotate`, and `FT_PaintSkew` records, zero-filling absent centers and
+  duplicating uniform scale into `scale_y`.
+- Extended the feature-gated COLRv1 graph snapshot with safe fixed-point
+  payload values, avoiding unsafe union reads in the test harness while still
+  comparing the same public C/Rust/C-ABI/WASM outputs.
+- Added a pinned-C oracle route comparing root lookup, first `FT_Get_Paint`
+  format, and recursive graph payload snapshots for the maintained transform
+  fixture.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype font-fixture-color
+make -C pillow-rs-freetype test-op OP=ftcolor.get_normalized_transform_paint
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_and_get_paint
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 287 → 277, `real-parity` 4676 → 4686.
+- Focused normalized runtime: compared 5 / total 5, passed 5, failed 0.
+- Focused direct-record runtime: compared 6 / total 6, passed 6, failed 0;
+  the remaining two rows in that operation are unrelated radial/sweep gradient
+  payload routes.
+
+Remaining nearby blockers:
+
+- `ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload` and
+  `FT_Get_Paint.success_inserts_root_transform` remain pending because they
+  require FreeType's synthetic root-transform path from active size and
+  `FT_Set_Transform` state, not explicit COLR table transform parsing.
+- Gradient/colorline rows remain pending until maintained linear/radial/sweep
+  gradient fixtures and `FT_Get_Colorline_Stops` traversal compare exact C
+  colorline iterator state and stops.

@@ -21,15 +21,16 @@ use super::convert::{
     load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
-    BDF_PropertyRec, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte,
-    FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char, FT_CharMap, FT_CharMapRecPublic,
-    FT_Color, FT_ColorIndex, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14, FT_F26Dot6,
-    FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec, FT_Int,
-    FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
-    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
+    FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char, FT_CharMap,
+    FT_CharMapRecPublic, FT_Color, FT_ColorIndex, FT_DebugHook_Func, FT_Encoding, FT_Error,
+    FT_F2Dot14, FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot,
+    FT_GlyphRec, FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
+    FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
     FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph,
-    FT_PaintSolid, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap,
+    FT_PaintRotate, FT_PaintScale, FT_PaintSkew, FT_PaintSolid, FT_PaintTransform,
+    FT_PaintTranslate, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap,
     FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short,
     FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream,
     FT_StreamDesc, FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
@@ -1336,6 +1337,35 @@ enum ColrV1Paint {
     ColrGlyph {
         glyph_index: FT_UInt,
     },
+    Transform {
+        paint: Box<ColrV1Paint>,
+        affine: FT_Affine23,
+    },
+    Translate {
+        paint: Box<ColrV1Paint>,
+        dx: FT_Fixed,
+        dy: FT_Fixed,
+    },
+    Scale {
+        paint: Box<ColrV1Paint>,
+        scale_x: FT_Fixed,
+        scale_y: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
+    Rotate {
+        paint: Box<ColrV1Paint>,
+        angle: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
+    Skew {
+        paint: Box<ColrV1Paint>,
+        x_skew_angle: FT_Fixed,
+        y_skew_angle: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
     Composite {
         source_paint: Box<ColrV1Paint>,
         composite_mode: FT_UShort,
@@ -1388,6 +1418,7 @@ pub struct FT_ColrV1_PaintNode_Snapshot {
     pub alpha: FT_F2Dot14,
     pub glyph_index: FT_UInt,
     pub composite_mode: FT_UShort,
+    pub values: [FT_Fixed; 6],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3686,6 +3717,43 @@ fn read_i16_be(data: &[u8], offset: usize) -> Option<i16> {
     ]))
 }
 
+fn read_i32_be(data: &[u8], offset: usize) -> Option<i32> {
+    Some(i32::from_be_bytes([
+        *data.get(offset)?,
+        *data.get(offset + 1)?,
+        *data.get(offset + 2)?,
+        *data.get(offset + 3)?,
+    ]))
+}
+
+fn colr_i16_to_fixed(value: i16) -> FT_Fixed {
+    FT_Fixed::from(value) << 16
+}
+
+fn f2dot14_to_fixed(value: i16) -> FT_Fixed {
+    // FreeType 2.14.3 `src/sfnt/ttcolr.c` exposes COLRv1 F2Dot14 paint
+    // values through 16.16 public fields by shifting left two bits.
+    FT_Fixed::from(value) << 2
+}
+
+fn parse_colr_v1_child_paint(
+    data: &[u8],
+    offset: usize,
+    depth: usize,
+    layer_list_offset: usize,
+    layer_offsets: &[usize],
+) -> Option<Box<ColrV1Paint>> {
+    let nested_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+    let nested_start = offset.checked_add(nested_offset)?;
+    Some(Box::new(parse_colr_v1_paint(
+        data,
+        nested_start,
+        depth,
+        layer_list_offset,
+        layer_offsets,
+    )?))
+}
+
 fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
     let version = read_u16_be(data, 0)?;
     if version != 1 {
@@ -3783,16 +3851,14 @@ fn parse_colr_v1_paint(
         10 => {
             // COLRv1 PaintGlyph stores an Offset24 child paint relative to
             // the current paint record, followed by a u16 glyph ID.
-            let nested_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
-            let nested_start = offset.checked_add(nested_offset)?;
             Some(ColrV1Paint::Glyph {
-                paint: Box::new(parse_colr_v1_paint(
+                paint: parse_colr_v1_child_paint(
                     data,
-                    nested_start,
-                    depth + 1,
+                    offset,
+                    depth,
                     layer_list_offset,
                     layer_offsets,
-                )?),
+                )?,
                 glyph_index: FT_UInt::from(read_u16_be(data, offset + 4)?),
             })
         }
@@ -3801,6 +3867,130 @@ fn parse_colr_v1_paint(
             // PaintColrGlyph as a scalar `FT_PaintColrGlyph.glyphID` payload.
             Some(ColrV1Paint::ColrGlyph {
                 glyph_index: FT_UInt::from(read_u16_be(data, offset + 1)?),
+            })
+        }
+        12 => {
+            let transform_offset = usize::try_from(read_u24_be(data, offset + 4)?).ok()?;
+            let transform_start = offset.checked_add(transform_offset)?;
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:903-926` reads PaintTransform
+            // Affine2x3 values as OpenType 16.16 fixed-point longs in public
+            // FT_Affine23 field order.
+            Some(ColrV1Paint::Transform {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                affine: FT_Affine23 {
+                    xx: FT_Fixed::from(read_i32_be(data, transform_start)?),
+                    yx: FT_Fixed::from(read_i32_be(data, transform_start + 4)?),
+                    xy: FT_Fixed::from(read_i32_be(data, transform_start + 8)?),
+                    yy: FT_Fixed::from(read_i32_be(data, transform_start + 12)?),
+                    dx: FT_Fixed::from(read_i32_be(data, transform_start + 16)?),
+                    dy: FT_Fixed::from(read_i32_be(data, transform_start + 20)?),
+                },
+            })
+        }
+        14 => Some(ColrV1Paint::Translate {
+            paint: parse_colr_v1_child_paint(
+                data,
+                offset,
+                depth,
+                layer_list_offset,
+                layer_offsets,
+            )?,
+            dx: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+            dy: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+        }),
+        16 | 18 | 20 | 22 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:973-1079` normalizes all
+            // non-variable scale table forms to public FT_PaintScale, setting
+            // uniform scale_y and absent centers exactly here.
+            let (scale_x, scale_y, center_offset) = match format {
+                16 | 18 => (
+                    f2dot14_to_fixed(read_i16_be(data, offset + 4)?),
+                    f2dot14_to_fixed(read_i16_be(data, offset + 6)?),
+                    offset + 8,
+                ),
+                20 | 22 => {
+                    let scale = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+                    (scale, scale, offset + 6)
+                }
+                _ => unreachable!(),
+            };
+            let (center_x, center_y) = match format {
+                18 | 22 => (
+                    colr_i16_to_fixed(read_i16_be(data, center_offset)?),
+                    colr_i16_to_fixed(read_i16_be(data, center_offset + 2)?),
+                ),
+                _ => (0, 0),
+            };
+            Some(ColrV1Paint::Scale {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                scale_x,
+                scale_y,
+                center_x,
+                center_y,
+            })
+        }
+        24 | 26 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:1081-1154` normalizes rotate
+            // forms to public FT_PaintRotate and zero-fills absent centers.
+            let angle = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+            let (center_x, center_y) = if format == 26 {
+                (
+                    colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                    colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                )
+            } else {
+                (0, 0)
+            };
+            Some(ColrV1Paint::Rotate {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                angle,
+                center_x,
+                center_y,
+            })
+        }
+        28 | 30 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:1158-1227` normalizes skew
+            // forms to public FT_PaintSkew and zero-fills absent centers.
+            let x_skew_angle = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+            let y_skew_angle = f2dot14_to_fixed(read_i16_be(data, offset + 6)?);
+            let (center_x, center_y) = if format == 30 {
+                (
+                    colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                )
+            } else {
+                (0, 0)
+            };
+            Some(ColrV1Paint::Skew {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                x_skew_angle,
+                y_skew_angle,
+                center_x,
+                center_y,
             })
         }
         32 => {
@@ -3948,6 +4138,11 @@ fn colr_v1_find_paint_by_ptr_in_node(
         ColrV1Paint::Solid { .. } => None,
         ColrV1Paint::Glyph { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
         ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
         ColrV1Paint::Composite {
             source_paint,
             backdrop_paint,
@@ -4058,6 +4253,77 @@ pub fn FT_Get_Paint(
                 },
             };
         }
+        ColrV1Paint::Transform { paint, affine } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_TRANSFORM as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                transform: FT_PaintTransform {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    affine: *affine,
+                },
+            };
+        }
+        ColrV1Paint::Translate { paint, dx, dy } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_TRANSLATE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                translate: FT_PaintTranslate {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    dx: *dx,
+                    dy: *dy,
+                },
+            };
+        }
+        ColrV1Paint::Scale {
+            paint,
+            scale_x,
+            scale_y,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SCALE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                scale: FT_PaintScale {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    scale_x: *scale_x,
+                    scale_y: *scale_y,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
+        ColrV1Paint::Rotate {
+            paint,
+            angle,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_ROTATE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                rotate: FT_PaintRotate {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    angle: *angle,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
+        ColrV1Paint::Skew {
+            paint,
+            x_skew_angle,
+            y_skew_angle,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SKEW as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                skew: FT_PaintSkew {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    x_skew_angle: *x_skew_angle,
+                    y_skew_angle: *y_skew_angle,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
         ColrV1Paint::Composite {
             source_paint,
             composite_mode,
@@ -4120,6 +4386,13 @@ fn colr_v1_find_layer_paints_by_iterator_in_node<'a>(
             colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
         }
         ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => {
+            colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
+        }
         ColrV1Paint::Composite {
             source_paint,
             backdrop_paint,
@@ -4209,6 +4482,7 @@ fn colr_v1_snapshot_paint(
                 alpha: 0,
                 glyph_index: 0,
                 composite_mode: paints.len().try_into().unwrap_or(FT_UShort::MAX),
+                values: [0; 6],
             });
             for paint in paints {
                 colr_v1_snapshot_paint(paint, depth + 1, nodes);
@@ -4224,6 +4498,7 @@ fn colr_v1_snapshot_paint(
             alpha: *alpha,
             glyph_index: 0,
             composite_mode: 0,
+            values: [0; 6],
         }),
         ColrV1Paint::Glyph { glyph_index, paint } => {
             nodes.push(FT_ColrV1_PaintNode_Snapshot {
@@ -4233,6 +4508,7 @@ fn colr_v1_snapshot_paint(
                 alpha: 0,
                 glyph_index: *glyph_index,
                 composite_mode: 0,
+                values: [0; 6],
             });
             colr_v1_snapshot_paint(paint, depth + 1, nodes);
         }
@@ -4243,7 +4519,87 @@ fn colr_v1_snapshot_paint(
             alpha: 0,
             glyph_index: *glyph_index,
             composite_mode: 0,
+            values: [0; 6],
         }),
+        ColrV1Paint::Transform { paint, affine } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_TRANSFORM as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [
+                    affine.xx, affine.xy, affine.dx, affine.yx, affine.yy, affine.dy,
+                ],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Translate { paint, dx, dy } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_TRANSLATE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*dx, *dy, 0, 0, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Scale {
+            paint,
+            scale_x,
+            scale_y,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_SCALE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*scale_x, *scale_y, *center_x, *center_y, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Rotate {
+            paint,
+            angle,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_ROTATE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*angle, *center_x, *center_y, 0, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Skew {
+            paint,
+            x_skew_angle,
+            y_skew_angle,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_SKEW as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*x_skew_angle, *y_skew_angle, *center_x, *center_y, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
         ColrV1Paint::Composite {
             source_paint,
             composite_mode,
@@ -4256,6 +4612,7 @@ fn colr_v1_snapshot_paint(
                 alpha: 0,
                 glyph_index: 0,
                 composite_mode: *composite_mode,
+                values: [0; 6],
             });
             colr_v1_snapshot_paint(source_paint, depth + 1, nodes);
             colr_v1_snapshot_paint(backdrop_paint, depth + 1, nodes);
