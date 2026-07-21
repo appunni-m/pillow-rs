@@ -188,6 +188,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_palette_select",
     "fontdone_wasm_palette_set_foreground_color",
     "fontdone_wasm_get_color_glyph_layer",
+    "fontdone_wasm_get_color_glyph_paint",
+    "fontdone_wasm_get_paint",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
@@ -2591,9 +2593,43 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
     return exact_cases.get(row.case_id)
 
 
+def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | None:
+    if not row.operation.startswith("ftcolor."):
+        return None
+    if unresolved_assets_reason(row) is not None:
+        return None
+    if row.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform":
+        return (
+            "FT_Get_Color_Glyph_Paint no-root-transform root lookup validates "
+            "through the maintained COLRv1 composite fixture, pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
+        "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
+    }:
+        return (
+            "COLRv1 PaintComposite mode graph validates every real composite "
+            "mode and sentinel absence through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
+        row.case_id.endswith(".paint_composite_runtime")
+        or row.case_id.endswith(".paint_composite_mode_runtime")
+    ):
+        return (
+            "COLRv1 PaintComposite node validates exact composite_mode and "
+            "source/backdrop paint traversal through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    return None
+
+
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
+        return None
+    if ftcolor_colrv1_composite_real_parity_reason(row):
         return None
     if absent_or_noop_surface_real_parity_reason(row):
         return None
@@ -7090,6 +7126,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftcache_pending = ftcache_subsystem_pending_reason(row)
     if ftcache_pending:
         return ("pending-route", ftcache_pending)
+    ftcolor_colrv1_real = ftcolor_colrv1_composite_real_parity_reason(row)
+    if ftcolor_colrv1_real:
+        return ("real-parity", ftcolor_colrv1_real)
     ftcolor_pending = ftcolor_subsystem_pending_reason(row)
     if ftcolor_pending:
         return ("pending-route", ftcolor_pending)

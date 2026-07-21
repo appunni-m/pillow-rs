@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fontTools.colorLib.builder import buildCOLR
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables.C_O_L_R_ import LayerRecord
 from fontTools.ttLib.tables.C_P_A_L_ import Color
+from fontTools.ttLib.tables import otTables as ot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,9 +32,15 @@ PALETTES = [
     ],
 ]
 
+CPAL_FIXTURE_HEAD_MODIFIED = 3867487964
+
 
 def build_cpal_font(path: Path) -> None:
-    font = TTFont(SOURCE_FONT)
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    # Preserve the already-tracked deterministic timestamp for these existing
+    # CPAL fixtures.  Their CPAL data is stable; changing only `head.modified`
+    # and checksum adjustment creates noisy binary fixture churn.
+    font["head"].modified = CPAL_FIXTURE_HEAD_MODIFIED
     cpal = newTable("CPAL")
     cpal.version = 1
     cpal.numPaletteEntries = len(PALETTES[0])
@@ -76,6 +84,67 @@ def build_colr_v0_layers_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def solid_paint(palette_index: int, alpha: float = 1.0) -> dict[str, object]:
+    return {
+        "Format": int(ot.PaintFormat.PaintSolid),
+        "PaletteIndex": palette_index,
+        "Alpha": alpha,
+    }
+
+
+def build_colr_v1_composite_font(path: Path) -> None:
+    """Build a compact COLRv1 paint graph fixture.
+
+    The fixture intentionally starts with the first batchable COLRv1 public
+    paint surfaces: root PaintSolid, nested PaintGlyph, and every real
+    PaintComposite mode.  Gradients, color lines, transforms, and ClipList rows
+    remain separate batches so their pending route counts stay visible until
+    same-input C/Rust/C-ABI/WASM comparisons exist.
+    """
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 4
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+            Color(0x70, 0x80, 0x90, 0x40),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: solid_paint(1),
+        base_names[1]: {
+            "Format": int(ot.PaintFormat.PaintGlyph),
+            "Paint": solid_paint(2, 0.5),
+            "Glyph": base_names[2],
+        },
+    }
+    for offset, mode in enumerate(ot.CompositeMode):
+        color_glyphs[base_names[3 + offset]] = {
+            "Format": int(ot.PaintFormat.PaintComposite),
+            "SourcePaint": solid_paint(1),
+            "CompositeMode": int(mode),
+            "BackdropPaint": solid_paint(2, 0.5),
+        }
+
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def main() -> None:
     for name in (
         "cpal-palettes-names-flags.ttf",
@@ -83,6 +152,7 @@ def main() -> None:
     ):
         build_cpal_font(OUTPUT_DIR / name)
     build_colr_v0_layers_font(COLOR_OUTPUT_DIR / "colr-v0-layers-cpal.ttf")
+    build_colr_v1_composite_font(COLOR_OUTPUT_DIR / "colr_v1_composite_modes.ttf")
 
 
 if __name__ == "__main__":

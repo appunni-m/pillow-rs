@@ -22,6 +22,7 @@ typedef long FT_Pos;
 typedef long FT_Fixed;
 typedef long FT_Angle;
 typedef long FT_F26Dot6;
+typedef short FT_F2Dot14;
 typedef short FT_Short;
 typedef unsigned short FT_UShort;
 typedef int FT_Render_Mode;
@@ -33,6 +34,9 @@ typedef int FT_Encoding;
 typedef unsigned int FT_Sfnt_Tag;
 typedef int FT_LcdFilter;
 typedef int FT_TrueTypeEngineType;
+typedef int FT_PaintExtend;
+typedef int FT_Composite_Mode;
+typedef int FT_PaintFormat;
 typedef char FT_String;
 typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
@@ -449,6 +453,142 @@ typedef struct FT_LayerIterator_ {
   FT_Byte* p;
 } FT_LayerIterator;
 
+typedef struct FT_OpaquePaint_ {
+  FT_Byte* p;
+  FT_Bool insert_root_transform;
+} FT_OpaquePaint;
+
+typedef struct FT_ColorStopIterator_ {
+  FT_UInt num_color_stops;
+  FT_UInt current_color_stop;
+  FT_Byte* p;
+  FT_Bool read_variable;
+} FT_ColorStopIterator;
+
+typedef struct FT_ColorIndex_ {
+  uint16_t palette_index;
+  FT_F2Dot14 alpha;
+} FT_ColorIndex;
+
+typedef struct FT_ColorStop_ {
+  FT_Fixed stop_offset;
+  FT_ColorIndex color;
+} FT_ColorStop;
+
+typedef struct FT_ColorLine_ {
+  FT_PaintExtend extend;
+  FT_ColorStopIterator color_stop_iterator;
+} FT_ColorLine;
+
+typedef struct FT_Affine23_ {
+  FT_Fixed xx;
+  FT_Fixed xy;
+  FT_Fixed dx;
+  FT_Fixed yx;
+  FT_Fixed yy;
+  FT_Fixed dy;
+} FT_Affine23;
+
+typedef struct FT_PaintColrLayers_ {
+  FT_LayerIterator layer_iterator;
+} FT_PaintColrLayers;
+
+typedef struct FT_PaintSolid_ {
+  FT_ColorIndex color;
+} FT_PaintSolid;
+
+typedef struct FT_PaintLinearGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector p0;
+  FT_Vector p1;
+  FT_Vector p2;
+} FT_PaintLinearGradient;
+
+typedef struct FT_PaintRadialGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector c0;
+  FT_Pos r0;
+  FT_Vector c1;
+  FT_Pos r1;
+} FT_PaintRadialGradient;
+
+typedef struct FT_PaintSweepGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector center;
+  FT_Fixed start_angle;
+  FT_Fixed end_angle;
+} FT_PaintSweepGradient;
+
+typedef struct FT_PaintGlyph_ {
+  FT_OpaquePaint paint;
+  FT_UInt glyphID;
+} FT_PaintGlyph;
+
+typedef struct FT_PaintColrGlyph_ {
+  FT_UInt glyphID;
+} FT_PaintColrGlyph;
+
+typedef struct FT_PaintTransform_ {
+  FT_OpaquePaint paint;
+  FT_Affine23 affine;
+} FT_PaintTransform;
+
+typedef struct FT_PaintTranslate_ {
+  FT_OpaquePaint paint;
+  FT_Fixed dx;
+  FT_Fixed dy;
+} FT_PaintTranslate;
+
+typedef struct FT_PaintScale_ {
+  FT_OpaquePaint paint;
+  FT_Fixed scale_x;
+  FT_Fixed scale_y;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintScale;
+
+typedef struct FT_PaintRotate_ {
+  FT_OpaquePaint paint;
+  FT_Fixed angle;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintRotate;
+
+typedef struct FT_PaintSkew_ {
+  FT_OpaquePaint paint;
+  FT_Fixed x_skew_angle;
+  FT_Fixed y_skew_angle;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintSkew;
+
+typedef struct FT_PaintComposite_ {
+  FT_OpaquePaint source_paint;
+  FT_Composite_Mode composite_mode;
+  FT_OpaquePaint backdrop_paint;
+} FT_PaintComposite;
+
+typedef union FT_COLR_PaintUnion_ {
+  FT_PaintColrLayers colr_layers;
+  FT_PaintGlyph glyph;
+  FT_PaintSolid solid;
+  FT_PaintLinearGradient linear_gradient;
+  FT_PaintRadialGradient radial_gradient;
+  FT_PaintSweepGradient sweep_gradient;
+  FT_PaintTransform transform;
+  FT_PaintTranslate translate;
+  FT_PaintScale scale;
+  FT_PaintRotate rotate;
+  FT_PaintSkew skew;
+  FT_PaintComposite composite;
+  FT_PaintColrGlyph colr_glyph;
+} FT_COLR_PaintUnion;
+
+typedef struct FT_COLR_Paint_ {
+  FT_PaintFormat format;
+  FT_COLR_PaintUnion u;
+} FT_COLR_Paint;
+
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Gzip_Uncompress(FT_Memory memory, FT_Byte* output, FT_ULong* output_len, const FT_Byte* input, FT_ULong input_len);
@@ -464,6 +604,8 @@ FT_Error FT_Palette_Data_Get(FT_Face face, FT_Palette_Data* apalette_data);
 FT_Error FT_Palette_Select(FT_Face face, FT_UShort palette_index, FT_Color** apalette);
 FT_Error FT_Palette_Set_Foreground_Color(FT_Face face, FT_Color foreground_color);
 FT_Bool FT_Get_Color_Glyph_Layer(FT_Face face, FT_UInt base_glyph, FT_UInt* aglyph_index, FT_UInt* acolor_index, FT_LayerIterator* iterator);
+FT_Bool FT_Get_Color_Glyph_Paint(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform, FT_OpaquePaint* paint);
+FT_Bool FT_Get_Paint(FT_Face face, FT_OpaquePaint opaque_paint, FT_COLR_Paint* paint);
 void FT_TrueTypeGX_Free(FT_Face face, FT_Bytes table);
 void FT_ClassicKern_Free(FT_Face face, FT_Bytes table);
 
