@@ -14758,6 +14758,7 @@ static int is_colr_all_paints_case(const char* case_id) {
            case_base_matches(case_id, "ftcolor.FT_Affine23.root_transform_values") ||
            case_base_matches(case_id, "ftcolor.FT_ColorStopIterator.initialized_by_get_paint") ||
            case_base_matches(case_id, "ftcolor.FT_ColorIndex.solid_and_color_stop_values") ||
+           case_base_matches(case_id, "ftcolor.FT_PaintFormat.paint_union_shape_runtime") ||
            case_base_matches(case_id, "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values") ||
            case_base_matches(case_id, "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator");
 }
@@ -14765,7 +14766,8 @@ static int is_colr_all_paints_case(const char* case_id) {
 static int emit_colr_all_paints_case(const char* case_id, OracleFace* face) {
     printf("{");
     print_status(0);
-    if (case_base_matches(case_id, "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format")) {
+    if (case_base_matches(case_id, "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format") ||
+        case_base_matches(case_id, "ftcolor.FT_PaintFormat.paint_union_shape_runtime")) {
         printf(",\"output\":{\"rows\":");
         print_colr_all_paints_rows_json(face->face);
         printf(",\"graph_snapshot\":");

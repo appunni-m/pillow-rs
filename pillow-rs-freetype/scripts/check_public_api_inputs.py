@@ -2657,6 +2657,7 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
         "ftcolor.FT_Affine23.root_transform_values",
         "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
         "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
+        "ftcolor.FT_PaintFormat.paint_union_shape_runtime",
         "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
         "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
     }:
@@ -4045,6 +4046,10 @@ def fixture_reference_exists(reference: str) -> bool:
         # The maintained BDF runtime asset lives under tests/fixtures/input.
         "fonts/bdf/properties-atoms-integers-cardinals.bdf": (
             "input/fonts/bdf/properties-atoms-integers-cardinals.bdf"
+        ),
+        # Historical logical id for the maintained COLRv1 all-paints fixture.
+        "fonts/color/colr_v1_all_paint_formats.ttf": (
+            "fonts/color/colr-v1-all-paints.ttf"
         ),
     }
     alias = aliases.get(reference)

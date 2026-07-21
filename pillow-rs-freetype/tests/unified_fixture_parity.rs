@@ -10916,6 +10916,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintSolid.get_paint_solid_values"
             | "ftcolor.FT_PaintGlyph.get_paint_glyph_values"
             | "ftcolor.FT_PaintComposite.get_paint_composite_values"
+            | "ftcolor.FT_PaintFormat.paint_union_shape_runtime"
             | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
             | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
             | "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
@@ -11756,6 +11757,7 @@ fn color_all_paints_case(case_id: &str) -> bool {
             | "ftcolor.FT_Affine23.root_transform_values"
             | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
             | "ftcolor.FT_ColorIndex.solid_and_color_stop_values"
+            | "ftcolor.FT_PaintFormat.paint_union_shape_runtime"
             | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
             | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
     )
@@ -11904,7 +11906,8 @@ fn color_all_paints_output_for_open_face(
 ) -> Result<RunOutput, String> {
     let rust_face_ref = rust_face.as_deref();
     match case_id_base(&case.case_id) {
-        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format" => Ok(ok(json!({
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+        | "ftcolor.FT_PaintFormat.paint_union_shape_runtime" => Ok(ok(json!({
             "rows": color_all_paints_rows_json(backend, rust_face_ref, c_face, wasm_handle),
             "graph_snapshot": color_paint_snapshot_json(backend, rust_face_ref, c_face, wasm_handle),
         }))),
@@ -42755,6 +42758,13 @@ fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Opti
             | "fixtures/assets/fonts/DejaVuSans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
             "fonts/bdf/properties-atoms-integers-cardinals.bdf" => {
                 Some("input/fonts/bdf/properties-atoms-integers-cardinals.bdf")
+            }
+            // Historical logical id for the maintained all-paints COLRv1
+            // fixture.  The route consumes this same fixture to compare all
+            // public FT_COLR_Paint format tags and payload classes against
+            // pinned FreeType 2.14.3.
+            "fonts/color/colr_v1_all_paint_formats.ttf" => {
+                Some("fonts/color/colr-v1-all-paints.ttf")
             }
             _ => None,
         }
