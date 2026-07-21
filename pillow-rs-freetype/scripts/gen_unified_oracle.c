@@ -3554,6 +3554,29 @@ static void print_tt_vert_header_record(const TT_VertHeader* record) {
     printf("}");
 }
 
+static void print_tt_maxprofile_record(const TT_MaxProfile* record) {
+    if (!record) {
+        printf("null");
+        return;
+    }
+    printf("{\"version\":%ld", (long)record->version);
+    printf(",\"numGlyphs\":%u", (unsigned)record->numGlyphs);
+    printf(",\"maxPoints\":%u", (unsigned)record->maxPoints);
+    printf(",\"maxContours\":%u", (unsigned)record->maxContours);
+    printf(",\"maxCompositePoints\":%u", (unsigned)record->maxCompositePoints);
+    printf(",\"maxCompositeContours\":%u", (unsigned)record->maxCompositeContours);
+    printf(",\"maxZones\":%u", (unsigned)record->maxZones);
+    printf(",\"maxTwilightPoints\":%u", (unsigned)record->maxTwilightPoints);
+    printf(",\"maxStorage\":%u", (unsigned)record->maxStorage);
+    printf(",\"maxFunctionDefs\":%u", (unsigned)record->maxFunctionDefs);
+    printf(",\"maxInstructionDefs\":%u", (unsigned)record->maxInstructionDefs);
+    printf(",\"maxStackElements\":%u", (unsigned)record->maxStackElements);
+    printf(",\"maxSizeOfInstructions\":%u", (unsigned)record->maxSizeOfInstructions);
+    printf(",\"maxComponentElements\":%u", (unsigned)record->maxComponentElements);
+    printf(",\"maxComponentDepth\":%u", (unsigned)record->maxComponentDepth);
+    printf("}");
+}
+
 static void print_fstype_flags_result(FT_UShort flags, const char* symbol_name) {
     printf("{\"return\":%u,\"fs_type\":%u", (unsigned int)flags, (unsigned int)flags);
     if (symbol_name && symbol_name[0] && !streq(symbol_name, "-")) {
@@ -12532,6 +12555,79 @@ static int emit_face_owned_handles(int argc, char** argv) {
 
     close_oracle_face(&face);
     return 0;
+}
+
+static int print_malformed_maxp_row(
+    const char* variant,
+    const char* source_kind,
+    const char* source_value,
+    FT_Long face_index) {
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Error face_error = init_error;
+    if (!face_error) {
+        face_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    TT_MaxProfile* maxp = NULL;
+    if (!face_error) {
+        maxp = (TT_MaxProfile*)FT_Get_Sfnt_Table(face, FT_SFNT_MAXP);
+    }
+
+    printf("{\"variant\":\"%s\",\"error\":%d,\"face_load_error\":%d,\"pointer_null\":",
+           variant,
+           (int)face_error,
+           (int)face_error);
+    print_json_bool(face_error || maxp == NULL);
+    printf(",\"fields_if_loaded\":");
+    print_tt_maxprofile_record(face_error ? NULL : maxp);
+    printf("}");
+
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
+}
+
+static int emit_malformed_maxp_route(int argc, char** argv) {
+    if (argc != 7) {
+        fprintf(stderr, "--malformed-maxp-route requires TRUNC_KIND TRUNC_SOURCE INVALID_KIND INVALID_SOURCE FACE_INDEX\n");
+        return 2;
+    }
+    FT_Long face_index = atol(argv[6]);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    int status = print_malformed_maxp_row("truncated_maxp", argv[2], argv[3], face_index);
+    if (status) {
+        printf("]}}\n");
+        return status;
+    }
+    printf(",");
+    status = print_malformed_maxp_row("invalid_maxp", argv[4], argv[5], face_index);
+    printf("]}}\n");
+    return status;
 }
 
 static void print_size_metrics_named_value(const char* name, FT_Size_Metrics* metrics) {
@@ -22485,6 +22581,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--face-owned-handles")) {
         return emit_face_owned_handles(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--malformed-maxp-route")) {
+        return emit_malformed_maxp_route(argc, argv);
     }
     if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
         return emit_face_or_slot(argc, argv);

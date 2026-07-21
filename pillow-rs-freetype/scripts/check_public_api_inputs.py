@@ -259,6 +259,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
     "fontdone_wasm_get_sfnt_vhea",
+    "fontdone_wasm_get_sfnt_maxp",
     "fontdone_wasm_load_sfnt_table",
     "fontdone_wasm_sfnt_table_info",
     "fontdone_wasm_get_first_char",
@@ -393,6 +394,7 @@ REAL_PARITY_OPERATIONS = {
     "sfnt.get_sfnt_table.maxp",
     "sfnt.get_sfnt_table.hhea",
     "sfnt.get_sfnt_table.hhea.after_variation",
+    "face.load_then_get_sfnt_table.maxp",
     "sfnt.load_sfnt_table",
     "sfnt.table_info",
     "sfnt.mac_encoding_record",
@@ -3697,7 +3699,6 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
     residual_rows_without_maintained_route = {
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
-        "tttables.TT_MaxProfile.malformed_table_error_source",
     }
     if row.case_id not in residual_rows_without_maintained_route:
         return None
@@ -3714,14 +3715,7 @@ def malformed_maxp_fixture_pending_reason(row: ConcreteInput) -> str | None:
     """Malformed maxp rows that still need an executable same-input route."""
     if row.case_id != "tttables.TT_MaxProfile.malformed_table_error_source":
         return None
-    return (
-        "Generated malformed maxp assets are present, but this row still uses "
-        "the unsupported face.load_then_get_sfnt_table.maxp operation; exact "
-        "same-input C/Rust/C-ABI/WASM parity requires wiring a maintained route "
-        "that opens each malformed SFNT, records pinned-C face-load status or "
-        "FT_Get_Sfnt_Table(FT_SFNT_MAXP) state, and compares the same public "
-        "output shape in Rust FFI, thin C ABI, and WASM ABI"
-    )
+    return None
 
 
 def otvalid_expectation_mismatch_pending_reason(row: ConcreteInput) -> str | None:

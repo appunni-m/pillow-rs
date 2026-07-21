@@ -11928,6 +11928,193 @@ fn wasm_tt_vert_header_record_json(record: wasm_abi::FontdoneWasmVertHeader) -> 
     })
 }
 
+fn tt_maxprofile_record_json(record: Option<TT_MaxProfile>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn c_tt_maxprofile_record_json(record: Option<c_abi::TT_MaxProfile>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn wasm_tt_maxprofile_record_json(record: wasm_abi::FontdoneWasmMaxProfile) -> Value {
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn rust_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Value {
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(&library, bytes, face_index, 20.0) {
+        Ok(face) => {
+            let ptr = FT_Get_Sfnt_Table(&face, FT_SFNT_MAXP as FT_Sfnt_Tag);
+            let record = FT_Get_Sfnt_MaxProfile_Copy(&face);
+            json!({
+                "variant": variant,
+                "error": FT_Err_Ok,
+                "face_load_error": FT_Err_Ok,
+                "pointer_null": ptr.is_null(),
+                "fields_if_loaded": tt_maxprofile_record_json(record),
+            })
+        }
+        Err(err) => json!({
+            "variant": variant,
+            "error": err,
+            "face_load_error": err,
+            "pointer_null": true,
+            "fields_if_loaded": Value::Null,
+        }),
+    }
+}
+
+fn rust_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            rust_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index),
+            rust_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index),
+        ]
+    })))
+}
+
+fn c_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Result<Value, String> {
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    let mut face = ptr::null_mut();
+    let mut face_error = init_error;
+    if face_error == FT_Err_Ok {
+        let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+        face_error =
+            c_abi::FT_New_Memory_Face(library, bytes.as_ptr(), file_size, face_index, &mut face);
+    }
+    let record = if face_error == FT_Err_Ok {
+        c_abi::abi_sfnt_maxp(face)
+    } else {
+        None
+    };
+    if !face.is_null() {
+        c_done_face(face);
+    }
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(json!({
+        "variant": variant,
+        "error": face_error,
+        "face_load_error": face_error,
+        "pointer_null": record.is_none(),
+        "fields_if_loaded": c_tt_maxprofile_record_json(record),
+    }))
+}
+
+fn c_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            c_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index)?,
+            c_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index)?,
+        ]
+    })))
+}
+
+fn wasm_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Value {
+    let status = wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
+    if status.error != FT_Err_Ok {
+        return json!({
+            "variant": variant,
+            "error": status.error,
+            "face_load_error": status.error,
+            "pointer_null": true,
+            "fields_if_loaded": Value::Null,
+        });
+    }
+    let mut record = wasm_abi::FontdoneWasmMaxProfile::default();
+    let table_status = wasm_abi::fontdone_wasm_get_sfnt_maxp(
+        status.handle,
+        FT_SFNT_MAXP as wasm_abi::FT_Sfnt_Tag,
+        &mut record,
+    );
+    wasm_done_face(status.handle);
+    json!({
+        "variant": variant,
+        "error": FT_Err_Ok,
+        "face_load_error": FT_Err_Ok,
+        "pointer_null": table_status != FT_Err_Ok,
+        "fields_if_loaded": if table_status == FT_Err_Ok {
+            wasm_tt_maxprofile_record_json(record)
+        } else {
+            Value::Null
+        },
+    })
+}
+
+fn wasm_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            wasm_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index),
+            wasm_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index),
+        ]
+    })))
+}
+
 fn rust_sfnt_table_info_output(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
     let tag_ptr_state = sfnt_table_info_tag_ptr_arg(params)?;
     let length_ptr_state = sfnt_table_info_length_ptr_arg(params)?;
@@ -24353,6 +24540,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(sfnt_get_table_tags_arg(params)?);
             Ok(args)
         }
+        "face.load_then_get_sfnt_table.maxp" => {
+            let mut args = vec!["--malformed-maxp-route".to_string()];
+            push_required_asset_source(case, "truncated_maxp", &mut args)?;
+            push_required_asset_source(case, "invalid_maxp", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "sfnt.load_sfnt_table" => {
             if params.get("offset").is_none()
                 && params.get("reads").is_none()
@@ -25986,6 +26180,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_sfnt_get_table_output(&face, &case.inputs.params)
         }
+        "face.load_then_get_sfnt_table.maxp" => rust_malformed_maxp_route(case),
         "sfnt.load_sfnt_table" => {
             let face = open_face(case)?;
             rust_load_sfnt_table_output(&face, case, &case.inputs.params)
@@ -26566,6 +26761,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.activate_size_sequence" => c_activate_size_sequence(case),
         "ftsizes.activate_select_size_sequence" => c_activate_select_size_sequence(case),
         "freetype.select_size" => c_select_size(case),
+        "face.load_then_get_sfnt_table.maxp" => c_malformed_maxp_route(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -27560,6 +27756,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.activate_size_sequence" => wasm_activate_size_sequence(case),
         "ftsizes.activate_select_size_sequence" => wasm_activate_select_size_sequence(case),
         "freetype.select_size" => wasm_select_size(case),
+        "face.load_then_get_sfnt_table.maxp" => wasm_malformed_maxp_route(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -49244,6 +49441,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "sfnt.get_sfnt_table.maxp"
             | "sfnt.get_sfnt_table.hhea"
             | "sfnt.get_sfnt_table.hhea.after_variation"
+            | "face.load_then_get_sfnt_table.maxp"
             | "sfnt.load_sfnt_table"
             | "sfnt.table_info"
             | "freetype.inspect_available_sizes"
