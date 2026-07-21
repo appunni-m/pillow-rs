@@ -42,6 +42,37 @@ Out of scope for this batch:
 Those rows must remain pending until exact routes exist. Do not reclassify them
 as real parity based on this fixture alone.
 
+## Batch 2: exact payload rows for covered paint formats
+
+Scope:
+
+- Reuse `tests/fixtures/fonts/color/colr_v1_composite_modes.ttf`.
+- Promote only rows whose declared behavior is fully present in that fixture:
+  - `FT_COLR_PAINTFORMAT_SOLID`;
+  - `FT_COLR_PAINTFORMAT_GLYPH`;
+  - `FT_COLR_PAINTFORMAT_COMPOSITE`;
+  - `FT_PaintSolid`;
+  - `FT_PaintGlyph`;
+  - `FT_PaintComposite`;
+  - `FT_OpaquePaint` produced/consumed by root and nested paint APIs;
+  - `FT_Get_Color_Glyph_Paint` downstream graph contract for the covered
+    solid/glyph/composite graph.
+- Keep broad all-paint-format, gradients, transforms, colorlines, layer lists,
+  COLR glyph, foreground-color, and malformed-paint rows pending.
+
+Acceptance gates:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint_graph_node
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_and_get_paint
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_and_resolve
+make -C pillow-rs-freetype test-op OP=ftcolor.traverse_color_paint_graph
+make fontdone-ffi-compat
+make fontdone-lint
+make fontdone-parity
+```
+
 ## Acceptance gates
 
 Focused:

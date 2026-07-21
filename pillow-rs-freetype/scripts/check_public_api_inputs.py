@@ -2605,6 +2605,35 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract",
+        "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis",
+    }:
+        return (
+            "COLRv1 opaque paint production and downstream FT_Get_Paint "
+            "consumption validate for the maintained solid/glyph/composite "
+            "paint graph through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index",
+        "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload",
+    }:
+        return (
+            "COLRv1 FT_COLR_Paint format dispatch validates the maintained "
+            "solid, glyph, and composite payload rows through pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_PaintSolid.get_paint_solid_values",
+        "ftcolor.FT_PaintGlyph.get_paint_glyph_values",
+        "ftcolor.FT_PaintComposite.get_paint_composite_values",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint public union payload values validate for "
+            "PaintSolid, PaintGlyph, and PaintComposite through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
         "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
         "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
     }:
