@@ -722,3 +722,83 @@ Remaining blocker in this operation:
   Adobe-platform Type1/CFF charmaps (`src/type1/t1objs.c:539-560`,
   `src/cff/cffobjs.c:1063-1081`) and then the declared
   `input/fonts/charmaps/adobe-custom-cmap.pfb` fixture.
+
+## Batch triage: pending-route surfaces after Apple format-13
+
+Status: triaged 2026-07-21; no rows promoted.
+
+Baseline:
+
+- Commit: `56396cc2c`
+- Route audit: `real-parity=4674`, `pending-route=289`,
+  `real-null-validation=9`, `compile-contract=2266`.
+
+Focused probes:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
+make -C pillow-rs-freetype test-op OP=ftlzw.stream_open_lzw
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_design_coordinates
+make -C pillow-rs-freetype test-op OP=freetype.inspect_charmaps
+make -C pillow-rs-freetype test-op OP=ftcid.get_cid_is_internally_cid_keyed
+make -C pillow-rs-freetype test-op OP=ftcid.get_cid_registry_ordering_supplement
+make -C pillow-rs-freetype test-op OP=ftpfr.get_pfr_metrics
+make -C pillow-rs-freetype test-op OP=ftdriver.hinting_engine_property
+make -C pillow-rs-freetype test-op OP=FT_Property_Get_then_FT_Load_Glyph
+make -C pillow-rs-freetype test-op OP=FT_Property_Set_then_FT_Load_Glyph
+```
+
+Findings:
+
+- COLRv1: existing Rust, C ABI, and WASM routes prove solid, glyph, and
+  composite paint nodes only.  The remaining color pending rows are not
+  duplicate tests.  They need real COLRv1 parser/runtime support for root
+  transform synthesis, gradient colorlines and color-stop iteration, v1 layer
+  iteration, clip boxes, and transform paint formats before any route can be
+  counted as real parity.
+- BDF/PCF: `ftbdf.get_bdf_charset_id` passed `3/3` runnable rows and kept two
+  SFNT-BDF rows pending because `input/fonts/bdf/sfnt-bdf-table.otb` is absent.
+  Local PCF files are 8-byte control stubs, not property fixtures.  FreeType's
+  BDF API explicitly covers BDF and PCF, and PCF integer properties are signed,
+  so PCF/SFNT-BDF rows must not be collapsed into the existing BDF success
+  row.  Implement by adding a C-openable PCF or SFNT-BDF fixture with
+  provenance, then adding pure-Rust PCF/SFNT-BDF property and charset support.
+- LZW: `ftlzw.stream_open_lzw` passed `4/4` runnable error/build-policy rows
+  and kept the success row pending because `streams/lzw/small-valid-pcf.Z` and
+  the memory-stream facade fixture are absent.  Real promotion requires a
+  pure-Rust LZW stream route matching FreeType `src/lzw/ftlzw.c:221-308` and
+  `337-383` for open/read/seek/close.
+- MM coordinates: `ftmm.get_var_design_coordinates` passed `4/4`; the remaining
+  excess-output row is intentionally unsound for the current TrueType variable
+  fixture because pinned FreeType reads past the active axis defaults while
+  Type1 MM zero-fills.  Do not model adjacent memory or safe zero-fill as
+  parity for that row.  Replace the input with a sound Type1 MM same-input row
+  if this surface is pursued.
+- Encoding-none charmap: `freetype.inspect_charmaps` passed `2/2`; the remaining
+  row uses a tracked encoding-none font that pinned C does not open.  Promotion
+  requires a C-openable encoding-none fixture, not a fallback error route.
+- CID/PFR: focused CID and PFR probes pass only non-CID/non-PFR or error rows.
+  Success rows need real compact CID-keyed and PFR fixtures plus pure-Rust
+  service implementations; fallback non-service errors are not parity for
+  registry/ordering/supplement, CID-from-glyph, internal-CID status, metrics,
+  advances, or kerning.
+- Driver properties: hinting-engine and autohint property rows are zero-runnable
+  until typed `FT_Property_Set`/`FT_Property_Get` routing exists and a glyph-load
+  observation proves the property changes public metrics, outline, or bitmap
+  output like pinned C.  A no-op accepting property values would be a green
+  placeholder.
+
+Next implementation order for this batch:
+
+1. COLRv1 parser extension: add one format family at a time, starting with
+   `PaintColrLayers`/`FT_Get_Paint_Layers` or `PaintTransform`, because these
+   can reuse the existing opaque-paint graph and ABI test support.
+2. BDF/PCF fixture path: add a maintained generator for compact PCF and OTB
+   fixtures, then implement PCF/SFNT-BDF property routing in safe Rust.
+3. LZW stream path: add a deterministic `.Z` fixture and implement the stream
+   adapter behavior before promoting any LZW success row.
+
+Do not promote any of the rows above by changing the audit allowlist alone.
+Each row needs the same input bytes executed through pinned C, Rust FFI, thin
+C ABI, and WASM ABI with exact public output comparison.
