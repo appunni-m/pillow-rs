@@ -1574,3 +1574,52 @@ Observed impact:
   previously passed 1/1 but the oracle cache output was an outline glyph root
   (`format=1869968492`), so it is no longer accepted as real bitmap-glyph
   parity.
+
+### FT_Get_Glyph real bitmap glyph object route: 2026-07-22
+
+Status: implemented for the narrow bitmap `FT_Get_Glyph` row.
+
+Scope:
+
+- Retargeted the shared logical bitmap-strike fixture
+  `fonts/bitmap-strikes/public-bitmap-strike.ttf` to the maintained
+  `fixtures/assets/fonts/sbit_gray_format1.ttf`, which has a 20 ppem EBLC/EBDT
+  strike and glyph 1 bitmap coverage.
+- Resolved the semantic test selector `glyph_index: "bitmap_glyph"` to glyph 1
+  instead of the previous placeholder glyph 0.
+- Added a safe Rust `FT_BitmapGlyphOwned` model plus thin C ABI and WASM ABI
+  owned bitmap glyph records.  The wrappers now allocate/free bitmap glyph
+  records around the core-owned bitmap payload and expose test-only ABI
+  snapshots; they do not parse fonts or implement glyph logic.
+- Extended the pinned-C oracle's `FT_Get_Glyph` record output so bitmap glyphs
+  include the public `FT_BitmapGlyphRec` payload.
+
+Proven row:
+
+- `ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy@gbitmap_glyph`
+
+Pinned C behavior checked:
+
+- The focused oracle now returns `FT_GLYPH_FORMAT_BITMAP` (`1651078259`) with
+  exact public bitmap payload:
+  `width=2`, `rows=2`, `pitch=2`, `pixel_mode=2`, `num_grays=256`,
+  `left=1`, `top=2`, `buffer_hex=1180c0ff`.
+- Rust FFI, thin C ABI, and WASM ABI now match that same output.
+
+Observed impact:
+
+- Route audit: `pending-route` 241 → 240, `real-parity` 4726 → 4727.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Get_Glyph.success_bitmap_slot`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` still
+  declares both `FT_Get_Glyph bitmap` and `FT_Glyph_To_Bitmap outline`
+  creation paths; the new route proves only the former.
+- `ftglyph.FT_Glyph_Copy.success_bitmap_copy_is_independent` still needs a
+  real bitmap glyph copy route proving target independence after source
+  destruction.
+- SVG rows still need an SVG-enabled fixture route or exact unsupported
+  classification against pinned C.

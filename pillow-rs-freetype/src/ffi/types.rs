@@ -851,6 +851,14 @@ pub struct FT_OutlineGlyphOwned {
     pub outline: FT_OutlineSnapshot,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_BitmapGlyphOwned {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: FT_Bitmap,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_BitmapGlyphRec {

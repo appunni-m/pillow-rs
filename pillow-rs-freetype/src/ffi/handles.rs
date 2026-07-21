@@ -23,12 +23,12 @@ use super::convert::{
 };
 use super::types::{
     BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
-    FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_ClipBox, FT_Color, FT_ColorIndex, FT_ColorLine, FT_ColorStop,
-    FT_ColorStopIterator, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14, FT_F26Dot6,
-    FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec, FT_Int,
-    FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
-    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    FT_BitmapGlyphOwned, FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char,
+    FT_CharMap, FT_CharMapRecPublic, FT_ClipBox, FT_Color, FT_ColorIndex, FT_ColorLine,
+    FT_ColorStop, FT_ColorStopIterator, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14,
+    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec,
+    FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
+    FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
     FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintFormat,
     FT_PaintGlyph, FT_PaintLinearGradient, FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale,
@@ -1952,6 +1952,43 @@ pub fn FT_Get_Outline_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_OutlineGly
             },
         },
         outline,
+    })
+}
+
+pub fn FT_Get_Bitmap_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_BitmapGlyphOwned, FT_Error> {
+    let Some(slot) = slot else {
+        return Err(FT_Err_Invalid_Slot_Handle as FT_Error);
+    };
+    if slot.format != FT_GLYPH_FORMAT_BITMAP {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    }
+    let Some(bitmap) = slot.bitmap.clone() else {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    };
+    // FreeType `src/base/ftglyph.c:647-661` applies the same 26.6 to 16.16
+    // root-advance bounds before initializing all glyph classes, including
+    // bitmap glyphs.
+    const MAX_ADVANCE_26_6_EXCLUSIVE: FT_Pos = 0x8000 * 64;
+    if slot.advance.x >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.x <= -MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y <= -MAX_ADVANCE_26_6_EXCLUSIVE
+    {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    Ok(FT_BitmapGlyphOwned {
+        root: FT_GlyphRec {
+            library: ptr::dangling_mut(),
+            clazz: ptr::dangling(),
+            format: slot.format,
+            advance: FT_Vector {
+                x: slot.advance.x * 1024,
+                y: slot.advance.y * 1024,
+            },
+        },
+        left: slot.bitmap_left,
+        top: slot.bitmap_top,
+        bitmap,
     })
 }
 

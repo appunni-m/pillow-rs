@@ -343,6 +343,15 @@ pub struct FontdoneWasmOutlineGlyph {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmBitmapGlyph {
+    pub root: FontdoneWasmGlyph,
+    pub left: i32,
+    pub top: i32,
+    pub bitmap: FontdoneWasmBitmap,
+}
+
+#[repr(C)]
 struct WasmOwnedOutlineGlyph {
     record: FontdoneWasmOutlineGlyph,
     core: rust_ffi::FT_OutlineGlyphOwned,
@@ -394,9 +403,59 @@ impl WasmOwnedOutlineGlyph {
     }
 }
 
+#[repr(C)]
+struct WasmOwnedBitmapGlyph {
+    record: FontdoneWasmBitmapGlyph,
+    core: rust_ffi::FT_BitmapGlyphOwned,
+    buffer: Box<[FT_Byte]>,
+}
+
+impl WasmOwnedBitmapGlyph {
+    fn new(core: rust_ffi::FT_BitmapGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FontdoneWasmBitmapGlyph {
+                root: wasm_glyph_root_from_core_with_class(&core.root, wasm_owned_bitmap_glyph_class()),
+                left: core.left,
+                top: core.top,
+                bitmap: FontdoneWasmBitmap::default(),
+            },
+            core,
+            buffer: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root =
+            wasm_glyph_root_from_core_with_class(&self.core.root, wasm_owned_bitmap_glyph_class());
+        self.record.left = self.core.left;
+        self.record.top = self.core.top;
+        self.buffer = self.core.bitmap.buffer.clone().into_boxed_slice();
+        self.record.bitmap = FontdoneWasmBitmap {
+            rows: self.core.bitmap.rows,
+            width: self.core.bitmap.width,
+            pitch: self.core.bitmap.pitch,
+            buffer: self.buffer.as_ptr(),
+            buffer_len: self.buffer.len(),
+            num_grays: self.core.bitmap.num_grays,
+            pixel_mode: self.core.bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null(),
+        };
+    }
+}
+
 fn wasm_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FontdoneWasmGlyph {
+    wasm_glyph_root_from_core_with_class(root, wasm_owned_outline_glyph_class())
+}
+
+fn wasm_glyph_root_from_core_with_class(
+    root: &rust_ffi::FT_GlyphRec,
+    clazz: *const FontdoneWasmGlyphClass,
+) -> FontdoneWasmGlyph {
     FontdoneWasmGlyph {
-        clazz: wasm_owned_outline_glyph_class(),
+        clazz,
         format: root.format,
         advance: FontdoneWasmVector {
             x: root.advance.x,
@@ -406,12 +465,19 @@ fn wasm_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FontdoneWasmGlyph 
 }
 
 static WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+static WASM_OWNED_BITMAP_GLYPH_CLASS_MARKER: u8 = 0;
 
 fn wasm_owned_outline_glyph_class() -> *const FontdoneWasmGlyphClass {
     // Private marker used only for pointer identity.  It is never dereferenced
     // as `FontdoneWasmGlyphClass`; caller-owned facades still use the public
     // class-record path.
     ptr::addr_of!(WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FontdoneWasmGlyphClass>()
+}
+
+fn wasm_owned_bitmap_glyph_class() -> *const FontdoneWasmGlyphClass {
+    // Private marker used only for pointer identity.  It is never dereferenced
+    // as `FontdoneWasmGlyphClass`.
+    ptr::addr_of!(WASM_OWNED_BITMAP_GLYPH_CLASS_MARKER).cast::<FontdoneWasmGlyphClass>()
 }
 
 fn wasm_owned_outline_glyph_from_root(
@@ -438,6 +504,19 @@ fn wasm_owned_outline_glyph_from_root_mut(
     // `Box<WasmOwnedOutlineGlyph>` records, whose first field starts with the
     // public `FontdoneWasmGlyph` root.
     Some(unsafe { &mut *glyph.cast::<WasmOwnedOutlineGlyph>() })
+}
+
+fn wasm_owned_bitmap_glyph_from_root(
+    glyph: *const FontdoneWasmGlyph,
+) -> Option<&'static WasmOwnedBitmapGlyph> {
+    let glyph = unsafe { glyph.as_ref() }?;
+    if glyph.clazz != wasm_owned_bitmap_glyph_class() {
+        return None;
+    }
+    // SAFETY: this private class marker is assigned only to
+    // `Box<WasmOwnedBitmapGlyph>` records, whose first field starts with the
+    // public `FontdoneWasmGlyph` root.
+    Some(unsafe { &*ptr::from_ref(glyph).cast::<WasmOwnedBitmapGlyph>() })
 }
 
 #[repr(C)]
@@ -1503,6 +1582,15 @@ pub struct AbiOutlineGlyphSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiBitmapGlyphSnapshot {
+    pub root: FontdoneWasmGlyph,
+    pub left: i32,
+    pub top: i32,
+    pub bitmap: AbiBitmapSnapshot,
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_outline_glyph_snapshot(glyph_handle: usize) -> Option<AbiOutlineGlyphSnapshot> {
     let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
     let owned = wasm_owned_outline_glyph_from_root(glyph)?;
@@ -1512,6 +1600,28 @@ pub fn abi_outline_glyph_snapshot(glyph_handle: usize) -> Option<AbiOutlineGlyph
         advance: owned.record.root.advance,
         outline: owned.core.outline.clone(),
         cbox,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_bitmap_glyph_snapshot(glyph_handle: usize) -> Option<AbiBitmapGlyphSnapshot> {
+    let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
+    let owned = wasm_owned_bitmap_glyph_from_root(glyph)?;
+    Some(AbiBitmapGlyphSnapshot {
+        root: owned.record.root,
+        left: owned.record.left,
+        top: owned.record.top,
+        bitmap: AbiBitmapSnapshot {
+            rows: owned.record.bitmap.rows,
+            width: owned.record.bitmap.width,
+            pitch: owned.record.bitmap.pitch,
+            num_grays: owned.record.bitmap.num_grays,
+            pixel_mode: owned.record.bitmap.pixel_mode,
+            left: owned.record.left,
+            top: owned.record.top,
+            owns_bitmap: true,
+            buffer: owned.buffer.to_vec(),
+        },
     })
 }
 
@@ -2001,6 +2111,23 @@ fn wasm_glyph_cbox_snapshot(
             cbox: Some(cbox),
         });
     }
+    if glyph.clazz == wasm_owned_bitmap_glyph_class() {
+        let owned = wasm_owned_bitmap_glyph_from_root(glyph)?;
+        let x_min = i64::from(owned.record.left).saturating_mul(64);
+        let y_max = i64::from(owned.record.top).saturating_mul(64);
+        let x_max = x_min.saturating_add(i64::from(owned.record.bitmap.width).saturating_mul(64));
+        let y_min = y_max.saturating_sub(i64::from(owned.record.bitmap.rows).saturating_mul(64));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(rust_ffi::FT_BBox {
+                xMin: x_min,
+                yMin: y_min,
+                xMax: x_max,
+                yMax: y_max,
+            }),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  This thin WASM ABI wrapper reads
     // only the class facade's bbox-hook presence and delegates FreeType's
     // zero-first `FT_Glyph_Get_CBox` contract to safe Rust.
@@ -2057,10 +2184,18 @@ pub extern "C" fn fontdone_wasm_get_glyph_from_face(
     let Some(out) = (unsafe { aglyph.as_mut() }) else {
         return err;
     };
-    match rust_ffi::FT_Get_Outline_Glyph(slot) {
-        Ok(core) => {
-            let glyph = Box::new(WasmOwnedOutlineGlyph::new(core));
-            *out = Box::into_raw(glyph).addr();
+    let glyph_result = if slot
+        .is_some_and(|slot| slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP)
+    {
+        rust_ffi::FT_Get_Bitmap_Glyph(slot)
+            .map(|core| Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(core))).addr())
+    } else {
+        rust_ffi::FT_Get_Outline_Glyph(slot)
+            .map(|core| Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(core))).addr())
+    };
+    match glyph_result {
+        Ok(glyph) => {
+            *out = glyph;
             rust_ffi::FT_Err_Ok
         }
         Err(error) => {
@@ -2103,6 +2238,12 @@ pub extern "C" fn fontdone_wasm_done_glyph_handle(glyph: *mut FontdoneWasmGlyph)
         // SAFETY: the private class marker proves this pointer came from
         // `Box<WasmOwnedOutlineGlyph>` in `fontdone_wasm_get_glyph_from_face`.
         unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedOutlineGlyph>())) };
+        return;
+    }
+    if wasm_owned_bitmap_glyph_from_root(glyph).is_some() {
+        // SAFETY: the private class marker proves this pointer came from
+        // `Box<WasmOwnedBitmapGlyph>` in `fontdone_wasm_get_glyph_from_face`.
+        unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedBitmapGlyph>())) };
         return;
     }
     rust_ffi::FT_Done_Glyph(!glyph.is_null());

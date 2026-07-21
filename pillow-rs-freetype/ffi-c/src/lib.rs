@@ -139,6 +139,7 @@ pub type FT_Face = *mut FT_FaceRec;
 pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
 pub type FT_Glyph = *mut FT_GlyphRec;
+pub type FT_BitmapGlyph = *mut FT_BitmapGlyphRec;
 pub type FT_CharMap = *mut FT_CharMapRec;
 
 #[repr(C)]
@@ -257,6 +258,14 @@ pub struct FT_OutlineGlyphRec {
 }
 
 #[repr(C)]
+pub struct FT_BitmapGlyphRec {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: FT_Bitmap,
+}
+
+#[repr(C)]
 struct OwnedOutlineGlyph {
     record: FT_OutlineGlyphRec,
     core: rust_ffi::FT_OutlineGlyphOwned,
@@ -308,10 +317,58 @@ impl OwnedOutlineGlyph {
     }
 }
 
+#[repr(C)]
+struct OwnedBitmapGlyph {
+    record: FT_BitmapGlyphRec,
+    core: rust_ffi::FT_BitmapGlyphOwned,
+    buffer: Box<[FT_Byte]>,
+}
+
+impl OwnedBitmapGlyph {
+    fn new(core: rust_ffi::FT_BitmapGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FT_BitmapGlyphRec {
+                root: c_glyph_root_from_core_with_class(&core.root, owned_bitmap_glyph_class()),
+                left: core.left,
+                top: core.top,
+                bitmap: FT_Bitmap::default(),
+            },
+            core,
+            buffer: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root = c_glyph_root_from_core_with_class(&self.core.root, owned_bitmap_glyph_class());
+        self.record.left = self.core.left;
+        self.record.top = self.core.top;
+        self.buffer = self.core.bitmap.buffer.clone().into_boxed_slice();
+        self.record.bitmap = FT_Bitmap {
+            rows: self.core.bitmap.rows,
+            width: self.core.bitmap.width,
+            pitch: self.core.bitmap.pitch,
+            buffer: self.buffer.as_mut_ptr(),
+            num_grays: self.core.bitmap.num_grays,
+            pixel_mode: self.core.bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null_mut(),
+        };
+    }
+}
+
 fn c_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FT_GlyphRec {
+    c_glyph_root_from_core_with_class(root, owned_outline_glyph_class())
+}
+
+fn c_glyph_root_from_core_with_class(
+    root: &rust_ffi::FT_GlyphRec,
+    clazz: *const FT_Glyph_Class,
+) -> FT_GlyphRec {
     FT_GlyphRec {
         library: root.library,
-        clazz: owned_outline_glyph_class(),
+        clazz,
         format: root.format,
         advance: FT_Vector {
             x: root.advance.x,
@@ -321,12 +378,19 @@ fn c_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FT_GlyphRec {
 }
 
 static OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+static OWNED_BITMAP_GLYPH_CLASS_MARKER: u8 = 0;
 
 fn owned_outline_glyph_class() -> *const FT_Glyph_Class {
     // Private marker used only for pointer identity.  We never dereference this
     // address as an `FT_Glyph_Class`; real class facades continue down the
     // caller-owned public-record path.
     ptr::addr_of!(OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FT_Glyph_Class>()
+}
+
+fn owned_bitmap_glyph_class() -> *const FT_Glyph_Class {
+    // Private marker used only for pointer identity.  We never dereference this
+    // address as an `FT_Glyph_Class`.
+    ptr::addr_of!(OWNED_BITMAP_GLYPH_CLASS_MARKER).cast::<FT_Glyph_Class>()
 }
 
 fn owned_outline_glyph_from_root(glyph: FT_Glyph) -> Option<&'static OwnedOutlineGlyph> {
@@ -353,6 +417,19 @@ fn owned_outline_glyph_from_root_mut(glyph: FT_Glyph) -> Option<&'static mut Own
     // allocations whose first field is an `FT_OutlineGlyphRec`, whose first
     // field is the public `FT_GlyphRec` root.
     Some(unsafe { &mut *glyph.as_ptr().cast::<OwnedOutlineGlyph>() })
+}
+
+fn owned_bitmap_glyph_from_root(glyph: FT_Glyph) -> Option<&'static OwnedBitmapGlyph> {
+    let glyph = non_null_mut(glyph)?;
+    // SAFETY: checked non-null and only reads the public root class pointer.
+    let root = unsafe { glyph.as_ref() };
+    if root.clazz != owned_bitmap_glyph_class() {
+        return None;
+    }
+    // SAFETY: this sentinel is assigned only for `Box<OwnedBitmapGlyph>`
+    // allocations whose first field is an `FT_BitmapGlyphRec`, whose first
+    // field is the public `FT_GlyphRec` root.
+    Some(unsafe { &*glyph.as_ptr().cast::<OwnedBitmapGlyph>() })
 }
 
 #[repr(C)]
@@ -1969,6 +2046,15 @@ pub struct AbiOutlineGlyphSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiBitmapGlyphSnapshot {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: AbiBitmapSnapshot,
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_get_outline_glyph_from_face(face: FT_Face) -> Result<FT_Glyph, FT_Error> {
     let Some(slot) = abi_glyph_slot(face) else {
         return Err(rust_ffi::FT_Err_Invalid_Slot_Handle as FT_Error);
@@ -1991,6 +2077,27 @@ pub fn abi_outline_glyph_snapshot(glyph: FT_Glyph) -> Option<AbiOutlineGlyphSnap
         advance: owned.record.root.advance,
         outline: owned.core.outline.clone(),
         cbox,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_bitmap_glyph_snapshot(glyph: FT_Glyph) -> Option<AbiBitmapGlyphSnapshot> {
+    let owned = owned_bitmap_glyph_from_root(glyph)?;
+    Some(AbiBitmapGlyphSnapshot {
+        root: owned.record.root,
+        left: owned.record.left,
+        top: owned.record.top,
+        bitmap: AbiBitmapSnapshot {
+            rows: owned.record.bitmap.rows,
+            width: owned.record.bitmap.width,
+            pitch: owned.record.bitmap.pitch,
+            num_grays: owned.record.bitmap.num_grays,
+            pixel_mode: owned.record.bitmap.pixel_mode,
+            left: owned.record.left,
+            top: owned.record.top,
+            owns_bitmap: true,
+            buffer: owned.buffer.to_vec(),
+        },
     })
 }
 
@@ -2325,6 +2432,11 @@ fn abi_glyph_slot(face: FT_Face) -> Option<NonNull<FT_GlyphSlotRec>> {
     let face = NonNull::new(face)?;
     // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
     NonNull::new(unsafe { (*face.as_ptr()).glyph })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyph_slot_pointer(face: FT_Face) -> Option<FT_GlyphSlot> {
+    abi_glyph_slot(face).map(NonNull::as_ptr)
 }
 
 #[unsafe(no_mangle)]
@@ -3483,6 +3595,23 @@ fn c_glyph_cbox_snapshot(glyph: FT_Glyph) -> Option<rust_ffi::FT_GlyphCBoxSnapsh
             cbox: Some(cbox),
         });
     }
+    if root.clazz == owned_bitmap_glyph_class() {
+        let owned = owned_bitmap_glyph_from_root(glyph.as_ptr())?;
+        let x_min = i64::from(owned.record.left).saturating_mul(64);
+        let y_max = i64::from(owned.record.top).saturating_mul(64);
+        let x_max = x_min.saturating_add(i64::from(owned.record.bitmap.width).saturating_mul(64));
+        let y_min = y_max.saturating_sub(i64::from(owned.record.bitmap.rows).saturating_mul(64));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(rust_ffi::FT_BBox {
+                xMin: x_min,
+                yMin: y_min,
+                xMax: x_max,
+                yMax: y_max,
+            }),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  The wrapper reads the public-sized
     // class facade to observe whether `glyph_bbox` is present, then delegates
     // the zero/no-bbox behavior to safe Rust.
@@ -3528,10 +3657,17 @@ pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_
     // SAFETY: `slot` is a live slot allocated by this wrapper.  Successful
     // glyph creation copies the private Rust slot payload into an owned glyph.
     let slot = unsafe { slot.as_ref() };
-    match rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot)) {
-        Ok(core) => {
-            let glyph = Box::new(OwnedOutlineGlyph::new(core));
-            let glyph = Box::into_raw(glyph).cast::<FT_GlyphRec>();
+    let glyph_result = if slot.rust_slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP {
+        rust_ffi::FT_Get_Bitmap_Glyph(Some(&slot.rust_slot)).map(|core| {
+            Box::into_raw(Box::new(OwnedBitmapGlyph::new(core))).cast::<FT_GlyphRec>()
+        })
+    } else {
+        rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot)).map(|core| {
+            Box::into_raw(Box::new(OwnedOutlineGlyph::new(core))).cast::<FT_GlyphRec>()
+        })
+    };
+    match glyph_result {
+        Ok(glyph) => {
             // SAFETY: `out` is non-null and points to caller-provided output storage.
             unsafe { *out.as_ptr() = glyph };
             rust_ffi::FT_Err_Ok
@@ -3569,6 +3705,12 @@ pub extern "C" fn FT_Done_Glyph(glyph: FT_Glyph) {
         // SAFETY: the class sentinel proves this pointer came from
         // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
         unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+        return;
+    }
+    if owned_bitmap_glyph_from_root(glyph).is_some() {
+        // SAFETY: the class sentinel proves this pointer came from
+        // `Box<OwnedBitmapGlyph>` in `FT_Get_Glyph`.
+        unsafe { drop(Box::from_raw(glyph.cast::<OwnedBitmapGlyph>())) };
         return;
     }
     rust_ffi::FT_Done_Glyph(!glyph.is_null());
