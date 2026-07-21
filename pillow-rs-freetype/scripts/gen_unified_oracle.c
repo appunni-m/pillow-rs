@@ -17469,6 +17469,15 @@ static int emit_property_case(int argc, char** argv) {
                error == FT_Err_Ok ? "true" : "false");
         return 0;
     }
+    if (streq(case_id, "fterrdef.FT_Err_Missing_Property.known_property_success")) {
+        FT_UInt value = PROPERTY_SENTINEL;
+        FT_Error error = oracle_property_get(1, 4, 4, &value);
+        printf(",\"output\":{\"status\":%d,\"value\":%u,\"module_service\":%s}}\n",
+               error,
+               value,
+               error == FT_Err_Ok ? "true" : "false");
+        return 0;
+    }
     if (streq(case_id, "ftmodapi.FT_Property_Get.rejects_null_arguments")) {
         FT_UInt library_value = PROPERTY_SENTINEL;
         FT_UInt module_value = PROPERTY_SENTINEL;
