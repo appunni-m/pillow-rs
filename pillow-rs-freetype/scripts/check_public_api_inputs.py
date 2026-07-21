@@ -3249,17 +3249,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "class pointer only by stable public behavior; raw private pointer "
             "or field comparison is not portable C/Rust/C-ABI/WASM parity"
         ),
-        "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta": (
-            "FT_Glyph_Transform outline matrix+delta success parity needs a "
-            "maintained outline glyph route comparing fixed-point matrix math, "
-            "delta application, root advance, and transformed outline arrays "
-            "against pinned C across all ABI lanes"
-        ),
-        "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only": (
-            "FT_Glyph_Transform delta-only and matrix-only parity needs the "
-            "same maintained outline glyph route, including null matrix/null "
-            "delta public inputs and exact C/Rust/C-ABI/WASM output comparison"
-        ),
         "ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates": (
             "FT_Glyph_Transform SVG parity needs an SVG-enabled glyph route "
             "that accumulates transform and delta into FT_SvgGlyphRec exactly "
@@ -5391,6 +5380,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftglyph.FT_Glyph_Transform.error_non_scalable_bitmap"
     ):
         return "FT_Glyph_Transform non-scalable bitmap errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_transform"
+        and row.case_id
+        in {
+            "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta",
+            "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only",
+        }
+    ):
+        return "FT_Glyph_Transform outline success validates owned FT_Get_Glyph outline records, transform status, outline points, root advance, CBox, and mutation class through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftlist.list_iterate"
         and row.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success"

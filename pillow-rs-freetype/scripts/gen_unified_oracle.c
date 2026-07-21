@@ -5496,6 +5496,118 @@ static void print_glyph_cbox_payload(FT_GlyphSlot slot, const char* modes_csv) {
     FT_Done_Glyph(glyph);
 }
 
+static void print_glyph_transform_outline_row(
+    FT_Face face,
+    FT_UInt glyph_index,
+    FT_Int32 load_flags,
+    int transform_index,
+    const char* matrix_spec,
+    const char* delta_spec
+) {
+    FT_Error err = FT_Load_Glyph(face, glyph_index, load_flags);
+    FT_Glyph glyph = NULL;
+    if (!err) {
+        err = FT_Get_Glyph(face->glyph, &glyph);
+    }
+    FT_Matrix matrix_value;
+    FT_Vector delta_value;
+    FT_Matrix* matrix = NULL;
+    FT_Vector* delta = NULL;
+    if (!streq(matrix_spec, "null")) {
+        long xx = 0, xy = 0, yx = 0, yy = 0;
+        sscanf(matrix_spec, "%ld,%ld,%ld,%ld", &xx, &xy, &yx, &yy);
+        matrix_value.xx = xx;
+        matrix_value.xy = xy;
+        matrix_value.yx = yx;
+        matrix_value.yy = yy;
+        matrix = &matrix_value;
+    }
+    if (!streq(delta_spec, "null")) {
+        long x = 0, y = 0;
+        sscanf(delta_spec, "%ld,%ld", &x, &y);
+        delta_value.x = x;
+        delta_value.y = y;
+        delta = &delta_value;
+    }
+    if (!err) {
+        err = FT_Glyph_Transform(glyph, matrix, delta);
+    }
+    printf("{\"glyph_index\":%u,\"transform_index\":%d,\"status\":%d",
+           glyph_index,
+           transform_index,
+           err);
+    if (!err && glyph && glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        FT_BBox cbox;
+        FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_UNSCALED, &cbox);
+        printf(",");
+        print_outline(&outline_glyph->outline);
+        printf(",\"root\":{\"advance\":{\"x\":%ld,\"y\":%ld}},",
+               glyph->advance.x,
+               glyph->advance.y);
+        print_bbox_named("cbox", cbox);
+        printf(",\"mutation_class\":\"%s\"",
+               !matrix && !delta ? "none" : (!matrix ? "delta_only" : (!delta ? "matrix_only" : "matrix_delta")));
+    } else {
+        printf(",\"outline\":null,\"root\":null,\"cbox\":null,\"mutation_class\":\"error\"");
+    }
+    printf("}");
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
+static void print_glyph_transform_payload(
+    FT_Face face,
+    const char* glyph_indices_csv,
+    FT_Int32 load_flags,
+    const char* transforms_spec
+) {
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    size_t glyphs_len = strlen(glyph_indices_csv);
+    char* glyphs = (char*)malloc(glyphs_len + 1);
+    if (glyphs) {
+        memcpy(glyphs, glyph_indices_csv, glyphs_len + 1);
+    }
+    int first = 1;
+    char* glyph_saveptr = NULL;
+    char* glyph_token = glyphs ? strtok_r(glyphs, ",", &glyph_saveptr) : NULL;
+    while (glyph_token) {
+        FT_UInt glyph_index = (FT_UInt)strtoul(glyph_token, NULL, 10);
+        size_t transforms_len = strlen(transforms_spec);
+        char* transforms = (char*)malloc(transforms_len + 1);
+        if (transforms) {
+            memcpy(transforms, transforms_spec, transforms_len + 1);
+        }
+        int transform_index = 0;
+        char* transform_saveptr = NULL;
+        char* transform_token = transforms ? strtok_r(transforms, ";", &transform_saveptr) : NULL;
+        while (transform_token) {
+            char* slash = strchr(transform_token, '/');
+            if (slash) {
+                *slash = '\0';
+                if (!first) printf(",");
+                first = 0;
+                print_glyph_transform_outline_row(
+                    face,
+                    glyph_index,
+                    load_flags,
+                    transform_index,
+                    transform_token,
+                    slash + 1
+                );
+            }
+            transform_index++;
+            transform_token = strtok_r(NULL, ";", &transform_saveptr);
+        }
+        free(transforms);
+        glyph_token = strtok_r(NULL, ",", &glyph_saveptr);
+    }
+    free(glyphs);
+    printf("]}}\n");
+}
+
 static FT_BBox parse_bbox_arg(const char* arg) {
     FT_BBox bbox = {0, 0, 0, 0};
     sscanf(arg, "%ld,%ld,%ld,%ld", &bbox.xMin, &bbox.yMin, &bbox.xMax, &bbox.yMax);
@@ -16249,7 +16361,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -16281,6 +16393,13 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     if (!err && streq(command, "--glyph-get-cbox")) {
         print_glyph_cbox_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (streq(command, "--glyph-transform")) {
+        print_glyph_transform_payload(face, argv[7], load_flags, argv[9]);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -18685,6 +18804,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--glyph-get-cbox")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--glyph-transform")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 11 && streq(argv[1], "--glyph-to-bitmap")) {
