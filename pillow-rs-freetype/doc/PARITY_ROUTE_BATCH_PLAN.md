@@ -679,3 +679,46 @@ Do not import a downloaded font just because it exercises the same broad table
 family. A missing fixture becomes real parity only when the manifest row names
 the exact input bytes, the license/provenance is acceptable, pinned C output is
 captured, and Rust FFI, C ABI, and WASM ABI compare the same public result.
+
+## Batch: Apple full-Unicode format-13 charmap route
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- `ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match`
+- Operation `face.enumerate_charmaps`
+
+Fix:
+
+- Generated the declared same-input fixture at
+  `tests/fixtures/input/fonts/charmaps/apple-full-unicode-type13.ttf` with an
+  Apple Unicode platform (`platform_id=0`), full Unicode encoding ID
+  (`encoding_id=6`), and cmap format 13.
+- Added safe Rust cmap format-13 parsing and lookup.  FreeType's format-13
+  class has the format-12 group layout but returns each group's constant glyph
+  ID (`src/sfnt/ttcmap.c:tt_cmap13_char_index`), so Rust now stores a distinct
+  `Format13Subtable`.
+- Routed `face.enumerate_charmaps` through the existing exact charmap inventory
+  path used by Rust FFI, thin C ABI, WASM ABI, and the pinned C oracle.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=face.enumerate_charmaps
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 290 → 289, `real-parity` 4673 → 4674.
+- Focused runtime: compared 1 / total 1, passed 1, failed 0.
+
+Remaining blocker in this operation:
+
+- `ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match` remains
+  pending.  Existing Type 1 custom-encoding fixtures prove
+  `T1_EncodingType`, but Rust Type1 loading currently leaves `FontData.cmap`
+  empty.  Promoting this row requires core support for FreeType's synthesized
+  Adobe-platform Type1/CFF charmaps (`src/type1/t1objs.c:539-560`,
+  `src/cff/cffobjs.c:1063-1081`) and then the declared
+  `input/fonts/charmaps/adobe-custom-cmap.pfb` fixture.
