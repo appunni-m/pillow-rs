@@ -244,6 +244,13 @@ Promoted in this sweep:
   `input/fonts/cff/fontinfo-populated.otf` asset and compares the exact
   `FT_Err_Invalid_Argument` unsupported-service behavior through pinned C,
   Rust FFI, C ABI, and WASM ABI.
+- `t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument` and
+  `t1tables.FT_Get_PS_Font_Private.truetype_invalid_argument` use the
+  maintained `input/fonts/DejaVuSans.ttf` control face and compare the exact
+  `FT_Err_Invalid_Argument` unsupported-service behavior through pinned C,
+  Rust FFI, C ABI, and WASM ABI. These split only the non-PostScript control
+  scenarios out of the broad matrices; they do not complete the Type1/CID/Type42
+  success obligations.
 
 After the malformed `TT_MaxProfile` route:
 
