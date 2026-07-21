@@ -22227,6 +22227,7 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
             | "sfnt.get_name"
             | "sfnt.get_sfnt_name"
             | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.charmap_and_name_metadata"
             | "sfnt.mac_encoding_record"
             | "freetype.get_first_char"
             | "freetype.get_next_char"
@@ -25277,7 +25278,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(sfnt_table_info_length_ptr_arg(params)?);
             Ok(args)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let mut args = vec!["--sfnt-mac-encoding-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -26922,7 +26923,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_sfnt_table_info_output(&face, &case.inputs.params)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let mut face = open_face(case)?;
             Ok(ok(rust_sfnt_mac_encoding_record_output(
                 &mut face,
@@ -27965,7 +27966,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_mac_encoding_record_output(face, &case.inputs.params);
             c_done_face(face);
@@ -28928,7 +28929,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_mac_encoding_record_output(handle, &case.inputs.params);
             wasm_done_face(handle);
@@ -50688,6 +50689,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "sfnt.get_name"
             | "sfnt.get_sfnt_name"
             | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.charmap_and_name_metadata"
             | "sfnt.mac_encoding_record"
             | "sfnt.get_sfnt_table"
             | "sfnt.get_sfnt_table.record"

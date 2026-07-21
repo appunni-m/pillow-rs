@@ -201,6 +201,30 @@ make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_value
 make -C pillow-rs-freetype route-audit
 ```
 
+After the `TT_MAC_ID_JAPANESE` mac-encoding metadata route:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 290, 'real-null-validation': 9, 'real-parity': 4673}
+runtime_parity_progress: compared=3 total=3 passed=3 failed=0
+runtime_cases: runnable=3 pending=0
+```
+
+The route extends the maintained name/cmap fixture generator with
+`input/fonts/name-cmap/mac-japanese.ttf`, a compact SFNT fixture containing one
+Macintosh Japanese full-name record and deterministic cmap entries for
+U+3042, U+30A2, and U+4E00. The manifest operation
+`sfnt.charmap_and_name_metadata` now routes through the existing exact
+mac-encoding runner instead of remaining hardcoded as a selection-skipped row.
+The three concrete variants compare pinned C, Rust FFI, thin C ABI, and WASM ABI
+for charmap metadata, glyph indices, and matched SFNT name record bytes.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=sfnt.charmap_and_name_metadata
+make -C pillow-rs-freetype route-buckets
+```
+
 ## Turn triage: 2026-07-21
 
 Rows checked before selecting the next implementation batch:
