@@ -2680,6 +2680,16 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "validate through the maintained layer-list fixture, pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI"
         )
+    if row.case_id in {
+        "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers",
+        "ftcolor.FT_Get_Paint_Layers.end_of_iteration",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint_Layers success and terminal iteration "
+            "validate layer paint handles, iterator fields, and exhausted-call "
+            "preservation through the maintained layer-list fixture, pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime":
         return (
             "COLRv1 PaintColrGlyph payload and referenced BaseGlyphV1List root "
