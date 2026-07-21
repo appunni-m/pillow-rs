@@ -3281,6 +3281,22 @@ pub fn FT_Get_PS_Font_Private(
     FT_Err_Ok
 }
 
+pub fn FT_Has_PS_Glyph_Names(face: Option<&FT_Face>) -> FT_Int {
+    let Some(face) = face else {
+        return 0;
+    };
+    let inner = face.inner.borrow();
+    // FreeType `src/base/fttype1.c:FT_Has_PS_Glyph_Names` initializes the
+    // result to 0 and only asks the PostScript service callback when present.
+    // The supported pure-Rust PostScript service today is Type 1; SFNT
+    // `FT_FACE_FLAG_GLYPH_NAMES` is intentionally not enough for this API.
+    if inner.font().type1_font_info().is_some() {
+        1
+    } else {
+        0
+    }
+}
+
 fn copy_value_bytes(value: Option<&mut [u8]>, required_len: usize, source: &[u8]) -> FT_Long {
     if let Some(value) = value.filter(|value| value.len() >= required_len) {
         value[..required_len].copy_from_slice(source);

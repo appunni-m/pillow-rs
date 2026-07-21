@@ -4596,6 +4596,11 @@ pub extern "C" fn fontdone_wasm_get_ps_font_private(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_has_ps_glyph_names(handle: usize) -> FT_Int {
+    rust_ffi::FT_Has_PS_Glyph_Names(face_ref(handle).map(|face| &face.face))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_ps_font_value(
     handle: usize,
     key: PS_Dict_Keys,

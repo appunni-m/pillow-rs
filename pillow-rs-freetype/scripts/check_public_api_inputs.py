@@ -200,6 +200,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_error_string",
     "fontdone_wasm_get_ps_font_info",
     "fontdone_wasm_get_ps_font_private",
+    "fontdone_wasm_has_ps_glyph_names",
     "fontdone_wasm_get_ps_font_value",
     "fontdone_wasm_open_type_validate",
     "fontdone_wasm_open_type_free",
@@ -4643,6 +4644,20 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         return (
             "FT_Get_PS_Font_Info Type1 FontInfo string/scalar record validates "
             "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.has_ps_glyph_names"
+        and row.case_id
+        in {
+            "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true",
+            "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
+            "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Has_PS_Glyph_Names Type1, TrueType, and null-face results "
+            "validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_private"

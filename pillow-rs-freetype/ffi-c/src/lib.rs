@@ -1833,6 +1833,12 @@ pub extern "C" fn FT_Get_PS_Font_Private(face: FT_Face, afont_private: PS_Privat
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Has_PS_Glyph_Names(face: FT_Face) -> FT_Int {
+    let face = face_state(face).map(|state| &state.inner);
+    rust_ffi::FT_Has_PS_Glyph_Names(face)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_PS_Font_Value(
     face: FT_Face,
     key: PS_Dict_Keys,
