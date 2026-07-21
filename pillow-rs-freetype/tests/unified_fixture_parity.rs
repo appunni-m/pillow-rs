@@ -40489,7 +40489,9 @@ fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Opti
             return Some(candidate);
         }
         match candidate {
-            "fonts/basic/dejavu-sans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
+            "fonts/basic/DejaVuSans.ttf"
+            | "fonts/basic/dejavu-sans.ttf"
+            | "fixtures/assets/fonts/DejaVuSans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
             "fonts/bdf/properties-atoms-integers-cardinals.bdf" => {
                 Some("input/fonts/bdf/properties-atoms-integers-cardinals.bdf")
             }

@@ -42,6 +42,36 @@
         "output_shape": {"status": "FT_Error", "private": {"unique_id": "FT_Int", "lenIV": "FT_Int", "blue_values": "FT_Short[14]", "other_blues": "FT_Short[10]", "family_blues": "FT_Short[14]", "family_other_blues": "FT_Short[10]", "blue_scale": "FT_Fixed", "blue_shift": "FT_Int", "blue_fuzz": "FT_Int", "standard_width": "FT_UShort[1]", "standard_height": "FT_UShort[1]", "snap_widths": "FT_Short[13]", "snap_heights": "FT_Short[13]", "force_bold": "FT_Bool", "round_stem_up": "FT_Bool", "language_group": "FT_Long", "password": "FT_Long", "min_feature": "FT_Short[2]"}},
         "compare": {"mode": "exact", "paths": ["status", "private"]}
       }
+    },
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.cff_invalid_argument",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "unsupported_postscript_formats_invalid_argument",
+      "covers_manifest_cases": ["unsupported_postscript_formats_invalid_argument"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "cff_font",
+            "id": "input/fonts/cff/fontinfo-populated.otf",
+            "requirements": "Maintained CFF face without ps_get_font_private service."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "expected_error": "FT_Err_Invalid_Argument",
+          "source_behavior": "CFF exposes FontInfo but no FT_Get_PS_Font_Private service, so pinned C returns Invalid_Argument."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "asset:existing"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "private": null},
+        "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true}
+      }
     }
   ]
 }
