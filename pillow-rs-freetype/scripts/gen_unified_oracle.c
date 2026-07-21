@@ -6490,6 +6490,90 @@ static int emit_cmap_cache_lookup(int argc, char** argv) {
     return 0;
 }
 
+static int emit_cmap_cache_new_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    const char* scenario = argv[4];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    CMapCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cmap_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_CMapCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_CMapCache_New(manager, &cache);
+
+    FT_UInt first = 0;
+    FT_UInt after_reset = 0;
+    int after_first_count = requester.request_count;
+    int after_reset_count = requester.request_count;
+    if (!cache_error) {
+        first = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
+        after_first_count = requester.request_count;
+        FTC_Manager_Reset(manager);
+        after_reset = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
+        after_reset_count = requester.request_count;
+    }
+
+    printf("{");
+    print_status(cache_error);
+    printf(",\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"manager_status\":%d,\"create_status\":%d,"
+           "\"cache_handle\":\"%s\",\"destroyed_by_manager_done\":true,"
+           "\"lookup\":{\"char_code\":65,\"first\":%u,\"after_reset\":%u,"
+           "\"requester_count_after_first\":%d,\"requester_count_after_reset\":%d,"
+           "\"reset_preserves_handle\":%s}}}\n",
+           manager_error,
+           cache_error,
+           cache ? "non_null" : "null",
+           first,
+           after_reset,
+           after_first_count,
+           after_reset_count,
+           cache ? "true" : "false");
+
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static void print_size_metrics_object(FT_Size_Metrics metrics) {
     printf("\"x_ppem\":%u,\"y_ppem\":%u,\"x_scale\":%ld,\"y_scale\":%ld,\"ascender\":%ld,\"descender\":%ld,\"height\":%ld,\"max_advance\":%ld",
            metrics.x_ppem,
@@ -6832,6 +6916,217 @@ static int emit_manager_lookup_face(int argc, char** argv) {
     FT_Done_FreeType(library);
     free(data);
     free(sequence_arg);
+    return 0;
+}
+
+static int emit_manager_new_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+    char* limits_arg = (char*)malloc(strlen(argv[6]) + 1);
+    if (!limits_arg) {
+        return 1;
+    }
+    memcpy(limits_arg, argv[6], strlen(argv[6]) + 1);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(limits_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(limits_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(limits_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(limits_arg);
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"req_data\":\"sentinel-pointer-token\",\"rows\":[");
+    char* cursor = limits_arg;
+    int first_row = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        unsigned long max_faces = 0;
+        unsigned long max_sizes = 0;
+        unsigned long max_bytes = 0;
+        if (sscanf(cursor, "%lu:%lu:%lu", &max_faces, &max_sizes, &max_bytes) != 3) {
+            FT_Done_FreeType(library);
+            free(data);
+            free(limits_arg);
+            return 2;
+        }
+        MemoryFaceRequestRec request = {data, data_len, face_index, 0};
+        FTC_Manager manager = NULL;
+        FT_Error manager_error = FTC_Manager_New(library,
+                                                 (FT_UInt)max_faces,
+                                                 (FT_UInt)max_sizes,
+                                                 max_bytes,
+                                                 memory_face_requester,
+                                                 &request,
+                                                 &manager);
+        FT_Face face = NULL;
+        FT_Error lookup_error = manager_error
+            ? manager_error
+            : FTC_Manager_LookupFace(manager, (FTC_FaceID)&request, &face);
+        unsigned int after_lookup_calls = request.calls;
+        unsigned int after_reset_calls = after_lookup_calls;
+        FT_Error after_reset_error = lookup_error;
+        if (!lookup_error) {
+            FTC_Manager_Reset(manager);
+            face = NULL;
+            after_reset_error = FTC_Manager_LookupFace(manager, (FTC_FaceID)&request, &face);
+            after_reset_calls = request.calls;
+        }
+        if (!first_row) {
+            printf(",");
+        }
+        first_row = 0;
+        printf("{\"limits\":{\"max_faces\":%lu,\"max_sizes\":%lu,\"max_bytes\":%lu},"
+               "\"manager_status\":%d,\"lookup_status\":%d,\"after_reset_status\":%d,"
+               "\"manager_handle\":\"%s\",\"requester_count_after_lookup\":%u,"
+               "\"requester_count_after_reset\":%u,\"reset_called\":%s,\"done_called\":true}",
+               max_faces,
+               max_sizes,
+               max_bytes,
+               manager_error,
+               lookup_error,
+               after_reset_error,
+               manager ? "non_null" : "null",
+               after_lookup_calls,
+               after_reset_calls,
+               manager ? "true" : "false");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+
+    FT_Done_FreeType(library);
+    free(data);
+    free(limits_arg);
+    return 0;
+}
+
+static int emit_image_cache_new_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    MemoryFaceRequestRec request = {data, data_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             memory_face_requester,
+                                             &request,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    FTC_ScalerRec scaler;
+    memset(&scaler, 0, sizeof(scaler));
+    scaler.face_id = (FTC_FaceID)&request;
+    scaler.width = 12;
+    scaler.height = 12;
+    scaler.pixel = 1;
+    FT_Glyph first_glyph = NULL;
+    FTC_Node first_node = NULL;
+    FT_Error first_error = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler, FT_LOAD_DEFAULT, 36, &first_glyph, &first_node);
+    unsigned int after_first_calls = request.calls;
+    if (first_node) {
+        FTC_Node_Unref(first_node, manager);
+    }
+    if (!cache_error) {
+        FTC_Manager_Reset(manager);
+    }
+    FT_Glyph reset_glyph = NULL;
+    FTC_Node reset_node = NULL;
+    FT_Error reset_error = cache_error ? cache_error
+        : FTC_ImageCache_LookupScaler(cache, &scaler, FT_LOAD_DEFAULT, 36, &reset_glyph, &reset_node);
+    unsigned int after_reset_calls = request.calls;
+    if (reset_node) {
+        FTC_Node_Unref(reset_node, manager);
+    }
+
+    printf("{");
+    print_status(cache_error);
+    printf(",\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"manager_status\":%d,\"create_status\":%d,"
+           "\"cache_handle\":\"%s\",\"destroyed_by_manager_done\":true,"
+           "\"lookup\":{\"glyph_index\":36,\"first_status\":%d,"
+           "\"after_reset_status\":%d,\"requester_count_after_first\":%u,"
+           "\"requester_count_after_reset\":%u,\"reset_preserves_handle\":%s,",
+           manager_error,
+           cache_error,
+           cache ? "non_null" : "null",
+           first_error,
+           reset_error,
+           after_first_calls,
+           after_reset_calls,
+           cache ? "true" : "false");
+    print_image_cache_glyph_object(reset_error ? NULL : reset_glyph);
+    printf("}}}\n");
+
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    free(data);
     return 0;
 }
 
@@ -20629,6 +20924,15 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--cmap-cache-new-route")) {
+        return emit_cmap_cache_new_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--image-cache-new-route")) {
+        return emit_image_cache_new_route(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--manager-new-route")) {
+        return emit_manager_new_route(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--manager-lookup-size")) {
         return emit_manager_lookup_size(argc, argv);
