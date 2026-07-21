@@ -26162,11 +26162,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(u32_param(params, "load_glyph")?.to_string());
         return Ok(args);
     }
-    if case.case_id == "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior" {
+    if incremental_nullness_case(case) {
         let mut args = vec!["--incremental-nullness-open".to_string()];
         push_font_source(case, &mut args)?;
         args.push(face_index_param(params)?.to_string());
-        args.push(u32_param(params, "load_glyph")?.to_string());
+        args.push(incremental_nullness_glyph_index(case)?.to_string());
         return Ok(args);
     }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" {
@@ -29326,7 +29326,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_library_lifecycle(case)
         }
         "ftincrem.open_face_without_incremental_parameter" => rust_incremental_absent_open(case),
-        "ftincrem.open_face_incremental_nullness" => rust_incremental_nullness_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            rust_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -30425,7 +30429,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_library_lifecycle(case)
         }
         "ftincrem.open_face_without_incremental_parameter" => c_incremental_absent_open(case),
-        "ftincrem.open_face_incremental_nullness" => c_incremental_nullness_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            c_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -31414,7 +31422,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_library_lifecycle(case)
         }
         "ftincrem.open_face_without_incremental_parameter" => wasm_incremental_absent_open(case),
-        "ftincrem.open_face_incremental_nullness" => wasm_incremental_nullness_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            wasm_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -41899,6 +41911,18 @@ fn incremental_absent_glyph_index(case: &InputCase) -> Result<u32, String> {
     u32_param(&case.inputs.params, "load_glyph")
 }
 
+fn incremental_nullness_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
+            | "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c"
+    )
+}
+
+fn incremental_nullness_glyph_index(case: &InputCase) -> Result<u32, String> {
+    u32_param(&case.inputs.params, "load_glyph").or_else(|_| glyph_index_param(&case.inputs.params))
+}
+
 fn incremental_nullness_row(variant: &str, open_error: FT_Error, load_error: FT_Error) -> Value {
     json!({
         "variant": variant,
@@ -41933,7 +41957,7 @@ fn rust_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String>
     let data = font_bytes(case)?;
     let library = FT_Init_FreeType();
     let face_index = face_index_param(&case.inputs.params)?;
-    let glyph_index = incremental_absent_glyph_index(case)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
     let mut rows = Vec::new();
     for variant in ["absent_parameter", "null_incremental_data"] {
         match FT_New_Memory_Face(&library, data.as_ref(), face_index, 20.0) {
@@ -41959,7 +41983,7 @@ fn c_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
         )]));
     }
     let face_index = face_index_param(&case.inputs.params)?;
-    let glyph_index = incremental_absent_glyph_index(case)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
     let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
     let mut rows = Vec::new();
     for (variant, with_null_incremental_param) in
@@ -42002,7 +42026,7 @@ fn c_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes(case)?;
     let face_index = face_index_param(&case.inputs.params)?;
-    let glyph_index = incremental_absent_glyph_index(case)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
     let mut rows = Vec::new();
     for variant in ["absent_parameter", "null_incremental_data"] {
         let status =
