@@ -2748,13 +2748,14 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
         )
     if row.case_id in {
         "ftcolor.FT_ColorStop.iterator_output_values",
+        "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values",
         "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
     }:
         return (
-            "COLRv1 variable gradient VarColorStop iteration validates default "
-            "and non-default wght/GRAD design-coordinate runs through the "
-            "maintained variable-gradient fixture, pinned C oracle, Rust FFI, "
-            "C ABI, and WASM ABI"
+            "COLRv1 variable gradient PaintLinearGradient payload and "
+            "VarColorStop iteration validate default and non-default wght/GRAD "
+            "design-coordinate runs through the maintained variable-gradient "
+            "fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id in {
         "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",

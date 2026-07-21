@@ -12154,6 +12154,11 @@ Remaining nearby blockers:
 - `ftcolor.FT_ColorStopIterator.initialized_by_get_paint` is already covered by
   the all-paints route, but broader root-transform/clipbox/foreground rows still
   require their own same-input public routes.
+- `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values` still
+  remains pending after the variable split because it also declares the
+  unresolved malformed COLR fixture
+  `fonts/color/malformed-colr-v1-paints.ttf`; keep that broad row visible until
+  the malformed route exists.
 - `ftcolor.FT_Get_Color_Glyph_ClipBox.*` still needs maintained clipbox
   success/no-clipbox fixtures and route output for scaled/transformed
   `FT_ClipBox` values.

@@ -11072,6 +11072,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
             | "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
             | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values"
             | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
             | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
@@ -12276,6 +12277,7 @@ fn color_variable_gradient_case(case_id: &str) -> bool {
     matches!(
         case_id,
         "ftcolor.FT_ColorStop.iterator_output_values"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values"
             | "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops"
     )
 }

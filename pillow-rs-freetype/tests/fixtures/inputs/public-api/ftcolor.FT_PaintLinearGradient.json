@@ -5,7 +5,8 @@
     "layout_matches_c",
     "field_order_matches_c",
     "get_paint_linear_gradient_values",
-    "get_paint_linear_gradient_static_values"
+    "get_paint_linear_gradient_static_values",
+    "get_paint_linear_gradient_variable_values"
   ],
   "cases": [
     {
@@ -267,6 +268,85 @@
         "fixture_requirements": [
           "Runtime C oracle generation; do not store generated outputs",
           "Does not replace get_paint_linear_gradient_values, which remains the broad static+variable+malformed row."
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values",
+      "subject": "ftcolor.FT_PaintLinearGradient",
+      "case": "get_paint_linear_gradient_variable_values",
+      "operation": "ftcolor.get_colorline_stops",
+      "schema": "paint_graph",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "fonts/color/colr-v1-variable-gradients.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyph": "linear_variable",
+          "coordinate_runs": [
+            "default",
+            {
+              "wght": 900,
+              "GRAD": 1
+            }
+          ],
+          "traversal": "FT_Get_Color_Glyph_Paint then FT_Get_Paint then FT_Get_Colorline_Stops",
+          "expected_format": "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT",
+          "active_union_member": "linear_gradient",
+          "read_colorline_stops": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "coordinate_runs": [
+            {
+              "label": "default_or_wght_900_grad_1",
+              "set_var_status": "FT_Error",
+              "sequence": {
+                "paint": {
+                  "format": "FT_COLR_PAINTFORMAT_LINEAR_GRADIENT",
+                  "linear_gradient": {
+                    "colorline": "C oracle value",
+                    "p0": "C oracle 16.16 FT_Vector",
+                    "p1": "C oracle 16.16 FT_Vector",
+                    "p2": "C oracle 16.16 FT_Vector"
+                  }
+                },
+                "color_stops": "FT_ColorStop sequence"
+              }
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "coordinate_runs[*].set_var_status",
+            "coordinate_runs[*].sequence.root_return",
+            "coordinate_runs[*].sequence.paint_return",
+            "coordinate_runs[*].sequence.paint.format",
+            "coordinate_runs[*].sequence.paint.node",
+            "coordinate_runs[*].sequence.colorline",
+            "coordinate_runs[*].sequence.calls"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs",
+          "Covers the maintained variable-gradient fixture only. The older broad get_paint_linear_gradient_values row remains pending because it also declares malformed COLR input."
         ]
       }
     }

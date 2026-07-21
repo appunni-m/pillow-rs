@@ -1316,3 +1316,29 @@ Observed impact:
 - Focused runtime:
   `make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values`
   passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+### Split variable FT_PaintLinearGradient public-record row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad row remains
+pending.
+
+Scope:
+
+- Added
+  `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values`
+  for the maintained
+  `tests/fixtures/fonts/color/colr-v1-variable-gradients.ttf` fixture.
+- Reused the existing pinned-C/Rust/C ABI/WASM variable-gradient route,
+  comparing default and `wght=900, GRAD=1` design-coordinate runs for
+  `FT_Get_Color_Glyph_Paint`, `FT_Get_Paint`, the active
+  `FT_COLR_Paint.u.linear_gradient` public union payload, attached
+  `FT_ColorLine`, and `FT_Get_Colorline_Stops` iteration.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values` still
+  declares the unresolved malformed COLR input
+  `fonts/color/malformed-colr-v1-paints.ttf`.  Promoting it based on the
+  maintained static and variable fixtures would hide that missing same-input
+  malformed route.
+- The split row names exactly the variable-gradient input it proves.
