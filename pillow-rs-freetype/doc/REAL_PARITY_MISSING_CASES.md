@@ -11394,6 +11394,70 @@ Rejected shortcuts:
   the public route; requester call counts are part of the observable parity
   contract.
 
+## Aggressive batch plan: Type1 Private/MM blend rows
+
+Status on 2026-07-21: selected as an implementable 11-row batch candidate after
+FTC cache, but not promotable by asset remapping alone.
+
+Current-state evidence:
+
+- `make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_private_mm_blend`
+  reports `runnable=0`, `pending=11`.
+- The input rows reference a future asset
+  `fonts/type1/mm-blend-fontinfo-private.pfb`, while the repository already has
+  Type1/MM fixtures including:
+  - `tests/fixtures/fonts/type1-mm/adobe-mm-two-axis.pfb`
+  - `tests/fixtures/fonts/mm/adobe-multiple-master.pfb`
+- The existing `font.rs` Type1 parser extracts basic FontInfo metadata and
+  Multiple Master axis/weight-vector data, but the public FFI layer currently
+  only defines `PS_PrivateRec` layout.  It does not yet expose exact
+  `FT_Get_PS_Font_Private` or `FT_Get_PS_Font_Value` behavior for Private
+  dictionary fields.
+- Therefore, changing the missing asset ID to an existing file would be a green
+  placeholder unless the same change proves pinned-C and Rust/C-ABI/WASM outputs
+  for the requested private fields.
+
+Rows owned by this batch:
+
+- `T1_BLEND_BLUE_SCALE.private_blue_scale_runtime_value`
+- `T1_BLEND_BLUE_SHIFT.private_blue_shift_runtime_value`
+- `T1_BLEND_BLUE_VALUES.private_blue_values_runtime_array`
+- `T1_BLEND_OTHER_BLUES.private_other_blues_runtime_array`
+- `T1_BLEND_FAMILY_BLUES.private_family_blues_runtime_array`
+- `T1_BLEND_FAMILY_OTHER_BLUES.private_family_other_blues_runtime_array`
+- `T1_BLEND_STANDARD_WIDTH.private_standard_width_runtime_value`
+- `T1_BLEND_STANDARD_HEIGHT.private_standard_height_runtime_value`
+- `T1_BLEND_STEM_SNAP_WIDTHS.private_snap_widths_runtime_array`
+- `T1_BLEND_STEM_SNAP_HEIGHTS.private_snap_heights_runtime_array`
+- `T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value`
+
+Required implementation plan:
+
+1. Extend pure-Rust Type1 cleartext parsing to capture the Private dictionary
+   fields used by FreeType's `PS_PrivateRec`: blue arrays/counts, `BlueScale`,
+   `BlueShift`, `StdVW`, `StdHW`, `StemSnapH`, `StemSnapV`, and `ForceBold`.
+2. Compare with pinned FreeType `src/type1/t1driver.c` and
+   `src/base/fttype1.c`; preserve C's defaulting, array length caps, numeric
+   conversions, and boolean normalization.
+3. Add `FT_Get_PS_Font_Private` and the relevant
+   `FT_Get_PS_Font_Value(PS_DICT_*)` selector routes in the pure Rust FFI layer
+   first; keep C ABI and WASM ABI as thin record-copy wrappers.
+4. Add a maintained oracle route for the MM fixture that reads private values
+   before and after a non-default design/blend selection.  The route must report
+   exact scalar fields, array counts, and array values.
+5. Promote only rows whose fixture actually changes or verifies the requested
+   field against pinned C across Rust FFI, C ABI, and WASM ABI.
+
+Rejected shortcuts:
+
+- Do not alias `fonts/type1/mm-blend-fontinfo-private.pfb` to an existing MM
+  fixture until the oracle proves the existing fixture contains the required
+  differing Private values.
+- Do not classify constants as runtime private-field parity.  The constant rows
+  are already covered separately; these 11 rows require public function output.
+- Do not synthesize expected Private values from Rust's parser.  The pinned C
+  oracle owns the expected output.
+
 ## FT_Get_BDF_Charset_ID false-green route audit correction
 
 Status: demoted to explicit `pending-route` on 2026-07-21.
