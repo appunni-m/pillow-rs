@@ -464,6 +464,8 @@ fn winfnt_font_data(data: &[u8], size_pt: f32, header: &WinFntHeader) -> Arc<Fon
         loca_data: Vec::new(),
         glyf_data: Vec::new(),
         size_pt: std::cell::Cell::new(size_pt),
+        size_public_x_scale: std::cell::Cell::new(0),
+        size_public_y_scale: std::cell::Cell::new(0),
         size_x_scale: std::cell::Cell::new(0),
         size_y_scale: std::cell::Cell::new(0),
         size_tt_scale: std::cell::Cell::new(0),
@@ -730,6 +732,8 @@ fn bdf_font_data(data: &[u8], size_pt: f32, metadata: &BdfMetadata) -> Arc<FontD
         loca_data: Vec::new(),
         glyf_data: Vec::new(),
         size_pt: std::cell::Cell::new(size_pt),
+        size_public_x_scale: std::cell::Cell::new(0),
+        size_public_y_scale: std::cell::Cell::new(0),
         size_x_scale: std::cell::Cell::new(0),
         size_y_scale: std::cell::Cell::new(0),
         size_tt_scale: std::cell::Cell::new(0),
@@ -1262,6 +1266,8 @@ fn type1_font_data(data: &[u8], size_pt: f32, metadata: &Type1Metadata) -> Arc<F
         loca_data: Vec::new(),
         glyf_data: Vec::new(),
         size_pt: std::cell::Cell::new(size_pt),
+        size_public_x_scale: std::cell::Cell::new(0),
+        size_public_y_scale: std::cell::Cell::new(0),
         size_x_scale: std::cell::Cell::new(0),
         size_y_scale: std::cell::Cell::new(0),
         size_tt_scale: std::cell::Cell::new(0),
@@ -2257,6 +2263,8 @@ impl Font {
             loca_data,
             glyf_data,
             size_pt: std::cell::Cell::new(size_pt),
+            size_public_x_scale: std::cell::Cell::new(0),
+            size_public_y_scale: std::cell::Cell::new(0),
             size_x_scale: std::cell::Cell::new(0),
             size_y_scale: std::cell::Cell::new(0),
             size_tt_scale: std::cell::Cell::new(0),
@@ -4883,6 +4891,8 @@ fn true_type_hint_scales(data: &FontData, metrics: SizeMetrics) -> (i32, i32) {
 
 fn sync_active_size_metrics(data: &FontData, metrics: SizeMetrics) {
     let (x_scale, y_scale) = true_type_hint_scales(data, metrics);
+    data.size_public_x_scale.set(metrics.x_scale);
+    data.size_public_y_scale.set(metrics.y_scale);
     data.size_x_scale.set(x_scale);
     data.size_y_scale.set(y_scale);
     data.size_tt_scale.set(if metrics.x_ppem >= metrics.y_ppem {

@@ -62,6 +62,8 @@ pub struct FontData {
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: Cell<f32>,
+    pub size_public_x_scale: Cell<i32>,
+    pub size_public_y_scale: Cell<i32>,
     pub size_x_scale: Cell<i32>,
     pub size_y_scale: Cell<i32>,
     pub size_tt_scale: Cell<i32>,
