@@ -6119,6 +6119,58 @@ static void print_image_cache_glyph_object(FT_Glyph glyph) {
     printf("},\"node\":{\"locked\":false}");
 }
 
+typedef struct ImageGlyphSnapshot_ {
+    FT_Bool present;
+    long format;
+    long advance_x;
+    long advance_y;
+    FT_Bool library_present;
+    FT_Bool clazz_present;
+} ImageGlyphSnapshot;
+
+static ImageGlyphSnapshot snapshot_image_glyph(FT_Glyph glyph) {
+    ImageGlyphSnapshot snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    if (glyph) {
+        snapshot.present = 1;
+        snapshot.format = (long)glyph->format;
+        snapshot.advance_x = glyph->advance.x;
+        snapshot.advance_y = glyph->advance.y;
+        snapshot.library_present = glyph->library ? 1 : 0;
+        snapshot.clazz_present = glyph->clazz ? 1 : 0;
+    }
+    return snapshot;
+}
+
+static int image_glyph_snapshot_still_matches(FT_Glyph glyph, const ImageGlyphSnapshot* snapshot) {
+    if (!snapshot->present) {
+        return glyph == NULL;
+    }
+    if (!glyph) {
+        return 0;
+    }
+    return snapshot->format == (long)glyph->format &&
+           snapshot->advance_x == glyph->advance.x &&
+           snapshot->advance_y == glyph->advance.y &&
+           snapshot->library_present == (FT_Bool)(glyph->library ? 1 : 0) &&
+           snapshot->clazz_present == (FT_Bool)(glyph->clazz ? 1 : 0);
+}
+
+static void print_image_glyph_snapshot_object(const ImageGlyphSnapshot* snapshot) {
+    if (!snapshot->present) {
+        printf("\"glyph\":null,\"node\":{\"locked\":false}");
+        return;
+    }
+    printf("\"glyph\":{");
+    printf("\"format\":%ld,", snapshot->format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},",
+           snapshot->advance_x,
+           snapshot->advance_y);
+    printf("\"library_present\":%s,", snapshot->library_present ? "true" : "false");
+    printf("\"clazz_present\":%s", snapshot->clazz_present ? "true" : "false");
+    printf("},\"node\":{\"locked\":false}");
+}
+
 static void print_image_cache_lookup_scaler_row(FTC_ImageCache cache,
                                                 FTC_Manager manager,
                                                 ImageCacheRequesterData* requester,
@@ -6443,6 +6495,115 @@ static int emit_image_cache_lookup(int argc, char** argv) {
     FT_Done_FreeType(library);
     free(data);
     free(glyphs_arg);
+    return 0;
+}
+
+static int emit_image_type_descriptor_lifetime(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong flags = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = width;
+    image_type.height = height;
+    image_type.flags = (FT_Int32)flags;
+
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Error error = FTC_ImageCache_Lookup(cache, &image_type, glyph_index, &glyph, &node);
+    ImageGlyphSnapshot snapshot = snapshot_image_glyph(error ? NULL : glyph);
+
+    image_type.width += 1;
+    image_type.height += 1;
+    image_type.flags ^= FT_LOAD_NO_HINTING;
+    int unchanged = image_glyph_snapshot_still_matches(error ? NULL : glyph, &snapshot);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":%d,", error);
+    printf("\"lookup_result\":{\"glyph_index\":%u,"
+           "\"image_type\":{\"width\":%u,\"height\":%u,\"flags\":%ld},"
+           "\"status\":%d,\"error\":%d,",
+           glyph_index,
+           width,
+           height,
+           (long)(FT_Int32)flags,
+           error,
+           error);
+    print_image_glyph_snapshot_object(&snapshot);
+    printf("},\"post_lookup_descriptor_mutation_effect_on_existing_node\":{");
+    printf("\"mutation_performed\":true,");
+    printf("\"mutated_image_type\":{\"width\":%u,\"height\":%u,\"flags\":%ld},",
+           image_type.width,
+           image_type.height,
+           (long)image_type.flags);
+    printf("\"existing_node_unchanged\":%s", unchanged ? "true" : "false");
+    printf("}}}\n");
+
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
     return 0;
 }
 
@@ -21829,6 +21990,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 11 && streq(argv[1], "--image-cache-lookup")) {
         return emit_image_cache_lookup(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--image-type-descriptor-lifetime")) {
+        return emit_image_type_descriptor_lifetime(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);
