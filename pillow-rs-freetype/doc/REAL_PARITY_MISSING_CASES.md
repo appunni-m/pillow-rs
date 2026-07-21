@@ -1515,6 +1515,41 @@ make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PaintFormat.paint_union_sha
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Completed: COLRv1 include-root-transform paint route
+
+Status: one-row runtime route completed on 2026-07-21 for
+`ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform`.
+
+Finding:
+
+- The public input preserved the historical logical fixture id
+  `fonts/color/colr-v1-root-paint-cpal.ttf`, while the maintained generated
+  fixture is `fonts/color/colr-v1-root-transform.ttf`. No duplicate fixture was
+  added; the resolver maps the legacy id to the maintained file.
+- The row declares a specific same-input transform:
+  `pixel_size=24`, matrix `{xx=65536, xy=8192, yx=0, yy=65536}`, and
+  delta `{x=64, y=32}`. The existing generic root-transform route used a
+  different transform, so it could not be reused as proof.
+- The fix adds a dedicated same-input branch in the generated C oracle and the
+  Rust parity harness. The case now compares the inserted transform paint from
+  `FT_Get_Color_Glyph_Paint(..., FT_COLOR_INCLUDE_ROOT_TRANSFORM, ...)` followed
+  by `FT_Get_Paint` through pinned C FreeType 2.14.3, Rust FFI, thin C ABI, and
+  WASM ABI.
+
+Impact:
+
+- `real-parity`: `4719 -> 4720`
+- `pending-route`: `244 -> 243`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: GX null free and palette data without CPAL
 
 Status: three-row runtime route completed on 2026-07-20 for pinned FreeType
