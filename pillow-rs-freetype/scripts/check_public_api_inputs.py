@@ -4406,6 +4406,20 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "t1tables.mm_blend_dictionary"
+        and row.case_id
+        in {
+            "t1tables.T1_BLEND_UNDERLINE_POSITION.blend_dictionary_runtime",
+            "t1tables.T1_BLEND_UNDERLINE_THICKNESS.blend_dictionary_runtime",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "Type1 MM FontInfo underline blend dictionary presence and public "
+            "FT_Get_PS_Font_Info field output validate through pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.get_ps_font_value"
         and row.case_id.startswith("t1tables.T1_ENCODING_TYPE_")
         and unresolved_assets_reason(row) is None
