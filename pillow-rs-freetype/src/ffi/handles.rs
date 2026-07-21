@@ -1992,6 +1992,22 @@ pub fn FT_Get_Bitmap_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_BitmapGlyph
     })
 }
 
+pub fn FT_Bitmap_Glyph_Copy(glyph: &FT_BitmapGlyphOwned) -> FT_BitmapGlyphOwned {
+    // FreeType `src/base/ftglyph.c:542-574` allocates a new glyph object and
+    // lets the bitmap glyph class copy hook duplicate the bitmap descriptor and
+    // buffer.  Cloning the safe owned representation gives the same detached
+    // target lifetime without sharing the source Vec.
+    glyph.clone()
+}
+
+pub fn FT_Outline_Glyph_Copy(glyph: &FT_OutlineGlyphOwned) -> FT_OutlineGlyphOwned {
+    // FreeType `src/base/ftglyph.c:542-574` allocates a new glyph object and
+    // lets the outline glyph class copy hook duplicate all outline arrays.
+    // Cloning the safe owned representation gives the same detached target
+    // lifetime without sharing the source points, tags, or contours.
+    glyph.clone()
+}
+
 pub fn FT_Outline_Glyph_CBox(
     glyph: Option<&FT_OutlineGlyphOwned>,
     bbox_mode: FT_UInt,

@@ -1623,3 +1623,49 @@ Rows deliberately left pending in the same surface:
   destruction.
 - SVG rows still need an SVG-enabled fixture route or exact unsupported
   classification against pinned C.
+
+### FT_Glyph_Copy owned outline dispatch route: 2026-07-22
+
+Status: implemented for the current concrete
+`ftglyph.FT_Glyph_Copy.success_bitmap_copy_is_independent` input.
+
+Scope:
+
+- Added a safe Rust `FT_Outline_Glyph_Copy` helper that clones the owned root
+  record and outline arrays, matching FreeType `src/base/ftglyph.c:542-574`
+  class-copy behavior without sharing the source object.
+- Routed thin C ABI `FT_Glyph_Copy` and WASM `fontdone_wasm_glyph_copy`
+  through owned outline glyph copies before the generic unimplemented
+  fallback.  Bitmap owned glyph copy support remains present, but is not what
+  this concrete input currently exercises.
+- Updated the runtime parity harness so `ftglyph.glyph_copy` rows call the
+  actual Rust/C/WASM copy endpoints and snapshot the copied glyph root instead
+  of reporting the loaded slot.
+
+Pinned C behavior checked:
+
+- Despite the manifest row name, the maintained concrete input passes
+  `glyph_index=0` for `fonts/bitmap-strikes/public-bitmap-strike.ttf`; pinned
+  FreeType returns `FT_GLYPH_FORMAT_OUTLINE` (`1869968492`) with root advance
+  `917504`, not an `FT_BitmapGlyphRec` bitmap payload.
+- The promoted route therefore proves owned outline `FT_Glyph_Copy` dispatch
+  for this concrete input.  It does not prove the manifest's intended bitmap
+  copy semantics.
+
+Observed impact:
+
+- Route audit: `pending-route` 240 → 239, `real-parity` 4727 → 4728.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_Copy.success_bitmap_copy`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- A true bitmap `FT_Glyph_Copy` row still needs a concrete bitmap glyph input
+  such as `glyph_index: "bitmap_glyph"` or another maintained bitmap-copy
+  fixture route.  The current row name is misleading relative to its oracle
+  payload.
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` remains
+  pending because it also declares `FT_Glyph_To_Bitmap outline`.
+- SVG copy/record rows remain pending until SVG fixture support or exact
+  unsupported classification is implemented against pinned C.

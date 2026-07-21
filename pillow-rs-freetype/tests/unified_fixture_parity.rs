@@ -32786,31 +32786,32 @@ fn ftglyph_bitmap_record_case(case: &InputCase) -> bool {
 fn rust_bitmap_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     match FT_Load_Glyph(
         face,
-        glyph_index_param(&case.inputs.params)?,
+        bitmap_glyph_record_index(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     ) {
         Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
-            Ok(glyph) => Ok(ok(json!({
-                "glyph": {
-                    "format": glyph.root.format,
-                    "advance": {
-                        "x": glyph.root.advance.x,
-                        "y": glyph.root.advance.y
-                    },
-                    "library_present": true,
-                    "clazz_present": true,
-                    "bitmap": {
-                    "width": glyph.bitmap.width,
-                    "rows": glyph.bitmap.rows,
-                    "pitch": glyph.bitmap.pitch,
-                    "pixel_mode": glyph.bitmap.pixel_mode,
-                    "num_grays": glyph.bitmap.num_grays,
-                    "left": glyph.left,
-                    "top": glyph.top,
-                    "buffer_hex": hex_bytes(&glyph.bitmap.buffer)
-                    }
-                }
-            }))),
+            Ok(glyph) => {
+                let glyph = if case.operation == "ftglyph.glyph_copy" {
+                    FT_Bitmap_Glyph_Copy(&glyph)
+                } else {
+                    glyph
+                };
+                Ok(ok(bitmap_glyph_record_output(
+                    glyph.root.format,
+                    glyph.root.advance.x,
+                    glyph.root.advance.y,
+                    true,
+                    true,
+                    glyph.left,
+                    glyph.top,
+                    glyph.bitmap.width,
+                    glyph.bitmap.rows,
+                    glyph.bitmap.pitch,
+                    glyph.bitmap.pixel_mode,
+                    glyph.bitmap.num_grays,
+                    &glyph.bitmap.buffer,
+                )))
+            }
             Err(err) => Ok(error(err)),
         },
         Err(err) => Ok(error(err)),
@@ -32821,38 +32822,38 @@ fn c_bitmap_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOu
     let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
     let mut err = c_abi::FT_Load_Glyph(
         face,
-        glyph_index_param(&case.inputs.params)?,
+        bitmap_glyph_record_index(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
     if err == FT_Err_Ok {
         let slot = c_abi::abi_glyph_slot_pointer(face)
             .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
         err = c_abi::FT_Get_Glyph(slot, &mut glyph);
+        if err == FT_Err_Ok && case.operation == "ftglyph.glyph_copy" {
+            let source = glyph;
+            glyph = ptr::null_mut();
+            err = c_abi::FT_Glyph_Copy(source, &mut glyph);
+            c_abi::FT_Done_Glyph(source);
+        }
     }
     let output = if err == FT_Err_Ok {
         let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
             .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
-        ok(json!({
-            "glyph": {
-                "format": snapshot.root.format,
-                "advance": {
-                    "x": snapshot.root.advance.x,
-                    "y": snapshot.root.advance.y
-                },
-                "library_present": true,
-                "clazz_present": true,
-                "bitmap": {
-                "width": snapshot.bitmap.width,
-                "rows": snapshot.bitmap.rows,
-                "pitch": snapshot.bitmap.pitch,
-                "pixel_mode": snapshot.bitmap.pixel_mode,
-                "num_grays": snapshot.bitmap.num_grays,
-                "left": snapshot.left,
-                "top": snapshot.top,
-                "buffer_hex": hex_bytes(&snapshot.bitmap.buffer)
-                }
-            }
-        }))
+        ok(bitmap_glyph_record_output(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            true,
+            true,
+            snapshot.left,
+            snapshot.top,
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+            snapshot.bitmap.pixel_mode,
+            snapshot.bitmap.num_grays,
+            &snapshot.bitmap.buffer,
+        ))
     } else {
         error(err)
     };
@@ -32866,36 +32867,39 @@ fn wasm_bitmap_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput
     let mut glyph_handle = 0usize;
     let mut err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
-        glyph_index_param(&case.inputs.params)?,
+        bitmap_glyph_record_index(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
     if err == FT_Err_Ok {
         err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+        if err == FT_Err_Ok && case.operation == "ftglyph.glyph_copy" {
+            let source = glyph_handle;
+            glyph_handle = 0;
+            let source_ptr = ptr::with_exposed_provenance::<wasm_abi::FontdoneWasmGlyph>(source);
+            err = wasm_abi::fontdone_wasm_glyph_copy(source_ptr, &mut glyph_handle);
+            let source_ptr =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(source);
+            wasm_abi::fontdone_wasm_done_glyph_handle(source_ptr);
+        }
     }
     let output = if err == FT_Err_Ok {
         let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
             .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
-        ok(json!({
-            "glyph": {
-                "format": snapshot.root.format,
-                "advance": {
-                    "x": snapshot.root.advance.x,
-                    "y": snapshot.root.advance.y
-                },
-                "library_present": true,
-                "clazz_present": true,
-                "bitmap": {
-                "width": snapshot.bitmap.width,
-                "rows": snapshot.bitmap.rows,
-                "pitch": snapshot.bitmap.pitch,
-                "pixel_mode": snapshot.bitmap.pixel_mode,
-                "num_grays": snapshot.bitmap.num_grays,
-                "left": snapshot.left,
-                "top": snapshot.top,
-                "buffer_hex": hex_bytes(&snapshot.bitmap.buffer)
-                }
-            }
-        }))
+        ok(bitmap_glyph_record_output(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            true,
+            true,
+            snapshot.left,
+            snapshot.top,
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+            snapshot.bitmap.pixel_mode,
+            snapshot.bitmap.num_grays,
+            &snapshot.bitmap.buffer,
+        ))
     } else {
         error(err)
     };
@@ -32906,12 +32910,72 @@ fn wasm_bitmap_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput
     Ok(output)
 }
 
+fn bitmap_glyph_record_index(params: &Value) -> Result<u32, String> {
+    if params
+        .get("source_creation")
+        .and_then(Value::as_str)
+        .is_some_and(|source| source == "FT_Get_Glyph bitmap")
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    glyph_index_param(params)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bitmap_glyph_record_output(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    library_present: bool,
+    clazz_present: bool,
+    left: i32,
+    top: i32,
+    width: u32,
+    rows: u32,
+    pitch: i32,
+    pixel_mode: i32,
+    num_grays: u16,
+    buffer: &[u8],
+) -> Value {
+    json!({
+        "glyph": {
+            "format": format,
+            "advance": {
+                "x": advance_x,
+                "y": advance_y
+            },
+            "library_present": library_present,
+            "clazz_present": clazz_present,
+            "bitmap": {
+                "width": width,
+                "rows": rows,
+                "pitch": pitch,
+                "pixel_mode": pixel_mode,
+                "num_grays": num_grays,
+                "left": left,
+                "top": top,
+                "buffer_hex": hex_bytes(buffer)
+            }
+        }
+    })
+}
+
 fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     match FT_Load_Glyph(
         face,
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     ) {
+        Ok(slot) if case.operation == "ftglyph.glyph_copy" => {
+            match FT_Get_Outline_Glyph(Some(&slot)) {
+                Ok(glyph) => {
+                    let copy = FT_Outline_Glyph_Copy(&glyph);
+                    Ok(ok(glyph_record_json_from_root(&copy.root)))
+                }
+                Err(err) => Ok(error(err)),
+            }
+        }
         Ok(slot) => Ok(ok(glyph_record_json(
             slot.format,
             i64::from(slot.advance.x),
@@ -32922,13 +32986,39 @@ fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, Stri
 }
 
 fn c_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
-    let err = c_abi::FT_Load_Glyph(
+    let mut err = c_abi::FT_Load_Glyph(
         face,
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
     if err != FT_Err_Ok {
         return Ok(error(err));
+    }
+    if case.operation == "ftglyph.glyph_copy" {
+        let mut source: c_abi::FT_Glyph = ptr::null_mut();
+        let mut target: c_abi::FT_Glyph = ptr::null_mut();
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut source);
+        if err == FT_Err_Ok {
+            err = c_abi::FT_Glyph_Copy(source, &mut target);
+            c_abi::FT_Done_Glyph(source);
+        }
+        let output = if err == FT_Err_Ok {
+            let snapshot = c_abi::abi_outline_glyph_snapshot(target)
+                .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+            ok(glyph_record_json_from_root_parts(
+                FT_GLYPH_FORMAT_OUTLINE,
+                snapshot.advance.x,
+                snapshot.advance.y,
+            ))
+        } else {
+            error(err)
+        };
+        if !target.is_null() {
+            c_abi::FT_Done_Glyph(target);
+        }
+        return Ok(output);
     }
     let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
@@ -32947,6 +33037,34 @@ fn wasm_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput, Strin
     );
     if err != FT_Err_Ok {
         return Ok(error(err));
+    }
+    if case.operation == "ftglyph.glyph_copy" {
+        let mut source = 0usize;
+        let mut target = 0usize;
+        let mut copy_err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut source);
+        if copy_err == FT_Err_Ok {
+            let source_ptr = ptr::with_exposed_provenance::<wasm_abi::FontdoneWasmGlyph>(source);
+            copy_err = wasm_abi::fontdone_wasm_glyph_copy(source_ptr, &mut target);
+            let source_ptr =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(source);
+            wasm_abi::fontdone_wasm_done_glyph_handle(source_ptr);
+        }
+        let output = if copy_err == FT_Err_Ok {
+            let snapshot = wasm_abi::abi_outline_glyph_snapshot(target)
+                .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+            ok(glyph_record_json_from_root_parts(
+                FT_GLYPH_FORMAT_OUTLINE,
+                snapshot.advance.x,
+                snapshot.advance.y,
+            ))
+        } else {
+            error(copy_err)
+        };
+        if target != 0 {
+            let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(target);
+            wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        }
+        return Ok(output);
     }
     let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
@@ -36175,6 +36293,24 @@ fn glyph_record_json(format: i32, advance_x: i64, advance_y: i64) -> Value {
             "advance": {
                 "x": glyph_advance_16dot16(advance_x),
                 "y": glyph_advance_16dot16(advance_y)
+            },
+            "library_present": true,
+            "clazz_present": true
+        }
+    })
+}
+
+fn glyph_record_json_from_root(root: &FT_GlyphRec) -> Value {
+    glyph_record_json_from_root_parts(root.format, root.advance.x, root.advance.y)
+}
+
+fn glyph_record_json_from_root_parts(format: i32, advance_x: i64, advance_y: i64) -> Value {
+    json!({
+        "glyph": {
+            "format": format,
+            "advance": {
+                "x": advance_x,
+                "y": advance_y
             },
             "library_present": true,
             "clazz_present": true
