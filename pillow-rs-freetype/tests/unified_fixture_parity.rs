@@ -24856,6 +24856,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.image_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(params).is_ok() =>
+        {
+            let mut args = vec!["--image-cache-lookup-scaler".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cache_scaler_rows_arg(params)?);
+            args.push(cache_glyph_indexes_arg(params)?);
+            args.push(cache_load_flags_ulong_param(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.sbit_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -25889,6 +25900,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             rust_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.image_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            rust_image_cache_lookup_scaler(case)
         }
         "ftcache.cmap_cache_lookup"
             if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
@@ -26940,6 +26956,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.image_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            c_image_cache_lookup_scaler(case)
+        }
         "ftcache.cmap_cache_lookup"
             if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
         {
@@ -27819,6 +27840,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             wasm_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.image_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            wasm_image_cache_lookup_scaler(case)
         }
         "ftcache.cmap_cache_lookup"
             if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
@@ -29356,6 +29382,32 @@ fn rust_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     })
 }
 
+fn rust_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    cache_image_scaler_outputs(
+        rows,
+        glyph_indexes,
+        load_flags,
+        |row, glyph_index, load_flags| {
+            let size_err = rust_apply_cache_scaler(&mut face, row);
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            match FT_Load_Glyph(&face, glyph_index, load_flags) {
+                Ok(slot) => Ok(Ok(glyph_record_json(
+                    slot.format,
+                    i64::from(slot.advance.x),
+                    i64::from(slot.advance.y),
+                ))),
+                Err(err) => Ok(Err(err)),
+            }
+        },
+    )
+}
+
 fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Glyph(
         face,
@@ -29403,6 +29455,38 @@ fn c_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     output
 }
 
+fn c_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let output = cache_image_scaler_outputs(
+        rows,
+        glyph_indexes,
+        load_flags,
+        |row, glyph_index, load_flags| {
+            let size_err = c_apply_cache_scaler(face, row);
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            let err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+            if err != FT_Err_Ok {
+                return Ok(Err(err));
+            }
+            let slot = c_abi::abi_slot_snapshot(face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            )))
+        },
+    );
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
 fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
@@ -29445,6 +29529,37 @@ fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
             .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
         Ok(Ok(wasm_sbit_json(&slot)))
     });
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let output = cache_image_scaler_outputs(
+        rows,
+        glyph_indexes,
+        load_flags,
+        |row, glyph_index, load_flags| {
+            let size_err = wasm_apply_cache_scaler(handle, row);
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+            if err != FT_Err_Ok {
+                return Ok(Err(err));
+            }
+            let slot = wasm_abi::abi_slot_snapshot(handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            )))
+        },
+    );
     wasm_done_face(handle);
     output
 }
@@ -29880,6 +29995,40 @@ fn cache_scaler_rows_arg(params: &Value) -> Result<String, String> {
         .join(";"))
 }
 
+fn cache_glyph_indexes(params: &Value) -> Result<Vec<u32>, String> {
+    if let Some(values) = params.get("glyph_indexes").and_then(Value::as_array) {
+        let indexes = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| u32_value(value, &format!("glyph_indexes[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        if indexes.is_empty() {
+            return Err("FTC cache glyph_indexes must not be empty".to_string());
+        }
+        return Ok(indexes);
+    }
+    if let Some(values) = params.get("glyph_indices").and_then(Value::as_array) {
+        let indexes = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| u32_value(value, &format!("glyph_indices[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        if indexes.is_empty() {
+            return Err("FTC cache glyph_indices must not be empty".to_string());
+        }
+        return Ok(indexes);
+    }
+    Ok(vec![glyph_index_param(params)?])
+}
+
+fn cache_glyph_indexes_arg(params: &Value) -> Result<String, String> {
+    Ok(cache_glyph_indexes(params)?
+        .into_iter()
+        .map(|index| index.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
 fn cache_load_flags_ulong_param(value: &Value) -> Result<u64, String> {
     let Some(raw) = value.get("load_flags") else {
         return Ok(FT_LOAD_DEFAULT as u64);
@@ -29891,16 +30040,32 @@ fn cache_load_flags_ulong_param(value: &Value) -> Result<u64, String> {
                 if item.is_array() {
                     return Err("load_flags contains aggregate flag sets".to_string());
                 }
-                flags |= u64_value(item, "load_flags")?;
+                flags |= cache_load_flag_ulong_value(item, "load_flags")?;
             }
             Ok(flags)
         }
-        _ => u64_value(raw, "load_flags"),
+        _ => cache_load_flag_ulong_value(raw, "load_flags"),
     }
 }
 
 fn cache_effective_load_flags(params: &Value) -> Result<i32, String> {
     Ok(cache_load_flags_ulong_param(params)? as u32 as i32)
+}
+
+fn cache_load_flag_ulong_value(value: &Value, key: &str) -> Result<u64, String> {
+    if let Some(symbol) = value.as_str() {
+        return match symbol {
+            "DEFAULT" | "FT_LOAD_DEFAULT" => Ok(FT_LOAD_DEFAULT as u64),
+            "NO_HINTING" | "FT_LOAD_NO_HINTING" => Ok(FT_LOAD_NO_HINTING as u64),
+            "RENDER" | "FT_LOAD_RENDER" => Ok(FT_LOAD_RENDER as u64),
+            // C FTC_ImageCache_LookupScaler takes FT_ULong but internally follows
+            // the signed FT_Int32 load-flags path.  Keep only high bits set so
+            // the route proves truncation instead of smuggling in a low flag.
+            "HIGH_BITS_SET" => Ok(1u64 << 40),
+            _ => u64_value(value, key),
+        };
+    }
+    u64_value(value, key)
 }
 
 fn cache_scaler_json(row: CacheScalerRow) -> Value {
@@ -29950,6 +30115,63 @@ fn cache_scaler_outputs(
             Err(err) => cache_scaler_error_json(row, load_flags, err),
         };
         outputs.push(output);
+    }
+    Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn cache_image_scaler_error_json(
+    row: CacheScalerRow,
+    glyph_index: u32,
+    load_flags: i32,
+    err: FT_Error,
+) -> Value {
+    json!({
+        "scaler": cache_scaler_json(row),
+        "glyph_index": glyph_index,
+        "effective_load_flags": load_flags,
+        "status": err,
+        "error": err,
+        "glyph": Value::Null,
+        "node": {"locked": false}
+    })
+}
+
+fn cache_image_scaler_glyph_json(
+    row: CacheScalerRow,
+    glyph_index: u32,
+    load_flags: i32,
+    glyph: Value,
+) -> Value {
+    let mut object = serde_json::Map::new();
+    object.insert("scaler".to_string(), cache_scaler_json(row));
+    object.insert("glyph_index".to_string(), json!(glyph_index));
+    object.insert("effective_load_flags".to_string(), json!(load_flags));
+    object.insert("status".to_string(), json!(FT_Err_Ok));
+    object.insert("error".to_string(), json!(FT_Err_Ok));
+    if let Some(glyph_object) = glyph.as_object() {
+        for (key, value) in glyph_object {
+            object.insert(key.clone(), value.clone());
+        }
+    }
+    object.insert("node".to_string(), json!({"locked": false}));
+    Value::Object(object)
+}
+
+fn cache_image_scaler_outputs(
+    rows: Vec<CacheScalerRow>,
+    glyph_indexes: Vec<u32>,
+    load_flags: i32,
+    mut run: impl FnMut(CacheScalerRow, u32, i32) -> Result<Result<Value, FT_Error>, String>,
+) -> Result<RunOutput, String> {
+    let mut outputs = Vec::with_capacity(rows.len().saturating_mul(glyph_indexes.len()));
+    for row in rows {
+        for glyph_index in glyph_indexes.iter().copied() {
+            let output = match run(row, glyph_index, load_flags)? {
+                Ok(glyph) => cache_image_scaler_glyph_json(row, glyph_index, load_flags, glyph),
+                Err(err) => cache_image_scaler_error_json(row, glyph_index, load_flags, err),
+            };
+            outputs.push(output);
+        }
     }
     Ok(ok(json!({ "outputs": outputs })))
 }

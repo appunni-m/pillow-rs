@@ -5375,6 +5375,23 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_ImageCache_LookupScaler null-scaler/aglyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.image_cache_lookup_scaler"
+        and row.case_id
+        in {
+            "ftcache.FTC_ImageCache_LookupScaler.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_LookupScaler.success_pixel_and_point_scalers",
+            "ftcache.FTC_ImageCache_LookupScaler.success_lookup_hit_miss_and_repeated",
+            "ftcache.FTC_ImageCache_LookupScaler.success_node_acquire_and_unref",
+            "ftcache.FTC_ImageCache_LookupScaler.load_flags_truncation_policy",
+        }
+    ):
+        return (
+            "FTC_ImageCache_LookupScaler scaler size selection, glyph hit/miss, "
+            "effective load-flag truncation, glyph public record, and node-unref "
+            "classification validate through pinned C oracle, Rust FFI, C ABI, "
+            "and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.sbit_cache_lookup"
         and row.case_id == "ftcache.FTC_SBitCache_Lookup.rejects_null_sbit_output"
     ):

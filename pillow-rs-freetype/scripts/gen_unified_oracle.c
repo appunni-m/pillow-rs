@@ -5991,6 +5991,205 @@ static void print_sbit_object(FT_GlyphSlot slot) {
     printf("\"},\"node\":{\"locked\":false}");
 }
 
+typedef struct ImageCacheRequesterData_ {
+    unsigned char* data;
+    long data_len;
+    FT_Long face_index;
+} ImageCacheRequesterData;
+
+static FT_Error image_cache_requester(FTC_FaceID face_id,
+                                      FT_Library library,
+                                      FT_Pointer req_data,
+                                      FT_Face* aface) {
+    (void)req_data;
+    ImageCacheRequesterData* data = (ImageCacheRequesterData*)face_id;
+    return FT_New_Memory_Face(library, data->data, data->data_len, data->face_index, aface);
+}
+
+static void print_image_cache_glyph_object(FT_Glyph glyph) {
+    printf("\"glyph\":{");
+    printf("\"format\":%ld,", glyph ? (long)glyph->format : 0L);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},",
+           glyph ? glyph->advance.x : 0L,
+           glyph ? glyph->advance.y : 0L);
+    printf("\"library_present\":%s,", (glyph && glyph->library) ? "true" : "false");
+    printf("\"clazz_present\":%s", (glyph && glyph->clazz) ? "true" : "false");
+    printf("},\"node\":{\"locked\":false}");
+}
+
+static void print_image_cache_lookup_scaler_row(FTC_ImageCache cache,
+                                                FTC_Manager manager,
+                                                ImageCacheRequesterData* requester,
+                                                FTC_ScalerRec* scaler,
+                                                FT_UInt glyph_index,
+                                                FT_ULong load_flags_ulong) {
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Int32 load_flags = (FT_Int32)load_flags_ulong;
+    FT_Error error = FTC_ImageCache_LookupScaler(cache, scaler, load_flags, glyph_index, &glyph, &node);
+    printf("{\"scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},"
+           "\"glyph_index\":%u,\"effective_load_flags\":%ld,\"status\":%d,\"error\":%d,",
+           scaler->width,
+           scaler->height,
+           scaler->pixel,
+           scaler->x_res,
+           scaler->y_res,
+           glyph_index,
+           (long)load_flags,
+           error,
+           error);
+    if (error) {
+        printf("\"glyph\":null,\"node\":{\"locked\":false}}");
+    } else {
+        print_image_cache_glyph_object(glyph);
+        printf("}");
+    }
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+}
+
+static int emit_image_cache_lookup_scaler(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    char* scalers_arg = (char*)malloc(strlen(argv[5]) + 1);
+    char* glyphs_arg = (char*)malloc(strlen(argv[6]) + 1);
+    if (!scalers_arg || !glyphs_arg) {
+        free(scalers_arg);
+        free(glyphs_arg);
+        return 1;
+    }
+    memcpy(scalers_arg, argv[5], strlen(argv[5]) + 1);
+    memcpy(glyphs_arg, argv[6], strlen(argv[6]) + 1);
+    FT_ULong load_flags_ulong = (FT_ULong)strtoull(argv[7], NULL, 0);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(scalers_arg);
+            free(glyphs_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(scalers_arg);
+            free(glyphs_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(scalers_arg);
+        free(glyphs_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(scalers_arg);
+        free(glyphs_arg);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":{\"outputs\":[]}}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        free(glyphs_arg);
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"outputs\":[");
+    int first = 1;
+    char* scaler_cursor = scalers_arg;
+    while (scaler_cursor && *scaler_cursor) {
+        char* scaler_next = strchr(scaler_cursor, ';');
+        if (scaler_next) {
+            *scaler_next = '\0';
+        }
+        FTC_ScalerRec scaler;
+        unsigned int pixel = 0;
+        memset(&scaler, 0, sizeof(scaler));
+        if (sscanf(scaler_cursor, "%u:%u:%u:%u:%u",
+                   &scaler.width,
+                   &scaler.height,
+                   &pixel,
+                   &scaler.x_res,
+                   &scaler.y_res) != 5) {
+            FTC_Manager_Done(manager);
+            FT_Done_FreeType(library);
+            free(data);
+            free(scalers_arg);
+            free(glyphs_arg);
+            return 2;
+        }
+        scaler.face_id = (FTC_FaceID)&requester;
+        scaler.pixel = (FT_UInt)pixel;
+
+        char* glyphs_copy = (char*)malloc(strlen(glyphs_arg) + 1);
+        if (!glyphs_copy) {
+            FTC_Manager_Done(manager);
+            FT_Done_FreeType(library);
+            free(data);
+            free(scalers_arg);
+            free(glyphs_arg);
+            return 1;
+        }
+        memcpy(glyphs_copy, glyphs_arg, strlen(glyphs_arg) + 1);
+        char* glyph_cursor = glyphs_copy;
+        while (glyph_cursor && *glyph_cursor) {
+            char* glyph_next = strchr(glyph_cursor, ',');
+            if (glyph_next) {
+                *glyph_next = '\0';
+            }
+            FT_UInt glyph_index = (FT_UInt)strtoul(glyph_cursor, NULL, 10);
+            if (!first) {
+                printf(",");
+            }
+            print_image_cache_lookup_scaler_row(cache, manager, &requester, &scaler, glyph_index, load_flags_ulong);
+            first = 0;
+            glyph_cursor = glyph_next ? glyph_next + 1 : NULL;
+        }
+        free(glyphs_copy);
+        scaler_cursor = scaler_next ? scaler_next + 1 : NULL;
+    }
+    printf("]}}\n");
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    free(scalers_arg);
+    free(glyphs_arg);
+    return 0;
+}
+
 static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -20157,6 +20356,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--image-cache-lookup-scaler")) {
+        return emit_image_cache_lookup_scaler(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);
