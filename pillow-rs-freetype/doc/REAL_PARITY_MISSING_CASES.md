@@ -2079,6 +2079,15 @@ Finding:
   public `FT_StreamRec` field/callback shape from
   `freetype/include/freetype/ftsystem.h:325-340` against Rust FFI, C ABI, and
   WASM for the same callback event sequences.
+- `ftsystem.FT_Memory.custom_allocator_runtime_events` remains `pending-route`.
+  It is not enough to compile the `FT_MemoryRec` layout or call
+  `FT_New_Library` with default allocation.  The missing
+  `memory/harnesses/custom-allocator-events.json` harness must drive a custom
+  allocator through `FT_New_Library`, `FT_Add_Default_Modules`,
+  `FT_New_Memory_Face`, `FT_Done_Face`, and `FT_Done_Library`, then compare
+  allocation, reallocation, free callback ordering, failure handling, and
+  public `FT_Memory` pointer identity across pinned C, Rust FFI, thin C ABI,
+  and WASM ABI.
 - `ftsystem.FT_StreamRec.memory_stream_field_contract` uses the maintained
   `input/fonts/DejaVuSans.ttf` font asset, but it is still not real runtime
   parity.  It needs a maintained memory-stream probe that opens those same
@@ -12027,6 +12036,21 @@ Groundwork status on 2026-07-21:
 - Rows remain `pending-route`: the unified native oracle command and
   Rust/C-ABI/WASM fixture route are not wired yet, and PCF/SFNT-BDF property
   support is still absent.
+
+Current remaining BDF-property blockers after the BDF rowset promotion:
+
+- `ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only` remains
+  `pending-route` because the declared fixture
+  `fonts/pcf/properties-signed-only.pcf` is absent from the maintained fixture
+  tree.  This row needs a C-openable PCF whose signed-only properties are read
+  by pinned FreeType and compared byte-for-byte against Rust FFI, C ABI, and
+  WASM ABI output.  Reusing the BDF property fixture would prove a different
+  driver and a different property parser.
+- `ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike` remains
+  `pending-route` because the declared fixture
+  `fonts/bitmap/sfnt-bdf-table.otb` is absent.  This row must prove selected
+  strike behavior for BDF properties embedded in an SFNT/bitmap wrapper before
+  promotion; a standalone BDF face does not cover the same public input.
 
 ## FT_Property_Set invalid property preservation
 
