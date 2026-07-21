@@ -10431,6 +10431,15 @@ fn wasm_color_entries_json(entries: &[wasm_abi::FontdoneWasmColor]) -> Value {
     )
 }
 
+fn ft_color_json(color: FT_Color) -> Value {
+    json!({
+        "blue": color.blue,
+        "green": color.green,
+        "red": color.red,
+        "alpha": color.alpha
+    })
+}
+
 fn rust_palette_select_runs_json(face: &FT_Face) -> Value {
     let runs: Vec<Value> = [0, 1]
         .into_iter()
@@ -10679,6 +10688,131 @@ fn wasm_palette_reselect_json(handle: usize) -> Value {
         },
         "error_sequence": [first.error, second.error]
     })
+}
+
+fn palette_set_foreground_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    color: FT_Color,
+) -> FT_Error {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Set_Foreground_Color(rust_face, color),
+        ColorPaintBackend::CAbi => c_abi::FT_Palette_Set_Foreground_Color(
+            c_face,
+            c_abi::FT_Color {
+                blue: color.blue,
+                green: color.green,
+                red: color.red,
+                alpha: color.alpha,
+            },
+        ),
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_palette_set_foreground_color(
+            wasm_handle,
+            wasm_abi::FontdoneWasmColor {
+                blue: color.blue,
+                green: color.green,
+                red: color.red,
+                alpha: color.alpha,
+            },
+        ),
+    }
+}
+
+fn palette_select_zero_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> FT_Error {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Select(rust_face, 0, None),
+        ColorPaintBackend::CAbi => c_abi::FT_Palette_Select(c_face, 0, ptr::null_mut()),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_palette_select(wasm_handle, 0, ptr::null_mut())
+        }
+    }
+}
+
+fn foreground_solid_public_reference_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let snapshot = match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_PublicPaintSolid_Copy(rust_face, 50),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_public_paint_solid(c_face, 50),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_public_paint_solid(wasm_handle, 50)
+        }
+    };
+    let color = if snapshot.paint_return != 0
+        && snapshot.paint_format == FT_COLR_PAINTFORMAT_SOLID as FT_PaintFormat
+    {
+        json!({
+            "palette_index": snapshot.palette_index,
+            "alpha": snapshot.alpha
+        })
+    } else {
+        Value::Null
+    };
+    json!({
+        "kind": "public_color_index",
+        "base_glyph": 50,
+        "root_return": snapshot.root_return,
+        "paint_return": snapshot.paint_return,
+        "paint_format": snapshot.paint_format,
+        "color": color
+    })
+}
+
+fn palette_set_foreground_sfnt_runs_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let colors = [
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 255,
+        },
+        FT_Color {
+            blue: 255,
+            green: 16,
+            red: 128,
+            alpha: 64,
+        },
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 0,
+        },
+    ];
+    let select_error = palette_select_zero_call(backend, rust_face, c_face, wasm_handle);
+    let runs: Vec<Value> = colors
+        .into_iter()
+        .map(|color| {
+            let set_error =
+                palette_set_foreground_call(backend, rust_face, c_face, wasm_handle, color);
+            json!({
+                "error": if select_error != FT_Err_Ok { select_error } else { set_error },
+                "foreground_color": ft_color_json(color),
+                "observable_bgra_or_color_index": foreground_solid_public_reference_json(
+                    backend,
+                    rust_face,
+                    c_face,
+                    wasm_handle,
+                )
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
 }
 
 #[derive(Clone, Copy)]
@@ -12518,6 +12652,15 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let face = open_face(case)?;
+            Ok(ok(palette_set_foreground_sfnt_runs_json(
+                ColorPaintBackend::Rust,
+                Some(&face),
+                ptr::null_mut(),
+                0,
+            )))
+        }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(FT_Err_Invalid_Face_Handle as FT_Error))
         }
@@ -12629,6 +12772,14 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let (library, face) = c_open_face(case)?;
+            let output =
+                palette_set_foreground_sfnt_runs_json(ColorPaintBackend::CAbi, None, face, 0);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(c_abi::FT_Palette_Set_Foreground_Color(
                 ptr::null_mut(),
@@ -12738,6 +12889,17 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let handle = wasm_open_face(case)?;
+            let output = palette_set_foreground_sfnt_runs_json(
+                ColorPaintBackend::Wasm,
+                None,
+                ptr::null_mut(),
+                handle,
+            );
+            wasm_done_face(handle);
+            Ok(ok(output))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(wasm_abi::fontdone_wasm_palette_set_foreground_color(

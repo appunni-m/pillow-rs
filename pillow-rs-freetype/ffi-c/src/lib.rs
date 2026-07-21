@@ -1202,6 +1202,17 @@ pub fn abi_support_colr_v1_paint_graph(
     rust_ffi::FT_ColrV1_PaintGraph_Copy(face_state(face).map(|state| &state.inner))
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_public_paint_solid(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+) -> rust_ffi::FT_ColrV1_PublicPaintSolid_Snapshot {
+    rust_ffi::FT_ColrV1_PublicPaintSolid_Copy(
+        face_state(face).map(|state| &state.inner),
+        glyph_index,
+    )
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_TrueTypeGX_Free(face: FT_Face, table: FT_Bytes) {
     rust_ffi::FT_TrueTypeGX_Free(face_state(face).map(|state| &state.inner), table);

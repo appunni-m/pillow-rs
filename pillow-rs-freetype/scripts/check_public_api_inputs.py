@@ -2370,11 +2370,6 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "active color-layer-disabled condition; the focused runtime "
             "currently has no font source for this error case"
         ),
-        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
-            "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
-            "route proving foreground color mutation affects subsequent COLR "
-            "foreground paint output like pinned C"
-        ),
         "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy": (
             "FT_Palette_Set_Foreground_Color default policy parity needs a "
             "maintained route proving default foreground color and later "
@@ -5561,6 +5556,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop"
     ):
         return "FT_Palette_Set_Foreground_Color non-SFNT no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id
+        == "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color"
+    ):
+        return "FT_Palette_Set_Foreground_Color SFNT foreground-color state and public COLR foreground 0xFFFF PaintSolid reference validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id

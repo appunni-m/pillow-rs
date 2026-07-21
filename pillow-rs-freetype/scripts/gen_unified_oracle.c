@@ -14007,6 +14007,14 @@ static void print_color_entries(FT_Color* palette, FT_UShort count) {
     printf("]");
 }
 
+static void print_ft_color_json(FT_Color color) {
+    printf("{\"blue\":%u,\"green\":%u,\"red\":%u,\"alpha\":%u}",
+           color.blue,
+           color.green,
+           color.red,
+           color.alpha);
+}
+
 static FT_UShort palette_entry_count(FT_Face face) {
     FT_Palette_Data data = {0};
     FT_Error err = FT_Palette_Data_Get(face, &data);
@@ -14829,6 +14837,54 @@ static int emit_colr_all_paints_case(const char* case_id, OracleFace* face) {
     return 0;
 }
 
+static void print_foreground_solid_public_reference_json(FT_Face face) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(
+        face,
+        50,
+        FT_COLOR_NO_ROOT_TRANSFORM,
+        &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+    printf("{\"kind\":\"public_color_index\",\"base_glyph\":50,\"root_return\":%u,\"paint_return\":%u,\"paint_format\":%d,\"color\":",
+           root_return,
+           paint_return,
+           paint.format);
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_SOLID) {
+        printf("{\"palette_index\":%u,\"alpha\":%d}",
+               paint.u.solid.color.palette_index,
+               paint.u.solid.color.alpha);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static void print_palette_set_foreground_sfnt_runs_json(FT_Face face) {
+    FT_Color colors[3] = {
+        { 0, 0, 0, 255 },
+        { 255, 16, 128, 64 },
+        { 0, 0, 0, 0 },
+    };
+    FT_Error select_error = FT_Palette_Select(face, 0, NULL);
+    printf("{\"runs\":[");
+    for (int i = 0; i < 3; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_Error set_error = FT_Palette_Set_Foreground_Color(face, colors[i]);
+        printf("{\"error\":%d,\"foreground_color\":",
+               select_error ? select_error : set_error);
+        print_ft_color_json(colors[i]);
+        printf(",\"observable_bgra_or_color_index\":");
+        print_foreground_solid_public_reference_json(face);
+        printf("}");
+    }
+    printf("]}");
+}
+
 static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
     printf("{");
     print_status(0);
@@ -15222,6 +15278,10 @@ static int emit_color_palette_case(int argc, char** argv) {
         FT_Color color = { 1, 2, 3, 4 };
         FT_Error err = FT_Palette_Set_Foreground_Color(face.face, color);
         printf(",\"output\":{\"error\":%d,\"followup_palette_or_render_state\":\"unchanged\"}}\n", err);
+    } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color")) {
+        printf(",\"output\":");
+        print_palette_set_foreground_sfnt_runs_json(face.face);
+        printf("}\n");
     } else {
         close_oracle_face(&face);
         return 2;

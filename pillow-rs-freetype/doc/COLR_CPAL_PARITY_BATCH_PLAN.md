@@ -57,14 +57,13 @@ Current sub-batch: `FT_Palette_Set_Foreground_Color`
   `src/base/ftcolor.c:95-111` stores `foreground_color` on `TT_Face`, sets the
   validity flag, and returns `FT_Err_Ok`. Rust previously returned
   `FT_Err_Unimplemented_Feature`.
-- Kept
+- Routed
   `ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`
-  pending for route audit. The core state mutation is necessary but not enough
-  to count real parity because the row requires observing the later COLR
-  foreground `0xFFFF` output through a maintained public route. That final
-  proof needs rendered/blended foreground output, or an accepted public
-  `FT_Get_Paint`/layer observation that is explicitly treated as sufficient by
-  the manifest.
+  through pinned C, Rust FFI, thin C ABI, and WASM ABI using the manifest's
+  accepted public-color-reference path: select palette 0, set each declared
+  foreground color, then observe base glyph 50 through
+  `FT_Get_Color_Glyph_Paint` + `FT_Get_Paint` as a PaintSolid color reference
+  with palette index `0xFFFF`. This does not claim BGRA render/blend parity.
 - Verified non-SFNT no-op and null-face rows still match pinned C, Rust FFI,
   thin C ABI, and WASM ABI exactly. Disabled-color-layer rows still require an
   explicit disabled-color-layer oracle build.

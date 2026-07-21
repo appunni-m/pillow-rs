@@ -30,7 +30,7 @@ use super::types::{
     FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis,
     FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface, FT_Multi_Master,
     FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot, FT_PaintColrGlyph,
-    FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph, FT_PaintLinearGradient,
+    FT_PaintColrLayers, FT_PaintComposite, FT_PaintFormat, FT_PaintGlyph, FT_PaintLinearGradient,
     FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale, FT_PaintSkew, FT_PaintSolid,
     FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate, FT_Palette_Data, FT_Pointer,
     FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
@@ -1466,6 +1466,16 @@ pub struct FT_ColrV1_PaintNode_Snapshot {
     pub glyph_index: FT_UInt,
     pub composite_mode: FT_UShort,
     pub values: [FT_Fixed; 6],
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FT_ColrV1_PublicPaintSolid_Snapshot {
+    pub root_return: FT_Bool,
+    pub paint_return: FT_Bool,
+    pub paint_format: FT_PaintFormat,
+    pub palette_index: FT_UShort,
+    pub alpha: FT_F2Dot14,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4914,6 +4924,69 @@ pub fn FT_ColrV1_PaintGraph_Copy(face: Option<&FT_Face>) -> Option<FT_ColrV1_Pai
         root_count: records.len(),
         records,
     })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+fn colr_v1_paint_format(paint: &ColrV1Paint) -> FT_PaintFormat {
+    match paint {
+        ColrV1Paint::Layers { .. } => FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_PaintFormat,
+        ColrV1Paint::Solid { .. } => FT_COLR_PAINTFORMAT_SOLID as FT_PaintFormat,
+        ColrV1Paint::Glyph { .. } => FT_COLR_PAINTFORMAT_GLYPH as FT_PaintFormat,
+        ColrV1Paint::ColrGlyph { .. } => FT_COLR_PAINTFORMAT_COLR_GLYPH as FT_PaintFormat,
+        ColrV1Paint::LinearGradient { .. } => FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::RadialGradient { .. } => FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::SweepGradient { .. } => FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::Transform { .. } => FT_COLR_PAINTFORMAT_TRANSFORM as FT_PaintFormat,
+        ColrV1Paint::Translate { .. } => FT_COLR_PAINTFORMAT_TRANSLATE as FT_PaintFormat,
+        ColrV1Paint::Scale { .. } => FT_COLR_PAINTFORMAT_SCALE as FT_PaintFormat,
+        ColrV1Paint::Rotate { .. } => FT_COLR_PAINTFORMAT_ROTATE as FT_PaintFormat,
+        ColrV1Paint::Skew { .. } => FT_COLR_PAINTFORMAT_SKEW as FT_PaintFormat,
+        ColrV1Paint::Composite { .. } => FT_COLR_PAINTFORMAT_COMPOSITE as FT_PaintFormat,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_PublicPaintSolid_Copy(
+    face: Option<&FT_Face>,
+    glyph_index: FT_UInt,
+) -> FT_ColrV1_PublicPaintSolid_Snapshot {
+    let Some(colr) = face.and_then(|face| face.colr_v1.as_ref()) else {
+        return FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 0,
+            paint_return: 0,
+            paint_format: 0,
+            palette_index: 0,
+            alpha: 0,
+        };
+    };
+    let Some(paint) = colr.root_paints.get(&glyph_index) else {
+        return FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 0,
+            paint_return: 0,
+            paint_format: 0,
+            palette_index: 0,
+            alpha: 0,
+        };
+    };
+    match paint {
+        ColrV1Paint::Solid {
+            palette_index,
+            alpha,
+        } => FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 1,
+            paint_return: 1,
+            paint_format: colr_v1_paint_format(paint),
+            palette_index: *palette_index,
+            alpha: *alpha,
+        },
+        _ => FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 1,
+            paint_return: 1,
+            paint_format: colr_v1_paint_format(paint),
+            palette_index: 0,
+            alpha: 0,
+        },
+    }
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
