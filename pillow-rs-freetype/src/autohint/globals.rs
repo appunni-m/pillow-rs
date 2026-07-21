@@ -72,6 +72,16 @@ const AF_DIGIT: u16 = 0x8000;
 const AF_NONBASE: u16 = 0x4000;
 const AF_HAS_CMAP_ENTRY: u16 = 0x2000;
 const PINNED_FT_STYLE_FALLBACK: u16 = 86;
+// `STYLE_TABLE` is the compact Rust table of default styles only; C's
+// `AF_Style` enum also contains Latin OpenType feature styles.  The public
+// `glyph_styles` map stores C enum values, not compact Rust indexes.  Values
+// are generated from pinned `src/autofit/afstyles.h` with AF_CONFIG_OPTION_CJK
+// and AF_CONFIG_OPTION_INDIC enabled.
+const PINNED_FT_PUBLIC_STYLE_VALUES: [u16; 59] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 22, 23, 24, 25, 26, 27, 28, 29, 39, 40, 41, 42, 43,
+    44, 45, 46, 47, 58, 59, 57, 60, 61, 62, 63, 64, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77,
+    78, 79, 80, 81, 82, 83, 84, 85, 86,
+];
 
 /// Build the public `AF_FaceGlobalsRec::glyph_styles` map returned by
 /// `FT_Prop_GlyphToScriptMap`.
@@ -86,7 +96,10 @@ pub fn build_public_glyph_style_map(font_data: &FontData, glyph_count: u16) -> V
     let mut glyph_styles = vec![AF_STYLE_MASK; ng];
 
     for (si, style) in STYLE_TABLE.iter().enumerate() {
-        let style_value = u16::try_from(si).unwrap_or(AF_STYLE_MASK);
+        let style_value = PINNED_FT_PUBLIC_STYLE_VALUES
+            .get(si)
+            .copied()
+            .unwrap_or(AF_STYLE_MASK);
         for range in style.uni_ranges {
             for cp in range.first..=range.last {
                 if let Some(gi) = font_data.cmap.char_index(cp) {
