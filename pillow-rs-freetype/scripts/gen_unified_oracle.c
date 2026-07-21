@@ -46,6 +46,38 @@ static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
+static void print_json_string_content(const char* value) {
+    if (!value) {
+        return;
+    }
+    for (const unsigned char* cursor = (const unsigned char*)value; *cursor; cursor++) {
+        switch (*cursor) {
+        case '\\':
+            printf("\\\\");
+            break;
+        case '"':
+            printf("\\\"");
+            break;
+        case '\n':
+            printf("\\n");
+            break;
+        case '\r':
+            printf("\\r");
+            break;
+        case '\t':
+            printf("\\t");
+            break;
+        default:
+            if (*cursor < 0x20) {
+                printf("\\u%04x", *cursor);
+            } else {
+                putchar(*cursor);
+            }
+            break;
+        }
+    }
+}
+
 static void* oracle_alloc(FT_Memory memory, long size) {
     (void)memory;
     return malloc((size_t)size);
@@ -6076,6 +6108,186 @@ static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     free(data);
     free(scalers_arg);
     (void)first_error;
+    return 0;
+}
+
+typedef struct CMapCacheRequesterData_ {
+    unsigned char* data;
+    long data_len;
+    int request_count;
+} CMapCacheRequesterData;
+
+static FT_Error cmap_cache_requester(FTC_FaceID face_id,
+                                     FT_Library library,
+                                     FT_Pointer req_data,
+                                     FT_Face* aface) {
+    (void)req_data;
+    CMapCacheRequesterData* data = (CMapCacheRequesterData*)face_id;
+    data->request_count++;
+    return FT_New_Memory_Face(library, data->data, data->data_len, 0, aface);
+}
+
+static int cmap_cache_active_index(FT_Face face) {
+    if (!face || !face->charmap) {
+        return -1;
+    }
+    for (FT_Int index = 0; index < face->num_charmaps; index++) {
+        if (face->charmaps[index] == face->charmap) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+static void print_cmap_lookup_row(FTC_Manager manager,
+                                  FTC_CMapCache cache,
+                                  CMapCacheRequesterData* requester,
+                                  int cmap_index,
+                                  FT_UInt32 char_code,
+                                  int repeat_lookup,
+                                  int lifecycle) {
+    int before_count = requester->request_count;
+    FT_UInt first = FTC_CMapCache_Lookup(cache, (FTC_FaceID)requester, cmap_index, char_code);
+    int after_first_count = requester->request_count;
+    FT_UInt repeat = 0;
+    int after_repeat_count = after_first_count;
+    if (repeat_lookup) {
+        repeat = FTC_CMapCache_Lookup(cache, (FTC_FaceID)requester, cmap_index, char_code);
+        after_repeat_count = requester->request_count;
+    }
+    FT_UInt after_remove = 0;
+    int after_remove_count = after_repeat_count;
+    FT_UInt after_reset = 0;
+    int after_reset_count = after_repeat_count;
+    if (lifecycle) {
+        FTC_Manager_RemoveFaceID(manager, (FTC_FaceID)requester);
+        after_remove = FTC_CMapCache_Lookup(cache, (FTC_FaceID)requester, cmap_index, char_code);
+        after_remove_count = requester->request_count;
+        FTC_Manager_Reset(manager);
+        after_reset = FTC_CMapCache_Lookup(cache, (FTC_FaceID)requester, cmap_index, char_code);
+        after_reset_count = requester->request_count;
+    }
+    FT_Face face = NULL;
+    FT_Error face_error = FTC_Manager_LookupFace(manager, (FTC_FaceID)requester, &face);
+    int active_index = face_error ? -1 : cmap_cache_active_index(face);
+    printf("{\"cmap_index\":%d,\"char_code\":%u,"
+           "\"requester_count_before\":%d,"
+           "\"first\":%u,\"requester_count_after_first\":%d,"
+           "\"repeat\":%u,\"requester_count_after_repeat\":%d,"
+           "\"after_remove\":%u,\"requester_count_after_remove\":%d,"
+           "\"after_reset\":%u,\"requester_count_after_reset\":%d,"
+           "\"active_charmap_after\":%d}",
+           cmap_index,
+           (unsigned int)char_code,
+           before_count,
+           first,
+           after_first_count,
+           repeat,
+           after_repeat_count,
+           after_remove,
+           after_remove_count,
+           after_reset,
+           after_reset_count,
+           active_index);
+}
+
+static int emit_cmap_cache_lookup(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    const char* scenario = argv[4];
+    char* indexes_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!indexes_arg) {
+        return 1;
+    }
+    memcpy(indexes_arg, argv[5], strlen(argv[5]) + 1);
+    FT_UInt32 char_code = (FT_UInt32)strtoul(argv[6], NULL, 0);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(indexes_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(indexes_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(indexes_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(indexes_arg);
+        return 0;
+    }
+
+    CMapCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cmap_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_CMapCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_CMapCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":{\"status\":%d,\"rows\":[]}}\n", cache_error);
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        free(indexes_arg);
+        return 0;
+    }
+
+    int repeat_lookup = strstr(scenario, "repeat") != NULL ||
+                        strstr(scenario, "planned_cache") != NULL ||
+                        strstr(scenario, "miss") != NULL ||
+                        strstr(scenario, "negative") != NULL;
+    int lifecycle = strstr(scenario, "lifecycle") != NULL;
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"rows\":[");
+    char* cursor = indexes_arg;
+    int first = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        int cmap_index = (int)strtol(cursor, NULL, 10);
+        if (!first) {
+            printf(",");
+        }
+        print_cmap_lookup_row(manager, cache, &requester, cmap_index, char_code, repeat_lookup, lifecycle);
+        first = 0;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("],\"requester_count_final\":%d}}\n", requester.request_count);
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    free(indexes_arg);
     return 0;
 }
 
@@ -19945,6 +20157,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
+        return emit_cmap_cache_lookup(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");

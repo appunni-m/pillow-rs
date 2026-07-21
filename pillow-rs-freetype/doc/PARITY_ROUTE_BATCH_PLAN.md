@@ -7,7 +7,7 @@ fixture substitutions, or green placeholders as parity.
 Current verified route-audit baseline:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 442, 'real-null-validation': 9, 'real-parity': 4518}
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 422, 'real-null-validation': 9, 'real-parity': 4538}
 ```
 
 Verification command:
@@ -28,6 +28,8 @@ Rows checked before selecting the next implementation batch:
 | malformed `new_memory_face` error rows | focused `test-case` commands for post/name-table malformed rows | `runnable=0 pending=1` for each checked row | Do not promote. Pinned C opens or returns a different public error for the generated fixtures. |
 | `freetype.new_face` | `make -C pillow-rs-freetype test-op OP=freetype.new_face` | `passed=6 pending=0` | Already real for current maintained route; not the next gap. |
 | `ftbzip2.*` | `make -C pillow-rs-freetype test-op OP=ftbzip2.stream_open_bzip2`, `stream_read`, `stream_close` | open errors `passed=2`, success/read/close pending | Error rows are already real. Success/read/close need a pure-Rust bzip2 stream implementation; do not fake with fixture-byte comparisons. |
+| `ftcache.FTC_SBitCache_LookupScaler` | `make -C pillow-rs-freetype test-op OP=ftcache.sbit_cache_lookup_scaler` | `passed=7 pending=0` | Completed. Route compares scaler size selection and FT_ULong→FT_Int32 load-flag truncation against pinned C through Rust FFI, C ABI, and WASM ABI. |
+| `ftcache.FTC_CMapCache_Lookup` | `make -C pillow-rs-freetype test-op OP=ftcache.cmap_cache_lookup` | `passed=18 pending=0` | Completed. Route compares pinned C FTC lookup output for glyph index, repeat lookup, requester count, negative cmap-index behavior, RemoveFaceID, and Manager_Reset against Rust FFI, C ABI, and WASM ABI observable behavior. |
 
 ## Next 10+ row batches
 
@@ -41,7 +43,6 @@ Current pending rows: at least 70 across `ftcache.*`.
 Primary operations:
 
 - `ftcache.image_cache_lookup_scaler`
-- `ftcache.cmap_cache_lookup`
 - `ftcache.manager_lookup_size`
 - `ftcache.manager_remove_face_id`
 - `ftcache.sbit_cache_lookup_scaler`

@@ -1729,6 +1729,14 @@ def ftcache_cmap_lookup_pending_reason(row: ConcreteInput) -> str | None:
     variant = row.variant_id or "single"
     codepoint = variant.removeprefix("cp") if variant.startswith("cp") else variant
     variant_detail = f"variant {variant} codepoint={codepoint}"
+    if row.case_id in {
+        "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+        "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit",
+        "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero",
+        "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap",
+        "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset",
+    }:
+        return None
     if (
         row.case_id
         == "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope"
@@ -5328,6 +5336,22 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_CMapCache_Lookup.error_null_cache_returns_zero"
     ):
         return "FTC_CMapCache_Lookup null-cache zero result validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.cmap_cache_lookup"
+        and row.case_id
+        in {
+            "ftcache.FTC_CMapCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_CMapCache_Lookup.success_lookup_hit_and_repeat_hit",
+            "ftcache.FTC_CMapCache_Lookup.success_lookup_miss_returns_zero",
+            "ftcache.FTC_CMapCache_Lookup.success_negative_cmap_index_uses_current_charmap",
+            "ftcache.FTC_CMapCache_Lookup.lifecycle_remove_faceid_and_reset",
+        }
+    ):
+        return (
+            "FTC_CMapCache_Lookup glyph-index, repeat lookup, requester-count, "
+            "negative-cmap-index, remove-face-id, and reset behavior validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftcache.cmap_cache_new"
         and row.case_id == "ftcache.FTC_CMapCache_New.error_null_manager_or_output"
