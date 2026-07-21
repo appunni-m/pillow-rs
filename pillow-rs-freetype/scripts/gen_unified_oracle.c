@@ -8432,11 +8432,15 @@ static int emit_cid_route(int argc, char** argv) {
         FT_Error err = FT_Get_CID_Registry_Ordering_Supplement(
             face, &registry, &ordering, &supplement);
         print_status(err);
-        printf(",\"output\":{\"registry\":");
+        printf(",\"output\":{\"registry\":{\"string\":");
         print_json_c_string_or_null(registry);
-        printf(",\"ordering\":");
+        printf(",\"identity_class\":\"%s\"},\"ordering\":{\"string\":",
+               registry ? "face_owned_c_string" : "null");
         print_json_c_string_or_null(ordering);
-        printf(",\"supplement\":%d}}\n", supplement);
+        printf(",\"identity_class\":\"%s\"},\"supplement\":%d,"
+               "\"output_write_bitmap\":[\"registry\",\"ordering\",\"supplement\"]}}\n",
+               ordering ? "face_owned_c_string" : "null",
+               supplement);
     } else {
         print_status(FT_Err_Invalid_Argument);
         printf("}\n");

@@ -33,12 +33,22 @@ Update on 2026-07-22:
   `real-parity` from 4754 to 4758 at the current branch baseline. Full
   `make fontdone-test` passes with `runtime_parity: passed=7028 failed=0
   total=7028` and `pending=234`.
+- Follow-up on 2026-07-22: `FT_Get_CID_Registry_Ordering_Supplement` now uses
+  the same maintained SFNT-wrapped CID fixture and compares exact ROS strings,
+  face-owned pointer identity class, supplement, and output write bitmap through
+  pinned C, Rust FFI, thin C ABI, and WASM ABI.
+- ROS first divergence: the Rust/C/WASM endpoint surface existed, but the
+  unified route still treated `success_cid_keyed_face` as pending because it
+  referenced a missing `source-han-cid.otf` input and had no same-output runner
+  for registry/ordering/supplement.
+- ROS verified result: focused
+  `make -C pillow-rs-freetype test-op OP=ftcid.get_cid_registry_ordering_supplement`
+  passes `runtime_parity: passed=3 failed=0 total=3`. Full
+  `make fontdone-test` passes with `runtime_parity: passed=7029 failed=0
+  total=7029`, `pending=233`, route audit `pending-route=228`, and
+  `real-parity=4759`.
 - Non-SFNT Type1 CID rows remain pending until a separate Type1 CID fixture is
   available and opens in pinned C.
-- `FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face` remains a
-  follow-up route promotion even though the thin Rust/C/WASM endpoint surface is
-  now present; it still needs unified harness output wiring before it can count
-  as real parity.
 
 Baseline from `make -C pillow-rs-freetype route-buckets` on `main` at
 `9d07011f1`:

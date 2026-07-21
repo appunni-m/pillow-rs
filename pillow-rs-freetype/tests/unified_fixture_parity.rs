@@ -2696,6 +2696,11 @@ impl BackendComparisonWorker {
             }
             "ftcid.get_cid_is_internally_cid_keyed" => rust_cid_is_keyed_output(case),
             "ftcid.get_cid_from_glyph_index" => rust_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                rust_cid_ros_output(case)
+            }
             "FT_Property_Set_then_Get"
                 if case.case_id
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
@@ -3076,6 +3081,11 @@ impl BackendComparisonWorker {
             }
             "ftcid.get_cid_is_internally_cid_keyed" => c_cid_is_keyed_output(case),
             "ftcid.get_cid_from_glyph_index" => c_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                c_cid_ros_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -3441,6 +3451,11 @@ impl BackendComparisonWorker {
             }
             "ftcid.get_cid_is_internally_cid_keyed" => wasm_cid_is_keyed_output(case),
             "ftcid.get_cid_from_glyph_index" => wasm_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                wasm_cid_ros_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return wasm_get_winfnt_header(0, &case.inputs.params);
@@ -21222,6 +21237,62 @@ fn cid_from_glyph_run_output(error: FT_Error, glyph_index: FT_UInt, cid: FT_UInt
     }
 }
 
+fn cid_ros_success_case_supported(case: &InputCase) -> bool {
+    case.case_id == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face"
+}
+
+fn cid_ros_string_json(value: Option<&str>) -> Value {
+    match value {
+        Some(value) => json!({
+            "string": value,
+            "identity_class": "face_owned_c_string"
+        }),
+        None => json!({
+            "string": Value::Null,
+            "identity_class": "null"
+        }),
+    }
+}
+
+fn cid_ros_c_string_json(pointer: *const FT_String) -> Value {
+    if pointer.is_null() {
+        return cid_ros_string_json(None);
+    }
+    let bytes = c_abi::abi_c_string_bytes(pointer);
+    cid_ros_string_json(Some(&String::from_utf8_lossy(&bytes)))
+}
+
+fn cid_ros_c_char_json(pointer: *const std::ffi::c_char) -> Value {
+    cid_ros_c_string_json(pointer.cast())
+}
+
+fn cid_ros_wasm_string_json(pointer: *const FT_Byte, len: FT_UInt) -> Value {
+    if pointer.is_null() {
+        return cid_ros_string_json(None);
+    }
+    let bytes = c_abi::abi_byte_slice(pointer, len);
+    cid_ros_string_json(Some(&String::from_utf8_lossy(&bytes)))
+}
+
+fn cid_ros_run_output(
+    error: FT_Error,
+    registry: Value,
+    ordering: Value,
+    supplement: FT_Int,
+) -> RunOutput {
+    let output = json!({
+        "registry": registry,
+        "ordering": ordering,
+        "supplement": supplement,
+        "output_write_bitmap": ["registry", "ordering", "supplement"]
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
 fn cid_route_glyph_index(num_glyphs: FT_Long, params: &Value) -> Result<FT_UInt, String> {
     if params
         .get("glyph_index")
@@ -21307,6 +21378,63 @@ fn wasm_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, Strin
     let output = cid_from_glyph_run_output(error, glyph_index, cid);
     wasm_done_face(handle);
     Ok(output)
+}
+
+fn rust_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut registry = std::ptr::null();
+    let mut ordering = std::ptr::null();
+    let mut supplement = 0;
+    let error = FT_Get_CID_Registry_Ordering_Supplement(
+        Some(&face),
+        Some(&mut registry),
+        Some(&mut ordering),
+        Some(&mut supplement),
+    );
+    Ok(cid_ros_run_output(
+        error,
+        cid_ros_c_string_json(registry),
+        cid_ros_c_string_json(ordering),
+        supplement,
+    ))
+}
+
+fn c_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut registry = std::ptr::null();
+    let mut ordering = std::ptr::null();
+    let mut supplement = 0;
+    let error = c_abi::FT_Get_CID_Registry_Ordering_Supplement(
+        face,
+        &mut registry,
+        &mut ordering,
+        &mut supplement,
+    );
+    let output = cid_ros_run_output(
+        error,
+        cid_ros_c_char_json(registry),
+        cid_ros_c_char_json(ordering),
+        supplement,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut output = wasm_abi::FontdoneWasmCidRos::default();
+    let error = wasm_abi::fontdone_wasm_get_cid_registry_ordering_supplement(handle, &mut output);
+    let run_output = cid_ros_run_output(
+        error,
+        cid_ros_wasm_string_json(output.registry, output.registry_len),
+        cid_ros_wasm_string_json(output.ordering, output.ordering_len),
+        output.supplement,
+    );
+    wasm_done_face(handle);
+    Ok(run_output)
 }
 
 fn bdf_property_sentinel() -> BDF_PropertyRec {
@@ -26584,6 +26712,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 format!("glyph-index:{}", glyph_index_param(params)?)
             };
             let mut args = vec!["--cid-route".to_string(), route];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_registry_ordering_supplement" if cid_ros_success_case_supported(case) => {
+            let mut args = vec!["--cid-route".to_string(), "ros".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
