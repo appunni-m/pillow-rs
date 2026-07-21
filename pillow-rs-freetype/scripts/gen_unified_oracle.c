@@ -5792,6 +5792,61 @@ static void print_get_glyph_error_row(const char* probe, FT_Error err, FT_Glyph 
            glyph ? "non_null" : "null");
 }
 
+static void print_get_glyph_advance_row(const char* axis, FT_Pos value, FT_Error err, FT_Glyph glyph) {
+    printf("{\"probe\":\"%s=%ld\",\"axis\":\"%s\",\"advance\":%ld,\"error\":%d,\"output_pointer_class\":\"%s\"",
+           axis,
+           value,
+           axis,
+           value,
+           err,
+           glyph ? "non_null" : "null");
+    if (!err && glyph) {
+        printf(",\"glyph\":{\"format\":%ld,\"advance\":{\"x\":%ld,\"y\":%ld},\"library_present\":%s,\"clazz_present\":%s}",
+               (long)glyph->format,
+               glyph->advance.x,
+               glyph->advance.y,
+               glyph->library ? "true" : "false",
+               glyph->clazz ? "true" : "false");
+    }
+    printf("}");
+}
+
+static int emit_get_glyph_advance_boundaries(FT_Face face, const char* values_csv) {
+    size_t values_len = strlen(values_csv);
+    char* values = (char*)malloc(values_len + 1);
+    if (!values) {
+        print_status(FT_Err_Out_Of_Memory);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    memcpy(values, values_csv, values_len + 1);
+
+    print_status(FT_Err_Invalid_Argument);
+    printf(",\"output\":{\"rows\":[");
+    int first = 1;
+    char* saveptr = NULL;
+    for (char* token = strtok_r(values, ",", &saveptr); token; token = strtok_r(NULL, ",", &saveptr)) {
+        FT_Pos advance = (FT_Pos)strtol(token, NULL, 10);
+        for (int axis_index = 0; axis_index < 2; axis_index++) {
+            face->glyph->advance.x = axis_index == 0 ? advance : 0;
+            face->glyph->advance.y = axis_index == 1 ? advance : 0;
+            FT_Glyph glyph = NULL;
+            FT_Error err = FT_Get_Glyph(face->glyph, &glyph);
+            if (!first) {
+                printf(",");
+            }
+            first = 0;
+            print_get_glyph_advance_row(axis_index == 0 ? "x" : "y", advance, err, glyph);
+            if (glyph) {
+                FT_Done_Glyph(glyph);
+            }
+        }
+    }
+    printf("]}}\n");
+    free(values);
+    return 0;
+}
+
 static int emit_get_glyph_null_inputs(void) {
     FT_Glyph glyph = (FT_Glyph)0x1;
     FT_Error null_slot_error = FT_Get_Glyph(NULL, &glyph);
@@ -10360,6 +10415,36 @@ static void print_palette_data_values_json(FT_Error err, FT_Palette_Data data) {
     printf("}}}");
 }
 
+static void print_palette_data_snapshot_json(FT_Palette_Data data) {
+    printf("{\"num_palettes\":%u,\"num_palette_entries\":%u,"
+           "\"pointer_nullness\":{\"palette_name_ids\":%s,\"palette_flags\":%s,\"palette_entry_name_ids\":%s}}",
+           data.num_palettes,
+           data.num_palette_entries,
+           data.palette_name_ids ? "false" : "true",
+           data.palette_flags ? "false" : "true",
+           data.palette_entry_name_ids ? "false" : "true");
+}
+
+static void print_palette_data_null_input_row(const char* variant, FT_Error err, const FT_Palette_Data* data) {
+    printf("{\"variant\":\"%s\",\"error\":%d,\"palette_data_snapshot\":",
+           variant,
+           err);
+    if (data) {
+        print_palette_data_snapshot_json(*data);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static void print_palette_select_error_row(const char* variant, FT_Error err, FT_Color* palette) {
+    printf("{\"variant\":\"%s\",\"error\":%d,\"apalette_snapshot\":\"%s\",\"active_palette_index\":%d}",
+           variant,
+           err,
+           palette ? "non_null" : "null",
+           err ? -1 : 0);
+}
+
 static void print_color_entries(FT_Color* palette, FT_UShort count) {
     if (!palette) {
         printf("null");
@@ -10391,6 +10476,42 @@ static int emit_color_palette_case(int argc, char** argv) {
     int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
     if (opened != 0) {
         return opened;
+    }
+    if (streq(case_id, "ftcolor.FT_Palette_Data_Get.error_null_face_or_output")) {
+        FT_Palette_Data data = { 999, (const FT_UShort*)1, (const FT_UShort*)1, 999, (const FT_UShort*)1 };
+        FT_Error null_face = FT_Palette_Data_Get(NULL, &data);
+        FT_Error null_output = FT_Palette_Data_Get(face.face, NULL);
+        printf("{");
+        print_status(null_face ? null_face : null_output);
+        printf(",\"output\":{\"variants\":[");
+        print_palette_data_null_input_row("null_face", null_face, &data);
+        printf(",");
+        print_palette_data_null_input_row("null_apalette", null_output, NULL);
+        printf("]}}\n");
+        close_oracle_face(&face);
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index")) {
+        FT_Palette_Data data = { 0 };
+        FT_Error data_err = FT_Palette_Data_Get(face.face, &data);
+        FT_UShort equal_num_palettes = data_err ? 0 : data.num_palettes;
+        FT_Color* null_face_palette = (FT_Color*)1;
+        FT_Color* equal_palette = (FT_Color*)1;
+        FT_Color* max_palette = (FT_Color*)1;
+        FT_Error null_face = FT_Palette_Select(NULL, 0, &null_face_palette);
+        FT_Error equal_index = FT_Palette_Select(face.face, equal_num_palettes, &equal_palette);
+        FT_Error max_index = FT_Palette_Select(face.face, 65535, &max_palette);
+        printf("{");
+        print_status(null_face ? null_face : (equal_index ? equal_index : max_index));
+        printf(",\"output\":{\"variants\":[");
+        print_palette_select_error_row("null_face", null_face, null_face_palette);
+        printf(",");
+        print_palette_select_error_row("palette_index_equal_num_palettes", equal_index, equal_palette);
+        printf(",");
+        print_palette_select_error_row("palette_index_65535", max_index, max_palette);
+        printf("]}}\n");
+        close_oracle_face(&face);
+        return 0;
     }
     printf("{");
     print_status(0);
@@ -16361,7 +16482,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -16416,6 +16537,13 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     if (!err && streq(command, "--glyph-record")) {
         print_get_glyph_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--get-glyph-advance-boundaries")) {
+        emit_get_glyph_advance_boundaries(face, argv[9]);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -18813,6 +18941,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--glyph-record")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--get-glyph-advance-boundaries")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {

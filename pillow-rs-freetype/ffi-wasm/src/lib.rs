@@ -20,6 +20,7 @@ pub type FT_Angle = FT_Fixed;
 pub type FT_Int = i32;
 pub type FT_Int32 = i32;
 pub type FT_Long = i64;
+pub type FT_Pos = i64;
 pub type FT_ULong = u64;
 pub type FT_UInt = u32;
 pub type FT_UInt32 = u32;
@@ -4289,6 +4290,21 @@ pub fn abi_set_unsupported_glyph_slot(handle: usize) -> FT_Error {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     face.slot = Some(rust_ffi::FT_Unsupported_GlyphSlot(&face.face));
+    rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_set_outline_glyph_slot_advance(
+    handle: usize,
+    advance_x: FT_Pos,
+    advance_y: FT_Pos,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    face.slot = Some(rust_ffi::FT_Outline_GlyphSlot_With_Advance(
+        &face.face, advance_x, advance_y,
+    ));
     rust_ffi::FT_Err_Ok
 }
 
