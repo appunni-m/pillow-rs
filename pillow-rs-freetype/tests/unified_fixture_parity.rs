@@ -18553,6 +18553,10 @@ fn property_map_identity_json(map: *mut FT_UShort) -> Value {
 }
 
 fn glyph_to_script_target_char_code(case: &InputCase) -> Result<FT_ULong, String> {
+    if case.case_id == "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip"
+    {
+        return Ok(0x41);
+    }
     match string_param(&case.inputs.params, "target_glyph")? {
         "latin_A_greek_alpha_cyrillic_be" | "latin_A_manual_none" => Ok(0x41),
         "cjk_u4e00" => Ok(0x4E00),
@@ -19097,6 +19101,7 @@ fn autofitter_script_property_case(case: &InputCase) -> bool {
         "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip"
     )
 }
 
@@ -19116,6 +19121,7 @@ fn property_autofitter_script_roundtrip_output(
     let property_names = string_array_param(&case.inputs.params, "property_names")?;
     let rows = property_names
         .iter()
+        .filter(|property_name| property_name.as_str() != "glyph-to-script-map")
         .map(|property_name| {
             let property_selector = autofitter_property_selector(property_name)?;
             let mut initial = PROPERTY_SENTINEL;
@@ -19156,7 +19162,21 @@ fn property_autofitter_script_roundtrip_output(
             }))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(ok(json!({ "rows": rows })))
+    let glyph_to_script_map = if case.case_id.as_str()
+        == "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip"
+    {
+        Some(match backend {
+            PropertyBackend::Rust => rust_property_glyph_to_script_runtime_output(case)?.output,
+            PropertyBackend::CAbi => c_property_glyph_to_script_runtime_output(case)?.output,
+            PropertyBackend::Wasm => wasm_property_glyph_to_script_runtime_output(case)?.output,
+        })
+    } else {
+        None
+    };
+    Ok(ok(json!({
+        "rows": rows,
+        "glyph_to_script_map": glyph_to_script_map
+    })))
 }
 
 fn property_get_call(
@@ -22792,6 +22812,7 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.glyph_to_script_map_runtime"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime"
+            | "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime"
             | "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c"
             | "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit"
@@ -23051,6 +23072,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             let mut args = vec!["--property-case".to_string(), case.case_id.clone()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftdriver.property_set_get"
+            if case.case_id
+                == "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip" =>
+        {
+            let mut args = vec!["--property-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(glyph_to_script_target_char_code(case)?.to_string());
+            let (pixel_width, pixel_height) = pixel_size_param(params)?;
+            args.push(pixel_width.to_string());
+            args.push(pixel_height.to_string());
             Ok(args)
         }
         "ftdriver.glyph_to_script_map" => {
