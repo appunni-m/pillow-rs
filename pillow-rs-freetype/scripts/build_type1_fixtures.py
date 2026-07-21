@@ -245,6 +245,22 @@ def build_non_mm_force_bold(path: Path) -> None:
     )
 
 
+def build_font_value_populated(path: Path) -> None:
+    """Build the declared FT_Get_PS_Font_Value selector-matrix fixture."""
+
+    build_simple_type1(
+        path,
+        "FontValuePopulated",
+        "Font Value Populated",
+        "Generated for fontdone Type 1 font-value selector parity",
+        private_overrides={
+            "BlueValues": [-20, 0, 480, 500],
+            "StdHW": [42],
+            "StdVW": [83],
+        },
+    )
+
+
 def build_encoding_fixture(path: Path, font_name: str, family_name: str, encoding: bytes) -> None:
     """Build a Type 1 fixture with a specific clear-text Encoding object."""
 
@@ -369,6 +385,7 @@ def main() -> None:
         "Attach AFM Base",
         "Generated for fontdone Type 1 attach/patent coverage",
     )
+    build_font_value_populated(INPUT_OUT_DIR / "font-value-populated.pfb")
     build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
     build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
     build_mm_blend_fontinfo_private(OUT_DIR / "mm-blend-fontinfo-private.pfb")

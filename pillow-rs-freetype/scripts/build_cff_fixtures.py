@@ -18,6 +18,7 @@ from fontTools.ttLib.tables.ttProgram import Program
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "cff"
+INPUT_OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "cff"
 UNITS_PER_EM = 1000
 FIXED_HEAD_TIME = 0
 GLYPH_ORDER = [".notdef", "A"]
@@ -892,6 +893,8 @@ def write_malformed_cff_faces() -> None:
 
 def main() -> None:
     write_hybrid_otto_face_info()
+    INPUT_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    build_cff(INPUT_OUT_DIR / "fontinfo-populated.otf")
     write_pure_cff_cubic()
     write_pure_cff_cubic_vmtx()
     write_pure_cff_empty_tt_programs()

@@ -13237,6 +13237,97 @@ static int emit_ps_font_value_encoding_rowset(int argc, char** argv) {
     return 0;
 }
 
+static void print_ps_font_value_matrix_row(const char* id,
+                                           const char* key_name,
+                                           FT_Face face,
+                                           PS_Dict_Keys key,
+                                           FT_UInt idx,
+                                           int pointer_is_null,
+                                           FT_Long explicit_len,
+                                           int exact_len) {
+    FT_Long prequery = FT_Get_PS_Font_Value(face, key, idx, NULL, 0);
+    FT_Long value_len = exact_len && prequery > 0 ? prequery : explicit_len;
+    unsigned char buffer[256];
+    memset(buffer, 0xA5, sizeof(buffer));
+    void* value = pointer_is_null ? NULL : buffer;
+    FT_Long ret = FT_Get_PS_Font_Value(face, key, idx, value, value_len);
+    long prefix_len = 0;
+    if (!pointer_is_null) {
+        if (ret > 0 && ret <= (FT_Long)sizeof(buffer) && value_len >= ret) {
+            prefix_len = ret;
+        } else {
+            prefix_len = 16;
+        }
+    }
+    printf("{\"id\":\"%s\",\"key\":\"%s\",\"idx\":%u,\"prequery\":%ld,\"value_len\":%ld,\"return\":%ld,\"buffer_hex\":\"",
+           id,
+           key_name,
+           idx,
+           prequery,
+           value_len,
+           ret);
+    print_hex_bytes(buffer, prefix_len);
+    printf("\"}");
+}
+
+static int emit_ps_font_value_matrix(int argc, char** argv) {
+    (void)argc;
+    OracleFace type1;
+    OracleFace custom;
+    OracleFace cff;
+    OracleFace truetype;
+    FT_Long face_index = atol(argv[10]);
+    int opened = open_oracle_face(argv[2], argv[3], face_index, &type1);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[4], argv[5], face_index, &custom);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[6], argv[7], face_index, &cff);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[8], argv[9], face_index, &truetype);
+    if (opened != 0) return opened;
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    print_ps_font_value_matrix_row("scalar_value", "PS_DICT_UNDERLINE_POSITION",
+                                   type1.face, PS_DICT_UNDERLINE_POSITION, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("string_value", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("array_value", "PS_DICT_BLUE_VALUE",
+                                   type1.face, PS_DICT_BLUE_VALUE, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("encoding_type", "PS_DICT_ENCODING_TYPE",
+                                   custom.face, PS_DICT_ENCODING_TYPE, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("sizing_query", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 1, 0, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("short_buffer", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, 1, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("negative_value_len", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, -1, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("invalid_index", "PS_DICT_BLUE_VALUE",
+                                   type1.face, PS_DICT_BLUE_VALUE, 255, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("unsupported_service", "PS_DICT_FULL_NAME",
+                                   cff.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("non_postscript", "PS_DICT_FULL_NAME",
+                                   truetype.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("null_face", "PS_DICT_FULL_NAME",
+                                   NULL, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf("]}}\n");
+    close_oracle_face(&truetype);
+    close_oracle_face(&cff);
+    close_oracle_face(&custom);
+    close_oracle_face(&type1);
+    return 0;
+}
+
 static int emit_open_type_free_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -22021,6 +22112,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc >= 6 && streq(argv[1], "--ps-font-value-encoding-rowset")) {
         return emit_ps_font_value_encoding_rowset(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--ps-font-value-matrix")) {
+        return emit_ps_font_value_matrix(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
         return emit_open_type_free_null_face(argc, argv);

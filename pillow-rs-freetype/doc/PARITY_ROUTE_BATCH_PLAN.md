@@ -13,13 +13,13 @@ route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pend
 Current post-merge baseline on `main`:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 352, 'real-null-validation': 9, 'real-parity': 4608}
-runtime_parity: passed=6879 failed=0 total=6879 covered_manifest_cases=3786
-runtime_cases: runnable=6879 pending=356
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 351, 'real-null-validation': 9, 'real-parity': 4609}
+runtime_parity: passed=6880 failed=0 total=6880 covered_manifest_cases=3787
+runtime_cases: runnable=6880 pending=355
 ```
 
 This baseline means the maintained same-input routes are green; it does not mean
-full public API parity is complete. The 352 route-pending rows remain outside
+full public API parity is complete. The 351 route-pending rows remain outside
 the real same-input Rust FFI / C ABI / WASM ABI comparison set.
 
 After the FTC manager/cache creation route batch:
@@ -129,6 +129,30 @@ Focused verification:
 
 ```bash
 make -C pillow-rs-freetype test-op OP=ftoutln.outline_get_bitmap
+make -C pillow-rs-freetype route-audit
+```
+
+After the `FT_Get_PS_Font_Value` selector-matrix route:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 351, 'real-null-validation': 9, 'real-parity': 4609}
+runtime_parity: passed=6880 failed=0 total=6880 covered_manifest_cases=3787
+runtime_cases: runnable=6880 pending=355
+```
+
+The route uses maintained generator-backed Type1 and CFF assets at the declared
+fixture paths and compares `FT_Get_PS_Font_Value` for scalar FontInfo,
+string FontInfo, Private-dictionary array, custom Encoding, sizing query,
+short-buffer preservation, negative `value_len`, invalid index,
+unsupported CFF service, non-PostScript face, and null face through pinned C,
+Rust FFI, thin C ABI, and WASM ABI. The core implementation now routes the
+public `PS_Dict_Keys` selectors used by that matrix instead of only
+`PS_DICT_ENCODING_TYPE`/`PS_DICT_ENCODING_ENTRY`.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_value
 make -C pillow-rs-freetype route-audit
 ```
 
