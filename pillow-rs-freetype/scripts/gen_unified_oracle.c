@@ -14648,7 +14648,57 @@ static int emit_property_case(int argc, char** argv) {
                    post_invalid_get,
                    post_invalid);
         }
-        printf("]}}\n");
+        printf("]");
+        if (streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip")) {
+            if (argc != 9) {
+                fprintf(stderr, "NONE script property roundtrip requires source_kind source_value face_index target_char_code pixel_width pixel_height\n");
+                return 2;
+            }
+            OracleFace opened = {0};
+            int open_status = open_oracle_face(argv[3], argv[4], atol(argv[5]), &opened);
+            if (open_status) {
+                return open_status;
+            }
+            FT_ULong target_char = strtoul(argv[6], NULL, 10);
+            FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+            FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+            FT_Error size_error = FT_Set_Pixel_Sizes(opened.face, pixel_width, pixel_height);
+            FT_UInt target_glyph = FT_Get_Char_Index(opened.face, target_char);
+            FT_Prop_GlyphToScriptMap prop;
+            prop.face = opened.face;
+            prop.map = (FT_UShort*)1;
+            FT_Error map_error = FT_Property_Get(
+                opened.library,
+                "autofitter",
+                "glyph-to-script-map",
+                &prop);
+            FT_UShort target_script = 0;
+            if (prop.map && target_glyph < opened.face->num_glyphs) {
+                target_script = prop.map[target_glyph];
+            }
+            FT_Error load_error = size_error ? size_error : FT_Load_Glyph(opened.face, target_glyph, FT_LOAD_FORCE_AUTOHINT);
+            printf(",\"glyph_to_script_map\":{\"error\":%d,\"prop_after\":{\"face\":", map_error);
+            print_property_face_identity(opened.face, prop.face);
+            printf(",\"map\":");
+            print_property_map_identity(prop.map);
+            printf("},\"num_glyphs\":%ld,\"target\":{\"glyph_index\":%u,\"script\":%u},\"load_error\":%d,\"glyph_slot\":",
+                   opened.face->num_glyphs,
+                   target_glyph,
+                   target_script,
+                   load_error);
+            if (load_error) {
+                printf("null");
+            } else {
+                printf("{");
+                print_slot_body(opened.face->glyph, target_glyph);
+                printf("}");
+            }
+            printf("}");
+            close_oracle_face(&opened);
+        } else {
+            printf(",\"glyph_to_script_map\":null");
+        }
+        printf("}}\n");
         return 0;
     }
     if (streq(case_id, "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit")) {

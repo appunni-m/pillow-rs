@@ -3024,12 +3024,6 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for driver/autohinter properties that do not have a maintained route."""
     ftdriver_rows_without_maintained_route = {
-        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip": (
-            "autofitter script NONE parity still needs a maintained typed "
-            "glyph-to-script-map route in addition to scalar default-script "
-            "and fallback-script readback; promoting only the scalar subset "
-            "would skip a declared public property input"
-        ),
         "ftdriver.FT_CFF_HINTING_ADOBE.hinting_engine_property_runtime": (
             "CFF Adobe hinting-engine runtime parity needs maintained "
             "FT_Property_Set/Get routing for the CFF driver and a C-openable "
@@ -4570,6 +4564,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.fallback_script_property_validation": "FT_Property_Set/Get autofitter fallback-script Indic scalar validation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_INDIC.glyph_to_script_map_runtime": "FT_Prop_GlyphToScriptMap Indic runtime map entry and force-autohint glyph output validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip": "FT_Property_Set/Get autofitter default-script Latin scalar roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip": "FT_Property_Set/Get autofitter NONE default/fallback scalar roundtrip plus typed glyph-to-script-map output validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.glyph_to_script_map_runtime": "FT_Prop_GlyphToScriptMap Latin runtime map entry and force-autohint glyph output validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime": "FT_Prop_GlyphToScriptMap NONE runtime map entry and force-autohint glyph output validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
