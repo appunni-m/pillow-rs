@@ -10892,8 +10892,11 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.get_paint_layers"
             | "ftcolor.get_paint_graph"
             | "ftcolor.get_paint_graph_node"
+            | "ftcolor.get_gradient_paint_and_stops"
+            | "ftcolor.get_colorline_stops"
             | "ftcolor.get_normalized_transform_paint"
             | "ftcolor.get_solid_paint_and_palette"
+            | "ftcolor.traverse_gradient_paints"
             | "ftcolor.traverse_color_paint_graph"
             | "ftcolor.traverse_paint_graph"
     );
@@ -10928,6 +10931,17 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintSkew.get_paint_skew_values"
             | "ftcolor.FT_PaintTransform.get_paint_transform_values"
             | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
+            | "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
+            | "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+            | "ftcolor.FT_ColorLine.gradient_colorline_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+            | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
         && (case.case_id.ends_with(".paint_composite_runtime")
             || case.case_id.ends_with(".paint_composite_mode_runtime"))
@@ -10994,6 +11008,25 @@ fn get_paint_layers_call(
     }
 }
 
+fn get_colorline_stops_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    color_stop: &mut FT_ColorStop,
+    iterator: &mut FT_ColorStopIterator,
+) -> FT_Bool {
+    match backend {
+        ColorPaintBackend::Rust => {
+            FT_Get_Colorline_Stops(rust_face, Some(color_stop), Some(iterator))
+        }
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Colorline_Stops(c_face, color_stop, iterator),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_colorline_stops(wasm_handle, color_stop, iterator)
+        }
+    }
+}
+
 fn get_paint_layer_iterator_copy(
     backend: ColorPaintBackend,
     rust_face: Option<&FT_Face>,
@@ -11008,6 +11041,145 @@ fn get_paint_layer_iterator_copy(
             wasm_abi::abi_support_colr_v1_paint_layer_iterator(wasm_handle, opaque)
         }
     }
+}
+
+fn color_stop_iterator_json(iterator: FT_ColorStopIterator) -> Value {
+    json!({
+        "num_color_stops": iterator.num_color_stops,
+        "current_color_stop": iterator.current_color_stop,
+        "p_class": pointer_class(iterator.p.cast_const()),
+        "read_variable": iterator.read_variable,
+    })
+}
+
+fn color_stop_json(stop: FT_ColorStop) -> Value {
+    json!({
+        "stop_offset": stop.stop_offset,
+        "color": {
+            "palette_index": stop.color.palette_index,
+            "alpha": stop.color.alpha,
+        },
+    })
+}
+
+fn colorline_json(colorline: FT_ColorLine) -> Value {
+    json!({
+        "extend": colorline.extend,
+        "color_stop_iterator": color_stop_iterator_json(colorline.color_stop_iterator),
+    })
+}
+
+fn get_paint_colorline_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_ColorLine_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_colorline(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_colorline(wasm_handle, opaque)
+        }
+    }
+}
+
+fn colorline_stop_call_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    iterator: &mut FT_ColorStopIterator,
+    color_stop: &mut FT_ColorStop,
+) -> Value {
+    let before_iterator = *iterator;
+    let before_stop = *color_stop;
+    let result = get_colorline_stops_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        color_stop,
+        iterator,
+    );
+    json!({
+        "label": label,
+        "return": result,
+        "before": {
+            "iterator": color_stop_iterator_json(before_iterator),
+            "color_stop": color_stop_json(before_stop),
+        },
+        "after": {
+            "iterator": color_stop_iterator_json(*iterator),
+            "color_stop": color_stop_json(*color_stop),
+        },
+    })
+}
+
+fn gradient_colorline_sequence_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    base_glyph: FT_UInt,
+    max_extra_calls: usize,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    let colorline = if paint_return != 0 {
+        get_paint_colorline_copy(backend, rust_face, c_face, wasm_handle, opaque)
+    } else {
+        None
+    };
+    let mut iterator = colorline
+        .map(|line| line.color_stop_iterator)
+        .unwrap_or_default();
+    let mut color_stop = FT_ColorStop {
+        stop_offset: -0x1234,
+        color: FT_ColorIndex {
+            palette_index: 0xBEEF,
+            alpha: -0x123,
+        },
+    };
+    let max_calls = usize::try_from(iterator.num_color_stops)
+        .unwrap_or(0)
+        .saturating_add(max_extra_calls);
+    let calls = (0..max_calls)
+        .map(|index| {
+            colorline_stop_call_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                &format!("call_{}", index + 1),
+                &mut iterator,
+                &mut color_stop,
+            )
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "label": label,
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "paint_return": paint_return,
+        "paint": {
+            "format": paint.format,
+            "node": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+        },
+        "colorline": colorline.map_or(Value::Null, colorline_json),
+        "calls": calls,
+    })
 }
 
 fn opaque_paint_json(opaque: FT_OpaquePaint) -> Value {
@@ -11348,6 +11520,96 @@ fn color_transform_paint_case(case_id: &str) -> bool {
     )
 }
 
+fn color_static_gradient_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
+            | "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+            | "ftcolor.FT_ColorLine.gradient_colorline_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+            | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
+    )
+}
+
+fn color_static_gradient_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    match case.case_id.as_str() {
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                36,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "radial_repeat",
+                37,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "sweep_reflect",
+                38,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+        | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                36,
+                2,
+            ),
+        })),
+        "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+        | "ftcolor.FT_ColorLine.gradient_colorline_values"
+        | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops" => ok(json!({
+            "sequences": [
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "linear_pad", 36, 1),
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "radial_repeat", 37, 1),
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "sweep_reflect", 38, 1),
+            ],
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        _ => ok(json!({})),
+    }
+}
+
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     if case.operation == "ftcolor.get_paint_layers"
@@ -11371,6 +11633,15 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     }
     if color_transform_paint_case(&case.case_id) {
         return Ok(color_transform_paint_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_static_gradient_case(&case.case_id) {
+        return Ok(color_static_gradient_output_for_open_face(
+            case,
             ColorPaintBackend::Rust,
             Some(&face),
             ptr::null_mut(),
@@ -11409,6 +11680,18 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
         c_done_library(library);
         return Ok(output);
     }
+    if color_static_gradient_case(&case.case_id) {
+        let output = color_static_gradient_output_for_open_face(
+            case,
+            ColorPaintBackend::CAbi,
+            None,
+            face,
+            0,
+        );
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
     let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
     c_done_face(face);
     c_done_library(library);
@@ -11442,6 +11725,17 @@ fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     }
     if color_transform_paint_case(&case.case_id) {
         let output = color_transform_paint_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_static_gradient_case(&case.case_id) {
+        let output = color_static_gradient_output_for_open_face(
+            case,
             ColorPaintBackend::Wasm,
             None,
             ptr::null_mut(),

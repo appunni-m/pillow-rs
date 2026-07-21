@@ -23,20 +23,22 @@ use super::convert::{
 use super::types::{
     BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
     FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char, FT_CharMap,
-    FT_CharMapRecPublic, FT_Color, FT_ColorIndex, FT_DebugHook_Func, FT_Encoding, FT_Error,
-    FT_F2Dot14, FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot,
-    FT_GlyphRec, FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
-    FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
-    FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
-    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph,
-    FT_PaintRotate, FT_PaintScale, FT_PaintSkew, FT_PaintSolid, FT_PaintTransform,
-    FT_PaintTranslate, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap,
-    FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short,
-    FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream,
-    FT_StreamDesc, FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys,
-    PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
-    TT_Postscript, TT_VertHeader,
+    FT_CharMapRecPublic, FT_Color, FT_ColorIndex, FT_ColorLine, FT_ColorStop, FT_ColorStopIterator,
+    FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14, FT_F26Dot6, FT_Fixed, FT_Glyph_Format,
+    FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec, FT_Int, FT_Int32, FT_LayerIterator,
+    FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis,
+    FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface, FT_Multi_Master,
+    FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot, FT_PaintColrGlyph,
+    FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph, FT_PaintLinearGradient,
+    FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale, FT_PaintSkew, FT_PaintSolid,
+    FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate, FT_Palette_Data, FT_Pointer,
+    FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
+    FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc, FT_StreamRec, FT_String,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
+    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
+    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
+    TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1322,6 +1324,19 @@ struct ColrV1State {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ColorStop {
+    stop_offset: FT_Fixed,
+    palette_index: FT_UShort,
+    alpha: FT_F2Dot14,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ColorLine {
+    extend: FT_Int,
+    stops: Vec<ColrV1ColorStop>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum ColrV1Paint {
     Layers {
         paints: Vec<ColrV1Paint>,
@@ -1336,6 +1351,25 @@ enum ColrV1Paint {
     },
     ColrGlyph {
         glyph_index: FT_UInt,
+    },
+    LinearGradient {
+        colorline: ColrV1ColorLine,
+        p0: FT_Vector,
+        p1: FT_Vector,
+        p2: FT_Vector,
+    },
+    RadialGradient {
+        colorline: ColrV1ColorLine,
+        c0: FT_Vector,
+        r0: FT_Pos,
+        c1: FT_Vector,
+        r1: FT_Pos,
+    },
+    SweepGradient {
+        colorline: ColrV1ColorLine,
+        center: FT_Vector,
+        start_angle: FT_Fixed,
+        end_angle: FT_Fixed,
     },
     Transform {
         paint: Box<ColrV1Paint>,
@@ -3754,6 +3788,30 @@ fn parse_colr_v1_child_paint(
     )?))
 }
 
+fn parse_colr_v1_colorline(data: &[u8], offset: usize) -> Option<ColrV1ColorLine> {
+    let extend = FT_Int::from(*data.get(offset)?);
+    if extend > FT_COLR_PAINT_EXTEND_REFLECT as FT_Int {
+        return None;
+    }
+    let count = usize::from(read_u16_be(data, offset + 1)?);
+    let stops_start = offset.checked_add(3)?;
+    let stops_end = stops_start.checked_add(count.checked_mul(6)?)?;
+    if stops_end > data.len() {
+        return None;
+    }
+    let stops = (0..count)
+        .map(|index| {
+            let stop_offset = stops_start.checked_add(index.checked_mul(6)?)?;
+            Some(ColrV1ColorStop {
+                stop_offset: f2dot14_to_fixed(read_i16_be(data, stop_offset)?),
+                palette_index: read_u16_be(data, stop_offset + 2)?,
+                alpha: read_i16_be(data, stop_offset + 4)?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(ColrV1ColorLine { extend, stops })
+}
+
 fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
     let version = read_u16_be(data, 0)?;
     if version != 1 {
@@ -3846,6 +3904,60 @@ fn parse_colr_v1_paint(
             Some(ColrV1Paint::Solid {
                 palette_index: read_u16_be(data, offset + 1)?,
                 alpha: read_i16_be(data, offset + 3)?,
+            })
+        }
+        4 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:724-758` exposes static
+            // PaintLinearGradient coordinates as 16.16 fixed-point vectors and
+            // initializes a ColorLine iterator from the child ColorLine table.
+            Some(ColrV1Paint::LinearGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                p0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                p1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                },
+                p2: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 14)?),
+                },
+            })
+        }
+        6 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            let r0 = colr_i16_to_fixed(read_i16_be(data, offset + 8)?);
+            let r1 = colr_i16_to_fixed(read_i16_be(data, offset + 14)?);
+            Some(ColrV1Paint::RadialGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                c0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                r0: if r0 < 0 { i32::MAX.into() } else { r0 },
+                c1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                },
+                r1: if r1 < 0 { i32::MAX.into() } else { r1 },
+            })
+        }
+        8 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            Some(ColrV1Paint::SweepGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                center: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                start_angle: f2dot14_to_fixed(read_i16_be(data, offset + 8)?),
+                end_angle: f2dot14_to_fixed(read_i16_be(data, offset + 10)?),
             })
         }
         10 => {
@@ -4138,6 +4250,9 @@ fn colr_v1_find_paint_by_ptr_in_node(
         ColrV1Paint::Solid { .. } => None,
         ColrV1Paint::Glyph { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
         ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::LinearGradient { .. }
+        | ColrV1Paint::RadialGradient { .. }
+        | ColrV1Paint::SweepGradient { .. } => None,
         ColrV1Paint::Transform { paint, .. }
         | ColrV1Paint::Translate { paint, .. }
         | ColrV1Paint::Scale { paint, .. }
@@ -4184,6 +4299,27 @@ pub fn FT_Get_Color_Glyph_Paint(
         0
     };
     1
+}
+
+fn colr_v1_colorline_iterator(colorline: &ColrV1ColorLine, index: usize) -> FT_ColorStopIterator {
+    FT_ColorStopIterator {
+        num_color_stops: colorline.stops.len().try_into().unwrap_or(FT_UInt::MAX),
+        current_color_stop: index.try_into().unwrap_or(FT_UInt::MAX),
+        p: colorline
+            .stops
+            .as_ptr()
+            .wrapping_add(index)
+            .cast_mut()
+            .cast::<FT_Byte>(),
+        read_variable: 0,
+    }
+}
+
+fn colr_v1_colorline_to_public(colorline: &ColrV1ColorLine) -> FT_ColorLine {
+    FT_ColorLine {
+        extend: colorline.extend,
+        color_stop_iterator: colr_v1_colorline_iterator(colorline, 0),
+    }
 }
 
 pub fn FT_Get_Paint(
@@ -4250,6 +4386,56 @@ pub fn FT_Get_Paint(
             paint_out.u = FT_COLR_PaintUnion {
                 colr_glyph: FT_PaintColrGlyph {
                     glyphID: *glyph_index,
+                },
+            };
+        }
+        ColrV1Paint::LinearGradient {
+            colorline,
+            p0,
+            p1,
+            p2,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                linear_gradient: FT_PaintLinearGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    p0: *p0,
+                    p1: *p1,
+                    p2: *p2,
+                },
+            };
+        }
+        ColrV1Paint::RadialGradient {
+            colorline,
+            c0,
+            r0,
+            c1,
+            r1,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                radial_gradient: FT_PaintRadialGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    c0: *c0,
+                    r0: *r0,
+                    c1: *c1,
+                    r1: *r1,
+                },
+            };
+        }
+        ColrV1Paint::SweepGradient {
+            colorline,
+            center,
+            start_angle,
+            end_angle,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                sweep_gradient: FT_PaintSweepGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    center: *center,
+                    start_angle: *start_angle,
+                    end_angle: *end_angle,
                 },
             };
         }
@@ -4342,6 +4528,101 @@ pub fn FT_Get_Paint(
     1
 }
 
+fn colr_v1_find_colorline_by_iterator<'a>(
+    state: &'a ColrV1State,
+    iterator: &FT_ColorStopIterator,
+) -> Option<&'a ColrV1ColorLine> {
+    state
+        .root_paints
+        .values()
+        .find_map(|paint| colr_v1_find_colorline_by_iterator_in_node(paint, iterator))
+}
+
+fn colr_v1_find_colorline_by_iterator_in_node<'a>(
+    paint: &'a ColrV1Paint,
+    iterator: &FT_ColorStopIterator,
+) -> Option<&'a ColrV1ColorLine> {
+    match paint {
+        ColrV1Paint::Layers { paints } => paints
+            .iter()
+            .find_map(|paint| colr_v1_find_colorline_by_iterator_in_node(paint, iterator)),
+        ColrV1Paint::Solid { .. } | ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::Glyph { paint, .. }
+        | ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => {
+            colr_v1_find_colorline_by_iterator_in_node(paint, iterator)
+        }
+        ColrV1Paint::LinearGradient { colorline, .. }
+        | ColrV1Paint::RadialGradient { colorline, .. }
+        | ColrV1Paint::SweepGradient { colorline, .. } => {
+            let stop_index = usize::try_from(iterator.current_color_stop).ok()?;
+            if iterator.num_color_stops != colorline.stops.len().try_into().ok()?
+                || iterator.read_variable != 0
+                || stop_index > colorline.stops.len()
+            {
+                return None;
+            }
+            let expected_p = colorline
+                .stops
+                .as_ptr()
+                .wrapping_add(stop_index)
+                .cast::<FT_Byte>();
+            if std::ptr::addr_eq(expected_p, iterator.p.cast_const()) {
+                Some(colorline)
+            } else {
+                None
+            }
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            backdrop_paint,
+            ..
+        } => colr_v1_find_colorline_by_iterator_in_node(source_paint, iterator)
+            .or_else(|| colr_v1_find_colorline_by_iterator_in_node(backdrop_paint, iterator)),
+    }
+}
+
+pub fn FT_Get_Colorline_Stops(
+    face: Option<&FT_Face>,
+    color_stop: Option<&mut FT_ColorStop>,
+    iterator: Option<&mut FT_ColorStopIterator>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(color_stop) = color_stop else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(colorline) = colr_v1_find_colorline_by_iterator(colr, iterator) else {
+        return 0;
+    };
+    let Ok(stop_index) = usize::try_from(iterator.current_color_stop) else {
+        return 0;
+    };
+    let Some(stop) = colorline.stops.get(stop_index) else {
+        return 0;
+    };
+    *color_stop = FT_ColorStop {
+        stop_offset: stop.stop_offset,
+        color: FT_ColorIndex {
+            palette_index: stop.palette_index,
+            alpha: stop.alpha,
+        },
+    };
+    let next_index = stop_index.saturating_add(1);
+    *iterator = colr_v1_colorline_iterator(colorline, next_index);
+    1
+}
+
 fn colr_v1_layer_iterator(paints: &[ColrV1Paint], layer: usize) -> FT_LayerIterator {
     FT_LayerIterator {
         num_layers: paints.len().try_into().unwrap_or(FT_UInt::MAX),
@@ -4386,6 +4667,9 @@ fn colr_v1_find_layer_paints_by_iterator_in_node<'a>(
             colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
         }
         ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::LinearGradient { .. }
+        | ColrV1Paint::RadialGradient { .. }
+        | ColrV1Paint::SweepGradient { .. } => None,
         ColrV1Paint::Transform { paint, .. }
         | ColrV1Paint::Translate { paint, .. }
         | ColrV1Paint::Scale { paint, .. }
@@ -4448,6 +4732,25 @@ pub fn FT_ColrV1_Paint_Layer_Iterator_Copy(
     let colr = face?.colr_v1.as_ref()?;
     match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
         ColrV1Paint::Layers { paints } => Some(colr_v1_layer_iterator(paints, 0)),
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_ColorLine_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    if opaque_paint.p.is_null() || opaque_paint.insert_root_transform != 0 {
+        return None;
+    }
+    let colr = face?.colr_v1.as_ref()?;
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::LinearGradient { colorline, .. }
+        | ColrV1Paint::RadialGradient { colorline, .. }
+        | ColrV1Paint::SweepGradient { colorline, .. } => {
+            Some(colr_v1_colorline_to_public(colorline))
+        }
         _ => None,
     }
 }
@@ -4520,6 +4823,49 @@ fn colr_v1_snapshot_paint(
             glyph_index: *glyph_index,
             composite_mode: 0,
             values: [0; 6],
+        }),
+        ColrV1Paint::LinearGradient {
+            colorline,
+            p0,
+            p1,
+            p2,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [p0.x, p0.y, p1.x, p1.y, p2.x, p2.y],
+        }),
+        ColrV1Paint::RadialGradient {
+            colorline,
+            c0,
+            r0,
+            c1,
+            r1,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [c0.x, c0.y, *r0, c1.x, c1.y, *r1],
+        }),
+        ColrV1Paint::SweepGradient {
+            colorline,
+            center,
+            start_angle,
+            end_angle,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [center.x, center.y, *start_angle, *end_angle, 0, 0],
         }),
         ColrV1Paint::Transform { paint, affine } => {
             nodes.push(FT_ColrV1_PaintNode_Snapshot {

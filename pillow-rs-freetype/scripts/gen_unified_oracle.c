@@ -14172,6 +14172,149 @@ static void print_colr_paint_layers_sequence_json(FT_Face face,
     printf("]}");
 }
 
+static void print_ft_vector_json(FT_Vector vector) {
+    printf("{\"x\":%ld,\"y\":%ld}", (long)vector.x, (long)vector.y);
+}
+
+static void print_color_stop_iterator_json(FT_ColorStopIterator iterator) {
+    printf("{\"num_color_stops\":%u,\"current_color_stop\":%u,\"p_class\":\"%s\",\"read_variable\":%u}",
+           iterator.num_color_stops,
+           iterator.current_color_stop,
+           iterator.p ? "nonnull" : "null",
+           iterator.read_variable);
+}
+
+static void print_color_stop_json(FT_ColorStop stop) {
+    printf("{\"stop_offset\":%ld,\"color\":{\"palette_index\":%u,\"alpha\":%d}}",
+           (long)stop.stop_offset,
+           stop.color.palette_index,
+           stop.color.alpha);
+}
+
+static void print_colorline_json(FT_ColorLine colorline) {
+    printf("{\"extend\":%d,\"color_stop_iterator\":", colorline.extend);
+    print_color_stop_iterator_json(colorline.color_stop_iterator);
+    printf("}");
+}
+
+static void print_gradient_paint_payload_json(FT_COLR_Paint paint) {
+    if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        printf("{\"format\":%d,\"linear_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.linear_gradient.colorline);
+        printf(",\"p0\":");
+        print_ft_vector_json(paint.u.linear_gradient.p0);
+        printf(",\"p1\":");
+        print_ft_vector_json(paint.u.linear_gradient.p1);
+        printf(",\"p2\":");
+        print_ft_vector_json(paint.u.linear_gradient.p2);
+        printf("}}");
+    } else if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        printf("{\"format\":%d,\"radial_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.radial_gradient.colorline);
+        printf(",\"c0\":");
+        print_ft_vector_json(paint.u.radial_gradient.c0);
+        printf(",\"r0\":%ld,\"c1\":", (long)paint.u.radial_gradient.r0);
+        print_ft_vector_json(paint.u.radial_gradient.c1);
+        printf(",\"r1\":%ld}}", (long)paint.u.radial_gradient.r1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        printf("{\"format\":%d,\"sweep_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.sweep_gradient.colorline);
+        printf(",\"center\":");
+        print_ft_vector_json(paint.u.sweep_gradient.center);
+        printf(",\"start_angle\":%ld,\"end_angle\":%ld}}",
+               (long)paint.u.sweep_gradient.start_angle,
+               (long)paint.u.sweep_gradient.end_angle);
+    } else {
+        printf("{\"format\":%d}", paint.format);
+    }
+}
+
+static int colorline_from_gradient_paint(FT_COLR_Paint paint, FT_ColorLine* colorline) {
+    if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        *colorline = paint.u.linear_gradient.colorline;
+        return 1;
+    }
+    if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        *colorline = paint.u.radial_gradient.colorline;
+        return 1;
+    }
+    if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        *colorline = paint.u.sweep_gradient.colorline;
+        return 1;
+    }
+    return 0;
+}
+
+static void print_colorline_stop_call_json(FT_Face face,
+                                           const char* label,
+                                           FT_ColorStopIterator* iterator,
+                                           FT_ColorStop* color_stop) {
+    FT_ColorStopIterator before_iterator = *iterator;
+    FT_ColorStop before_stop = *color_stop;
+    FT_Bool result = FT_Get_Colorline_Stops(face, color_stop, iterator);
+    printf("{\"label\":\"%s\",\"return\":%u,\"before\":{\"iterator\":",
+           label,
+           result);
+    print_color_stop_iterator_json(before_iterator);
+    printf(",\"color_stop\":");
+    print_color_stop_json(before_stop);
+    printf("},\"after\":{\"iterator\":");
+    print_color_stop_iterator_json(*iterator);
+    printf(",\"color_stop\":");
+    print_color_stop_json(*color_stop);
+    printf("}}");
+}
+
+static void print_gradient_colorline_sequence_json(FT_Face face,
+                                                   const char* label,
+                                                   FT_UInt base_glyph,
+                                                   int max_extra_calls) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+    FT_ColorLine colorline;
+    memset(&colorline, 0, sizeof(colorline));
+    int has_colorline = paint_return && colorline_from_gradient_paint(paint, &colorline);
+    FT_ColorStopIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    if (has_colorline) {
+        iterator = colorline.color_stop_iterator;
+    }
+    FT_ColorStop color_stop;
+    color_stop.stop_offset = -0x1234;
+    color_stop.color.palette_index = 0xBEEF;
+    color_stop.color.alpha = -0x123;
+    int max_calls = (int)iterator.num_color_stops + max_extra_calls;
+
+    printf("{\"label\":\"%s\",\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"paint_return\":%u,\"paint\":{\"format\":%d,\"node\":", paint_return, paint.format);
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+    printf(",\"colorline\":");
+    if (has_colorline) {
+        print_colorline_json(colorline);
+    } else {
+        printf("null");
+    }
+    printf(",\"calls\":[");
+    for (int index = 0; index < max_calls; index++) {
+        if (index) {
+            printf(",");
+        }
+        char call_label[16];
+        snprintf(call_label, sizeof(call_label), "call_%d", index + 1);
+        print_colorline_stop_call_json(face, call_label, &iterator, &color_stop);
+    }
+    printf("]}");
+}
+
 static int emit_color_paint_layers_case(const char* case_id, OracleFace* face) {
     if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
         printf("{");
@@ -14223,6 +14366,31 @@ static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, i
         glyph_index = paint.u.glyph.glyphID;
     } else if (paint.format == FT_COLR_PAINTFORMAT_COLR_GLYPH) {
         glyph_index = paint.u.colr_glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        palette_index = paint.u.linear_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.linear_gradient.colorline.extend;
+        values[0] = (long)paint.u.linear_gradient.p0.x;
+        values[1] = (long)paint.u.linear_gradient.p0.y;
+        values[2] = (long)paint.u.linear_gradient.p1.x;
+        values[3] = (long)paint.u.linear_gradient.p1.y;
+        values[4] = (long)paint.u.linear_gradient.p2.x;
+        values[5] = (long)paint.u.linear_gradient.p2.y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        palette_index = paint.u.radial_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.radial_gradient.colorline.extend;
+        values[0] = (long)paint.u.radial_gradient.c0.x;
+        values[1] = (long)paint.u.radial_gradient.c0.y;
+        values[2] = (long)paint.u.radial_gradient.r0;
+        values[3] = (long)paint.u.radial_gradient.c1.x;
+        values[4] = (long)paint.u.radial_gradient.c1.y;
+        values[5] = (long)paint.u.radial_gradient.r1;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        palette_index = paint.u.sweep_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.sweep_gradient.colorline.extend;
+        values[0] = (long)paint.u.sweep_gradient.center.x;
+        values[1] = (long)paint.u.sweep_gradient.center.y;
+        values[2] = (long)paint.u.sweep_gradient.start_angle;
+        values[3] = (long)paint.u.sweep_gradient.end_angle;
     } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
         values[0] = (long)paint.u.transform.affine.xx;
         values[1] = (long)paint.u.transform.affine.xy;
@@ -14387,6 +14555,85 @@ static int emit_colr_transform_paint_case(OracleFace* face) {
     return 0;
 }
 
+static void print_colr_static_gradient_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":3,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    printf(",");
+    print_colr_snapshot_record_json(face, 38);
+    printf("]}");
+}
+
+static int emit_colr_static_gradient_case(const char* case_id, OracleFace* face) {
+    printf("{");
+    print_status(0);
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "radial_repeat", 37, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "sweep_reflect", 38, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Colorline_Stops.end_of_iteration") ||
+        streq(case_id, "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 2);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_PaintExtend.gradient_extend_runtime") ||
+        streq(case_id, "ftcolor.FT_ColorLine.gradient_colorline_values") ||
+        streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops")) {
+        printf(",\"output\":{\"sequences\":[");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "radial_repeat", 37, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "sweep_reflect", 38, 1);
+        printf("],\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    printf(",\"output\":{}}\n");
+    return 0;
+}
+
+static int is_colr_static_gradient_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect") ||
+           streq(case_id, "ftcolor.FT_PaintExtend.gradient_extend_runtime") ||
+           streq(case_id, "ftcolor.FT_ColorLine.gradient_colorline_values") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.end_of_iteration") ||
+           streq(case_id, "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops");
+}
+
 static int is_colr_transform_paint_case(const char* case_id) {
     return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload") ||
            streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload") ||
@@ -14426,6 +14673,11 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
     }
     if (is_colr_transform_paint_case(case_id)) {
         int result = emit_colr_transform_paint_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_static_gradient_case(case_id)) {
+        int result = emit_colr_static_gradient_case(case_id, &face);
         close_oracle_face(&face);
         return result;
     }

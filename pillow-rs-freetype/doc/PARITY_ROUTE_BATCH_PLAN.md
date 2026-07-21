@@ -218,6 +218,57 @@ mac-encoding runner instead of remaining hardcoded as a selection-skipped row.
 The three concrete variants compare pinned C, Rust FFI, thin C ABI, and WASM ABI
 for charmap metadata, glyph indices, and matched SFNT name record bytes.
 
+After the COLRv1 static gradient and ColorLine stop route batch:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 266, 'real-null-validation': 9, 'real-parity': 4697}
+runtime_parity_progress:
+  ftcolor.get_gradient_paint_and_stops compared=6 total=6 passed=6 failed=0
+  ftcolor.get_colorline_stops compared=5 total=5 passed=5 failed=0
+  ftcolor.get_paint compared=31 total=31 passed=31 failed=0
+  ftcolor.traverse_gradient_paints compared=1 total=1 passed=1 failed=0
+```
+
+This batch adds `fonts/color/colr-v1-static-gradients.ttf`, a maintained static
+COLRv1 fixture with one PaintLinearGradient/PAD/3-stop root, one
+PaintRadialGradient/REPEAT/2-stop root, and one
+PaintSweepGradient/REFLECT/1-stop root.  The routed rows compare public
+gradient formats, static `FT_ColorLine` extend and iterator fields, exact
+`FT_ColorStop` stop offsets/palette indices/alpha values, iterator advancement,
+and terminal false behavior through pinned C, Rust FFI, thin C ABI, and WASM
+ABI.
+
+Pinned C behavior checked:
+
+- `freetype/src/sfnt/ttcolr.c:500-520`: `read_color_line` reads extend/count,
+  validates extend range, and initializes the public color-stop iterator.
+- `freetype/src/sfnt/ttcolr.c:724-870`: gradient paints expose static
+  coordinates/radii/angles as FreeType public fixed-point values and normalize
+  public paint formats.
+- `freetype/src/sfnt/ttcolr.c:1585-1650`: `FT_Get_Colorline_Stops` emits one
+  stop, advances the iterator pointer/current index, and returns false without
+  modifying output once iteration is exhausted.
+
+Rows deliberately left pending: variable ColorLine/VarColorStop deltas,
+`FT_ColorStop.iterator_output_values` because it still includes variable-stop
+coverage, broad all-paint linear-gradient matrix rows, and root-transform
+gradient cases.  Those require separate maintained variable/all-paints fixtures
+and exact variable-delta/root-transform routes, not static-gradient
+classification.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_gradient_paint_and_stops
+make -C pillow-rs-freetype test-op OP=ftcolor.get_colorline_stops
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint
+make -C pillow-rs-freetype test-op OP=ftcolor.traverse_gradient_paints
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+```
+
 Focused verification:
 
 ```bash

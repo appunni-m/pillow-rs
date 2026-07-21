@@ -61,7 +61,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-gradient-extend-pad.ttf",
+            "id": "fonts/color/colr-v1-static-gradients.ttf",
             "asset_kind": "font"
           }
         },

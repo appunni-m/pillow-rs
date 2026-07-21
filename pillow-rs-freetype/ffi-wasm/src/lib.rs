@@ -30,6 +30,9 @@ pub type FT_UShort = u16;
 pub type FT_Byte = u8;
 pub type FT_Bytes = *const FT_Byte;
 pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_ColorLine = rust_ffi::FT_ColorLine;
+pub type FT_ColorStop = rust_ffi::FT_ColorStop;
+pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -1124,6 +1127,19 @@ pub extern "C" fn fontdone_wasm_get_paint_layers(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_colorline_stops(
+    handle: usize,
+    color_stop: *mut FT_ColorStop,
+    iterator: *mut FT_ColorStopIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Colorline_Stops(
+        face_ref(handle).map(|face| &face.face),
+        unsafe { color_stop.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_colr_v1_paint_layer_iterator(
     handle: usize,
@@ -1133,6 +1149,14 @@ pub fn abi_support_colr_v1_paint_layer_iterator(
         face_ref(handle).map(|face| &face.face),
         opaque_paint,
     )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_colorline(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(face_ref(handle).map(|face| &face.face), opaque_paint)
 }
 
 #[cfg(feature = "abi-test-support")]
