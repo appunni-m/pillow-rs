@@ -3033,15 +3033,6 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 
 def property_service_pending_reason(row: ConcreteInput) -> str | None:
-    if row.case_id == "fterrdef.FT_Err_Missing_Property.known_property_success":
-        return (
-            "FT_Err_Missing_Property known-property success fixture asks for "
-            'module_name="svg" property_name="svg-hooks", but pinned '
-            'FreeType exposes svg-hooks on module "ot-svg"; reusing the '
-            "maintained truetype interpreter-version route would be a "
-            "different input and a green placeholder"
-        )
-
     property_rows_without_maintained_route = {
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script": (
             "FT_Prop_GlyphToScriptMap mutation parity needs maintained typed "
@@ -4580,6 +4571,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": "FT_Property_Set/Get increase-x-height face-scoped limit roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "fterrdef.FT_Err_Missing_Property.known_property_success": "FT_Property_Get known autofitter fallback-script property success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

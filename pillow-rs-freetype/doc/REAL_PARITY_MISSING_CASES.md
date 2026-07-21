@@ -1,5 +1,103 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: 2026-07-21 FTMM residual route sweep on `main`
+
+Status: audited on 2026-07-21 from `main` at `5fed74445`. This section
+tracks the current FTMM residual rows separately from the older route-audit
+triage below.
+
+Current route-audit baseline:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 351, 'real-null-validation': 9, 'real-parity': 4609}
+```
+
+Focused runtime evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_design_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.set_mm_design_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.set_mm_blend_coordinates
+```
+
+```text
+ftmm.get_var_design_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.get_var_design_coordinates:FT_Get_Var_Design_Coordinates excess-output fixture is not a sound same-input parity row for the current TrueType variable font: pinned FreeType 2.14.3 `TT_Get_Var_Design` clamps the active axis count but then reads default values past the axis array for excess outputs, while Type1 MM zero-fills; promoting Rust's safe zero-fill or modeling pinned-C adjacent memory would be a green placeholder:1
+
+ftmm.set_mm_design_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.set_mm_design_coordinates:FT_Set_MM_Design_Coordinates Adobe-MM glyph-output fixture is not currently a C-observable success row: pinned FreeType 2.14.3 returns OK for FT_Set_Pixel_Sizes and FT_Set_MM_Design_Coordinates on the maintained Type1 MM fixture, then FT_Load_Glyph returns error 6 for the declared glyph_index=42; promoting this as glyph output parity would be a green placeholder until the input names a glyph that C can load successfully:1
+
+ftmm.set_mm_blend_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.set_mm_blend_coordinates:FT_Set_MM_Blend_Coordinates output parity needs a maintained MM route proving active blend-coordinate changes alter subsequent coordinates, metrics, and exposed state like pinned C:1
+```
+
+Disposition:
+
+- Keep `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  pending for the current TrueType variable fixture. This is not a valid
+  same-input Rust parity target because the pinned C observation depends on an
+  adjacent-memory read past the active axis default array. A future fix must use
+  a C-defined same-input observation, such as a Type1 MM excess-output fixture
+  where pinned C defines zero-fill behavior.
+- Keep `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
+  pending until the input names a C-loadable glyph after the MM design mutation,
+  or is split into an exact public error row plus a separate C-loadable success
+  row. The current declared success row cannot be promoted because pinned C
+  returns `FT_Err_Invalid_Argument` for glyph index 42 after the successful
+  design-coordinate set.
+- Treat `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` as
+  blocked by the current declared input shape, not by missing Rust glue. A
+  direct pinned-C probe of the same current input
+  `fonts/variable/gvar-hvar-wght.ttf`, `num_coords=1`,
+  `coords_16_16=[65536]` shows `FT_Set_MM_Blend_Coordinates` returns the
+  public wrapper sentinel `-2` for the TrueType/OpenType variation service,
+  while the row declares `expect_error=false` and a glyph-output success shape.
+  The sibling `FT_Set_Var_Blend_Coordinates` row is the valid glyph-output
+  setter for this font. Do not promote the MM row until it is changed through a
+  reviewed input-plan update to an exact `-2` public-error observation or to a
+  true Adobe MM same-input output route.
+
+### Issue Set Current: 2026-07-21 module-lifecycle route sweep on `main`
+
+Status: audited on 2026-07-21 from `main` at `5fed74445`.
+
+Focused runtime evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_debug_hook
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_module
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_get_remove_module
+make -C pillow-rs-freetype test-op OP=ftmodapi.module_class_lifecycle
+make -C pillow-rs-freetype test-op OP=ftmodapi.done_library
+```
+
+```text
+ftmodapi.set_debug_hook: runtime_parity passed=3 failed=0 total=3, pending=1
+ftmodapi.add_module: runtime_parity passed=4 failed=0 total=4, pending=3
+ftmodapi.add_get_remove_module: runtime_parity passed=0 failed=0 total=0, pending=1
+ftmodapi.module_class_lifecycle: runtime_parity passed=0 failed=0 total=0, pending=1
+ftmodapi.done_library: runtime_parity passed=1 failed=0 total=1, pending=1
+```
+
+Disposition:
+
+- Keep these module-lifecycle success rows pending until a maintained synthetic
+  module-class route exists. The missing scope is real FreeType behavior in
+  `src/base/ftobjs.c`: `FT_Add_Module` version/name checks, module allocation,
+  library/memory initialization, optional renderer/hinter/driver side effects,
+  `module_init`, table insertion, `FT_Get_Module`/interface lookup,
+  `FT_Remove_Module`, reverse-order teardown, and final `FT_Done_Library`
+  destruction.
+- Do not promote constant/layout/import-contract rows as lifecycle parity.
+  Existing null/future-version/duplicate/non-final rows prove only their exact
+  error paths, not successful module installation/removal/destruction.
+
 ### Issue Set Current: 2026-07-21 route-audit blocker triage after NONE script promotion
 
 Status: audited on 2026-07-21 from branch
@@ -85,10 +183,11 @@ Inspected blockers:
   across pinned C, Rust FFI, thin C ABI, and WASM ABI. Layout parity for
   `FT_StreamRec` and `FT_OPEN_STREAM` close-callback ownership do not prove
   this memory-stream field contract.
-- `fterrdef.FT_Err_Missing_Property.known_property_success` remains pending
-  because the declared success input asks for module `svg` property `svg-hooks`,
-  while pinned FreeType exposes the maintained property on module `ot-svg`.
-  Reusing a different known-property route would not be the same public input.
+- `fterrdef.FT_Err_Missing_Property.known_property_success` was corrected in
+  the maintained public input to use documented `autofitter:fallback-script`
+  `FT_Property_Get` value storage and promoted on `main` at the current
+  2026-07-21 property-route sweep. The old `svg:svg-hooks` spelling remains a
+  useful fixture-contract lesson, but is no longer the active success input.
 
 Required fix plan:
 
@@ -111,9 +210,9 @@ Required fix plan:
 6. For FTMM residuals, fix the declared input shape first: use C-loadable Type1
    MM glyphs for output rows and avoid treating pinned-C adjacent-memory reads
    as safe Rust parity.
-7. For the known-property row, either change the manifest/input through a
-   reviewed fixture-plan update to the pinned-C `ot-svg` property, or keep the
-   current `svg` row pending as an invalid declared success input.
+7. Completed for the known-property row on 2026-07-21 by changing the active
+   success input to documented `autofitter:fallback-script` and routing it
+   through pinned C, Rust FFI, C ABI, and WASM ABI exact value comparison.
 
 ### Issue Set Completed: FT_OPEN_STREAM external-stream ownership
 
@@ -888,17 +987,17 @@ Required fix plan:
    compare the same validation flags, output pointer initialization, and table
    pointer classes.
 
-### Issue Set Current: property-route pending rows with fixture/input mismatches
+### Issue Set Completed: property-route known-property correction
 
-Status: classified on 2026-07-20; no route promoted.
+Status: promoted on 2026-07-21.
 
-Rejected candidate:
+Promoted row:
 
 - `fterrdef.FT_Err_Missing_Property.known_property_success`
 
 Finding:
 
-- The fixture input currently says `module_name="svg"` and
+- The fixture input previously said `module_name="svg"` and
   `property_name="svg-hooks"`, with expected success.
 - FreeType 2.14.3 documents and implements SVG renderer hooks on module
   `ot-svg`, not `svg`; see `include/freetype/ftdriver.h` `svg-hooks` example
@@ -909,19 +1008,21 @@ Finding:
   - `FT_Property_Get(library, "ot-svg", "svg-hooks", &hooks) -> 0`
 - Promoting the existing row through the scalar `truetype:interpreter-version`
   helper would use a different public input and would be a green placeholder.
+- The active row now uses documented `autofitter:fallback-script`, which is a
+  scalar public property already represented by the maintained Rust FFI, C ABI,
+  and WASM property selector facade.
 
-Required fix plan:
+Verification:
 
-1. Add a maintained typed property route for `svg-hooks` that preserves the
-   public input module name and hook-record shape.
-2. Correct the public input row or add a replacement row that uses
-   `module_name="ot-svg"` for the SVG hook success control; keep the current
-   `module_name="svg"` behavior visible as an exact `Missing_Module` case if
-   the manifest intends to exercise that spelling.
-3. Implement the behavior in core Rust first, then expose it through thin C ABI
-   and WASM ABI helpers without parsing hook semantics in the wrappers.
-4. Promote only after the pinned C oracle, Rust FFI, C ABI, and WASM ABI all
-   compare the same module/property input and output.
+```bash
+make -C pillow-rs-freetype test-op OP=FT_Property_Get
+make -C pillow-rs-freetype route-audit
+```
+
+```text
+runtime_parity: passed=3 failed=0 total=3
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 350, 'real-null-validation': 9, 'real-parity': 4610}
+```
 
 Related property rows still pending:
 

@@ -17943,6 +17943,15 @@ fn property_get_case_output(
                 "module_service": error == FT_Err_Ok
             })))
         }
+        "fterrdef.FT_Err_Missing_Property.known_property_success" => {
+            let mut value = PROPERTY_SENTINEL;
+            let error = property_get_call(backend, 1, 4, 4, Some(&mut value));
+            Ok(ok(json!({
+                "status": error,
+                "value": value,
+                "module_service": error == FT_Err_Ok
+            })))
+        }
         "ftmodapi.FT_Property_Get.rejects_null_arguments" => {
             let mut library_value = PROPERTY_SENTINEL;
             let mut module_value = PROPERTY_SENTINEL;

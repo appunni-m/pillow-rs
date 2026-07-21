@@ -129,14 +129,14 @@
             "kind": "ref",
             "role": "font_or_public_input",
             "id": "fixtures/assets/fonts/DejaVuSans.ttf",
-            "requirements": "Known module property control such as svg-hooks or a documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
+            "requirements": "Known documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
           }
         },
         "params": {
-          "pinned_source": "freetype/src/svg/ftsvg.c:213-223; freetype/src/autofit/afmodule.c:281,368",
-          "module_name": "svg",
-          "property_name": "svg-hooks",
-          "value_pointer": "valid_hook_storage"
+          "pinned_source": "freetype/src/autofit/afmodule.c:281,368",
+          "module_name": "autofitter",
+          "property_name": "fallback-script",
+          "value_pointer": "valid_uint_storage"
         }
       },
       "classifiers": [
@@ -161,7 +161,7 @@
             "output_bytes_or_values"
           ]
         },
-        "fixture_requirements": "Known module property control such as svg-hooks or a documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
+        "fixture_requirements": "Known documented autofitter/truetype property succeeds or value-validates, proving the unknown-name branch."
       }
     }
   ]
