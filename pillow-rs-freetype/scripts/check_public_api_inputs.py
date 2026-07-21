@@ -5428,6 +5428,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_Manager_LookupFace null-manager cache-handle errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.manager_lookup_face"
+        and row.case_id
+        in {
+            "ftcache.FTC_Manager_LookupFace.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_LookupFace.success_first_lookup_invokes_requester",
+            "ftcache.FTC_Manager_LookupFace.success_repeat_lookup_returns_cached_face",
+            "ftcache.FTC_Manager_LookupFace.success_face_has_no_required_current_size",
+        }
+    ):
+        return (
+            "FTC_Manager_LookupFace requester-count, cache identity class, "
+            "RemoveFaceID reload behavior, and public face fields validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.manager_lookup_size"
         and row.case_id
         == "ftcache.FTC_Manager_LookupSize.error_null_scaler_output_or_manager"
@@ -5439,6 +5454,23 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcache.FTC_Manager_LookupSize.error_requester_or_size_selection_failure"
     ):
         return "FTC_Manager_LookupSize requester/size-selection errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.manager_lookup_size"
+        and row.case_id
+        in {
+            "ftcache.FTC_Manager_LookupSize.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_Manager_LookupSize.success_pixel_size_scaler",
+            "ftcache.FTC_Manager_LookupSize.success_point_size_resolution_scaler",
+            "ftcache.FTC_Manager_LookupSize.success_repeat_lookup_cached_size",
+            "ftcache.FTC_ScalerRec.pixel_scaler_uses_integer_pixels",
+            "ftcache.FTC_ScalerRec.point_scaler_uses_26_6_points_and_resolution",
+        }
+    ):
+        return (
+            "FTC_Manager_LookupSize scaler metrics, requester-count, and "
+            "immediate repeat identity classification validate through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftcache.manager_new"
         and row.case_id == "ftcache.FTC_Manager_New.error_null_library"
