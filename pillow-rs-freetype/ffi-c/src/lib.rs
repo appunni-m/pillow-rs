@@ -1549,6 +1549,17 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_stream_info(face: FT_Face) -> Option<rust_ffi::FT_StreamRec> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let internal = unsafe { (*face.as_ptr()).internal };
+    let state = NonNull::new(internal.cast::<FaceState>())?;
+    // SAFETY: `state` is owned by the live face for the duration of this scalar copy.
+    let state = unsafe { state.as_ref() };
+    Some(state.inner.memory_stream_record())
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_face_available_sizes(face: FT_Face) -> Option<Vec<rust_ffi::FT_Bitmap_Size>> {
     let face = NonNull::new(face)?;
     // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
@@ -5050,6 +5061,7 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..rust_ffi::FT_FaceRecPublic::default()
     }
 }

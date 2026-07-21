@@ -13,13 +13,13 @@ route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pend
 Current post-merge baseline on `main`:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 355, 'real-null-validation': 9, 'real-parity': 4605}
-runtime_parity: passed=6876 failed=0 total=6876 covered_manifest_cases=3783
-runtime_cases: runnable=6876 pending=359
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 354, 'real-null-validation': 9, 'real-parity': 4606}
+runtime_parity: passed=6877 failed=0 total=6877 covered_manifest_cases=3784
+runtime_cases: runnable=6877 pending=358
 ```
 
 This baseline means the maintained same-input routes are green; it does not mean
-full public API parity is complete. The 355 route-pending rows remain outside
+full public API parity is complete. The 354 route-pending rows remain outside
 the real same-input Rust FFI / C ABI / WASM ABI comparison set.
 
 After the FTC manager/cache creation route batch:
@@ -87,6 +87,21 @@ After the FTC node lifecycle route:
 ```text
 route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 355, 'real-null-validation': 9, 'real-parity': 4605}
 ```
+
+After the FT_StreamRec memory-stream probe route:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 354, 'real-null-validation': 9, 'real-parity': 4606}
+runtime_parity: passed=6877 failed=0 total=6877 covered_manifest_cases=3784
+runtime_cases: runnable=6877 pending=358
+```
+
+The route compares `FT_New_Memory_Face` public memory stream state for
+`input/fonts/DejaVuSans.ttf`: base nullness, size, final stream position,
+cursor/limit nullness, and declared frame byte reads. Pinned FreeType 2.14.3
+leaves the stream position at the `cvt ` table offset (`2908`) after opening
+this TrueType face, so Rust now derives the public memory-stream position from
+the retained parsed table directory rather than defaulting it to zero.
 
 Verification command:
 
