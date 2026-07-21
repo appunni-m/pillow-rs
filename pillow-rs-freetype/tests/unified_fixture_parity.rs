@@ -2564,10 +2564,7 @@ impl BackendComparisonWorker {
             {
                 rust_color_paint_graph_case(case)
             }
-            "ftbzip2.stream_open_bzip2"
-                if case.case_id
-                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
-            {
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust))
             }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
@@ -2932,10 +2929,7 @@ impl BackendComparisonWorker {
             {
                 c_color_paint_graph_case(case)
             }
-            "ftbzip2.stream_open_bzip2"
-                if case.case_id
-                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
-            {
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
             }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
@@ -3298,10 +3292,7 @@ impl BackendComparisonWorker {
             {
                 wasm_color_paint_graph_case(case)
             }
-            "ftbzip2.stream_open_bzip2"
-                if case.case_id
-                    == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
-            {
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
             }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
@@ -25908,7 +25899,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         return Ok(args);
     }
-    if case.case_id == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" {
+    if is_bzip2_disabled_build_policy_case(case) {
         return Ok(vec!["--bzip2-stream-disabled-policy".to_string()]);
     }
     if case.case_id == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data" {
@@ -28595,6 +28586,15 @@ fn case_id_base(case_id: &str) -> &str {
     case_id.split_once('@').map_or(case_id, |(base, _)| base)
 }
 
+fn is_bzip2_disabled_build_policy_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
+            | "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation"
+            | "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation"
+    )
+}
+
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
     if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
         return gzip_uncompress_output(case, GzipBackend::Rust);
@@ -28602,7 +28602,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
     if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
         return gzip_stream_open_output(case, GzipStreamBackend::Rust);
     }
-    if case.case_id == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" {
+    if is_bzip2_disabled_build_policy_case(case) {
         return Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust));
     }
     // Handle null-param error tests: only for operations without explicit implementation.
@@ -29548,10 +29548,7 @@ fn catch_font_error(err: String) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
-        "ftbzip2.stream_open_bzip2"
-            if case.case_id
-                == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
-        {
+        "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
             Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
         }
         "sfnt.get_sfnt_table.record"
@@ -30585,10 +30582,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
-        "ftbzip2.stream_open_bzip2"
-            if case.case_id
-                == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
-        {
+        "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
             Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
         }
         "sfnt.get_sfnt_table.record"

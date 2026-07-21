@@ -5947,6 +5947,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Stream_OpenBzip2 disabled-bzip2 build policy validates Unimplemented_Feature through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftbzip2.stream_open_bzip2"
+        and row.case_id
+        in {
+            "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation",
+            "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation",
+        }
+    ):
+        return "FT_Stream_OpenBzip2 active disabled-bzip2 build precedence validates Unimplemented_Feature before enabled-build input validation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftgxval.classic_kern_validate"
         and row.case_id == "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments"
     ):

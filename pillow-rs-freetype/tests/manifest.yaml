@@ -2824,6 +2824,10 @@ subjects:
         description: Null target or source stream returns Invalid_Stream_Handle and preserves target/source state.
       - id: error_invalid_or_truncated_bzip2_header
         description: Invalid, empty, or truncated compressed data returns the same C error and avoids unnecessary wrapper allocation.
+      - id: disabled_build_precedes_null_validation
+        description: In the active pinned build without bzip2 support, FT_Stream_OpenBzip2 returns Unimplemented_Feature before null target/source validation.
+      - id: disabled_build_precedes_header_validation
+        description: In the active pinned build without bzip2 support, FT_Stream_OpenBzip2 returns Unimplemented_Feature before reading invalid, truncated, or empty bzip2 headers.
       - id: out_of_scope_uncompiled_bzip2_policy
         description: If this build intentionally excludes bzip2, the ABI-visible behavior must be documented as C-compatible Unimplemented_Feature rather than silently omitting the symbol.
     # needs-input: operation=FT_Stream_OpenBzip2 plus FT_Stream read/close through wrapper; fixture_asset=valid .pcf.bz2 or compressed byte fixture, raw expected decompressed bytes, invalid/truncated bzip2 byte fixtures; params valid source stream, null target, null source, corrupt header, truncated stream, uncompiled-bzip2 feature configuration; output shape=FT_Error, target FT_Stream fields memory/size/pos/base/read/close/descriptor classification, read byte chunks, and source close-count state; comparison=exact C oracle error, stream field classification, decompressed bytes, close ownership behavior, and Unimplemented_Feature policy when excluded.

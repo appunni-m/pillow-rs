@@ -1836,3 +1836,47 @@ Rows deliberately left pending in the same surface:
 - `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` and
   `ftglyph.FT_Glyph.caller_owned_lifetime` still require broader
   outline/bitmap/SVG and creation-path lifecycle matrices.
+
+### Split FT_Stream_OpenBzip2 disabled-build precedence rows: 2026-07-22
+
+Status: implemented as additive active-build split rows; the enabled-build
+stream validation rows remain pending.
+
+Scope:
+
+- Added
+  `ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation`.
+- Added
+  `ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation`.
+- Reused the maintained pinned-C `--bzip2-stream-disabled-policy` oracle and
+  the Rust FFI, thin C ABI, and WASM ABI `FT_Stream_OpenBzip2` routes to
+  compare the active build's public behavior: `build_features.bzip2=false`,
+  `FT_Err_Unimplemented_Feature`, and untouched target stream pointer classes.
+
+Why this is split instead of promoting the older enabled-build rows:
+
+- The pinned FreeType 2.14.3 oracle build currently excludes bzip2 support.
+  In this build, `FT_Stream_OpenBzip2` returns `Unimplemented_Feature` before
+  null target/source validation or invalid/truncated header reads.
+- The existing `error_null_stream_or_source` and
+  `error_invalid_or_truncated_bzip2_header` rows describe enabled-build
+  validation behavior. Promoting those rows with disabled-build output would be
+  false parity.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7244 → 7246, `real-parity` 4732 → 4734,
+  `pending-route` remains 237 because the enabled-build rows remain pending.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes`
+  passed 2/2 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source` remains pending for
+  bzip2-enabled null validation.
+- `ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header`
+  remains pending for bzip2-enabled header validation.
+- `success_open_valid_bzip2_stream`, `success_read_decompressed_bytes`, and
+  `lifecycle_close_does_not_close_source` still require a pure-Rust bzip2
+  stream wrapper or a maintained bzip2-enabled pinned oracle profile.
