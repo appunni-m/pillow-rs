@@ -3884,8 +3884,11 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftbdf.get_bdf_property":
         return (
             "FT_Get_BDF_Property has fixture rows but no maintained native oracle "
-            "command or Rust/C ABI/WASM route; classifying BDF property output as "
-            "real parity would be a green placeholder"
+            "command or Rust/C ABI/WASM route; the current BDF success fixture is "
+            "also contradicted by pinned FreeType because FAMILY_NAME returns "
+            "Invalid_Argument and PIXEL_SIZE returns INTEGER, not CARDINAL; "
+            "classifying BDF property output as real parity would be a green "
+            "placeholder"
         )
     if not operation_is_real_parity(row.operation):
         return None
