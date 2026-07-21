@@ -5062,6 +5062,22 @@ Verified progress:
   against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
 - No runtime Rust behavior change was needed for these rows.
 
+Correction on 2026-07-21:
+
+- The three color-layers-disabled rows below are no longer counted as
+  `real-parity`:
+  - `ftcolor.FT_Palette_Data_Get.error_color_layers_disabled`
+  - `ftcolor.FT_Palette_Select.error_color_layers_disabled`
+  - `ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled`
+- Focused runtime targets for `ftcolor.palette_data_get`,
+  `ftcolor.palette_select`, and `ftcolor.palette_set_foreground_color` all
+  report these rows as pending with `no font source for error case`.
+- Counting them as real exact-error parity was a green placeholder because the
+  manifest expects a C-observable color font and active disabled-color-layers
+  condition.  They now stay `pending-route` until a maintained same-input
+  COLR/CPAL disabled-layers route proves pinned C, Rust FFI, thin C ABI, and
+  WASM ABI output.
+
 Focused non-coverage result:
 
 ```bash
@@ -13868,6 +13884,12 @@ Current blocker families:
     `success_non_sfnt_noop`, and `default_foreground_color_policy`: foreground
     color mutation, non-SFNT no-op behavior, default policy, and later
     overrides.
+  - `FT_Palette_Data_Get.error_color_layers_disabled`,
+    `FT_Palette_Select.error_color_layers_disabled`, and
+    `FT_Palette_Set_Foreground_Color.error_color_layers_disabled`: disabled
+    color-layer error behavior with a C-observable color font and active
+    disabled-color-layers condition.  Null/error scalar fallbacks and missing
+    font-source routes do not prove these rows.
 - Layer iterator rows are split by exact obligation instead of sharing a broad
   layer-route blocker:
   - `FT_Get_Color_Glyph_Layer.layer_iteration_success`: successive COLR v0

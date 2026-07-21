@@ -1027,10 +1027,8 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcolor.FT_Get_Paint_Layers.error_invalid_iterator_or_paint_offset",
         "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy",
         "ftcolor.FT_Palette_Data_Get.error_null_face_or_output",
-        "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled",
         "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index",
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face",
-        "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled",
         "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.non_cid_or_null_face_errors_and_clears_output",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.error_non_cid_or_null_outputs",
@@ -1148,7 +1146,6 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftimage.FT_Raster_Funcs.render_callback_error_contract",
         "ftimage.FT_Raster_Params.invalid_param_errors",
         "ftincrem.FT_Incremental_FuncsRec.callback_error_propagates",
-        "ftcolor.FT_Palette_Select.error_color_layers_disabled",
         "ftlcdfil.FT_Library_SetLcdFilter.unimplemented_without_subpixel_filtering",
         "ftlcdfil.FT_Library_SetLcdFilterWeights.unimplemented_without_subpixel_filtering",
         "ftlcdfil.FT_Library_SetLcdGeometry.unimplemented_with_subpixel_filtering",
@@ -2362,6 +2359,18 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcolor."):
         return None
     exact_cases = {
+        "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled": (
+            "FT_Palette_Data_Get disabled-color-layers parity needs a "
+            "maintained same-input route with a C-observable color font and "
+            "active color-layer-disabled condition; the focused runtime "
+            "currently has no font source for this error case"
+        ),
+        "ftcolor.FT_Palette_Select.error_color_layers_disabled": (
+            "FT_Palette_Select disabled-color-layers parity needs a "
+            "maintained same-input route with a C-observable color font and "
+            "active color-layer-disabled condition; the focused runtime "
+            "currently has no font source for this error case"
+        ),
         "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
             "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
             "route proving foreground color mutation affects subsequent COLR "
@@ -2371,6 +2380,12 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Palette_Set_Foreground_Color default policy parity needs a "
             "maintained route proving default foreground color and later "
             "overrides match pinned C"
+        ),
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled": (
+            "FT_Palette_Set_Foreground_Color disabled-color-layers parity "
+            "needs a maintained same-input route with a C-observable color "
+            "font and active color-layer-disabled condition; the focused "
+            "runtime currently has no font source for this error case"
         ),
     }
     return exact_cases.get(row.case_id)
@@ -4701,10 +4716,6 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c",
         ): "FT_Property_Get/Set increase-x-height invalid-face error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
-            "ftcolor.palette_select",
-            "ftcolor.FT_Palette_Select.error_color_layers_disabled",
-        ): "FT_Palette_Select color-layers-disabled error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
-        (
             "allocation_failure_harness.array_growth",
             "fterrdef.FT_Err_Array_Too_Large.allocator_growth_overflow_returns_error",
         ): "allocator array-growth overflow error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -5257,11 +5268,6 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Palette_Data_Get null-face/output rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_data_get"
-        and row.case_id == "ftcolor.FT_Palette_Data_Get.error_color_layers_disabled"
-    ):
-        return "FT_Palette_Data_Get disabled-color-layers rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftcolor.palette_data_get"
         and row.case_id == "ftcolor.FT_Palette_Data_Get.success_sfnt_cpal_palette_data"
     ):
         return "FT_Palette_Data_Get CPAL palette counts and pointer nullness validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -5309,12 +5315,6 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face"
     ):
         return "FT_Palette_Set_Foreground_Color null-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
-    if (
-        row.operation == "ftcolor.palette_set_foreground_color"
-        and row.case_id
-        == "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled"
-    ):
-        return "FT_Palette_Set_Foreground_Color disabled-color-layers errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_set_foreground_color"
         and row.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.success_non_sfnt_noop"
