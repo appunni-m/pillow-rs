@@ -4,12 +4,12 @@ Current objective: exact same-input parity with pinned C FreeType for Rust FFI,
 thin C ABI, and WASM ABI. Do not count coverage-only tests, generic fallback,
 fixture substitutions, or green placeholders as parity.
 
-Current live baseline on `main` after the Type1/CFF OpenType missing-service split:
+Current live baseline on `main` after the bitmap-glyph ownership route batch:
 
 ```text
-route audit concrete_cases=7260 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4748}
-pending_route_rows=237
-duplicate_operation_input_buckets=42
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4760}
+pending_route_rows=227
+duplicate_operation_input_buckets=41
 ```
 
 This is the authoritative starting point for the next batch. The pending rows
@@ -25,8 +25,35 @@ High-leverage duplicate input buckets from
 | 9 | `ftgxval.truetype_gx_validate` | Keep pending. Requires C-openable GX/AAT fixtures plus selected table output/free routing. |
 | 9 | `ftotval.open_type_validate` success/selected tables | Keep pending. Required OpenType validator fixtures are absent and the pinned oracle currently reports validator service unavailable before selected table output can be observed. |
 | 7 | `ftotval.open_type_validate` malformed/partial cleanup | Keep pending. Required malformed fixtures are absent; returning only the service-missing error would not prove malformed table parity. |
-| 7 | `ftcid.get_cid_from_glyph_index` | Keep pending. Requires CID-keyed Type1/CFF and SFNT-wrapped CID fixtures with exact glyph-index-to-CID output. Non-CID error routing does not prove success rows. |
+| 4 | `ftcid.get_cid_from_glyph_index` | Keep pending. Requires CID-keyed Type1/CFF and SFNT-wrapped CID fixtures with exact glyph-index-to-CID output. Non-CID error routing does not prove success rows. |
 | 6 | `ftstroke.export_border` | Keep pending. Requires real stroker path/border geometry; an unparsed stroker no-op only proves the existing invalid-input row. |
+
+Current-turn candidate decisions:
+
+- `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` stays pending even
+  though concrete outline and bitmap ownership sub-routes are now real.  The
+  broad row still declares optional SVG glyphs, malformed glyph/class facades,
+  allocation-failure facades, and multiple creation paths.  Re-adding the same
+  bitmap route under the `FT_Done_Glyph` subject would create duplicate
+  line-mapping evidence rather than new parity.
+- `ftimage.FT_Pos.coordinate_outputs_use_ft_pos` stays pending.  The declared
+  synthetic outline asset `outlines/synthetic/negative-and-large-coordinates.json`
+  is absent, and no maintained `coordinate_endpoint_parity` runner currently
+  compares the declared `FT_Load_Glyph` outline points, `FT_Outline_Get_CBox`,
+  `FT_Vector_Transform`, and `FT_Outline_Decompose` outputs across pinned C,
+  Rust FFI, C ABI, and WASM ABI.
+- `freetype.FT_Open_Args.open_face_consumes_args_like_c` stays pending.  The
+  current maintained routes cover specific memory/name-option/ignored-param and
+  external-stream cases, but the broad row still declares pathname, driver,
+  params, negative face-index, stream, multiple-source-flag, and no-source-flag
+  behavior as one contract.  Promoting it without explicit variants would
+  overclaim `FT_Open_Face` dispatch parity.
+- `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  stays pending.  Focused verification showed `runnable=0 pending=1`; the
+  classifier records that pinned FreeType 2.14.3 clamps the active TrueType
+  axis count but reads default values past the axis array for excess outputs,
+  while Type1 MM zero-fills.  Safe Rust zero-fill is not exact same-input C
+  behavior for the current TrueType variable fixture.
 
 Rejected same-turn promotions:
 
