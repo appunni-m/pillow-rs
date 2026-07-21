@@ -30,6 +30,7 @@ pub type FT_UShort = u16;
 pub type FT_Byte = u8;
 pub type FT_Bytes = *const FT_Byte;
 pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_ClipBox = rust_ffi::FT_ClipBox;
 pub type FT_ColorLine = rust_ffi::FT_ColorLine;
 pub type FT_ColorStop = rust_ffi::FT_ColorStop;
 pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
@@ -1086,6 +1087,19 @@ pub extern "C" fn fontdone_wasm_get_color_glyph_layer(
         unsafe { aglyph_index.as_mut() },
         unsafe { acolor_index.as_mut() },
         unsafe { iterator.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_clipbox(
+    handle: usize,
+    base_glyph: FT_UInt,
+    clip_box: *mut FT_ClipBox,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_ClipBox(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        unsafe { clip_box.as_mut() },
     )
 }
 

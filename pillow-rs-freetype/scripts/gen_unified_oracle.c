@@ -14105,6 +14105,108 @@ static int emit_color_glyph_layer_case(int argc, char** argv) {
     return 0;
 }
 
+static FT_ClipBox sentinel_clip_box(void) {
+    FT_ClipBox box;
+    box.bottom_left.x = -0x1111;
+    box.bottom_left.y = -0x2222;
+    box.top_left.x = -0x3333;
+    box.top_left.y = -0x4444;
+    box.top_right.x = 0x5555;
+    box.top_right.y = 0x6666;
+    box.bottom_right.x = 0x7777;
+    box.bottom_right.y = 0x8888;
+    return box;
+}
+
+static int clip_box_equal(FT_ClipBox a, FT_ClipBox b) {
+    return a.bottom_left.x == b.bottom_left.x &&
+           a.bottom_left.y == b.bottom_left.y &&
+           a.top_left.x == b.top_left.x &&
+           a.top_left.y == b.top_left.y &&
+           a.top_right.x == b.top_right.x &&
+           a.top_right.y == b.top_right.y &&
+           a.bottom_right.x == b.bottom_right.x &&
+           a.bottom_right.y == b.bottom_right.y;
+}
+
+static void print_clip_vector_json(FT_Vector vector) {
+    printf("{\"x\":%ld,\"y\":%ld}", vector.x, vector.y);
+}
+
+static void print_clip_box_json(FT_ClipBox clip_box) {
+    printf("{\"bottom_left\":");
+    print_clip_vector_json(clip_box.bottom_left);
+    printf(",\"top_left\":");
+    print_clip_vector_json(clip_box.top_left);
+    printf(",\"top_right\":");
+    print_clip_vector_json(clip_box.top_right);
+    printf(",\"bottom_right\":");
+    print_clip_vector_json(clip_box.bottom_right);
+    printf("}");
+}
+
+static int emit_color_glyph_clipbox_case(int argc, char** argv) {
+    if (argc != 7 && argc != 15) {
+        fprintf(stderr, "--color-glyph-clipbox-case requires CASE SOURCE_KIND SOURCE FACE_INDEX BASE_GLYPH [PX PY XX XY YX YY DX DY]\n");
+        return 2;
+    }
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt base_glyph = (FT_UInt)strtoul(argv[6], NULL, 10);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"setup\":{");
+    if (argc == 15) {
+        FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+        FT_Error size_error = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+        FT_Matrix matrix;
+        matrix.xx = (FT_Fixed)strtol(argv[9], NULL, 10);
+        matrix.xy = (FT_Fixed)strtol(argv[10], NULL, 10);
+        matrix.yx = (FT_Fixed)strtol(argv[11], NULL, 10);
+        matrix.yy = (FT_Fixed)strtol(argv[12], NULL, 10);
+        FT_Vector delta;
+        delta.x = (FT_Pos)strtol(argv[13], NULL, 10);
+        delta.y = (FT_Pos)strtol(argv[14], NULL, 10);
+        FT_Set_Transform(face.face, &matrix, &delta);
+        printf("\"pixel_size\":{\"x\":%u,\"y\":%u,\"error\":%d},",
+               pixel_width,
+               pixel_height,
+               size_error);
+        printf("\"set_transform\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":",
+               (long)matrix.xx,
+               (long)matrix.xy,
+               (long)matrix.yx,
+               (long)matrix.yy);
+        print_clip_vector_json(delta);
+        printf("}");
+    }
+    printf("}");
+
+    FT_ClipBox before = sentinel_clip_box();
+    FT_ClipBox clip_box = before;
+    FT_Bool result = FT_Get_Color_Glyph_ClipBox(face.face, base_glyph, &clip_box);
+    printf(",\"return\":%u", result);
+    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output")) {
+        printf(",\"clip_box_before_after\":{\"before\":");
+        print_clip_box_json(before);
+        printf(",\"after\":");
+        print_clip_box_json(clip_box);
+        printf(",\"preserved\":%s}", clip_box_equal(before, clip_box) ? "true" : "false");
+    } else {
+        printf(",\"clip_box\":");
+        print_clip_box_json(clip_box);
+    }
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_opaque_paint_json(FT_OpaquePaint opaque) {
     printf("{\"p_class\":\"%s\",\"insert_root_transform\":%u}",
            opaque.p ? "nonnull" : "null",
@@ -23909,6 +24011,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--color-glyph-layer-case")) {
         return emit_color_glyph_layer_case(argc, argv);
+    }
+    if ((argc == 7 || argc == 15) && streq(argv[1], "--color-glyph-clipbox-case")) {
+        return emit_color_glyph_clipbox_case(argc, argv);
     }
     if (argc == 6 && streq(argv[1], "--color-paint-graph-case")) {
         return emit_color_paint_graph_case(argc, argv);

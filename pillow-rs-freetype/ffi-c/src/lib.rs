@@ -89,6 +89,7 @@ pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_ClipBox = rust_ffi::FT_ClipBox;
 pub type FT_PaintTransform = rust_ffi::FT_PaintTransform;
 pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
@@ -1105,6 +1106,19 @@ pub extern "C" fn FT_Get_Color_Glyph_Layer(
         unsafe { aglyph_index.as_mut() },
         unsafe { acolor_index.as_mut() },
         unsafe { iterator.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Color_Glyph_ClipBox(
+    face: FT_Face,
+    base_glyph: FT_UInt,
+    clip_box: *mut FT_ClipBox,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_ClipBox(
+        face_state(face).map(|state| &state.inner),
+        base_glyph,
+        unsafe { clip_box.as_mut() },
     )
 }
 

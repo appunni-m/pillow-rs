@@ -604,6 +604,7 @@ FT_Error FT_Palette_Data_Get(FT_Face face, FT_Palette_Data* apalette_data);
 FT_Error FT_Palette_Select(FT_Face face, FT_UShort palette_index, FT_Color** apalette);
 FT_Error FT_Palette_Set_Foreground_Color(FT_Face face, FT_Color foreground_color);
 FT_Bool FT_Get_Color_Glyph_Layer(FT_Face face, FT_UInt base_glyph, FT_UInt* aglyph_index, FT_UInt* acolor_index, FT_LayerIterator* iterator);
+FT_Bool FT_Get_Color_Glyph_ClipBox(FT_Face face, FT_UInt base_glyph, FT_ClipBox* clip_box);
 FT_Bool FT_Get_Color_Glyph_Paint(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform, FT_OpaquePaint* paint);
 FT_Bool FT_Get_Paint(FT_Face face, FT_OpaquePaint opaque_paint, FT_COLR_Paint* paint);
 FT_Bool FT_Get_Paint_Layers(FT_Face face, FT_LayerIterator* layer_iterator, FT_OpaquePaint* paint);

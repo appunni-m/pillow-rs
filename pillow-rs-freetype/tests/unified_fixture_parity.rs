@@ -2536,6 +2536,9 @@ impl BackendComparisonWorker {
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 rust_color_glyph_layer_case(case)
             }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                rust_color_glyph_clipbox_case(case)
+            }
             operation
                 if operation.starts_with("ftcolor.")
                     && color_paint_success_route_supported(case) =>
@@ -2901,6 +2904,9 @@ impl BackendComparisonWorker {
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 c_color_glyph_layer_case(case)
             }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                c_color_glyph_clipbox_case(case)
+            }
             operation
                 if operation.starts_with("ftcolor.")
                     && color_paint_success_route_supported(case) =>
@@ -3263,6 +3269,9 @@ impl BackendComparisonWorker {
             }
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 wasm_color_glyph_layer_case(case)
+            }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                wasm_color_glyph_clipbox_case(case)
             }
             operation
                 if operation.starts_with("ftcolor.")
@@ -11006,6 +11015,259 @@ fn wasm_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
     let output = color_glyph_layer_output_for_open_face(
         case,
         ColorGlyphLayerBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    output
+}
+
+#[derive(Clone, Copy)]
+enum ColorGlyphClipBoxBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_glyph_clipbox_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s37"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output"
+    )
+}
+
+fn color_glyph_clipbox_base_glyph(case: &InputCase) -> Result<FT_UInt, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values"
+        | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12"
+        | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s37" => Ok(36),
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output" => Ok(37),
+        other => Err(format!("unsupported color glyph clipbox case {other}")),
+    }
+}
+
+fn sentinel_clip_box() -> FT_ClipBox {
+    FT_ClipBox {
+        bottom_left: FT_Vector {
+            x: -0x1111,
+            y: -0x2222,
+        },
+        top_left: FT_Vector {
+            x: -0x3333,
+            y: -0x4444,
+        },
+        top_right: FT_Vector {
+            x: 0x5555,
+            y: 0x6666,
+        },
+        bottom_right: FT_Vector {
+            x: 0x7777,
+            y: 0x8888,
+        },
+    }
+}
+
+fn ft_vector_json(vector: FT_Vector) -> Value {
+    json!({
+        "x": vector.x,
+        "y": vector.y,
+    })
+}
+
+fn clip_box_json(clip_box: FT_ClipBox) -> Value {
+    json!({
+        "bottom_left": ft_vector_json(clip_box.bottom_left),
+        "top_left": ft_vector_json(clip_box.top_left),
+        "top_right": ft_vector_json(clip_box.top_right),
+        "bottom_right": ft_vector_json(clip_box.bottom_right),
+    })
+}
+
+fn color_glyph_clipbox_setup(
+    case: &InputCase,
+    backend: ColorGlyphClipBoxBackend,
+    rust_face: &mut Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<Value, String> {
+    let mut output = json!({});
+    if case.inputs.params.get("pixel_size").is_some() {
+        let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+        let error = match backend {
+            ColorGlyphClipBoxBackend::Rust => {
+                let Some(face) = rust_face.as_deref_mut() else {
+                    return Err("Rust clipbox setup missing face".to_string());
+                };
+                FT_Set_Pixel_Sizes(face, pixel_width, pixel_height)
+            }
+            ColorGlyphClipBoxBackend::CAbi => {
+                c_abi::FT_Set_Pixel_Sizes(c_face, pixel_width, pixel_height)
+            }
+            ColorGlyphClipBoxBackend::Wasm => {
+                wasm_abi::fontdone_wasm_set_pixel_sizes(wasm_handle, pixel_width, pixel_height)
+            }
+        };
+        output["pixel_size"] = json!({
+            "x": pixel_width,
+            "y": pixel_height,
+            "error": error,
+        });
+    }
+    if let Some(transform) = case.inputs.params.get("set_transform") {
+        let (xx, xy, yx, yy, default_dx, default_dy) = set_transform_matrix_param(transform)?;
+        let (dx, dy) = if let Some(delta) = transform.get("delta_26_6") {
+            let dx = delta
+                .get("x")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "delta_26_6.x missing".to_string())?;
+            let dy = delta
+                .get("y")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "delta_26_6.y missing".to_string())?;
+            (
+                i32::try_from(dx).map_err(|err| format!("delta_26_6.x: {err}"))?,
+                i32::try_from(dy).map_err(|err| format!("delta_26_6.y: {err}"))?,
+            )
+        } else {
+            (default_dx, default_dy)
+        };
+        let matrix = FT_Matrix {
+            xx: xx.into(),
+            xy: xy.into(),
+            yx: yx.into(),
+            yy: yy.into(),
+        };
+        let delta = FT_Vector {
+            x: dx.into(),
+            y: dy.into(),
+        };
+        match backend {
+            ColorGlyphClipBoxBackend::Rust => {
+                let Some(face) = rust_face.as_deref_mut() else {
+                    return Err("Rust clipbox transform missing face".to_string());
+                };
+                FT_Set_Transform(Some(face), Some(&matrix), Some(&delta));
+            }
+            ColorGlyphClipBoxBackend::CAbi => {
+                let c_matrix = c_abi::FT_Matrix {
+                    xx: xx.into(),
+                    xy: xy.into(),
+                    yx: yx.into(),
+                    yy: yy.into(),
+                };
+                let c_delta = c_abi::FT_Vector {
+                    x: dx.into(),
+                    y: dy.into(),
+                };
+                c_abi::FT_Set_Transform(c_face, &c_matrix, &c_delta);
+            }
+            ColorGlyphClipBoxBackend::Wasm => {
+                wasm_abi::fontdone_wasm_set_transform(wasm_handle, &matrix, &delta);
+            }
+        }
+        output["set_transform"] = json!({
+            "matrix": {"xx": xx, "xy": xy, "yx": yx, "yy": yy},
+            "delta": ft_vector_json(delta),
+        });
+    }
+    Ok(output)
+}
+
+fn color_glyph_clipbox_call(
+    backend: ColorGlyphClipBoxBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    clip_box: &mut FT_ClipBox,
+) -> FT_Bool {
+    match backend {
+        ColorGlyphClipBoxBackend::Rust => {
+            FT_Get_Color_Glyph_ClipBox(rust_face, base_glyph, Some(clip_box))
+        }
+        ColorGlyphClipBoxBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_ClipBox(c_face, base_glyph, clip_box)
+        }
+        ColorGlyphClipBoxBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_color_glyph_clipbox(wasm_handle, base_glyph, clip_box)
+        }
+    }
+}
+
+fn color_glyph_clipbox_output_for_open_face(
+    case: &InputCase,
+    backend: ColorGlyphClipBoxBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let setup = color_glyph_clipbox_setup(case, backend, &mut rust_face, c_face, wasm_handle)?;
+    let base_glyph = color_glyph_clipbox_base_glyph(case)?;
+    let before = sentinel_clip_box();
+    let mut clip_box = before;
+    let result = color_glyph_clipbox_call(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        base_glyph,
+        &mut clip_box,
+    );
+    if case.case_id
+        == "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output"
+    {
+        Ok(ok(json!({
+            "setup": setup,
+            "return": result,
+            "clip_box_before_after": {
+                "before": clip_box_json(before),
+                "after": clip_box_json(clip_box),
+                "preserved": before == clip_box,
+            },
+        })))
+    } else {
+        Ok(ok(json!({
+            "setup": setup,
+            "return": result,
+            "clip_box": clip_box_json(clip_box),
+        })))
+    }
+}
+
+fn rust_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::Rust,
+        Some(&mut face),
+        ptr::null_mut(),
+        0,
+    )
+}
+
+fn c_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output = color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::CAbi,
+        None,
+        face,
+        0,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::Wasm,
         None,
         ptr::null_mut(),
         handle,
@@ -26182,6 +26444,47 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(color_glyph_layer_base_glyph(case)?.to_string());
+            Ok(args)
+        }
+        "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+            let mut args = vec![
+                "--color-glyph-clipbox-case".to_string(),
+                case.case_id.clone(),
+            ];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(color_glyph_clipbox_base_glyph(case)?.to_string());
+            if let Some(transform) = params.get("set_transform") {
+                let (pixel_width, pixel_height) = pixel_size_param(params)?;
+                let (xx, xy, yx, yy, default_dx, default_dy) =
+                    set_transform_matrix_param(transform)?;
+                let (dx, dy) = if let Some(delta) = transform.get("delta_26_6") {
+                    let dx = delta
+                        .get("x")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| "delta_26_6.x missing".to_string())?;
+                    let dy = delta
+                        .get("y")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| "delta_26_6.y missing".to_string())?;
+                    (
+                        i32::try_from(dx).map_err(|err| format!("delta_26_6.x: {err}"))?,
+                        i32::try_from(dy).map_err(|err| format!("delta_26_6.y: {err}"))?,
+                    )
+                } else {
+                    (default_dx, default_dy)
+                };
+                args.extend([
+                    pixel_width.to_string(),
+                    pixel_height.to_string(),
+                    xx.to_string(),
+                    xy.to_string(),
+                    yx.to_string(),
+                    yy.to_string(),
+                    dx.to_string(),
+                    dy.to_string(),
+                ]);
+            }
             Ok(args)
         }
         operation

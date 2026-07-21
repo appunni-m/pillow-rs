@@ -154,14 +154,12 @@ Inspected blockers:
   pinned C cannot load successfully after the design-coordinate mutation. It
   must be split into an exact-error row plus a separate C-loadable success row,
   or fixed to name a C-loadable glyph.
-- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` and `ftcolor.FT_ClipBox.color_glyph_clipbox_values`
-  remain pending. The declared COLR v1 clipbox fixtures such as
-  `fonts/color/colr-v1-clipbox-format1-format2.ttf`,
-  `fonts/color/colr-v1-no-clipbox-control.ttf`, and
-  `fonts/color/colr-v1-all-paints.ttf` are not present in the maintained fixture
-  tree, and there is no current Rust/ABI `FT_Get_Color_Glyph_ClipBox` runtime
-  export. The next real fix must add compact COLR v1 clipbox fixtures and a pure
-  Rust clipbox implementation before adding C/WASM ABI route glue.
+- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` and
+  `ftcolor.FT_ClipBox.color_glyph_clipbox_values` now have maintained same-input
+  routes for COLRv1 ClipList format 1 success, active size/transform handling,
+  public `FT_ClipBox` corner copying, and no-clipbox false-return output
+  preservation. Remaining clipbox expansion should add a dedicated variable
+  ClipBox format 2 expected-output row before crediting variation-delta parity.
 - `ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`
   and `ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy`
   remain pending for the same COLR v1 foreground-paint fixture gap. The CPAL
