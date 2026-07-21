@@ -2880,9 +2880,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Get_MM_Var then FT_Done_MM_Var rows"
         ),
         "ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled": (
-            "FT_Get_Var_Design_Coordinates excess-output parity needs a "
-            "maintained MM route proving coordinates beyond the axis count are "
-            "zero-filled exactly like pinned C"
+            "FT_Get_Var_Design_Coordinates excess-output fixture is not a "
+            "sound same-input parity row for the current TrueType variable "
+            "font: pinned FreeType 2.14.3 `TT_Get_Var_Design` clamps the active "
+            "axis count but then reads default values past the axis array for "
+            "excess outputs, while Type1 MM zero-fills; promoting Rust's safe "
+            "zero-fill or modeling pinned-C adjacent memory would be a green "
+            "placeholder"
         ),
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend": (
             "FT_Set_MM_Blend_Coordinates output parity needs a maintained MM "

@@ -1,5 +1,56 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FT_Get_Var_Design_Coordinates excess output row
+
+Status: audited on 2026-07-21; remains pending. Do not promote this row as a
+safe zero-fill parity case for the current TrueType variable fixture.
+
+Still-pending row:
+
+- `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+
+Finding:
+
+- The manifest states that excess design-coordinate outputs beyond the axis
+  count are zero-filled.
+- Pinned FreeType 2.14.3 does not behave uniformly across variation formats:
+  - Type1 MM `src/type1/t1load.c:T1_Get_Var_Design` explicitly zero-fills
+    excess output entries after `blend->num_axis`.
+  - TrueType/OpenType variation `src/truetype/ttgxvar.c:TT_Get_Var_Design`
+    clamps the active copy count to `blend->num_axis`, but then continues a
+    second loop that writes `a->def` for excess entries while `a` has already
+    advanced past the axis array.
+- On the maintained single-axis TrueType fixture with `num_coords=4` and
+  nonzero sentinel prefill, the pinned C oracle returned adjacent-memory
+  values for excess coordinates instead of zeros. Rust's safe route returned
+  zeros. Matching C exactly here would require modeling an out-of-bounds
+  adjacent-memory read, which is not a sound public behavior to clone.
+
+Required follow-up:
+
+1. Keep the current TrueType excess-output row pending; classifying either
+   Rust zero-fill or pinned-C adjacent memory as real same-input parity would
+   be a green placeholder.
+2. If this contract must be covered, split it into format-specific rows:
+   Type1 MM excess-output zero-fill can be real parity; TrueType excess-output
+   behavior needs an explicit pinned-C bug/undefined-adjacent-memory note rather
+   than a zero-fill expectation.
+3. Do not edit fixture expectations to make the current TrueType row pass.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_design_coordinates
+```
+
+The row failed when temporarily routed:
+
+```text
+runtime_parity: passed=4 failed=1 total=5
+rust ffi: ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled
+field=/coords/1 expected=105553160536256 actual=0
+```
+
 ### Issue Set Current: FT_Get_BDF_Property BDF property rowset
 
 Status: completed on 2026-07-21 for the maintained BDF success-row fixture.
