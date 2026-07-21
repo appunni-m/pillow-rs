@@ -17630,6 +17630,80 @@ where
     Ok(json!({ "lookups": rows }))
 }
 
+fn module_interface_service_names(params: &Value) -> Result<Vec<String>, String> {
+    array_param(params, "service_names")?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| format!("service name must be a string, got {value}"))
+        })
+        .collect()
+}
+
+fn module_interface_service_names_arg(params: &Value) -> Result<String, String> {
+    Ok(module_interface_service_names(params)?.join(","))
+}
+
+fn module_interface_output<P, I, R>(
+    params: &Value,
+    mut present_for: P,
+    mut interface_for: I,
+    mut requester_for: R,
+) -> Result<Value, String>
+where
+    P: FnMut(Option<&str>) -> bool,
+    I: FnMut(Option<&str>) -> bool,
+    R: FnMut(Option<&str>, &str) -> bool,
+{
+    let service_names = module_interface_service_names(params)?;
+    let modules = module_lookup_names(params)?
+        .into_iter()
+        .map(|module| {
+            let module_name = if module == "null" {
+                None
+            } else {
+                Some(module.as_str())
+            };
+            let requester_result_class = service_names
+                .iter()
+                .map(|service| {
+                    (
+                        service.clone(),
+                        if requester_for(module_name, service) {
+                            json!("service_pointer")
+                        } else {
+                            json!("null")
+                        },
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>();
+            let callback_invocations = service_names
+                .iter()
+                .map(|service| {
+                    json!({
+                        "typedef": "FT_Module_Requester",
+                        "name": service,
+                        "status_or_nullness": requester_result_class
+                            .get(service)
+                            .cloned()
+                            .unwrap_or_else(|| json!("null")),
+                    })
+                })
+                .collect::<Vec<_>>();
+            json!({
+                "module": module,
+                "module_found": present_for(module_name),
+                "module_interface_nullness": !interface_for(module_name),
+                "requester_result_class": requester_result_class,
+                "callback_invocations": callback_invocations,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({ "modules": modules }))
+}
+
 fn rust_get_module(case: &InputCase) -> Result<RunOutput, String> {
     let library = if module_lookup_library_present(&case.inputs.params) != 0 {
         Some(FT_Init_FreeType())
@@ -17663,6 +17737,58 @@ fn wasm_get_module(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(module_lookup_output(&case.inputs.params, |name| {
         name.is_some_and(|name| wasm_abi::abi_support_default_module_present(library_present, name))
     })?))
+}
+
+fn rust_module_interface_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let library = if module_lookup_library_present(&case.inputs.params) != 0 {
+        Some(FT_Init_FreeType())
+    } else {
+        None
+    };
+    Ok(ok(module_interface_output(
+        &case.inputs.params,
+        |name| name.is_some_and(|name| FT_Library_Has_Module(library.as_ref(), name)),
+        |name| !FT_Get_Module_Interface(library.as_ref(), name).is_null(),
+        |name, service| FT_Module_Requester_Service_Available(library.as_ref(), name, service),
+    )?))
+}
+
+fn c_module_interface_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    if module_lookup_library_present(&case.inputs.params) != 0 {
+        let err = c_abi::FT_Init_FreeType(&mut library);
+        if err != FT_Err_Ok {
+            return Ok(error(err));
+        }
+    }
+    let output = module_interface_output(
+        &case.inputs.params,
+        |name| name.is_some_and(|name| c_abi::abi_support_library_has_module(library, name)),
+        |name| c_abi::abi_support_module_interface_present(library, name),
+        |name, service| {
+            c_abi::abi_support_module_requester_service_available(library, name, service)
+        },
+    )?;
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(ok(output))
+}
+
+fn wasm_module_interface_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let library_present = module_lookup_library_present(&case.inputs.params);
+    Ok(ok(module_interface_output(
+        &case.inputs.params,
+        |name| {
+            name.is_some_and(|name| {
+                wasm_abi::abi_support_default_module_present(library_present, name)
+            })
+        },
+        |name| wasm_abi::abi_support_module_interface_present(library_present, name),
+        |name, service| {
+            wasm_abi::abi_support_module_requester_service_available(library_present, name, service)
+        },
+    )?))
 }
 
 fn library_lifecycle_action(case: &InputCase) -> Result<i32, String> {
@@ -21665,6 +21791,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             module_lookup_library_present(params).to_string(),
             module_lookup_names_arg(params)?,
         ]),
+        "freetype.module_interface_probe" => Ok(vec![
+            "--module-interface-probe".to_string(),
+            module_lookup_library_present(params).to_string(),
+            module_lookup_names_arg(params)?,
+            module_interface_service_names_arg(params)?,
+        ]),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library" => {
@@ -22969,6 +23101,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
         "ftmodapi.get_module" => rust_get_module(case),
+        "freetype.module_interface_probe" => rust_module_interface_probe(case),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
@@ -23900,6 +24033,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
         "ftmodapi.get_module" => c_get_module(case),
+        "freetype.module_interface_probe" => c_module_interface_probe(case),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
@@ -24744,6 +24878,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
         "ftmodapi.get_module" => wasm_get_module(case),
+        "freetype.module_interface_probe" => wasm_module_interface_probe(case),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"

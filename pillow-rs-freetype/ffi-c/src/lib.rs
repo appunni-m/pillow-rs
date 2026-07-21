@@ -87,6 +87,7 @@ pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 pub type FT_Pointer = *mut c_void;
+pub type FT_Module_Interface = FT_Pointer;
 pub type FT_Generic_Finalizer = FT_Pointer;
 pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
@@ -1972,6 +1973,24 @@ fn property_name_arg(ptr: *const FT_String) -> Option<String> {
     // SAFETY: FreeType string arguments are nul-terminated `const char*`
     // values owned by the caller for the duration of the call.
     unsafe { CStr::from_ptr(ptr).to_str().ok().map(ToOwned::to_owned) }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_module_interface_present(library: FT_Library, module_name: Option<&str>) -> bool {
+    !rust_ffi::FT_Get_Module_Interface(library_ref(library), module_name).is_null()
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_module_requester_service_available(
+    library: FT_Library,
+    module_name: Option<&str>,
+    service_name: &str,
+) -> bool {
+    rust_ffi::FT_Module_Requester_Service_Available(
+        library_ref(library),
+        module_name,
+        service_name,
+    )
 }
 
 fn is_increase_x_height_property(module_name: Option<&str>, property_name: Option<&str>) -> bool {
