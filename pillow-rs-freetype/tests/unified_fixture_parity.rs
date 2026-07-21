@@ -18294,6 +18294,14 @@ fn c_ftmm_set_var_design_metrics_output(case: &InputCase) -> Result<RunOutput, S
     output
 }
 
+fn is_ftmm_set_mm_design_glyph_output_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design"
+            | "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph"
+    )
+}
+
 fn c_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
     let params = &case.inputs.params;
@@ -26155,7 +26163,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(render_mode_param(params)?.to_string());
         return Ok(args);
     }
-    if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" {
+    if is_ftmm_set_mm_design_glyph_output_case(case) {
         let set_coords = ftmm_long_coords_from_params(params)?;
         let mut args = vec!["--ftmm-set-mm-design-glyph-output".to_string()];
         push_font_source(case, &mut args)?;
@@ -29207,9 +29215,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             rust_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => rust_ftmm_set_mm_design_coordinates(case),
@@ -30304,9 +30310,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             c_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => c_ftmm_set_mm_design_coordinates(case),
@@ -31291,9 +31295,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             wasm_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => wasm_ftmm_set_mm_design_coordinates(case),

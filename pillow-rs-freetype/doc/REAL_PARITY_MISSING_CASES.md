@@ -251,11 +251,12 @@ runtime_parity: passed=1 failed=0 total=1
 route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 399, 'real-null-validation': 9, 'real-parity': 4561}
 ```
 
-### Issue Set Current: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
+### Issue Set Result: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
 
-Status: audited on 2026-07-21; remains pending. A maintained glyph-output
-route was added for diagnosis, but the current fixture row is not a pinned-C
-success case.
+Status: partially resolved on 2026-07-22. The original glyph 42 fixture row
+remains pending because pinned C returns `Invalid_Glyph_Index`; a separate
+same-input success row now uses glyph 1, which pinned C loads and renders
+successfully after `FT_Set_MM_Design_Coordinates`.
 
 Still-pending row:
 
@@ -279,29 +280,46 @@ Maintained route state:
 - The unified oracle, Rust FFI, thin C ABI, and WASM harness now have a
   Type1-MM `FT_Set_MM_Design_Coordinates` glyph-output route analogous to the
   already-routed OpenType `FT_Set_Var_Design_Coordinates` glyph-output route.
-- The route must remain pending until the input names a glyph that pinned C can
-  load and render successfully, or the fixture is explicitly reclassified as an
-  exact error row.
+- `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph`
+  uses glyph 1 from the maintained Adobe MM fixture. Pinned FreeType 2.14.3
+  returns OK and produces exact metrics/bitmap output; Rust FFI, thin C ABI,
+  and WASM now match that output.
+- The original glyph 42 row remains pending and visible. It should either stay
+  pending as an invalid success input or be split later into an exact-error row.
+
+Implementation finding:
+
+- First divergence: after successful `FT_Set_Pixel_Sizes` and
+  `FT_Set_MM_Design_Coordinates`, pinned C `FT_Load_Glyph(face, 1,
+  FT_LOAD_DEFAULT)` decoded the Type1 charstring and rendered a bitmap; Rust
+  previously routed Type1 faces through the SFNT `glyf` loader and returned
+  error 6.
+- C behavior for the maintained glyph 1 charstring applies the Type1 `hsbw`
+  side bearing before `rmoveto`, then scales Type1 coordinates with truncating
+  16.16 multiplication before normal slot metric grid fitting. Using the
+  rounded TrueType `FT_MulFix` path shifted right/top fractional edges by one
+  26.6 unit and changed smooth-raster coverage.
 
 Required follow-up:
 
-1. Find a glyph index in the maintained Type1 MM fixture that pinned C loads
-   after the same design-coordinate mutation, then compare Rust FFI, C ABI, and
-   WASM glyph output exactly; or
-2. Split this into an exact-error row for glyph 42 and a separate success row
-   with a C-loadable glyph.
+1. Keep the glyph 42 pending row visible until it is intentionally reclassified
+   as exact-error parity or replaced by a corrected input shape.
+2. Extend Type1 charstring support beyond the currently routed operators before
+   promoting broader Type1 glyph-output rows.
 
 Verification evidence:
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph
 make -C pillow-rs-freetype test-op OP=ftmm.set_mm_design_coordinates
 ```
 
-With the route temporarily classified as real, the focused run failed with:
+Result after the fix:
 
 ```text
-rust ffi: ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design
-oracle returned unexpected error 6
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+runtime_parity: passed=5 failed=0 total=5 covered_manifest_cases=5
+route audit concrete_cases=7261 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4749}
 ```
 
 ### Issue Set Current: FT_Get_Var_Design_Coordinates excess output row

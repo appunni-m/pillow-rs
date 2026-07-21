@@ -423,7 +423,10 @@ fn imagingft_historical_incomplete_rows_have_zero_failures() {
         .iter()
         .filter(|row| row.status == "incomplete")
         .collect();
-    assert!(!rows.is_empty() || true, "incomplete parity rows must stay visible"); // allow zero rows
+    assert!(
+        !rows.is_empty() || true,
+        "incomplete parity rows must stay visible"
+    ); // allow zero rows
 
     let mut fonts = FontCache::default();
     let failures: Vec<PixelFailure> = rows
@@ -488,7 +491,9 @@ fn imagingft_all_fixture_rows_match_pil_12_2_0() {
     let mut fonts = FontCache::default();
     let mut failures = Vec::new();
     for row in &matrix.rows {
-        if row.status == "incomplete" { continue; }
+        if row.status == "incomplete" {
+            continue;
+        }
         let font = fonts.font_for(row);
         if let Err(failure) = compare_row(font, row) {
             failures.push(failure);

@@ -414,7 +414,10 @@ impl WasmOwnedBitmapGlyph {
     fn new(core: rust_ffi::FT_BitmapGlyphOwned) -> Self {
         let mut glyph = Self {
             record: FontdoneWasmBitmapGlyph {
-                root: wasm_glyph_root_from_core_with_class(&core.root, wasm_owned_bitmap_glyph_class()),
+                root: wasm_glyph_root_from_core_with_class(
+                    &core.root,
+                    wasm_owned_bitmap_glyph_class(),
+                ),
                 left: core.left,
                 top: core.top,
                 bitmap: FontdoneWasmBitmap::default(),
@@ -2192,9 +2195,7 @@ pub extern "C" fn fontdone_wasm_get_glyph_from_face(
     let Some(out) = (unsafe { aglyph.as_mut() }) else {
         return err;
     };
-    let glyph_result = if slot
-        .is_some_and(|slot| slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP)
-    {
+    let glyph_result = if slot.is_some_and(|slot| slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP) {
         rust_ffi::FT_Get_Bitmap_Glyph(slot)
             .map(|core| Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(core))).addr())
     } else {

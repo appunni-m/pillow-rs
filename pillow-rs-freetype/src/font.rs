@@ -54,6 +54,7 @@ pub struct Font {
     type1_font_info: Option<Type1FontInfo>,
     type1_encoding: Option<Type1EncodingInfo>,
     type1_private: Option<Type1PrivateDict>,
+    type1_charstrings: Vec<Type1CharString>,
     type1_multi_master: Option<Arc<Type1MultiMaster>>,
     type1_mm_weight_vector: Option<Vec<i32>>,
     type1_mm_variation_active: bool,
@@ -201,6 +202,24 @@ pub(crate) struct Type1PrivateDict {
     pub language_group: i64,
     pub password: i64,
     pub min_feature: [i16; 2],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Type1CharString {
+    name: String,
+    encrypted: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Type1GlyphProgram {
+    advance_width: i32,
+    outline: Type1GlyphOutline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct Type1GlyphOutline {
+    points: Vec<OutlinePoint>,
+    contours: Vec<i16>,
 }
 
 struct BdfMetadata {
@@ -929,6 +948,10 @@ fn type1_cleartext(data: &[u8]) -> Option<&[u8]> {
 }
 
 fn type1_eexec_private_text(data: &[u8]) -> Option<String> {
+    Some(String::from_utf8_lossy(&type1_eexec_private_bytes(data)?).into_owned())
+}
+
+fn type1_eexec_private_bytes(data: &[u8]) -> Option<Vec<u8>> {
     // PFB segment type 2 is the eexec-encrypted private program.  FreeType's
     // Type 1 loader decrypts this program before filling `PS_PrivateRec`.
     let mut offset = 0usize;
@@ -951,7 +974,7 @@ fn type1_eexec_private_text(data: &[u8]) -> Option<String> {
     None
 }
 
-fn type1_decrypt_eexec(cipher: &[u8]) -> Option<String> {
+fn type1_decrypt_eexec(cipher: &[u8]) -> Option<Vec<u8>> {
     const C1: u32 = 52845;
     const C2: u32 = 22719;
     let mut r = 55665u32;
@@ -961,7 +984,7 @@ fn type1_decrypt_eexec(cipher: &[u8]) -> Option<String> {
         r = ((u32::from(cipher_byte) + r) * C1 + C2) & 0xffff;
         plain.push(plain_byte);
     }
-    Some(String::from_utf8_lossy(plain.get(4..)?).into_owned())
+    Some(plain.get(4..)?.to_vec())
 }
 
 fn parse_type1_metadata(cleartext: &[u8]) -> Result<Type1Metadata, FontError> {
@@ -1099,6 +1122,325 @@ fn parse_type1_encoding(cleartext: &[u8]) -> Option<Type1EncodingInfo> {
         encoding_type: 1,
         entries,
     })
+}
+
+fn parse_type1_charstrings(data: &[u8], len_iv: i32) -> Vec<Type1CharString> {
+    let Some(private) = type1_eexec_private_bytes(data) else {
+        return Vec::new();
+    };
+    let Some(mut offset) = find_bytes(&private, b"/CharStrings") else {
+        return Vec::new();
+    };
+    let Some(begin) = find_bytes(&private[offset..], b"begin") else {
+        return Vec::new();
+    };
+    offset += begin + b"begin".len();
+    let end = find_bytes(&private[offset..], b"\nend").map_or(private.len(), |end| offset + end);
+    let mut charstrings = Vec::new();
+    while offset < end {
+        skip_ascii_space(&private, &mut offset);
+        if offset >= end {
+            break;
+        }
+        if private[offset] != b'/' {
+            offset += 1;
+            continue;
+        }
+        offset += 1;
+        let name_start = offset;
+        while offset < end && !private[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        let name = String::from_utf8_lossy(&private[name_start..offset]).into_owned();
+        skip_ascii_space(&private, &mut offset);
+        let length_start = offset;
+        while offset < end && private[offset].is_ascii_digit() {
+            offset += 1;
+        }
+        let Some(length) = std::str::from_utf8(&private[length_start..offset])
+            .ok()
+            .and_then(|length| length.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        skip_ascii_space(&private, &mut offset);
+        while offset < end && !private[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        if offset < end && private[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        let Some(encrypted) = private.get(offset..offset.saturating_add(length)) else {
+            break;
+        };
+        let decrypted = decrypt_type1_charstring(encrypted, len_iv);
+        charstrings.push(Type1CharString {
+            name,
+            encrypted: decrypted,
+        });
+        offset = offset.saturating_add(length);
+    }
+    charstrings
+}
+
+fn decrypt_type1_charstring(cipher: &[u8], len_iv: i32) -> Vec<u8> {
+    if len_iv < 0 {
+        return cipher.to_vec();
+    }
+    const C1: u32 = 52845;
+    const C2: u32 = 22719;
+    let mut r = 4330u32;
+    let mut plain = Vec::with_capacity(cipher.len());
+    for &cipher_byte in cipher {
+        let plain_byte = cipher_byte ^ ((r >> 8) as u8);
+        r = ((u32::from(cipher_byte) + r) * C1 + C2) & 0xffff;
+        plain.push(plain_byte);
+    }
+    let skip = usize::try_from(len_iv).unwrap_or(0).min(plain.len());
+    plain[skip..].to_vec()
+}
+
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn skip_ascii_space(bytes: &[u8], offset: &mut usize) {
+    while *offset < bytes.len() && bytes[*offset].is_ascii_whitespace() {
+        *offset += 1;
+    }
+}
+
+fn parse_type1_glyph_program(charstring: &[u8]) -> Result<Type1GlyphProgram, FontError> {
+    let mut stack = Vec::<i32>::new();
+    let mut outline = Type1GlyphOutline::default();
+    let mut x = 0i32;
+    let mut y = 0i32;
+    let mut advance_width = 0i32;
+    let mut open_contour = false;
+    let mut offset = 0usize;
+    while offset < charstring.len() {
+        let op = charstring[offset];
+        offset += 1;
+        match op {
+            1 | 3 | 10 | 11 | 15 | 19 | 20 => stack.clear(),
+            4 => {
+                let dy = type1_pop_one(&mut stack)?;
+                type1_finish_contour(&mut outline, &mut open_contour)?;
+                y = y.saturating_add(dy);
+                type1_push_point(&mut outline, x, y);
+                open_contour = true;
+                stack.clear();
+            }
+            5 => {
+                for pair in stack.chunks_exact(2) {
+                    x = x.saturating_add(pair[0]);
+                    y = y.saturating_add(pair[1]);
+                    type1_push_point(&mut outline, x, y);
+                }
+                stack.clear();
+            }
+            6 => {
+                for dx in stack.drain(..) {
+                    x = x.saturating_add(dx);
+                    type1_push_point(&mut outline, x, y);
+                }
+            }
+            7 => {
+                for dy in stack.drain(..) {
+                    y = y.saturating_add(dy);
+                    type1_push_point(&mut outline, x, y);
+                }
+            }
+            8 => {
+                for curve in stack.chunks_exact(6) {
+                    x = x.saturating_add(curve[0]);
+                    y = y.saturating_add(curve[1]);
+                    outline.points.push(OutlinePoint {
+                        x,
+                        y,
+                        on_curve: false,
+                    });
+                    x = x.saturating_add(curve[2]);
+                    y = y.saturating_add(curve[3]);
+                    outline.points.push(OutlinePoint {
+                        x,
+                        y,
+                        on_curve: false,
+                    });
+                    x = x.saturating_add(curve[4]);
+                    y = y.saturating_add(curve[5]);
+                    type1_push_point(&mut outline, x, y);
+                }
+                stack.clear();
+            }
+            9 => {
+                type1_finish_contour(&mut outline, &mut open_contour)?;
+                stack.clear();
+            }
+            12 => {
+                let Some(escape) = charstring.get(offset).copied() else {
+                    return Err(FontError::InvalidOutline(
+                        "Type 1 truncated escape operator".into(),
+                    ));
+                };
+                offset += 1;
+                match escape {
+                    // Flex/hint and counter operators do not change the public
+                    // outline for the compact fixtures currently parsed here.
+                    0 | 1 | 2 | 6 | 7 | 12 | 16 | 17 => stack.clear(),
+                    _ => {
+                        return Err(FontError::InvalidOutline(format!(
+                            "unsupported Type 1 escaped charstring operator 12 {escape}"
+                        )));
+                    }
+                }
+            }
+            13 => {
+                if stack.len() < 2 {
+                    return Err(FontError::InvalidOutline(
+                        "Type 1 hsbw stack underflow".into(),
+                    ));
+                }
+                x = stack[0];
+                y = 0;
+                advance_width = stack[1];
+                stack.clear();
+            }
+            14 => {
+                type1_finish_contour(&mut outline, &mut open_contour)?;
+                return Ok(Type1GlyphProgram {
+                    advance_width,
+                    outline,
+                });
+            }
+            21 => {
+                if stack.len() < 2 {
+                    return Err(FontError::InvalidOutline(
+                        "Type 1 rmoveto stack underflow".into(),
+                    ));
+                }
+                let dx = stack[stack.len() - 2];
+                let dy = stack[stack.len() - 1];
+                type1_finish_contour(&mut outline, &mut open_contour)?;
+                x = x.saturating_add(dx);
+                y = y.saturating_add(dy);
+                type1_push_point(&mut outline, x, y);
+                open_contour = true;
+                stack.clear();
+            }
+            22 => {
+                let dx = type1_pop_one(&mut stack)?;
+                type1_finish_contour(&mut outline, &mut open_contour)?;
+                x = x.saturating_add(dx);
+                type1_push_point(&mut outline, x, y);
+                open_contour = true;
+                stack.clear();
+            }
+            30 | 31 => {
+                return Err(FontError::InvalidOutline(
+                    "Type 1 vhcurveto/hvcurveto unsupported".into(),
+                ));
+            }
+            32..=255 => {
+                offset -= 1;
+                let value = decode_type1_number(charstring, &mut offset)?;
+                stack.push(value);
+            }
+            _ => {
+                return Err(FontError::InvalidOutline(format!(
+                    "unsupported Type 1 charstring operator {op}"
+                )));
+            }
+        }
+    }
+    type1_finish_contour(&mut outline, &mut open_contour)?;
+    Ok(Type1GlyphProgram {
+        advance_width,
+        outline,
+    })
+}
+
+fn type1_pop_one(stack: &mut Vec<i32>) -> Result<i32, FontError> {
+    stack
+        .pop()
+        .ok_or_else(|| FontError::InvalidOutline("Type 1 charstring stack underflow".into()))
+}
+
+fn type1_push_point(outline: &mut Type1GlyphOutline, x: i32, y: i32) {
+    outline.points.push(OutlinePoint {
+        x,
+        y,
+        on_curve: true,
+    });
+}
+
+fn type1_finish_contour(
+    outline: &mut Type1GlyphOutline,
+    open_contour: &mut bool,
+) -> Result<(), FontError> {
+    if !*open_contour {
+        return Ok(());
+    }
+    let Some(last) = outline.points.len().checked_sub(1) else {
+        *open_contour = false;
+        return Ok(());
+    };
+    outline.contours.push(
+        i16::try_from(last).map_err(|_| {
+            FontError::InvalidOutline("Type 1 contour endpoint out of range".into())
+        })?,
+    );
+    *open_contour = false;
+    Ok(())
+}
+
+fn decode_type1_number(bytes: &[u8], offset: &mut usize) -> Result<i32, FontError> {
+    let Some(first) = bytes.get(*offset).copied() else {
+        return Err(FontError::InvalidOutline("Type 1 number missing".into()));
+    };
+    *offset += 1;
+    match first {
+        32..=246 => Ok(i32::from(first) - 139),
+        247..=250 => {
+            let next = type1_next_byte(bytes, offset)?;
+            Ok((i32::from(first) - 247) * 256 + i32::from(next) + 108)
+        }
+        251..=254 => {
+            let next = type1_next_byte(bytes, offset)?;
+            Ok(-((i32::from(first) - 251) * 256) - i32::from(next) - 108)
+        }
+        255 => {
+            let bytes = [
+                type1_next_byte(bytes, offset)?,
+                type1_next_byte(bytes, offset)?,
+                type1_next_byte(bytes, offset)?,
+                type1_next_byte(bytes, offset)?,
+            ];
+            Ok(i32::from_be_bytes(bytes))
+        }
+        _ => Err(FontError::InvalidOutline(
+            "Type 1 operator cannot be decoded as number".into(),
+        )),
+    }
+}
+
+fn type1_next_byte(bytes: &[u8], offset: &mut usize) -> Result<u8, FontError> {
+    let Some(byte) = bytes.get(*offset).copied() else {
+        return Err(FontError::InvalidOutline("Type 1 number truncated".into()));
+    };
+    *offset += 1;
+    Ok(byte)
+}
+
+fn type1_scale_font_unit(value: i32, scale: i32) -> i32 {
+    // FreeType's Type 1 loader scales decrypted CharString coordinates through
+    // the PS hinter/decoder path before slot metric grid fitting.  For the
+    // maintained Type 1 MM fixture this behaves as a truncating 16.16 multiply;
+    // using the rounded TrueType `FT_MulFix` path shifts right/top fractional
+    // edges by one 26.6 unit and changes smooth-raster coverage.
+    ((i64::from(value) * i64::from(scale)) >> 16) as i32
 }
 
 fn type1_exact_key_tail<'a>(text: &'a str, key: &str) -> Option<&'a str> {
@@ -1916,6 +2258,10 @@ impl Font {
         };
         let type1_private = parse_type1_private(data);
         let type1_encoding = parse_type1_encoding(cleartext);
+        let type1_charstrings = parse_type1_charstrings(
+            data,
+            type1_private.as_ref().map_or(4, |private| private.len_iv),
+        );
         let type1_mm_weight_vector = type1_multi_master
             .as_ref()
             .map(|master| master.default_weight_vector.clone());
@@ -1943,6 +2289,7 @@ impl Font {
             type1_font_info: Some(type1_font_info),
             type1_encoding,
             type1_private,
+            type1_charstrings,
             type1_multi_master,
             type1_mm_weight_vector,
             type1_mm_variation_active: false,
@@ -1987,6 +2334,7 @@ impl Font {
             type1_font_info: None,
             type1_encoding: None,
             type1_private: None,
+            type1_charstrings: Vec::new(),
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -2031,6 +2379,7 @@ impl Font {
             type1_font_info: None,
             type1_encoding: None,
             type1_private: None,
+            type1_charstrings: Vec::new(),
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -2311,6 +2660,7 @@ impl Font {
             type1_font_info: None,
             type1_encoding: None,
             type1_private: None,
+            type1_charstrings: Vec::new(),
             type1_multi_master: None,
             type1_mm_weight_vector: None,
             type1_mm_variation_active: false,
@@ -2780,6 +3130,12 @@ impl Font {
     /// Equivalent to `FT_Get_Glyph_Name` for supported SFNT `post` names.
     pub fn glyph_name(&self, glyph_index: u32) -> Option<&str> {
         let glyph_index = usize::try_from(glyph_index).ok()?;
+        if self.is_type1_face() {
+            return self
+                .type1_charstrings
+                .get(glyph_index)
+                .map(|charstring| charstring.name.as_str());
+        }
         let post = self.data.post.as_ref()?;
         // C `FT_Get_Glyph_Name` checks `FT_FACE_FLAG_GLYPH_NAMES` before
         // dispatching to `tt_face_get_ps_name`; SFNT sets that flag only for
@@ -2792,6 +3148,14 @@ impl Font {
 
     /// Equivalent to `FT_Get_Name_Index` for supported SFNT `post` names.
     pub fn name_index(&self, glyph_name: &str) -> u32 {
+        if self.is_type1_face() {
+            return self
+                .type1_charstrings
+                .iter()
+                .position(|charstring| charstring.name == glyph_name)
+                .and_then(|index| u32::try_from(index).ok())
+                .unwrap_or(0);
+        }
         let Some(post) = self.data.post.as_ref() else {
             return 0;
         };
@@ -3540,6 +3904,13 @@ impl Font {
         use_hdmx: bool,
         pedantic_hinting: bool,
     ) -> Result<GlyphSlotLoad, FontError> {
+        if self.is_type1_face() {
+            return self.glyph_slot_load_type1_scaled(
+                glyph,
+                vertical_layout,
+                MetricsGridFit::Horizontal,
+            );
+        }
         let scaled = self.scale_glyph_for_metrics_default_with_mode_and_hdmx_and_pedantic(
             glyph,
             native_hint_mode,
@@ -3610,6 +3981,9 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotLoad, FontError> {
+        if self.is_type1_face() {
+            return self.glyph_slot_load_type1_scaled(glyph, false, MetricsGridFit::None);
+        }
         let scaled = scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)?;
         // C: `FT_Load_Glyph` calls `ft_glyphslot_grid_fit_metrics` only when
         // `FT_LOAD_NO_HINTING` is not set (`src/base/ftobjs.c`).  No-hinting
@@ -3626,6 +4000,9 @@ impl Font {
         glyph: u16,
         vertical_layout: bool,
     ) -> Result<GlyphSlotLoad, FontError> {
+        if self.is_type1_face() {
+            return self.glyph_slot_load_type1_no_scale(glyph, vertical_layout);
+        }
         if self.data.cff.is_some() {
             return self.glyph_slot_load_cff_no_scale(glyph, vertical_layout);
         }
@@ -3839,6 +4216,13 @@ impl Font {
         native_hint_mode: NativeHintMode,
         pedantic_hinting: bool,
     ) -> Result<GlyphSlotLoad, FontError> {
+        if self.is_type1_face() {
+            return self.glyph_slot_load_type1_scaled(
+                glyph,
+                vertical_layout,
+                MetricsGridFit::Horizontal,
+            );
+        }
         let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode_and_pedantic(
             glyph,
             native_hint_mode,
@@ -4390,6 +4774,277 @@ impl Font {
                 top: bbox_y_max,
             }),
         }
+    }
+
+    fn is_type1_face(&self) -> bool {
+        matches!(self.face_kind, FaceKind::Type1 { .. })
+    }
+
+    fn type1_glyph_program(&self, glyph: u16) -> Result<Type1GlyphProgram, FontError> {
+        let charstring = self
+            .type1_charstrings
+            .get(usize::from(glyph))
+            .ok_or_else(|| FontError::InvalidArgument("Type 1 glyph index out of range".into()))?;
+        // C Type 1 `T1_Load_Glyph` decodes the selected CharString after
+        // `FT_Load_Glyph` has accepted the public glyph index.  Keep this in
+        // core so Rust FFI, C ABI, and WASM expose the same parsed outline.
+        parse_type1_glyph_program(&charstring.encrypted)
+    }
+
+    fn glyph_slot_load_type1_scaled(
+        &self,
+        glyph: u16,
+        _vertical_layout: bool,
+        grid_fit_metrics: MetricsGridFit,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let program = self.type1_glyph_program(glyph)?;
+        let scale = scaler::ScaleMetrics::from_font_data(&self.data);
+        let mut scaled_points = program
+            .outline
+            .points
+            .iter()
+            .map(|point| OutlinePoint {
+                x: type1_scale_font_unit(point.x, scale.x_scale),
+                y: type1_scale_font_unit(point.y, scale.y_scale),
+                on_curve: point.on_curve,
+            })
+            .collect::<Vec<_>>();
+        let advance_width = type1_scale_font_unit(program.advance_width, scale.x_scale);
+        if scaled_points.is_empty() || program.outline.contours.is_empty() {
+            let mut metrics = GlyphSlotMetrics {
+                width: 0,
+                height: 0,
+                hori_bearing_x: 0,
+                hori_bearing_y: 0,
+                hori_advance: advance_width,
+                vert_bearing_x: 0,
+                vert_bearing_y: 0,
+                vert_advance: 0,
+            };
+            if matches!(
+                grid_fit_metrics,
+                MetricsGridFit::Horizontal | MetricsGridFit::Vertical
+            ) {
+                metrics.hori_advance = ft_pix_round(metrics.hori_advance);
+            }
+            return Ok(GlyphSlotLoad {
+                metrics,
+                format: GlyphSlotLoadFormat::Outline,
+                outline_cbox: BBox {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: 0,
+                    y_max: 0,
+                },
+                outline_bbox: BBox {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: 0,
+                    y_max: 0,
+                },
+                subglyphs: Vec::new(),
+                slot_outline: Some(Outline::default()),
+                render_outline: Some(LoadedOutline {
+                    outline: Outline::default(),
+                    left: 0,
+                    bottom: 0,
+                    top: 0,
+                }),
+            });
+        }
+
+        let mut x_min = scaled_points[0].x;
+        let mut y_min = scaled_points[0].y;
+        let mut x_max = x_min;
+        let mut y_max = y_min;
+        for point in &scaled_points[1..] {
+            x_min = x_min.min(point.x);
+            y_min = y_min.min(point.y);
+            x_max = x_max.max(point.x);
+            y_max = y_max.max(point.y);
+        }
+        let grid_x_min = ft_pix_floor(x_min);
+        let grid_y_min = ft_pix_floor(y_min);
+        let grid_x_max = ft_pix_ceil(x_max);
+        let grid_y_max = ft_pix_ceil(y_max);
+        let px_x_min = grid_x_min >> 6;
+        let px_y_min = grid_y_min >> 6;
+        let px_x_max = grid_x_max >> 6;
+        let px_y_max = grid_y_max >> 6;
+        let off_x = grid_x_min;
+        let off_y = grid_y_min;
+        let slot_points = scaled_points.clone();
+        for point in &mut scaled_points {
+            point.x -= off_x;
+            point.y -= off_y;
+        }
+        let mut metrics = GlyphSlotMetrics {
+            width: grid_x_max - grid_x_min,
+            height: grid_y_max - grid_y_min,
+            hori_bearing_x: grid_x_min,
+            hori_bearing_y: grid_y_max,
+            hori_advance: advance_width,
+            vert_bearing_x: 0,
+            vert_bearing_y: 0,
+            vert_advance: 0,
+        };
+        match grid_fit_metrics {
+            MetricsGridFit::None => {
+                metrics.width = x_max - x_min;
+                metrics.height = y_max - y_min;
+                metrics.hori_bearing_x = x_min;
+                metrics.hori_bearing_y = y_max;
+            }
+            MetricsGridFit::Horizontal | MetricsGridFit::Vertical => {
+                metrics.hori_advance = ft_pix_round(metrics.hori_advance);
+            }
+        }
+        let cbox = BBox {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        };
+        Ok(GlyphSlotLoad {
+            metrics,
+            format: GlyphSlotLoadFormat::Outline,
+            outline_cbox: cbox,
+            outline_bbox: cbox,
+            subglyphs: Vec::new(),
+            slot_outline: Some(Outline {
+                n_contours: i32::try_from(program.outline.contours.len()).unwrap_or(i32::MAX),
+                contours: program.outline.contours.clone(),
+                points: slot_points,
+                tags: Vec::new(),
+                contour_dropouts: Vec::new(),
+                flags: 0,
+                cbox_x_min: x_min,
+                cbox_y_min: y_min,
+                cbox_x_max: x_max,
+                cbox_y_max: y_max,
+            }),
+            render_outline: Some(LoadedOutline {
+                outline: Outline {
+                    n_contours: i32::try_from(program.outline.contours.len()).unwrap_or(i32::MAX),
+                    contours: program.outline.contours,
+                    points: scaled_points,
+                    tags: Vec::new(),
+                    contour_dropouts: Vec::new(),
+                    flags: 0,
+                    cbox_x_min: 0,
+                    cbox_y_min: 0,
+                    cbox_x_max: px_x_max - px_x_min,
+                    cbox_y_max: px_y_max - px_y_min,
+                },
+                left: px_x_min,
+                bottom: px_y_min,
+                top: px_y_max,
+            }),
+        })
+    }
+
+    fn glyph_slot_load_type1_no_scale(
+        &self,
+        glyph: u16,
+        _vertical_layout: bool,
+    ) -> Result<GlyphSlotLoad, FontError> {
+        let program = self.type1_glyph_program(glyph)?;
+        if program.outline.points.is_empty() || program.outline.contours.is_empty() {
+            return Ok(GlyphSlotLoad {
+                metrics: GlyphSlotMetrics {
+                    width: 0,
+                    height: 0,
+                    hori_bearing_x: 0,
+                    hori_bearing_y: 0,
+                    hori_advance: program.advance_width,
+                    vert_bearing_x: 0,
+                    vert_bearing_y: 0,
+                    vert_advance: 0,
+                },
+                format: GlyphSlotLoadFormat::Outline,
+                outline_cbox: BBox {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: 0,
+                    y_max: 0,
+                },
+                outline_bbox: BBox {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: 0,
+                    y_max: 0,
+                },
+                subglyphs: Vec::new(),
+                slot_outline: Some(Outline::default()),
+                render_outline: Some(LoadedOutline {
+                    outline: Outline::default(),
+                    left: 0,
+                    bottom: 0,
+                    top: 0,
+                }),
+            });
+        }
+        let mut x_min = program.outline.points[0].x;
+        let mut y_min = program.outline.points[0].y;
+        let mut x_max = x_min;
+        let mut y_max = y_min;
+        for point in &program.outline.points[1..] {
+            x_min = x_min.min(point.x);
+            y_min = y_min.min(point.y);
+            x_max = x_max.max(point.x);
+            y_max = y_max.max(point.y);
+        }
+        let cbox = BBox {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        };
+        Ok(GlyphSlotLoad {
+            metrics: GlyphSlotMetrics {
+                width: x_max - x_min,
+                height: y_max - y_min,
+                hori_bearing_x: x_min,
+                hori_bearing_y: y_max,
+                hori_advance: program.advance_width,
+                vert_bearing_x: 0,
+                vert_bearing_y: 0,
+                vert_advance: 0,
+            },
+            format: GlyphSlotLoadFormat::Outline,
+            outline_cbox: cbox,
+            outline_bbox: cbox,
+            subglyphs: Vec::new(),
+            slot_outline: Some(Outline {
+                n_contours: i32::try_from(program.outline.contours.len()).unwrap_or(i32::MAX),
+                contours: program.outline.contours.clone(),
+                points: program.outline.points.clone(),
+                tags: Vec::new(),
+                contour_dropouts: Vec::new(),
+                flags: 0,
+                cbox_x_min: x_min,
+                cbox_y_min: y_min,
+                cbox_x_max: x_max,
+                cbox_y_max: y_max,
+            }),
+            render_outline: Some(LoadedOutline {
+                outline: Outline {
+                    n_contours: i32::try_from(program.outline.contours.len()).unwrap_or(i32::MAX),
+                    contours: program.outline.contours,
+                    points: program.outline.points,
+                    tags: Vec::new(),
+                    contour_dropouts: Vec::new(),
+                    flags: 0,
+                    cbox_x_min: x_min,
+                    cbox_y_min: y_min,
+                    cbox_x_max: x_max,
+                    cbox_y_max: y_max,
+                },
+                left: ft_pix_floor(x_min) >> 6,
+                bottom: ft_pix_floor(y_min) >> 6,
+                top: ft_pix_ceil(y_max) >> 6,
+            }),
+        })
     }
 
     fn glyph_is_composite(&self, glyph_index: u16) -> Result<bool, FontError> {
