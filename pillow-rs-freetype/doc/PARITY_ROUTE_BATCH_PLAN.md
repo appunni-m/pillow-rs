@@ -238,6 +238,33 @@ gradient formats, static `FT_ColorLine` extend and iterator fields, exact
 and terminal false behavior through pinned C, Rust FFI, thin C ABI, and WASM
 ABI.
 
+After the COLRv1 clipbox route batch and the 2026-07-22 pending-surface audit:
+
+```text
+route audit concrete_cases=7242 category_counts={'compile-contract': 2266, 'pending-route': 238, 'real-null-validation': 9, 'real-parity': 4729}
+duplicate_operation_input_buckets=41
+runtime_parity: passed=6999 failed=0 total=6999
+runtime_cases: pending=243
+```
+
+Rows audited and intentionally kept pending:
+
+| Surface | Pending rows checked | Current blocker | Correct next batch |
+|---|---:|---|---|
+| `ftdriver.hinting_engine_property` | 4 | Declared fixtures `fonts/cff/cff-hinting-sensitive.otf`, `fonts/type1/type1-hinting-sensitive.pfb`, and `fonts/cid/cid-keyed-type1-hinting-sensitive.otf` are absent. Substitute CFF/Type1 fonts would not prove glyph output after the `hinting-engine` property toggle. | Add maintained hinting-sensitive CFF/Type1/CID fixtures, then implement `cff` driver `hinting-engine` property state through Rust FFI, C ABI, WASM, and oracle route. |
+| `ftglyph.type_runtime` / non-null `ftglyph.done_glyph` | 7 | Existing maintained route proves `FT_Done_Glyph(NULL)` and `FT_OutlineGlyphRec.owns_outline_arrays` only. The pending rows require real bitmap glyph creation through `FT_Glyph_To_Bitmap`, optional SVG classification, allocation/free event logging, class identity behavior, and lifetime ordering. Treating outline-only glyphs or opaque non-null handles as proof would be a green placeholder. | Implement owned bitmap glyph records and `FT_Glyph_To_Bitmap` success first, then route glyph class/type/lifecycle rows together. |
+| BDF success variants | 2 | `fonts/pcf/properties-signed-only.pcf` and `fonts/bitmap/sfnt-bdf-table.otb` are absent. The BDF `.bdf` row and exact error rows are already maintained; PCF/SFNT-BDF success needs distinct parser/fixture coverage. | Add C-openable PCF and SFNT-BDF fixtures, then extend the existing BDF property route for signed PCF properties and selected-strike SFNT-BDF properties. |
+| bzip2 stream validation | 2 | The active pinned oracle build is bzip2-disabled and returns `FT_Err_Unimplemented_Feature` before null/source/header validation. The pending rows describe enabled-build behavior, so counting disabled-build `Unimplemented_Feature` would be false parity. | Split enabled-vs-disabled bzip2 policy, or add a bzip2-enabled pinned oracle profile plus pure-Rust bzip2 stream wrapper. |
+| CID success/null-output rows | 10 | Required CID-keyed and SFNT-wrapped CID fixtures are absent (`type1-cid-ros-and-glyph-map.pfb`, `ot-cff-cid-keyed.otf`). Existing non-CID/null-face error controls are already real. | Add maintained CID-keyed fixtures and implement CID service metadata/glyph-index mapping before routing CID success and null-output behavior. |
+| `ftparams.face_properties_then_render` | 2 | Required CFF fixtures `randomized-cff.otf` and `stem-darkening-sensitive.otf` are absent. Existing DejaVu null-data/internal-state rows are already routed; render-output rows need an observable CFF/Type1/CID driver effect. | Add C-openable property-sensitive CFF/Type1 fixtures, then compare internal property state plus glyph metrics/outline/bitmap output. |
+| GX/OpenType/classic-kern validator success rows | 30+ | Declared AAT/GX/OpenType validator fixtures are absent, including all-table, selected-table, malformed-table, and length-matrix fonts. Existing green rows cover invalid arguments and missing services only. | Build deterministic validator fixtures, then implement validation output-buffer allocation/free semantics and route selected/all/free rows as one validator batch. |
+| `ftmodapi.add_module` success/renderer/styler rows | 3 | These require synthetic `FT_Module_Class`/`FT_Renderer_Class` callback facades with callback logs and rollback semantics. Current maintained rows cover null/future-version/duplicate error behavior only. | Add a maintained ABI test facade for synthetic module classes and route add/remove/interface callback behavior across C, Rust, C ABI, and WASM. |
+
+This audit narrows the next safe high-value work. It does not reduce the full
+parity target or reclassify any row as real. Each listed surface remains visible
+as `pending-route` until the same declared inputs compare exact pinned C output
+through Rust FFI, thin C ABI, and WASM ABI.
+
 Pinned C behavior checked:
 
 - `freetype/src/sfnt/ttcolr.c:500-520`: `read_color_line` reads extend/count,
