@@ -277,6 +277,55 @@
       }
     },
     {
+      "case_id": "ftotval.FT_OpenType_Validate.cff_fontinfo_service_missing_error",
+      "subject": "ftotval.FT_OpenType_Validate",
+      "case": "service_missing_error",
+      "operation": "ftotval.open_type_validate",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "cff_font",
+            "path": "input/fonts/cff/fontinfo-populated.otf"
+          }
+        },
+        "params": {
+          "face": "valid_without_OPENTYPE_VALIDATE_service",
+          "face_index": 0,
+          "validation_flags": [
+            "FT_VALIDATE_OT"
+          ],
+          "output_pointers": "all_valid_non_null",
+          "source_behavior": "The active pinned build has no OPENTYPE_VALIDATE service for this CFF face; FT_OpenType_Validate returns FT_Err_Unimplemented_Feature after argument validation."
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "runtime:opentype_validation",
+        "error_path",
+        "asset:existing"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "error": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "compare_error_output": true,
+          "paths": [
+            "error"
+          ]
+        },
+        "error": "FT_Err_Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/base/ftotval.c"
+        ]
+      }
+    },
+    {
       "case_id": "ftotval.FT_OpenType_Validate.selected_tables_success",
       "subject": "ftotval.FT_OpenType_Validate",
       "case": "selected_tables_success",
