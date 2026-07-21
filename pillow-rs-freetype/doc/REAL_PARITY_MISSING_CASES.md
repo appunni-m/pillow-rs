@@ -1,5 +1,50 @@
 # Real-Parity Missing Cases
 
+### Issue Set Result: FT_PARAM_TAG_INCREMENTAL parameter-route absent/null behavior
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c`
+
+Finding:
+
+- Pinned FreeType 2.14.3 `FT_Open_Face` with `FT_OPEN_MEMORY` behaves the same
+  when the incremental parameter is absent and when an
+  `FT_PARAM_TAG_INCREMENTAL` parameter is present with `data = NULL`.
+- The maintained public result is successful embedded-font open, successful
+  glyph load for the declared glyph, null stored-interface class, and callback
+  count zero.
+
+Implementation note:
+
+- The ftparams row now reuses the maintained incremental nullness oracle route
+  through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+- The route accepts both fixture spellings for the glyph selector:
+  `load_glyph` for the ftincrem row and `glyph_index` for the ftparams row.
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load`
+  remains pending. That row still needs a real incremental callback route that
+  stores the callback interface, invokes glyph-data callbacks, releases glyph
+  data, applies metrics overrides, and compares callback event logs plus public
+  glyph output across all four lanes.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c
+make -C pillow-rs-freetype test-op OP=freetype.open_face_incremental
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=1 failed=0 total=1
+runtime_cases: runnable=1 pending=1
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 235, 'real-null-validation': 9, 'real-parity': 4752}
+```
+
 ### Issue Set Result: FT_PARAM_TAG_INCREMENTAL absent/null interface behavior
 
 Status: promoted on 2026-07-22.

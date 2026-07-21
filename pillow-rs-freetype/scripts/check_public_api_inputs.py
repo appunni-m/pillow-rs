@@ -3496,13 +3496,6 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "applies metrics overrides, and compares callback event logs and "
             "public glyph output across pinned C, Rust FFI, C ABI, and WASM ABI"
         ),
-        "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c": (
-            "FT_PARAM_TAG_INCREMENTAL null or incomplete interface behavior "
-            "must be proven through the FT_Open_Face parameter route from "
-            "pinned C FreeType src/base/ftobjs.c and mirrored Rust/C-ABI/WASM "
-            "validation; a generic open-face or exact-error route would not "
-            "prove the parameter-table branch"
-        ),
         "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property": (
             "FT_PARAM_TAG_RANDOM_SEED valid-data parity needs a maintained "
             "route that proves the seeded face-internal value through a "
@@ -6561,6 +6554,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
     ):
         return "Absent and NULL FT_PARAM_TAG_INCREMENTAL interface behavior validates embedded font data use, null stored-interface class, and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_incremental"
+        and row.case_id
+        == "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c"
+    ):
+        return "FT_PARAM_TAG_INCREMENTAL absent and NULL parameter-data behavior validates FT_Open_Face parameter dispatch, embedded font data use, null stored-interface class, and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.face_driver_name"
         and row.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name"
