@@ -15,6 +15,7 @@ OUT_DIR = FIXTURE_ROOT / "fonts" / "type1"
 MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "type1-mm"
 LEGACY_MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "mm"
 INPUT_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1"
+INPUT_ENCODING_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1-encoding"
 
 
 def charstring(program: list[object]) -> T1CharString:
@@ -205,6 +206,85 @@ def build_non_mm_force_bold(path: Path) -> None:
     )
 
 
+def build_encoding_fixture(path: Path, font_name: str, family_name: str, encoding: bytes) -> None:
+    """Build a Type 1 fixture with a specific clear-text Encoding object."""
+
+    build_simple_type1(
+        path,
+        font_name,
+        family_name,
+        f"Generated for fontdone {family_name} encoding parity",
+        cleartext_replacements=[(b"/Encoding StandardEncoding def", encoding)],
+    )
+
+
+def build_type1_encoding_fixtures() -> None:
+    custom_array = (
+        b"/Encoding 256 array\n"
+        b"0 1 255 {1 index exch /.notdef put} for\n"
+        b"dup 65 /A put\n"
+        b"readonly def"
+    )
+    variants = [
+        (
+            INPUT_ENCODING_OUT_DIR / "custom-array.pfb",
+            "EncodingCustomArray",
+            "Encoding Custom Array",
+            custom_array,
+        ),
+        (
+            INPUT_ENCODING_OUT_DIR / "standard.pfb",
+            "EncodingStandard",
+            "Encoding Standard",
+            b"/Encoding StandardEncoding def",
+        ),
+        (
+            INPUT_ENCODING_OUT_DIR / "isolatin1.pfb",
+            "EncodingISOLatin1",
+            "Encoding ISO Latin 1",
+            b"/Encoding ISOLatin1Encoding def",
+        ),
+        (
+            INPUT_ENCODING_OUT_DIR / "expert.pfb",
+            "EncodingExpert",
+            "Encoding Expert",
+            b"/Encoding ExpertEncoding def",
+        ),
+        (
+            INPUT_ENCODING_OUT_DIR / "no-recognized-encoding.pfb",
+            "EncodingNone",
+            "Encoding None",
+            b"/Encoding UnknownEncoding def",
+        ),
+        (
+            OUT_DIR / "custom-encoding-array.pfb",
+            "EncodingCustomArray",
+            "Encoding Custom Array",
+            custom_array,
+        ),
+        (
+            OUT_DIR / "standard-encoding.pfb",
+            "EncodingStandard",
+            "Encoding Standard",
+            b"/Encoding StandardEncoding def",
+        ),
+        (
+            OUT_DIR / "isolatin1-encoding.pfb",
+            "EncodingISOLatin1",
+            "Encoding ISO Latin 1",
+            b"/Encoding ISOLatin1Encoding def",
+        ),
+        (
+            OUT_DIR / "expert-encoding.pfb",
+            "EncodingExpert",
+            "Encoding Expert",
+            b"/Encoding ExpertEncoding def",
+        ),
+    ]
+    for path, font_name, family_name, encoding in variants:
+        build_encoding_fixture(path, font_name, family_name, encoding)
+
+
 def main() -> None:
     build_simple_type1(
         OUT_DIR / "simple-type1.pfb",
@@ -254,6 +334,7 @@ def main() -> None:
     build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
     build_mm_blend_fontinfo_private(OUT_DIR / "mm-blend-fontinfo-private.pfb")
     build_non_mm_force_bold(OUT_DIR / "non-mm-force-bold.pfb")
+    build_type1_encoding_fixtures()
 
 
 if __name__ == "__main__":

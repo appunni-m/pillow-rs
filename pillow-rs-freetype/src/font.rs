@@ -52,6 +52,7 @@ pub struct Font {
     pub load_mode: LoadMode,
     face_kind: FaceKind,
     type1_font_info: Option<Type1FontInfo>,
+    type1_encoding: Option<Type1EncodingInfo>,
     type1_private: Option<Type1PrivateDict>,
     type1_multi_master: Option<Arc<Type1MultiMaster>>,
     type1_mm_weight_vector: Option<Vec<i32>>,
@@ -165,6 +166,12 @@ pub(crate) struct Type1FontInfo {
     pub is_fixed_pitch: bool,
     pub underline_position: i16,
     pub underline_thickness: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Type1EncodingInfo {
+    pub encoding_type: i32,
+    pub entries: Vec<Option<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1039,6 +1046,75 @@ fn parse_type1_private(data: &[u8]) -> Option<Type1PrivateDict> {
     Some(private)
 }
 
+fn parse_type1_encoding(cleartext: &[u8]) -> Option<Type1EncodingInfo> {
+    let text = std::str::from_utf8(cleartext).ok()?;
+    let tail = type1_exact_key_tail(text, "Encoding")?;
+    if tail.starts_with("StandardEncoding") {
+        return Some(Type1EncodingInfo {
+            encoding_type: 2,
+            entries: Vec::new(),
+        });
+    }
+    if tail.starts_with("ISOLatin1Encoding") {
+        return Some(Type1EncodingInfo {
+            encoding_type: 3,
+            entries: Vec::new(),
+        });
+    }
+    if tail.starts_with("ExpertEncoding") {
+        return Some(Type1EncodingInfo {
+            encoding_type: 4,
+            entries: Vec::new(),
+        });
+    }
+    if !tail.starts_with("256 array") {
+        return Some(Type1EncodingInfo {
+            encoding_type: 0,
+            entries: Vec::new(),
+        });
+    }
+
+    let mut entries = vec![Some(".notdef".to_string()); 256];
+    let tokens = tail.split_whitespace().collect::<Vec<_>>();
+    for window in tokens.windows(4) {
+        if window[0] != "dup" || window[3] != "put" {
+            continue;
+        }
+        let Some(index) = window[1]
+            .parse::<usize>()
+            .ok()
+            .filter(|index| *index < entries.len())
+        else {
+            continue;
+        };
+        if let Some(name) = window[2].strip_prefix('/') {
+            entries[index] = Some(name.to_string());
+        }
+    }
+    Some(Type1EncodingInfo {
+        encoding_type: 1,
+        entries,
+    })
+}
+
+fn type1_exact_key_tail<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let marker = format!("/{key}");
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(&marker) {
+        let start = search_start + relative_start;
+        let after = start + marker.len();
+        if text[after..]
+            .chars()
+            .next()
+            .is_some_and(char::is_whitespace)
+        {
+            return Some(text[after..].trim_start());
+        }
+        search_start = after;
+    }
+    None
+}
+
 fn copy_i16_array(values: Option<&[f64]>, out: &mut [i16], count: &mut u8) {
     let Some(values) = values else {
         return;
@@ -1833,6 +1909,7 @@ impl Font {
             underline_thickness: u16::try_from(metadata.underline_thickness.max(0)).unwrap_or(0),
         };
         let type1_private = parse_type1_private(data);
+        let type1_encoding = parse_type1_encoding(cleartext);
         let type1_mm_weight_vector = type1_multi_master
             .as_ref()
             .map(|master| master.default_weight_vector.clone());
@@ -1858,6 +1935,7 @@ impl Font {
                 is_fixed_pitch: metadata.is_fixed_pitch,
             },
             type1_font_info: Some(type1_font_info),
+            type1_encoding,
             type1_private,
             type1_multi_master,
             type1_mm_weight_vector,
@@ -1901,6 +1979,7 @@ impl Font {
             load_mode: LoadMode::Default,
             face_kind: FaceKind::Bdf,
             type1_font_info: None,
+            type1_encoding: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -1944,6 +2023,7 @@ impl Font {
             load_mode: LoadMode::Default,
             face_kind: FaceKind::WinFnt { header },
             type1_font_info: None,
+            type1_encoding: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -2221,6 +2301,7 @@ impl Font {
             load_mode,
             face_kind: FaceKind::Sfnt,
             type1_font_info: None,
+            type1_encoding: None,
             type1_private: None,
             type1_multi_master: None,
             type1_mm_weight_vector: None,
@@ -2347,6 +2428,10 @@ impl Font {
 
     pub(crate) fn type1_font_info(&self) -> Option<&Type1FontInfo> {
         self.type1_font_info.as_ref()
+    }
+
+    pub(crate) fn type1_encoding(&self) -> Option<&Type1EncodingInfo> {
+        self.type1_encoding.as_ref()
     }
 
     pub(crate) fn type1_private(&self) -> Option<&Type1PrivateDict> {

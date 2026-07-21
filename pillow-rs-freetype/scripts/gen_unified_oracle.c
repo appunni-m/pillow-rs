@@ -10449,6 +10449,87 @@ static int emit_ps_font_private(int argc, char** argv) {
     return 0;
 }
 
+static void print_ps_font_value_encoding_type_json(FT_Face face) {
+    T1_EncodingType encoding = (T1_EncodingType)-999;
+    FT_Long ret = FT_Get_PS_Font_Value(face, PS_DICT_ENCODING_TYPE, 0,
+                                       &encoding, sizeof(encoding));
+    printf("{\"return\":%ld,\"encoding_type\":%d,\"bytes\":\"", ret, encoding);
+    print_hex_bytes((const unsigned char*)&encoding, (long)sizeof(encoding));
+    printf("\"}");
+}
+
+static void print_ps_font_value_encoding_entry_json(FT_Face face, FT_UInt index) {
+    unsigned char buffer[256];
+    memset(buffer, 0xA5, sizeof(buffer));
+    FT_Long ret = FT_Get_PS_Font_Value(face, PS_DICT_ENCODING_ENTRY, index,
+                                       buffer, sizeof(buffer));
+    printf("{\"index\":%u,\"return\":%ld,\"bytes\":\"", index, ret);
+    if (ret > 0 && ret <= (FT_Long)sizeof(buffer)) {
+        print_hex_bytes(buffer, ret);
+    }
+    printf("\"}");
+}
+
+static void print_ps_font_value_encoding_json(FT_Face face, const char* entries_csv) {
+    printf("{\"encoding_type\":");
+    print_ps_font_value_encoding_type_json(face);
+    if (entries_csv && entries_csv[0]) {
+        printf(",\"entries\":[");
+        const char* cursor = entries_csv;
+        int first = 1;
+        while (*cursor) {
+            char* end = NULL;
+            unsigned long index = strtoul(cursor, &end, 10);
+            if (end == cursor) {
+                break;
+            }
+            if (!first) printf(",");
+            print_ps_font_value_encoding_entry_json(face, (FT_UInt)index);
+            first = 0;
+            cursor = (*end == ',') ? end + 1 : end;
+        }
+        printf("]");
+    }
+    printf("}");
+}
+
+static int emit_ps_font_value_encoding(int argc, char** argv) {
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    const char* entries_csv = argc >= 6 ? argv[5] : "";
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_ps_font_value_encoding_json(face.face, entries_csv);
+    printf("}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ps_font_value_encoding_rowset(int argc, char** argv) {
+    int count = atoi(argv[2]);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    int arg = 3;
+    for (int row = 0; row < count; row++) {
+        OracleFace face;
+        int opened = open_oracle_face(argv[arg], argv[arg + 1], atol(argv[arg + 2]), &face);
+        if (opened != 0) {
+            return opened;
+        }
+        if (row) printf(",");
+        print_ps_font_value_encoding_json(face.face, "");
+        close_oracle_face(&face);
+        arg += 3;
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static int emit_open_type_free_null_face(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -18805,6 +18886,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);
+    }
+    if ((argc == 5 || argc == 6) && streq(argv[1], "--ps-font-value-encoding")) {
+        return emit_ps_font_value_encoding(argc, argv);
+    }
+    if (argc >= 6 && streq(argv[1], "--ps-font-value-encoding-rowset")) {
+        return emit_ps_font_value_encoding_rowset(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
         return emit_open_type_free_null_face(argc, argv);

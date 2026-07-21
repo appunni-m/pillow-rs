@@ -11359,6 +11359,51 @@ Why this batch is smaller than 10 rows:
   remain pending until the required Type1/CFF/CID/Type42/CFF2 assets and
   same-input runtime rows exist.
 
+### Issue Set Current: Type1 PS font-value encoding route
+
+Batch target:
+
+- Promote the Type1 `FT_Get_PS_Font_Value` route for
+  `PS_DICT_ENCODING_TYPE` and `PS_DICT_ENCODING_ENTRY`.
+- Generate maintained Type1 encoding fixtures for custom array,
+  StandardEncoding, ISOLatin1Encoding, ExpertEncoding, and no-recognized
+  encoding cases.
+- Keep the broad `FT_Get_PS_Font_Value.signature_and_behavior_matrix` pending;
+  it still needs scalar, string, private array, subr/charstring, unsupported
+  service, non-PostScript, null-face, short-buffer, sizing-query, and
+  negative-length route coverage.
+
+Rows promoted in this batch:
+
+- `t1tables.T1_ENCODING_TYPE_ARRAY.ps_font_value_encoding_type`
+- `t1tables.T1_ENCODING_TYPE_STANDARD.ps_font_value_encoding_type`
+- `t1tables.T1_ENCODING_TYPE_ISOLATIN1.ps_font_value_encoding_type`
+- `t1tables.T1_ENCODING_TYPE_EXPERT.ps_font_value_encoding_type`
+- `t1tables.T1_ENCODING_TYPE_NONE.ps_font_value_encoding_type`
+- `t1tables.T1_EncodingType.array_encoding_runtime_case`
+- `t1tables.T1_EncodingType.standard_or_expert_runtime_cases`
+
+Implementation notes:
+
+- The core Type1 loader now classifies the clear-text `Encoding` dictionary as
+  ARRAY, STANDARD, ISOLATIN1, EXPERT, or NONE for the public PS value route.
+- The parser must locate the exact `/Encoding` dictionary key. Generated
+  fixture font names such as `/EncodingStandard` are not dictionary keys.
+- `FT_Get_PS_Font_Value` in the Rust FFI remains safe Rust by taking
+  `Option<&mut [u8]>`; raw pointer conversion is limited to the thin C/WASM ABI
+  boundary.
+- The custom-array fixture intentionally has one explicit proving entry
+  (`dup 65 /A put`). Other probed indexes remain `.notdef`, matching pinned C
+  for the same generated Type1 input.
+
+Verification for the encoding batch:
+
+```bash
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_value
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_value_encoding
+make -C pillow-rs-freetype route-audit
+```
+
 ### Type1 PS Private dictionary route promotion
 
 Promoted rows:
