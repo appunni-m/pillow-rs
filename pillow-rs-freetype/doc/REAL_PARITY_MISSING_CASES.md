@@ -2,12 +2,11 @@
 
 ### Issue Set Current: FT_Glyph_Transform owned outline glyph success route
 
-Status: in progress on 2026-07-21 after route audit at `ef6bbc55a`.
+Status: outline route complete on 2026-07-21 after route audit at `c196de7cd`;
+SVG remains pending.
 
 Pending real parity rows:
 
-- `ftglyph.FT_Glyph_Transform.success_outline_matrix_delta`
-- `ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only`
 - `ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`
 
 Current evidence:
@@ -29,10 +28,12 @@ Current evidence:
   CBox support for wrapper-owned glyphs, and explicit release. The wrapper owns
   opaque handle lifetime and linear-memory record copying only; transform math
   remains in `fontdone`.
-- The success rows remain pending because the unified harness/oracle still needs
-  to compare this operation through all lanes. Using only outline snapshot
-  helpers would not prove the public `FT_Glyph_Transform` endpoint or glyph
-  ownership contract.
+- The unified harness/oracle now compares outline matrix+delta, delta-only,
+  matrix-only, and null/null transform rows through pinned C oracle, Rust FFI,
+  C ABI, and WASM ABI. The first real divergence found during promotion was
+  `FT_OUTLINE_OWNER`: pinned C `ft_outline_glyph_init` allocates a fresh outline
+  with `FT_Outline_New` before copying the slot outline, so owned outline glyph
+  flags keep `FT_OUTLINE_OWNER`.
 - Pinned C behavior to match:
   - `freetype/src/base/ftglyph.c:672-700` checks `glyph` and `glyph->clazz`,
     calls the class transform hook when present, and transforms `glyph->advance`
@@ -49,11 +50,10 @@ Implementation plan:
 2. [done] Teach Rust FFI/C ABI/WASM ABI `FT_Get_Glyph` success to allocate/copy an outline glyph for
    scalable outline slots, preserving root format, advance, library/class
    presence, outline points/tags/contours, and CBox.
-3. [partial] Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only
+3. [done] Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only
    after the owned glyph object exists; wrappers may validate raw pointers and
-   copy records, but must not implement transform logic independently. C ABI and
-   WASM ABI are present; unified route comparison is still pending.
-4. Route `ftglyph.glyph_transform` success through pinned C oracle, Rust FFI,
+   copy records, but must not implement transform logic independently.
+4. [done for outline] Route `ftglyph.glyph_transform` success through pinned C oracle, Rust FFI,
    C ABI, and WASM ABI, comparing status, transformed outline points, root
    advance, CBox, and mutation class for matrix+delta, delta-only, matrix-only,
    and null/null transforms.
@@ -66,8 +66,9 @@ Focused check showing current blocker:
 make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only
 ```
 
-Result at `ef6bbc55a`: `runtime_cases: runnable=0 pending=1`, with the
-expected pending reason for the missing maintained outline glyph route.
+Result at current outline route: `runtime_parity: passed=4 failed=0 total=4`;
+`runtime_cases: runnable=4 pending=1`, with the single pending row being
+`ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`.
 
 ### Issue Set Current: FT module interface requester route
 

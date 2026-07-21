@@ -820,6 +820,128 @@ fn first_glyph_index_arg(params: &Value) -> Result<u32, String> {
     glyph_index_param(params)
 }
 
+fn glyph_transform_setup_params(params: &Value) -> &Value {
+    params.get("source_setup").unwrap_or(params)
+}
+
+fn glyph_transform_indices(params: &Value) -> Result<Vec<u32>, String> {
+    let setup = glyph_transform_setup_params(params);
+    let indices = if let Some(values) = setup.get("glyph_indices").and_then(Value::as_array) {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| u32_value(value, &format!("source_setup.glyph_indices[{index}]")))
+            .collect::<Result<Vec<_>, _>>()?
+    } else if let Some(value) = setup.get("glyph_index") {
+        vec![u32_value(value, "source_setup.glyph_index")?]
+    } else {
+        vec![glyph_index_param(setup)?]
+    };
+    if indices.is_empty() {
+        return Err("glyph_transform requires at least one glyph index".to_string());
+    }
+    Ok(indices)
+}
+
+fn glyph_transform_indices_arg(params: &Value) -> Result<String, String> {
+    Ok(glyph_transform_indices(params)?
+        .into_iter()
+        .map(|index| index.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GlyphTransformSpec {
+    matrix: Option<FT_Matrix>,
+    delta: Option<FT_Vector>,
+}
+
+fn glyph_transform_specs(params: &Value) -> Result<Vec<GlyphTransformSpec>, String> {
+    let values = params
+        .get("transforms")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "glyph_transform requires transforms array".to_string())?;
+    if values.is_empty() {
+        return Err("glyph_transform requires at least one transform".to_string());
+    }
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let matrix = match value.get("matrix") {
+                Some(Value::Null) | None => None,
+                Some(matrix) => Some(FT_Matrix {
+                    xx: i64_value(
+                        matrix
+                            .get("xx")
+                            .ok_or_else(|| format!("transforms[{index}].matrix.xx is missing"))?,
+                        &format!("transforms[{index}].matrix.xx"),
+                    )?,
+                    xy: i64_value(
+                        matrix
+                            .get("xy")
+                            .ok_or_else(|| format!("transforms[{index}].matrix.xy is missing"))?,
+                        &format!("transforms[{index}].matrix.xy"),
+                    )?,
+                    yx: i64_value(
+                        matrix
+                            .get("yx")
+                            .ok_or_else(|| format!("transforms[{index}].matrix.yx is missing"))?,
+                        &format!("transforms[{index}].matrix.yx"),
+                    )?,
+                    yy: i64_value(
+                        matrix
+                            .get("yy")
+                            .ok_or_else(|| format!("transforms[{index}].matrix.yy is missing"))?,
+                        &format!("transforms[{index}].matrix.yy"),
+                    )?,
+                }),
+            };
+            let delta = match value.get("delta") {
+                Some(Value::Null) | None => None,
+                Some(delta) => Some(FT_Vector {
+                    x: i64_value(
+                        delta
+                            .get("x")
+                            .ok_or_else(|| format!("transforms[{index}].delta.x is missing"))?,
+                        &format!("transforms[{index}].delta.x"),
+                    )?,
+                    y: i64_value(
+                        delta
+                            .get("y")
+                            .ok_or_else(|| format!("transforms[{index}].delta.y is missing"))?,
+                        &format!("transforms[{index}].delta.y"),
+                    )?,
+                }),
+            };
+            Ok(GlyphTransformSpec { matrix, delta })
+        })
+        .collect()
+}
+
+fn glyph_transform_specs_arg(params: &Value) -> Result<String, String> {
+    Ok(glyph_transform_specs(params)?
+        .into_iter()
+        .map(|spec| {
+            let matrix = spec.matrix.map_or_else(
+                || "null".to_string(),
+                |matrix| format!("{},{},{},{}", matrix.xx, matrix.xy, matrix.yx, matrix.yy),
+            );
+            let delta = spec.delta.map_or_else(
+                || "null".to_string(),
+                |delta| format!("{},{}", delta.x, delta.y),
+            );
+            format!("{matrix}/{delta}")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn glyph_transform_load_flags(params: &Value) -> Result<FT_Int32, String> {
+    load_flags_param(glyph_transform_setup_params(params))
+}
+
 fn outline_runtime_supported(case: &InputCase) -> bool {
     if case.expect_error
         || !has_runtime_font_source(case)
@@ -22281,6 +22403,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(bbox_modes_arg(params)?);
             Ok(args)
         }
+        "ftglyph.glyph_transform"
+            if matches!(
+                case.case_id.as_str(),
+                "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta"
+                    | "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only"
+            ) =>
+        {
+            let mut args = vec!["--glyph-transform".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(glyph_transform_setup_params(params), &mut args)?;
+            args.push(glyph_transform_indices_arg(params)?);
+            args.push(glyph_transform_load_flags(params)?.to_string());
+            args.push(glyph_transform_specs_arg(params)?);
+            Ok(args)
+        }
         "ftglyph.glyph_to_bitmap" => {
             if case.case_id
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
@@ -23267,6 +23404,15 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_glyph_copy_null_inputs()
         }
         "ftglyph.done_glyph" => rust_done_glyph_runtime_output(case),
+        "ftglyph.glyph_transform"
+            if matches!(
+                case.case_id.as_str(),
+                "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta"
+                    | "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only"
+            ) =>
+        {
+            rust_glyph_transform(case)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
@@ -24215,6 +24361,15 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_glyph_copy_null_inputs()
         }
         "ftglyph.done_glyph" => c_done_glyph_runtime_output(case),
+        "ftglyph.glyph_transform"
+            if matches!(
+                case.case_id.as_str(),
+                "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta"
+                    | "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only"
+            ) =>
+        {
+            c_glyph_transform(case)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -25055,6 +25210,15 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_glyph_copy_null_inputs()
         }
         "ftglyph.done_glyph" => wasm_done_glyph_runtime_output(case),
+        "ftglyph.glyph_transform"
+            if matches!(
+                case.case_id.as_str(),
+                "ftglyph.FT_Glyph_Transform.success_outline_matrix_delta"
+                    | "ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only"
+            ) =>
+        {
+            wasm_glyph_transform(case)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_outline_operation(handle, case);
@@ -26281,6 +26445,246 @@ fn wasm_outline_operation_bbox(
         ));
     }
     Ok(bbox)
+}
+
+fn glyph_transform_mutation_class(spec: GlyphTransformSpec) -> &'static str {
+    match (spec.matrix.is_some(), spec.delta.is_some()) {
+        (false, false) => "none",
+        (false, true) => "delta_only",
+        (true, false) => "matrix_only",
+        (true, true) => "matrix_delta",
+    }
+}
+
+fn glyph_transform_row_json(
+    glyph_index: u32,
+    transform_index: usize,
+    status: FT_Error,
+    outline: Option<Value>,
+    advance: Option<Value>,
+    cbox: Option<Value>,
+    mutation_class: &str,
+) -> Value {
+    json!({
+        "glyph_index": glyph_index,
+        "transform_index": transform_index,
+        "status": status,
+        "outline": outline,
+        "root": advance.map(|advance| json!({"advance": advance})),
+        "cbox": cbox,
+        "mutation_class": mutation_class
+    })
+}
+
+fn glyph_transform_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn rust_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    let params = &case.inputs.params;
+    let load_flags = glyph_transform_load_flags(params)?;
+    let transforms = glyph_transform_specs(params)?;
+    let mut rows = Vec::new();
+    for glyph_index in glyph_transform_indices(params)? {
+        for (transform_index, spec) in transforms.iter().copied().enumerate() {
+            let row = match FT_Load_Glyph(&face, glyph_index, load_flags) {
+                Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+                    Ok(mut glyph) => {
+                        let status = FT_Glyph_Transform_Outline(
+                            Some(&mut glyph),
+                            spec.matrix.as_ref(),
+                            spec.delta.as_ref(),
+                        );
+                        let mut cbox = FT_BBox::default();
+                        FT_Outline_Glyph_CBox(Some(&glyph), 0, Some(&mut cbox));
+                        glyph_transform_row_json(
+                            glyph_index,
+                            transform_index,
+                            status,
+                            Some(outline_snapshot_json(&glyph.outline)),
+                            Some(json!({"x": glyph.root.advance.x, "y": glyph.root.advance.y})),
+                            Some(bbox_json(bbox_from_rust_bbox(cbox))),
+                            glyph_transform_mutation_class(spec),
+                        )
+                    }
+                    Err(status) => glyph_transform_row_json(
+                        glyph_index,
+                        transform_index,
+                        status,
+                        None,
+                        None,
+                        None,
+                        "error",
+                    ),
+                },
+                Err(status) => glyph_transform_row_json(
+                    glyph_index,
+                    transform_index,
+                    status,
+                    None,
+                    None,
+                    None,
+                    "error",
+                ),
+            };
+            rows.push(row);
+        }
+    }
+    Ok(glyph_transform_output(rows))
+}
+
+fn c_outline_record_json(outline: &c_abi::FT_Outline) -> Value {
+    json!({
+        "n_points": outline.n_points,
+        "n_contours": outline.n_contours,
+        "points": [],
+        "tags": [],
+        "contours": [],
+        "flags": outline.flags
+    })
+}
+
+fn c_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
+    let (_library, face) = c_open_face(case)?;
+    let params = &case.inputs.params;
+    let load_flags = glyph_transform_load_flags(params)?;
+    let transforms = glyph_transform_specs(params)?;
+    let mut rows = Vec::new();
+    for glyph_index in glyph_transform_indices(params)? {
+        for (transform_index, spec) in transforms.iter().copied().enumerate() {
+            let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+            let mut status = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+            if status == FT_Err_Ok {
+                match c_abi::abi_get_outline_glyph_from_face(face) {
+                    Ok(created) => glyph = created,
+                    Err(err) => status = err,
+                }
+            }
+            let matrix = spec.matrix.map(|matrix| c_abi::FT_Matrix {
+                xx: matrix.xx,
+                xy: matrix.xy,
+                yx: matrix.yx,
+                yy: matrix.yy,
+            });
+            let delta = spec.delta.map(|delta| c_abi::FT_Vector {
+                x: delta.x,
+                y: delta.y,
+            });
+            if status == FT_Err_Ok {
+                status = c_abi::FT_Glyph_Transform(
+                    glyph,
+                    matrix.as_ref().map_or(ptr::null(), ptr::from_ref),
+                    delta.as_ref().map_or(ptr::null(), ptr::from_ref),
+                );
+            }
+            let row = if status == FT_Err_Ok {
+                let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+                    .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+                glyph_transform_row_json(
+                    glyph_index,
+                    transform_index,
+                    status,
+                    Some(outline_snapshot_json(&snapshot.outline)),
+                    Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+                    Some(bbox_json(bbox_from_c_bbox(snapshot.cbox))),
+                    glyph_transform_mutation_class(spec),
+                )
+            } else {
+                glyph_transform_row_json(
+                    glyph_index,
+                    transform_index,
+                    status,
+                    None,
+                    None,
+                    None,
+                    "error",
+                )
+            };
+            rows.push(row);
+            if !glyph.is_null() {
+                c_abi::FT_Done_Glyph(glyph);
+            }
+        }
+    }
+    c_done_face(face);
+    Ok(glyph_transform_output(rows))
+}
+
+fn wasm_outline_record_json(outline: &wasm_abi::FontdoneWasmOutline) -> Value {
+    json!({
+        "n_points": outline.n_points,
+        "n_contours": outline.n_contours,
+        "points": [],
+        "tags": [],
+        "contours": [],
+        "flags": outline.flags
+    })
+}
+
+fn wasm_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let params = &case.inputs.params;
+    let load_flags = glyph_transform_load_flags(params)?;
+    let transforms = glyph_transform_specs(params)?;
+    let mut rows = Vec::new();
+    for glyph_index in glyph_transform_indices(params)? {
+        for (transform_index, spec) in transforms.iter().copied().enumerate() {
+            let mut glyph_handle = 0usize;
+            let mut status = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+            if status == FT_Err_Ok {
+                status = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+            }
+            let matrix = spec.matrix.map(|matrix| wasm_abi::FontdoneWasmMatrix {
+                xx: matrix.xx,
+                xy: matrix.xy,
+                yx: matrix.yx,
+                yy: matrix.yy,
+            });
+            let delta = spec.delta.map(|delta| wasm_abi::FontdoneWasmVector {
+                x: delta.x,
+                y: delta.y,
+            });
+            let glyph =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+            if status == FT_Err_Ok {
+                status = wasm_abi::fontdone_wasm_glyph_transform(
+                    glyph,
+                    matrix.as_ref().map_or(ptr::null(), ptr::from_ref),
+                    delta.as_ref().map_or(ptr::null(), ptr::from_ref),
+                );
+            }
+            let row = if status == FT_Err_Ok {
+                let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph_handle)
+                    .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+                glyph_transform_row_json(
+                    glyph_index,
+                    transform_index,
+                    status,
+                    Some(outline_snapshot_json(&snapshot.outline)),
+                    Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+                    Some(bbox_json(bbox_from_wasm_public_bbox(snapshot.cbox))),
+                    glyph_transform_mutation_class(spec),
+                )
+            } else {
+                glyph_transform_row_json(
+                    glyph_index,
+                    transform_index,
+                    status,
+                    None,
+                    None,
+                    None,
+                    "error",
+                )
+            };
+            rows.push(row);
+            if glyph_handle != 0 {
+                wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+            }
+        }
+    }
+    wasm_done_face(handle);
+    Ok(glyph_transform_output(rows))
 }
 
 fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
@@ -42166,6 +42570,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftlcdfil.set_lcd_filter_weights"
             | "ftlcdfil.set_lcd_geometry"
             | "ftglyph.done_glyph"
+            | "ftglyph.glyph_transform"
             | "ftmm.done_mm_var"
             | "ftmm.get_default_named_instance"
             | "ftmm.set_named_instance"

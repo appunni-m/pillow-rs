@@ -1549,6 +1549,40 @@ pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiOutlineGlyphSnapshot {
+    pub advance: FT_Vector,
+    pub outline: rust_ffi::FT_OutlineSnapshot,
+    pub cbox: FT_BBox,
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_get_outline_glyph_from_face(face: FT_Face) -> Result<FT_Glyph, FT_Error> {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return Err(rust_ffi::FT_Err_Invalid_Slot_Handle as FT_Error);
+    };
+    let mut glyph = ptr::null_mut();
+    let err = FT_Get_Glyph(slot.as_ptr(), &mut glyph);
+    if err == rust_ffi::FT_Err_Ok {
+        Ok(glyph)
+    } else {
+        Err(err)
+    }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_outline_glyph_snapshot(glyph: FT_Glyph) -> Option<AbiOutlineGlyphSnapshot> {
+    let owned = owned_outline_glyph_from_root(glyph)?;
+    let mut cbox = FT_BBox::default();
+    FT_Glyph_Get_CBox(glyph, 0, &mut cbox);
+    Some(AbiOutlineGlyphSnapshot {
+        advance: owned.record.root.advance,
+        outline: owned.core.outline.clone(),
+        cbox,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
 fn rust_bbox_to_abi(bbox: rust_ffi::FT_BBox) -> FT_BBox {
     FT_BBox {
         xMin: bbox.xMin,

@@ -1194,6 +1194,27 @@ pub struct AbiBitmapSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiOutlineGlyphSnapshot {
+    pub advance: FontdoneWasmVector,
+    pub outline: rust_ffi::FT_OutlineSnapshot,
+    pub cbox: FontdoneWasmBBox,
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_outline_glyph_snapshot(glyph_handle: usize) -> Option<AbiOutlineGlyphSnapshot> {
+    let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
+    let owned = wasm_owned_outline_glyph_from_root(glyph)?;
+    let mut cbox = FontdoneWasmBBox::default();
+    fontdone_wasm_glyph_get_cbox(glyph, 0, &mut cbox);
+    Some(AbiOutlineGlyphSnapshot {
+        advance: owned.record.root.advance,
+        outline: owned.core.outline.clone(),
+        cbox,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
     let face = face_ref(handle)?;
     Some(rust_face_info(&face.face))

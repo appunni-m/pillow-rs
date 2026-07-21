@@ -1717,7 +1717,7 @@ pub fn FT_Get_Outline_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_OutlineGly
     let Some(slot) = slot else {
         return Err(FT_Err_Invalid_Slot_Handle as FT_Error);
     };
-    let Some(outline) = slot.outline.clone() else {
+    let Some(mut outline) = slot.outline.clone() else {
         return Err(FT_Err_Invalid_Glyph_Format);
     };
     if slot.format != FT_GLYPH_FORMAT_OUTLINE {
@@ -1733,6 +1733,10 @@ pub fn FT_Get_Outline_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_OutlineGly
     {
         return Err(FT_Err_Invalid_Argument);
     }
+    // FreeType `ft_outline_glyph_init` allocates a fresh outline with
+    // `FT_Outline_New` before copying the slot outline, so the owned glyph
+    // target keeps `FT_OUTLINE_OWNER` even if the slot outline did not have it.
+    outline.flags |= FT_OUTLINE_OWNER as FT_Int;
     Ok(FT_OutlineGlyphOwned {
         root: FT_GlyphRec {
             library: ptr::dangling_mut(),
