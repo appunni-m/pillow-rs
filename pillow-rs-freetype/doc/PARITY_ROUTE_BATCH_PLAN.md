@@ -1704,11 +1704,55 @@ Observed impact:
 
 Rows deliberately left pending in the same surface:
 
-- `ftglyph.FT_BitmapGlyph.pointer_alias_matches_record` still needs a real
-  bitmap glyph alias route.
 - `ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled` still needs
   SVG-enabled fixture support or exact unsupported classification.
 - `ftglyph.FT_GlyphRec.clazz_is_private_identity_only` and
   `ftglyph.FT_Glyph_Class.opaque_class_identity_only` require broader
   outline/bitmap/SVG public-behavior class classification and were not
   promoted by this outline-only route.
+
+### FT_BitmapGlyph public alias route: 2026-07-22
+
+Status: implemented for `ftglyph.FT_BitmapGlyph.pointer_alias_matches_record`.
+
+Scope:
+
+- Extended the maintained `ftglyph.type_runtime` route to branch on
+  `format_filter=FT_GLYPH_FORMAT_BITMAP`.
+- The bitmap branch explicitly selects the declared `bitmap_strike_font`
+  instead of the row's `outline_font`, preventing accidental fallback to an
+  outline-only font.
+- The route uses the pinned-C `--glyph-record` path with glyph 1 from
+  `fonts/bitmap-strikes/public-bitmap-strike.ttf`, then compares the cast
+  `FT_BitmapGlyphRec` public payload: root format and advance, left/top,
+  bitmap descriptor, and bitmap buffer bytes.
+- Rust FFI, C ABI, and WASM ABI reuse the real owned bitmap glyph route added
+  for `FT_Get_Glyph`, with named-font face setup matching the oracle's size
+  setup.
+
+Pinned C behavior checked:
+
+- For the maintained bitmap strike font at 20 ppem, glyph 1 produces
+  `FT_GLYPH_FORMAT_BITMAP` (`1651078259`) and exposes:
+  `width=2`, `rows=2`, `pitch=2`, `pixel_mode=2`, `num_grays=256`,
+  `left=1`, `top=2`, `buffer_hex=1180c0ff`.
+- This route proves the bitmap alias row only.  It does not prove the broader
+  `FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` row because that
+  row also declares `FT_Glyph_To_Bitmap outline`.
+
+Observed impact:
+
+- Route audit: `pending-route` 238 → 237, `real-parity` 4729 → 4730.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyph.pointer_alias_matches_record`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` remains
+  pending until the `FT_Glyph_To_Bitmap outline` creation path is implemented
+  and compared for the same public record fields.
+- `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` still needs an ownership and
+  release-event route, not only field equality before destruction.
+- SVG alias/record rows still need SVG fixture support or exact unsupported
+  classification against pinned C.

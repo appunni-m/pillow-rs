@@ -993,8 +993,11 @@ fn glyph_record_runtime_supported(case: &InputCase) -> bool {
 }
 
 fn ftglyph_type_runtime_supported(case: &InputCase) -> bool {
-    case.case_id == "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record"
-        && !case.expect_error
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record"
+            | "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record"
+    ) && !case.expect_error
         && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
         && !has_probe_params(case)
@@ -1003,7 +1006,9 @@ fn ftglyph_type_runtime_supported(case: &InputCase) -> bool {
             .params
             .get("format_filter")
             .and_then(Value::as_str)
-            .is_some_and(|format| format == "FT_GLYPH_FORMAT_OUTLINE")
+            .is_some_and(|format| {
+                matches!(format, "FT_GLYPH_FORMAT_OUTLINE" | "FT_GLYPH_FORMAT_BITMAP")
+            })
 }
 
 fn sbit_cache_runtime_supported(case: &InputCase) -> bool {
@@ -27912,13 +27917,23 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
-            let mut args = vec!["--glyph-transform".to_string()];
-            push_font_source(case, &mut args)?;
-            push_face_size(params, &mut args)?;
-            args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
-            args.push(load_flags_param(params)?.to_string());
-            args.push("null/null".to_string());
-            Ok(args)
+            if ftglyph_type_runtime_format(params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let mut args = vec!["--glyph-record".to_string()];
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push("get".to_string());
+                Ok(args)
+            } else {
+                let mut args = vec!["--glyph-transform".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push("null/null".to_string());
+                Ok(args)
+            }
         }
         "ftglyph.glyph_to_bitmap" => {
             if case.case_id
@@ -29168,7 +29183,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_glyph_transform(case)
         }
         "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
-            rust_outline_glyph_alias(case)
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let face = open_named_face(case, "bitmap_strike_font")?;
+                rust_bitmap_glyph_record(&face, case)
+            } else {
+                rust_outline_glyph_alias(case)
+            }
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
@@ -30261,7 +30281,15 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_glyph_transform(case)
         }
         "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
-            c_outline_glyph_alias(case)
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let (library, face) = c_open_named_face(case, "bitmap_strike_font")?;
+                let output = c_bitmap_glyph_record(face, case);
+                c_done_face(face);
+                c_done_library(library);
+                output
+            } else {
+                c_outline_glyph_alias(case)
+            }
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
@@ -31223,7 +31251,14 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_glyph_transform(case)
         }
         "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
-            wasm_outline_glyph_alias(case)
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+                let output = wasm_bitmap_glyph_record(handle, case);
+                wasm_done_face(handle);
+                output
+            } else {
+                wasm_outline_glyph_alias(case)
+            }
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -32544,9 +32579,21 @@ fn glyph_transform_output(rows: Vec<Value>) -> RunOutput {
 }
 
 fn ftglyph_type_runtime_glyph_index(params: &Value) -> Result<u32, String> {
+    if let Some(value) = params.get("glyph_index") {
+        return u32_value(value, "glyph_index");
+    }
+    if ftglyph_type_runtime_format(params)? == "FT_GLYPH_FORMAT_BITMAP" {
+        Ok(1)
+    } else {
+        Ok(36)
+    }
+}
+
+fn ftglyph_type_runtime_format(params: &Value) -> Result<&str, String> {
     params
-        .get("glyph_index")
-        .map_or(Ok(36), |value| u32_value(value, "glyph_index"))
+        .get("format_filter")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing format_filter".to_string())
 }
 
 fn rust_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
@@ -33048,6 +33095,14 @@ fn bitmap_glyph_record_index(params: &Value) -> Result<u32, String> {
         .get("source_creation")
         .and_then(Value::as_str)
         .is_some_and(|source| source == "FT_Get_Glyph bitmap")
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    if params
+        .get("format_filter")
+        .and_then(Value::as_str)
+        .is_some_and(|format| format == "FT_GLYPH_FORMAT_BITMAP")
         && params.get("glyph_index").is_none()
     {
         return Ok(1);
@@ -39528,18 +39583,50 @@ fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), 
     c_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn c_open_named_face(
+    case: &InputCase,
+    name: &str,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let bytes = named_font_bytes(case, name)?;
+    c_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn c_open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
-    if preserve_initial_size(&case.inputs.params)? {
+    c_apply_size_or_char_size(library, face, pixel_size, &case.inputs.params)
+}
+
+fn c_open_face_from_bytes_with_size_or_char_size(
+    bytes: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let (library, face) = c_new_face_from_bytes(bytes, face_index)?;
+    c_apply_size_or_char_size(library, face, pixel_size, params)
+}
+
+fn c_apply_size_or_char_size(
+    library: c_abi::FT_Library,
+    face: c_abi::FT_Face,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    if preserve_initial_size(params)? {
         return Ok((library, face));
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = c_size_request_rec(row);
         c_abi::FT_Request_Size(face, &request)
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         c_abi::FT_Set_Char_Size(
             face,
             row.char_width,
@@ -40178,27 +40265,46 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
     wasm_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn wasm_open_named_face(case: &InputCase, name: &str) -> Result<usize, String> {
+    let bytes = named_font_bytes(case, name)?;
+    wasm_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn wasm_open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<usize, String> {
     let bytes = font_bytes(case)?;
-    let status = wasm_abi::fontdone_wasm_open_face(
-        bytes.as_ptr(),
-        bytes.len(),
+    wasm_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
         face_index_param(&case.inputs.params)?,
-        20.0,
-    );
+        pixel_size,
+        &case.inputs.params,
+    )
+}
+
+fn wasm_open_face_from_bytes_with_size_or_char_size(
+    bytes: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<usize, String> {
+    let status = wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    if preserve_initial_size(&case.inputs.params)? {
+    if preserve_initial_size(params)? {
         return Ok(status.handle);
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = wasm_size_request_rec(row);
         wasm_abi::fontdone_wasm_request_size(status.handle, &request)
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         wasm_abi::fontdone_wasm_set_char_size(
             status.handle,
             row.char_width,
@@ -42198,26 +42304,45 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
     open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn open_named_face(case: &InputCase, name: &str) -> Result<FT_Face, String> {
+    let data = named_font_bytes(case, name)?;
+    open_face_from_bytes_with_size_or_char_size(
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<FT_Face, String> {
     let data = font_bytes(case)?;
-    let library = FT_Init_FreeType();
-    let mut face = FT_New_Memory_Face(
-        &library,
+    open_face_from_bytes_with_size_or_char_size(
         data.as_ref(),
         face_index_param(&case.inputs.params)?,
-        20.0,
+        pixel_size,
+        &case.inputs.params,
     )
-    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    if preserve_initial_size(&case.inputs.params)? {
+}
+
+fn open_face_from_bytes_with_size_or_char_size(
+    data: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<FT_Face, String> {
+    let library = FT_Init_FreeType();
+    let mut face = FT_New_Memory_Face(&library, data, face_index, 20.0)
+        .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    if preserve_initial_size(params)? {
         return Ok(face);
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = rust_size_request_rec(row);
         FT_Request_Size(Some(&mut face), Some(&request))
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         FT_Set_Char_Size(
             &mut face,
             row.char_width,
