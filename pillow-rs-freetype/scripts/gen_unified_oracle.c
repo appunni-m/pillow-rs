@@ -20141,6 +20141,54 @@ static int emit_open_face_stream_ownership(int argc, char** argv) {
     return 0;
 }
 
+static void print_memory_stream_frame_read(FT_Stream stream, unsigned long offset, unsigned long count) {
+    unsigned long size = stream ? stream->size : 0;
+    int in_bounds = stream && offset <= size && count <= size - offset;
+    unsigned long available = 0;
+    if (stream && offset <= size) {
+        unsigned long remaining = size - offset;
+        available = count < remaining ? count : remaining;
+    }
+    printf("{\"offset\":%lu,\"count\":%lu,\"in_bounds\":", offset, count);
+    print_json_bool(in_bounds);
+    printf(",\"bytes\":\"");
+    if (stream && stream->base && available > 0) {
+        print_hex_bytes(stream->base + offset, (long)available);
+    }
+    printf("\"}");
+}
+
+static int emit_memory_stream_probe(int argc, char** argv) {
+    if (argc != 5) {
+        fprintf(stderr, "memory stream probe requires source_kind source_value face_index\n");
+        return 2;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Stream stream = face.face ? face.face->stream : NULL;
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"face_load_status\":0,\"stream_fields\":{");
+    printf("\"base_nullness\":");
+    print_json_bool(!stream || !stream->base);
+    printf(",\"size\":%lu,\"pos\":%lu,\"cursor_nullness\":",
+           stream ? stream->size : 0,
+           stream ? stream->pos : 0);
+    print_json_bool(!stream || !stream->cursor);
+    printf(",\"limit_nullness\":");
+    print_json_bool(!stream || !stream->limit);
+    printf("},\"frame_read_events\":[");
+    print_memory_stream_frame_read(stream, 0, 4);
+    printf(",");
+    print_memory_stream_frame_read(stream, 12, 4);
+    printf("]}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static void print_face_style_flag_output(FT_Error err, FT_Face face) {
     printf("{\"status\":%d,\"family_name\":", err);
     print_nullable_c_string_result(face ? face->family_name : NULL);
@@ -22238,6 +22286,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--open-face-stream-ownership")) {
         return emit_open_face_stream_ownership(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--memory-stream-probe")) {
+        return emit_memory_stream_probe(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--face-owned-handles")) {
         return emit_face_owned_handles(argc, argv);

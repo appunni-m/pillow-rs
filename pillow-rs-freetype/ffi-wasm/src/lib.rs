@@ -1342,6 +1342,12 @@ pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_face_stream_info(handle: usize) -> Option<rust_ffi::FT_StreamRec> {
+    let face = face_ref(handle)?;
+    Some(face.face.memory_stream_record())
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_face_available_sizes(handle: usize) -> Option<Vec<rust_ffi::FT_Bitmap_Size>> {
     let face = face_ref(handle)?;
     Some(face.face.available_sizes.to_vec())
@@ -4873,6 +4879,7 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..rust_ffi::FT_FaceRecPublic::default()
     }
 }

@@ -23296,6 +23296,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "ftsystem.memory_stream_probe" => {
+            let mut args = vec!["--memory-stream-probe".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.face_flags" => {
             let mut args = vec!["--face-flags".to_string()];
             push_font_source(case, &mut args)?;
@@ -25614,6 +25620,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => rust_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => rust_memory_stream_probe(case),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -26465,6 +26472,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => c_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => c_memory_stream_probe(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return c_open_face_name_options(case);
@@ -27456,6 +27464,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => wasm_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => wasm_memory_stream_probe(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return wasm_open_face_name_options(case);
@@ -35555,6 +35564,7 @@ fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..FT_FaceRecPublic::default()
     }
 }
@@ -37436,6 +37446,163 @@ fn wasm_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(status.handle);
     }
     Ok(open_face_stream_output(status.error, face_flags, 1))
+}
+
+fn memory_stream_frame_reads(params: &Value) -> Result<Vec<(usize, usize)>, String> {
+    params
+        .get("stream_probe")
+        .and_then(|probe| probe.get("frame_reads"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing stream_probe.frame_reads".to_string())?
+        .iter()
+        .map(|row| {
+            let offset = row
+                .get("offset")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| format!("invalid stream frame-read offset {row}"))?;
+            let count = row
+                .get("count")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| format!("invalid stream frame-read count {row}"))?;
+            Ok((offset, count))
+        })
+        .collect()
+}
+
+fn memory_stream_probe_output(
+    status: FT_Error,
+    stream: Option<FT_StreamRec>,
+    bytes: &[u8],
+    frame_reads: &[(usize, usize)],
+) -> RunOutput {
+    let stream_fields = stream.map_or_else(
+        || {
+            json!({
+                "base_nullness": true,
+                "size": 0,
+                "pos": 0,
+                "cursor_nullness": true,
+                "limit_nullness": true
+            })
+        },
+        |stream| {
+            json!({
+                "base_nullness": stream.base.is_null(),
+                "size": stream.size,
+                "pos": stream.pos,
+                "cursor_nullness": stream.cursor.is_null(),
+                "limit_nullness": stream.limit.is_null()
+            })
+        },
+    );
+    let frame_read_events = frame_reads
+        .iter()
+        .map(|(offset, count)| {
+            let end = offset.saturating_add(*count).min(bytes.len());
+            let in_bounds = *offset <= bytes.len() && offset.saturating_add(*count) <= bytes.len();
+            let slice = if *offset <= bytes.len() {
+                &bytes[*offset..end]
+            } else {
+                &[]
+            };
+            json!({
+                "offset": offset,
+                "count": count,
+                "in_bounds": in_bounds,
+                "bytes": hex_bytes(slice)
+            })
+        })
+        .collect::<Vec<_>>();
+    let output = json!({
+        "face_load_status": status,
+        "stream_fields": stream_fields,
+        "frame_read_events": frame_read_events
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    ) {
+        Ok(face) => Ok(memory_stream_probe_output(
+            FT_Err_Ok,
+            Some(face.memory_stream_record()),
+            bytes.as_ref(),
+            &frame_reads,
+        )),
+        Err(err) => Ok(memory_stream_probe_output(
+            err,
+            None,
+            bytes.as_ref(),
+            &frame_reads,
+        )),
+    }
+}
+
+fn c_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(memory_stream_probe_output(
+            init_err,
+            None,
+            bytes.as_ref(),
+            &frame_reads,
+        ));
+    }
+    let mut face = std::ptr::null_mut();
+    let err = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        i64::try_from(bytes.len()).map_err(|err| err.to_string())?,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let stream = if err == FT_Err_Ok {
+        c_abi::abi_face_stream_info(face)
+    } else {
+        None
+    };
+    let output = memory_stream_probe_output(err, stream, bytes.as_ref(), &frame_reads);
+    if err == FT_Err_Ok {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let stream = if status.error == FT_Err_Ok {
+        wasm_abi::abi_face_stream_info(status.handle)
+    } else {
+        None
+    };
+    let output = memory_stream_probe_output(status.error, stream, bytes.as_ref(), &frame_reads);
+    wasm_done_face(status.handle);
+    Ok(output)
 }
 
 fn face_style_flag_output(

@@ -4340,6 +4340,17 @@ def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str |
 
 def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
+        row.operation == "ftsystem.memory_stream_probe"
+        and row.case_id == "ftsystem.FT_StreamRec.memory_stream_field_contract"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_StreamRec memory-stream field contract validates "
+            "FT_New_Memory_Face stream base/size/pos/cursor/limit nullness and "
+            "declared frame byte reads through pinned C oracle, Rust FFI, C ABI, "
+            "and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.get_ps_font_private_mm_blend"
         and row.case_id != "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value"
         and "rows" not in row.params

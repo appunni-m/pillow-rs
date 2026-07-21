@@ -28,9 +28,9 @@ use super::types::{
     FT_Module_Interface, FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot,
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
     FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
-    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
+    FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
+    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
     PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
     TT_VertHeader,
 };
@@ -1237,6 +1237,7 @@ pub struct FT_Face {
     pub size_metrics: FT_Size_MetricsRec,
     pub active_charmap_index: FT_Int,
     pub charmaps: Box<[FT_CharMapRecPublic]>,
+    memory_stream: Box<FT_StreamRec>,
     inner: Rc<RefCell<api::Face>>,
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
@@ -1259,6 +1260,16 @@ pub struct FT_Face {
     increase_x_height: FT_UInt,
     glyph_to_script_map: Box<[FT_UShort]>,
     refcount: usize,
+}
+
+impl FT_Face {
+    pub fn memory_stream(&self) -> FT_Stream {
+        (&*self.memory_stream as *const FT_StreamRec).cast_mut()
+    }
+
+    pub fn memory_stream_record(&self) -> FT_StreamRec {
+        *self.memory_stream
+    }
 }
 
 #[derive(Clone)]
@@ -5436,6 +5447,28 @@ pub fn FT_Open_External_Stream_Face_With_Name_Options(
 
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
+    let raw_data = &font.data.raw_data;
+    let stream_pos = font
+        .data
+        .table_directory
+        .record(u32::from_be_bytes(*b"cvt "))
+        .map_or(0, |record| record.offset);
+    let memory_stream = Box::new(FT_StreamRec {
+        // C FreeType's FT_New_Memory_Face builds an FT_StreamRec over the
+        // retained face bytes.  Public stream probes compare nullness, size,
+        // pos, and frame bytes against freetype/src/base/ftobjs.c stream-open
+        // setup and ftstream.c memory-frame behavior.
+        base: raw_data.as_ptr().cast_mut(),
+        size: FT_ULong::try_from(raw_data.len()).unwrap_or(FT_ULong::MAX),
+        pos: FT_ULong::from(stream_pos),
+        descriptor: FT_StreamDesc::default(),
+        pathname: FT_StreamDesc::default(),
+        read: std::ptr::null_mut(),
+        close: std::ptr::null_mut(),
+        memory: std::ptr::null_mut(),
+        cursor: std::ptr::null_mut(),
+        limit: std::ptr::null_mut(),
+    });
     let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
     let type1_font_info_strings = type1_font_info_strings(font.type1_font_info());
@@ -5538,6 +5571,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         size_metrics,
         active_charmap_index,
         charmaps,
+        memory_stream,
         inner,
         sizes,
         probe_only,
