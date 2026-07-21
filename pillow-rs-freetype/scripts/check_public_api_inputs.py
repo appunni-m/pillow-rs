@@ -2628,11 +2628,6 @@ def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "fixture and exact T1_Private dictionary scalar/array comparison "
             "across all ABI lanes"
         ),
-        "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix": (
-            "FT_Get_PS_Font_Value parity needs maintained selector routing for "
-            "font-info, private, encoding, and blend keys with exact value "
-            "bytes, lengths, and public errors"
-        ),
         "t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix": (
             "FT_Has_PS_Glyph_Names parity needs Type1/CFF fixtures proving "
             "pinned C glyph-name availability and matching Rust/C-ABI/WASM "
@@ -4415,6 +4410,17 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "FTC_SBitCache_LookupScaler scaler size-selection and FT_ULong "
             "load-flag truncation outputs validate through pinned C oracle, "
             "Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_value"
+        and row.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Value selector matrix validates scalar, string, "
+            "array, encoding, sizing-query, short-buffer, negative-length, "
+            "unsupported-service, non-PostScript, and null-face behavior "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_value"

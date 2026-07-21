@@ -2931,6 +2931,34 @@ fn copy_value_bytes(value: Option<&mut [u8]>, required_len: usize, source: &[u8]
     FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
 }
 
+fn copy_ps_string_value(value: Option<&mut [u8]>, string: Option<&str>) -> FT_Long {
+    let Some(string) = string else {
+        return -1;
+    };
+    let required_len = string.len().saturating_add(1);
+    if let Some(value) = value.filter(|value| value.len() >= required_len) {
+        value[..string.len()].copy_from_slice(string.as_bytes());
+        value[string.len()] = 0;
+    }
+    FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
+}
+
+fn copy_ps_short_array_value(
+    value: Option<&mut [u8]>,
+    idx: FT_UInt,
+    count: usize,
+    source: &[FT_Short],
+) -> FT_Long {
+    let Some(item) = usize::try_from(idx)
+        .ok()
+        .filter(|index| *index < count)
+        .and_then(|index| source.get(index))
+    else {
+        return -1;
+    };
+    copy_value_bytes(value, std::mem::size_of::<FT_Short>(), &item.to_ne_bytes())
+}
+
 pub fn FT_Get_PS_Font_Value(
     face: Option<&FT_Face>,
     key: PS_Dict_Keys,
@@ -2942,31 +2970,172 @@ pub fn FT_Get_PS_Font_Value(
         return 0;
     };
     let inner = face.inner.borrow();
-    let Some(encoding) = inner.font().type1_encoding() else {
-        return 0;
-    };
+    let font = inner.font();
     let value_len = usize::try_from(value_len.max(0)).unwrap_or(usize::MAX);
     let value = value.map(|buffer| {
         let len = buffer.len().min(value_len);
         &mut buffer[..len]
     });
+    // C parity: `src/base/fttype1.c:133-147` returns 0 when the face has no
+    // POSTSCRIPT_INFO service, then `src/type1/t1driver.c:t1_ps_get_font_value`
+    // returns the required byte length and only copies when the destination is
+    // non-null and large enough.
+    let has_type1_service = font.type1_font_info().is_some()
+        || font.type1_private().is_some()
+        || font.type1_encoding().is_some();
+    if !has_type1_service {
+        return 0;
+    }
     match key {
+        PS_DICT_UNIQUE_ID => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.unique_id.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_STD_HW => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &private.standard_width[0].to_ne_bytes(),
+            )
+        }),
+        PS_DICT_STD_VW => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &private.standard_height[0].to_ne_bytes(),
+            )
+        }),
+        PS_DICT_NUM_BLUE_VALUES => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Byte>(),
+                &[private.num_blue_values],
+            )
+        }),
+        PS_DICT_BLUE_VALUE => font.type1_private().map_or(-1, |private| {
+            copy_ps_short_array_value(
+                value,
+                idx,
+                usize::from(private.num_blue_values),
+                &private.blue_values,
+            )
+        }),
+        PS_DICT_BLUE_FUZZ => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.blue_fuzz.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_BLUE_SCALE => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Fixed>(),
+                &private.blue_scale.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_BLUE_SHIFT => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.blue_shift.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_LEN_IV => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.len_iv.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_PASSWORD => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Long>(),
+                &private.password.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_LANGUAGE_GROUP => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Long>(),
+                &private.language_group.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_VERSION => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.version.as_deref()),
+        ),
+        PS_DICT_NOTICE => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.notice.as_deref()),
+        ),
+        PS_DICT_FULL_NAME => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.full_name.as_deref()),
+        ),
+        PS_DICT_FAMILY_NAME => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.family_name.as_deref()),
+        ),
+        PS_DICT_WEIGHT => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.weight.as_deref()),
+        ),
+        PS_DICT_IS_FIXED_PITCH => font.type1_font_info().map_or(-1, |info| {
+            let fixed = FT_Bool::from(info.is_fixed_pitch);
+            copy_value_bytes(value, std::mem::size_of::<FT_Bool>(), &fixed.to_ne_bytes())
+        }),
+        PS_DICT_UNDERLINE_POSITION => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Short>(),
+                &info.underline_position.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_UNDERLINE_THICKNESS => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &info.underline_thickness.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_ITALIC_ANGLE => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Fixed>(),
+                &info.italic_angle.to_ne_bytes(),
+            )
+        }),
         // FreeType `src/type1/t1driver.c:t1_ps_get_font_value` copies
         // `type1->encoding_type` as a public `T1_EncodingType` enum and
         // returns its required byte length even for sizing queries.
-        PS_DICT_ENCODING_TYPE => copy_value_bytes(
-            value,
-            std::mem::size_of::<PS_Dict_Keys>(),
-            &encoding.encoding_type.to_ne_bytes(),
-        ),
+        PS_DICT_ENCODING_TYPE => font.type1_encoding().map_or(-1, |encoding| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<PS_Dict_Keys>(),
+                &encoding.encoding_type.to_ne_bytes(),
+            )
+        }),
         PS_DICT_ENCODING_ENTRY
-            if encoding.encoding_type == 1
+            if font
+                .type1_encoding()
+                .is_some_and(|encoding| encoding.encoding_type == 1)
                 && usize::try_from(idx)
                     .ok()
-                    .and_then(|index| encoding.entries.get(index))
+                    .and_then(|index| font.type1_encoding()?.entries.get(index))
                     .and_then(Option::as_deref)
                     .is_some() =>
         {
+            let encoding = font.type1_encoding().unwrap_or_else(|| unreachable!());
             let name = encoding.entries[usize::try_from(idx).unwrap_or(0)]
                 .as_deref()
                 .unwrap_or("");

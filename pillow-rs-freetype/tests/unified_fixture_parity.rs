@@ -2762,6 +2762,9 @@ impl BackendComparisonWorker {
                 rust_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => rust_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                rust_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -3086,6 +3089,9 @@ impl BackendComparisonWorker {
                 c_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => c_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                c_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -3414,6 +3420,9 @@ impl BackendComparisonWorker {
                 wasm_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => wasm_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                wasm_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -9430,6 +9439,185 @@ fn wasm_ps_font_value_encoding_for_bytes(
         &encoding_bytes,
         entry_rows,
     ))
+}
+
+fn ps_font_value_signature_matrix_case(case: &InputCase) -> bool {
+    case.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
+}
+
+fn ps_font_value_matrix_scenarios(case: &InputCase) -> Result<Vec<&Value>, String> {
+    case.inputs
+        .params
+        .get("scenarios")
+        .and_then(Value::as_array)
+        .map(|rows| rows.iter().collect())
+        .ok_or_else(|| "missing FT_Get_PS_Font_Value scenarios".to_string())
+}
+
+fn ps_font_value_key_value(key: &str) -> Result<PS_Dict_Keys, String> {
+    match key {
+        "PS_DICT_UNDERLINE_POSITION" => Ok(PS_DICT_UNDERLINE_POSITION),
+        "PS_DICT_FULL_NAME" => Ok(PS_DICT_FULL_NAME),
+        "PS_DICT_BLUE_VALUE" => Ok(PS_DICT_BLUE_VALUE),
+        "PS_DICT_ENCODING_TYPE" => Ok(PS_DICT_ENCODING_TYPE),
+        other => Err(format!("unsupported PS_Dict_Keys scenario {other}")),
+    }
+}
+
+fn ps_font_value_scenario_asset<'a>(
+    case: &'a InputCase,
+    scenario: &Value,
+) -> Result<Option<&'a Asset>, String> {
+    if scenario
+        .get("face_pointer_mode")
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode == "null")
+    {
+        return Ok(None);
+    }
+    let asset = string_param(scenario, "asset")?;
+    case.inputs
+        .assets
+        .get(asset)
+        .map(Some)
+        .ok_or_else(|| format!("missing FT_Get_PS_Font_Value asset {asset}"))
+}
+
+fn ps_font_value_scenario_idx(scenario: &Value) -> Result<FT_UInt, String> {
+    scenario
+        .get("idx")
+        .and_then(Value::as_u64)
+        .and_then(|value| FT_UInt::try_from(value).ok())
+        .ok_or_else(|| format!("invalid FT_Get_PS_Font_Value idx {scenario}"))
+}
+
+fn ps_font_value_matrix_row<F>(scenario: &Value, mut call: F) -> Result<Value, String>
+where
+    F: FnMut(Option<&mut [u8]>, FT_Long) -> FT_Long,
+{
+    let id = string_param(scenario, "id")?;
+    let key = string_param(scenario, "key")?;
+    let idx = ps_font_value_scenario_idx(scenario)?;
+    let pointer_mode = scenario
+        .get("value_pointer_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("valid");
+    let prequery = call(None, 0);
+    let value_len = if let Some(len) = scenario.get("value_len") {
+        i64_value(len, "value_len")?
+    } else if scenario
+        .get("value_len_mode")
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode == "exact")
+        && prequery > 0
+    {
+        prequery
+    } else {
+        256
+    };
+    let mut buffer = vec![0xA5u8; 256];
+    let ret = if pointer_mode == "null" {
+        call(None, value_len)
+    } else {
+        call(Some(&mut buffer), value_len)
+    };
+    let prefix_len = if pointer_mode == "null" {
+        0
+    } else if ret > 0
+        && usize::try_from(ret)
+            .ok()
+            .is_some_and(|len| len <= buffer.len() && value_len >= ret)
+    {
+        usize::try_from(ret).unwrap_or(0)
+    } else {
+        16
+    };
+    Ok(json!({
+        "id": id,
+        "key": key,
+        "idx": idx,
+        "prequery": prequery,
+        "value_len": value_len,
+        "return": ret,
+        "buffer_hex": hex_bytes(&buffer[..prefix_len])
+    }))
+}
+
+fn rust_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let face = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| rust_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?;
+            ps_font_value_matrix_row(scenario, |value, value_len| {
+                FT_Get_PS_Font_Value(face.as_ref(), key, idx, value, value_len)
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn c_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let opened = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| c_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?;
+            let face = opened.map_or(ptr::null_mut(), |(_, face)| face);
+            let row = ps_font_value_matrix_row(scenario, |value, value_len| {
+                let value_ptr = value.map_or(ptr::null_mut(), |buffer| {
+                    buffer.as_mut_ptr().cast::<c_void>()
+                });
+                c_abi::FT_Get_PS_Font_Value(face, key, idx, value_ptr, value_len)
+            })?;
+            if let Some((library, face)) = opened {
+                c_done_face(face);
+                c_done_library(library);
+            }
+            Ok(row)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn wasm_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let handle = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?
+                .unwrap_or(0);
+            let row = ps_font_value_matrix_row(scenario, |value, value_len| {
+                let value_ptr = value.map_or(ptr::null_mut(), |buffer| {
+                    buffer.as_mut_ptr().cast::<c_void>()
+                });
+                wasm_abi::fontdone_wasm_get_ps_font_value(handle, key, idx, value_ptr, value_len)
+            })?;
+            if handle != 0 {
+                wasm_done_face(handle);
+            }
+            Ok(row)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ok(json!({ "rows": rows })))
 }
 
 fn ps_font_value_standard_rows(case: &InputCase) -> Result<Vec<&Value>, String> {
@@ -23533,6 +23721,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "t1tables.t1_blend_flags_private_group" => {
             let mut args = vec!["--ps-font-private".to_string()];
             push_named_font_source(case, "type1_mm_font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+            let mut args = vec!["--ps-font-value-matrix".to_string()];
+            push_named_font_source(case, "type1_font", &mut args)?;
+            push_named_font_source(case, "type1_custom_encoding", &mut args)?;
+            push_named_font_source(case, "cff_font", &mut args)?;
+            push_named_font_source(case, "truetype_font", &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
