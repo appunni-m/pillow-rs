@@ -10889,6 +10889,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.get_color_glyph_paint_and_resolve"
             | "ftcolor.get_color_glyph_paint_then_get_paint"
             | "ftcolor.get_paint"
+            | "ftcolor.get_paint_and_colorline_stops"
             | "ftcolor.get_paint_layers"
             | "ftcolor.get_paint_graph"
             | "ftcolor.get_paint_graph_node"
@@ -10935,6 +10936,8 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
+            | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
             | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
             | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
             | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
@@ -10947,6 +10950,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
             | "ftcolor.FT_Affine23.root_transform_values"
             | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_ColorIndex.solid_and_color_stop_values"
             | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
             | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
             | "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
@@ -11749,6 +11753,7 @@ fn color_all_paints_case(case_id: &str) -> bool {
             | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
             | "ftcolor.FT_Affine23.root_transform_values"
             | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_ColorIndex.solid_and_color_stop_values"
             | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
             | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
     )
@@ -11916,6 +11921,21 @@ fn color_all_paints_output_for_open_face(
                 gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "sweep_reflect", 42, 1),
             ],
         }))),
+        "ftcolor.FT_ColorIndex.solid_and_color_stop_values" => Ok(ok(json!({
+            "solid_paints": [
+                color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "solid", 37),
+                color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "foreground_solid", 50),
+            ],
+            "colorline": gradient_colorline_sequence_json(
+                backend,
+                rust_face_ref,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                40,
+                1,
+            ),
+        }))),
         "ftcolor.FT_Get_Paint.success_inserts_root_transform"
         | "ftcolor.FT_Affine23.root_transform_values" => Ok(ok(json!({
             "runs": color_all_paints_root_transform_runs_json(
@@ -12000,6 +12020,8 @@ fn color_static_gradient_case(case_id: &str) -> bool {
         "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
+            | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
             | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
             | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
             | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
@@ -12033,6 +12055,7 @@ fn color_static_gradient_output_for_open_face(
             "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
         })),
         "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+        | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
         | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat" => ok(json!({
             "sequence": gradient_colorline_sequence_json(
                 backend,
@@ -12046,6 +12069,7 @@ fn color_static_gradient_output_for_open_face(
             "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
         })),
         "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+        | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
         | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect" => ok(json!({
             "sequence": gradient_colorline_sequence_json(
                 backend,

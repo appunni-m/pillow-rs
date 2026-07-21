@@ -1147,3 +1147,57 @@ Remaining nearby blockers:
   a declared `fonts/color/malformed-colr-v1-paints.ttf` malformed-asset input.
   They remain pending until that separate malformed fixture is generated and
   routed; the success all-paints fixture is now covered.
+
+## Batch: COLRv1 direct gradient records and ColorIndex values
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- Operation `ftcolor.get_color_glyph_paint_and_get_paint`
+  - `ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values`
+  - `ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values`
+- Operation `ftcolor.get_paint_and_colorline_stops`
+  - `ftcolor.FT_ColorIndex.solid_and_color_stop_values`
+
+Fix:
+
+- Pointed the radial and sweep public-record inputs at the maintained
+  `tests/fixtures/fonts/color/colr-v1-static-gradients.ttf` fixture instead of
+  absent per-format duplicate fixture names.
+- Reused the pinned C/Rust/C ABI/WASM static-gradient route to compare radial
+  and sweep `FT_Get_Paint` public union fields plus attached ColorLine iterator
+  state and stop traversal.
+- Added an all-paints ColorIndex route comparing normal solid paint,
+  foreground `0xFFFF` solid paint, and linear-gradient `FT_ColorStop.color`
+  palette/alpha values through the same pinned C oracle and every ABI leg.
+- Fixed the color-paint success dispatcher to include
+  `ftcolor.get_paint_and_colorline_stops`; before this, routed ColorIndex rows
+  fell through to `FT_Err_Unimplemented_Feature` in Rust/C ABI/WASM while the
+  pinned C oracle was producing real output.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_and_get_paint
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_ColorIndex.solid_and_color_stop_values
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint_and_colorline_stops
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 254 → 251, `real-parity` 4709 → 4712.
+- Focused direct-gradient runtime: compared 8 / total 8, passed 8, failed 0.
+- Focused ColorIndex runtime: compared 1 / total 1, passed 1, failed 0.
+
+Remaining nearby blocker:
+
+- `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values` still
+  declares unresolved variable-gradient and malformed-COLR assets.  Keep it
+  pending until those separate inputs exist or the manifest is deliberately
+  split into a static-success row and future variable/malformed rows.
