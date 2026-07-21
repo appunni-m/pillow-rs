@@ -11504,6 +11504,64 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_StreamRec` memory-stream field contract
+
+Current status:
+
+- `ftsystem.FT_StreamRec.memory_stream_field_contract` remains
+  `pending-route`.
+- The existing `FT_OPEN_STREAM` ownership route proves callback stream close
+  ownership for `FT_Open_Face`, but it does not prove FreeType's
+  memory-stream record that is synthesized by `FT_New_Memory_Face`.
+- The ABI already exposes `FT_StreamRec` layout fields (`base`, `size`, `pos`,
+  `descriptor`, `pathname`, `read`, `close`, `memory`, `cursor`, `limit`) and
+  the C ABI can accept caller-owned `FT_StreamRec` for external streams.  That
+  is layout/ownership coverage only.
+
+Pinned C behavior to prove before promotion:
+
+- `FT_New_Memory_Face(library, base, size, face_index, &face)` creates a
+  memory stream whose public fields describe the caller bytes without installing
+  callback `read`/`close` functions.
+- The initial stream state must be compared against pinned FreeType 2.14.3 for
+  at least:
+  - `base` identity relative to the input bytes;
+  - `size`;
+  - `pos`;
+  - `cursor` and `limit` nullness or offsets after public frame reads;
+  - `descriptor` and `pathname` nullness;
+  - `read` and `close` nullness;
+  - observable frame-read/seek effects if the route reads through the stream.
+- The same route must be run through Rust FFI, thin C ABI, and WASM ABI.  A
+  Rust-only probe or layout-only `FT_StreamRec` record inspection is not parity.
+
+Why it is still pending:
+
+- `FT_Face` does not currently expose a maintained test-only memory-stream
+  inspection facade that can be consumed through all ABI lanes.
+- The recent external-stream route records caller stream close behavior, but
+  memory streams are internally allocated by `FT_New_Memory_Face`; reusing the
+  external-stream close route would prove a different input.
+
+Required fix plan:
+
+1. Add a test-only, feature-gated stream probe that opens the maintained
+   `input/fonts/DejaVuSans.ttf` bytes with `FT_New_Memory_Face`.
+2. Expose only public `FT_StreamRec` field classifications and public read/seek
+   side effects through Rust FFI, C ABI, and WASM ABI; do not expose private
+   core internals as the comparison.
+3. Add the matching pinned-C oracle route in `gen_unified_oracle.c`.
+4. Promote `ftsystem.FT_StreamRec.memory_stream_field_contract` only after the
+   focused operation passes with identical C oracle, Rust FFI, C ABI, and WASM
+   output.
+
+Verification target:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftsystem.memory_stream_probe
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Result: Type1 MM underline blend dictionary public output
 
 Rows promoted:
