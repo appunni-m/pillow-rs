@@ -202,6 +202,49 @@ checked into a maintained generator or fixture note.
 | TrueType phantom-point backward-compatibility and synthetic outline JSON | No public exact fixtures found. | Generate locally; these are behavior-specific fixtures, not internet corpus assets. |
 | malformed `maxp` | Exact declared files were placeholder symlinks; no internet asset should be used. | Completed. `scripts/build_sfnt_fixtures.py` generates malformed SFNTs and `face.load_then_get_sfnt_table.maxp` now compares pinned-C face-load status, pointer nullness, and adjusted `TT_MaxProfile` fields through Rust FFI, C ABI, and WASM ABI. |
 
+### Basic DejaVu fixture path standardization
+
+The missing-fixture sweep reported many references to
+`fonts/basic/dejavu-sans.ttf`, `fonts/basic/DejaVuSans.ttf`, and
+`fixtures/assets/fonts/DejaVuSans.ttf`. These are not independent missing
+fixtures. They are legacy path spellings for the maintained standard input
+`input/fonts/DejaVuSans.ttf`. The unified parity harness resolves all three
+spellings to that single checked-in font so same-input C/Rust/C-ABI/WASM
+comparisons use identical bytes.
+
+Do not apply the same shortcut to `fonts/basic/dejavu-serif.ttf`. The current
+tree has `input/fonts/LiberationSerif-Regular.ttf`, but that is not the same
+font as DejaVu Serif. Rows that truly require a second serif face must either
+vendor a license-reviewed DejaVu Serif asset with recorded provenance and
+pinned-C output, or be changed through a reviewed manifest update to name
+`LiberationSerif-Regular.ttf` as the actual same input.
+
+### Type1/CFF PostScript table fixture split
+
+The full `FT_Get_PS_Font_Info` and `FT_Get_PS_Font_Private` signature matrices
+remain pending because the declared Type1/CFF2/CID/Type42 success and error
+asset set is not fully maintained. Do not mark the aggregate matrix complete.
+
+Checked and rejected in this sweep:
+
+- Generating `input/fonts/type1/fontinfo-populated.pfb` and
+  `input/fonts/type1/private-dict-populated.pfb` from the existing compact Type1
+  builder was not a valid success fixture for these APIs. Pinned C returned
+  error `7` for `FT_Get_PS_Font_Info`/`FT_Get_PS_Font_Private` on those same
+  bytes while Rust returned success, so keeping those rows would expose a real
+  Rust/C contract gap, not a parity fixture.
+- `input/fonts/cff/fontinfo-populated.otf` is not a valid
+  `FT_Get_PS_Font_Info` success row for the current pinned build; pinned C
+  returned error `7` while Rust returned success. This remains implementation
+  work, not a green fixture promotion.
+
+Promoted in this sweep:
+
+- `t1tables.FT_Get_PS_Font_Private.cff_invalid_argument` uses the maintained
+  `input/fonts/cff/fontinfo-populated.otf` asset and compares the exact
+  `FT_Err_Invalid_Argument` unsupported-service behavior through pinned C,
+  Rust FFI, C ABI, and WASM ABI.
+
 After the malformed `TT_MaxProfile` route:
 
 ```text
