@@ -61,12 +61,30 @@ pub struct Font {
     pub is_italic: bool,
     family_name: String,
     subfamily_name: String,
+    bdf_properties: Vec<BdfPropertyEntry>,
     size_metrics: SizeMetrics,
     selected_charmap: usize,
     bytecode_context: BytecodeContextCache,
     /// Reusable raster scratch space for gray rasterizer passes.
     /// Avoids allocating scanline cell vectors on every glyph render.
     pub(crate) raster_scratch: std::cell::RefCell<crate::grays::RasterScratch>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BdfPropertyEntry {
+    name: String,
+    value: BdfPropertyValue,
+}
+
+/// Value returned for one parsed BDF font property.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BdfPropertyValue {
+    /// String atom property.
+    Atom(String),
+    /// Signed integer property.
+    Integer(i32),
+    /// Unsigned integer property.
+    Cardinal(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,6 +154,7 @@ struct BdfMetadata {
     x_offset: i16,
     y_offset: i16,
     glyph_count: u16,
+    properties: Vec<BdfPropertyEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -424,14 +443,132 @@ fn parse_bdf_font_bounding_box(line: &str) -> Option<(i16, i16, i16, i16)> {
     Some((width, height, x_offset, y_offset))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BdfPropertyFormat {
+    Atom,
+    Integer,
+    Cardinal,
+}
+
+fn bdf_property_format(name: &str) -> BdfPropertyFormat {
+    match name {
+        "DEFAULT_CHAR" | "DESTINATION" | "RELATIVE_SETWIDTH" | "RELATIVE_WEIGHT"
+        | "RESOLUTION_X" | "RESOLUTION_Y" | "WEIGHT" => BdfPropertyFormat::Cardinal,
+        "AVERAGE_WIDTH"
+        | "AVG_CAPITAL_WIDTH"
+        | "AVG_LOWERCASE_WIDTH"
+        | "CAP_HEIGHT"
+        | "END_SPACE"
+        | "FIGURE_WIDTH"
+        | "FONT_ASCENT"
+        | "FONT_DESCENT"
+        | "ITALIC_ANGLE"
+        | "MAX_SPACE"
+        | "MIN_SPACE"
+        | "NORM_SPACE"
+        | "PIXEL_SIZE"
+        | "POINT_SIZE"
+        | "QUAD_WIDTH"
+        | "RAW_ASCENT"
+        | "RAW_AVERAGE_WIDTH"
+        | "RAW_AVG_CAPITAL_WIDTH"
+        | "RAW_AVG_LOWERCASE_WIDTH"
+        | "RAW_CAP_HEIGHT"
+        | "RAW_DESCENT"
+        | "RAW_END_SPACE"
+        | "RAW_FIGURE_WIDTH"
+        | "RAW_MAX_SPACE"
+        | "RAW_MIN_SPACE"
+        | "RAW_NORM_SPACE"
+        | "RAW_PIXEL_SIZE"
+        | "RAW_POINT_SIZE"
+        | "RAW_PIXELSIZE"
+        | "RAW_POINTSIZE"
+        | "RAW_QUAD_WIDTH"
+        | "RAW_SMALL_CAP_SIZE"
+        | "RAW_STRIKEOUT_ASCENT"
+        | "RAW_STRIKEOUT_DESCENT"
+        | "RAW_SUBSCRIPT_SIZE"
+        | "RAW_SUBSCRIPT_X"
+        | "RAW_SUBSCRIPT_Y"
+        | "RAW_SUPERSCRIPT_SIZE"
+        | "RAW_SUPERSCRIPT_X"
+        | "RAW_SUPERSCRIPT_Y"
+        | "RAW_UNDERLINE_POSITION"
+        | "RAW_UNDERLINE_THICKNESS"
+        | "RAW_X_HEIGHT"
+        | "RESOLUTION"
+        | "SMALL_CAP_SIZE"
+        | "STRIKEOUT_ASCENT"
+        | "STRIKEOUT_DESCENT"
+        | "SUBSCRIPT_SIZE"
+        | "SUBSCRIPT_X"
+        | "SUBSCRIPT_Y"
+        | "SUPERSCRIPT_SIZE"
+        | "SUPERSCRIPT_X"
+        | "SUPERSCRIPT_Y"
+        | "UNDERLINE_POSITION"
+        | "UNDERLINE_THICKNESS"
+        | "X_HEIGHT"
+        | "_MULE_BASELINE_OFFSET"
+        | "_MULE_RELATIVE_COMPOSE" => BdfPropertyFormat::Integer,
+        _ => BdfPropertyFormat::Atom,
+    }
+}
+
+fn parse_bdf_atom(raw_value: &str) -> String {
+    raw_value.trim().trim_matches('"').to_string()
+}
+
+fn parse_bdf_property_line(line: &str) -> Option<BdfPropertyEntry> {
+    let (name, raw_value) = line.split_once(char::is_whitespace)?;
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let format = bdf_property_format(name);
+    let value = match format {
+        BdfPropertyFormat::Atom => BdfPropertyValue::Atom(parse_bdf_atom(raw_value)),
+        BdfPropertyFormat::Integer => {
+            let parsed = raw_value.trim().parse::<i64>().ok()? as i32;
+            BdfPropertyValue::Integer(parsed)
+        }
+        BdfPropertyFormat::Cardinal => {
+            let parsed = raw_value.trim().parse::<u64>().ok()? as u32;
+            BdfPropertyValue::Cardinal(parsed)
+        }
+    };
+    Some(BdfPropertyEntry {
+        name: name.to_string(),
+        value,
+    })
+}
+
 fn parse_bdf_metadata(text: &str) -> Result<BdfMetadata, FontError> {
     let mut family_name = "BDF".to_string();
     let mut bbox = None;
     let mut glyph_count = 0u16;
+    let mut properties = Vec::new();
+    let mut in_properties = false;
 
     for raw_line in text.lines() {
         let line = raw_line.trim();
-        if let Some(name) = line.strip_prefix("FONT ") {
+        if line.starts_with("STARTPROPERTIES ") {
+            in_properties = true;
+        } else if line == "ENDPROPERTIES" {
+            in_properties = false;
+        } else if in_properties {
+            if let Some(entry) = parse_bdf_property_line(line) {
+                if let Some(existing_index) = properties
+                    .iter()
+                    .position(|existing: &BdfPropertyEntry| existing.name == entry.name)
+                {
+                    properties[existing_index] = entry;
+                } else {
+                    properties.push(entry);
+                }
+            }
+        } else if let Some(name) = line.strip_prefix("FONT ") {
             family_name = name.trim().to_string();
         } else if line.starts_with("FONTBOUNDINGBOX ") {
             bbox = parse_bdf_font_bounding_box(line);
@@ -450,6 +587,7 @@ fn parse_bdf_metadata(text: &str) -> Result<BdfMetadata, FontError> {
         x_offset,
         y_offset,
         glyph_count: glyph_count.max(1),
+        properties,
     })
 }
 
@@ -1505,6 +1643,7 @@ impl Font {
             is_italic,
             family_name,
             subfamily_name,
+            bdf_properties: Vec::new(),
             size_metrics,
             selected_charmap: 0,
             bytecode_context: BytecodeContextCache::default(),
@@ -1531,6 +1670,7 @@ impl Font {
         sync_active_size_metrics(&font_data, size_metrics);
         let family_name = font_data.name.family.clone();
         let subfamily_name = font_data.name.subfamily.clone();
+        let bdf_properties = metadata.properties;
 
         Ok(Font {
             data: font_data,
@@ -1544,6 +1684,7 @@ impl Font {
             is_italic: false,
             family_name,
             subfamily_name,
+            bdf_properties,
             size_metrics,
             selected_charmap: 0,
             bytecode_context: BytecodeContextCache::default(),
@@ -1584,6 +1725,7 @@ impl Font {
             is_italic,
             family_name,
             subfamily_name,
+            bdf_properties: Vec::new(),
             size_metrics,
             selected_charmap: 0,
             bytecode_context: BytecodeContextCache::default(),
@@ -1858,6 +2000,7 @@ impl Font {
             is_italic,
             family_name,
             subfamily_name,
+            bdf_properties: Vec::new(),
             size_metrics,
             selected_charmap,
             bytecode_context: BytecodeContextCache::default(),
@@ -2195,6 +2338,17 @@ impl Font {
             FaceKind::WinFnt { header } => Some(header),
             _ => None,
         }
+    }
+
+    /// Return one parsed BDF font property for bitmap BDF faces.
+    pub fn bdf_property(&self, name: &str) -> Option<&BdfPropertyValue> {
+        if self.face_kind != FaceKind::Bdf {
+            return None;
+        }
+        self.bdf_properties
+            .iter()
+            .find(|property| property.name == name)
+            .map(|property| &property.value)
     }
 
     /// Return scalar face metadata.
@@ -4903,6 +5057,7 @@ fn face_metric_values(data: &FontData) -> (i32, i32, i32) {
 
 #[cfg(test)]
 mod tests {
+    use super::BdfPropertyValue;
     use super::Font;
 
     const DEJAVU_SANS: &[u8] = include_bytes!("../tests/fixtures/input/fonts/DejaVuSans.ttf");
@@ -4911,6 +5066,16 @@ mod tests {
         match Font::truetype(DEJAVU_SANS, 20.0) {
             Ok(font) => font,
             Err(err) => panic!("test font should load: {err}"),
+        }
+    }
+
+    fn bdf_property_test_font() -> Font {
+        let data = include_bytes!(
+            "../tests/fixtures/input/fonts/bdf/properties-atoms-integers-cardinals.bdf"
+        );
+        match Font::memory_face(data, 0, 12.0) {
+            Ok(font) => font,
+            Err(err) => panic!("BDF fixture should load: {err}"),
         }
     }
 
@@ -4955,5 +5120,36 @@ mod tests {
 
         assert!(text > single);
         assert_eq!(text, single * 2.0);
+    }
+
+    #[test]
+    fn bdf_property_returns_atom_property_from_startproperties_block() {
+        let font = bdf_property_test_font();
+
+        assert_eq!(
+            font.bdf_property("FOUNDRY"),
+            Some(&BdfPropertyValue::Atom("PillowRs".to_string()))
+        );
+    }
+
+    #[test]
+    fn bdf_property_uses_freetype_builtin_integer_format_for_pixel_size() {
+        let font = bdf_property_test_font();
+
+        assert_eq!(
+            font.bdf_property("PIXEL_SIZE"),
+            Some(&BdfPropertyValue::Integer(12))
+        );
+    }
+
+    #[test]
+    fn bdf_property_does_not_synthesize_missing_family_name() {
+        let font = bdf_property_test_font();
+
+        // Pinned FreeType 2.14.3 resolves BDF properties through
+        // `src/base/ftbdf.c:FT_Get_BDF_Property` and
+        // `src/bdf/bdfdrivr.c:bdf_get_bdf_property`; the BDF `FONT` name is
+        // not synthesized into a `FAMILY_NAME` property.
+        assert_eq!(font.bdf_property("FAMILY_NAME"), None);
     }
 }
