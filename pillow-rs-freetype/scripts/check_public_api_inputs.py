@@ -6473,6 +6473,15 @@ def null_error_real_parity_reason(row: ConcreteInput) -> str | None:
     return reasons.get(row.case_id)
 
 
+def bdf_property_exact_error_real_parity_reason(row: ConcreteInput) -> str | None:
+    reasons = {
+        "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none": "FT_Get_BDF_Property missing-property error validates exact status and BDF_PropertyRec NONE/sentinel state through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftbdf.FT_Get_BDF_Property.error_null_face_or_output": "FT_Get_BDF_Property null-face/null-output errors validate exact status and output preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike": "FT_Get_BDF_Property unsupported-face error validates exact status and BDF_PropertyRec NONE/sentinel state through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+    }
+    return reasons.get(row.case_id)
+
+
 def list_value(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
@@ -6586,6 +6595,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     null_error_real_reason = null_error_real_parity_reason(row)
     if null_error_real_reason:
         return ("real-parity", null_error_real_reason)
+    bdf_property_exact_error_reason = bdf_property_exact_error_real_parity_reason(row)
+    if bdf_property_exact_error_reason:
+        return ("real-parity", bdf_property_exact_error_reason)
     done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
     if done_glyph_pending:
         return ("pending-route", done_glyph_pending)
