@@ -1,5 +1,94 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: 2026-07-21 route-audit blocker triage after NONE script promotion
+
+Status: audited on 2026-07-21 from branch
+`ftmm-route-audit-placeholder-parity` at `95b893240`; remains pending. This
+entry records surfaces inspected for the next batch and the reason they must not
+be promoted without new fixtures or subsystem implementation.
+
+Current route-audit baseline:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 442, 'real-null-validation': 9, 'real-parity': 4518}
+```
+
+Focused runtime evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12
+```
+
+```text
+runtime_cases: runnable=0 pending=1
+pending_reasons=ftcolor.get_color_glyph_clipbox:FT_Get_Color_Glyph_ClipBox success parity needs a maintained route for variant s12 proving scaled size coordinates and active transform effects match pinned C output exactly:1
+```
+
+Inspected blockers:
+
+- `ftcid.FT_Get_CID_From_Glyph_Index.*`,
+  `ftcid.FT_Get_CID_Is_Internally_CID_Keyed.*`, and
+  `ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face`
+  remain pending. The success inputs reference `required_future_asset` CID fonts
+  such as `input/fonts/cid/type1-cid-ros-and-glyph-map.pfb` and
+  `input/fonts/cid/ot-cff-cid-keyed.otf`; those fixtures are not present, and
+  the Rust core currently exposes CID only as constants/header/macro metadata,
+  not as a CID-keyed font implementation. Promoting non-CID error behavior as
+  success parity would be a green placeholder.
+- `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  remains pending because pinned FreeType 2.14.3 reads past the active axis
+  default array for the current TrueType variable fixture when excess output
+  coordinates are requested. Modeling that adjacent-memory read in safe Rust or
+  crediting safe zero-fill would be a green placeholder. This needs a Type1 MM
+  excess-output fixture where pinned C zero-fills, or a reclassified exact
+  unsafe-C-observation plan that does not pretend Rust should reproduce an
+  overread.
+- `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` remains
+  pending because it still needs a maintained glyph-output observation after
+  active blend-coordinate mutation, compared through pinned C, Rust FFI, thin C
+  ABI, and WASM ABI.
+- `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design` remains
+  pending because the declared Type1 MM glyph-output row uses a glyph index that
+  pinned C cannot load successfully after the design-coordinate mutation. It
+  must be split into an exact-error row plus a separate C-loadable success row,
+  or fixed to name a C-loadable glyph.
+- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` and `ftcolor.FT_ClipBox.color_glyph_clipbox_values`
+  remain pending. The declared COLR v1 clipbox fixtures such as
+  `fonts/color/colr-v1-clipbox-format1-format2.ttf`,
+  `fonts/color/colr-v1-no-clipbox-control.ttf`, and
+  `fonts/color/colr-v1-all-paints.ttf` are not present in the maintained fixture
+  tree, and there is no current Rust/ABI `FT_Get_Color_Glyph_ClipBox` runtime
+  export. The next real fix must add compact COLR v1 clipbox fixtures and a pure
+  Rust clipbox implementation before adding C/WASM ABI route glue.
+- `ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`
+  and `ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy`
+  remain pending for the same COLR v1 foreground-paint fixture gap. The CPAL
+  palette subsystem is routed, but foreground-color parity requires observing a
+  public foreground `0xFFFF` paint/layer output after mutation, not merely
+  returning success from `FT_Palette_Set_Foreground_Color`.
+- `fterrdef.FT_Err_Missing_Property.known_property_success` remains pending
+  because the declared success input asks for module `svg` property `svg-hooks`,
+  while pinned FreeType exposes the maintained property on module `ot-svg`.
+  Reusing a different known-property route would not be the same public input.
+
+Required fix plan:
+
+1. Do not remove or weaken the above rows. Keep them visible as `pending-route`
+   until exact same-input C/Rust/C-ABI/WASM evidence exists.
+2. For the CID batch, add or generate compact C-openable CID-keyed fixtures
+   first, then implement pure-Rust CID service behavior and thin ABI snapshots
+   for glyph-index-to-CID, internally-CID-keyed status, and
+   registry/ordering/supplement.
+3. For COLR v1 clipbox/foreground, add deterministic compact COLR v1 fixtures
+   and implement the pure-Rust COLR clipbox/foreground-paint route before
+   wiring C/WASM ABI helpers.
+4. For FTMM residuals, fix the declared input shape first: use C-loadable Type1
+   MM glyphs for output rows and avoid treating pinned-C adjacent-memory reads
+   as safe Rust parity.
+5. For the known-property row, either change the manifest/input through a
+   reviewed fixture-plan update to the pinned-C `ot-svg` property, or keep the
+   current `svg` row pending as an invalid declared success input.
+
 ### Issue Set Completed: FT_OPEN_STREAM external-stream ownership
 
 Status: promoted on 2026-07-21.
