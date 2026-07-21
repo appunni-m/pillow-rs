@@ -4633,13 +4633,20 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         in {
             "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success",
             "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
+            "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle",
+            "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument",
         }
         and unresolved_assets_reason(row) is None
     ):
         if row.expect_error:
+            if row.case_id == "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument":
+                return (
+                    "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
+                    "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+                )
             return (
-                "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
-                "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+                "FT_Get_PS_Font_Info null face/output error behavior validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
             )
         return (
             "FT_Get_PS_Font_Info Type1 FontInfo string/scalar record validates "
@@ -4668,6 +4675,19 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         return (
             "FT_Get_PS_Font_Private TrueType unsupported-service Invalid_Argument "
             "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_private"
+        and row.case_id
+        in {
+            "t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle",
+            "t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private null face/output error behavior validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.t1_blend_flags_private_group"
