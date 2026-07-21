@@ -4632,6 +4632,7 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id
         in {
             "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success",
+            "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success",
             "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
             "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle",
             "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument",
@@ -4647,6 +4648,11 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             return (
                 "FT_Get_PS_Font_Info null face/output error behavior validates "
                 "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        if row.case_id == "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success":
+            return (
+                "FT_Get_PS_Font_Info CFF top-dict FontInfo string/scalar record "
+                "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
             )
         return (
             "FT_Get_PS_Font_Info Type1 FontInfo string/scalar record validates "

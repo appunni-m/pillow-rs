@@ -9640,6 +9640,7 @@ fn direct_ps_font_info_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
         "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success"
+            | "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success"
             | "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle"
             | "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument"
     )
