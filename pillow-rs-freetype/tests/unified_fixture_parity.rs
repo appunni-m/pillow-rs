@@ -10881,7 +10881,7 @@ enum ColorPaintBackend {
 }
 
 fn color_paint_success_route_supported(case: &InputCase) -> bool {
-    matches!(
+    let operation_supported = matches!(
         case.operation.as_str(),
         "ftcolor.get_color_glyph_paint"
             | "ftcolor.get_color_glyph_paint_and_get_paint"
@@ -10893,9 +10893,21 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.get_solid_paint_and_palette"
             | "ftcolor.traverse_color_paint_graph"
             | "ftcolor.traverse_paint_graph"
-    ) && matches!(
+    );
+    if !operation_supported {
+        return false;
+    }
+    matches!(
         case.case_id.as_str(),
         "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract"
+            | "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index"
+            | "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload"
+            | "ftcolor.FT_PaintSolid.get_paint_solid_values"
+            | "ftcolor.FT_PaintGlyph.get_paint_glyph_values"
+            | "ftcolor.FT_PaintComposite.get_paint_composite_values"
             | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
             | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")

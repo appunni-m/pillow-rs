@@ -108,15 +108,8 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-all-paints.ttf",
-            "asset_kind": "font",
-            "properties": [
-              "COLR version 1 base glyph list",
-              "CPAL table with at least two palettes and named entries",
-              "paint graph containing solid, colr_layers, glyph, colr_glyph, linear, radial, sweep, transform, translate, scale, rotate, skew, and composite paints",
-              "static ColorLine records using PAD, REPEAT, and REFLECT extend modes",
-              "foreground palette index 0xFFFF references"
-            ]
+            "id": "fonts/color/colr_v1_composite_modes.ttf",
+            "asset_kind": "font"
           }
         },
         "params": {
