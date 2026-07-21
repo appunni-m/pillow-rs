@@ -13,6 +13,7 @@ use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
 use crate::tt::hinter::NativeHintMode;
 use crate::tt::{self, tag};
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
@@ -74,6 +75,7 @@ pub struct Font {
 struct BdfPropertyEntry {
     name: String,
     value: BdfPropertyValue,
+    atom_c_string: Option<CString>,
 }
 
 /// Value returned for one parsed BDF font property.
@@ -538,9 +540,14 @@ fn parse_bdf_property_line(line: &str) -> Option<BdfPropertyEntry> {
             BdfPropertyValue::Cardinal(parsed)
         }
     };
+    let atom_c_string = match &value {
+        BdfPropertyValue::Atom(atom) => CString::new(atom.as_str()).ok(),
+        _ => None,
+    };
     Some(BdfPropertyEntry {
         name: name.to_string(),
         value,
+        atom_c_string,
     })
 }
 
@@ -2349,6 +2356,16 @@ impl Font {
             .iter()
             .find(|property| property.name == name)
             .map(|property| &property.value)
+    }
+
+    pub(crate) fn bdf_property_atom_c_str(&self, name: &str) -> Option<&CStr> {
+        if self.face_kind != FaceKind::Bdf {
+            return None;
+        }
+        self.bdf_properties
+            .iter()
+            .find(|property| property.name == name)
+            .and_then(|property| property.atom_c_string.as_deref())
     }
 
     /// Return scalar face metadata.

@@ -247,6 +247,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_var_design_coordinates",
     "fontdone_wasm_get_default_named_instance",
     "fontdone_wasm_get_winfnt_header",
+    "fontdone_wasm_get_bdf_property",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
@@ -3897,12 +3898,12 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         )
     if row.operation == "ftbdf.get_bdf_property":
         return (
-            "FT_Get_BDF_Property has fixture rows but no maintained native oracle "
-            "command or Rust/C ABI/WASM route; the current BDF success fixture is "
-            "also contradicted by pinned FreeType because FAMILY_NAME returns "
-            "Invalid_Argument and PIXEL_SIZE returns INTEGER, not CARDINAL; "
-            "classifying BDF property output as real parity would be a green "
-            "placeholder"
+            "FT_Get_BDF_Property has core/C-ABI/WASM ABI groundwork but no "
+            "maintained unified native oracle command or same-input fixture "
+            "route yet; the current BDF success fixture is also contradicted by "
+            "pinned FreeType because FAMILY_NAME returns Invalid_Argument and "
+            "PIXEL_SIZE returns INTEGER, not CARDINAL; classifying BDF property "
+            "output as real parity would be a green placeholder"
         )
     if not operation_is_real_parity(row.operation):
         return None

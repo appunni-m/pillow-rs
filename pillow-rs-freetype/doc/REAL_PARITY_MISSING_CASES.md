@@ -11330,6 +11330,19 @@ Required fix plan:
    integer, cardinal value, and output preservation semantics across pinned C,
    Rust FFI, C ABI, and WASM before promoting any row back to real parity.
 
+Groundwork status on 2026-07-21:
+
+- Core Rust FFI now has FreeType-shaped `BDF_PropertyRec`/value records and
+  `FT_Get_BDF_Property` delegates to the pure-Rust BDF property model.
+- Thin C ABI now exports `FT_Get_BDF_Property` and declares `BDF_PropertyRec`.
+- WASM ABI now exposes `fontdone_wasm_get_bdf_property` with a flat
+  type/value/string record.
+- C atom output uses per-face NUL-terminated storage, not raw Rust `String`
+  bytes.
+- Rows remain `pending-route`: the unified native oracle command and
+  Rust/C-ABI/WASM fixture route are not wired yet, and PCF/SFNT-BDF property
+  support is still absent.
+
 ## FT_Property_Set invalid property preservation
 
 Pinned FreeType `FT_Property_Set` failure does not by itself define the

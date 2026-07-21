@@ -9,8 +9,8 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::casts::usize_from_i32;
 use crate::font::{
-    ActiveSizeState, KerningMode, SelectSizeError, SizeRequest, SizeRequestError, SizeRequestType,
-    WinFntHeader,
+    ActiveSizeState, BdfPropertyValue, KerningMode, SelectSizeError, SizeRequest, SizeRequestError,
+    SizeRequestType, WinFntHeader,
 };
 use crate::{api, grays, render};
 
@@ -20,17 +20,17 @@ use super::convert::{
     load_flags_to_core, render_mode_to_core,
 };
 use super::types::{
-    FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte, FT_Bytes, FT_Char,
-    FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding, FT_Error,
-    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec,
-    FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec, FT_ListRec,
-    FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec, FT_Module_Interface,
-    FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot, FT_Palette_Data,
-    FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag,
-    FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec,
-    FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
-    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header, TT_HoriHeader,
-    TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
+    BDF_PropertyRec, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte,
+    FT_Bytes, FT_Char, FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding,
+    FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot,
+    FT_GlyphRec, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
+    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    FT_Module_Interface, FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot,
+    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
+    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
+    FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, TT_Header,
+    TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -3174,6 +3174,45 @@ pub fn FT_Get_WinFNT_Header(
     };
     *output = winfnt_header_to_ffi(header);
     FT_Err_Ok
+}
+
+pub fn FT_Get_BDF_Property(
+    face: Option<&FT_Face>,
+    prop_name: Option<&str>,
+    aproperty: Option<&mut BDF_PropertyRec>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(output) = aproperty else {
+        return FT_Err_Invalid_Argument;
+    };
+    output.type_ = BDF_PROPERTY_TYPE_NONE;
+    let Some(prop_name) = prop_name else {
+        return FT_Err_Invalid_Argument;
+    };
+    let inner = face.inner.borrow();
+    match inner.font().bdf_property(prop_name) {
+        Some(BdfPropertyValue::Atom(_)) => {
+            output.type_ = BDF_PROPERTY_TYPE_ATOM;
+            let Some(atom_c_string) = inner.font().bdf_property_atom_c_str(prop_name) else {
+                return FT_Err_Invalid_Argument;
+            };
+            output.u.atom = atom_c_string.as_ptr();
+            FT_Err_Ok
+        }
+        Some(BdfPropertyValue::Integer(integer)) => {
+            output.type_ = BDF_PROPERTY_TYPE_INTEGER;
+            output.u.integer = *integer;
+            FT_Err_Ok
+        }
+        Some(BdfPropertyValue::Cardinal(cardinal)) => {
+            output.type_ = BDF_PROPERTY_TYPE_CARDINAL;
+            output.u.cardinal = *cardinal;
+            FT_Err_Ok
+        }
+        None => FT_Err_Invalid_Argument,
+    }
 }
 
 pub fn FT_GlyphSlot_AdjustWeight(
