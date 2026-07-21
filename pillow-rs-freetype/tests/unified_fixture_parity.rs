@@ -2533,6 +2533,9 @@ impl BackendComparisonWorker {
             {
                 gzip_stream_open_output(case, GzipStreamBackend::Rust)
             }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                rust_color_glyph_layer_case(case)
+            }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
                     == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
@@ -2889,6 +2892,9 @@ impl BackendComparisonWorker {
             {
                 gzip_stream_open_output(case, GzipStreamBackend::CAbi)
             }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                c_color_glyph_layer_case(case)
+            }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
                     == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
@@ -3242,6 +3248,9 @@ impl BackendComparisonWorker {
                 if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
             {
                 gzip_stream_open_output(case, GzipStreamBackend::Wasm)
+            }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                wasm_color_glyph_layer_case(case)
             }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
@@ -10652,6 +10661,198 @@ fn wasm_palette_reselect_json(handle: usize) -> Value {
         },
         "error_sequence": [first.error, second.error]
     })
+}
+
+#[derive(Clone, Copy)]
+enum ColorGlyphLayerBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_glyph_layer_base_glyph(case: &InputCase) -> Result<FT_UInt, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+        | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs" => Ok(36),
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => Ok(1),
+        other => Err(format!("unsupported color glyph layer case {other}")),
+    }
+}
+
+fn color_glyph_layer_success_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+            | "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index"
+            | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs"
+    )
+}
+
+fn layer_iterator_json(iterator: FT_LayerIterator) -> Value {
+    json!({
+        "num_layers": iterator.num_layers,
+        "layer": iterator.layer,
+        "p_class": pointer_class(iterator.p.cast_const()),
+    })
+}
+
+fn color_glyph_layer_call_json(
+    label: &str,
+    result: FT_Bool,
+    glyph_index: FT_UInt,
+    color_index: FT_UInt,
+    iterator: FT_LayerIterator,
+) -> Value {
+    json!({
+        "label": label,
+        "return": result,
+        "glyph_index": glyph_index,
+        "color_index": color_index,
+        "iterator": layer_iterator_json(iterator),
+    })
+}
+
+fn color_glyph_layer_call(
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    glyph_index: &mut FT_UInt,
+    color_index: &mut FT_UInt,
+    iterator: &mut FT_LayerIterator,
+) -> FT_Bool {
+    match backend {
+        ColorGlyphLayerBackend::Rust => FT_Get_Color_Glyph_Layer(
+            rust_face,
+            base_glyph,
+            Some(glyph_index),
+            Some(color_index),
+            Some(iterator),
+        ),
+        ColorGlyphLayerBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_Layer(c_face, base_glyph, glyph_index, color_index, iterator)
+        }
+        ColorGlyphLayerBackend::Wasm => wasm_abi::fontdone_wasm_get_color_glyph_layer(
+            wasm_handle,
+            base_glyph,
+            glyph_index,
+            color_index,
+            iterator,
+        ),
+    }
+}
+
+fn color_glyph_layer_output_for_open_face(
+    case: &InputCase,
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let base_glyph = color_glyph_layer_base_glyph(case)?;
+    let mut iterator = FT_LayerIterator::default();
+    let mut glyph_index = 0xDEAD;
+    let mut color_index = 0xBEEF;
+    let mut call = |label: &str| {
+        let result = color_glyph_layer_call(
+            backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            base_glyph,
+            &mut glyph_index,
+            &mut color_index,
+            &mut iterator,
+        );
+        color_glyph_layer_call_json(label, result, glyph_index, color_index, iterator)
+    };
+    match case.case_id.as_str() {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success" => Ok(ok(json!({
+            "calls": [call("call_1"), call("call_2"), call("call_3"), call("call_4")]
+        }))),
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => {
+            let output = call("foreground");
+            Ok(ok(json!({
+                "call": output,
+                "foreground_marker_preserved": color_index == 0xFFFF,
+            })))
+        }
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs" => {
+            for _ in 0..4 {
+                let _ = color_glyph_layer_call(
+                    backend,
+                    rust_face,
+                    c_face,
+                    wasm_handle,
+                    base_glyph,
+                    &mut glyph_index,
+                    &mut color_index,
+                    &mut iterator,
+                );
+            }
+            let before_glyph = glyph_index;
+            let before_color = color_index;
+            let before_iterator = iterator;
+            let terminal = color_glyph_layer_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                &mut glyph_index,
+                &mut color_index,
+                &mut iterator,
+            );
+            Ok(ok(json!({
+                "terminal_return": terminal,
+                "before": {
+                    "glyph_index": before_glyph,
+                    "color_index": before_color,
+                    "iterator": layer_iterator_json(before_iterator),
+                },
+                "after": {
+                    "glyph_index": glyph_index,
+                    "color_index": color_index,
+                    "iterator": layer_iterator_json(iterator),
+                },
+            })))
+        }
+        other => Err(format!("unsupported color glyph layer case {other}")),
+    }
+}
+
+fn rust_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    color_glyph_layer_output_for_open_face(
+        case,
+        ColorGlyphLayerBackend::Rust,
+        Some(&face),
+        ptr::null_mut(),
+        0,
+    )
+}
+
+fn c_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output =
+        color_glyph_layer_output_for_open_face(case, ColorGlyphLayerBackend::CAbi, None, face, 0);
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = color_glyph_layer_output_for_open_face(
+        case,
+        ColorGlyphLayerBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    output
 }
 
 fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
@@ -24218,6 +24419,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            let mut args = vec!["--color-glyph-layer-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(color_glyph_layer_base_glyph(case)?.to_string());
+            Ok(args)
+        }
         "size_metrics" => {
             let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -26950,6 +27158,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => rust_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            rust_color_glyph_layer_case(case)
+        }
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
                 rust_get_subglyph_info(None, case)
@@ -27101,6 +27312,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => c_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            c_color_glyph_layer_case(case)
+        }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::CAbi,
@@ -28113,6 +28327,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => wasm_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            wasm_color_glyph_layer_case(case)
+        }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::Wasm,

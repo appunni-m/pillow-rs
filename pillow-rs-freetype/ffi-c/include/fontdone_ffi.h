@@ -443,6 +443,12 @@ typedef struct FT_Palette_Data_ {
   const FT_UShort* palette_entry_name_ids;
 } FT_Palette_Data;
 
+typedef struct FT_LayerIterator_ {
+  FT_UInt num_layers;
+  FT_UInt layer;
+  FT_Byte* p;
+} FT_LayerIterator;
+
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
 FT_Error FT_Gzip_Uncompress(FT_Memory memory, FT_Byte* output, FT_ULong* output_len, const FT_Byte* input, FT_ULong input_len);
@@ -457,6 +463,7 @@ FT_Error FT_GlyphSlot_Own_Bitmap(FT_GlyphSlot slot);
 FT_Error FT_Palette_Data_Get(FT_Face face, FT_Palette_Data* apalette_data);
 FT_Error FT_Palette_Select(FT_Face face, FT_UShort palette_index, FT_Color** apalette);
 FT_Error FT_Palette_Set_Foreground_Color(FT_Face face, FT_Color foreground_color);
+FT_Bool FT_Get_Color_Glyph_Layer(FT_Face face, FT_UInt base_glyph, FT_UInt* aglyph_index, FT_UInt* acolor_index, FT_LayerIterator* iterator);
 void FT_TrueTypeGX_Free(FT_Face face, FT_Bytes table);
 void FT_ClassicKern_Free(FT_Face face, FT_Bytes table);
 

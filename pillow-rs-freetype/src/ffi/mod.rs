@@ -26,7 +26,7 @@ pub use handles::{
     FT_Face_Properties, FT_Face_Properties_Get_State, FT_Face_Properties_State, FT_Face_Property,
     FT_Face_Property_Value, FT_Face_SetUnpatentedHinting, FT_FloorFix, FT_Get_Advance,
     FT_Get_Advances, FT_Get_BDF_Charset_ID, FT_Get_BDF_Property, FT_Get_CMap_Format,
-    FT_Get_CMap_Language_ID, FT_Get_Char_Index, FT_Get_Charmap_Index,
+    FT_Get_CMap_Language_ID, FT_Get_Char_Index, FT_Get_Charmap_Index, FT_Get_Color_Glyph_Layer,
     FT_Get_Default_Named_Instance, FT_Get_FSType_Flags, FT_Get_First_Char, FT_Get_Font_Format,
     FT_Get_Gasp, FT_Get_Glyph, FT_Get_Glyph_Name, FT_Get_Kerning, FT_Get_MM_Blend_Coordinates,
     FT_Get_MM_Var, FT_Get_MM_WeightVector, FT_Get_Module_Interface, FT_Get_Multi_Master,

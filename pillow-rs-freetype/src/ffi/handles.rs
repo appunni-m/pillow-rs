@@ -24,8 +24,8 @@ use super::types::{
     BDF_PropertyRec, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte,
     FT_Bytes, FT_Char, FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding,
     FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot,
-    FT_GlyphRec, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
-    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    FT_GlyphRec, FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
+    FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot,
     FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
     FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
@@ -1262,6 +1262,7 @@ pub struct FT_Face {
     sfnt_pclt: Option<Box<TT_PCLT>>,
     charmap_metadata: Box<[(FT_Long, FT_ULong)]>,
     cpal: Option<Rc<RefCell<CpalState>>>,
+    colr_v0: Option<Rc<ColrV0State>>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
@@ -1298,6 +1299,17 @@ struct CpalState {
     palettes: Vec<Vec<FT_Color>>,
     active_palette: Vec<FT_Color>,
     active_palette_index: FT_UShort,
+}
+
+#[derive(Clone, Copy)]
+struct ColrV0Layer {
+    glyph_index: FT_UInt,
+    color_index: FT_UInt,
+}
+
+#[derive(Clone)]
+struct ColrV0State {
+    layers_by_base: BTreeMap<FT_UInt, Vec<ColrV0Layer>>,
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -3563,6 +3575,46 @@ fn parse_cpal_table(data: &[u8]) -> Option<CpalState> {
     })
 }
 
+fn parse_colr_v0_table(data: &[u8]) -> Option<ColrV0State> {
+    let version = read_u16_be(data, 0)?;
+    if version != 0 {
+        return None;
+    }
+    let num_base_glyph_records = usize::from(read_u16_be(data, 2)?);
+    let base_glyph_records_offset = usize::try_from(read_u32_be(data, 4)?).ok()?;
+    let layer_records_offset = usize::try_from(read_u32_be(data, 8)?).ok()?;
+    let num_layer_records = usize::from(read_u16_be(data, 12)?);
+    let base_records_end =
+        base_glyph_records_offset.checked_add(num_base_glyph_records.checked_mul(6)?)?;
+    let layer_records_end = layer_records_offset.checked_add(num_layer_records.checked_mul(4)?)?;
+    if base_records_end > data.len() || layer_records_end > data.len() {
+        return None;
+    }
+
+    let mut layers_by_base = BTreeMap::new();
+    for record_index in 0..num_base_glyph_records {
+        let record_offset = base_glyph_records_offset.checked_add(record_index.checked_mul(6)?)?;
+        let base_glyph = FT_UInt::from(read_u16_be(data, record_offset)?);
+        let first_layer = usize::from(read_u16_be(data, record_offset + 2)?);
+        let num_layers = usize::from(read_u16_be(data, record_offset + 4)?);
+        let layer_end = first_layer.checked_add(num_layers)?;
+        if layer_end > num_layer_records {
+            return None;
+        }
+        let layers = (first_layer..layer_end)
+            .map(|layer_index| {
+                let layer_offset = layer_records_offset.checked_add(layer_index.checked_mul(4)?)?;
+                Some(ColrV0Layer {
+                    glyph_index: FT_UInt::from(read_u16_be(data, layer_offset)?),
+                    color_index: FT_UInt::from(read_u16_be(data, layer_offset + 2)?),
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        layers_by_base.insert(base_glyph, layers);
+    }
+    Some(ColrV0State { layers_by_base })
+}
+
 pub fn FT_Palette_Data_Get(
     face: Option<&FT_Face>,
     apalette_data: Option<&mut FT_Palette_Data>,
@@ -3603,6 +3655,50 @@ pub fn FT_Palette_Data_Get(
         palette_entry_name_ids: cpal.palette_entry_name_ids.as_ptr(),
     };
     FT_Err_Ok
+}
+
+pub fn FT_Get_Color_Glyph_Layer(
+    face: Option<&FT_Face>,
+    base_glyph: FT_UInt,
+    aglyph_index: Option<&mut FT_UInt>,
+    acolor_index: Option<&mut FT_UInt>,
+    iterator: Option<&mut FT_LayerIterator>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(aglyph_index) = aglyph_index else {
+        return 0;
+    };
+    let Some(acolor_index) = acolor_index else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v0 else {
+        return 0;
+    };
+    let Some(layers) = colr.layers_by_base.get(&base_glyph) else {
+        return 0;
+    };
+    if iterator.p.is_null() {
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c` initializes the public iterator
+        // from the COLR v0 base-glyph record on the first call.
+        iterator.num_layers = layers.len().try_into().unwrap_or(FT_UInt::MAX);
+        iterator.layer = 0;
+        iterator.p = layers.as_ptr().cast_mut().cast::<FT_Byte>();
+    }
+    let Ok(layer_index) = usize::try_from(iterator.layer) else {
+        return 0;
+    };
+    let Some(layer) = layers.get(layer_index) else {
+        return 0;
+    };
+    *aglyph_index = layer.glyph_index;
+    *acolor_index = layer.color_index;
+    iterator.layer = iterator.layer.saturating_add(1);
+    1
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -5955,6 +6051,11 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .and_then(|data| parse_cpal_table(&data))
         .map(RefCell::new)
         .map(Rc::new);
+    let colr_v0 = font
+        .load_sfnt_table(u32::from_be_bytes(*b"COLR"), 0, None)
+        .ok()
+        .and_then(|data| parse_colr_v0_table(&data))
+        .map(Rc::new);
     let available_sizes = available_sizes_to_ffi(font);
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
@@ -6017,6 +6118,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sfnt_pclt,
         charmap_metadata,
         cpal,
+        colr_v0,
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,

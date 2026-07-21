@@ -29,6 +29,7 @@ pub type FT_Short = i16;
 pub type FT_UShort = u16;
 pub type FT_Byte = u8;
 pub type FT_Bytes = *const FT_Byte;
+pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -1055,6 +1056,23 @@ pub extern "C" fn fontdone_wasm_palette_set_foreground_color(
     rust_ffi::FT_Palette_Set_Foreground_Color(
         face_ref(handle).map(|face| &face.face),
         wasm_color_to_rust(foreground_color),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_layer(
+    handle: usize,
+    base_glyph: FT_UInt,
+    aglyph_index: *mut FT_UInt,
+    acolor_index: *mut FT_UInt,
+    iterator: *mut FT_LayerIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Layer(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        unsafe { aglyph_index.as_mut() },
+        unsafe { acolor_index.as_mut() },
+        unsafe { iterator.as_mut() },
     )
 }
 
