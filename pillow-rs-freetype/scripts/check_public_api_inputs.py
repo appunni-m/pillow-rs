@@ -4663,11 +4663,17 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id
         in {
             "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true",
+            "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true",
             "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
             "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
         }
         and unresolved_assets_reason(row) is None
     ):
+        if row.case_id == "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true":
+            return (
+                "FT_Has_PS_Glyph_Names CFF glyph-name flag behavior validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         return (
             "FT_Has_PS_Glyph_Names Type1, TrueType, and null-face results "
             "validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

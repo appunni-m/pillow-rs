@@ -2444,6 +2444,12 @@ impl Font {
             .or_else(|| self.data.cff.as_ref().map(tt::cff::CffTable::font_info))
     }
 
+    pub(crate) fn has_postscript_glyph_names(&self) -> bool {
+        const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
+        self.type1_font_info.is_some()
+            || (self.data.cff.is_some() && self.face_flags() & FT_FACE_FLAG_GLYPH_NAMES != 0)
+    }
+
     pub(crate) fn type1_encoding(&self) -> Option<&Type1EncodingInfo> {
         self.type1_encoding.as_ref()
     }
@@ -2931,13 +2937,14 @@ impl Font {
         {
             flags |= FT_FACE_FLAG_FIXED_WIDTH;
         }
-        // sfobjs.c:1118-1121 exposes glyph names only if `tt_face_load_post`
-        // accepted the `post` format, and format 3 intentionally has no names.
-        if self
-            .data
-            .post
-            .as_ref()
-            .is_some_and(|post| matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000))
+        // CFF sets the glyph-name face flag in `src/cff/cffobjs.c:994-998`
+        // for non-CID CFF faces independently of the SFNT `post` table.
+        // Non-CFF SFNT faces use `sfobjs.c:1118-1121`, exposing glyph names
+        // only if `tt_face_load_post` accepted a named `post` format.
+        if self.data.cff.is_some()
+            || self.data.post.as_ref().is_some_and(|post| {
+                matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000)
+            })
         {
             flags |= FT_FACE_FLAG_GLYPH_NAMES;
         }

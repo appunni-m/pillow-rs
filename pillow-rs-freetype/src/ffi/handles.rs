@@ -3287,10 +3287,10 @@ pub fn FT_Has_PS_Glyph_Names(face: Option<&FT_Face>) -> FT_Int {
     };
     let inner = face.inner.borrow();
     // FreeType `src/base/fttype1.c:FT_Has_PS_Glyph_Names` initializes the
-    // result to 0 and only asks the PostScript service callback when present.
-    // The supported pure-Rust PostScript service today is Type 1; SFNT
-    // `FT_FACE_FLAG_GLYPH_NAMES` is intentionally not enough for this API.
-    if inner.font().type1_font_info().is_some() {
+    // result to 0 and only asks the PostScript service callback when present;
+    // CFF's callback (`src/cff/cffdrivr.c:cff_ps_has_glyph_names`) then follows
+    // the CFF face's FT_FACE_FLAG_GLYPH_NAMES state.
+    if inner.font().has_postscript_glyph_names() {
         1
     } else {
         0
