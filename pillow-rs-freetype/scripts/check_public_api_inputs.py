@@ -5383,6 +5383,22 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_ImageCache_Lookup invalid-cache/type/face/glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.image_cache_lookup"
+        and row.case_id
+        in {
+            "ftcache.FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope",
+            "ftcache.FTC_ImageCache_Lookup.success_lookup_hit_and_repeat_hit",
+            "ftcache.FTC_ImageCache_Lookup.success_node_acquire_and_unref",
+            "ftcache.FTC_ImageCache_Lookup.success_null_anode_ephemeral_glyph",
+        }
+    ):
+        return (
+            "FTC_ImageCache_Lookup image-type sizing, glyph output, repeat "
+            "lookup, requester count, null/non-null anode ownership "
+            "classification, and node-unref behavior validate through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.image_cache_lookup_scaler"
         and row.case_id
         == "ftcache.FTC_ImageCache_LookupScaler.error_null_scaler_or_aglyph"

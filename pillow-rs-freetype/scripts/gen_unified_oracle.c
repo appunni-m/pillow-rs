@@ -5995,6 +5995,7 @@ typedef struct ImageCacheRequesterData_ {
     unsigned char* data;
     long data_len;
     FT_Long face_index;
+    int request_count;
 } ImageCacheRequesterData;
 
 static FT_Error image_cache_requester(FTC_FaceID face_id,
@@ -6003,6 +6004,7 @@ static FT_Error image_cache_requester(FTC_FaceID face_id,
                                       FT_Face* aface) {
     (void)req_data;
     ImageCacheRequesterData* data = (ImageCacheRequesterData*)face_id;
+    data->request_count++;
     return FT_New_Memory_Face(library, data->data, data->data_len, data->face_index, aface);
 }
 
@@ -6104,6 +6106,7 @@ static int emit_image_cache_lookup_scaler(int argc, char** argv) {
     requester.data = data;
     requester.data_len = data_len;
     requester.face_index = face_index;
+    requester.request_count = 0;
 
     FTC_Manager manager = NULL;
     FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
@@ -6186,6 +6189,159 @@ static int emit_image_cache_lookup_scaler(int argc, char** argv) {
     FT_Done_FreeType(library);
     free(data);
     free(scalers_arg);
+    free(glyphs_arg);
+    return 0;
+}
+
+static void print_image_cache_lookup_row(FTC_ImageCache cache,
+                                         FTC_Manager manager,
+                                         ImageCacheRequesterData* requester,
+                                         FTC_ImageTypeRec* image_type,
+                                         FT_UInt glyph_index,
+                                         int repeat_lookup) {
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    int before_calls = requester->request_count;
+    FT_Error error = FTC_ImageCache_Lookup(cache, image_type, glyph_index, &glyph, &node);
+    int after_first_calls = requester->request_count;
+    FT_Glyph repeat_glyph = NULL;
+    FTC_Node repeat_node = NULL;
+    FT_Error repeat_error = error;
+    if (repeat_lookup) {
+        repeat_error = FTC_ImageCache_Lookup(cache, image_type, glyph_index, &repeat_glyph, &repeat_node);
+    }
+    printf("{\"glyph_index\":%u,\"image_type\":{\"width\":%u,\"height\":%u,\"flags\":%ld},"
+           "\"status\":%d,\"error\":%d,\"repeat_status\":%d,"
+           "\"requester_count_before\":%d,\"requester_count_after_first\":%d,"
+           "\"requester_count_after_repeat\":%d,",
+           glyph_index,
+           image_type->width,
+           image_type->height,
+           (long)image_type->flags,
+           error,
+           error,
+           repeat_error,
+           before_calls,
+           after_first_calls,
+           requester->request_count);
+    if (error) {
+        printf("\"glyph\":null,\"node\":{\"locked\":false}}");
+    } else {
+        print_image_cache_glyph_object(glyph);
+        printf("}");
+    }
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    if (repeat_node) {
+        FTC_Node_Unref(repeat_node, manager);
+    }
+}
+
+static int emit_image_cache_lookup(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+    FT_UInt width = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_UInt height = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_ULong flags = (FT_ULong)strtoull(argv[8], NULL, 0);
+    char* glyphs_arg = (char*)malloc(strlen(argv[9]) + 1);
+    if (!glyphs_arg) {
+        return 1;
+    }
+    memcpy(glyphs_arg, argv[9], strlen(argv[9]) + 1);
+    int repeat_lookup = atoi(argv[10]) != 0;
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(glyphs_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(glyphs_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(glyphs_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(glyphs_arg);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":{\"scenario\":\"");
+        print_json_string_content(scenario);
+        printf("\",\"rows\":[]}}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        free(glyphs_arg);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = width;
+    image_type.height = height;
+    image_type.flags = (FT_Int32)flags;
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"rows\":[");
+    char* cursor = glyphs_arg;
+    int first = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ',');
+        if (next) {
+            *next = '\0';
+        }
+        FT_UInt glyph_index = (FT_UInt)strtoul(cursor, NULL, 10);
+        if (!first) {
+            printf(",");
+        }
+        print_image_cache_lookup_row(cache, manager, &requester, &image_type, glyph_index, repeat_lookup);
+        first = 0;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
     free(glyphs_arg);
     return 0;
 }
@@ -21197,6 +21353,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--image-cache-lookup-scaler")) {
         return emit_image_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--image-cache-lookup")) {
+        return emit_image_cache_lookup(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);

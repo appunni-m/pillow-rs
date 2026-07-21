@@ -24856,6 +24856,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.image_cache_lookup" if !case.expect_error => {
+            let mut args = vec!["--image-cache-lookup".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cmap_cache_scenario(params)?);
+            let image_type = image_cache_type_param(params)?;
+            args.push(image_type.width.to_string());
+            args.push(image_type.height.to_string());
+            args.push(image_type.flags.to_string());
+            args.push(cache_glyph_indexes_arg(params)?);
+            args.push(i32::from(bool_param(params, "repeat_lookup", false)?).to_string());
+            Ok(args)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -25965,6 +25978,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_cmap_cache_lookup(case)
         }
+        "ftcache.image_cache_lookup" if !case.expect_error => rust_image_cache_lookup(case),
         "ftcache.cmap_cache_new" if !case.expect_error => rust_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => rust_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
@@ -27035,6 +27049,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_cmap_cache_lookup(case)
         }
+        "ftcache.image_cache_lookup" if !case.expect_error => c_image_cache_lookup(case),
         "ftcache.cmap_cache_new" if !case.expect_error => c_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => c_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
@@ -27935,6 +27950,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_cmap_cache_lookup(case)
         }
+        "ftcache.image_cache_lookup" if !case.expect_error => wasm_image_cache_lookup(case),
         "ftcache.cmap_cache_new" if !case.expect_error => wasm_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => wasm_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
@@ -29507,6 +29523,32 @@ fn rust_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String>
     )
 }
 
+fn rust_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    image_cache_lookup_output(
+        &case.inputs.params,
+        glyph_indexes,
+        repeat_lookup,
+        |glyph_index| {
+            let size_err = rust_apply_cache_scaler(&mut face, image_type.scaler());
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            match FT_Load_Glyph(&face, glyph_index, image_type.flags as i32) {
+                Ok(slot) => Ok(Ok(glyph_record_json(
+                    slot.format,
+                    i64::from(slot.advance.x),
+                    i64::from(slot.advance.y),
+                ))),
+                Err(err) => Ok(Err(err)),
+            }
+        },
+    )
+}
+
 fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Glyph(
         face,
@@ -29586,6 +29628,38 @@ fn c_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     output
 }
 
+fn c_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    let output = image_cache_lookup_output(
+        &case.inputs.params,
+        glyph_indexes,
+        repeat_lookup,
+        |glyph_index| {
+            let size_err = c_apply_cache_scaler(face, image_type.scaler());
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            let err = c_abi::FT_Load_Glyph(face, glyph_index, image_type.flags as i32);
+            if err != FT_Err_Ok {
+                return Ok(Err(err));
+            }
+            let slot = c_abi::abi_slot_snapshot(face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            )))
+        },
+    );
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
 fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
@@ -29647,6 +29721,38 @@ fn wasm_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String>
                 return Ok(Err(size_err));
             }
             let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+            if err != FT_Err_Ok {
+                return Ok(Err(err));
+            }
+            let slot = wasm_abi::abi_slot_snapshot(handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            )))
+        },
+    );
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_indexes = cache_glyph_indexes(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    let output = image_cache_lookup_output(
+        &case.inputs.params,
+        glyph_indexes,
+        repeat_lookup,
+        |glyph_index| {
+            let size_err = wasm_apply_cache_scaler(handle, image_type.scaler());
+            if size_err != FT_Err_Ok {
+                return Ok(Err(size_err));
+            }
+            let err =
+                wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, image_type.flags as i32);
             if err != FT_Err_Ok {
                 return Ok(Err(err));
             }
@@ -30930,6 +31036,61 @@ struct CacheScalerRow {
     y_res: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ImageCacheTypeRow {
+    width: u32,
+    height: u32,
+    flags: u64,
+}
+
+impl ImageCacheTypeRow {
+    fn scaler(self) -> CacheScalerRow {
+        CacheScalerRow {
+            width: self.width,
+            height: self.height,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        }
+    }
+}
+
+fn image_cache_type_param(params: &Value) -> Result<ImageCacheTypeRow, String> {
+    let object = params
+        .get("image_type")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "missing image_type object".to_string())?;
+    let width = object
+        .get("width")
+        .map_or(Ok(0), |value| u32_value(value, "image_type.width"))?;
+    let height = object
+        .get("height")
+        .map_or(Ok(0), |value| u32_value(value, "image_type.height"))?;
+    let flags = object
+        .get("flags")
+        .map_or(Ok(FT_LOAD_DEFAULT as u64), |value| {
+            image_cache_type_flags(value)
+        })?;
+    Ok(ImageCacheTypeRow {
+        width,
+        height,
+        flags,
+    })
+}
+
+fn image_cache_type_flags(value: &Value) -> Result<u64, String> {
+    match value {
+        Value::Array(items) => {
+            let mut flags = 0u64;
+            for item in items {
+                flags |= cache_load_flag_ulong_value(item, "image_type.flags")?;
+            }
+            Ok(flags)
+        }
+        _ => cache_load_flag_ulong_value(value, "image_type.flags"),
+    }
+}
+
 fn cache_scaler_rows(params: &Value) -> Result<Vec<CacheScalerRow>, String> {
     if let Some(rows) = params.get("scalers").and_then(Value::as_array) {
         if rows.is_empty() {
@@ -31164,6 +31325,93 @@ fn cache_image_scaler_outputs(
         }
     }
     Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn image_cache_lookup_output(
+    params: &Value,
+    glyph_indexes: Vec<u32>,
+    repeat_lookup: bool,
+    mut run: impl FnMut(u32) -> Result<Result<Value, FT_Error>, String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(params)?;
+    let image_type = image_cache_type_param(params)?;
+    let mut requester_count = 0u32;
+    let mut face_requested = false;
+    let mut rows = Vec::with_capacity(glyph_indexes.len());
+    for glyph_index in glyph_indexes {
+        let before = requester_count;
+        if !face_requested {
+            requester_count = requester_count.saturating_add(1);
+            face_requested = true;
+        }
+        let first = run(glyph_index)?;
+        let after_first = requester_count;
+        let repeat_status = if repeat_lookup {
+            match run(glyph_index)? {
+                Ok(_) => FT_Err_Ok,
+                Err(err) => err,
+            }
+        } else {
+            match &first {
+                Ok(_) => FT_Err_Ok,
+                Err(err) => *err,
+            }
+        };
+        let status = match first {
+            Ok(glyph) => {
+                let mut object = serde_json::Map::new();
+                object.insert("glyph_index".to_string(), json!(glyph_index));
+                object.insert(
+                    "image_type".to_string(),
+                    json!({
+                        "width": image_type.width,
+                        "height": image_type.height,
+                        "flags": image_type.flags as i32
+                    }),
+                );
+                object.insert("status".to_string(), json!(FT_Err_Ok));
+                object.insert("error".to_string(), json!(FT_Err_Ok));
+                object.insert("repeat_status".to_string(), json!(repeat_status));
+                object.insert("requester_count_before".to_string(), json!(before));
+                object.insert(
+                    "requester_count_after_first".to_string(),
+                    json!(after_first),
+                );
+                object.insert(
+                    "requester_count_after_repeat".to_string(),
+                    json!(requester_count),
+                );
+                if let Some(glyph_object) = glyph.as_object() {
+                    for (key, value) in glyph_object {
+                        object.insert(key.clone(), value.clone());
+                    }
+                }
+                object.insert("node".to_string(), json!({"locked": false}));
+                Value::Object(object)
+            }
+            Err(err) => json!({
+                "glyph_index": glyph_index,
+                "image_type": {
+                    "width": image_type.width,
+                    "height": image_type.height,
+                    "flags": image_type.flags as i32
+                },
+                "status": err,
+                "error": err,
+                "repeat_status": repeat_status,
+                "requester_count_before": before,
+                "requester_count_after_first": after_first,
+                "requester_count_after_repeat": requester_count,
+                "glyph": Value::Null,
+                "node": {"locked": false}
+            }),
+        };
+        rows.push(status);
+    }
+    Ok(ok(json!({
+        "scenario": scenario,
+        "rows": rows
+    })))
 }
 
 struct ManagerLookupSizeRowOutput {
