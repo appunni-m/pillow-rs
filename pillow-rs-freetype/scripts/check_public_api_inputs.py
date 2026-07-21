@@ -268,6 +268,9 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_winfnt_header",
     "fontdone_wasm_get_bdf_property",
     "fontdone_wasm_get_bdf_charset_id",
+    "fontdone_wasm_get_cid_is_internally_cid_keyed",
+    "fontdone_wasm_get_cid_from_glyph_index",
+    "fontdone_wasm_get_cid_registry_ordering_supplement",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
@@ -7300,10 +7303,12 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
     runtime_skipped_needs_input_cases = {
         "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid",
         "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c",
-        "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported",
+        # SFNT-wrapped CID rows are backed by the maintained OFL-1.1
+        # FDArrayTest257 OpenType/CFF CID fixture.
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c",
-        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported",
+        # SFNT-wrapped CID keyed-state row is backed by the maintained
+        # FDArrayTest257 OpenType/CFF CID fixture.
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",

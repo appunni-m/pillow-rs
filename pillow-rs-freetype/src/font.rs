@@ -3214,6 +3214,29 @@ impl Font {
         self.data.os2.as_ref()
     }
 
+    pub(crate) fn is_cid_keyed(&self) -> bool {
+        self.data
+            .cff
+            .as_ref()
+            .is_some_and(tt::cff::CffTable::is_cid_keyed)
+    }
+
+    pub(crate) fn cid_for_glyph_index(&self, glyph_index: u32) -> Option<u16> {
+        self.data
+            .cff
+            .as_ref()
+            .and_then(tt::cff::CffTable::cid_info)
+            .and_then(|cid| cid.cid_for_glyph_index(glyph_index))
+    }
+
+    pub(crate) fn cid_registry_ordering_supplement(&self) -> Option<(&str, &str, i32)> {
+        self.data
+            .cff
+            .as_ref()
+            .and_then(tt::cff::CffTable::cid_info)
+            .map(|cid| (cid.registry(), cid.ordering(), cid.supplement()))
+    }
+
     /// Number of raw SFNT name records exposed by `FT_Get_Sfnt_Name_Count`.
     pub fn sfnt_name_count(&self) -> usize {
         self.data.name.records.len()
@@ -3318,6 +3341,10 @@ impl Font {
         if self.data.kern.as_ref().is_some_and(|kern| !kern.is_empty()) {
             flags |= FT_FACE_FLAG_KERNING;
         }
+        // FreeType's CID service can report SFNT-wrapped CFF faces as
+        // internally CID keyed while `FT_IS_CID_KEYED(face)` remains false
+        // because the public `face_flags` bit is not set for this path in
+        // pinned 2.14.3.
         // sfobjs.c:642-657 rejects zero-axis `fvar` tables before setting
         // TT_FACE_FLAG_VAR_FVAR; sfobjs.c:1141-1144 derives the public MM flag.
         if self

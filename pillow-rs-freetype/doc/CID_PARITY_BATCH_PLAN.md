@@ -9,6 +9,37 @@ implemented public endpoints. Counting them now would be a green placeholder.
 
 ## Current evidence
 
+Update on 2026-07-22:
+
+- Added the smaller Adobe `FDArrayTest257.otf` as
+  `tests/fixtures/input/fonts/cid/ot-cff-cid-keyed.otf`.
+- Recorded OFL-1.1 license and provenance next to the fixture.
+- Promoted only the SFNT-wrapped CID rows to real runtime candidates:
+  `FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported` and
+  `FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported`.
+- First divergence: after promotion, Rust returned the generic fallback error
+  for CID success rows because core CFF parsing did not preserve ROS metadata or
+  charset CID mappings and the Rust/C/WASM FFI surfaces did not expose the CID
+  endpoints.
+- C behavior: pinned FreeType reports `FDArrayTest257.otf` as internally
+  CID-keyed through the CID service and maps GID 0/1/last to exact CIDs, while
+  `FT_IS_CID_KEYED(face)` remains false for this SFNT-wrapped path.
+- Rust behavior before the fix: no CFF CID metadata, no glyph-index-to-CID map,
+  no public CID wrapper exports, and generic error output for the promoted rows.
+- Current fix: safe Rust parses CFF ROS and charset CID data, Rust FFI owns
+  face-lifetime ROS strings and CID outputs, C/WASM wrappers remain thin, and
+  the pinned C oracle records exact CID service output.
+- Verified result: route audit moved `pending-route` from 233 to 229 and
+  `real-parity` from 4754 to 4758 at the current branch baseline. Full
+  `make fontdone-test` passes with `runtime_parity: passed=7028 failed=0
+  total=7028` and `pending=234`.
+- Non-SFNT Type1 CID rows remain pending until a separate Type1 CID fixture is
+  available and opens in pinned C.
+- `FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face` remains a
+  follow-up route promotion even though the thin Rust/C/WASM endpoint surface is
+  now present; it still needs unified harness output wiring before it can count
+  as real parity.
+
 Baseline from `make -C pillow-rs-freetype route-buckets` on `main` at
 `9d07011f1`:
 
