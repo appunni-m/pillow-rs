@@ -1,5 +1,44 @@
 # Real-Parity Missing Cases
 
+### Issue Set Completed: FT_OPEN_STREAM external-stream ownership
+
+Status: promoted on 2026-07-21.
+
+Promoted row:
+
+- `freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership`
+
+Finding:
+
+- Pinned FreeType 2.14.3 `FT_Open_Face` with `FT_OPEN_STREAM` sets
+  `FT_FACE_FLAG_EXTERNAL_STREAM` on the opened face.
+- `FT_Done_Face` calls the caller-provided `FT_StreamRec.close` callback once.
+  The stream record itself remains caller-owned and accessible after face
+  teardown.
+
+Implementation note:
+
+- The pure Rust core owns parsed font bytes but exposes a dedicated external
+  stream open helper that sets the public face flag.
+- The thin C ABI now accepts memory-backed `FT_StreamRec` input for
+  `FT_OPEN_STREAM` and stores the caller's stream close callback in face handle
+  state so `FT_Done_Face` invokes it once.
+- The WASM ABI exposes a matching external-stream open helper for parity with
+  the handle API shape.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=freetype.open_face_stream
+```
+
+Result:
+
+```text
+runtime_parity: passed=1 failed=0 total=1
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 399, 'real-null-validation': 9, 'real-parity': 4561}
+```
+
 ### Issue Set Current: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
 
 Status: audited on 2026-07-21; remains pending. A maintained glyph-output

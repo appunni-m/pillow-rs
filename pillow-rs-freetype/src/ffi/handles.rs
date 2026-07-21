@@ -5368,6 +5368,23 @@ pub fn FT_New_Memory_Face_With_Name_Options(
         .map_err(error_to_ft)
 }
 
+pub fn FT_Open_External_Stream_Face_With_Name_Options(
+    library: &FT_Library,
+    data: &[u8],
+    face_index: FT_Long,
+    size_pt: f32,
+    options: FT_Open_Face_Name_Options,
+) -> Result<FT_Face, FT_Error> {
+    let mut face =
+        FT_New_Memory_Face_With_Name_Options(library, data, face_index, size_pt, options)?;
+    // C FreeType `FT_Stream_New` marks faces opened with `FT_OPEN_STREAM`
+    // as caller-stream backed (`src/base/ftobjs.c`, stream-open path).
+    // The Rust core still owns parsed font bytes, but the public face flag
+    // must reflect the caller-owned stream source.
+    face.face_flags |= FT_FACE_FLAG_EXTERNAL_STREAM;
+    Ok(face)
+}
+
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
     let info = inner.info();

@@ -114,6 +114,10 @@ pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
 pub type FT_List_Iterator = Option<extern "C" fn(node: FT_ListNode, user: FT_Pointer) -> FT_Error>;
 pub type FT_Memory = *mut FT_MemoryRec;
+pub type FT_StreamDesc = rust_ffi::FT_StreamDesc;
+pub type FT_StreamRec = rust_ffi::FT_StreamRec;
+pub type FT_Stream = *mut FT_StreamRec;
+pub type FT_Stream_CloseFunc = Option<extern "C" fn(stream: FT_Stream)>;
 pub type FT_Alloc_Func = Option<extern "C" fn(memory: FT_Memory, size: c_long) -> FT_Pointer>;
 pub type FT_Free_Func = Option<extern "C" fn(memory: FT_Memory, block: FT_Pointer)>;
 pub type FT_Realloc_Func = Option<
@@ -204,7 +208,7 @@ pub struct FT_Open_Args {
     pub memory_base: *const FT_Byte,
     pub memory_size: FT_Long,
     pub pathname: *mut c_char,
-    pub stream: *mut c_void,
+    pub stream: FT_Stream,
     pub driver: *mut c_void,
     pub num_params: FT_Int,
     pub params: *mut FT_Parameter,
@@ -1170,6 +1174,8 @@ struct FaceState {
     font_format: Option<CString>,
     face_driver_name: Option<CString>,
     variant_list: Vec<FT_UInt32>,
+    stream: FT_Stream,
+    stream_close: FT_Stream_CloseFunc,
 }
 
 impl FaceState {
@@ -1196,6 +1202,8 @@ impl FaceState {
             font_format,
             face_driver_name,
             variant_list: Vec::new(),
+            stream: ptr::null_mut(),
+            stream_close: None,
         }
     }
 
@@ -1460,16 +1468,11 @@ pub extern "C" fn FT_Get_PS_Font_Info(face: FT_Face, afont_info: PS_FontInfo) ->
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn FT_Get_PS_Font_Private(
-    face: FT_Face,
-    afont_private: PS_Private,
-) -> FT_Error {
+pub extern "C" fn FT_Get_PS_Font_Private(face: FT_Face, afont_private: PS_Private) -> FT_Error {
     let face = face_state(face).map(|state| &state.inner);
     let mut private = PS_PrivateRec::default();
-    let err = rust_ffi::FT_Get_PS_Font_Private(
-        face,
-        (!afont_private.is_null()).then_some(&mut private),
-    );
+    let err =
+        rust_ffi::FT_Get_PS_Font_Private(face, (!afont_private.is_null()).then_some(&mut private));
     if err == rust_ffi::FT_Err_Ok && !afont_private.is_null() {
         // SAFETY: C ABI caller supplied a non-null `PS_PrivateRec*` output
         // pointer; copying the repr(C) public record is the wrapper's only
@@ -2087,7 +2090,10 @@ pub extern "C" fn FT_New_Library(memory: FT_Memory, alibrary: *mut FT_Library) -
     // SAFETY: `memory` is a non-null FT_MemoryRec provided by the caller.
     let allocation = unsafe {
         match (*memory.as_ptr()).alloc {
-            Some(alloc) => alloc(memory.as_ptr(), std::mem::size_of::<FT_LibraryRec>() as c_long),
+            Some(alloc) => alloc(
+                memory.as_ptr(),
+                std::mem::size_of::<FT_LibraryRec>() as c_long,
+            ),
             None => std::ptr::null_mut(),
         }
     };
@@ -2271,7 +2277,10 @@ fn property_name_arg(ptr: *const FT_String) -> Option<String> {
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_module_interface_present(library: FT_Library, module_name: Option<&str>) -> bool {
+pub fn abi_support_module_interface_present(
+    library: FT_Library,
+    module_name: Option<&str>,
+) -> bool {
     !rust_ffi::FT_Get_Module_Interface(library_ref(library), module_name).is_null()
 }
 
@@ -2281,11 +2290,7 @@ pub fn abi_support_module_requester_service_available(
     module_name: Option<&str>,
     service_name: &str,
 ) -> bool {
-    rust_ffi::FT_Module_Requester_Service_Available(
-        library_ref(library),
-        module_name,
-        service_name,
-    )
+    rust_ffi::FT_Module_Requester_Service_Available(library_ref(library), module_name, service_name)
 }
 
 fn is_increase_x_height_property(module_name: Option<&str>, property_name: Option<&str>) -> bool {
@@ -2476,7 +2481,7 @@ pub fn abi_support_new_library_without_default_modules() -> FT_Library {
         internal: Box::into_raw(Box::new(LibraryState::new(
             rust_ffi::FT_New_Library_Without_Default_Modules(),
         )))
-            .cast::<c_void>(),
+        .cast::<c_void>(),
     }))
 }
 
@@ -2819,18 +2824,30 @@ pub extern "C" fn FT_Open_Face(
     let source_flags = args.flags
         & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME)
             as FT_UInt);
-    if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
+    if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt
+        && source_flags != rust_ffi::FT_OPEN_STREAM as FT_UInt
+    {
         return rust_ffi::FT_Err_Invalid_Argument;
     }
     let name_options = open_face_name_options(args);
-    ft_new_memory_face_with_name_options(
-        library,
-        args.memory_base,
-        args.memory_size,
-        face_index,
-        aface,
-        name_options,
-    )
+    if source_flags == rust_ffi::FT_OPEN_STREAM as FT_UInt {
+        ft_open_external_stream_face_with_name_options(
+            library,
+            args.stream,
+            face_index,
+            aface,
+            name_options,
+        )
+    } else {
+        ft_new_memory_face_with_name_options(
+            library,
+            args.memory_base,
+            args.memory_size,
+            face_index,
+            aface,
+            name_options,
+        )
+    }
 }
 
 fn open_face_name_options(args: &FT_Open_Args) -> rust_ffi::FT_Open_Face_Name_Options {
@@ -2894,7 +2911,7 @@ fn ft_new_memory_face_with_name_options(
     let Some(library) = non_null_mut(library) else {
         return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
     };
-    let Some(out) = non_null_mut(aface) else {
+    let Some(_out) = non_null_mut(aface) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
     let Ok(file_len) = usize::try_from(file_size) else {
@@ -2902,16 +2919,109 @@ fn ft_new_memory_face_with_name_options(
     };
     // SAFETY: `file_base` is non-null and the caller promises `file_size` readable bytes.
     let data = unsafe { slice::from_raw_parts(file_base, file_len) };
-    let Some(rust_library) = library_ref(library.as_ptr()) else {
-        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
-    };
-    match rust_ffi::FT_New_Memory_Face_With_Name_Options(
-        rust_library,
+    ft_open_face_from_bytes_with_name_options(
+        library.as_ptr(),
         data,
         face_index,
-        20.0,
-        options,
-    ) {
+        aface,
+        OpenFaceByteOptions {
+            name_options: options,
+            external_stream: false,
+            stream: ptr::null_mut(),
+            stream_close: None,
+        },
+    )
+}
+
+fn ft_open_external_stream_face_with_name_options(
+    library: FT_Library,
+    stream: FT_Stream,
+    face_index: FT_Long,
+    aface: *mut FT_Face,
+    options: rust_ffi::FT_Open_Face_Name_Options,
+) -> FT_Error {
+    let Some(stream) = non_null_mut(stream) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(library) = non_null_mut(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(_out) = non_null_mut(aface) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `stream` is non-null and read-only for this call.  This thin ABI
+    // layer supports the memory-backed `FT_StreamRec` route used by FreeType's
+    // public `FT_OPEN_STREAM` ownership contract.
+    let stream = unsafe { stream.as_ref() };
+    if stream.base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let close = if stream.close.is_null() {
+        None
+    } else {
+        // SAFETY: public `FT_StreamRec.close` has FreeType's
+        // `void (*)(FT_Stream)` ABI; the Rust layout stores it as an opaque
+        // pointer to keep core runtime independent from C callbacks.
+        Some(unsafe { std::mem::transmute::<FT_Pointer, extern "C" fn(FT_Stream)>(stream.close) })
+    };
+    let Ok(file_len) = usize::try_from(stream.size) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `FT_OPEN_STREAM` callers provide `size` readable bytes at `base`
+    // for a memory-backed stream; the stream record remains caller-owned.
+    let data = unsafe { slice::from_raw_parts(stream.base.cast_const(), file_len) };
+    ft_open_face_from_bytes_with_name_options(
+        library.as_ptr(),
+        data,
+        face_index,
+        aface,
+        OpenFaceByteOptions {
+            name_options: options,
+            external_stream: true,
+            stream: stream as *const FT_StreamRec as FT_Stream,
+            stream_close: close,
+        },
+    )
+}
+
+struct OpenFaceByteOptions {
+    name_options: rust_ffi::FT_Open_Face_Name_Options,
+    external_stream: bool,
+    stream: FT_Stream,
+    stream_close: FT_Stream_CloseFunc,
+}
+
+fn ft_open_face_from_bytes_with_name_options(
+    library: FT_Library,
+    data: &[u8],
+    face_index: FT_Long,
+    aface: *mut FT_Face,
+    options: OpenFaceByteOptions,
+) -> FT_Error {
+    let Some(out) = non_null_mut(aface) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let Some(rust_library) = library_ref(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let opened = if options.external_stream {
+        rust_ffi::FT_Open_External_Stream_Face_With_Name_Options(
+            rust_library,
+            data,
+            face_index,
+            20.0,
+            options.name_options,
+        )
+    } else {
+        rust_ffi::FT_New_Memory_Face_With_Name_Options(
+            rust_library,
+            data,
+            face_index,
+            20.0,
+            options.name_options,
+        )
+    };
+    match opened {
         Ok(inner) => {
             let metrics = rust_size_metrics_to_abi(inner.size_metrics);
             let rust_size = inner.size;
@@ -2930,6 +3040,10 @@ fn ft_new_memory_face_with_name_options(
             });
             let face_ptr = (&mut *face) as *mut FT_FaceRec;
             let mut state = Box::new(FaceState::new(inner));
+            if options.external_stream {
+                state.stream = options.stream;
+                state.stream_close = options.stream_close;
+            }
             // SAFETY: `face.size` was allocated above and is owned by `state`.
             unsafe {
                 (*face.size).face = face_ptr;
@@ -2961,7 +3075,11 @@ pub extern "C" fn FT_Done_Face(face: FT_Face) -> FT_Error {
         let face = Box::from_raw(face.as_ptr());
         drop_glyph(face.glyph);
         if !face.internal.is_null() {
-            drop(Box::from_raw(face.internal.cast::<FaceState>()));
+            let state = Box::from_raw(face.internal.cast::<FaceState>());
+            if let Some(close) = state.stream_close {
+                close(state.stream);
+            }
+            drop(state);
         }
     }
     rust_ffi::FT_Err_Ok
@@ -3150,8 +3268,11 @@ pub extern "C" fn FT_Glyph_Transform(
             y: delta.y,
         }
     });
-    let error =
-        rust_ffi::FT_Glyph_Transform_Outline(Some(&mut owned.core), matrix.as_ref(), delta.as_ref());
+    let error = rust_ffi::FT_Glyph_Transform_Outline(
+        Some(&mut owned.core),
+        matrix.as_ref(),
+        delta.as_ref(),
+    );
     if error == rust_ffi::FT_Err_Ok {
         owned.refresh_record();
     }

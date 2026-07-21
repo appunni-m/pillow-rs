@@ -80,6 +80,28 @@ typedef struct FT_MemoryRec_ {
   FT_Realloc_Func realloc;
 } FT_MemoryRec;
 
+typedef union FT_StreamDesc_ {
+  long value;
+  void* pointer;
+} FT_StreamDesc;
+
+typedef struct FT_StreamRec_* FT_Stream;
+typedef unsigned long (*FT_Stream_IoFunc)(FT_Stream stream, unsigned long offset, unsigned char* buffer, unsigned long count);
+typedef void (*FT_Stream_CloseFunc)(FT_Stream stream);
+
+typedef struct FT_StreamRec_ {
+  unsigned char* base;
+  unsigned long size;
+  unsigned long pos;
+  FT_StreamDesc descriptor;
+  FT_StreamDesc pathname;
+  FT_Stream_IoFunc read;
+  FT_Stream_CloseFunc close;
+  FT_Memory memory;
+  unsigned char* cursor;
+  unsigned char* limit;
+} FT_StreamRec;
+
 typedef struct FT_Vector_ {
   FT_Pos x;
   FT_Pos y;
@@ -262,7 +284,7 @@ typedef struct FT_Open_Args_ {
   const FT_Byte* memory_base;
   FT_Long memory_size;
   char* pathname;
-  void* stream;
+  FT_Stream stream;
   void* driver;
   FT_Int num_params;
   FT_Parameter* params;

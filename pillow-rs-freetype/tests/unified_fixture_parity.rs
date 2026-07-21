@@ -32,6 +32,7 @@ use std::os::raw::c_long;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::ptr;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22675,6 +22676,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             );
             Ok(args)
         }
+        "freetype.open_face_stream" => {
+            let mut args = vec!["--open-face-stream-ownership".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.face_flags" => {
             let mut args = vec!["--face-flags".to_string()];
             push_font_source(case, &mut args)?;
@@ -24828,6 +24835,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
             rust_open_face_ignored_params(case)
         }
+        "freetype.open_face_stream" => rust_open_face_stream(case),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -25622,6 +25630,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
             c_open_face_ignored_params(case)
         }
+        "freetype.open_face_stream" => c_open_face_stream(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return c_open_face_name_options(case);
@@ -26558,6 +26567,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.open_face_with_params" if open_face_ignored_params_runtime_supported(case) => {
             wasm_open_face_ignored_params(case)
         }
+        "freetype.open_face_stream" => wasm_open_face_stream(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return wasm_open_face_name_options(case);
@@ -33332,6 +33342,126 @@ fn wasm_open_face_name_options(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(status.handle);
     }
     Ok(open_face_name_run_output(results))
+}
+
+fn open_face_stream_output(status: FT_Error, face_flags: FT_Long, close_calls: i32) -> RunOutput {
+    let output = json!({
+        "return": status,
+        "status": status,
+        "opened": status == FT_Err_Ok,
+        "face_flags": face_flags,
+        "bit_set": (face_flags & FT_FACE_FLAG_EXTERNAL_STREAM) != 0,
+        "stream_close_calls": close_calls,
+        "client_stream_alive_after_done_face": true
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let face_index = face_index_param(&case.inputs.params)?;
+    match FT_Open_External_Stream_Face_With_Name_Options(
+        &library,
+        data.as_ref(),
+        face_index,
+        20.0,
+        FT_Open_Face_Name_Options::default(),
+    ) {
+        Ok(face) => {
+            let face_flags = face.face_flags;
+            let err = FT_Done_Face(Some(face));
+            Ok(open_face_stream_output(err, face_flags, 1))
+        }
+        Err(err) => Ok(open_face_stream_output(err, 0, 0)),
+    }
+}
+
+static C_OPEN_FACE_STREAM_CLOSE_CALLS: AtomicI32 = AtomicI32::new(0);
+
+extern "C" fn c_open_face_stream_close(_stream: c_abi::FT_Stream) {
+    C_OPEN_FACE_STREAM_CLOSE_CALLS.fetch_add(1, Ordering::SeqCst);
+}
+
+fn c_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    C_OPEN_FACE_STREAM_CLOSE_CALLS.store(0, Ordering::SeqCst);
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(error(init_err));
+    }
+    let mut stream = c_abi::FT_StreamRec {
+        base: bytes.as_ptr().cast_mut(),
+        size: c_abi::FT_ULong::try_from(bytes.len())
+            .map_err(|err| format!("font size does not fit FT_ULong: {err}"))?,
+        pos: 0,
+        descriptor: c_abi::FT_StreamDesc {
+            pointer: std::ptr::null_mut(),
+        },
+        pathname: c_abi::FT_StreamDesc {
+            pointer: std::ptr::null_mut(),
+        },
+        read: std::ptr::null_mut(),
+        close: c_open_face_stream_close as *const () as *mut c_void,
+        memory: std::ptr::null_mut(),
+        cursor: std::ptr::null_mut(),
+        limit: std::ptr::null_mut(),
+    };
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_STREAM as c_abi::FT_UInt,
+        memory_base: std::ptr::null(),
+        memory_size: 0,
+        pathname: std::ptr::null_mut(),
+        stream: &mut stream,
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let mut face = std::ptr::null_mut();
+    let err = c_abi::FT_Open_Face(
+        library,
+        &open_args,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let face_flags = if err == FT_Err_Ok {
+        let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+        info.face_flags
+    } else {
+        0
+    };
+    if err == FT_Err_Ok {
+        c_done_face(face);
+    }
+    let close_calls = C_OPEN_FACE_STREAM_CLOSE_CALLS.load(Ordering::SeqCst);
+    c_done_library(library);
+    Ok(open_face_stream_output(err, face_flags, close_calls))
+}
+
+fn wasm_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let status = wasm_abi::fontdone_wasm_open_external_stream_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let face_flags = if status.error == FT_Err_Ok {
+        let info = wasm_abi::abi_face_info(status.handle)
+            .ok_or_else(|| "missing wasm face info".to_string())?;
+        info.face_flags
+    } else {
+        0
+    };
+    if status.error == FT_Err_Ok {
+        wasm_done_face(status.handle);
+    }
+    Ok(open_face_stream_output(status.error, face_flags, 1))
 }
 
 fn face_style_flag_output(
@@ -44464,6 +44594,9 @@ fn comparison_schema(case: &InputCase) -> &str {
         return "api_object";
     }
     if open_face_name_options_runtime_supported(case) {
+        return "api_object";
+    }
+    if case.operation == "freetype.open_face_stream" {
         return "api_object";
     }
     match case.operation.as_str() {
