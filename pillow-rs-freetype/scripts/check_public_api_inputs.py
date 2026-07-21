@@ -187,6 +187,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_palette_data_get",
     "fontdone_wasm_palette_select",
     "fontdone_wasm_palette_set_foreground_color",
+    "fontdone_wasm_get_color_glyph_layer",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
@@ -2581,6 +2582,12 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
             "pinned C public union output"
         ),
     }
+    if row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+    }:
+        return None
     return exact_cases.get(row.case_id)
 
 
@@ -5236,6 +5243,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior"
     ):
         return "FT_Get_Color_Glyph_Layer malformed-layer rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.operation == "ftcolor.get_color_glyph_layer" and row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+    }:
+        return "FT_Get_Color_Glyph_Layer COLR v0 layer iterator output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.get_color_glyph_paint"
         and row.case_id

@@ -88,6 +88,7 @@ pub type FT_Var_Axis = rust_ffi::FT_Var_Axis;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
+pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
 pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
@@ -1076,6 +1077,23 @@ pub extern "C" fn FT_Palette_Set_Foreground_Color(
     rust_ffi::FT_Palette_Set_Foreground_Color(
         face_state(face).map(|state| &state.inner),
         rust_color_from_c(foreground_color),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Color_Glyph_Layer(
+    face: FT_Face,
+    base_glyph: FT_UInt,
+    aglyph_index: *mut FT_UInt,
+    acolor_index: *mut FT_UInt,
+    iterator: *mut FT_LayerIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Layer(
+        face_state(face).map(|state| &state.inner),
+        base_glyph,
+        unsafe { aglyph_index.as_mut() },
+        unsafe { acolor_index.as_mut() },
+        unsafe { iterator.as_mut() },
     )
 }
 

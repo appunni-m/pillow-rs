@@ -14013,6 +14013,89 @@ static FT_UShort palette_entry_count(FT_Face face) {
     return err ? 0 : data.num_palette_entries;
 }
 
+static void print_layer_iterator_json(FT_LayerIterator iterator) {
+    printf("{\"num_layers\":%u,\"layer\":%u,\"p_class\":\"%s\"}",
+           iterator.num_layers,
+           iterator.layer,
+           iterator.p ? "nonnull" : "null");
+}
+
+static void print_color_layer_call_json(const char* label,
+                                        FT_Bool result,
+                                        FT_UInt glyph_index,
+                                        FT_UInt color_index,
+                                        FT_LayerIterator iterator) {
+    printf("{\"label\":\"%s\",\"return\":%u,\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+           label,
+           result,
+           glyph_index,
+           color_index);
+    print_layer_iterator_json(iterator);
+    printf("}");
+}
+
+static int emit_color_glyph_layer_case(int argc, char** argv) {
+    if (argc != 7) {
+        fprintf(stderr, "--color-glyph-layer-case requires CASE SOURCE_KIND SOURCE FACE_INDEX BASE_GLYPH\n");
+        return 2;
+    }
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt base_glyph = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    FT_UInt glyph_index = 0xDEAD;
+    FT_UInt color_index = 0xBEEF;
+
+    printf("{");
+    print_status(0);
+    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success")) {
+        printf(",\"output\":{\"calls\":[");
+        for (int i = 0; i < 4; i++) {
+            if (i) {
+                printf(",");
+            }
+            FT_Bool result = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+            char label[16];
+            snprintf(label, sizeof(label), "call_%d", i + 1);
+            print_color_layer_call_json(label, result, glyph_index, color_index, iterator);
+        }
+        printf("]}}\n");
+    } else if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index")) {
+        FT_Bool result = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        printf(",\"output\":{\"call\":");
+        print_color_layer_call_json("foreground", result, glyph_index, color_index, iterator);
+        printf(",\"foreground_marker_preserved\":%s}}\n", color_index == 0xFFFF ? "true" : "false");
+    } else if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs")) {
+        for (int i = 0; i < 4; i++) {
+            FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        }
+        FT_UInt before_glyph = glyph_index;
+        FT_UInt before_color = color_index;
+        FT_LayerIterator before_iterator = iterator;
+        FT_Bool terminal = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        printf(",\"output\":{\"terminal_return\":%u,\"before\":{\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+               terminal,
+               before_glyph,
+               before_color);
+        print_layer_iterator_json(before_iterator);
+        printf("},\"after\":{\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+               glyph_index,
+               color_index);
+        print_layer_iterator_json(iterator);
+        printf("}}}\n");
+    } else {
+        close_oracle_face(&face);
+        return 2;
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_color_palette_case(int argc, char** argv) {
     const char* case_id = argv[2];
     OracleFace face;
@@ -22753,6 +22836,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--color-palette-case")) {
         return emit_color_palette_case(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--color-glyph-layer-case")) {
+        return emit_color_glyph_layer_case(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);

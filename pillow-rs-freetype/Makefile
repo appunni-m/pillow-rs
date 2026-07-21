@@ -29,6 +29,7 @@ help:
 	@printf "  make font-fixture-autohint-scripts Rebuild compact autohint script fixture\n"
 	@printf "  make font-fixture-cff Rebuild compact CFF/OpenType fixtures\n"
 	@printf "  make font-fixture-cmap Rebuild compact cmap table fixtures\n"
+	@printf "  make font-fixture-color Rebuild compact COLR/CPAL fixtures\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
@@ -351,6 +352,10 @@ font-fixture-mvar:
 .PHONY: font-fixture-cmap
 font-fixture-cmap: font-fixture-hinter
 	$(PYTHON) scripts/build_cmap_fixtures.py
+
+.PHONY: font-fixture-color
+font-fixture-color:
+	$(PYTHON) scripts/build_cpal_palette_fixtures.py
 
 .PHONY: font-fixture-post
 font-fixture-post: font-fixture-hinter
