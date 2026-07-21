@@ -2622,6 +2622,12 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "through the maintained COLRv1 composite fixture, pinned C oracle, "
             "Rust FFI, C ABI, and WASM ABI"
         )
+    if row.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform":
+        return (
+            "FT_Get_Color_Glyph_Paint include-root-transform lookup validates "
+            "the inserted transform paint through the maintained COLRv1 root "
+            "transform fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if row.case_id in {
         "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract",
         "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis",
@@ -4050,6 +4056,10 @@ def fixture_reference_exists(reference: str) -> bool:
         # Historical logical id for the maintained COLRv1 all-paints fixture.
         "fonts/color/colr_v1_all_paint_formats.ttf": (
             "fonts/color/colr-v1-all-paints.ttf"
+        ),
+        # Historical logical id for the maintained COLRv1 root-transform fixture.
+        "fonts/color/colr-v1-root-paint-cpal.ttf": (
+            "fonts/color/colr-v1-root-transform.ttf"
         ),
     }
     alias = aliases.get(reference)

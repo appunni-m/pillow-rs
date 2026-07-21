@@ -10917,6 +10917,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintGlyph.get_paint_glyph_values"
             | "ftcolor.FT_PaintComposite.get_paint_composite_values"
             | "ftcolor.FT_PaintFormat.paint_union_shape_runtime"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform"
             | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
             | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
             | "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
@@ -11526,6 +11527,15 @@ fn color_root_transform_setup(name: &str, root_transform: FT_UInt) -> ColorRootT
             },
             FT_Vector { x: 0, y: 0 },
         ),
+        "manifest_include_transform" => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 8_192,
+                yx: 0,
+                yy: 65_536,
+            },
+            FT_Vector { x: 64, y: 32 },
+        ),
         _ => (
             FT_Matrix {
                 xx: 65_536,
@@ -11539,6 +11549,7 @@ fn color_root_transform_setup(name: &str, root_transform: FT_UInt) -> ColorRootT
     ColorRootTransformSetup {
         label: match name {
             "identity" => "identity",
+            "manifest_include_transform" => "manifest_include_transform",
             _ => "scale_translate",
         },
         root_transform,
@@ -11556,10 +11567,12 @@ fn color_root_pixel_size(case: &InputCase) -> Result<(FT_UInt, FT_UInt), String>
     let x = pixel_size
         .get("x")
         .and_then(Value::as_u64)
+        .or_else(|| pixel_size.as_u64().map(|_| 0))
         .ok_or_else(|| format!("{} missing pixel_size.x", case.case_id))?;
     let y = pixel_size
         .get("y")
         .and_then(Value::as_u64)
+        .or_else(|| pixel_size.as_u64())
         .ok_or_else(|| format!("{} missing pixel_size.y", case.case_id))?;
     Ok((
         x.try_into().unwrap_or(FT_UInt::MAX),
@@ -11721,6 +11734,12 @@ fn color_root_transform_output_for_open_face(
         "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload" => {
             vec![color_root_transform_setup("scale_translate", include)]
         }
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform" => {
+            vec![color_root_transform_setup(
+                "manifest_include_transform",
+                include,
+            )]
+        }
         other => return Err(format!("unsupported COLRv1 root transform case {other}")),
     };
     let mut output_rows = Vec::with_capacity(rows.len());
@@ -11746,6 +11765,7 @@ fn color_root_transform_case(case_id: &str) -> bool {
             | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
             | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
             | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform"
     )
 }
 
@@ -42765,6 +42785,11 @@ fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Opti
             // pinned FreeType 2.14.3.
             "fonts/color/colr_v1_all_paint_formats.ttf" => {
                 Some("fonts/color/colr-v1-all-paints.ttf")
+            }
+            // Historical logical id for the maintained COLRv1 root-transform
+            // fixture used to compare FT_COLOR_INCLUDE_ROOT_TRANSFORM output.
+            "fonts/color/colr-v1-root-paint-cpal.ttf" => {
+                Some("fonts/color/colr-v1-root-transform.ttf")
             }
             _ => None,
         }

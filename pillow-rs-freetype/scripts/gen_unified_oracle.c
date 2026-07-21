@@ -14550,6 +14550,15 @@ static void color_root_setup_values(const char* label, FT_Matrix* matrix, FT_Vec
         delta->y = 0;
         return;
     }
+    if (streq(label, "manifest_include_transform")) {
+        matrix->xx = 65536;
+        matrix->xy = 8192;
+        matrix->yx = 0;
+        matrix->yy = 65536;
+        delta->x = 64;
+        delta->y = 32;
+        return;
+    }
     matrix->xx = 65536;
     matrix->xy = 8192;
     matrix->yx = -4096;
@@ -14605,7 +14614,8 @@ static int is_colr_root_transform_case(const char* case_id) {
     return case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
            case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime") ||
            case_base_matches(case_id, "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint") ||
-           case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload");
+           case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload") ||
+           case_base_matches(case_id, "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform");
 }
 
 static int emit_colr_root_transform_case(const char* case_id, OracleFace* face) {
@@ -14616,6 +14626,8 @@ static int emit_colr_root_transform_case(const char* case_id, OracleFace* face) 
     if (case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
         case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload")) {
         print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+    } else if (case_base_matches(case_id, "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform")) {
+        print_colr_root_transform_row_json(face->face, "manifest_include_transform", 36, 24, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
     } else if (case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime")) {
         print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_NO_ROOT_TRANSFORM);
     } else {
