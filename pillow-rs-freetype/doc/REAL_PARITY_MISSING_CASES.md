@@ -1,5 +1,60 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FT_Glyph_Transform owned outline glyph success route
+
+Status: planned on 2026-07-21 after route audit at `ef6bbc55a`.
+
+Pending real parity rows:
+
+- `ftglyph.FT_Glyph_Transform.success_outline_matrix_delta`
+- `ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only`
+- `ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`
+
+Current evidence:
+
+- The two `FT_Glyph_Transform` public error rows are already real parity:
+  null/bad glyph and non-scalable bitmap paths compare exact `FT_Error`
+  behavior across pinned C oracle, Rust FFI, C ABI, and WASM ABI.
+- The success rows remain pending because the C and WASM thin ABI layers do not
+  yet own a real allocated `FT_OutlineGlyphRec`/SVG glyph object produced by
+  `FT_Get_Glyph`. The existing outline transform helpers can mutate outline
+  snapshots, but using only those helpers would not prove the public
+  `FT_Glyph_Transform` endpoint or glyph ownership contract.
+- Pinned C behavior to match:
+  - `freetype/src/base/ftglyph.c:672-700` checks `glyph` and `glyph->clazz`,
+    calls the class transform hook when present, and transforms `glyph->advance`
+    only when `matrix != NULL`.
+  - `freetype/src/base/ftglyph.c:209-224` outline glyph transform applies the
+    matrix to outline points when non-null and translates outline points by
+    `delta` when non-null.
+  - Delta does not mutate root advance; matrix does.
+
+Implementation plan:
+
+1. Add an owned glyph representation in `fontdone` that can hold the public
+   `FT_GlyphRec` root plus outline payload copied from a loaded glyph slot.
+2. Teach Rust FFI `FT_Get_Glyph` success to allocate/copy an outline glyph for
+   scalable outline slots, preserving root format, advance, library/class
+   presence, outline points/tags/contours, and CBox.
+3. Add public thin C ABI `FT_Glyph_Transform` and WASM equivalent only after the
+   owned glyph object exists; wrappers may validate raw pointers and copy
+   records, but must not implement transform logic independently.
+4. Route `ftglyph.glyph_transform` success through pinned C oracle, Rust FFI,
+   C ABI, and WASM ABI, comparing status, transformed outline points, root
+   advance, CBox, and mutation class for matrix+delta, delta-only, matrix-only,
+   and null/null transforms.
+5. Leave SVG success pending until a maintained OT-SVG glyph fixture and real
+   SVG glyph object path exist; do not count SVG via outline-only helpers.
+
+Focused check showing current blocker:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_Transform.success_outline_delta_only_or_matrix_only
+```
+
+Result at `ef6bbc55a`: `runtime_cases: runnable=0 pending=1`, with the
+expected pending reason for the missing maintained outline glyph route.
+
 ### Issue Set Current: FT module interface requester route
 
 Status: completed on 2026-07-21 for the public `FT_Module_Interface` requester
