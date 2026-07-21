@@ -528,6 +528,31 @@ Reasoning:
   weakened. The remaining COLRv1 layer terminal/iterator and linear-gradient
   rows stay pending until they have exact same-input routes.
 
+### COLRv1 paint-layer iteration route classifier correction: 2026-07-21
+
+Rows promoted:
+
+- `ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers`
+- `ftcolor.FT_Get_Paint_Layers.end_of_iteration`
+
+Evidence:
+
+- The maintained route already compares `FT_Get_Paint_Layers` layer paint
+  handles, iterator fields, and exhausted-call output preservation for
+  `fonts/color/colr-v1-all-paints.ttf` through pinned C, Rust FFI, thin C ABI,
+  and WASM ABI.
+- Focused run: `make -C pillow-rs-freetype test-op OP=ftcolor.get_paint_layers`
+  passed `4/4`; pending rows for the operation dropped from three to one.
+- Route audit moved `pending-route 249 -> 247`, `real-parity 4714 -> 4716`,
+  and duplicate pending buckets `45 -> 44`.
+
+Reasoning:
+
+- These rows are COLR v1-only and match the maintained layer-list route.
+- `ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis` remains
+  pending because its manifest covers both COLR v0 and COLR v1 layer APIs; the
+  current route proves only the COLR v1 side.
+
 ## Next 10+ row batches
 
 These are the viable high-count batches. Each must be attacked as an actual
