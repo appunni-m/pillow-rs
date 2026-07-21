@@ -10449,6 +10449,34 @@ static int emit_ps_font_private(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ps_font_private_rowset(int argc, char** argv) {
+    int count = atoi(argv[2]);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    int arg = 3;
+    for (int row = 0; row < count; row++) {
+        OracleFace face;
+        int opened = open_oracle_face(argv[arg], argv[arg + 1], atol(argv[arg + 2]), &face);
+        if (opened != 0) {
+            return opened;
+        }
+        PS_PrivateRec private_rec;
+        memset(&private_rec, 0, sizeof(private_rec));
+        FT_Error err = FT_Get_PS_Font_Private(face.face, &private_rec);
+        if (row) printf(",");
+        if (err == FT_Err_Ok) {
+            print_ps_private_json(&private_rec);
+        } else {
+            printf("null");
+        }
+        close_oracle_face(&face);
+        arg += 3;
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static void print_ps_font_value_encoding_type_json(FT_Face face) {
     T1_EncodingType encoding = (T1_EncodingType)-999;
     FT_Long ret = FT_Get_PS_Font_Value(face, PS_DICT_ENCODING_TYPE, 0,
@@ -18886,6 +18914,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);
+    }
+    if (argc >= 6 && streq(argv[1], "--ps-font-private-rowset")) {
+        return emit_ps_font_private_rowset(argc, argv);
     }
     if ((argc == 5 || argc == 6) && streq(argv[1], "--ps-font-value-encoding")) {
         return emit_ps_font_value_encoding(argc, argv);

@@ -4379,6 +4379,16 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "FT_Get_PS_Font_Private Type1 private dictionary fields validate "
             "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
+    if (
+        row.operation == "t1tables.get_ps_font_private_mm_blend"
+        and row.case_id == "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value"
+        and "rows" in row.params
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private Type1 ForceBold MM/non-MM rows validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if row.operation in {
         "t1tables.get_ps_font_info_mm_blend",
         "t1tables.t1_blend_flags_font_info_group",
