@@ -6779,6 +6779,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     otvalid_unresolved_pending = otvalid_unresolved_asset_pending_reason(row)
     if otvalid_unresolved_pending:
         return ("pending-route", otvalid_unresolved_pending)
+    property_pending = property_service_pending_reason(row)
+    if property_pending:
+        return ("pending-route", property_pending)
     null_error_real_reason = null_error_real_parity_reason(row)
     if null_error_real_reason:
         return ("real-parity", null_error_real_reason)

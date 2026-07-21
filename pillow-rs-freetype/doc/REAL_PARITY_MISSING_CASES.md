@@ -307,6 +307,53 @@ make -C pillow-rs-freetype test
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: Autofitter typed property invalid-face rows demoted
+
+Status: corrected on 2026-07-21. These rows were previously counted as
+`real-parity` by broad exact-error classifiers, but the runtime selector
+skipped them because maintained typed `FT_Property_Get/Set` routes do not yet
+exist for the public autofitter property payloads.
+
+Demoted rows:
+
+- `ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c`
+- `ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c`
+
+Finding:
+
+- Focused runtime selection for both rows reported zero executable cases:
+  `FT_Property_Get/Set route requires maintained Rust FFI, C ABI, and WASM ABI
+  property APIs; generic fallback would be a green placeholder`.
+- The classifier already had precise pending reasons for these rows, but route
+  ordering allowed broad exact-error real classification to win first.
+- Route ordering now checks typed property route blockers before exact-error
+  real classifications.
+
+Impact:
+
+- `real-parity`: `4512 -> 4510`
+- `pending-route`: `448 -> 450`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+- Runtime pending/route-audit cross-check now reports zero pending samples
+  classified as `real-parity`.
+
+Required follow-up:
+
+1. Add maintained typed property routes for glyph-to-script-map and
+   increase-x-height, including invalid/null face payload behavior.
+2. Compare exact pinned C error code and caller-visible output preservation
+   through Rust FFI, thin C ABI, and WASM ABI.
+3. Promote only after the focused runtime rows execute.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c
+make -C pillow-rs-freetype test-case CASE=ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: CPAL palette null-input verifier routes
 
 Status: completed on 2026-07-21 for two already-routed palette exact-error
@@ -9992,11 +10039,24 @@ Plan:
 
 Verified progress:
 
+- Corrected on 2026-07-21: the focused runtime row previously selected zero
+  executable cases because the public input stored `num_coords` and
+  `coords_ft_long` at the scenario-matrix parent level while the harness
+  required each scenario to repeat them. The harness now inherits parent
+  design-coordinate inputs for each scenario.
+- First real divergence after making the row executable: the runtime comparison
+  wrapped per-scenario `FT_Set_MM_Design_Coordinates` error rows in an overall
+  `ok` result, so the exact-error guard rejected Rust before comparing row
+  payloads. The scenario output now returns an exact error status while
+  preserving the row payload.
 - The focused non-Adobe variation/static-face row passes exact comparison
   against pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
 - The route audit now classifies
   `ftmm.FT_Set_MM_Design_Coordinates.error_non_adobe_variation_face` as
   `real-parity`.
+- Full runtime parity moved from `6779/6779` runnable rows with 456 pending to
+  `6781/6781` runnable rows with 454 pending. Route-audit categories are
+  unchanged because both rows were already classified as real parity.
 
 Verified command:
 
@@ -13088,6 +13148,10 @@ Implementation:
   Adobe MM asset path.
 - Fixed Rust `FT_Get_Default_Named_Instance` for Type 1 MM faces to return OK
   and preserve the output sentinel when the C service callback is absent.
+- Corrected the invalid-face runtime route to use a stable output sentinel
+  when the public input omits `instance_index_initial`, so the row now compares
+  null-face and non-variable-face error behavior across pinned C, Rust FFI,
+  thin C ABI, and WASM ABI instead of being skipped by selection.
 - Promoted only fixture-backed rows proven through pinned C oracle, Rust FFI,
   C ABI, and WASM ABI:
   - `ftmm.FT_MM_Axis.populated_by_get_multi_master`
@@ -13095,6 +13159,7 @@ Implementation:
   - `ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success`
   - `ftmm.T1_MAX_MM_DESIGNS.record_design_capacity`
   - `ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success`
+  - `ftmm.FT_Get_Default_Named_Instance.invalid_face_error`
   - `ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success`
   - `ftmm.FT_MM_Var.populated_for_adobe_mm`
   - `ftmm.FT_Var_Axis.adobe_mm_axis_values`
@@ -13113,6 +13178,7 @@ make -C pillow-rs-freetype test-case CASE=ftmm.FT_Multi_Master.populated_by_adob
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Multi_Master.adobe_mm_descriptor_success
 make -C pillow-rs-freetype test-case CASE=ftmm.T1_MAX_MM_DESIGNS.record_design_capacity
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Default_Named_Instance.service_without_default_instance_success
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_Default_Named_Instance.invalid_face_error
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Get_MM_Var.adobe_mm_descriptor_success
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_MM_Var.populated_for_adobe_mm
 make -C pillow-rs-freetype test-case CASE=ftmm.FT_Var_Axis.adobe_mm_axis_values
