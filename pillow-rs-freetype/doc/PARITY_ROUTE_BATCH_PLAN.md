@@ -4,6 +4,45 @@ Current objective: exact same-input parity with pinned C FreeType for Rust FFI,
 thin C ABI, and WASM ABI. Do not count coverage-only tests, generic fallback,
 fixture substitutions, or green placeholders as parity.
 
+Current live baseline on `main` after the FTC node-unref null-only split:
+
+```text
+route audit concrete_cases=7247 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4735}
+pending_route_rows=237
+duplicate_operation_input_buckets=42
+```
+
+This is the authoritative starting point for the next batch. The pending rows
+are still visible and must remain visible until the same declared input runs
+against pinned C, Rust FFI, thin C ABI, and WASM ABI with exact matching output.
+
+High-leverage duplicate input buckets from
+`python3 scripts/report_pending_route_buckets.py`:
+
+| Pending rows | Bucket | Current decision |
+|---:|---|---|
+| 16 | `FT_TrueTypeGX_Validate` semantic constants / output slots | Keep pending. These rows have no maintained runtime-resolved input and the pinned oracle build has no active GX validator service. |
+| 9 | `ftgxval.truetype_gx_validate` | Keep pending. Requires C-openable GX/AAT fixtures plus selected table output/free routing. |
+| 9 | `ftotval.open_type_validate` success/selected tables | Keep pending. Required OpenType validator fixtures are absent and the pinned oracle currently reports validator service unavailable before selected table output can be observed. |
+| 7 | `ftotval.open_type_validate` malformed/partial cleanup | Keep pending. Required malformed fixtures are absent; returning only the service-missing error would not prove malformed table parity. |
+| 7 | `ftcid.get_cid_from_glyph_index` | Keep pending. Requires CID-keyed Type1/CFF and SFNT-wrapped CID fixtures with exact glyph-index-to-CID output. Non-CID error routing does not prove success rows. |
+| 6 | `ftstroke.export_border` | Keep pending. Requires real stroker path/border geometry; an unparsed stroker no-op only proves the existing invalid-input row. |
+
+Rejected same-turn promotions:
+
+- `ftstroke.FT_Stroker.lifecycle_contract` remains pending. The existing
+  lifecycle runner proves non-null allocation and no-crash cleanup, but the row
+  asks for allocator/crash lifecycle evidence across a manual path sequence.
+  Counting the existing runner as this row would be a green placeholder.
+- `ftstroke.FT_Stroker_Done.after_export_cleanup` remains pending. The row asks
+  for exported outline preservation and allocation/free event behavior after a
+  real path export; the current route only covers invalid/null/unparsed
+  no-op export behavior.
+- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending. The
+  already-promoted split covers null node/manager inputs only. The original row
+  also includes a non-null foreign/bad-cache-index node, where pinned C reads
+  `node->cache_index`; null-only behavior cannot be generalized.
+
 Historical route-audit baseline before the FTC route batches:
 
 ```text
