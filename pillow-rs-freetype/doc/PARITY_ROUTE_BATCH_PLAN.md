@@ -852,3 +852,53 @@ Remaining blockers in nearby operations:
   zero/one/many layer traversal with the same C/Rust/C-ABI/WASM output.
 - `ftcolor.get_paint` still has `FT_PaintColrLayers.get_paint_initializes_layer_iterator`
   pending for the same all-paint fixture surface.
+
+## Batch: COLRv1 PaintColrGlyph recursive route
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- `ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime`
+- Operation `ftcolor.get_paint_graph`
+
+Fix:
+
+- Added deterministic FontTools-generated fixtures through the maintained
+  `font-fixture-color` target:
+  - `tests/fixtures/fonts/color/colr-v1-colr-glyph-recursive.ttf`
+  - `tests/fixtures/fonts/color/colr-v0-layer-control.ttf`
+- Extended the safe Rust COLRv1 parser with PaintColrGlyph format 11.
+  FreeType 2.14.3 `src/sfnt/ttcolr.c:706-711` reads this paint as the scalar
+  `FT_PaintColrGlyph.glyphID`; `ftcolor.h` documents that clients resolve the
+  referenced base glyph through `FT_Get_Color_Glyph_Paint`.  Rust now exposes
+  the same scalar payload and graph snapshot behavior without moving recursive
+  lookup logic into the thin C or WASM wrappers.
+- Added a pinned-C oracle route comparing the root PaintColrGlyph payload, the
+  referenced base glyph root paint, and the graph snapshot for the maintained
+  recursive COLRv1 fixture across Rust FFI, C ABI, and WASM ABI.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype font-fixture-color
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint_graph
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 288 → 287, `real-parity` 4675 → 4676.
+- Focused runtime: compared 22 / total 22, passed 22, failed 0.
+
+Remaining nearby blocker:
+
+- `ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values` remains pending
+  because it is part of the broader absent
+  `fonts/color/colr-v1-all-paints.ttf` fixture surface.  Do not count it until
+  the all-paints fixture exists and proves its direct `FT_Get_Paint` output
+  with the same C/Rust/C-ABI/WASM comparison.

@@ -10916,6 +10916,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_Get_Paint_Layers.end_of_iteration"
             | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
             | "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
         && (case.case_id.ends_with(".paint_composite_runtime")
             || case.case_id.ends_with(".paint_composite_mode_runtime"))
@@ -11233,6 +11234,43 @@ fn color_paint_graph_output_for_open_face(
     }))
 }
 
+fn color_colr_glyph_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let (colr_glyph_return, colr_glyph_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        36,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (referenced_return, referenced_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        37,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    ok(json!({
+        "colr_glyph_root": {
+            "root_return": colr_glyph_return,
+            "root_opaque": opaque_paint_json(colr_glyph_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, colr_glyph_opaque, 0),
+        },
+        "referenced_root": {
+            "root_return": referenced_return,
+            "root_opaque": opaque_paint_json(referenced_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, referenced_opaque, 0),
+        },
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     if case.operation == "ftcolor.get_paint_layers"
@@ -11245,6 +11283,14 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
             ptr::null_mut(),
             0,
         );
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        return Ok(color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
     }
     Ok(color_paint_graph_output_for_open_face(
         ColorPaintBackend::Rust,
@@ -11264,6 +11310,12 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
         c_done_face(face);
         c_done_library(library);
         return output;
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        let output = color_colr_glyph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
     }
     let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
     c_done_face(face);
@@ -11285,6 +11337,16 @@ fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
         );
         wasm_done_face(handle);
         return output;
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        let output = color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
     }
     let output = color_paint_graph_output_for_open_face(
         ColorPaintBackend::Wasm,

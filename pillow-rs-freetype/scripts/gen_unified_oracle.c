@@ -14220,6 +14220,8 @@ static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, i
         alpha = paint.u.solid.color.alpha;
     } else if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
         glyph_index = paint.u.glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COLR_GLYPH) {
+        glyph_index = paint.u.colr_glyph.glyphID;
     } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
         composite_mode = paint.u.composite.composite_mode;
     }
@@ -14257,6 +14259,14 @@ static void print_colr_graph_snapshot_json(FT_Face face) {
     printf("]}");
 }
 
+static void print_colr_glyph_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":2,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    printf("]}");
+}
+
 static void print_colr_root_json(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform) {
     FT_OpaquePaint opaque;
     memset(&opaque, 0, sizeof(opaque));
@@ -14266,6 +14276,19 @@ static void print_colr_root_json(FT_Face face, FT_UInt base_glyph, FT_UInt root_
     printf(",\"root_paint\":");
     print_colr_paint_node_json(face, opaque, 0);
     printf("}");
+}
+
+static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"colr_glyph_root\":");
+    print_colr_root_json(face->face, 36, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"referenced_root\":");
+    print_colr_root_json(face->face, 37, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"graph_snapshot\":");
+    print_colr_glyph_graph_snapshot_json(face->face);
+    printf("}}\n");
+    return 0;
 }
 
 static int emit_color_paint_graph_case(int argc, char** argv) {
@@ -14284,6 +14307,11 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
         streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis") ||
         streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
         int result = emit_color_paint_layers_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime")) {
+        int result = emit_colr_glyph_paint_graph_case(&face);
         close_oracle_face(&face);
         return result;
     }
