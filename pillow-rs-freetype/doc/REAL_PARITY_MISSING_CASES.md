@@ -2855,7 +2855,12 @@ Rejected or blocked during the same pass:
   allowed, but strict success classification exposed pinned oracle error `7`.
 - `t1tables.get_ps_font_private_mm_blend` was rejected: route audit would move
   eleven rows, but focused strict parity had zero runnable cases and eleven
-  unresolved runtime font assets.
+  unresolved runtime font assets.  The declared Type 1 inputs are now generated
+  reproducibly as `fonts/type1/mm-blend-fontinfo-private.pfb` and
+  `fonts/type1/non-mm-force-bold.pfb`; the rows must remain pending until a
+  maintained `FT_Get_PS_Font_Private`/`FT_Get_PS_Font_Value` route compares
+  exact Private-dictionary fields through pinned C, Rust FFI, thin C ABI, and
+  WASM ABI.
 - `ftcache.cmap_cache_lookup` was rejected: route audit would move twelve rows,
   but focused strict parity left fifteen unresolved runtime font assets and the
   runnable oracle cache contained error `7`.

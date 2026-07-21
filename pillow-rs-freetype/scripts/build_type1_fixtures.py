@@ -37,8 +37,29 @@ def build_simple_type1(
     *,
     weight: str = "Regular",
     is_fixed_pitch: bool = False,
+    private_overrides: dict[str, object] | None = None,
     cleartext_replacements: list[tuple[bytes, bytes]] | None = None,
 ) -> None:
+    private_dict = {
+        "BlueValues": [],
+        "OtherBlues": [],
+        "FamilyBlues": [],
+        "FamilyOtherBlues": [],
+        "BlueScale": 0.039625,
+        "BlueShift": 7,
+        "BlueFuzz": 1,
+        "StdHW": [50],
+        "StdVW": [80],
+        "ForceBold": False,
+        "LanguageGroup": 0,
+        "password": 5839,
+        "lenIV": 4,
+        "RD": "-|",
+        "ND": "|-",
+        "NP": "|",
+        "Subrs": [],
+    }
+    private_dict.update(private_overrides or {})
     font = T1Font.__new__(T1Font)
     font.encoding = "ascii"
     font.font = {
@@ -59,25 +80,7 @@ def build_simple_type1(
         "FontType": 1,
         "FontMatrix": [0.001, 0, 0, 0.001, 0, 0],
         "FontBBox": (0, 0, 500, 700),
-        "Private": {
-            "BlueValues": [],
-            "OtherBlues": [],
-            "FamilyBlues": [],
-            "FamilyOtherBlues": [],
-            "BlueScale": 0.039625,
-            "BlueShift": 7,
-            "BlueFuzz": 1,
-            "StdHW": [50],
-            "StdVW": [80],
-            "ForceBold": False,
-            "LanguageGroup": 0,
-            "password": 5839,
-            "lenIV": 4,
-            "RD": "-|",
-            "ND": "|-",
-            "NP": "|",
-            "Subrs": [],
-        },
+        "Private": private_dict,
         "CharStrings": {
             ".notdef": charstring([500, 0, "hsbw", "endchar"]),
             "A": charstring(
@@ -149,6 +152,59 @@ def build_adobe_mm_two_axis(path: Path) -> None:
     )
 
 
+def build_mm_blend_fontinfo_private(path: Path) -> None:
+    """Build the declared Type 1 MM fixture for private blend-table parity.
+
+    The public rows under `t1tables.get_ps_font_private_mm_blend` need a
+    Multiple Master face with populated Private-dictionary fields, not just the
+    descriptor-only MM fixture used by `ftmm`.  Keep this source-backed so the
+    eventual `FT_Get_PS_Font_Private`/`FT_Get_PS_Font_Value` route can compare
+    pinned C and Rust against a reproducible same input.
+    """
+
+    build_simple_type1(
+        path,
+        "MMBlendPrivate",
+        "MM Blend Private",
+        "Generated for fontdone Type 1 MM private blend parity",
+        private_overrides={
+            "BlueValues": [-20, 0, 480, 500],
+            "OtherBlues": [-250, -230],
+            "FamilyBlues": [-15, 0, 470, 490],
+            "FamilyOtherBlues": [-260, -240],
+            "BlueScale": 0.047,
+            "BlueShift": 9,
+            "StdHW": [42],
+            "StdVW": [83],
+            "StemSnapH": [38, 42, 46],
+            "StemSnapV": [78, 83, 91],
+            "ForceBold": True,
+        },
+        cleartext_replacements=[
+            (
+                b"/FontBBox {0 0 500 700} def",
+                b"/FontBBox {0 0 500 700} def\n"
+                b"/BlendAxisTypes [/Weight /Width] def\n"
+                b"/BlendDesignPositions [[400 100] [900 100] [400 200] [900 200]] def\n"
+                b"/BlendDesignMap [[[400 0] [900 1]] [[100 0] [200 1]]] def\n"
+                b"/WeightVector [0.25 0.25 0.25 0.25] def",
+            )
+        ],
+    )
+
+
+def build_non_mm_force_bold(path: Path) -> None:
+    """Build the declared non-MM ForceBold control for Type 1 private parity."""
+
+    build_simple_type1(
+        path,
+        "NonMMForceBold",
+        "Non MM Force Bold",
+        "Generated for fontdone Type 1 ForceBold private control parity",
+        private_overrides={"ForceBold": True},
+    )
+
+
 def main() -> None:
     build_simple_type1(
         OUT_DIR / "simple-type1.pfb",
@@ -196,6 +252,8 @@ def main() -> None:
     )
     build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
     build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
+    build_mm_blend_fontinfo_private(OUT_DIR / "mm-blend-fontinfo-private.pfb")
+    build_non_mm_force_bold(OUT_DIR / "non-mm-force-bold.pfb")
 
 
 if __name__ == "__main__":
