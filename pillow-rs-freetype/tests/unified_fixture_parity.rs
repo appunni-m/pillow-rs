@@ -10479,6 +10479,9 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
+            Ok(error(FT_Err_Invalid_Face_Handle as FT_Error))
+        }
         other => Err(format!("unsupported color palette case {other}")),
     }
 }
@@ -10587,6 +10590,17 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
+            Ok(error(c_abi::FT_Palette_Set_Foreground_Color(
+                ptr::null_mut(),
+                c_abi::FT_Color {
+                    blue: 1,
+                    green: 2,
+                    red: 3,
+                    alpha: 4,
+                },
+            )))
+        }
         other => Err(format!("unsupported C color palette case {other}")),
     }
 }
@@ -10685,6 +10699,17 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
+            Ok(error(wasm_abi::fontdone_wasm_palette_set_foreground_color(
+                0,
+                wasm_abi::FontdoneWasmColor {
+                    blue: 1,
+                    green: 2,
+                    red: 3,
+                    alpha: 4,
+                },
+            )))
         }
         other => Err(format!("unsupported WASM color palette case {other}")),
     }
@@ -22970,6 +22995,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => {
+            if case.case_id == "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" {
+                return Ok(vec![
+                    "--error".to_string(),
+                    (FT_Err_Invalid_Face_Handle as FT_Error).to_string(),
+                ]);
+            }
             let mut args = vec!["--color-palette-case".to_string(), case.case_id.clone()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
