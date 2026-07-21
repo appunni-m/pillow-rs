@@ -219,6 +219,94 @@ Verification evidence:
 make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 ```
 
+### Issue Set Current: Runtime-skipped semantic rows demoted from real parity
+
+Status: corrected on 2026-07-21. These rows were previously counted as
+`real-parity` by broad semantic classifiers, but the unified runtime selector
+skipped them because the declared same input does not resolve into a maintained
+runtime case. Counting a selection-skipped row as C/Rust/C-ABI/WASM parity is a
+green placeholder.
+
+Demoted row groups:
+
+- CID runtime rows:
+  - `ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid`
+  - `ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported`
+  - `ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c`
+  - `ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true`
+  - `ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported`
+  - `ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c`
+  - `ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face`
+- Autohinter glyph-to-script-map:
+  - `ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map`
+- GX/classic validation rows:
+  - `ftgxval.FT_VALIDATE_GX.validates_all_requested_tables`
+  - `ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization`
+  - `ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern`
+  - `ftgxval.FT_VALIDATE_bsln.validates_bsln_table_slot`
+  - `ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot`
+  - `ftgxval.FT_VALIDATE_feat.validates_feat_table_slot`
+  - `ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot`
+  - `ftgxval.FT_VALIDATE_just.validates_just_table_slot`
+  - `ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot`
+  - `ftgxval.FT_VALIDATE_kern.validates_gx_kern_table_slot`
+  - `ftgxval.FT_VALIDATE_kern_INDEX.indexes_kern_output_slot`
+  - `ftgxval.FT_VALIDATE_lcar.validates_lcar_table_slot`
+  - `ftgxval.FT_VALIDATE_lcar_INDEX.indexes_lcar_output_slot`
+  - `ftgxval.FT_VALIDATE_mort.validates_mort_table_slot`
+  - `ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot`
+  - `ftgxval.FT_VALIDATE_morx.validates_morx_table_slot`
+  - `ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot`
+- Debug hook/PFR/SFNT metadata rows:
+  - `ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract`
+  - `ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success`
+  - `ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success`
+  - `ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match`
+  - `ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match`
+  - `ttnameid.TT_APPLE_ID_ISO_10646.deprecated_apple_unicode_encoding_runtime`
+  - `ttnameid.TT_ISO_ID_10646.deprecated_iso_10646_runtime`
+  - `ttnameid.TT_MAC_ID_JAPANESE.mac_japanese_charmap_runtime`
+  - `ttnameid.TT_PLATFORM_ADOBE.representative_adobe_charmap_match`
+  - `ttnameid.TT_PLATFORM_APPLE_UNICODE.unicode_charmap_platform_runtime`
+  - `ttnameid.TT_PLATFORM_CUSTOM.custom_charmap_platform_runtime`
+  - `ttnameid.TT_PLATFORM_ISO.deprecated_iso_platform_runtime`
+  - `ttnameid.TT_PLATFORM_MICROSOFT.microsoft_unicode_platform_runtime`
+
+Finding:
+
+- Full selection-only runtime output reported these rows as
+  `declared runtime font asset is unresolved`.
+- Several rows expand into multiple concrete variants, so the route-audit count
+  impact is larger than the base case-id list.
+- Four related scalar/ABI type rows remain `compile-contract`; they are not
+  runtime-output parity and were not demoted by this fix.
+
+Impact:
+
+- `real-parity`: `4558 -> 4512`
+- `pending-route`: `402 -> 448`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Required follow-up:
+
+1. Add maintained C-openable fixtures and executable routes for each row group.
+2. Run the same declared input through pinned C, Rust FFI, thin C ABI, and WASM
+   ABI.
+3. Promote only after runtime comparison executes the row and compares exact
+   public output. A skipped row is not parity evidence.
+
+Verification evidence:
+
+```bash
+FONTDONE_UNIFIED_SELECTION_ONLY=1 \
+FONTDONE_UNIFIED_PENDING_LIMIT=300 \
+FONTDONE_UNIFIED_PENDING_SAMPLE_LIMIT=800 \
+make -C pillow-rs-freetype test
+
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: CPAL palette null-input verifier routes
 
 Status: completed on 2026-07-21 for two already-routed palette exact-error

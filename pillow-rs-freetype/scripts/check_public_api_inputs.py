@@ -6701,6 +6701,71 @@ def shape_fallback_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
+    runtime_skipped_needs_input_cases = {
+        "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid",
+        "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c",
+        "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported",
+        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face",
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map",
+        "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
+        "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",
+        "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern",
+        "ftgxval.FT_VALIDATE_bsln.validates_bsln_table_slot",
+        "ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot",
+        "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot",
+        "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot",
+        "ftgxval.FT_VALIDATE_just.validates_just_table_slot",
+        "ftgxval.FT_VALIDATE_just_INDEX.indexes_just_output_slot",
+        "ftgxval.FT_VALIDATE_kern.validates_gx_kern_table_slot",
+        "ftgxval.FT_VALIDATE_kern_INDEX.indexes_kern_output_slot",
+        "ftgxval.FT_VALIDATE_lcar.validates_lcar_table_slot",
+        "ftgxval.FT_VALIDATE_lcar_INDEX.indexes_lcar_output_slot",
+        "ftgxval.FT_VALIDATE_mort.validates_mort_table_slot",
+        "ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot",
+        "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot",
+        "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot",
+        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract",
+        "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success",
+        "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success",
+        "ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match",
+        "ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match",
+        "ttnameid.TT_APPLE_ID_ISO_10646.deprecated_apple_unicode_encoding_runtime",
+        "ttnameid.TT_ISO_ID_10646.deprecated_iso_10646_runtime",
+        "ttnameid.TT_MAC_ID_JAPANESE.mac_japanese_charmap_runtime",
+        "ttnameid.TT_PLATFORM_ADOBE.representative_adobe_charmap_match",
+        "ttnameid.TT_PLATFORM_APPLE_UNICODE.unicode_charmap_platform_runtime",
+        "ttnameid.TT_PLATFORM_CUSTOM.custom_charmap_platform_runtime",
+        "ttnameid.TT_PLATFORM_ISO.deprecated_iso_platform_runtime",
+        "ttnameid.TT_PLATFORM_MICROSOFT.microsoft_unicode_platform_runtime",
+    }
+    if row.case_id in runtime_skipped_needs_input_cases:
+        return (
+            "declared semantic row has no maintained runtime-resolved input; "
+            "exact runtime parity requires the declared same input to execute "
+            "against pinned C, Rust FFI, thin C ABI, and WASM ABI; counting the "
+            "selection-skipped row as real parity would be a green placeholder"
+        )
+    if row.expect_error or exact_error_public_route(
+        row.operation, row.case_id, row.expect_error
+    ):
+        return None
+    if not operation_is_real_parity(row.operation):
+        return None
+    unresolved = unresolved_assets_reason(row)
+    if not unresolved:
+        return None
+    return (
+        f"{unresolved}; exact runtime parity requires the declared same input "
+        "to resolve for pinned C, Rust FFI, thin C ABI, and WASM ABI; counting "
+        "a different input or skipped runtime case as real parity would be a "
+        "green placeholder"
+    )
+
+
 def route_category(row: ConcreteInput) -> tuple[str, str]:
     pending = pending_core_reason(row)
     if pending:
@@ -6732,6 +6797,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     header_or_layout_reason = header_or_layout_compile_contract_reason(row)
     if header_or_layout_reason:
         return ("compile-contract", header_or_layout_reason)
+    unresolved_asset_pending = unresolved_runtime_asset_pending_reason(row)
+    if unresolved_asset_pending:
+        return ("pending-route", unresolved_asset_pending)
     lifecycle_null_reason = lifecycle_null_real_parity_reason(row)
     if lifecycle_null_reason:
         return ("real-parity", lifecycle_null_reason)
