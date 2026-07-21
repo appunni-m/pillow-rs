@@ -398,6 +398,157 @@ def build_colr_v1_root_transform_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def build_colr_v1_all_paints_font(path: Path) -> None:
+    """Build one maintained COLRv1 fixture with every supported paint family."""
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:60]
+
+    cpal = newTable("CPAL")
+    cpal.version = 1
+    cpal.numPaletteEntries = 4
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+            Color(0x70, 0x80, 0x90, 0x40),
+        ],
+        [
+            Color(0x01, 0x02, 0x03, 0xFF),
+            Color(0x11, 0x12, 0x13, 0xE0),
+            Color(0x21, 0x22, 0x23, 0xC0),
+            Color(0x31, 0x32, 0x33, 0xA0),
+        ],
+    ]
+    cpal.paletteTypes = [0x0001, 0x0002]
+    cpal.paletteLabels = [256, cpal.NO_NAME_ID]
+    cpal.paletteEntryLabels = [257, 258, cpal.NO_NAME_ID, cpal.NO_NAME_ID]
+    font["CPAL"] = cpal
+
+    transform = {
+        "xx": 1.5,
+        "xy": -0.125,
+        "dx": 5.0,
+        "yx": 0.25,
+        "yy": 0.75,
+        "dy": -3.0,
+    }
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: {
+            "Format": int(ot.PaintFormat.PaintColrLayers),
+            "Layers": [
+                solid_paint(1),
+                solid_paint(2, 0.5),
+                {
+                    "Format": int(ot.PaintFormat.PaintGlyph),
+                    "Paint": solid_paint(3, 0.25),
+                    "Glyph": base_names[15],
+                },
+            ],
+        },
+        base_names[1]: solid_paint(1),
+        base_names[2]: {
+            "Format": int(ot.PaintFormat.PaintGlyph),
+            "Paint": solid_paint(2, 0.5),
+            "Glyph": base_names[15],
+        },
+        base_names[3]: {
+            "Format": int(ot.PaintFormat.PaintColrGlyph),
+            "Glyph": base_names[1],
+        },
+        base_names[4]: {
+            "Format": int(ot.PaintFormat.PaintLinearGradient),
+            "ColorLine": color_line(
+                ot.ExtendMode.PAD,
+                [(0.0, 1, 1.0), (0.5, 2, 0.5), (1.0, 3, 0.25)],
+            ),
+            "x0": -10,
+            "y0": 0,
+            "x1": 40,
+            "y1": 0,
+            "x2": 40,
+            "y2": 20,
+        },
+        base_names[5]: {
+            "Format": int(ot.PaintFormat.PaintRadialGradient),
+            "ColorLine": color_line(
+                ot.ExtendMode.REPEAT,
+                [(0.25, 2, 0.75), (0.875, 3, 0.125)],
+            ),
+            "x0": 5,
+            "y0": -7,
+            "r0": 3,
+            "x1": 33,
+            "y1": 29,
+            "r1": 41,
+        },
+        base_names[6]: {
+            "Format": int(ot.PaintFormat.PaintSweepGradient),
+            "ColorLine": color_line(ot.ExtendMode.REFLECT, [(0.75, 1, 0.625)]),
+            "centerX": -13,
+            "centerY": 17,
+            "startAngle": -0.25,
+            "endAngle": 0.5,
+        },
+        base_names[7]: {
+            "Format": int(ot.PaintFormat.PaintTransform),
+            "Paint": solid_paint(1),
+            "Transform": transform,
+        },
+        base_names[8]: {
+            "Format": int(ot.PaintFormat.PaintTranslate),
+            "Paint": solid_paint(2, 0.5),
+            "dx": 17,
+            "dy": -9,
+        },
+        base_names[9]: {
+            "Format": int(ot.PaintFormat.PaintScale),
+            "Paint": solid_paint(1),
+            "scaleX": 0.75,
+            "scaleY": -0.5,
+        },
+        base_names[10]: {
+            "Format": int(ot.PaintFormat.PaintRotateAroundCenter),
+            "Paint": solid_paint(3, 0.25),
+            "angle": -0.125,
+            "centerX": 23,
+            "centerY": -29,
+        },
+        base_names[11]: {
+            "Format": int(ot.PaintFormat.PaintSkewAroundCenter),
+            "Paint": solid_paint(2, 0.5),
+            "xSkewAngle": -0.25,
+            "ySkewAngle": 0.125,
+            "centerX": -31,
+            "centerY": 37,
+        },
+        base_names[12]: {
+            "Format": int(ot.PaintFormat.PaintComposite),
+            "SourcePaint": solid_paint(1),
+            "CompositeMode": int(ot.CompositeMode.SRC_OVER),
+            "BackdropPaint": solid_paint(2, 0.5),
+        },
+        base_names[13]: {
+            "Format": int(ot.PaintFormat.PaintGlyph),
+            "Paint": solid_paint(1),
+            "Glyph": base_names[15],
+        },
+        base_names[14]: solid_paint(0xFFFF),
+    }
+
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def color_line(extend: ot.ExtendMode, stops: list[tuple[float, int, float]]) -> dict[str, object]:
     return {
         "Extend": int(extend),
@@ -511,6 +662,7 @@ def main() -> None:
     build_colr_v1_colr_glyph_font(COLOR_OUTPUT_DIR / "colr-v1-colr-glyph-recursive.ttf")
     build_colr_v1_transform_paints_font(COLOR_OUTPUT_DIR / "colr-v1-transform-paints.ttf")
     build_colr_v1_root_transform_font(COLOR_OUTPUT_DIR / "colr-v1-root-transform.ttf")
+    build_colr_v1_all_paints_font(COLOR_OUTPUT_DIR / "colr-v1-all-paints.ttf")
     build_colr_v1_static_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-static-gradients.ttf")
 
 

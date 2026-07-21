@@ -1094,3 +1094,56 @@ Remaining nearby blockers:
   `fonts/color/colr-v1-all-paints.ttf` bucket.  They should only move when that
   shared all-paints fixture or an explicit manifest update gives those rows the
   same maintained root-transform route.
+
+## Batch: COLRv1 all-paints direct FT_Get_Paint routes
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- Operation `ftcolor.get_paint`
+  - `ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format`
+  - `ftcolor.FT_Get_Paint.success_inserts_root_transform`
+  - `ftcolor.FT_Affine23.root_transform_values`
+  - `ftcolor.FT_ColorStopIterator.initialized_by_get_paint`
+  - `ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values`
+  - `ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator`
+
+Fix:
+
+- Add one maintained generated fixture at
+  `tests/fixtures/fonts/color/colr-v1-all-paints.ttf` rather than separate
+  per-case duplicate font files.  It covers every currently supported COLRv1
+  paint family needed by the direct `FT_Get_Paint` public-record rows:
+  PaintColrLayers, PaintSolid, PaintGlyph, PaintColrGlyph, static
+  linear/radial/sweep gradients, explicit transform/translate/scale/rotate/skew
+  paints, composite paint, foreground solid, and a real root-transform target.
+- Extend the pinned C oracle and unified Rust/C ABI/WASM parity route to compare
+  direct root lookup, first `FT_Get_Paint` return and format, recursive paint
+  nodes, initialized ColorLine iterators, initialized layer iterators, graph
+  snapshots, and inserted root-transform affine payloads.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype font-fixture-color
+make -C pillow-rs-freetype test-op OP=ftcolor.get_paint
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 258 → 254, `real-parity` 4705 → 4709.
+- Focused runtime: compared 35 / total 35, passed 35, failed 0.
+
+Remaining nearby blockers:
+
+- `ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values` and
+  `ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator` still have
+  a declared `fonts/color/malformed-colr-v1-paints.ttf` malformed-asset input.
+  They remain pending until that separate malformed fixture is generated and
+  routed; the success all-paints fixture is now covered.
