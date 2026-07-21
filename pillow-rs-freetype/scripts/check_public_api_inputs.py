@@ -6938,6 +6938,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_MM_Blend_Coordinates Adobe MM reset-to-default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_mm_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend"
+    ):
+        return "FT_Set_MM_Blend_Coordinates Type 1 MM glyph output after active blend validates FT_Load_Glyph/FT_Render_Glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI; the separate blend-dependent output-change row remains pending"
+    if (
         row.operation == "ftmm.set_then_get_mm_blend_coordinates"
         and row.case_id
         == "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates"

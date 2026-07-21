@@ -8374,6 +8374,8 @@ subjects:
         description: Nonzero num_coords with a null coords pointer returns Invalid_Argument before service dispatch.
       - id: output_changes_for_active_blend
         description: Setting non-default blend coordinates changes variable glyph metrics, cbox/bbox, and rendered bytes in the same way as C.
+      - id: success_type1_mm_glyph_output_after_blend
+        description: Setting Adobe Type 1 MM blend coordinates succeeds and preserves exact subsequent glyph load/render output across the public ABI surfaces.
     # needs-input: operation=FT_Set_MM_Blend_Coordinates followed by FT_Get_Var_Blend_Coordinates and glyph load/render; fixture_asset=variable TrueType fonts with gvar/HVAR/MVAR coverage and Adobe MM fixture where available; params={blend_coords, num_coords, coords_null, glyph_index, size, load_flags}; output shape={FT_Error, returned blend coords, face_flags variation bit, metrics, outline cbox/bbox, bitmap descriptor/bytes}; comparison=exact C oracle error code, coordinate state, variation flag, metrics, geometry, and render bytes.
 
   - id: ftmm.FT_Set_MM_Design_Coordinates
