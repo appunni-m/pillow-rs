@@ -11,6 +11,7 @@
 #include <freetype/ftbbox.h>
 #include <freetype/ftbitmap.h>
 #include <freetype/ftbdf.h>
+#include <freetype/ftbzip2.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftfntfmt.h>
@@ -425,6 +426,26 @@ static int emit_gzip_stream_open(int argc, char** argv) {
     }
     printf("]}}\n");
     FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_bzip2_stream_disabled_policy(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_StreamRec source;
+    FT_StreamRec stream;
+    memset(&source, 0, sizeof(source));
+    memset(&stream, 0, sizeof(stream));
+
+    FT_Error status = FT_Stream_OpenBzip2(&stream, &source);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"build_features\":{\"bzip2\":false},\"error\":%d,"
+           "\"stream\":{\"base_class\":\"%s\",\"read_class\":\"%s\",\"close_class\":\"%s\"}}}\n",
+           status,
+           stream.base ? "nonnull" : "null",
+           stream.read ? "nonnull" : "null",
+           stream.close ? "nonnull" : "null");
     return 0;
 }
 
@@ -23132,6 +23153,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc >= 5 && streq(argv[1], "--gzip-stream-open")) {
         return emit_gzip_stream_open(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--bzip2-stream-disabled-policy")) {
+        return emit_bzip2_stream_disabled_policy(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);

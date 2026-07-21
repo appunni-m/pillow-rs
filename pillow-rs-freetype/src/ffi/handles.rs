@@ -3337,6 +3337,18 @@ pub fn FT_Gzip_Uncompress(
     FT_Err_Ok
 }
 
+pub fn FT_Stream_OpenBzip2(
+    stream: Option<&mut FT_StreamRec>,
+    source: Option<&FT_StreamRec>,
+) -> FT_Error {
+    let _ = stream;
+    let _ = source;
+    // The pinned oracle build passes `-DFT_DISABLE_BZIP2=ON`; FreeType 2.14.3
+    // `src/bzip2/ftbzip2.c:521-529` returns `Unimplemented_Feature` before
+    // checking stream/source nullness or reading bytes in that build.
+    FT_Err_Unimplemented_Feature
+}
+
 pub fn FT_Stream_OpenGzip(
     stream: Option<&mut FT_StreamRec>,
     source: Option<&FT_StreamRec>,

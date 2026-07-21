@@ -1538,6 +1538,14 @@ pub extern "C" fn fontdone_wasm_stream_open_gzip(
     rust_ffi::FT_Stream_OpenGzip(Some(stream_ref), Some(source_ref), Some(source_bytes))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_stream_open_bzip2(
+    stream: *mut rust_ffi::FT_StreamRec,
+    source: *const rust_ffi::FT_StreamRec,
+) -> FT_Error {
+    rust_ffi::FT_Stream_OpenBzip2(unsafe { stream.as_mut() }, unsafe { source.as_ref() })
+}
+
 pub fn abi_support_gzip_stream_bytes(
     stream: *const rust_ffi::FT_StreamRec,
     offset: FT_ULong,
