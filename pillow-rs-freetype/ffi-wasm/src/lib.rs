@@ -33,6 +33,9 @@ pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
 pub type FT_ColorLine = rust_ffi::FT_ColorLine;
 pub type FT_ColorStop = rust_ffi::FT_ColorStop;
 pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
+pub type FT_Matrix = rust_ffi::FT_Matrix;
+pub type FT_PaintTransform = rust_ffi::FT_PaintTransform;
+pub type FT_Vector = rust_ffi::FT_Vector;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -1157,6 +1160,14 @@ pub fn abi_support_colr_v1_paint_colorline(
     opaque_paint: FT_OpaquePaint,
 ) -> Option<FT_ColorLine> {
     rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(face_ref(handle).map(|face| &face.face), opaque_paint)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_transform(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    rust_ffi::FT_ColrV1_Paint_Transform_Copy(face_ref(handle).map(|face| &face.face), opaque_paint)
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -3594,6 +3605,24 @@ pub extern "C" fn fontdone_wasm_set_pixel_sizes(
         update_wasm_active_size_metrics(face);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_transform(
+    handle: usize,
+    matrix: *const FT_Matrix,
+    delta: *const FT_Vector,
+) {
+    let Some(face) = face_mut(handle) else {
+        return;
+    };
+    // SAFETY: nullable pointers are converted to `Option<&T>` and never
+    // retained after this thin ABI call returns.
+    let matrix = unsafe { matrix.as_ref() };
+    // SAFETY: nullable pointers are converted to `Option<&T>` and never
+    // retained after this thin ABI call returns.
+    let delta = unsafe { delta.as_ref() };
+    rust_ffi::FT_Set_Transform(Some(&mut face.face), matrix, delta);
 }
 
 #[unsafe(no_mangle)]

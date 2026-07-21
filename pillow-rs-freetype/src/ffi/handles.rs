@@ -4322,6 +4322,30 @@ fn colr_v1_colorline_to_public(colorline: &ColrV1ColorLine) -> FT_ColorLine {
     }
 }
 
+fn colr_v1_root_transform_paint(face: &FT_Face, opaque_paint: FT_OpaquePaint) -> FT_PaintTransform {
+    let mut root_scale = FT_Matrix {
+        xx: (face.size_metrics.x_scale + 32) >> 6,
+        xy: 0,
+        yx: 0,
+        yy: (face.size_metrics.y_scale + 32) >> 6,
+    };
+    FT_Matrix_Multiply(Some(&face.transform_matrix), Some(&mut root_scale));
+    FT_PaintTransform {
+        paint: FT_OpaquePaint {
+            p: opaque_paint.p,
+            insert_root_transform: 0,
+        },
+        affine: FT_Affine23 {
+            xx: root_scale.xx,
+            xy: root_scale.xy,
+            dx: face.transform_delta.x * (1 << 10),
+            yx: root_scale.yx,
+            yy: root_scale.yy,
+            dy: face.transform_delta.y * (1 << 10),
+        },
+    }
+}
+
 pub fn FT_Get_Paint(
     face: Option<&FT_Face>,
     opaque_paint: FT_OpaquePaint,
@@ -4340,10 +4364,14 @@ pub fn FT_Get_Paint(
         return 0;
     };
     if opaque_paint.insert_root_transform != 0 {
-        // Root-transform synthesis depends on size transform state and is kept
-        // visible as a separate pending COLRv1 route until that exact C path is
-        // implemented.
-        return 0;
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c:1660-1715` synthesizes a
+        // top-level PaintTransform from the active size scale and
+        // `FT_Set_Transform` state before resolving the underlying root paint.
+        paint_out.format = FT_COLR_PAINTFORMAT_TRANSFORM as _;
+        paint_out.u = FT_COLR_PaintUnion {
+            transform: colr_v1_root_transform_paint(face, opaque_paint),
+        };
+        return 1;
     }
     let Some(node) = colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const()) else {
         return 0;
@@ -4751,6 +4779,28 @@ pub fn FT_ColrV1_Paint_ColorLine_Copy(
         | ColrV1Paint::SweepGradient { colorline, .. } => {
             Some(colr_v1_colorline_to_public(colorline))
         }
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_Transform_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    if opaque_paint.p.is_null() {
+        return None;
+    }
+    let face = face?;
+    let colr = face.colr_v1.as_ref()?;
+    if opaque_paint.insert_root_transform != 0 {
+        return Some(colr_v1_root_transform_paint(face, opaque_paint));
+    }
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::Transform { paint, affine } => Some(FT_PaintTransform {
+            paint: colr_v1_paint_to_opaque(paint),
+            affine: *affine,
+        }),
         _ => None,
     }
 }
