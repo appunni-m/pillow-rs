@@ -12738,17 +12738,19 @@ Finding:
 - `tttables.TT_MaxProfile.malformed_table_error_source` is intended to compare
   the pinned C face-load error or C-adjusted parsed `TT_MaxProfile` state for
   malformed `maxp` tables.
-- The declared assets resolve, but they are not malformed maxp fixtures:
-  `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
-  `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf` are symlinks to
-  `../DejaVuSans.ttf`.
-- Treating that row as runtime parity would compare a normal DejaVuSans face
-  and would not prove the declared `ttload.c:785-835` malformed-table behavior.
+- The declared assets previously resolved to non-malformed DejaVuSans symlinks.
+  That would have compared a normal DejaVuSans face and would not have proved
+  the declared `ttload.c:785-835` malformed-table behavior.
+- `scripts/build_sfnt_fixtures.py` now generates real malformed SFNT wrappers
+  for `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
+  `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf`.
+- The focused row is still not runtime parity because
+  `face.load_then_get_sfnt_table.maxp` is not an executable same-input route.
 
 Classification change:
 
 - The row remains `pending-route`, but the route-audit reason now names the
-  exact fixture blocker instead of the generic residual public-surface bucket.
+  exact missing route instead of the old symlink fixture blocker.
 - The stale residual mention of
   `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature` was
   removed from the residual list; current route audit already classifies that
@@ -12756,8 +12758,8 @@ Classification change:
 
 Required fix plan:
 
-1. Add or generate real malformed SFNT fixtures for truncated and invalid
-   `maxp` tables under the maintained fixture workflow.
+1. Keep the generated malformed SFNT fixtures under the maintained
+   `font-fixture-sfnt` workflow.
 2. Add a maintained `face.load_then_get_sfnt_table.maxp` route that opens each
    malformed face through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
 3. Compare exact face-load status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer

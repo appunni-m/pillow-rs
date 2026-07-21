@@ -3711,14 +3711,16 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
 
 
 def malformed_maxp_fixture_pending_reason(row: ConcreteInput) -> str | None:
-    """Rows whose declared malformed maxp assets are current placeholders."""
+    """Malformed maxp rows that still need an executable same-input route."""
     if row.case_id != "tttables.TT_MaxProfile.malformed_table_error_source":
         return None
     return (
-        "Declared malformed maxp assets resolve to placeholder DejaVuSans symlinks "
-        "instead of truncated/invalid maxp tables; a maintained malformed SFNT "
-        "fixture or generator is required before same-input C/Rust/C-ABI/WASM "
-        "parity can be claimed"
+        "Generated malformed maxp assets are present, but this row still uses "
+        "the unsupported face.load_then_get_sfnt_table.maxp operation; exact "
+        "same-input C/Rust/C-ABI/WASM parity requires wiring a maintained route "
+        "that opens each malformed SFNT, records pinned-C face-load status or "
+        "FT_Get_Sfnt_Table(FT_SFNT_MAXP) state, and compares the same public "
+        "output shape in Rust FFI, thin C ABI, and WASM ABI"
     )
 
 
