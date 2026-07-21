@@ -26,12 +26,13 @@ use super::types::{
     FT_GlyphRec, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
     FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot,
-    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag,
-    FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size, FT_Size_Metrics as FT_Size_MetricsRec,
-    FT_Size_RequestRec, FT_Span, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
-    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys,
-    PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
-    TT_Postscript, TT_VertHeader,
+    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
+    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
+    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
+    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
+    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
+    TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -3826,10 +3827,38 @@ fn autofitter_property_lookup_error(
     if module_name != "autofitter" {
         return Err(FT_Err_Unimplemented_Feature);
     }
-    if property_name != "increase-x-height" {
+    if !matches!(property_name, "glyph-to-script-map" | "increase-x-height") {
         return Err(FT_Err_Missing_Property as FT_Error);
     }
     Ok(())
+}
+
+pub fn FT_Property_Get_GlyphToScriptMap(
+    library: Option<&FT_Library>,
+    module_name: Option<&str>,
+    property_name: Option<&str>,
+    face: Option<&FT_Face>,
+    value: Option<&mut FT_Prop_GlyphToScriptMap>,
+) -> FT_Error {
+    // FreeType 2.14.3 `src/autofit/afmodule.c:296-304` dispatches
+    // `autofitter:glyph-to-script-map` through `af_property_get_face_globals`.
+    // A null `prop.face` returns Invalid_Face_Handle before `prop.map` is
+    // touched; successful map construction is a separate route.
+    let Some(value) = value else {
+        return if library.is_none() {
+            FT_Err_Invalid_Library_Handle as FT_Error
+        } else {
+            FT_Err_Invalid_Argument
+        };
+    };
+    if let Err(error) = autofitter_property_lookup_error(library, module_name, property_name) {
+        return error;
+    }
+    if face.is_none() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
+    let _ = value;
+    FT_Err_Unimplemented_Feature
 }
 
 pub fn FT_Property_Get(

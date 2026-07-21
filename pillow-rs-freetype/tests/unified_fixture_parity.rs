@@ -2419,6 +2419,7 @@ impl BackendComparisonWorker {
                     | "ftmodapi.set_default_properties"
                     | "ftdriver.interpreter_version_default"
                     | "FT_Property_Get"
+                    | "FT_Property_Set_or_Get"
                     | "freetype.get_kerning"
                     | "freetype.get_subglyph_info"
                     | "ftotval.open_type_validate"
@@ -2640,6 +2641,12 @@ impl BackendComparisonWorker {
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
             {
                 property_increase_x_height_roundtrip_output(case, PropertyBackend::Rust)
+            }
+            "FT_Property_Set_or_Get"
+                if case.case_id
+                    == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c" =>
+            {
+                property_increase_x_height_invalid_face_output(PropertyBackend::Rust)
             }
             "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
                 property_autofitter_script_roundtrip_output(case, PropertyBackend::Rust)
@@ -17801,6 +17808,9 @@ fn property_get_case_output(
                 "rows": [{"property": "fixture-missing-property", "error": error, "value_after": value}]
             })))
         }
+        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c" => {
+            property_glyph_to_script_map_invalid_face_output(backend)
+        }
         other => Err(format!("unsupported property get case {other}")),
     }
 }
@@ -18524,6 +18534,137 @@ fn property_face_identity_json<T>(face: *const T, prop_face: FT_Pointer) -> Valu
             "other"
         }
     })
+}
+
+fn property_map_identity_json(map: *mut FT_UShort) -> Value {
+    json!({
+        "identity_class": if map.is_null() {
+            "null"
+        } else if map.addr() == 1 {
+            "sentinel"
+        } else {
+            "other"
+        },
+        "nullness": map.is_null()
+    })
+}
+
+fn property_glyph_to_script_map_invalid_face_output(
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    let (error, map) = match backend {
+        PropertyBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let mut prop = FT_Prop_GlyphToScriptMap {
+                face: std::ptr::null_mut(),
+                map: std::ptr::without_provenance_mut(1),
+            };
+            let error = FT_Property_Get_GlyphToScriptMap(
+                Some(&library),
+                Some("autofitter"),
+                Some("glyph-to-script-map"),
+                None,
+                Some(&mut prop),
+            );
+            (error, prop.map)
+        }
+        PropertyBackend::CAbi => {
+            let mut library = std::ptr::null_mut();
+            let init_error = c_abi::FT_Init_FreeType(&mut library);
+            if init_error != FT_Err_Ok {
+                return Ok(error_with_output(init_error, json!({"error": init_error})));
+            }
+            let mut prop = FT_Prop_GlyphToScriptMap {
+                face: std::ptr::null_mut(),
+                map: std::ptr::without_provenance_mut(1),
+            };
+            let error = c_abi::FT_Property_Get(
+                library,
+                c"autofitter".as_ptr(),
+                c"glyph-to-script-map".as_ptr(),
+                (&mut prop as *mut FT_Prop_GlyphToScriptMap).cast(),
+            );
+            c_done_library(library);
+            (error, prop.map)
+        }
+        PropertyBackend::Wasm => {
+            let mut map_is_null = -1;
+            let error =
+                wasm_abi::fontdone_wasm_property_glyph_to_script_map_invalid_face(&mut map_is_null);
+            let map = if map_is_null == 1 {
+                std::ptr::null_mut()
+            } else {
+                std::ptr::without_provenance_mut(1)
+            };
+            (error, map)
+        }
+    };
+    Ok(error_with_output(
+        error,
+        json!({
+            "error": error,
+            "prop_after": {
+                "face": property_face_identity_json::<c_void>(std::ptr::null(), std::ptr::null_mut()),
+                "map": property_map_identity_json(map)
+            }
+        }),
+    ))
+}
+
+fn property_increase_x_height_invalid_face_output(
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    let (error, limit) = match backend {
+        PropertyBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let prop = FT_Prop_IncreaseXHeight {
+                face: std::ptr::null_mut(),
+                limit: PROPERTY_SENTINEL,
+            };
+            let error = FT_Property_Set_IncreaseXHeight(
+                Some(&library),
+                Some("autofitter"),
+                Some("increase-x-height"),
+                None,
+                Some(&prop),
+            );
+            (error, prop.limit)
+        }
+        PropertyBackend::CAbi => {
+            let mut library = std::ptr::null_mut();
+            let init_error = c_abi::FT_Init_FreeType(&mut library);
+            if init_error != FT_Err_Ok {
+                return Ok(error_with_output(init_error, json!({"error": init_error})));
+            }
+            let prop = FT_Prop_IncreaseXHeight {
+                face: std::ptr::null_mut(),
+                limit: PROPERTY_SENTINEL,
+            };
+            let error = c_abi::FT_Property_Set(
+                library,
+                c"autofitter".as_ptr(),
+                c"increase-x-height".as_ptr(),
+                (&prop as *const FT_Prop_IncreaseXHeight).cast(),
+            );
+            c_done_library(library);
+            (error, prop.limit)
+        }
+        PropertyBackend::Wasm => {
+            let mut limit = 0;
+            let error = wasm_abi::fontdone_wasm_property_increase_x_height_invalid_face(&mut limit);
+            (error, limit)
+        }
+    };
+    Ok(error_with_output(
+        error,
+        json!({
+            "error": error,
+            "prop_after": {
+                "face": property_face_identity_json::<c_void>(std::ptr::null(), std::ptr::null_mut()),
+                "limit": limit
+            }
+        }),
+    ))
 }
 
 fn property_increase_x_height_roundtrip_output(
@@ -21584,6 +21725,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id == "ftmodapi.FT_Property_Set.rejects_null_arguments"
             || case.case_id == "ftmodapi.FT_Property_Set.missing_or_unsupported_property_service"
             || case.case_id == "ftmodapi.FT_Property_Set.invalid_property_or_value"
+            || case.case_id == "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
+            || case.case_id == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c"
             || case.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_library"
             || case.case_id == "ftlcdfil.FT_Library_SetLcdFilterWeights.error_null_weights"
             || case.case_id == "ftlcdfil.FT_Library_SetLcdGeometry.error_null_library"
@@ -22346,6 +22489,8 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "ftdriver.TT_INTERPRETER_VERSION_40.interpreter_version_property_roundtrip"
             | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
+            | "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
+            | "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c"
             | "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_CJK.fallback_script_property_roundtrip"
@@ -22605,6 +22750,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         | "ftmodapi.set_default_properties"
         | "ftdriver.interpreter_version_property"
         | "ftdriver.interpreter_version_default"
+        | "FT_Property_Set_or_Get"
         | "FT_Property_Get" => Ok(vec!["--property-case".to_string(), case.case_id.clone()]),
         "ftbdf.get_bdf_property" if bdf_property_error_case_supported(case) => {
             let mut args = vec!["--bdf-property-case".to_string(), case.case_id.clone()];
@@ -24790,6 +24936,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
                 | "ftdriver.interpreter_version_property"
                 | "ftdriver.interpreter_version_default"
                 | "FT_Property_Get"
+                | "FT_Property_Set_or_Get"
                 | "freetype.get_kerning"
                 | "freetype.get_subglyph_info"
                 | "ftotval.open_type_validate"
@@ -25113,6 +25260,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmodapi.property_get" | "ftdriver.interpreter_version_default" | "FT_Property_Get" => {
             property_get_case_output(case, PropertyBackend::Rust)
+        }
+        "FT_Property_Set_or_Get"
+            if case.case_id == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c" =>
+        {
+            property_increase_x_height_invalid_face_output(PropertyBackend::Rust)
         }
         "ftmodapi.property_set" | "ftmodapi.property_set_then_get" => {
             property_set_case_output(case, PropertyBackend::Rust)
@@ -26086,6 +26238,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             property_increase_x_height_roundtrip_output(case, PropertyBackend::CAbi)
         }
+        "FT_Property_Set_or_Get"
+            if case.case_id == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c" =>
+        {
+            property_increase_x_height_invalid_face_output(PropertyBackend::CAbi)
+        }
         "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
             property_autofitter_script_roundtrip_output(case, PropertyBackend::CAbi)
         }
@@ -26964,6 +27121,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
                 == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
         {
             property_increase_x_height_roundtrip_output(case, PropertyBackend::Wasm)
+        }
+        "FT_Property_Set_or_Get"
+            if case.case_id == "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c" =>
+        {
+            property_increase_x_height_invalid_face_output(PropertyBackend::Wasm)
         }
         "ftdriver.property_set_get" if autofitter_script_property_case(case) => {
             property_autofitter_script_roundtrip_output(case, PropertyBackend::Wasm)

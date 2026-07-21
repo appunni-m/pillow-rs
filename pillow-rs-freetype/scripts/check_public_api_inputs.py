@@ -174,6 +174,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_truetype_engine_type",
     "fontdone_wasm_face_properties_one",
     "fontdone_wasm_property_get",
+    "fontdone_wasm_property_glyph_to_script_map_invalid_face",
+    "fontdone_wasm_property_increase_x_height_invalid_face",
     "fontdone_wasm_property_increase_x_height_set_then_get",
     "fontdone_wasm_property_set_then_get",
     "fontdone_wasm_library_set_lcd_filter",
@@ -3101,11 +3103,6 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Property_Get routing that returns the face-specific glyph to "
             "script map pointer/class exactly like pinned C"
         ),
-        "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c": (
-            "FT_Prop_GlyphToScriptMap invalid-face parity needs maintained "
-            "typed FT_Property_Get routing that preserves the exact pinned-C "
-            "error and output state for null or invalid face data"
-        ),
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script": (
             "FT_Prop_GlyphToScriptMap mutation parity needs maintained typed "
             "property routing plus an autohint glyph-load observation proving "
@@ -3115,11 +3112,6 @@ def property_service_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Prop_IncreaseXHeight glyph-output parity needs maintained "
             "typed property routing plus an autohint load proving the x-height "
             "adjustment changes metrics/outline output like pinned C"
-        ),
-        "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c": (
-            "FT_Prop_IncreaseXHeight invalid-face parity needs maintained "
-            "typed FT_Property_Set/Get routing that preserves the exact pinned-C "
-            "error and output state for null or invalid face data"
         ),
     }
     if row.case_id not in property_rows_without_maintained_route:

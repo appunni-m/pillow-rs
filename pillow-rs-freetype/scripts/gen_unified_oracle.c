@@ -14136,6 +14136,18 @@ static void print_property_face_identity(FT_Face face, FT_Face prop_face) {
     printf("{\"identity_class\":\"%s\"}", identity);
 }
 
+static void print_property_map_identity(FT_UShort* map) {
+    const char* identity = "other";
+    if (!map) {
+        identity = "null";
+    } else if (map == (FT_UShort*)1) {
+        identity = "sentinel";
+    }
+    printf("{\"identity_class\":\"%s\",\"nullness\":%s}",
+           identity,
+           map ? "false" : "true");
+}
+
 static FT_UInt oracle_default_properties_value(int library_present, const char* env) {
     FT_Library library = NULL;
     unsetenv("FREETYPE_PROPERTIES");
@@ -14433,6 +14445,54 @@ static int emit_bdf_charset_case(int argc, char** argv) {
 static int emit_property_case(int argc, char** argv) {
     const char* case_id = argv[2];
     printf("{");
+    if (streq(case_id, "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c")) {
+        FT_Library library = NULL;
+        FT_Error init_error = FT_Init_FreeType(&library);
+        if (init_error) {
+            print_status(init_error);
+            printf(",\"output\":{\"error\":%d}}\n", init_error);
+            return 0;
+        }
+        FT_Prop_GlyphToScriptMap prop;
+        prop.face = NULL;
+        prop.map = (FT_UShort*)1;
+        FT_Error error = FT_Property_Get(
+            library,
+            "autofitter",
+            "glyph-to-script-map",
+            &prop);
+        print_status(error);
+        printf(",\"output\":{\"error\":%d,\"prop_after\":{\"face\":", error);
+        print_property_face_identity(NULL, prop.face);
+        printf(",\"map\":");
+        print_property_map_identity(prop.map);
+        printf("}}}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    if (streq(case_id, "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c")) {
+        FT_Library library = NULL;
+        FT_Error init_error = FT_Init_FreeType(&library);
+        if (init_error) {
+            print_status(init_error);
+            printf(",\"output\":{\"error\":%d}}\n", init_error);
+            return 0;
+        }
+        FT_Prop_IncreaseXHeight prop;
+        prop.face = NULL;
+        prop.limit = PROPERTY_SENTINEL;
+        FT_Error error = FT_Property_Set(
+            library,
+            "autofitter",
+            "increase-x-height",
+            &prop);
+        print_status(error);
+        printf(",\"output\":{\"error\":%d,\"prop_after\":{\"face\":", error);
+        print_property_face_identity(NULL, prop.face);
+        printf(",\"limit\":%u}}}\n", prop.limit);
+        FT_Done_FreeType(library);
+        return 0;
+    }
     print_status(FT_Err_Ok);
     if (streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip") ||
         streq(case_id, "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.default_and_fallback_property_roundtrip") ||
