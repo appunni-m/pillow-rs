@@ -2105,3 +2105,98 @@ Rows deliberately left pending in the same surface:
 
 - `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending for the
   live-manager and foreign/bad-cache-index node variants.
+
+### Pending surface audit after CFF OpenType validate split: 2026-07-22
+
+Baseline:
+
+```text
+git rev-parse --short HEAD
+cd84dcf11
+
+make -C pillow-rs-freetype route-audit
+route audit concrete_cases=7260 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4748}
+
+make fontdone-test
+runtime_parity: passed=7018 failed=0 total=7018
+runtime_cases: runnable=7018 pending=242
+```
+
+Current pending-route blocker shape from
+`python3 scripts/report_pending_route_buckets.py` and direct
+`route_audit.json` inspection:
+
+| Blocker class | Rows | Decision |
+| --- | ---: | --- |
+| Missing parser/service/route surface | 62+ | Do not promote by adding scalar/no-op rows. Implement as subsystem batches: PFR metrics/advance/kerning service, CID metadata/glyph mapping, PCF/SFNT-BDF property services, AFM attach/track kerning, glyph object lifetime, and stroker geometry. |
+| No maintained runtime-resolved input | 34 | Do not count semantic rows. Add exact same-input fixture and route first, then compare pinned C, Rust FFI, thin C ABI, and WASM ABI output. |
+| Missing fixture path | 24 | Search or generate license-compatible fixtures, but do not add files unless the current Rust implementation can actually expose the declared public output. |
+| Active pinned build disables the feature | 7 | Keep enabled-build rows pending or split an explicit active-build row. Do not count `Unimplemented_Feature` as enabled-build validation parity. |
+| Pinned C crash or fixture mismatch | remaining mixed rows | Keep pending unless a maintained subprocess/crash-classification route is designed. Do not strengthen Rust behavior and call it C parity. |
+
+Checked candidate fixture sources:
+
+- `twardoch/test-fonts` publishes `totopfr` PFR test fonts under Apache-2.0,
+  based on Noto Sans.  This is a viable provenance source for future PFR
+  fixture work, but the current Rust core has no PFR face parser or
+  `PFR_METRICS` service.  Dropping in `basic-metrics.pfr` would leave Rust
+  unable to produce `FT_Get_PFR_Metrics` / `FT_Get_PFR_Advance` success output,
+  so the PFR success rows remain pending.
+- `adobe-fonts/fdarray-test` publishes OFL-licensed CID-keyed OpenType/CFF
+  fonts using the Adobe-Identity-0 ROS.  This is a viable candidate source for
+  SFNT-wrapped CID fixture research, but the current Rust core has no CID
+  public API implementation and the CFF parser is explicitly scoped to
+  non-CID CFF.  The CID success/null-output rows remain pending until CID
+  metadata, ROS, and glyph-index mapping are implemented.
+- The existing repo has generated BDF fixtures and a BDF property route, but
+  no PCF property parser and no SFNT-BDF/OTB fixture.  The PCF/SFNT-BDF rows
+  must remain pending until a deterministic generator or license-reviewed asset
+  exists and the Rust service reads PCF/SFNT-BDF properties exactly like pinned
+  C.
+- The repo has `input/fonts/type1/attach-afm-base.pfb`, but no matching
+  `input/aux/type1/attach-afm-base.afm` and no maintained attach/track-kerning
+  service.  `FT_Attach_File`, `FT_Attach_Stream`, and
+  `FT_Get_Track_Kerning.type1_afm_track_kerning_success` remain pending until
+  AFM parsing and post-attach observable kerning/track-kerning output are
+  implemented.
+
+Next high-value implementation batches:
+
+1. **PCF/SFNT-BDF property batch**
+   - Add deterministic tiny PCF and SFNT-BDF/OTB fixtures with provenance.
+   - Extend safe Rust font parsing to expose PCF signed properties and
+     selected-strike SFNT-BDF properties/charset strings.
+   - Route `FT_Get_BDF_Property` and `FT_Get_BDF_Charset_ID` success variants
+     through Rust FFI, C ABI, WASM, and pinned C.
+
+2. **CID CFF batch**
+   - Select or generate compact CID-keyed fixtures; imported candidates need
+     license/provenance review and should be subset or generated when possible.
+   - Implement CID-aware CFF metadata: ROS, supplement, internal-CID flag, and
+     glyph-index-to-CID mapping.
+   - Add public `ftcid` Rust FFI, thin C ABI, WASM ABI, and oracle routes.
+
+3. **PFR service batch**
+   - Generate or import a compact PFR with known metrics, advances, and kerning.
+   - Implement safe Rust PFR parsing sufficient for `PFR_METRICS`.
+   - Route `FT_Get_PFR_Metrics`, `FT_Get_PFR_Advance`, and PFR kerning success
+     rows together; keep the existing non-PFR fallback/error rows unchanged.
+
+4. **Type1 AFM attach batch**
+   - Add a reproducible AFM generator for the existing Type1 attach font, or
+     regenerate both PFB and AFM together.
+   - Implement AFM attachment state and `FT_Get_Track_Kerning` behavior in
+     core, then expose through thin C/WASM wrappers.
+   - Compare attach return code plus post-attach kerning/track-kerning deltas.
+
+Rejected quick fixes in this audit:
+
+- Reclassifying PFR/CID/PCF/AFM rows based only on a found internet fixture.
+  Same-input parity requires the Rust implementation to produce the same public
+  output, not just for pinned C to open the file.
+- Adding broad matrix rows that duplicate already-routed Type1/CFF/null cases.
+  The remaining broad rows name CFF2, CID, Type42, CFF-without-glyph-names, or
+  other still-missing obligations.
+- Counting active-build `Unimplemented_Feature` as enabled-build bzip2,
+  OpenType validator, or SVG behavior.  Those rows intentionally remain
+  pending unless split by build configuration.
