@@ -7410,6 +7410,16 @@ static int emit_cache_node_lifecycle(int argc, char** argv) {
     return 0;
 }
 
+static int emit_cache_node_unref_null_only(void) {
+    FTC_Node_Unref(NULL, NULL);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true,");
+    printf("\"rows\":[");
+    printf("{\"node\":\"null\",\"manager\":\"null\",\"void_return\":true,\"side_effects\":\"none\"}");
+    printf("]}}\n");
+    return 0;
+}
+
 static int emit_scaler_descriptor_lifetime(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -24658,6 +24668,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 9 && streq(argv[1], "--cache-node-lifecycle")) {
         return emit_cache_node_lifecycle(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--cache-node-unref-null-only")) {
+        return emit_cache_node_unref_null_only();
     }
     if (argc == 8 && streq(argv[1], "--scaler-descriptor-lifetime")) {
         return emit_scaler_descriptor_lifetime(argc, argv);
