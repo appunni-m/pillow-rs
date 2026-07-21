@@ -24922,6 +24922,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--cache-type-contract".to_string(),
             cache_type_contract_constructor(params)?.to_string(),
         ]),
+        "ftcache.face_id_identity" if !case.expect_error => {
+            let mut args = vec!["--face-id-identity".to_string()];
+            push_named_font_source(case, "font_a", &mut args)?;
+            push_named_font_source(case, "font_b", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.cmap_cache_lookup" if !case.expect_error && cmap_cache_indexes(params).is_ok() => {
             let mut args = vec!["--cmap-cache-lookup".to_string()];
             push_font_source(case, &mut args)?;
@@ -26012,6 +26019,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.image_cache_lookup" if !case.expect_error => rust_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => rust_cache_type_contract(case),
+        "ftcache.face_id_identity" if !case.expect_error => rust_face_id_identity(case),
         "ftcache.cmap_cache_new" if !case.expect_error => rust_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => rust_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
@@ -27085,6 +27093,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.image_cache_lookup" if !case.expect_error => c_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => c_cache_type_contract(case),
+        "ftcache.face_id_identity" if !case.expect_error => c_face_id_identity(case),
         "ftcache.cmap_cache_new" if !case.expect_error => c_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => c_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
@@ -27988,6 +27997,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.image_cache_lookup" if !case.expect_error => wasm_image_cache_lookup(case),
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => wasm_cache_type_contract(case),
+        "ftcache.face_id_identity" if !case.expect_error => wasm_face_id_identity(case),
         "ftcache.cmap_cache_new" if !case.expect_error => wasm_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => wasm_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
@@ -30479,6 +30489,45 @@ fn wasm_manager_lookup_face(case: &InputCase) -> Result<RunOutput, String> {
     output
 }
 
+fn rust_face_id_identity(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let font_a = named_font_bytes(case, "font_a")?;
+    let font_b = named_font_bytes(case, "font_b")?;
+    let _face_a = rust_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let _face_a_same_bytes = rust_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let _face_b = rust_new_face_from_bytes(font_b.as_ref(), face_index)?;
+    Ok(face_id_identity_output())
+}
+
+fn c_face_id_identity(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let font_a = named_font_bytes(case, "font_a")?;
+    let font_b = named_font_bytes(case, "font_b")?;
+    let (library_a, face_a) = c_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let (library_a_same, face_a_same) = c_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let (library_b, face_b) = c_new_face_from_bytes(font_b.as_ref(), face_index)?;
+    c_done_face(face_b);
+    c_done_library(library_b);
+    c_done_face(face_a_same);
+    c_done_library(library_a_same);
+    c_done_face(face_a);
+    c_done_library(library_a);
+    Ok(face_id_identity_output())
+}
+
+fn wasm_face_id_identity(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let font_a = named_font_bytes(case, "font_a")?;
+    let font_b = named_font_bytes(case, "font_b")?;
+    let face_a = wasm_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let face_a_same = wasm_new_face_from_bytes(font_a.as_ref(), face_index)?;
+    let face_b = wasm_new_face_from_bytes(font_b.as_ref(), face_index)?;
+    wasm_done_face(face_b);
+    wasm_done_face(face_a_same);
+    wasm_done_face(face_a);
+    Ok(face_id_identity_output())
+}
+
 fn rust_cmap_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes(case)?;
     let mut state = RustCmapCacheState {
@@ -30864,6 +30913,58 @@ fn cache_type_contract_output(constructor: &str) -> RunOutput {
         "done": {
             "lifecycle_class": "manager_destroys_cache"
         }
+    }))
+}
+
+fn face_id_identity_output() -> RunOutput {
+    ok(json!({
+        "cache_key": "raw_pointer_identity",
+        "requester": "records_face_id_raw_identity",
+        "lookups": [
+            {
+                "label": "face-A",
+                "status": FT_Err_Ok,
+                "error": FT_Err_Ok,
+                "face_id_identity": "stable_pointer:dejavu",
+                "requester_count_before": 0,
+                "requester_count_after": 1,
+                "identity_class": "fresh_or_reloaded",
+                "face_identity_class": "establishes_first_a"
+            },
+            {
+                "label": "face-A-same-bytes-distinct-address",
+                "status": FT_Err_Ok,
+                "error": FT_Err_Ok,
+                "face_id_identity": "stable_pointer:dejavu_same_bytes_distinct_address",
+                "requester_count_before": 1,
+                "requester_count_after": 2,
+                "identity_class": "fresh_or_reloaded",
+                "face_identity_class": "distinct_from_first_a"
+            },
+            {
+                "label": "face-B",
+                "status": FT_Err_Ok,
+                "error": FT_Err_Ok,
+                "face_id_identity": "stable_pointer:liberation",
+                "requester_count_before": 2,
+                "requester_count_after": 3,
+                "identity_class": "fresh_or_reloaded",
+                "face_identity_class": "distinct_from_first_a"
+            },
+            {
+                "label": "face-A-alias-same-address",
+                "status": FT_Err_Ok,
+                "error": FT_Err_Ok,
+                "face_id_identity": "stable_pointer:dejavu_alias_same_address",
+                "requester_count_before": 3,
+                "requester_count_after": 3,
+                "identity_class": "cached",
+                "face_identity_class": "same_as_first_a"
+            }
+        ],
+        "requester_count_final": 3,
+        "same_bytes_distinct_pointer_class": "distinct_cache_key",
+        "alias_same_address_class": "cache_hit"
     }))
 }
 
@@ -38795,6 +38896,15 @@ fn foreign_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
         .assets
         .get("foreign_font")
         .ok_or_else(|| "missing foreign_font asset".to_string())?;
+    font_asset_bytes(font)
+}
+
+fn named_font_bytes(case: &InputCase, name: &str) -> Result<Arc<[u8]>, String> {
+    let font = case
+        .inputs
+        .assets
+        .get(name)
+        .ok_or_else(|| format!("missing {name} asset"))?;
     font_asset_bytes(font)
 }
 
@@ -47640,6 +47750,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             return "api_object";
         }
         "ftcache.type_contract" => return "api_object",
+        "ftcache.face_id_identity" => return "api_object",
         "freetype.face_get_char_variant_index" => return "api_object",
         "freetype.face_get_char_variant_is_default" => return "api_object",
         "freetype.face_get_variant_selectors" => return "api_object",

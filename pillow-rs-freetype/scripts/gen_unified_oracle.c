@@ -6866,6 +6866,19 @@ typedef struct MemoryFaceRequestRec_ {
     unsigned int calls;
 } MemoryFaceRequestRec;
 
+static int load_oracle_source_bytes(const char* source_kind,
+                                    const char* source_value,
+                                    unsigned char** data,
+                                    long* data_len) {
+    if (streq(source_kind, "file")) {
+        return load_file(source_value, data, data_len);
+    }
+    if (streq(source_kind, "hex")) {
+        return decode_hex(source_value, data, data_len);
+    }
+    return 2;
+}
+
 static FT_Error memory_face_requester(FTC_FaceID face_id,
                                       FT_Library library,
                                       FT_Pointer req_data,
@@ -6902,6 +6915,112 @@ static void print_manager_reset_payload(unsigned int before_calls,
     printf("\"size_identity_class_after_reset\":\"fresh_or_reloaded\",");
     printf("\"node_count_class\":\"not_observed\"");
     printf("}");
+}
+
+static void print_face_id_identity_row(FTC_Manager manager,
+                                       MemoryFaceRequestRec* request,
+                                       const char* label,
+                                       const char* face_id_identity,
+                                       unsigned int* total_calls,
+                                       FT_Face* first_a_face) {
+    unsigned int before = *total_calls;
+    unsigned int request_before = request->calls;
+    FT_Face face = NULL;
+    FT_Error error = FTC_Manager_LookupFace(manager, (FTC_FaceID)request, &face);
+    unsigned int request_delta = request->calls - request_before;
+    *total_calls += request_delta;
+    const char* face_identity_class = "distinct_from_first_a";
+    if (!error && first_a_face && !*first_a_face && face) {
+        face_identity_class = "establishes_first_a";
+    } else if (!error && first_a_face && *first_a_face && face == *first_a_face) {
+        face_identity_class = "same_as_first_a";
+    }
+    printf("{\"label\":\"");
+    print_json_string_content(label);
+    printf("\",\"status\":%d,\"error\":%d,\"face_id_identity\":\"",
+           error,
+           error);
+    print_json_string_content(face_id_identity);
+    printf("\",\"requester_count_before\":%u,"
+           "\"requester_count_after\":%u,"
+           "\"identity_class\":\"%s\","
+           "\"face_identity_class\":\"%s\"}",
+           before,
+           *total_calls,
+           request_delta ? "fresh_or_reloaded" : "cached",
+           face_identity_class);
+    if (!error && first_a_face && !*first_a_face && face) {
+        *first_a_face = face;
+    }
+}
+
+static int emit_face_id_identity_route(int argc, char** argv) {
+    (void)argc;
+    unsigned char* data_a = NULL;
+    unsigned char* data_b = NULL;
+    long data_a_len = 0;
+    long data_b_len = 0;
+    FT_Long face_index = (FT_Long)strtol(argv[6], NULL, 10);
+    if (load_oracle_source_bytes(argv[2], argv[3], &data_a, &data_a_len) != 0 ||
+        load_oracle_source_bytes(argv[4], argv[5], &data_b, &data_b_len) != 0) {
+        fprintf(stderr, "failed to read face-id identity fonts\n");
+        free(data_a);
+        free(data_b);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data_a);
+        free(data_b);
+        return 0;
+    }
+
+    MemoryFaceRequestRec request_a = {data_a, data_a_len, face_index, 0};
+    MemoryFaceRequestRec request_a_same_bytes = {data_a, data_a_len, face_index, 0};
+    MemoryFaceRequestRec request_b = {data_b, data_b_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 8, 8, 0,
+                                             memory_face_requester,
+                                             NULL,
+                                             &manager);
+    if (manager_error) {
+        printf("{");
+        print_status(manager_error);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        free(data_a);
+        free(data_b);
+        return 0;
+    }
+
+    unsigned int total_calls = 0;
+    FT_Face first_a_face = NULL;
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{"
+           "\"cache_key\":\"raw_pointer_identity\","
+           "\"requester\":\"records_face_id_raw_identity\","
+           "\"lookups\":[");
+    print_face_id_identity_row(manager, &request_a, "face-A", "stable_pointer:dejavu", &total_calls, &first_a_face);
+    printf(",");
+    print_face_id_identity_row(manager, &request_a_same_bytes, "face-A-same-bytes-distinct-address", "stable_pointer:dejavu_same_bytes_distinct_address", &total_calls, &first_a_face);
+    printf(",");
+    print_face_id_identity_row(manager, &request_b, "face-B", "stable_pointer:liberation", &total_calls, &first_a_face);
+    printf(",");
+    print_face_id_identity_row(manager, &request_a, "face-A-alias-same-address", "stable_pointer:dejavu_alias_same_address", &total_calls, &first_a_face);
+    printf("],\"requester_count_final\":%u,"
+           "\"same_bytes_distinct_pointer_class\":\"distinct_cache_key\","
+           "\"alias_same_address_class\":\"cache_hit\"}}\n",
+           total_calls);
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data_a);
+    free(data_b);
+    return 0;
 }
 
 static void print_manager_lookup_size_row(FTC_Manager manager,
@@ -21482,6 +21601,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--manager-lookup-face")) {
         return emit_manager_lookup_face(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--face-id-identity")) {
+        return emit_face_id_identity_route(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
