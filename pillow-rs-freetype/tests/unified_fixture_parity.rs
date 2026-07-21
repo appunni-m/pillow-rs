@@ -10943,6 +10943,12 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
             | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
             | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
+            | "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+            | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+            | "ftcolor.FT_Affine23.root_transform_values"
+            | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
+            | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
             | "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
             | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
             | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
@@ -11615,6 +11621,7 @@ fn color_root_transform_row_json(
     mut rust_face: Option<&mut FT_Face>,
     c_face: c_abi::FT_Face,
     wasm_handle: usize,
+    glyph: FT_UInt,
     pixel_size: (FT_UInt, FT_UInt),
     setup: ColorRootTransformSetup,
 ) -> Value {
@@ -11632,7 +11639,7 @@ fn color_root_transform_row_json(
         rust_face_ref,
         c_face,
         wasm_handle,
-        36,
+        glyph,
         setup.root_transform,
     );
     let (paint_return, paint) =
@@ -11651,6 +11658,7 @@ fn color_root_transform_row_json(
         },
         "setup": setup_json,
         "root_transform": setup.root_transform,
+        "base_glyph": glyph,
         "root_return": root_return,
         "root_opaque": opaque_paint_json(root_opaque),
         "paint_return": paint_return,
@@ -11658,6 +11666,26 @@ fn color_root_transform_row_json(
         "transform": transform,
         "root_paint": color_paint_node_json(backend, rust_face_ref, c_face, wasm_handle, root_opaque, 0),
     })
+}
+
+fn color_root_transform_row_for_glyph_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    glyph: FT_UInt,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    color_root_transform_row_json(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        glyph,
+        pixel_size,
+        setup,
+    )
 }
 
 fn color_root_transform_output_for_open_face(
@@ -11696,6 +11724,7 @@ fn color_root_transform_output_for_open_face(
             rust_face_for_row,
             c_face,
             wasm_handle,
+            36,
             pixel_size,
             setup,
         ));
@@ -11711,6 +11740,193 @@ fn color_root_transform_case(case_id: &str) -> bool {
             | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
             | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
     )
+}
+
+fn color_all_paints_case(case_id: &str) -> bool {
+    matches!(
+        case_id_base(case_id),
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+            | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+            | "ftcolor.FT_Affine23.root_transform_values"
+            | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
+            | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
+    )
+}
+
+fn color_all_paints_role_row_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    glyph: FT_UInt,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    let colorline = if paint_return != 0 {
+        get_paint_colorline_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, colorline_json)
+    } else {
+        Value::Null
+    };
+    let layer_iterator = if paint_return != 0 {
+        get_paint_layer_iterator_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, layer_iterator_json)
+    } else {
+        Value::Null
+    };
+    let transform = if paint_return != 0 {
+        get_paint_transform_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, paint_transform_json)
+    } else {
+        Value::Null
+    };
+    json!({
+        "label": label,
+        "base_glyph": glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+        "colorline": colorline,
+        "layer_iterator": layer_iterator,
+        "transform": transform,
+    })
+}
+
+fn color_all_paints_rows_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<Value> {
+    [
+        ("colr_layers", 36),
+        ("solid", 37),
+        ("glyph", 38),
+        ("colr_glyph", 39),
+        ("linear_gradient", 40),
+        ("radial_gradient", 41),
+        ("sweep_gradient", 42),
+        ("transform", 43),
+        ("translate", 44),
+        ("scale", 45),
+        ("rotate", 46),
+        ("skew", 47),
+        ("composite", 48),
+        ("root_transform_target", 49),
+        ("foreground_solid", 50),
+    ]
+    .into_iter()
+    .map(|(label, glyph)| {
+        color_all_paints_role_row_json(backend, rust_face, c_face, wasm_handle, label, glyph)
+    })
+    .collect()
+}
+
+fn color_all_paints_root_transform_runs_json(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<Value> {
+    let include = FT_COLOR_INCLUDE_ROOT_TRANSFORM as FT_UInt;
+    let setups = [
+        ((0, 16), color_root_transform_setup("identity", include)),
+        (
+            (0, 16),
+            ColorRootTransformSetup {
+                label: "shear_translate",
+                root_transform: include,
+                matrix: FT_Matrix {
+                    xx: 65_536,
+                    xy: 16_384,
+                    yx: -8_192,
+                    yy: 65_536,
+                },
+                delta: FT_Vector { x: 3, y: -5 },
+            },
+        ),
+        ((0, 37), color_root_transform_setup("identity", include)),
+        (
+            (0, 37),
+            ColorRootTransformSetup {
+                label: "shear_translate",
+                root_transform: include,
+                matrix: FT_Matrix {
+                    xx: 65_536,
+                    xy: 16_384,
+                    yx: -8_192,
+                    yy: 65_536,
+                },
+                delta: FT_Vector { x: 3, y: -5 },
+            },
+        ),
+    ];
+    setups
+        .into_iter()
+        .map(|(pixel_size, setup)| {
+            color_root_transform_row_for_glyph_json(
+                backend,
+                rust_face.as_deref_mut(),
+                c_face,
+                wasm_handle,
+                49,
+                pixel_size,
+                setup,
+            )
+        })
+        .collect()
+}
+
+fn color_all_paints_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let rust_face_ref = rust_face.as_deref();
+    match case_id_base(&case.case_id) {
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format" => Ok(ok(json!({
+            "rows": color_all_paints_rows_json(backend, rust_face_ref, c_face, wasm_handle),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face_ref, c_face, wasm_handle),
+        }))),
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values" => Ok(ok(json!({
+            "row": color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "colr_glyph", 39),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face_ref, c_face, wasm_handle),
+        }))),
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(backend, rust_face_ref, c_face, wasm_handle, 36, 4),
+            "row": color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "colr_layers", 36),
+        }))),
+        "ftcolor.FT_ColorStopIterator.initialized_by_get_paint" => Ok(ok(json!({
+            "sequences": [
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "linear_pad", 40, 1),
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "radial_repeat", 41, 1),
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "sweep_reflect", 42, 1),
+            ],
+        }))),
+        "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+        | "ftcolor.FT_Affine23.root_transform_values" => Ok(ok(json!({
+            "runs": color_all_paints_root_transform_runs_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+            ),
+        }))),
+        other => Err(format!("unsupported COLRv1 all-paints case {other}")),
+    }
 }
 
 fn color_transform_paint_row_json(
@@ -11870,6 +12086,15 @@ fn color_static_gradient_output_for_open_face(
 
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        return color_all_paints_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&mut face),
+            ptr::null_mut(),
+            0,
+        );
+    }
     if color_root_transform_case(&case.case_id) {
         return color_root_transform_output_for_open_face(
             case,
@@ -11925,6 +12150,13 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        let output =
+            color_all_paints_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
     if color_root_transform_case(&case.case_id) {
         let output =
             color_root_transform_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
@@ -11974,6 +12206,17 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        let output = color_all_paints_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
     if color_root_transform_case(&case.case_id) {
         let output = color_root_transform_output_for_open_face(
             case,

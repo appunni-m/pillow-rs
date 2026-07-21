@@ -2637,6 +2637,20 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id in {
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",
+        "ftcolor.FT_Get_Paint.success_inserts_root_transform",
+        "ftcolor.FT_Affine23.root_transform_values",
+        "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
+    }:
+        return (
+            "COLRv1 all-paints FT_Get_Paint route validates supported paint "
+            "formats, initialized colorline and layer iterators, PaintColrGlyph "
+            "payloads, and inserted root-transform affine values through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
         "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
         "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
     }:
