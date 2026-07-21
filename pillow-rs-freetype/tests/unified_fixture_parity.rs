@@ -25892,6 +25892,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     if case.case_id == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" {
         return Ok(vec!["--bzip2-stream-disabled-policy".to_string()]);
     }
+    if case.case_id == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data" {
+        let mut args = vec!["--incremental-absent-open".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(u32_param(params, "load_glyph")?.to_string());
+        return Ok(args);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let output_count =
@@ -28952,6 +28959,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => rust_incremental_absent_open(case),
         "ftrender.get_renderer" => rust_get_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -30018,6 +30026,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => c_incremental_absent_open(case),
         "ftrender.get_renderer" => c_get_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -30978,6 +30987,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => wasm_incremental_absent_open(case),
         "ftrender.get_renderer" => wasm_get_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
@@ -40794,6 +40804,103 @@ fn wasm_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
         wasm_done_face(status.handle);
     }
     Ok(open_face_stream_output(status.error, face_flags, 1))
+}
+
+fn incremental_absent_output(open_error: FT_Error, load_error: FT_Error) -> RunOutput {
+    let status = if open_error != FT_Err_Ok {
+        open_error
+    } else {
+        load_error
+    };
+    let output = json!({
+        "open_error": open_error,
+        "load_error": load_error,
+        "callback_count": 0,
+        "embedded_data_used": open_error == FT_Err_Ok && load_error == FT_Err_Ok
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn incremental_absent_glyph_index(case: &InputCase) -> Result<u32, String> {
+    u32_param(&case.inputs.params, "load_glyph")
+}
+
+fn rust_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    ) {
+        Ok(face) => {
+            let load_error = FT_Load_Glyph(
+                &face,
+                incremental_absent_glyph_index(case)?,
+                FT_LOAD_DEFAULT,
+            )
+            .err()
+            .unwrap_or(FT_Err_Ok);
+            Ok(incremental_absent_output(FT_Err_Ok, load_error))
+        }
+        Err(err) => Ok(incremental_absent_output(err, err)),
+    }
+}
+
+fn c_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(incremental_absent_output(init_err, init_err));
+    }
+    let mut face = std::ptr::null_mut();
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let open_error = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        file_size,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let load_error = if open_error == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, incremental_absent_glyph_index(case)?, FT_LOAD_DEFAULT)
+    } else {
+        open_error
+    };
+    if !face.is_null() {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    Ok(incremental_absent_output(open_error, load_error))
+}
+
+fn wasm_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let load_error = if status.error == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(
+            status.handle,
+            incremental_absent_glyph_index(case)?,
+            FT_LOAD_DEFAULT,
+        )
+    } else {
+        status.error
+    };
+    if status.handle != 0 {
+        wasm_done_face(status.handle);
+    }
+    Ok(incremental_absent_output(status.error, load_error))
 }
 
 fn memory_stream_frame_reads(params: &Value) -> Result<Vec<(usize, usize)>, String> {
