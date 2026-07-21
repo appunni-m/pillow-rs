@@ -5614,6 +5614,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC cache opaque public handle nullness, manager ownership identity, and manager-done lifecycle class validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.face_id_identity"
+        and row.case_id == "ftcache.FTC_FaceID.pointer_identity_key"
+    ):
+        return "FTC_FaceID raw pointer identity, same-bytes distinct-pointer miss, and same-address alias hit behavior validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftbzip2.stream_open_bzip2"
         and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
     ):
