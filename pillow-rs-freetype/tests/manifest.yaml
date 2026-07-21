@@ -4242,6 +4242,8 @@ subjects:
         description: Field order is num_layers, layer, p exactly, preserving the opaque COLR cursor ABI.
       - id: initialized_and_advanced_by_layer_apis
         description: FT_Get_Color_Glyph_Layer, FT_Get_Paint, and FT_Get_Paint_Layers initialize and advance iterator state exactly like C.
+      - id: initialized_and_advanced_by_paint_layers_v1
+        description: FT_Get_Paint_Layers initializes and advances COLR v1 FT_LayerIterator state exactly like C for the maintained all-paints fixture.
     # needs-input: operation=FT_Get_Color_Glyph_Layer and FT_Get_Paint_Layers; fixture_asset=COLR v0 and COLR v1 fonts with multiple layers; params first-call p=NULL, repeated iteration, exhausted iterator, and malformed cursor controls; expected output shape=FT_LayerIterator { num_layers, layer, p/null-class } plus per-layer outputs; comparison=exact C oracle scalar equality, pointer-null classification, iteration progression, and output preservation on 0 return.
 
   - id: ftcolor.FT_OpaquePaint

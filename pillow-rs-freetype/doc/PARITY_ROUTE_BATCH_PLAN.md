@@ -553,6 +553,36 @@ Reasoning:
   pending because its manifest covers both COLR v0 and COLR v1 layer APIs; the
   current route proves only the COLR v1 side.
 
+### Split COLRv1 FT_LayerIterator paint-layer row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad row remains
+pending.
+
+Scope:
+
+- Added `ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1`
+  for the maintained `tests/fixtures/fonts/color/colr-v1-all-paints.ttf`
+  fixture.
+- Reused the existing pinned-C/Rust/C ABI/WASM `FT_Get_Paint_Layers` route for
+  COLR v1 PaintColrLayers glyphs, comparing return sequence, iterator
+  `num_layers`, `layer`, pointer/null identity class, and returned
+  `FT_OpaquePaint` fields.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis` declares
+  both `FT_Get_Color_Glyph_Layer` COLR v0 and `FT_Get_Paint_Layers` COLR v1
+  behavior.  The maintained route proves only the COLR v1 side.  Counting it as
+  the broad row would hide the remaining COLR v0 iterator work.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7239 → 7240, `real-parity` 4722 → 4723,
+  `pending-route` remains 242.
+- Focused runtime:
+  `make -C pillow-rs-freetype test-case CASE=ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
 ## Next 10+ row batches
 
 These are the viable high-count batches. Each must be attacked as an actual

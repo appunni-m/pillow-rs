@@ -11057,6 +11057,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
             | "ftcolor.FT_Get_Paint_Layers.end_of_iteration"
             | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1"
             | "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime"
             | "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload"
@@ -11468,6 +11469,7 @@ fn color_paint_layers_output_for_open_face(
             ),
         }))),
         "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1"
         | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis" => Ok(ok(json!({
             "sequences": [
                 color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 36, 3),

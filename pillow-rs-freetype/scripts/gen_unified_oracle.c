@@ -14333,6 +14333,7 @@ static int emit_color_paint_layers_case(const char* case_id, OracleFace* face) {
         return 0;
     }
     if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1") ||
         streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis")) {
         printf("{");
         print_status(0);
@@ -15102,6 +15103,7 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
     }
     if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
         streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1") ||
         streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis") ||
         streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
         int result = emit_color_paint_layers_case(case_id, &face);
