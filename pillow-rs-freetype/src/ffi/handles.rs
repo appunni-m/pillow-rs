@@ -13,6 +13,7 @@ use crate::font::{
     ActiveSizeState, BdfPropertyValue, KerningMode, SelectSizeError, SizeRequest, SizeRequestError,
     SizeRequestType, Type1FontInfo, Type1PrivateDict, WinFntHeader,
 };
+use crate::tt::varstore::ItemVariationStore;
 use crate::{api, grays, render};
 
 use super::constants::*;
@@ -1318,9 +1319,10 @@ struct ColrV0State {
     layers_by_base: BTreeMap<FT_UInt, Vec<ColrV0Layer>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct ColrV1State {
     root_paints: BTreeMap<FT_UInt, ColrV1Paint>,
+    var_store: Option<ItemVariationStore>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1328,12 +1330,14 @@ struct ColrV1ColorStop {
     stop_offset: FT_Fixed,
     palette_index: FT_UShort,
     alpha: FT_F2Dot14,
+    var_index_base: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ColrV1ColorLine {
     extend: FT_Int,
     stops: Vec<ColrV1ColorStop>,
+    read_variable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3788,31 +3792,43 @@ fn parse_colr_v1_child_paint(
     )?))
 }
 
-fn parse_colr_v1_colorline(data: &[u8], offset: usize) -> Option<ColrV1ColorLine> {
+fn parse_colr_v1_colorline(
+    data: &[u8],
+    offset: usize,
+    read_variable: bool,
+) -> Option<ColrV1ColorLine> {
     let extend = FT_Int::from(*data.get(offset)?);
     if extend > FT_COLR_PAINT_EXTEND_REFLECT as FT_Int {
         return None;
     }
     let count = usize::from(read_u16_be(data, offset + 1)?);
     let stops_start = offset.checked_add(3)?;
-    let stops_end = stops_start.checked_add(count.checked_mul(6)?)?;
+    let entry_size = if read_variable { 10 } else { 6 };
+    let stops_end = stops_start.checked_add(count.checked_mul(entry_size)?)?;
     if stops_end > data.len() {
         return None;
     }
     let stops = (0..count)
         .map(|index| {
-            let stop_offset = stops_start.checked_add(index.checked_mul(6)?)?;
+            let stop_offset = stops_start.checked_add(index.checked_mul(entry_size)?)?;
             Some(ColrV1ColorStop {
                 stop_offset: f2dot14_to_fixed(read_i16_be(data, stop_offset)?),
                 palette_index: read_u16_be(data, stop_offset + 2)?,
                 alpha: read_i16_be(data, stop_offset + 4)?,
+                var_index_base: read_variable
+                    .then(|| read_u32_be(data, stop_offset + 6))
+                    .flatten(),
             })
         })
         .collect::<Option<Vec<_>>>()?;
-    Some(ColrV1ColorLine { extend, stops })
+    Some(ColrV1ColorLine {
+        extend,
+        stops,
+        read_variable,
+    })
 }
 
-fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
+fn parse_colr_v1_table(data: &[u8], variation_axis_count: usize) -> Option<ColrV1State> {
     let version = read_u16_be(data, 0)?;
     if version != 1 {
         return None;
@@ -3822,6 +3838,10 @@ fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
     if base_glyph_list_offset == 0 {
         return None;
     }
+    let var_store = read_u32_be(data, 30)
+        .and_then(|offset| usize::try_from(offset).ok())
+        .filter(|offset| *offset != 0)
+        .and_then(|offset| ItemVariationStore::parse(data, offset, variation_axis_count).ok());
     let layer_offsets = parse_colr_v1_layer_offsets(data, layer_list_offset)?;
     let base_glyph_count = usize::try_from(read_u32_be(data, base_glyph_list_offset)?).ok()?;
     let records_offset = base_glyph_list_offset.checked_add(4)?;
@@ -3839,7 +3859,10 @@ fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
         let paint = parse_colr_v1_paint(data, paint_start, 0, layer_list_offset, &layer_offsets)?;
         root_paints.insert(glyph_index, paint);
     }
-    Some(ColrV1State { root_paints })
+    Some(ColrV1State {
+        root_paints,
+        var_store,
+    })
 }
 
 fn parse_colr_v1_layer_offsets(data: &[u8], layer_list_offset: usize) -> Option<Vec<usize>> {
@@ -3913,7 +3936,7 @@ fn parse_colr_v1_paint(
             // PaintLinearGradient coordinates as 16.16 fixed-point vectors and
             // initializes a ColorLine iterator from the child ColorLine table.
             Some(ColrV1Paint::LinearGradient {
-                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
                 p0: FT_Vector {
                     x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
                     y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
@@ -3934,7 +3957,7 @@ fn parse_colr_v1_paint(
             let r0 = colr_i16_to_fixed(read_i16_be(data, offset + 8)?);
             let r1 = colr_i16_to_fixed(read_i16_be(data, offset + 14)?);
             Some(ColrV1Paint::RadialGradient {
-                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
                 c0: FT_Vector {
                     x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
                     y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
@@ -3951,13 +3974,37 @@ fn parse_colr_v1_paint(
             let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
             let colorline_start = offset.checked_add(colorline_offset)?;
             Some(ColrV1Paint::SweepGradient {
-                colorline: parse_colr_v1_colorline(data, colorline_start)?,
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
                 center: FT_Vector {
                     x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
                     y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
                 },
                 start_angle: f2dot14_to_fixed(read_i16_be(data, offset + 8)?),
                 end_angle: f2dot14_to_fixed(read_i16_be(data, offset + 10)?),
+            })
+        }
+        5 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            // FreeType `src/sfnt/ttcolr.c:724-767` normalizes
+            // PaintVarLinearGradient to the public PaintLinearGradient format,
+            // but preserves a variable ColorLine iterator so
+            // FT_Get_Colorline_Stops can read VarColorStop and apply COLR
+            // VarStore deltas.
+            Some(ColrV1Paint::LinearGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start, true)?,
+                p0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                p1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                },
+                p2: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 14)?),
+                },
             })
         }
         10 => {
@@ -4311,7 +4358,7 @@ fn colr_v1_colorline_iterator(colorline: &ColrV1ColorLine, index: usize) -> FT_C
             .wrapping_add(index)
             .cast_mut()
             .cast::<FT_Byte>(),
-        read_variable: 0,
+        read_variable: FT_Bool::from(colorline.read_variable),
     }
 }
 
@@ -4588,7 +4635,7 @@ fn colr_v1_find_colorline_by_iterator_in_node<'a>(
         | ColrV1Paint::SweepGradient { colorline, .. } => {
             let stop_index = usize::try_from(iterator.current_color_stop).ok()?;
             if iterator.num_color_stops != colorline.stops.len().try_into().ok()?
-                || iterator.read_variable != 0
+                || iterator.read_variable != FT_Bool::from(colorline.read_variable)
                 || stop_index > colorline.stops.len()
             {
                 return None;
@@ -4639,11 +4686,31 @@ pub fn FT_Get_Colorline_Stops(
     let Some(stop) = colorline.stops.get(stop_index) else {
         return 0;
     };
+    let mut stop_offset = stop.stop_offset;
+    let mut alpha = stop.alpha;
+    if let (Some(var_store), Some(var_index_base)) = (&colr.var_store, stop.var_index_base) {
+        let normalized_coords = face.inner.borrow();
+        let normalized_coords = normalized_coords.font().normalized_variation_coords();
+        let outer_index = (var_index_base >> 16) as u16;
+        let inner_index = var_index_base as u16;
+        let stop_delta = var_store.item_delta(outer_index, inner_index, normalized_coords);
+        let alpha_delta = var_store.item_delta(
+            outer_index,
+            inner_index.saturating_add(1),
+            normalized_coords,
+        );
+        stop_offset = stop_offset.saturating_add(f2dot14_to_fixed(
+            stop_delta.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
+        ));
+        alpha = alpha.saturating_add(
+            alpha_delta.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as FT_F2Dot14
+        );
+    }
     *color_stop = FT_ColorStop {
-        stop_offset: stop.stop_offset,
+        stop_offset,
         color: FT_ColorIndex {
             palette_index: stop.palette_index,
-            alpha: stop.alpha,
+            alpha,
         },
     };
     let next_index = stop_index.saturating_add(1);
@@ -7374,7 +7441,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let colr_v1 = font
         .load_sfnt_table(u32::from_be_bytes(*b"COLR"), 0, None)
         .ok()
-        .and_then(|data| parse_colr_v1_table(&data))
+        .and_then(|data| parse_colr_v1_table(&data, font.normalized_variation_coords().len()))
         .map(Rc::new);
     let available_sizes = available_sizes_to_ffi(font);
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);

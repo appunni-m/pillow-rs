@@ -14950,6 +14950,34 @@ static int emit_colr_static_gradient_case(const char* case_id, OracleFace* face)
     return 0;
 }
 
+static void print_colr_variable_coordinate_run_json(FT_Face face,
+                                                    const char* label,
+                                                    FT_Error set_status) {
+    printf("{\"label\":\"%s\",\"set_var_status\":%d,\"sequence\":",
+           label,
+           set_status);
+    print_gradient_colorline_sequence_json(face, label, 36, 1);
+    printf("}");
+}
+
+static int emit_colr_variable_gradient_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"coordinate_runs\":[");
+    print_colr_variable_coordinate_run_json(face->face, "default", 0);
+    FT_Fixed coords[2] = { 900 * 65536, 1 * 65536 };
+    FT_Error set_status = FT_Set_Var_Design_Coordinates(face->face, 2, coords);
+    printf(",");
+    print_colr_variable_coordinate_run_json(face->face, "wght_900_grad_1", set_status);
+    printf("]}}\n");
+    return 0;
+}
+
+static int is_colr_variable_gradient_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_ColorStop.iterator_output_values") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops");
+}
+
 static int is_colr_static_gradient_case(const char* case_id) {
     return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
            streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
@@ -15015,6 +15043,11 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
     }
     if (is_colr_transform_paint_case(case_id)) {
         int result = emit_colr_transform_paint_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_variable_gradient_case(case_id)) {
+        int result = emit_colr_variable_gradient_case(&face);
         close_oracle_face(&face);
         return result;
     }
