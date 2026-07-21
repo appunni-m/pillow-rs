@@ -28309,6 +28309,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.operation == "ftglyph.glyph_copy" && params.get("probes").is_some() {
                 return Ok(vec!["--glyph-copy-null-inputs".to_string()]);
             }
+            if bitmap_glyph_record_paths_case(case) {
+                let mut args = vec!["--bitmap-glyph-record-paths".to_string()];
+                push_named_font_source(case, "outline_font", &mut args)?;
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                let (pixel_x, pixel_y) = pixel_size_param(params)?;
+                args.push(pixel_x.to_string());
+                args.push(pixel_y.to_string());
+                args.push(bitmap_glyph_record_index(params)?.to_string());
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(bitmap_glyph_record_render_mode(params)?.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -29563,6 +29577,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsynth.glyphslot_embolden_after_load" => rust_ftsynth_weight(case, true),
         "ftsynth.glyphslot_null_noop" => rust_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if bitmap_glyph_record_paths_case(case) {
+                return rust_bitmap_glyph_record_paths(case);
+            }
             let face = open_face(case)?;
             if ftglyph_bitmap_record_case(case) {
                 rust_bitmap_glyph_record(&face, case)
@@ -30721,6 +30738,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftsynth.glyphslot_null_noop" => c_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if bitmap_glyph_record_paths_case(case) {
+                return c_bitmap_glyph_record_paths(case);
+            }
             let (library, face) = c_open_face(case)?;
             let output = if ftglyph_bitmap_record_case(case) {
                 c_bitmap_glyph_record(face, case)
@@ -31700,6 +31720,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftsynth.glyphslot_null_noop" => wasm_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if bitmap_glyph_record_paths_case(case) {
+                return wasm_bitmap_glyph_record_paths(case);
+            }
             let handle = wasm_open_face(case)?;
             let output = if ftglyph_bitmap_record_case(case) {
                 wasm_bitmap_glyph_record(handle, case)
@@ -33344,6 +33367,19 @@ fn ftglyph_bitmap_record_case(case: &InputCase) -> bool {
         || case.case_id == "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap"
 }
 
+fn bitmap_glyph_record_paths_case(case: &InputCase) -> bool {
+    case.case_id
+        .starts_with("ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap@")
+}
+
+fn bitmap_glyph_record_render_mode(params: &Value) -> Result<i32, String> {
+    match params.get("render_mode") {
+        Some(Value::String(mode)) if mode == "NORMAL" => Ok(FT_RENDER_MODE_NORMAL),
+        Some(Value::String(mode)) if mode == "MONO" => Ok(FT_RENDER_MODE_MONO),
+        _ => render_mode_param(params),
+    }
+}
+
 fn rust_bitmap_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     match FT_Load_Glyph(
         face,
@@ -33377,6 +33413,73 @@ fn rust_bitmap_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutpu
         },
         Err(err) => Ok(error(err)),
     }
+}
+
+fn rust_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_face = open_named_face(case, "bitmap_strike_font")?;
+    let bitmap_row = match FT_Load_Glyph(
+        &bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+            Ok(glyph) => Ok(bitmap_glyph_record_row(
+                "FT_Get_Glyph bitmap",
+                bitmap_glyph_record_output(
+                    glyph.root.format,
+                    glyph.root.advance.x,
+                    glyph.root.advance.y,
+                    true,
+                    true,
+                    glyph.left,
+                    glyph.top,
+                    glyph.bitmap.width,
+                    glyph.bitmap.rows,
+                    glyph.bitmap.pitch,
+                    glyph.bitmap.pixel_mode,
+                    glyph.bitmap.num_grays,
+                    &glyph.bitmap.buffer,
+                ),
+            )),
+            Err(err) => Err(err),
+        },
+        Err(err) => Err(err),
+    };
+
+    let outline_face = open_named_face(case, "outline_font")?;
+    let render_mode = bitmap_glyph_record_render_mode(&case.inputs.params)?;
+    let outline_row = match FT_Load_Glyph(
+        &outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    )
+    .and_then(|slot| FT_Render_Glyph(slot, render_mode))
+    {
+        Ok(slot) => match slot.bitmap.as_ref() {
+            Some(bitmap) => Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    i64::from(slot.advance.x) * 1024,
+                    i64::from(slot.advance.y) * 1024,
+                    true,
+                    true,
+                    slot.bitmap_left,
+                    slot.bitmap_top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            )),
+            None => Err(FT_Err_Invalid_Glyph_Format),
+        },
+        Err(err) => Err(err),
+    };
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
 }
 
 fn c_bitmap_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
@@ -33422,6 +33525,97 @@ fn c_bitmap_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOu
         c_abi::FT_Done_Glyph(glyph);
     }
     Ok(output)
+}
+
+fn c_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let (bitmap_library, bitmap_face) = c_open_named_face(case, "bitmap_strike_font")?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut err = c_abi::FT_Load_Glyph(
+        bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(bitmap_face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut glyph);
+    }
+    let bitmap_row = if err == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+        Ok(bitmap_glyph_record_row(
+            "FT_Get_Glyph bitmap",
+            bitmap_glyph_record_output(
+                snapshot.root.format,
+                snapshot.root.advance.x,
+                snapshot.root.advance.y,
+                true,
+                true,
+                snapshot.left,
+                snapshot.top,
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        Err(err)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(bitmap_face);
+    c_done_library(bitmap_library);
+
+    let (outline_library, outline_face) = c_open_named_face(case, "outline_font")?;
+    let load_err = c_abi::FT_Load_Glyph(
+        outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let render_err = if load_err == FT_Err_Ok {
+        c_abi::abi_render_glyph_from_face(
+            outline_face,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+        )
+    } else {
+        load_err
+    };
+    let outline_row = if render_err == FT_Err_Ok {
+        let slot = c_abi::abi_slot_snapshot(outline_face)
+            .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+        if let Some(bitmap) = slot.bitmap.as_ref() {
+            Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    slot.advance.x * 1024,
+                    slot.advance.y * 1024,
+                    true,
+                    true,
+                    bitmap.left,
+                    bitmap.top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            ))
+        } else {
+            Err(FT_Err_Invalid_Glyph_Format)
+        }
+    } else {
+        Err(render_err)
+    };
+    c_done_face(outline_face);
+    c_done_library(outline_library);
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
 }
 
 fn wasm_bitmap_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
@@ -33471,11 +33665,111 @@ fn wasm_bitmap_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput
     Ok(output)
 }
 
+fn wasm_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+    let mut glyph_handle = 0usize;
+    let mut err = wasm_abi::fontdone_wasm_load_glyph(
+        bitmap_handle,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_get_glyph_from_face(bitmap_handle, &mut glyph_handle);
+    }
+    let bitmap_row = if err == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+        Ok(bitmap_glyph_record_row(
+            "FT_Get_Glyph bitmap",
+            bitmap_glyph_record_output(
+                snapshot.root.format,
+                snapshot.root.advance.x,
+                snapshot.root.advance.y,
+                true,
+                true,
+                snapshot.left,
+                snapshot.top,
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        Err(err)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(bitmap_handle);
+
+    let outline_handle = wasm_open_named_face(case, "outline_font")?;
+    let load_err = wasm_abi::fontdone_wasm_load_glyph(
+        outline_handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let render_err = if load_err == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_render_glyph(
+            outline_handle,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+        )
+    } else {
+        load_err
+    };
+    let outline_row = if render_err == FT_Err_Ok {
+        let slot = wasm_abi::abi_slot_snapshot(outline_handle)
+            .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+        if let Some(bitmap) = slot.bitmap.as_ref() {
+            Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    slot.advance.x * 1024,
+                    slot.advance.y * 1024,
+                    true,
+                    true,
+                    bitmap.left,
+                    bitmap.top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            ))
+        } else {
+            Err(FT_Err_Invalid_Glyph_Format)
+        }
+    } else {
+        Err(render_err)
+    };
+    wasm_done_face(outline_handle);
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
+}
+
 fn bitmap_glyph_record_index(params: &Value) -> Result<u32, String> {
     if params
         .get("source_creation")
         .and_then(Value::as_str)
         .is_some_and(|source| source == "FT_Get_Glyph bitmap")
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    if params
+        .get("creation_paths")
+        .and_then(Value::as_array)
+        .is_some_and(|paths| {
+            paths
+                .iter()
+                .any(|path| path.as_str() == Some("FT_Get_Glyph bitmap"))
+        })
         && params.get("glyph_index").is_none()
     {
         return Ok(1);
@@ -33489,6 +33783,28 @@ fn bitmap_glyph_record_index(params: &Value) -> Result<u32, String> {
         return Ok(1);
     }
     glyph_index_param(params)
+}
+
+fn bitmap_glyph_record_row(path: &str, mut record: Value) -> Value {
+    if let Some(object) = record.as_object_mut() {
+        object.insert("creation_path".to_string(), Value::String(path.to_string()));
+    }
+    record
+}
+
+fn bitmap_glyph_record_paths_output(
+    bitmap_row: Result<Value, FT_Error>,
+    outline_row: Result<Value, FT_Error>,
+) -> Result<RunOutput, String> {
+    let rows = [bitmap_row, outline_row];
+    if let Some(err) = rows.iter().find_map(|row| row.as_ref().err().copied()) {
+        return Ok(error(err));
+    }
+    let rows = rows
+        .into_iter()
+        .map(|row| row.map_err(|err| err.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ok(json!({ "rows": rows })))
 }
 
 #[allow(clippy::too_many_arguments)]

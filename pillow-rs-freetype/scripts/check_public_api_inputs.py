@@ -3398,12 +3398,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "document/metrics/range/transform fields; slot format/advance "
             "alone is not the declared output"
         ),
-        "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap": (
-            "FT_BitmapGlyphRec field parity needs maintained FT_Get_Glyph "
-            "bitmap and FT_Glyph_To_Bitmap routes that cast to "
-            "FT_BitmapGlyphRec and compare root, left, top, bitmap descriptor, "
-            "and buffer bytes across pinned C, Rust FFI, C ABI, and WASM ABI"
-        ),
         "ftglyph.FT_Glyph_Copy.success_svg_copy_is_independent": (
             "FT_Glyph_Copy SVG success parity needs an SVG-enabled glyph copy "
             "route proving document bytes, metrics, glyph range, transform, "
@@ -5052,6 +5046,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.done_glyph",
             "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",
         ): "FT_Done_Glyph bitmap-glyph ownership validates a real FT_Get_Glyph bitmap, owned bitmap buffer fields before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.record_inspect",
+            "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap",
+        ): "FT_BitmapGlyphRec fields validate both FT_Get_Glyph bitmap and FT_Glyph_To_Bitmap outline creation paths through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
