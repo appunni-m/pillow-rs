@@ -22942,6 +22942,107 @@ static void print_incremental_absent_output(FT_Error open_error, FT_Error load_e
     printf("}}\n");
 }
 
+static void print_incremental_nullness_row(const char* variant, FT_Error open_error, FT_Error load_error) {
+    printf("{\"variant\":\"%s\",\"open_error\":%d,\"load_error\":%d,"
+           "\"stored_interface_null\":true,\"callback_count\":0,"
+           "\"embedded_data_used\":",
+           variant,
+           open_error,
+           load_error);
+    print_json_bool(open_error == FT_Err_Ok && load_error == FT_Err_Ok);
+    printf("}");
+}
+
+static FT_Error open_incremental_nullness_face(FT_Library library,
+                                               const unsigned char* data,
+                                               size_t data_len,
+                                               FT_Long face_index,
+                                               int with_null_incremental_param,
+                                               FT_Face* face) {
+    if (!with_null_incremental_param) {
+        return FT_New_Memory_Face(library, data, (FT_Long)data_len, face_index, face);
+    }
+
+    FT_Parameter param;
+    memset(&param, 0, sizeof(param));
+    param.tag = FT_PARAM_TAG_INCREMENTAL;
+    param.data = NULL;
+
+    FT_Open_Args args;
+    memset(&args, 0, sizeof(args));
+    args.flags = FT_OPEN_MEMORY;
+    args.memory_base = data;
+    args.memory_size = (FT_Long)data_len;
+    args.num_params = 1;
+    args.params = &param;
+    return FT_Open_Face(library, &args, face_index, face);
+}
+
+static int emit_incremental_nullness_open(int argc, char** argv) {
+    if (argc != 6) return 2;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    unsigned char* data = NULL;
+    long data_len_long = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len_long) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 1;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len_long) != 0) {
+            fprintf(stderr, "failed to decode font hex source\n");
+            return 1;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+    size_t data_len = data_len_long < 0 ? 0 : (size_t)data_len_long;
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    FT_Long face_index = (FT_Long)atol(argv[4]);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    const char* variants[] = {"absent_parameter", "null_incremental_data"};
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    for (int i = 0; i < 2; i++) {
+        FT_Face face = NULL;
+        FT_Error open_error = open_incremental_nullness_face(
+            library,
+            data,
+            data_len,
+            face_index,
+            i == 1,
+            &face);
+        FT_Error load_error = open_error;
+        if (!open_error && face) {
+            load_error = FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
+        }
+        if (i) printf(",");
+        print_incremental_nullness_row(variants[i], open_error, load_error);
+        if (face) {
+            FT_Done_Face(face);
+        }
+    }
+    printf("]}}\n");
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_incremental_absent_open(int argc, char** argv) {
     (void)argc;
     OracleFace face;
@@ -24225,6 +24326,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--incremental-absent-open")) {
         return emit_incremental_absent_open(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--incremental-nullness-open")) {
+        return emit_incremental_nullness_open(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--new-face-variants")) {
         return emit_new_face_variants(argc, argv);

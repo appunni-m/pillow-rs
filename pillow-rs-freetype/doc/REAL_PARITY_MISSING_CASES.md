@@ -1,5 +1,50 @@
 # Real-Parity Missing Cases
 
+### Issue Set Result: FT_PARAM_TAG_INCREMENTAL absent/null interface behavior
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior`
+
+Finding:
+
+- Pinned FreeType 2.14.3 opens and loads the embedded glyph data the same way
+  when `FT_PARAM_TAG_INCREMENTAL` is absent and when the tag is present with
+  `data = NULL`.
+- No incremental callbacks are invoked for either variant; the observable
+  public result is successful face open, successful glyph load for the
+  maintained DejaVuSans glyph input, null stored-interface class, and callback
+  count zero.
+
+Implementation note:
+
+- The runtime route now compares both variants through the pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI.
+- The C ABI path uses `FT_Open_Face` with `FT_OPEN_MEMORY` and a public
+  `FT_Parameter { tag: FT_PARAM_TAG_INCREMENTAL, data: NULL }` for the null
+  interface variant. The Rust and WASM lanes expose the same public null/absent
+  behavior without fabricating callback events.
+- Full incremental callback success, client lifetime, required callback
+  validation, and glyph-data release behavior remain pending until a real
+  incremental callback harness exists.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior
+make -C pillow-rs-freetype test-op OP=ftincrem.open_face_incremental_nullness
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=1 failed=0 total=1
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 236, 'real-null-validation': 9, 'real-parity': 4751}
+```
+
 ### Issue Set Current: 2026-07-21 FTMM residual route sweep on `main`
 
 Status: audited on 2026-07-21 from `main` at `5fed74445`. This section

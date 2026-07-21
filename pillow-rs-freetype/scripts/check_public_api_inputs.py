@@ -3301,12 +3301,6 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "interpreted as FT_Incremental_InterfaceRec* with exact null/bad "
             "shape handling across all ABI lanes"
         ),
-        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior": (
-            "FT_Incremental_Interface null/absent parity needs a maintained "
-            "open-face incremental route that compares pinned C behavior for "
-            "null data, missing parameter, and incomplete interface without "
-            "fabricating callbacks"
-        ),
         "ftincrem.FT_Incremental_InterfaceRec.open_face_stores_interface": (
             "FT_Incremental_InterfaceRec storage parity needs a maintained "
             "FT_Open_Face route proving FreeType stores the interface on the "
@@ -6561,6 +6555,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data"
     ):
         return "Absent FT_PARAM_TAG_INCREMENTAL open/load behavior validates embedded font data use and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftincrem.open_face_incremental_nullness"
+        and row.case_id
+        == "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
+    ):
+        return "Absent and NULL FT_PARAM_TAG_INCREMENTAL interface behavior validates embedded font data use, null stored-interface class, and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.face_driver_name"
         and row.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name"
