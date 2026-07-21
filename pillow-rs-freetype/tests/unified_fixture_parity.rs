@@ -9659,6 +9659,7 @@ fn direct_has_ps_glyph_names_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
         "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true"
+            | "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true"
             | "t1tables.FT_Has_PS_Glyph_Names.truetype_false"
             | "t1tables.FT_Has_PS_Glyph_Names.null_face_false"
     )

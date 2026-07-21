@@ -74,6 +74,36 @@
       }
     },
     {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "cff_follows_face_flag",
+      "covers_manifest_cases": ["cff_follows_face_flag"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "cff_font",
+            "path": "input/fonts/cff/fontinfo-populated.otf"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "CFF cff_ps_has_glyph_names returns whether the CFF face has FT_FACE_FLAG_GLYPH_NAMES set."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "asset:existing"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Has_PS_Glyph_Names", "freetype/src/cff/cffdrivr.c:cff_ps_has_glyph_names"]
+      }
+    },
+    {
       "case_id": "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
       "subject": "t1tables.FT_Has_PS_Glyph_Names",
       "case": "cid_true_type_and_null_return_false",
