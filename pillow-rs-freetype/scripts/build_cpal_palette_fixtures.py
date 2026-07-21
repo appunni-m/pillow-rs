@@ -145,6 +145,66 @@ def build_colr_v1_composite_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def build_colr_v1_layers_font(path: Path) -> None:
+    """Build a compact COLRv1 PaintColrLayers fixture.
+
+    FreeType 2.14.3 exposes PaintColrLayers through `FT_Get_Paint` as an
+    initialized `FT_LayerIterator`, then consumes that iterator through
+    `FT_Get_Paint_Layers`.  Keep this fixture focused on two- and three-layer
+    records; FontTools canonicalizes a one-layer PaintColrLayers node to its
+    child paint, so single-layer and malformed layer-list behavior should stay
+    in separate future fixtures.
+    """
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:40]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 4
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+            Color(0x70, 0x80, 0x90, 0x40),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: {
+            "Format": int(ot.PaintFormat.PaintColrLayers),
+            "Layers": [
+                solid_paint(1),
+                solid_paint(2, 0.5),
+            ],
+        },
+        base_names[1]: {
+            "Format": int(ot.PaintFormat.PaintColrLayers),
+            "Layers": [
+                solid_paint(1),
+                solid_paint(2, 0.5),
+                {
+                    "Format": int(ot.PaintFormat.PaintGlyph),
+                    "Paint": solid_paint(3, 0.25),
+                    "Glyph": base_names[3],
+                },
+            ],
+        },
+    }
+
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def main() -> None:
     for name in (
         "cpal-palettes-names-flags.ttf",
@@ -153,6 +213,7 @@ def main() -> None:
         build_cpal_font(OUTPUT_DIR / name)
     build_colr_v0_layers_font(COLOR_OUTPUT_DIR / "colr-v0-layers-cpal.ttf")
     build_colr_v1_composite_font(COLOR_OUTPUT_DIR / "colr_v1_composite_modes.ttf")
+    build_colr_v1_layers_font(COLOR_OUTPUT_DIR / "colr-v1-paint-colr-layers-cpal.ttf")
 
 
 if __name__ == "__main__":

@@ -1111,6 +1111,30 @@ pub extern "C" fn fontdone_wasm_get_paint(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_paint_layers(
+    handle: usize,
+    layer_iterator: *mut FT_LayerIterator,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint_Layers(
+        face_ref(handle).map(|face| &face.face),
+        unsafe { layer_iterator.as_mut() },
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_layer_iterator(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    rust_ffi::FT_ColrV1_Paint_Layer_Iterator_Copy(
+        face_ref(handle).map(|face| &face.face),
+        opaque_paint,
+    )
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_colr_v1_paint_graph(
     handle: usize,

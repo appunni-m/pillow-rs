@@ -802,3 +802,53 @@ Next implementation order for this batch:
 Do not promote any of the rows above by changing the audit allowlist alone.
 Each row needs the same input bytes executed through pinned C, Rust FFI, thin
 C ABI, and WASM ABI with exact public output comparison.
+
+## Batch: COLRv1 PaintColrLayers payload route
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- `ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload`
+- Operation `ftcolor.get_color_glyph_paint_graph`
+
+Fix:
+
+- Added a deterministic FontTools-generated fixture at
+  `tests/fixtures/fonts/color/colr-v1-paint-colr-layers-cpal.ttf` through the
+  maintained `font-fixture-color` target.
+- Extended the safe Rust COLRv1 parser with PaintColrLayers and LayerV1List
+  offset traversal.  FreeType 2.14.3 `src/sfnt/ttcolr.c:641-662` initializes
+  `FT_PaintColrLayers.layer_iterator` from `NumLayers` and `FirstLayerIndex`;
+  `src/sfnt/ttcolr.c:1518-1570` consumes that iterator by reading each layer
+  paint offset relative to LayerV1List.  Rust now mirrors that public iterator
+  state without exposing raw pointer values in comparisons.
+- Added thin C ABI and WASM ABI forwarding for public `FT_Get_Paint_Layers`.
+- Added a pinned-C oracle route comparing root lookup, `FT_Get_Paint`
+  PaintColrLayers format, iterator initialization, layer iteration, returned
+  opaque-paint classes, and terminal false behavior for the maintained fixture.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_graph
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 289 → 288, `real-parity` 4674 → 4675.
+- Focused runtime: compared 1 / total 1, passed 1, failed 0.
+
+Remaining blockers in nearby operations:
+
+- `ftcolor.get_paint_layers` still has three pending rows because they are tied
+  to the broader absent `fonts/color/colr-v1-all-paints.ttf` fixture.  Do not
+  count those rows until that declared all-paint fixture exists and proves
+  zero/one/many layer traversal with the same C/Rust/C-ABI/WASM output.
+- `ftcolor.get_paint` still has `FT_PaintColrLayers.get_paint_initializes_layer_iterator`
+  pending for the same all-paint fixture surface.

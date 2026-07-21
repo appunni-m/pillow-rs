@@ -10885,9 +10885,11 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
         case.operation.as_str(),
         "ftcolor.get_color_glyph_paint"
             | "ftcolor.get_color_glyph_paint_and_get_paint"
+            | "ftcolor.get_color_glyph_paint_graph"
             | "ftcolor.get_color_glyph_paint_and_resolve"
             | "ftcolor.get_color_glyph_paint_then_get_paint"
             | "ftcolor.get_paint"
+            | "ftcolor.get_paint_layers"
             | "ftcolor.get_paint_graph"
             | "ftcolor.get_paint_graph_node"
             | "ftcolor.get_solid_paint_and_palette"
@@ -10910,6 +10912,10 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_PaintComposite.get_paint_composite_values"
             | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
             | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
+            | "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
+            | "ftcolor.FT_Get_Paint_Layers.end_of_iteration"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
         && (case.case_id.ends_with(".paint_composite_runtime")
             || case.case_id.ends_with(".paint_composite_mode_runtime"))
@@ -10959,11 +10965,155 @@ fn get_paint_call(
     (result, paint)
 }
 
+fn get_paint_layers_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    iterator: &mut FT_LayerIterator,
+    paint: &mut FT_OpaquePaint,
+) -> FT_Bool {
+    match backend {
+        ColorPaintBackend::Rust => FT_Get_Paint_Layers(rust_face, Some(iterator), Some(paint)),
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Paint_Layers(c_face, iterator, paint),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_paint_layers(wasm_handle, iterator, paint)
+        }
+    }
+}
+
+fn get_paint_layer_iterator_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_Layer_Iterator_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_layer_iterator(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_layer_iterator(wasm_handle, opaque)
+        }
+    }
+}
+
 fn opaque_paint_json(opaque: FT_OpaquePaint) -> Value {
     json!({
         "p_class": pointer_class(opaque.p.cast_const()),
         "insert_root_transform": opaque.insert_root_transform,
     })
+}
+
+fn color_paint_layers_call_json(
+    label: &str,
+    result: FT_Bool,
+    iterator: FT_LayerIterator,
+    paint: FT_OpaquePaint,
+) -> Value {
+    json!({
+        "label": label,
+        "return": result,
+        "iterator": layer_iterator_json(iterator),
+        "paint": opaque_paint_json(paint),
+    })
+}
+
+fn color_paint_layers_sequence_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    max_calls: usize,
+) -> Value {
+    let (root_return, root_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) =
+        get_paint_call(backend, rust_face, c_face, wasm_handle, root_opaque);
+    let mut iterator =
+        if paint_return != 0 && paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_PaintFormat {
+            get_paint_layer_iterator_copy(backend, rust_face, c_face, wasm_handle, root_opaque)
+                .unwrap_or_default()
+        } else {
+            FT_LayerIterator::default()
+        };
+    let initial_iterator = iterator;
+    let mut calls = Vec::new();
+    for index in 0..max_calls {
+        let mut layer_paint = FT_OpaquePaint {
+            p: ptr::dangling_mut::<FT_Byte>(),
+            insert_root_transform: 0x7F,
+        };
+        let result = get_paint_layers_call(
+            backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            &mut iterator,
+            &mut layer_paint,
+        );
+        calls.push(color_paint_layers_call_json(
+            &format!("call_{}", index + 1),
+            result,
+            iterator,
+            layer_paint,
+        ));
+    }
+    json!({
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(root_opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "initial_iterator": layer_iterator_json(initial_iterator),
+        "calls": calls,
+    })
+}
+
+fn color_paint_layers_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                36,
+                3,
+            ),
+        }))),
+        "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis" => Ok(ok(json!({
+            "sequences": [
+                color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 36, 3),
+                color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 37, 4),
+            ],
+        }))),
+        "ftcolor.FT_Get_Paint_Layers.end_of_iteration" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                37,
+                5,
+            ),
+        }))),
+        other => Err(format!("unsupported COLRv1 paint layer case {other}")),
+    }
 }
 
 fn color_paint_node_json(
@@ -11085,6 +11235,17 @@ fn color_paint_graph_output_for_open_face(
 
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        return color_paint_layers_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        );
+    }
     Ok(color_paint_graph_output_for_open_face(
         ColorPaintBackend::Rust,
         Some(&face),
@@ -11095,6 +11256,15 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_open_face(case)?;
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        let output =
+            color_paint_layers_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
     let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
     c_done_face(face);
     c_done_library(library);
@@ -11103,6 +11273,19 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_open_face(case)?;
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        let output = color_paint_layers_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
     let output = color_paint_graph_output_for_open_face(
         ColorPaintBackend::Wasm,
         None,
