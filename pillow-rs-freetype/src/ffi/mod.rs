@@ -65,7 +65,7 @@ pub use handles::{
     FT_Stream_OpenBzip2, FT_Stream_OpenGzip, FT_Stroker, FT_Stroker_Done, FT_Stroker_Export,
     FT_Stroker_ExportBorder, FT_Stroker_New, FT_Stroker_Rewind, FT_Stroker_Set, FT_Tan,
     FT_TrueTypeGX_Free, FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize,
-    FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent,
+    FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit, FTC_Node_Unref, FTOutlineDecomposeEvent,
     FTOutlineDecomposeRun,
 };
 

@@ -122,6 +122,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
     "fontdone_wasm_gzip_uncompress",
+    "fontdone_wasm_node_unref",
     "fontdone_wasm_stream_open_bzip2",
     "fontdone_wasm_stream_open_gzip",
     "fontdone_wasm_open_face",
@@ -5686,10 +5687,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id
         in {
             "ftcache.FTC_Node.reference_counted_cache_handle",
+            "ftcache.FTC_Node_Unref.null_inputs_noop",
             "ftcache.FTC_Node_Unref.releases_lookup_reference",
             "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable",
         }
     ):
+        if row.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop":
+            return (
+                "FTC_Node_Unref null node/null manager no-op validates through "
+                "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         return (
             "FTC_Node and FTC_Node_Unref lookup-acquired node handle, cache "
             "index, reference release, and post-unref flushability classes "

@@ -747,6 +747,11 @@ pub extern "C" fn FT_Stream_OpenBzip2(stream: FT_Stream, source: FT_Stream) -> F
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FTC_Node_Unref(node: rust_ffi::FTC_Node, manager: rust_ffi::FTC_Manager) {
+    rust_ffi::FTC_Node_Unref(node, manager);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stream_OpenGzip(stream: FT_Stream, source: FT_Stream) -> FT_Error {
     let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
         return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;

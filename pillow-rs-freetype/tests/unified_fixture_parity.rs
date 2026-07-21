@@ -28090,6 +28090,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(args)
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            Ok(vec!["--cache-node-unref-null-only".to_string()])
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             let mut args = vec!["--cache-node-lifecycle".to_string()];
@@ -29276,6 +29281,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_image_type_lookup_probe(case)
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            rust_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             rust_cache_node_lifecycle(case)
@@ -30412,6 +30422,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_type_lookup_probe" if !case.expect_error => c_image_type_lookup_probe(case),
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            c_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             c_cache_node_lifecycle(case)
@@ -31369,6 +31384,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftcache.image_type_lookup_probe" if !case.expect_error => {
             wasm_image_type_lookup_probe(case)
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            wasm_cache_node_unref_null_only()
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
@@ -33336,6 +33356,25 @@ fn rust_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
     )))
 }
 
+fn cache_node_unref_null_only_output() -> RunOutput {
+    ok(json!({
+        "void": true,
+        "rows": [
+            {
+                "node": "null",
+                "manager": "null",
+                "void_return": true,
+                "side_effects": "none"
+            }
+        ]
+    }))
+}
+
+fn rust_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
+}
+
 fn rust_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
     let mut face = rust_new_face_without_size(case)?;
     let row = single_cache_scaler_row(&case.inputs.params)?;
@@ -33566,6 +33605,11 @@ fn c_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
         sbit_fields,
         pressure_statuses,
     )))
+}
+
+fn c_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    c_abi::FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
 }
 
 fn c_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
@@ -33847,6 +33891,11 @@ fn wasm_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
         sbit_fields,
         pressure_statuses,
     )))
+}
+
+fn wasm_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
 }
 
 fn wasm_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {

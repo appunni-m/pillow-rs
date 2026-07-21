@@ -37,9 +37,9 @@ use super::types::{
     FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
     FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
-    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
-    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
-    TT_VertHeader,
+    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, FTC_Manager, FTC_Node,
+    PS_Dict_Keys, PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2,
+    TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -2066,6 +2066,12 @@ pub fn FT_Done_Glyph(_glyph_present: bool) {
     // FreeType `src/base/ftglyph.c:580-591` treats NULL as a no-op and returns
     // void. Non-null lifecycle behavior is owned by class hooks and remains
     // separate exact glyph ownership/facade work.
+}
+
+pub fn FTC_Node_Unref(_node: FTC_Node, _manager: FTC_Manager) {
+    // FreeType `src/cache/ftcmanag.c:667-677` returns before touching the
+    // manager when `node == NULL`. Non-null cache-node release remains covered
+    // by the managed cache lifecycle routes, not by this null-only facade.
 }
 
 pub fn FT_Glyph_To_Bitmap(

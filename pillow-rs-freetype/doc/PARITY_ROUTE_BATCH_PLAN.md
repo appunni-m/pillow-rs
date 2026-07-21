@@ -1880,3 +1880,41 @@ Rows deliberately left pending in the same surface:
 - `success_open_valid_bzip2_stream`, `success_read_decompressed_bytes`, and
   `lifecycle_close_does_not_close_source` still require a pure-Rust bzip2
   stream wrapper or a maintained bzip2-enabled pinned oracle profile.
+
+### Split FTC_Node_Unref null-input row: 2026-07-22
+
+Status: implemented as an additive null-only split row; the original mixed
+null/foreign row remains pending.
+
+Scope:
+
+- Added `ftcache.FTC_Node_Unref.null_inputs_noop`.
+- Added a direct core `FTC_Node_Unref` facade for the public null-node no-op
+  path and exposed it through the thin C ABI and WASM ABI.
+- Added a pinned-C `--cache-node-unref-null-only` oracle command that calls
+  `FTC_Node_Unref(NULL, NULL)` and compares the void/no-side-effect output
+  through Rust FFI, C ABI, and WASM ABI.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` also declares a
+  non-null `foreign_or_bad_cache_index` node with a live manager.
+- Pinned FreeType `src/cache/ftcmanag.c:667-677` returns immediately only when
+  `node == NULL`; for non-null nodes it reads `node->cache_index` and requires
+  a maintained cache-node/manager layout facade.
+- The current split proves only the direct public `(node=NULL, manager=NULL)`
+  no-op, which is the same input across pinned C, Rust FFI, thin C ABI, and
+  WASM ABI.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7246 → 7247, `real-parity` 4734 → 4735,
+  `pending-route` remains 237 because the original mixed row remains pending.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftcache.FTC_Node_Unref.null_inputs_noop`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending for the
+  live-manager and foreign/bad-cache-index node variants.

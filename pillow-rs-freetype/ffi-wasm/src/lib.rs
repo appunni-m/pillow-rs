@@ -1816,6 +1816,14 @@ pub extern "C" fn fontdone_wasm_stream_open_bzip2(
     rust_ffi::FT_Stream_OpenBzip2(unsafe { stream.as_mut() }, unsafe { source.as_ref() })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_node_unref(
+    node: rust_ffi::FTC_Node,
+    manager: rust_ffi::FTC_Manager,
+) {
+    rust_ffi::FTC_Node_Unref(node, manager);
+}
+
 pub fn abi_support_gzip_stream_bytes(
     stream: *const rust_ffi::FT_StreamRec,
     offset: FT_ULong,

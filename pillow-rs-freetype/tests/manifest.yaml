@@ -3046,6 +3046,8 @@ subjects:
     description: FreeType C API function that releases one cache-node reference acquired by a cache lookup.
     cases:
       # needs-input: operation FTC_SBitCache_Lookup or FTC_ImageCache_Lookup with non-null anode followed by FTC_Node_Unref and manager pressure; fixture asset input/fonts/DejaVuSans.ttf plus requester-backed FTC_Manager; params one glyph index, small cache max_bytes, repeated lookup/fill sequence; expected output shape node pointer, ref_count classification before and after unref if oracle helper exposes it, and survival/flush classification under cache pressure; comparison rule exact C oracle no-op behavior for null/foreign-invalid handles and exact lifecycle classification for referenced versus unreferenced nodes.
+      - id: null_inputs_noop
+        description: FTC_Node_Unref with null node and null manager returns void without touching memory.
       - id: null_or_invalid_inputs_noop
         description: Null node, null manager, or a node whose cache index is outside the manager cache count is ignored like ftcmanag.c.
       - id: releases_lookup_reference
