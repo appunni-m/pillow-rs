@@ -10,17 +10,46 @@ Historical route-audit baseline before the FTC route batches:
 route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 392, 'real-null-validation': 9, 'real-parity': 4568}
 ```
 
-Current post-merge baseline on `main`:
+Current live baseline on `main` after the stroker lifecycle/no-op route batch:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 350, 'real-null-validation': 9, 'real-parity': 4610}
-runtime_parity: passed=6880 failed=0 total=6880 covered_manifest_cases=3787
-runtime_cases: runnable=6880 pending=355
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 336, 'real-null-validation': 9, 'real-parity': 4627}
+runtime_parity: passed=6897 failed=0 total=6897 covered_manifest_cases=3804
+runtime_cases: runnable=6897 pending=341
 ```
 
 This baseline means the maintained same-input routes are green; it does not mean
-full public API parity is complete. The 350 route-pending rows remain outside
+full public API parity is complete. The 336 route-pending rows remain outside
 the real same-input Rust FFI / C ABI / WASM ABI comparison set.
+
+The remaining rows are not independent one-off issues. They should be attacked
+as shared implementation surfaces. The current largest related buckets are:
+
+| Surface | Current pending shape | Correct batch strategy |
+|---|---:|---|
+| COLR/CPAL paint graph, layers, gradients, transforms, clipboxes, foreground color | 90+ rows across `ftcolor.*` | Implement maintained COLR v0/v1 fixtures plus core paint graph traversal, opaque paint handles, colorline iterators, transform normalization, and palette/foreground semantics. Do not count absent color fonts or scalar constants as paint parity. |
+| Stroker path, border, count, export, glyph-stroke geometry | 50+ rows across `ftstroke.*` | Port the pure-Rust stroker path/border model from `freetype/src/base/ftstroke.c`, then promote line/conic/cubic/begin/end/count/export rows together. Do not promote `Set`, `Rewind`, or optional-output rows from an unparsed zero-count stroker; their expectations depend on path state and geometry. |
+| GX/OpenType/classic-kern validation | 40+ rows across `ftgxval.*` and `ftotval.*` | Resolve the pinned-build validator service contract, add C-openable table fixtures, implement validation buffer output/free semantics, and promote selected/all/free rows together. Existing green rows are only invalid/service-missing behavior. |
+| CID/PFR/BDF/Bzip/SVG/incremental/glyph object lifecycle | smaller service/fixture clusters | Keep as separate subsystem batches because each requires distinct assets or ownership facades. Combine rows within each subsystem, not across unrelated APIs. |
+
+Do not split future work by individual row when one implementation surface owns
+the behavior. Also do not merge dissimilar missing-fixture rows into a fake
+"10+" batch; a batch counts only when the same code path and same maintained
+fixture/oracle route prove the promoted rows.
+
+After the `FT_Gzip_Uncompress` gzip/zlib buffer success batch:
+
+```text
+route audit concrete_cases=7238 category_counts={'compile-contract': 2266, 'pending-route': 335, 'real-null-validation': 9, 'real-parity': 4628}
+runtime_parity: passed=6898 failed=0 total=6898 covered_manifest_cases=3805
+runtime_cases: runnable=6898 pending=340
+```
+
+This batch adds the maintained `font-fixture-gzip` generator, a deterministic
+small-text/empty gzip+zlib fixture manifest, pure-Rust `FT_Gzip_Uncompress`
+buffer decompression, thin C/WASM ABI exports, and a pinned C oracle route for
+exact output bytes. `FT_Stream_OpenGzip` remains pending because stream wrapper
+state, source-position behavior, and close lifecycle are separate semantics.
 
 After the FTC manager/cache creation route batch:
 

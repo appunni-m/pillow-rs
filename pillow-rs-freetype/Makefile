@@ -32,6 +32,7 @@ help:
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
+	@printf "  make font-fixture-gzip Rebuild compact gzip/zlib payload fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
 	@printf "  make font-fixture-metrics Rebuild compact face metric fallback fixtures\n"
 	@printf "  make font-fixture-mvar Rebuild compact MVAR variation metrics fixtures\n"
@@ -334,6 +335,10 @@ font-fixture-winfnt:
 .PHONY: font-fixture-gasp
 font-fixture-gasp: font-fixture-hinter
 	$(PYTHON) scripts/build_gasp_fixtures.py
+
+.PHONY: font-fixture-gzip
+font-fixture-gzip:
+	$(PYTHON) scripts/build_gzip_fixtures.py
 
 .PHONY: font-fixture-metrics
 font-fixture-metrics: font-fixture-hinter
