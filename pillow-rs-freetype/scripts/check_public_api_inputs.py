@@ -3394,6 +3394,47 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
     if done_glyph_pending:
         return done_glyph_pending
+    glyph_object_rows_without_exact_payload_route = {
+        "ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy": (
+            "FT_Get_Glyph bitmap success parity needs the runner to create a "
+            "real FT_BitmapGlyph with FT_GLYPH_FORMAT_BITMAP and compare "
+            "FT_BitmapGlyphRec left/top/bitmap buffer payload. The current "
+            "slot-record snapshot can pass with an outline glyph and would be "
+            "a green placeholder for the declared bitmap-glyph contract"
+        ),
+        "ftglyph.FT_Get_Glyph.success_svg_slot_deep_copy": (
+            "FT_Get_Glyph SVG success parity needs an SVG-enabled glyph route "
+            "that creates FT_GLYPH_FORMAT_SVG and compares FT_SvgGlyphRec "
+            "document/metrics/range/transform fields; slot format/advance "
+            "alone is not the declared output"
+        ),
+        "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap": (
+            "FT_BitmapGlyphRec field parity needs maintained FT_Get_Glyph "
+            "bitmap and FT_Glyph_To_Bitmap routes that cast to "
+            "FT_BitmapGlyphRec and compare root, left, top, bitmap descriptor, "
+            "and buffer bytes across pinned C, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftglyph.FT_Glyph_Copy.success_bitmap_copy_is_independent": (
+            "FT_Glyph_Copy bitmap success parity needs a real bitmap glyph "
+            "copy route proving copied FT_BitmapGlyphRec fields and bitmap "
+            "buffer ownership remain independent after the source glyph is "
+            "destroyed"
+        ),
+        "ftglyph.FT_Glyph_Copy.success_svg_copy_is_independent": (
+            "FT_Glyph_Copy SVG success parity needs an SVG-enabled glyph copy "
+            "route proving document bytes, metrics, glyph range, transform, "
+            "and delta are copied exactly or classified as unsupported like "
+            "pinned C"
+        ),
+        "ftglyph.FT_SvgGlyphRec.fields_match_svg_get_copy_transform": (
+            "FT_SvgGlyphRec field parity needs an SVG-enabled FT_Get_Glyph, "
+            "FT_Glyph_Copy, and FT_Glyph_Transform route comparing the public "
+            "SVG record payload; generic glyph root snapshots are not enough"
+        ),
+    }
+    reason = glyph_object_rows_without_exact_payload_route.get(row.case_id)
+    if reason is not None:
+        return reason
     ftglyph_rows_without_maintained_route = {
         "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record": (
             "FT_BitmapGlyph alias parity needs a maintained FT_Get_Glyph or "

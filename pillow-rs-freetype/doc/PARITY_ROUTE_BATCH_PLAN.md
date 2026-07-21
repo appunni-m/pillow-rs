@@ -1530,3 +1530,47 @@ Why this is split instead of promoting the older broad row:
   maintained static and variable fixtures would hide that missing same-input
   malformed route.
 - The split row names exactly the variable-gradient input it proves.
+
+### FTGlyph bitmap/SVG false-green route correction: 2026-07-22
+
+Status: route classification corrected; no parity row promoted.
+
+Scope:
+
+- Moved seven `ftglyph` rows out of `real-parity` because the maintained
+  runners did not prove the manifest-declared bitmap/SVG glyph payloads:
+  - `ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy`
+  - `ftglyph.FT_Get_Glyph.success_svg_slot_deep_copy`
+  - `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap` (two
+    concrete variants)
+  - `ftglyph.FT_Glyph_Copy.success_bitmap_copy_is_independent`
+  - `ftglyph.FT_Glyph_Copy.success_svg_copy_is_independent`
+  - `ftglyph.FT_SvgGlyphRec.fields_match_svg_get_copy_transform`
+- The focused bitmap `FT_Get_Glyph` row previously passed while the oracle
+  output showed format `1869968492` (`FT_GLYPH_FORMAT_OUTLINE`), not
+  `FT_GLYPH_FORMAT_BITMAP`.  That proves the route was observing a glyph-slot
+  root snapshot, not an actual `FT_BitmapGlyphRec` deep-copy payload.
+
+Why this must stay pending:
+
+- The manifest rows require exact public `FT_BitmapGlyphRec` or
+  `FT_SvgGlyphRec` fields: root, left/top, bitmap descriptor, buffer bytes,
+  document bytes, metrics, glyph range, transform, delta, and ownership or copy
+  independence where applicable.
+- Counting slot `format`/advance equality or a non-null handle would be a green
+  placeholder.  The correct next batch is to implement real bitmap glyph object
+  creation/copy/record inspection through `FT_Get_Glyph` and
+  `FT_Glyph_To_Bitmap`, then add the SVG route or explicit pinned-C unsupported
+  classification.
+
+Observed impact:
+
+- Route audit on `main` at `ad4cc6453` before this correction:
+  `concrete_cases=7242`, `pending-route=234`, `real-parity=4733`.
+- Route audit after this correction:
+  `concrete_cases=7242`, `pending-route=241`, `real-parity=4726`.
+- Focused confirmation:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Get_Glyph.success_bitmap_slot`
+  previously passed 1/1 but the oracle cache output was an outline glyph root
+  (`format=1869968492`), so it is no longer accepted as real bitmap-glyph
+  parity.
