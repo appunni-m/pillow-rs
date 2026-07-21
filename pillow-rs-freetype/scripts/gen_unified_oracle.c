@@ -14967,6 +14967,7 @@ static int emit_colr_static_gradient_case(const char* case_id, OracleFace* face)
     printf("{");
     print_status(0);
     if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values") ||
         streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad")) {
         printf(",\"output\":{\"sequence\":");
         print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 1);
@@ -15050,6 +15051,7 @@ static int is_colr_variable_gradient_case(const char* case_id) {
 
 static int is_colr_static_gradient_case(const char* case_id) {
     return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values") ||
            streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
            streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload") ||
            streq(case_id, "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values") ||

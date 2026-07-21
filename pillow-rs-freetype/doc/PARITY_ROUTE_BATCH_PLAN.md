@@ -1254,3 +1254,35 @@ Remaining nearby blocker:
   declares unresolved variable-gradient and malformed-COLR assets.  Keep it
   pending until those separate inputs exist or the manifest is deliberately
   split into a static-success row and future variable/malformed rows.
+
+### Split static FT_PaintLinearGradient public-record row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad row remains
+pending.
+
+Scope:
+
+- Added `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values`
+  for the maintained `tests/fixtures/fonts/color/colr-v1-static-gradients.ttf`
+  fixture.
+- Reused the existing pinned-C/Rust/C ABI/WASM static-gradient route for glyph
+  36 (`linear_pad`), comparing `FT_Get_Color_Glyph_Paint`, `FT_Get_Paint`,
+  the active `FT_COLR_Paint.u.linear_gradient` public union payload, attached
+  `FT_ColorLine`, graph snapshot, and `FT_Get_Colorline_Stops` iteration.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values` declares
+  static, variable, and malformed COLR inputs.  The malformed fixture
+  `fonts/color/malformed-colr-v1-paints.ttf` is not present, and the broad row
+  also requires non-default variable-gradient interpolation proof.  Counting a
+  single static glyph as that full row would be a green placeholder.
+- The split row is narrower by design and names exactly the input it proves.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7238 → 7239, `real-parity` 4721 → 4722,
+  `pending-route` remains 242.
+- Focused runtime:
+  `make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
