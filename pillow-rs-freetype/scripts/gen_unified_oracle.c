@@ -13966,6 +13966,10 @@ static int emit_bdf_property_case(int argc, char** argv) {
 }
 
 static void print_bdf_charset_pointer(const char* value) {
+    if (value == (const char*)0x1) {
+        printf("{\"null\":false,\"bytes\":\"\",\"length\":3735928559,\"sentinel\":true}");
+        return;
+    }
     printf("{\"null\":");
     print_json_bool(value == NULL);
     printf(",\"bytes\":");
@@ -13987,7 +13991,8 @@ static int emit_bdf_charset_case(int argc, char** argv) {
         return 2;
     }
     if (!streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face") &&
-        !streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset")) {
+        !streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset") &&
+        !streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs")) {
         fprintf(stderr, "unsupported BDF charset case: %s\n", case_id);
         return 2;
     }
@@ -13996,6 +14001,55 @@ static int emit_bdf_charset_case(int argc, char** argv) {
     int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
     if (opened) {
         return opened;
+    }
+
+    if (streq(case_id, "ftbdf.FT_Get_BDF_Charset_ID.error_null_face_or_outputs")) {
+        const char* null_face_encoding = (const char*)0x1;
+        const char* null_face_registry = (const char*)0x1;
+        FT_Error null_face_error =
+            FT_Get_BDF_Charset_ID(NULL, &null_face_encoding, &null_face_registry);
+
+        const char* registry_only = (const char*)0x1;
+        FT_Error null_encoding_error =
+            FT_Get_BDF_Charset_ID(face.face, NULL, &registry_only);
+
+        const char* encoding_only = (const char*)0x1;
+        FT_Error null_registry_error =
+            FT_Get_BDF_Charset_ID(face.face, &encoding_only, NULL);
+
+        FT_Error both_outputs_null_error =
+            FT_Get_BDF_Charset_ID(face.face, NULL, NULL);
+
+        printf("{");
+        print_status(null_face_error);
+        printf(",\"output\":{\"error\":%d,\"rows\":[", null_face_error);
+
+        printf("{\"variant\":\"face\",\"error\":%d,\"charset_encoding\":",
+               null_face_error);
+        print_bdf_charset_pointer(null_face_encoding);
+        printf(",\"charset_registry\":");
+        print_bdf_charset_pointer(null_face_registry);
+        printf("},");
+
+        printf("{\"variant\":\"charset_encoding\",\"error\":%d,"
+               "\"charset_encoding\":null,\"charset_registry\":",
+               null_encoding_error);
+        print_bdf_charset_pointer(registry_only);
+        printf("},");
+
+        printf("{\"variant\":\"charset_registry\",\"error\":%d,"
+               "\"charset_encoding\":",
+               null_registry_error);
+        print_bdf_charset_pointer(encoding_only);
+        printf(",\"charset_registry\":null},");
+
+        printf("{\"variant\":\"both_outputs\",\"error\":%d,"
+               "\"charset_encoding\":null,\"charset_registry\":null}",
+               both_outputs_null_error);
+
+        printf("]}}\n");
+        close_oracle_face(&face);
+        return 0;
     }
 
     const char* encoding = (const char*)0x1;
