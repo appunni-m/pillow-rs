@@ -11273,16 +11273,36 @@ for `FT_Get_BDF_Property`.  The Rust fallback returned
 `FT_Err_Unimplemented_Feature` and any generic output acceptance would be a
 green placeholder.
 
+Additional fixture audit against pinned FreeType 2.14.3 showed that the current
+BDF success row is not C-observable as declared.  For
+`tests/fixtures/input/fonts/bdf/properties-atoms-integers-cardinals.bdf`,
+`FT_Get_BDF_Property` returns:
+
+- `FAMILY_NAME`: error `6` (`FT_Err_Invalid_Argument`) and type `NONE`.
+- `FOUNDRY`: success, type `ATOM`, atom string `PillowRs`.
+- `POINT_SIZE`: success, type `INTEGER`, value `120`.
+- `PIXEL_SIZE`: success, type `INTEGER`, value `12` — not
+  `BDF_PROPERTY_TYPE_CARDINAL`.
+- `NO_SUCH_PROPERTY` and null property name: error `6`, type `NONE`, with the
+  value union otherwise preserving the caller sentinel.
+- null face: error `35` (`FT_Err_Invalid_Face_Handle`) and preserves the output
+  record apart from any caller-initialized state.
+- null output pointer: error `6`.
+
 Required fix plan:
 
 1. Add a native oracle command that calls pinned FreeType
    `FT_Get_BDF_Property` for BDF, PCF, selected-strike SFNT BDF-table, missing
    property, unsupported face, and null-argument rows.
-2. Implement the pure-Rust core property model first.  BDF/PCF/SFNT property
+2. Correct the declared BDF success properties before promotion: use an actual
+   atom property such as `FOUNDRY`, and treat `POINT_SIZE`/`PIXEL_SIZE` as
+   signed integer properties for this fixture unless a separate C-observable
+   cardinal fixture is added.
+3. Implement the pure-Rust core property model first.  BDF/PCF/SFNT property
    parsing must live in `fontdone`; C and WASM ABI layers may only validate
    handles, copy `BDF_PropertyRec`-style records, and preserve string
    lifetimes.
-3. Compare exact `FT_Error`, property type, atom string contents, signed
+4. Compare exact `FT_Error`, property type, atom string contents, signed
    integer, cardinal value, and output preservation semantics across pinned C,
    Rust FFI, C ABI, and WASM before promoting any row back to real parity.
 
