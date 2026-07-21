@@ -11262,6 +11262,30 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+## FT_Get_BDF_Charset_ID false-green route audit correction
+
+Status: demoted to explicit `pending-route` on 2026-07-21.
+
+Current-state evidence:
+
+- `make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset`
+  reported `runtime_cases: runnable=0 pending=1` with
+  `pending_reasons=ftbdf.get_bdf_charset_id:declared runtime font asset is unresolved:1`.
+- The fixture input file points at paths such as
+  `input/fonts/bdf/charset-registry.bdf` and
+  `input/fonts/bdf/sfnt-bdf-table.otb`; those assets are not present under the
+  maintained `tests/fixtures/input/` tree.
+- The public Rust FFI, C ABI, and WASM ABI do not expose a maintained
+  `FT_Get_BDF_Charset_ID` route.
+
+Audit correction:
+
+- `ftbdf.get_bdf_charset_id` rows must stay `pending-route` until the BDF and
+  SFNT-BDF fixtures are present and same-input output validates through pinned
+  C FreeType, Rust FFI, C ABI, and WASM ABI.
+- Counting these rows as `real-parity` is a green placeholder because the
+  focused runtime test does not run any comparison.
+
 ## FT_Get_BDF_Property route audit correction
 
 `ftbdf.get_bdf_property` fixture rows are present, but they are not real parity
