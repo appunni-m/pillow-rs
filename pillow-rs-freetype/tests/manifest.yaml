@@ -6310,6 +6310,8 @@ subjects:
         description: FT_Get_Glyph and FT_Glyph_To_Bitmap populate root, left, top, and bitmap fields with exact C values for bitmap glyph fixtures.
       - id: fields_match_get_glyph_bitmap
         description: FT_Get_Glyph on the maintained bitmap strike fixture populates root, left, top, and bitmap fields with exact C values.
+      - id: owns_bitmap_buffer_get_glyph_bitmap
+        description: FT_Get_Glyph on the maintained bitmap strike fixture creates a bitmap glyph whose buffer is owned until FT_Done_Glyph.
       - id: owns_bitmap_buffer
         description: The bitmap buffer is owned by FT_BitmapGlyphRec and is released by FT_Done_Glyph through the bitmap glyph done hook.
     # needs-input: operation=FT_Get_Glyph and FT_Glyph_To_Bitmap with record inspection; fixture_asset=bitmap strike font and outline font rendered to bitmap; params={glyph index, size, render mode}; output shape={layout metadata, root fields, left/top, FT_Bitmap fields/bytes, free events}; comparison=exact C oracle layout, field values, bytes, and ownership.

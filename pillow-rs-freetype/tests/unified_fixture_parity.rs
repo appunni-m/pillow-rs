@@ -28015,6 +28015,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if params.get("glyph").is_some_and(Value::is_null) {
                 return Ok(vec!["--done-glyph-null".to_string()]);
             }
+            if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+                let mut args = vec!["--done-glyph-bitmap".to_string()];
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(bitmap_glyph_record_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
+            }
             if case.case_id == "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
                 let mut args = vec!["--done-glyph-outline".to_string()];
                 push_font_source(case, &mut args)?;
@@ -37547,10 +37555,74 @@ fn done_outline_glyph_output(
     }))
 }
 
+fn done_bitmap_glyph_output(
+    create_error: FT_Error,
+    pointer_class: &str,
+    format: Option<i32>,
+    buffer_owner_class: Option<&str>,
+    bitmap: Option<(u32, u32, i32)>,
+) -> RunOutput {
+    ok(json!({
+        "void": true,
+        "created_glyph_pointer_class": pointer_class,
+        "create_error": create_error,
+        "format_before_done": format,
+        "buffer_owner_class": buffer_owner_class,
+        "bitmap_before_done": bitmap.map(|(width, rows, pitch)| json!({
+            "width": width,
+            "rows": rows,
+            "pitch": pitch
+        })),
+        "free_events": if create_error == FT_Err_Ok {
+            "FT_Done_Glyph called once for owned bitmap glyph"
+        } else {
+            "none"
+        }
+    }))
+}
+
 fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
         FT_Done_Glyph(false);
         return Ok(done_glyph_null_output());
+    }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+        let face = open_named_face(case, "bitmap_strike_font")?;
+        let loaded = FT_Load_Glyph(
+            &face,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        let (create_error, pointer_class, format, buffer_owner_class, bitmap) = match loaded {
+            Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+                Ok(glyph) => {
+                    let format = glyph.root.format;
+                    let bitmap = (glyph.bitmap.width, glyph.bitmap.rows, glyph.bitmap.pitch);
+                    let buffer_owner_class = if glyph.bitmap.buffer.is_empty() {
+                        "null"
+                    } else {
+                        "owned_non_null"
+                    };
+                    FT_Done_Glyph(true);
+                    (
+                        FT_Err_Ok,
+                        "non_null",
+                        Some(format),
+                        Some(buffer_owner_class),
+                        Some(bitmap),
+                    )
+                }
+                Err(error) => (error, "null", None, None, None),
+            },
+            Err(error) => (error, "null", None, None, None),
+        };
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            pointer_class,
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
     }
     if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
@@ -37597,6 +37669,51 @@ fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
         c_abi::FT_Done_Glyph(ptr::null_mut());
         return Ok(done_glyph_null_output());
     }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+        let (library, face) = c_open_named_face(case, "bitmap_strike_font")?;
+        let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+        let mut create_error = c_abi::FT_Load_Glyph(
+            face,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if create_error == FT_Err_Ok {
+            let slot = c_abi::abi_glyph_slot_pointer(face)
+                .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+            create_error = c_abi::FT_Get_Glyph(slot, &mut glyph);
+        }
+        let (format, buffer_owner_class, bitmap) = if create_error == FT_Err_Ok {
+            let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+                .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+            (
+                Some(snapshot.root.format),
+                Some(if snapshot.bitmap.buffer.is_empty() {
+                    "null"
+                } else {
+                    "owned_non_null"
+                }),
+                Some((
+                    snapshot.bitmap.width,
+                    snapshot.bitmap.rows,
+                    snapshot.bitmap.pitch,
+                )),
+            )
+        } else {
+            (None, None, None)
+        };
+        if !glyph.is_null() {
+            c_abi::FT_Done_Glyph(glyph);
+        }
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            if glyph.is_null() { "null" } else { "non_null" },
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
+    }
     if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
@@ -37641,6 +37758,54 @@ fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
     if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
         wasm_abi::fontdone_wasm_done_glyph(0);
         return Ok(done_glyph_null_output());
+    }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+        let handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+        let mut glyph_handle = 0usize;
+        let mut create_error = wasm_abi::fontdone_wasm_load_glyph(
+            handle,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if create_error == FT_Err_Ok {
+            create_error = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+        }
+        let (format, buffer_owner_class, bitmap) = if create_error == FT_Err_Ok {
+            let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+                .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+            (
+                Some(snapshot.root.format),
+                Some(if snapshot.bitmap.buffer.is_empty() {
+                    "null"
+                } else {
+                    "owned_non_null"
+                }),
+                Some((
+                    snapshot.bitmap.width,
+                    snapshot.bitmap.rows,
+                    snapshot.bitmap.pitch,
+                )),
+            )
+        } else {
+            (None, None, None)
+        };
+        if glyph_handle != 0 {
+            let glyph =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+            wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        }
+        wasm_done_face(handle);
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            if glyph_handle == 0 {
+                "null"
+            } else {
+                "non_null"
+            },
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
     }
     if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
         return Err(format!("unsupported done glyph case {}", case.case_id));
