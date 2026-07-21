@@ -220,6 +220,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_matrix_multiply",
     "fontdone_wasm_matrix_invert",
     "fontdone_wasm_set_pixel_sizes",
+    "fontdone_wasm_set_transform",
     "fontdone_wasm_set_char_size",
     "fontdone_wasm_request_size",
     "fontdone_wasm_select_size",
@@ -2698,6 +2699,18 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "COLRv1 static gradient payloads and ColorLine stop iteration "
             "validate through the maintained PAD/REPEAT/REFLECT static "
             "gradient fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",
+        "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime",
+        "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload",
+    }:
+        return (
+            "COLRv1 included-root-transform synthesis validates exact public "
+            "PaintTransform affine fields and nested opaque paint class through "
+            "the maintained root-transform fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
         )
     if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
         row.case_id.endswith(".paint_composite_runtime")

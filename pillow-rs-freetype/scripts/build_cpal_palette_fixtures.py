@@ -354,6 +354,50 @@ def build_colr_v1_transform_paints_font(path: Path) -> None:
     font.save(path, reorderTables=False)
 
 
+def build_colr_v1_root_transform_font(path: Path) -> None:
+    """Build a compact COLRv1 root-transform fixture.
+
+    The font intentionally keeps the actual root paint simple.  The parity
+    surface under test is FreeType's synthetic top-level PaintTransform that
+    `FT_Get_Paint` inserts from active size and `FT_Set_Transform` state when
+    `FT_Get_Color_Glyph_Paint` is called with `FT_COLOR_INCLUDE_ROOT_TRANSFORM`.
+    """
+    font = TTFont(SOURCE_FONT, recalcTimestamp=False)
+    glyph_order = font.getGlyphOrder()
+    base_names = glyph_order[36:38]
+
+    cpal = newTable("CPAL")
+    cpal.version = 0
+    cpal.numPaletteEntries = 3
+    cpal.palettes = [
+        [
+            Color(0x00, 0x00, 0x00, 0xFF),
+            Color(0x10, 0x20, 0x30, 0xFF),
+            Color(0x40, 0x50, 0x60, 0x80),
+        ]
+    ]
+    font["CPAL"] = cpal
+
+    color_glyphs: dict[str, object] = {
+        base_names[0]: {
+            "Format": int(ot.PaintFormat.PaintGlyph),
+            "Paint": solid_paint(1),
+            "Glyph": base_names[1],
+        },
+        base_names[1]: solid_paint(2, 0.5),
+    }
+
+    font["COLR"] = buildCOLR(
+        color_glyphs,
+        version=1,
+        glyphMap=font.getReverseGlyphMap(),
+        allowLayerReuse=False,
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    font.save(path, reorderTables=False)
+
+
 def color_line(extend: ot.ExtendMode, stops: list[tuple[float, int, float]]) -> dict[str, object]:
     return {
         "Extend": int(extend),
@@ -466,6 +510,7 @@ def main() -> None:
     build_colr_v1_layers_font(COLOR_OUTPUT_DIR / "colr-v1-paint-colr-layers-cpal.ttf")
     build_colr_v1_colr_glyph_font(COLOR_OUTPUT_DIR / "colr-v1-colr-glyph-recursive.ttf")
     build_colr_v1_transform_paints_font(COLOR_OUTPUT_DIR / "colr-v1-transform-paints.ttf")
+    build_colr_v1_root_transform_font(COLOR_OUTPUT_DIR / "colr-v1-root-transform.ttf")
     build_colr_v1_static_gradients_font(COLOR_OUTPUT_DIR / "colr-v1-static-gradients.ttf")
 
 

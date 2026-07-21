@@ -89,6 +89,7 @@ pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
 pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_PaintTransform = rust_ffi::FT_PaintTransform;
 pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
@@ -1178,6 +1179,17 @@ pub fn abi_support_colr_v1_paint_colorline(
     opaque_paint: FT_OpaquePaint,
 ) -> Option<FT_ColorLine> {
     rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_transform(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    rust_ffi::FT_ColrV1_Paint_Transform_Copy(
         face_state(face).map(|state| &state.inner),
         opaque_paint,
     )
@@ -4174,6 +4186,44 @@ pub extern "C" fn FT_Set_Pixel_Sizes(
         update_size_metrics(face, &state.inner);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Transform(
+    face: FT_Face,
+    matrix: *const FT_Matrix,
+    delta: *const FT_Vector,
+) {
+    let Some(state) = face_state_mut(face) else {
+        return;
+    };
+    let rust_matrix = if matrix.is_null() {
+        None
+    } else {
+        // SAFETY: `matrix` is non-null and points to a C ABI `FT_Matrix`.
+        let matrix = unsafe { *matrix };
+        Some(rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        })
+    };
+    let rust_delta = if delta.is_null() {
+        None
+    } else {
+        // SAFETY: `delta` is non-null and points to a C ABI `FT_Vector`.
+        let delta = unsafe { *delta };
+        Some(rust_ffi::FT_Vector {
+            x: delta.x,
+            y: delta.y,
+        })
+    };
+    rust_ffi::FT_Set_Transform(
+        Some(&mut state.inner),
+        rust_matrix.as_ref(),
+        rust_delta.as_ref(),
+    );
 }
 
 #[unsafe(no_mangle)]

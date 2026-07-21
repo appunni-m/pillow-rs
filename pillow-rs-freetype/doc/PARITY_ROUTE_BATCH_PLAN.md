@@ -1028,3 +1028,69 @@ Remaining nearby blockers:
 - Gradient/colorline rows remain pending until maintained linear/radial/sweep
   gradient fixtures and `FT_Get_Colorline_Stops` traversal compare exact C
   colorline iterator state and stops.
+
+## Batch: COLRv1 included root-transform synthesis routes
+
+Status: implemented 2026-07-21.
+
+Scope:
+
+- Operation `ftcolor.get_color_glyph_paint_then_get_paint`
+  - `ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime`
+  - `ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime`
+  - `ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint`
+- Operation `ftcolor.get_root_transform_paint`
+  - `ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload`
+
+Fix:
+
+- Added the maintained fixture
+  `tests/fixtures/fonts/color/colr-v1-root-transform.ttf` through
+  `scripts/build_cpal_palette_fixtures.py` and the `font-fixture-color`
+  target.  The fixture uses a real COLRv1 PaintGlyph root wrapping PaintSolid,
+  so the synthetic top-level transform is not confused with an explicit root
+  PaintTransform node.
+- Implemented FreeType 2.14.3 `src/sfnt/ttcolr.c:1660-1715` behavior in
+  pure Rust `FT_Get_Paint`: when `FT_OpaquePaint.insert_root_transform` is set,
+  Rust now returns `FT_COLR_PAINTFORMAT_TRANSFORM`, scales active
+  `FT_Size_Metrics` from 26.6 to 16.16 with C's rounding, multiplies the active
+  `FT_Set_Transform` matrix, shifts the active transform delta by 10 bits, and
+  clears `insert_root_transform` on the nested child paint.
+- Added thin C ABI and WASM ABI `FT_Set_Transform` wrappers so the route can set
+  the same active transform state through every public ABI leg.  The wrappers
+  only validate/convert records and delegate to core; they contain no color
+  parsing or parity behavior.
+- Added safe ABI-test-support helpers for copying `FT_PaintTransform` payloads
+  so Rust, C ABI, and WASM tests compare exact affine fields without unsafe
+  union reads in the test harness.
+- Updated the pinned C oracle and unified parity harness to apply the same
+  pixel sizes and transforms, then compare root lookup, first `FT_Get_Paint`
+  output, affine fields, nested opaque paint identity class, and no-root
+  behavior exactly.
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype font-fixture-color
+make -C pillow-rs-freetype test-op OP=ftcolor.get_color_glyph_paint_then_get_paint
+make -C pillow-rs-freetype test-op OP=ftcolor.get_root_transform_paint
+make -C pillow-rs-freetype route-buckets
+make fontdone-ffi
+make fontdone-ffi-compat
+make fontdone-lint
+git diff --check
+```
+
+Observed impact:
+
+- Route audit: `pending-route` 266 → 258, `real-parity` 4697 → 4705.
+- Focused root-transform runtime: compared 6 / total 6, passed 6, failed 0.
+- Focused transform payload runtime: compared 2 / total 2, passed 2, failed 0.
+
+Remaining nearby blockers:
+
+- `ftcolor.FT_Get_Paint.success_inserts_root_transform` and
+  `ftcolor.FT_Affine23.root_transform_values` still sit in the broader
+  `fonts/color/colr-v1-all-paints.ttf` bucket.  They should only move when that
+  shared all-paints fixture or an explicit manifest update gives those rows the
+  same maintained root-transform route.

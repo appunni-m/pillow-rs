@@ -790,6 +790,7 @@ void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);
 void FT_Outline_Translate(const FT_Outline* outline, FT_Pos xOffset, FT_Pos yOffset);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
+void FT_Set_Transform(FT_Face face, const FT_Matrix* matrix, const FT_Vector* delta);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);
 FT_Error FT_Select_Size(FT_Face face, FT_Int strike_index);
 FT_UInt FT_Get_Char_Index(FT_Face face, FT_ULong char_code);

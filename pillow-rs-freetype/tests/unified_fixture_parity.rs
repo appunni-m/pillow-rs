@@ -10895,6 +10895,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.get_gradient_paint_and_stops"
             | "ftcolor.get_colorline_stops"
             | "ftcolor.get_normalized_transform_paint"
+            | "ftcolor.get_root_transform_paint"
             | "ftcolor.get_solid_paint_and_palette"
             | "ftcolor.traverse_gradient_paints"
             | "ftcolor.traverse_color_paint_graph"
@@ -10904,7 +10905,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
         return false;
     }
     matches!(
-        case.case_id.as_str(),
+        case_id_base(&case.case_id),
         "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform"
             | "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract"
             | "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis"
@@ -10942,6 +10943,10 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
             | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
             | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
+            | "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
+            | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
+            | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
         && (case.case_id.ends_with(".paint_composite_runtime")
             || case.case_id.ends_with(".paint_composite_mode_runtime"))
@@ -11083,6 +11088,40 @@ fn get_paint_colorline_copy(
             wasm_abi::abi_support_colr_v1_paint_colorline(wasm_handle, opaque)
         }
     }
+}
+
+fn get_paint_transform_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_Transform_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_transform(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_transform(wasm_handle, opaque)
+        }
+    }
+}
+
+fn affine23_json(affine: FT_Affine23) -> Value {
+    json!({
+        "xx": affine.xx,
+        "xy": affine.xy,
+        "dx": affine.dx,
+        "yx": affine.yx,
+        "yy": affine.yy,
+        "dy": affine.dy,
+    })
+}
+
+fn paint_transform_json(transform: FT_PaintTransform) -> Value {
+    json!({
+        "paint": opaque_paint_json(transform.paint),
+        "affine": affine23_json(transform.affine),
+    })
 }
 
 fn colorline_stop_call_json(
@@ -11455,6 +11494,225 @@ fn color_colr_glyph_output_for_open_face(
     }))
 }
 
+#[derive(Clone, Copy)]
+struct ColorRootTransformSetup {
+    label: &'static str,
+    root_transform: FT_UInt,
+    matrix: FT_Matrix,
+    delta: FT_Vector,
+}
+
+fn color_root_transform_setup(name: &str, root_transform: FT_UInt) -> ColorRootTransformSetup {
+    let (matrix, delta) = match name {
+        "identity" => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 0,
+                yx: 0,
+                yy: 65_536,
+            },
+            FT_Vector { x: 0, y: 0 },
+        ),
+        _ => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 8_192,
+                yx: -4_096,
+                yy: 65_536,
+            },
+            FT_Vector { x: 96, y: -64 },
+        ),
+    };
+    ColorRootTransformSetup {
+        label: match name {
+            "identity" => "identity",
+            _ => "scale_translate",
+        },
+        root_transform,
+        matrix,
+        delta,
+    }
+}
+
+fn color_root_pixel_size(case: &InputCase) -> Result<(FT_UInt, FT_UInt), String> {
+    let pixel_size = case
+        .inputs
+        .params
+        .get("pixel_size")
+        .ok_or_else(|| format!("{} missing pixel_size", case.case_id))?;
+    let x = pixel_size
+        .get("x")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("{} missing pixel_size.x", case.case_id))?;
+    let y = pixel_size
+        .get("y")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("{} missing pixel_size.y", case.case_id))?;
+    Ok((
+        x.try_into().unwrap_or(FT_UInt::MAX),
+        y.try_into().unwrap_or(FT_UInt::MAX),
+    ))
+}
+
+fn apply_color_root_transform_setup(
+    backend: ColorPaintBackend,
+    rust_face: &mut Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    let size_error = match backend {
+        ColorPaintBackend::Rust => {
+            let Some(face) = rust_face.as_deref_mut() else {
+                return json!({"size_error": FT_Err_Invalid_Face_Handle, "set_transform": 0});
+            };
+            let error = FT_Set_Pixel_Sizes(face, pixel_size.0, pixel_size.1);
+            FT_Set_Transform(Some(face), Some(&setup.matrix), Some(&setup.delta));
+            error
+        }
+        ColorPaintBackend::CAbi => {
+            let error = c_abi::FT_Set_Pixel_Sizes(c_face, pixel_size.0, pixel_size.1);
+            let matrix = c_abi::FT_Matrix {
+                xx: setup.matrix.xx,
+                xy: setup.matrix.xy,
+                yx: setup.matrix.yx,
+                yy: setup.matrix.yy,
+            };
+            let delta = c_abi::FT_Vector {
+                x: setup.delta.x,
+                y: setup.delta.y,
+            };
+            c_abi::FT_Set_Transform(c_face, &matrix, &delta);
+            error
+        }
+        ColorPaintBackend::Wasm => {
+            let error =
+                wasm_abi::fontdone_wasm_set_pixel_sizes(wasm_handle, pixel_size.0, pixel_size.1);
+            wasm_abi::fontdone_wasm_set_transform(wasm_handle, &setup.matrix, &setup.delta);
+            error
+        }
+    };
+    json!({
+        "size_error": size_error,
+        "set_transform": {
+            "matrix": {
+                "xx": setup.matrix.xx,
+                "xy": setup.matrix.xy,
+                "yx": setup.matrix.yx,
+                "yy": setup.matrix.yy,
+            },
+            "delta": {
+                "x": setup.delta.x,
+                "y": setup.delta.y,
+            },
+        },
+    })
+}
+
+fn color_root_transform_row_json(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    let setup_json = apply_color_root_transform_setup(
+        backend,
+        &mut rust_face,
+        c_face,
+        wasm_handle,
+        pixel_size,
+        setup,
+    );
+    let rust_face_ref = rust_face.as_deref();
+    let (root_return, root_opaque) = color_paint_call(
+        backend,
+        rust_face_ref,
+        c_face,
+        wasm_handle,
+        36,
+        setup.root_transform,
+    );
+    let (paint_return, paint) =
+        get_paint_call(backend, rust_face_ref, c_face, wasm_handle, root_opaque);
+    let transform = if paint_return != 0 {
+        get_paint_transform_copy(backend, rust_face_ref, c_face, wasm_handle, root_opaque)
+            .map_or(Value::Null, paint_transform_json)
+    } else {
+        Value::Null
+    };
+    json!({
+        "label": setup.label,
+        "pixel_size": {
+            "x": pixel_size.0,
+            "y": pixel_size.1,
+        },
+        "setup": setup_json,
+        "root_transform": setup.root_transform,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(root_opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "transform": transform,
+        "root_paint": color_paint_node_json(backend, rust_face_ref, c_face, wasm_handle, root_opaque, 0),
+    })
+}
+
+fn color_root_transform_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let pixel_size = color_root_pixel_size(case)?;
+    let include = FT_COLOR_INCLUDE_ROOT_TRANSFORM as FT_UInt;
+    let no_root = FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt;
+    let rows = match case_id_base(&case.case_id) {
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime" => {
+            vec![color_root_transform_setup("scale_translate", include)]
+        }
+        "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime" => {
+            vec![color_root_transform_setup("scale_translate", no_root)]
+        }
+        "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint" => vec![
+            color_root_transform_setup("identity", include),
+            color_root_transform_setup("identity", no_root),
+            color_root_transform_setup("scale_translate", include),
+            color_root_transform_setup("scale_translate", no_root),
+        ],
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload" => {
+            vec![color_root_transform_setup("scale_translate", include)]
+        }
+        other => return Err(format!("unsupported COLRv1 root transform case {other}")),
+    };
+    let mut output_rows = Vec::with_capacity(rows.len());
+    for setup in rows {
+        let rust_face_for_row = rust_face.as_deref_mut();
+        output_rows.push(color_root_transform_row_json(
+            backend,
+            rust_face_for_row,
+            c_face,
+            wasm_handle,
+            pixel_size,
+            setup,
+        ));
+    }
+    Ok(ok(json!({ "rows": output_rows })))
+}
+
+fn color_root_transform_case(case_id: &str) -> bool {
+    matches!(
+        case_id_base(case_id),
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
+            | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
+            | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
+    )
+}
+
 fn color_transform_paint_row_json(
     backend: ColorPaintBackend,
     rust_face: Option<&FT_Face>,
@@ -11611,7 +11869,16 @@ fn color_static_gradient_output_for_open_face(
 }
 
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
-    let face = open_face(case)?;
+    let mut face = open_face(case)?;
+    if color_root_transform_case(&case.case_id) {
+        return color_root_transform_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&mut face),
+            ptr::null_mut(),
+            0,
+        );
+    }
     if case.operation == "ftcolor.get_paint_layers"
         || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
     {
@@ -11658,6 +11925,13 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_open_face(case)?;
+    if color_root_transform_case(&case.case_id) {
+        let output =
+            color_root_transform_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
     if case.operation == "ftcolor.get_paint_layers"
         || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
     {
@@ -11700,6 +11974,17 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
 
 fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let handle = wasm_open_face(case)?;
+    if color_root_transform_case(&case.case_id) {
+        let output = color_root_transform_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
     if case.operation == "ftcolor.get_paint_layers"
         || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
     {

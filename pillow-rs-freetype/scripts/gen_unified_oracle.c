@@ -14487,6 +14487,139 @@ static void print_colr_root_json(FT_Face face, FT_UInt base_glyph, FT_UInt root_
     printf("}");
 }
 
+static int case_base_matches(const char* case_id, const char* base) {
+    size_t len = strlen(base);
+    return strncmp(case_id, base, len) == 0 &&
+           (case_id[len] == '\0' || case_id[len] == '@');
+}
+
+static int color_root_case_ppem(const char* case_id) {
+    const char* variant = strchr(case_id, '@');
+    if (!variant) {
+        return 16;
+    }
+    if (streq(variant, "@s12")) {
+        return 12;
+    }
+    if (streq(variant, "@s16")) {
+        return 16;
+    }
+    if (streq(variant, "@s31")) {
+        return 31;
+    }
+    if (streq(variant, "@s48")) {
+        return 48;
+    }
+    return 16;
+}
+
+static void print_affine23_json(FT_Affine23 affine) {
+    printf("{\"xx\":%ld,\"xy\":%ld,\"dx\":%ld,\"yx\":%ld,\"yy\":%ld,\"dy\":%ld}",
+           (long)affine.xx,
+           (long)affine.xy,
+           (long)affine.dx,
+           (long)affine.yx,
+           (long)affine.yy,
+           (long)affine.dy);
+}
+
+static void print_paint_transform_json(FT_PaintTransform transform) {
+    printf("{\"paint\":");
+    print_opaque_paint_json(transform.paint);
+    printf(",\"affine\":");
+    print_affine23_json(transform.affine);
+    printf("}");
+}
+
+static void color_root_setup_values(const char* label, FT_Matrix* matrix, FT_Vector* delta) {
+    if (streq(label, "identity")) {
+        matrix->xx = 65536;
+        matrix->xy = 0;
+        matrix->yx = 0;
+        matrix->yy = 65536;
+        delta->x = 0;
+        delta->y = 0;
+        return;
+    }
+    matrix->xx = 65536;
+    matrix->xy = 8192;
+    matrix->yx = -4096;
+    matrix->yy = 65536;
+    delta->x = 96;
+    delta->y = -64;
+}
+
+static void print_colr_root_transform_row_json(FT_Face face,
+                                               const char* label,
+                                               int ppem,
+                                               FT_UInt root_transform) {
+    FT_Matrix matrix;
+    FT_Vector delta;
+    color_root_setup_values(label, &matrix, &delta);
+    FT_Error size_error = FT_Set_Pixel_Sizes(face, 0, (FT_UInt)ppem);
+    FT_Set_Transform(face, &matrix, &delta);
+
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, 36, root_transform, &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+
+    printf("{\"label\":\"%s\",\"pixel_size\":{\"x\":0,\"y\":%d},\"setup\":{\"size_error\":%d,\"set_transform\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":{\"x\":%ld,\"y\":%ld}}},\"root_transform\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           ppem,
+           size_error,
+           (long)matrix.xx,
+           (long)matrix.xy,
+           (long)matrix.yx,
+           (long)matrix.yy,
+           (long)delta.x,
+           (long)delta.y,
+           root_transform,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"paint_return\":%u,\"paint_format\":%d,\"transform\":", paint_return, paint.format);
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        print_paint_transform_json(paint.u.transform);
+    } else {
+        printf("null");
+    }
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static int is_colr_root_transform_case(const char* case_id) {
+    return case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
+           case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime") ||
+           case_base_matches(case_id, "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint") ||
+           case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload");
+}
+
+static int emit_colr_root_transform_case(const char* case_id, OracleFace* face) {
+    int ppem = color_root_case_ppem(case_id);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    if (case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
+        case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload")) {
+        print_colr_root_transform_row_json(face->face, "scale_translate", ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+    } else if (case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime")) {
+        print_colr_root_transform_row_json(face->face, "scale_translate", ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+    } else {
+        print_colr_root_transform_row_json(face->face, "identity", ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "identity", ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "scale_translate", ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "scale_translate", ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
     printf("{");
     print_status(0);
@@ -14657,6 +14790,11 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
     int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
     if (opened != 0) {
         return opened;
+    }
+    if (is_colr_root_transform_case(case_id)) {
+        int result = emit_colr_root_transform_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
     }
     if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
         streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration") ||

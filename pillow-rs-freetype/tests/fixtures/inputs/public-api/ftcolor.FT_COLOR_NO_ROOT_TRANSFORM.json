@@ -57,7 +57,7 @@
             "assets": {
               "font": {
                 "kind": "ref",
-                "id": "fonts/color/colr_v1_root_transform.ttf",
+                "id": "fonts/color/colr-v1-root-transform.ttf",
                 "asset_kind": "font"
               }
             },
@@ -80,7 +80,7 @@
             "assets": {
               "font": {
                 "kind": "ref",
-                "id": "fonts/color/colr_v1_root_transform.ttf",
+                "id": "fonts/color/colr-v1-root-transform.ttf",
                 "asset_kind": "font"
               }
             },

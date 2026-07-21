@@ -3327,7 +3327,7 @@ subjects:
         description: "Variants and implicit C enum values match the pinned public header: INCLUDE_ROOT_TRANSFORM=0, NO_ROOT_TRANSFORM=1, ROOT_TRANSFORM_MAX=2."
       - id: root_transform_controls_initial_paint
         description: FT_Get_Color_Glyph_Paint returns an initial FT_COLR_PAINTFORMAT_TRANSFORM paint only when FT_COLOR_INCLUDE_ROOT_TRANSFORM is requested and otherwise returns the font's root paint directly.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params base_glyph with COLR v1 graph, sizes 12px and 48px, FT_Set_Transform identity and non-identity, root_transform in {INCLUDE_ROOT_TRANSFORM, NO_ROOT_TRANSFORM}; expected output shape={FT_Bool, FT_OpaquePaint{p_nonnull, insert_root_transform}, first FT_COLR_Paint JSON with format, transform affine xx/xy/dx/yx/yy/dy when included, and nested paint reference}; comparison=exact C oracle bool, enum value, fixed-point affine fields, opaque null/non-null classification, and paint graph shape.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params base_glyph with COLR v1 graph, sizes 12px and 48px, FT_Set_Transform identity and non-identity, root_transform in {INCLUDE_ROOT_TRANSFORM, NO_ROOT_TRANSFORM}; expected output shape={FT_Bool, FT_OpaquePaint{p_nonnull, insert_root_transform}, first FT_COLR_Paint JSON with format, transform affine xx/xy/dx/yx/yy/dy when included, and nested paint reference}; comparison=exact C oracle bool, enum value, fixed-point affine fields, opaque null/non-null classification, and paint graph shape.
 
   - id: ftcolor.FT_Composite_Mode
     kind: enum
@@ -3375,7 +3375,7 @@ subjects:
         description: Implicit C enum value 0 matches the pinned public header.
       - id: include_transform_runtime
         description: FT_Get_Color_Glyph_Paint marks the returned opaque paint so FT_Get_Paint first yields a root FT_COLR_PAINTFORMAT_TRANSFORM node.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_INCLUDE_ROOT_TRANSFORM, sizes and FT_Set_Transform values covering scale and translation; expected output shape={FT_Bool, first_paint:{format:TRANSFORM, affine:{xx,xy,dx,yx,yy,dy}, child_ref}}; comparison=exact C oracle bool, enum value 0, 16.16 affine fields, and nested paint reference.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_INCLUDE_ROOT_TRANSFORM, sizes and FT_Set_Transform values covering scale and translation; expected output shape={FT_Bool, first_paint:{format:TRANSFORM, affine:{xx,xy,dx,yx,yy,dy}, child_ref}}; comparison=exact C oracle bool, enum value 0, 16.16 affine fields, and nested paint reference.
 
   - id: ftcolor.FT_COLOR_NO_ROOT_TRANSFORM
     kind: enum_variant
@@ -3387,7 +3387,7 @@ subjects:
         description: Implicit C enum value 1 matches the pinned public header.
       - id: omit_transform_runtime
         description: FT_Get_Color_Glyph_Paint returns the font's root paint without an inserted root transform when this variant is used.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_NO_ROOT_TRANSFORM with same base glyph, size, and transform matrix as include-transform case; expected output shape={FT_Bool, first_paint:{format:not inserted TRANSFORM unless font root itself is transform, payload_by_format}}; comparison=exact C oracle bool, enum value 1, first paint format/payload, and absence of synthetic root transform.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_NO_ROOT_TRANSFORM with same base glyph, size, and transform matrix as include-transform case; expected output shape={FT_Bool, first_paint:{format:not inserted TRANSFORM unless font root itself is transform, payload_by_format}}; comparison=exact C oracle bool, enum value 1, first paint format/payload, and absence of synthetic root transform.
 
   - id: ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX
     kind: enum_variant
@@ -3399,7 +3399,7 @@ subjects:
         description: Implicit C enum value 2 matches the pinned public header.
       - id: invalid_runtime_behavior
         description: Passing the sentinel as root_transform to FT_Get_Color_Glyph_Paint matches C FreeType's failure and output preservation behavior.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_ROOT_TRANSFORM_MAX and output FT_OpaquePaint initialized with sentinels; expected output shape={FT_Bool, FT_OpaquePaint before/after null/non-null and insert_root_transform fields}; comparison=exact C oracle bool, enum value 2, and output write/preservation behavior.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_ROOT_TRANSFORM_MAX and output FT_OpaquePaint initialized with sentinels; expected output shape={FT_Bool, FT_OpaquePaint before/after null/non-null and insert_root_transform fields}; comparison=exact C oracle bool, enum value 2, and output write/preservation behavior.
 
   - id: ftcolor.FT_COLR_COMPOSITE_CLEAR
     kind: enum_variant
