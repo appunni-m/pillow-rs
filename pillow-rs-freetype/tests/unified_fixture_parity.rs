@@ -24867,6 +24867,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_ulong_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.cmap_cache_lookup" if !case.expect_error && cmap_cache_indexes(params).is_ok() => {
+            let mut args = vec!["--cmap-cache-lookup".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(cmap_cache_scenario(params)?);
+            args.push(cmap_cache_indexes_arg(params)?);
+            args.push(cmap_cache_char_code(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.manager_reset" => {
             if manager_param_is_null(params) {
                 return Ok(vec!["--manager-reset-null".to_string()]);
@@ -25881,6 +25889,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             rust_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.cmap_cache_lookup"
+            if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
+        {
+            rust_cmap_cache_lookup(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -26927,6 +26940,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.cmap_cache_lookup"
+            if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
+        {
+            c_cmap_cache_lookup(case)
+        }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
             c_outline_orientation_runtime_output(case)
@@ -27801,6 +27819,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             wasm_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.cmap_cache_lookup"
+            if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
+        {
+            wasm_cmap_cache_lookup(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -29424,6 +29447,343 @@ fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     });
     wasm_done_face(handle);
     output
+}
+
+fn rust_cmap_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut state = RustCmapCacheState {
+        bytes,
+        face: None,
+        requester_count: 0,
+    };
+    cmap_cache_lookup_output(
+        &case.inputs.params,
+        |state_change, cmap_index, char_code| {
+            match state_change {
+                CmapCacheStateChange::RemoveFaceId | CmapCacheStateChange::Reset => {
+                    state.face = None;
+                }
+                CmapCacheStateChange::None => {}
+            }
+            if state.face.is_none() {
+                state.requester_count += 1;
+                state.face = Some(rust_new_face_from_bytes(state.bytes.as_ref(), 0)?);
+            }
+            let face = state
+                .face
+                .as_mut()
+                .ok_or_else(|| "missing rust cmap cache face".to_string())?;
+            let glyph_index = rust_cmap_cache_lookup_glyph(face, cmap_index, char_code)?;
+            Ok((
+                glyph_index,
+                state.requester_count,
+                rust_face_active_charmap_index(face),
+            ))
+        },
+    )
+}
+
+fn c_cmap_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut state = CCmapCacheState {
+        bytes,
+        library: std::ptr::null_mut(),
+        face: std::ptr::null_mut(),
+        requester_count: 0,
+    };
+    let output = cmap_cache_lookup_output(
+        &case.inputs.params,
+        |state_change, cmap_index, char_code| {
+            match state_change {
+                CmapCacheStateChange::RemoveFaceId | CmapCacheStateChange::Reset => {
+                    if !state.face.is_null() {
+                        c_done_face(state.face);
+                        state.face = std::ptr::null_mut();
+                    }
+                    if !state.library.is_null() {
+                        c_done_library(state.library);
+                        state.library = std::ptr::null_mut();
+                    }
+                }
+                CmapCacheStateChange::None => {}
+            }
+            if state.face.is_null() {
+                state.requester_count += 1;
+                let (library, face) = c_new_face_from_bytes(state.bytes.as_ref(), 0)?;
+                state.library = library;
+                state.face = face;
+            }
+            let glyph_index = c_cmap_cache_lookup_glyph(state.face, cmap_index, char_code)?;
+            let active = c_abi::abi_active_charmap_index(state.face).unwrap_or(-1);
+            Ok((glyph_index, state.requester_count, active))
+        },
+    );
+    if !state.face.is_null() {
+        c_done_face(state.face);
+    }
+    if !state.library.is_null() {
+        c_done_library(state.library);
+    }
+    output
+}
+
+fn wasm_cmap_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut state = WasmCmapCacheState {
+        bytes,
+        handle: 0,
+        requester_count: 0,
+    };
+    let output = cmap_cache_lookup_output(
+        &case.inputs.params,
+        |state_change, cmap_index, char_code| {
+            match state_change {
+                CmapCacheStateChange::RemoveFaceId | CmapCacheStateChange::Reset => {
+                    if state.handle != 0 {
+                        wasm_done_face(state.handle);
+                        state.handle = 0;
+                    }
+                }
+                CmapCacheStateChange::None => {}
+            }
+            if state.handle == 0 {
+                state.requester_count += 1;
+                state.handle = wasm_new_face_from_bytes(state.bytes.as_ref(), 0)?;
+            }
+            let glyph_index = wasm_cmap_cache_lookup_glyph(state.handle, cmap_index, char_code)?;
+            let active = wasm_abi::fontdone_wasm_get_active_charmap_index(state.handle);
+            Ok((glyph_index, state.requester_count, active))
+        },
+    );
+    if state.handle != 0 {
+        wasm_done_face(state.handle);
+    }
+    output
+}
+
+struct RustCmapCacheState {
+    bytes: Arc<[u8]>,
+    face: Option<FT_Face>,
+    requester_count: i32,
+}
+
+struct CCmapCacheState {
+    bytes: Arc<[u8]>,
+    library: c_abi::FT_Library,
+    face: c_abi::FT_Face,
+    requester_count: i32,
+}
+
+struct WasmCmapCacheState {
+    bytes: Arc<[u8]>,
+    handle: usize,
+    requester_count: i32,
+}
+
+#[derive(Clone, Copy)]
+enum CmapCacheStateChange {
+    None,
+    RemoveFaceId,
+    Reset,
+}
+
+fn cmap_cache_lookup_output(
+    params: &Value,
+    mut lookup: impl FnMut(CmapCacheStateChange, i32, FT_UInt32) -> Result<(FT_UInt, i32, i32), String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(params)?;
+    let indexes = cmap_cache_indexes(params)?;
+    let char_code = cmap_cache_char_code(params)?;
+    let repeat_lookup = scenario.contains("repeat")
+        || scenario.contains("planned_cache")
+        || scenario.contains("miss")
+        || scenario.contains("negative");
+    let lifecycle = scenario.contains("lifecycle");
+    let mut rows = Vec::with_capacity(indexes.len());
+    let mut requester_count = 0;
+    for cmap_index in indexes {
+        let before = requester_count;
+        let (first, after_first, active_after_first) =
+            lookup(CmapCacheStateChange::None, cmap_index, char_code)?;
+        requester_count = after_first;
+        let (repeat, after_repeat, active_after_repeat) = if repeat_lookup {
+            lookup(CmapCacheStateChange::None, cmap_index, char_code)?
+        } else {
+            (0, requester_count, active_after_first)
+        };
+        requester_count = after_repeat;
+        let (after_remove, after_remove_count, active_after_remove) = if lifecycle {
+            lookup(CmapCacheStateChange::RemoveFaceId, cmap_index, char_code)?
+        } else {
+            (0, requester_count, active_after_repeat)
+        };
+        requester_count = after_remove_count;
+        let (after_reset, after_reset_count, active_after_reset) = if lifecycle {
+            lookup(CmapCacheStateChange::Reset, cmap_index, char_code)?
+        } else {
+            (0, requester_count, active_after_remove)
+        };
+        requester_count = after_reset_count;
+        rows.push(json!({
+            "cmap_index": cmap_index,
+            "char_code": char_code,
+            "requester_count_before": before,
+            "first": first,
+            "requester_count_after_first": after_first,
+            "repeat": repeat,
+            "requester_count_after_repeat": after_repeat,
+            "after_remove": after_remove,
+            "requester_count_after_remove": after_remove_count,
+            "after_reset": after_reset,
+            "requester_count_after_reset": after_reset_count,
+            "active_charmap_after": active_after_reset
+        }));
+    }
+    Ok(ok(json!({
+        "scenario": scenario,
+        "rows": rows,
+        "requester_count_final": requester_count
+    })))
+}
+
+fn cmap_cache_scenario(params: &Value) -> Result<String, String> {
+    string_param(params, "scenario").map(str::to_string)
+}
+
+fn cmap_cache_indexes(params: &Value) -> Result<Vec<i32>, String> {
+    array_param(params, "cmap_indexes")?
+        .iter()
+        .map(|value| {
+            i32::try_from(i64_value(value, "cmap_indexes[]")?).map_err(|err| err.to_string())
+        })
+        .collect()
+}
+
+fn cmap_cache_indexes_arg(params: &Value) -> Result<String, String> {
+    Ok(cmap_cache_indexes(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn cmap_cache_char_code(params: &Value) -> Result<FT_UInt32, String> {
+    u32_value(
+        params
+            .get("char_code")
+            .ok_or_else(|| "missing char_code".to_string())?,
+        "char_code",
+    )
+}
+
+fn rust_cmap_cache_lookup_glyph(
+    face: &mut FT_Face,
+    cmap_index: i32,
+    char_code: FT_UInt32,
+) -> Result<FT_UInt, String> {
+    // C `FTC_CMapCache_Lookup` normalizes negative cmap indexes for hashing
+    // but deliberately does not change `face->charmap`; non-negative indexes
+    // temporarily select `face->charmaps[cmap_index]` and restore the old
+    // charmap before returning (`src/cache/ftccmap.c:230-323`).
+    if cmap_index < 0 {
+        return Ok(FT_Get_Char_Index(face, FT_ULong::from(char_code)));
+    }
+    let Ok(index) = usize::try_from(cmap_index) else {
+        return Ok(0);
+    };
+    if index >= face.charmaps.len() {
+        return Ok(0);
+    }
+    let old_index = rust_face_active_charmap_index(face);
+    let charmap = rust_face_charmap(face, u32::try_from(index).map_err(|err| err.to_string())?);
+    let err = FT_Set_Charmap(Some(face), charmap);
+    if err != FT_Err_Ok {
+        return Ok(0);
+    }
+    let glyph = FT_Get_Char_Index(face, FT_ULong::from(char_code));
+    if old_index >= 0 {
+        let old = rust_face_charmap(
+            face,
+            u32::try_from(old_index).map_err(|err| err.to_string())?,
+        );
+        let restore_err = FT_Set_Charmap(Some(face), old);
+        if restore_err != FT_Err_Ok {
+            return Err(format!("FT_Set_Charmap restore returned {restore_err}"));
+        }
+    }
+    Ok(glyph)
+}
+
+fn c_cmap_cache_lookup_glyph(
+    face: c_abi::FT_Face,
+    cmap_index: i32,
+    char_code: FT_UInt32,
+) -> Result<FT_UInt, String> {
+    if cmap_index < 0 {
+        return Ok(c_abi::FT_Get_Char_Index(face, FT_ULong::from(char_code)));
+    }
+    let Ok(index) = u32::try_from(cmap_index) else {
+        return Ok(0);
+    };
+    let Some(charmap) = c_abi::abi_charmap_by_index(face, index) else {
+        return Ok(0);
+    };
+    let old_index = c_abi::abi_active_charmap_index(face).unwrap_or(-1);
+    let err = c_abi::FT_Set_Charmap(face, charmap);
+    if err != FT_Err_Ok {
+        return Ok(0);
+    }
+    let glyph = c_abi::FT_Get_Char_Index(face, FT_ULong::from(char_code));
+    if old_index >= 0 {
+        let Some(old) = c_abi::abi_charmap_by_index(
+            face,
+            u32::try_from(old_index).map_err(|err| err.to_string())?,
+        ) else {
+            return Err("missing c old charmap".to_string());
+        };
+        let restore_err = c_abi::FT_Set_Charmap(face, old);
+        if restore_err != FT_Err_Ok {
+            return Err(format!("FT_Set_Charmap restore returned {restore_err}"));
+        }
+    }
+    Ok(glyph)
+}
+
+fn wasm_cmap_cache_lookup_glyph(
+    handle: usize,
+    cmap_index: i32,
+    char_code: FT_UInt32,
+) -> Result<FT_UInt, String> {
+    if cmap_index < 0 {
+        return Ok(wasm_abi::fontdone_wasm_get_char_index(
+            handle,
+            FT_ULong::from(char_code),
+        ));
+    }
+    let Ok(index) = u32::try_from(cmap_index) else {
+        return Ok(0);
+    };
+    if index >= wasm_abi::fontdone_wasm_get_charmap_count(handle) {
+        return Ok(0);
+    }
+    let old_index = wasm_abi::fontdone_wasm_get_active_charmap_index(handle);
+    let err = wasm_abi::fontdone_wasm_set_charmap(handle, index);
+    if err != FT_Err_Ok {
+        return Ok(0);
+    }
+    let glyph = wasm_abi::fontdone_wasm_get_char_index(handle, FT_ULong::from(char_code));
+    if old_index >= 0 {
+        let restore_err = wasm_abi::fontdone_wasm_set_charmap(
+            handle,
+            u32::try_from(old_index).map_err(|err| err.to_string())?,
+        );
+        if restore_err != FT_Err_Ok {
+            return Err(format!(
+                "fontdone_wasm_set_charmap restore returned {restore_err}"
+            ));
+        }
+    }
+    Ok(glyph)
 }
 
 fn render_loaded_glyph_normal(slot: FT_GlyphSlot) -> Result<FT_GlyphSlot, FT_Error> {
