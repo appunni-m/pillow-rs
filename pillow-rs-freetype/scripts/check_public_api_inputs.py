@@ -3881,11 +3881,25 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
         if value.get("status") == "required_future_asset":
             return f"{label} is marked required_future_asset"
         return None
-    if not (FIXTURE_DIR / reference).is_file():
+    if not fixture_reference_exists(reference):
         if value.get("status") == "required_future_asset":
             return f"{label} is marked required_future_asset"
         return f"{label} references missing fixture {reference}"
     return None
+
+
+def fixture_reference_exists(reference: str) -> bool:
+    if (FIXTURE_DIR / reference).is_file():
+        return True
+    aliases = {
+        # Public input manifests preserve the historical logical fixture id.
+        # The maintained BDF runtime asset lives under tests/fixtures/input.
+        "fonts/bdf/properties-atoms-integers-cardinals.bdf": (
+            "input/fonts/bdf/properties-atoms-integers-cardinals.bdf"
+        ),
+    }
+    alias = aliases.get(reference)
+    return alias is not None and (FIXTURE_DIR / alias).is_file()
 
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
@@ -3911,19 +3925,25 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         )
     if row.operation == "ftbdf.get_bdf_property":
         if row.case_id in {
+            "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties",
             "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
             "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
             "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
         }:
             return None
+        unresolved = unresolved_assets_reason(row)
+        if unresolved:
+            return (
+                f"{unresolved}; FT_Get_BDF_Property cannot count as real "
+                "parity until the same input is available to pinned C, Rust "
+                "FFI, C ABI, and WASM ABI"
+            )
         return (
             "FT_Get_BDF_Property exact-error rows have a maintained native "
             "oracle and Rust FFI/C ABI/WASM ABI route, but this success row is "
-            "still unresolved; the current BDF success fixture is contradicted "
-            "by pinned FreeType because FAMILY_NAME returns Invalid_Argument "
-            "and PIXEL_SIZE returns INTEGER, not CARDINAL, and PCF/SFNT-BDF "
-            "success assets remain unavailable. Classifying this BDF property "
-            "success output as real parity would be a green placeholder"
+            "still unresolved; PCF/SFNT-BDF success assets remain unavailable. "
+            "Classifying this BDF property success output as real parity would "
+            "be a green placeholder"
         )
     if not operation_is_real_parity(row.operation):
         return None
@@ -4418,6 +4438,17 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "Type1 MM FontInfo underline blend dictionary presence and public "
             "FT_Get_PS_Font_Info field output validate through pinned C oracle, "
             "Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftbdf.get_bdf_property"
+        and row.case_id
+        == "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_BDF_Property BDF property rowset validates actual pinned C "
+            "FAMILY_NAME missing-property behavior and POINT_SIZE/PIXEL_SIZE "
+            "integer outputs through Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_value"

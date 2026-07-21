@@ -14197,7 +14197,25 @@ static void print_bdf_property_after(const BDF_PropertyRec* property) {
     } else {
         printf("null");
     }
-    printf(",\"integer\":%d,\"cardinal\":%u}", property->u.integer, property->u.cardinal);
+    printf(",\"integer\":");
+    if (property->type == BDF_PROPERTY_TYPE_INTEGER) {
+        printf("%d", property->u.integer);
+    } else if (property->type != BDF_PROPERTY_TYPE_ATOM &&
+               property->type != BDF_PROPERTY_TYPE_CARDINAL) {
+        printf("%d", property->u.integer);
+    } else {
+        printf("null");
+    }
+    printf(",\"cardinal\":");
+    if (property->type == BDF_PROPERTY_TYPE_CARDINAL) {
+        printf("%u", property->u.cardinal);
+    } else if (property->type != BDF_PROPERTY_TYPE_ATOM &&
+               property->type != BDF_PROPERTY_TYPE_INTEGER) {
+        printf("%u", property->u.cardinal);
+    } else {
+        printf("null");
+    }
+    printf("}");
 }
 
 static BDF_PropertyRec bdf_property_sentinel(void) {
@@ -14230,6 +14248,24 @@ static int emit_bdf_property_case(int argc, char** argv) {
         printf("{\"variant\":\"face\",\"error\":%d,\"property_after\":", null_face_error);
         print_bdf_property_after(&null_face_property);
         printf("},{\"variant\":\"aproperty\",\"error\":%d,\"property_after\":null}", null_output_error);
+        printf("]}}\n");
+        close_oracle_face(&face);
+        return 0;
+    }
+
+    if (streq(case_id, "ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties")) {
+        const char* names[] = {"FAMILY_NAME", "POINT_SIZE", "PIXEL_SIZE"};
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"rows\":[");
+        for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+            BDF_PropertyRec property = bdf_property_sentinel();
+            FT_Error error = FT_Get_BDF_Property(face.face, names[i], &property);
+            if (i) printf(",");
+            printf("{\"property_name\":\"%s\",\"error\":%d,\"property_after\":", names[i], error);
+            print_bdf_property_after(&property);
+            printf("}");
+        }
         printf("]}}\n");
         close_oracle_face(&face);
         return 0;
