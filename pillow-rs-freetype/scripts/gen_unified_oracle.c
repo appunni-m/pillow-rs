@@ -6466,6 +6466,47 @@ static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     return 0;
 }
 
+static FT_Error cache_no_lookup_requester(FTC_FaceID face_id,
+                                          FT_Library library,
+                                          FT_Pointer req_data,
+                                          FT_Face* aface) {
+    (void)face_id;
+    (void)library;
+    (void)req_data;
+    (void)aface;
+    return FT_Err_Invalid_Argument;
+}
+
+static int emit_sbit_cache_new_success(void) {
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cache_no_lookup_requester,
+                                             NULL,
+                                             &manager);
+    FTC_SBitCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_SBitCache_New(manager, &cache);
+    printf("{");
+    print_status(cache_error);
+    printf(",\"output\":{\"manager_status\":%d,\"acache\":{\"nullness\":\"%s\","
+           "\"owner_identity_class\":\"manager\"},\"manager_done_called\":true}}\n",
+           manager_error,
+           cache ? "non_null" : "null");
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 typedef struct CMapCacheRequesterData_ {
     unsigned char* data;
     long data_len;
@@ -21350,6 +21391,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--sbit-cache-new-success")) {
+        return emit_sbit_cache_new_success();
     }
     if (argc == 8 && streq(argv[1], "--image-cache-lookup-scaler")) {
         return emit_image_cache_lookup_scaler(argc, argv);

@@ -5599,6 +5599,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FTC_SBitCache_New invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcache.sbit_cache_new"
+        and row.case_id == "ftcache.FTC_SBitCache_New.creates_manager_owned_cache"
+    ):
+        return "FTC_SBitCache_New successful manager-owned SBit cache handle creation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftbzip2.stream_open_bzip2"
         and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
     ):

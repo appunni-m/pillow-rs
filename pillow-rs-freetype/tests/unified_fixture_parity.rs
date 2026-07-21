@@ -24891,6 +24891,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_ulong_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.sbit_cache_new" if !case.expect_error => {
+            Ok(vec!["--sbit-cache-new-success".to_string()])
+        }
         "ftcache.cmap_cache_lookup" if !case.expect_error && cmap_cache_indexes(params).is_ok() => {
             let mut args = vec!["--cmap-cache-lookup".to_string()];
             push_font_source(case, &mut args)?;
@@ -25979,6 +25982,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => rust_image_cache_lookup(case),
+        "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.cmap_cache_new" if !case.expect_error => rust_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => rust_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
@@ -27050,6 +27054,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => c_image_cache_lookup(case),
+        "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.cmap_cache_new" if !case.expect_error => c_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => c_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
@@ -27951,6 +27956,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => wasm_image_cache_lookup(case),
+        "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.cmap_cache_new" if !case.expect_error => wasm_cmap_cache_new(case),
         "ftcache.image_cache_new" if !case.expect_error => wasm_image_cache_new(case),
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
@@ -30728,6 +30734,17 @@ fn image_cache_new_output(
         "destroyed_by_manager_done": true,
         "lookup": Value::Object(lookup)
     })))
+}
+
+fn sbit_cache_new_success_output() -> RunOutput {
+    ok(json!({
+        "manager_status": FT_Err_Ok,
+        "acache": {
+            "nullness": "non_null",
+            "owner_identity_class": "manager"
+        },
+        "manager_done_called": true
+    }))
 }
 
 #[derive(Clone, Copy)]
