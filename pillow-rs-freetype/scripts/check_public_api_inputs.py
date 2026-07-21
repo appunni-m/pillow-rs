@@ -6751,10 +6751,7 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
         return ("real-parity", done_mm_var_real_reason)
     wrapper_null_reason = wrapper_null_validation_reason(row)
     if wrapper_null_reason:
-        return (
-            "pending-route",
-            f"{wrapper_null_reason}; full same-input public C/Rust/C-ABI/WASM parity route is still required",
-        )
+        return ("real-null-validation", wrapper_null_reason)
     raw_slot_null_reason = raw_slot_null_validation_reason(row)
     if raw_slot_null_reason:
         return ("real-parity", raw_slot_null_reason)

@@ -70,6 +70,29 @@ Result at current outline route: `runtime_parity: passed=4 failed=0 total=4`;
 `runtime_cases: runnable=4 pending=1`, with the single pending row being
 `ftglyph.FT_Glyph_Transform.success_svg_transform_accumulates`.
 
+### Issue Set Current: FT_Get_SubGlyph_Info null-output wrapper validation
+
+Status: completed on 2026-07-21 as `real-null-validation`, not real parity.
+
+Implemented validation row:
+
+- `freetype.FT_Get_SubGlyph_Info.error_null_outputs`
+
+Finding:
+
+- Pinned FreeType 2.14.3's public `FT_Get_SubGlyph_Info` expects all output
+  pointers to be valid for a valid glyph slot; calling native C with one of
+  those outputs null dereferences through the implementation instead of
+  returning a portable `FT_Error`.
+- The maintained harness therefore proves only the safe wrapper policy for
+  Rust FFI, thin C ABI, and WASM ABI after the same subglyph is proven
+  native-C-callable with non-null outputs. Counting this row as `real-parity`
+  would be a green placeholder because there is no safe same-input native C
+  output to compare.
+- The audit now classifies this row as `real-null-validation`, keeping it
+  separate from `real-parity` while removing it from the unresolved
+  `pending-route` ledger.
+
 ### Issue Set Current: FT module interface requester route
 
 Status: completed on 2026-07-21 for the public `FT_Module_Interface` requester
