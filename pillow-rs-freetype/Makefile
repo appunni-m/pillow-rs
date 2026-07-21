@@ -62,6 +62,7 @@ help:
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make api-abi-check    Check manifest/input routing and thin FFI ABI surfaces\n"
 	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
+	@printf "  make route-buckets    Group pending routes by operation/input hash for batch planning\n"
 	@printf "  make real-parity-verify Run parity, route audit, FFI gates, fmt, and clippy\n"
 	@printf "  make scaler-parity-focused Run the exact public FT_Load_Glyph vertical-flags bucket\n"
 	@printf "  make scaler-condition-coverage Run full condition coverage into scaler-owned artifacts\n"
@@ -299,6 +300,10 @@ api-abi-check: api-abi-audit
 
 .PHONY: route-audit
 route-audit: api-abi-check
+
+.PHONY: route-buckets
+route-buckets: route-audit
+	$(PYTHON) scripts/report_pending_route_buckets.py
 
 .PHONY: font-fixture-hinter
 font-fixture-hinter:
