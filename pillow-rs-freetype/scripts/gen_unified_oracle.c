@@ -6607,6 +6607,140 @@ static int emit_image_type_descriptor_lifetime(int argc, char** argv) {
     return 0;
 }
 
+static void print_image_type_lookup_result(FT_Error error,
+                                           const ImageGlyphSnapshot* image_snapshot,
+                                           const SBitSnapshot* sbit_snapshot,
+                                           const char* payload_kind) {
+    printf("{\"status\":%d,\"error\":%d,", error, error);
+    if (streq(payload_kind, "image")) {
+        print_image_glyph_snapshot_object(image_snapshot);
+    } else {
+        printf("\"sbit\":");
+        print_ftc_sbit_snapshot_fields(sbit_snapshot);
+        printf(",\"node\":{\"locked\":false}");
+    }
+    printf("}");
+}
+
+static int emit_image_type_lookup_probe(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong flags = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache image_cache = NULL;
+    FT_Error image_cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &image_cache);
+    FTC_SBitCache sbit_cache = NULL;
+    FT_Error sbit_cache_error = image_cache_error ? image_cache_error : FTC_SBitCache_New(manager, &sbit_cache);
+    if (sbit_cache_error) {
+        printf("{");
+        print_status(sbit_cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = width;
+    image_type.height = height;
+    image_type.flags = (FT_Int32)flags;
+
+    FT_Glyph glyph = NULL;
+    FTC_Node image_node = NULL;
+    FT_Error image_error = FTC_ImageCache_Lookup(image_cache, &image_type, glyph_index, &glyph, &image_node);
+    ImageGlyphSnapshot image_snapshot = snapshot_image_glyph(image_error ? NULL : glyph);
+
+    FTC_SBit sbit = NULL;
+    FTC_Node sbit_node = NULL;
+    FT_Error sbit_error = FTC_SBitCache_Lookup(sbit_cache, &image_type, glyph_index, &sbit, &sbit_node);
+    SBitSnapshot sbit_snapshot;
+    if (snapshot_ftc_sbit(sbit_error ? NULL : sbit, &sbit_snapshot) != 0) {
+        if (image_node) {
+            FTC_Node_Unref(image_node, manager);
+        }
+        if (sbit_node) {
+            FTC_Node_Unref(sbit_node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        return 1;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":0,\"effective_query\":{\"face_id_identity\":\"stable_pointer\","
+           "\"width\":%u,\"height\":%u,\"flags\":%ld,\"glyph_index\":%u},",
+           width,
+           height,
+           (long)(FT_Int32)flags,
+           glyph_index);
+    printf("\"result_metrics\":{\"image\":");
+    print_image_type_lookup_result(image_error, &image_snapshot, &sbit_snapshot, "image");
+    printf(",\"sbit\":");
+    print_image_type_lookup_result(sbit_error, &image_snapshot, &sbit_snapshot, "sbit");
+    printf("}}}\n");
+
+    free_sbit_snapshot(&sbit_snapshot);
+    if (image_node) {
+        FTC_Node_Unref(image_node, manager);
+    }
+    if (sbit_node) {
+        FTC_Node_Unref(sbit_node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -21993,6 +22127,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 9 && streq(argv[1], "--image-type-descriptor-lifetime")) {
         return emit_image_type_descriptor_lifetime(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--image-type-lookup-probe")) {
+        return emit_image_type_lookup_probe(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);
