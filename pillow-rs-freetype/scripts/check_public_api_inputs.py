@@ -4997,6 +4997,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays",
         ): "FT_Done_Glyph outline-glyph ownership validates a real FT_Get_Glyph outline, owned outline flags/counts before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",
+        ): "FT_Done_Glyph bitmap-glyph ownership validates a real FT_Get_Glyph bitmap, owned bitmap buffer fields before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
         ): "FT_Outline_Copy invalid-pointer/size mismatch error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

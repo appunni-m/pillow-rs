@@ -1796,3 +1796,43 @@ Rows deliberately left pending in the same surface:
   pending for the `FT_Glyph_To_Bitmap outline` path.
 - `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` still needs a destruction and
   ownership-event route.
+
+### Split FT_BitmapGlyphRec FT_Get_Glyph bitmap ownership row: 2026-07-22
+
+Status: implemented as an additive split row; the original broad ownership row
+remains pending.
+
+Scope:
+
+- Added `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap`.
+- Added a pinned-C `--done-glyph-bitmap` oracle command that creates a real
+  `FT_BitmapGlyph` through `FT_Get_Glyph`, records the bitmap glyph payload
+  before destruction, then calls `FT_Done_Glyph` exactly once.
+- Added Rust FFI, C ABI, and WASM ABI runners that perform the same operation
+  on the maintained bitmap strike font/glyph and compare:
+  created glyph nullness, creation error, format before done, bitmap buffer
+  owner class, bitmap descriptor before done, and public release event string.
+
+Why this is split instead of promoting the older broad row:
+
+- `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` declares both
+  `FT_Get_Glyph bitmap` and `FT_Glyph_To_Bitmap outline` creation paths.
+- The split row proves only the `FT_Get_Glyph bitmap` ownership path.  Counting
+  it as the broad row would hide the unresolved `FT_Glyph_To_Bitmap outline`
+  ownership path.
+
+Observed impact:
+
+- Route audit: `concrete_cases` 7243 → 7244, `real-parity` 4731 → 4732,
+  `pending-route` remains 237 because the original broad row is still pending.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer` remains pending for the
+  `FT_Glyph_To_Bitmap outline` ownership path.
+- `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` and
+  `ftglyph.FT_Glyph.caller_owned_lifetime` still require broader
+  outline/bitmap/SVG and creation-path lifecycle matrices.
