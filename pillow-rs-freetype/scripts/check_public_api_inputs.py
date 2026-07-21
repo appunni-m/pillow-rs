@@ -453,6 +453,7 @@ REAL_PARITY_OPERATIONS = {
     "ftglyph.get_glyph",
     "ftglyph.glyph_copy",
     "ftglyph.record_inspect",
+    "ftglyph.type_runtime",
     "ftbitmap.bitmap_blend",
     "ftbitmap.bitmap_convert",
     "ftbitmap.bitmap_copy",
@@ -3453,11 +3454,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "synthetic renderer registration route where pinned C accepts the "
             "format, initializes the glyph class payload, and exposes matching "
             "root fields and ownership across Rust FFI, C ABI, and WASM ABI"
-        ),
-        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record": (
-            "FT_OutlineGlyph alias parity needs a maintained FT_Get_Glyph route "
-            "for real outline glyphs that compares the root record and "
-            "FT_OutlineGlyphRec outline arrays after cast across all ABI lanes"
         ),
         "ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled": (
             "FT_SvgGlyph alias parity needs an SVG-enabled fixture where "

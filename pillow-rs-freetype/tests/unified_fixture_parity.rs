@@ -992,6 +992,20 @@ fn glyph_record_runtime_supported(case: &InputCase) -> bool {
         && load_flags_param(&case.inputs.params).is_ok()
 }
 
+fn ftglyph_type_runtime_supported(case: &InputCase) -> bool {
+    case.case_id == "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record"
+        && !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && case
+            .inputs
+            .params
+            .get("format_filter")
+            .and_then(Value::as_str)
+            .is_some_and(|format| format == "FT_GLYPH_FORMAT_OUTLINE")
+}
+
 fn sbit_cache_runtime_supported(case: &InputCase) -> bool {
     !case.expect_error
         && has_runtime_font_source(case)
@@ -27897,6 +27911,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(glyph_transform_specs_arg(params)?);
             Ok(args)
         }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            let mut args = vec!["--glyph-transform".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
+            args.push(load_flags_param(params)?.to_string());
+            args.push("null/null".to_string());
+            Ok(args)
+        }
         "ftglyph.glyph_to_bitmap" => {
             if case.case_id
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
@@ -29144,6 +29167,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_glyph_transform(case)
         }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            rust_outline_glyph_alias(case)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
@@ -30234,6 +30260,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_glyph_transform(case)
         }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            c_outline_glyph_alias(case)
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
             let output = c_outline_operation(face, case);
@@ -31192,6 +31221,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             ) =>
         {
             wasm_glyph_transform(case)
+        }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            wasm_outline_glyph_alias(case)
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -32509,6 +32541,107 @@ fn glyph_transform_row_json(
 
 fn glyph_transform_output(rows: Vec<Value>) -> RunOutput {
     ok(json!({ "rows": rows }))
+}
+
+fn ftglyph_type_runtime_glyph_index(params: &Value) -> Result<u32, String> {
+    params
+        .get("glyph_index")
+        .map_or(Ok(36), |value| u32_value(value, "glyph_index"))
+}
+
+fn rust_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let row = match FT_Load_Glyph(&face, glyph_index, load_flags) {
+        Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let mut cbox = FT_BBox::default();
+                FT_Outline_Glyph_CBox(Some(&glyph), 0, Some(&mut cbox));
+                glyph_transform_row_json(
+                    glyph_index,
+                    0,
+                    FT_Err_Ok,
+                    Some(outline_snapshot_json(&glyph.outline)),
+                    Some(json!({"x": glyph.root.advance.x, "y": glyph.root.advance.y})),
+                    Some(bbox_json(bbox_from_rust_bbox(cbox))),
+                    "none",
+                )
+            }
+            Err(status) => {
+                glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+            }
+        },
+        Err(status) => glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error"),
+    };
+    Ok(glyph_transform_output(vec![row]))
+}
+
+fn c_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut status = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+    if status == FT_Err_Ok {
+        match c_abi::abi_get_outline_glyph_from_face(face) {
+            Ok(created) => glyph = created,
+            Err(err) => status = err,
+        }
+    }
+    let row = if status == FT_Err_Ok {
+        let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+        glyph_transform_row_json(
+            glyph_index,
+            0,
+            status,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+            Some(bbox_json(bbox_from_c_bbox(snapshot.cbox))),
+            "none",
+        )
+    } else {
+        glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(glyph_transform_output(vec![row]))
+}
+
+fn wasm_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let mut glyph = 0usize;
+    let mut status = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph);
+    }
+    let row = if status == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+        glyph_transform_row_json(
+            glyph_index,
+            0,
+            status,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+            Some(bbox_json(bbox_from_wasm_public_bbox(snapshot.cbox))),
+            "none",
+        )
+    } else {
+        glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+    };
+    if glyph != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(handle);
+    Ok(glyph_transform_output(vec![row]))
 }
 
 fn rust_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {

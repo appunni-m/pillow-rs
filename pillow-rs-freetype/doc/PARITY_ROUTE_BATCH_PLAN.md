@@ -1669,3 +1669,46 @@ Rows deliberately left pending in the same surface:
   pending because it also declares `FT_Glyph_To_Bitmap outline`.
 - SVG copy/record rows remain pending until SVG fixture support or exact
   unsupported classification is implemented against pinned C.
+
+### FT_OutlineGlyph public alias route: 2026-07-22
+
+Status: implemented for `ftglyph.FT_OutlineGlyph.pointer_alias_matches_record`.
+
+Scope:
+
+- Added a maintained `ftglyph.type_runtime` route for the outline alias row.
+- The route uses the existing pinned-C `--glyph-transform` no-op path because
+  it creates a real `FT_Glyph` through `FT_Get_Glyph`, casts it to
+  `FT_OutlineGlyph`, and prints the public `FT_OutlineGlyphRec` payload:
+  outline arrays, root advance, CBox, status, and mutation class.
+- Rust FFI, C ABI, and WASM ABI now execute the same operation shape: open the
+  declared outline font, load outline glyph 36 when the row does not declare a
+  more specific glyph index, create the detached outline glyph, snapshot the
+  cast record, and destroy the owned glyph handle.
+
+Pinned C behavior checked:
+
+- For the declared `input/fonts/DejaVuSans.ttf` outline font at 20 ppem,
+  glyph 36 produces a real `FT_GLYPH_FORMAT_OUTLINE` owned glyph whose
+  `FT_OutlineGlyph` cast exposes the same public outline record fields that
+  the transform route already compares.
+- This route proves the outline alias only.  It does not prove bitmap or SVG
+  alias rows, which have their own pending manifest cases.
+
+Observed impact:
+
+- Route audit: `pending-route` 239 → 238, `real-parity` 4728 → 4729.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_OutlineGlyph.pointer_alias_matches_record`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
+Rows deliberately left pending in the same surface:
+
+- `ftglyph.FT_BitmapGlyph.pointer_alias_matches_record` still needs a real
+  bitmap glyph alias route.
+- `ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled` still needs
+  SVG-enabled fixture support or exact unsupported classification.
+- `ftglyph.FT_GlyphRec.clazz_is_private_identity_only` and
+  `ftglyph.FT_Glyph_Class.opaque_class_identity_only` require broader
+  outline/bitmap/SVG public-behavior class classification and were not
+  promoted by this outline-only route.
