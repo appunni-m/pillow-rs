@@ -24886,6 +24886,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cmap_cache_char_code(params)?.to_string());
             Ok(args)
         }
+        "ftcache.manager_lookup_size"
+            if !case.expect_error && cache_scaler_rows(params).is_ok() =>
+        {
+            let mut args = vec!["--manager-lookup-size".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cache_scaler_rows_arg(params)?);
+            args.push(i32::from(bool_param(params, "repeat_lookup", false)?).to_string());
+            Ok(args)
+        }
+        "ftcache.manager_lookup_face"
+            if !case.expect_error && manager_lookup_face_sequence(params).is_ok() =>
+        {
+            let mut args = vec!["--manager-lookup-face".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(manager_lookup_face_sequence_arg(params)?);
+            Ok(args)
+        }
         "ftcache.manager_reset" => {
             if manager_param_is_null(params) {
                 return Ok(vec!["--manager-reset-null".to_string()]);
@@ -25910,6 +25929,16 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
         {
             rust_cmap_cache_lookup(case)
+        }
+        "ftcache.manager_lookup_size"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            rust_manager_lookup_size(case)
+        }
+        "ftcache.manager_lookup_face"
+            if !case.expect_error && manager_lookup_face_sequence(&case.inputs.params).is_ok() =>
+        {
+            rust_manager_lookup_face(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -26966,6 +26995,16 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_cmap_cache_lookup(case)
         }
+        "ftcache.manager_lookup_size"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            c_manager_lookup_size(case)
+        }
+        "ftcache.manager_lookup_face"
+            if !case.expect_error && manager_lookup_face_sequence(&case.inputs.params).is_ok() =>
+        {
+            c_manager_lookup_face(case)
+        }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
             c_outline_orientation_runtime_output(case)
@@ -27850,6 +27889,16 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cmap_cache_indexes(&case.inputs.params).is_ok() =>
         {
             wasm_cmap_cache_lookup(case)
+        }
+        "ftcache.manager_lookup_size"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            wasm_manager_lookup_size(case)
+        }
+        "ftcache.manager_lookup_face"
+            if !case.expect_error && manager_lookup_face_sequence(&case.inputs.params).is_ok() =>
+        {
+            wasm_manager_lookup_face(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -29564,6 +29613,251 @@ fn wasm_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String>
     output
 }
 
+fn rust_manager_lookup_size(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    let mut requester_count = 0u32;
+    let mut face_requested = false;
+    manager_lookup_size_outputs(rows, repeat_lookup, |row, repeat_lookup| {
+        let before_count = requester_count;
+        if !face_requested {
+            requester_count = requester_count.saturating_add(1);
+            face_requested = true;
+        }
+        let status = rust_apply_cache_scaler(&mut face, row);
+        let metrics = if status == FT_Err_Ok {
+            Some(size_metrics_json(&face.size_metrics))
+        } else {
+            None
+        };
+        let repeat_status = if repeat_lookup {
+            rust_apply_cache_scaler(&mut face, row)
+        } else {
+            status
+        };
+        Ok(ManagerLookupSizeRowOutput {
+            status,
+            metrics,
+            requester_count_before: before_count,
+            requester_count_after: requester_count,
+            requester_count_after_repeat: requester_count,
+            repeat_status,
+            repeat_same_identity: repeat_lookup
+                && status == FT_Err_Ok
+                && repeat_status == FT_Err_Ok,
+        })
+    })
+}
+
+fn c_manager_lookup_size(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    let mut requester_count = 0u32;
+    let mut face_requested = false;
+    let output = manager_lookup_size_outputs(rows, repeat_lookup, |row, repeat_lookup| {
+        let before_count = requester_count;
+        if !face_requested {
+            requester_count = requester_count.saturating_add(1);
+            face_requested = true;
+        }
+        let status = c_apply_cache_scaler(face, row);
+        let metrics = if status == FT_Err_Ok {
+            Some(c_size_metrics_json(face)?)
+        } else {
+            None
+        };
+        let repeat_status = if repeat_lookup {
+            c_apply_cache_scaler(face, row)
+        } else {
+            status
+        };
+        Ok(ManagerLookupSizeRowOutput {
+            status,
+            metrics,
+            requester_count_before: before_count,
+            requester_count_after: requester_count,
+            requester_count_after_repeat: requester_count,
+            repeat_status,
+            repeat_same_identity: repeat_lookup
+                && status == FT_Err_Ok
+                && repeat_status == FT_Err_Ok,
+        })
+    });
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_manager_lookup_size(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let repeat_lookup = bool_param(&case.inputs.params, "repeat_lookup", false)?;
+    let mut requester_count = 0u32;
+    let mut face_requested = false;
+    let output = manager_lookup_size_outputs(rows, repeat_lookup, |row, repeat_lookup| {
+        let before_count = requester_count;
+        if !face_requested {
+            requester_count = requester_count.saturating_add(1);
+            face_requested = true;
+        }
+        let status = wasm_apply_cache_scaler(handle, row);
+        let metrics = if status == FT_Err_Ok {
+            Some(wasm_size_metrics_value(handle)?)
+        } else {
+            None
+        };
+        let repeat_status = if repeat_lookup {
+            wasm_apply_cache_scaler(handle, row)
+        } else {
+            status
+        };
+        Ok(ManagerLookupSizeRowOutput {
+            status,
+            metrics,
+            requester_count_before: before_count,
+            requester_count_after: requester_count,
+            requester_count_after_repeat: requester_count,
+            repeat_status,
+            repeat_same_identity: repeat_lookup
+                && status == FT_Err_Ok
+                && repeat_status == FT_Err_Ok,
+        })
+    });
+    wasm_done_face(handle);
+    output
+}
+
+fn rust_manager_lookup_face(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let sequence = manager_lookup_face_sequence(&case.inputs.params)?;
+    let mut cached_face: Option<FT_Face> = None;
+    let mut requester_count = 0u32;
+    manager_lookup_face_outputs(sequence, |step_index, action| match action {
+        ManagerLookupFaceAction::RemoveFaceA => {
+            cached_face = None;
+            Ok(None)
+        }
+        ManagerLookupFaceAction::LookupFaceA => {
+            let before_count = requester_count;
+            if cached_face.is_none() {
+                requester_count = requester_count.saturating_add(1);
+                cached_face = Some(rust_new_face_from_bytes(bytes.as_ref(), face_index)?);
+            }
+            let face = cached_face
+                .as_ref()
+                .ok_or_else(|| "missing rust manager lookup face".to_string())?;
+            Ok(Some(ManagerLookupFaceRowOutput {
+                step_index,
+                face_id: "face-A",
+                status: FT_Err_Ok,
+                requester_count_before: before_count,
+                requester_count_after: requester_count,
+                identity_class: if requester_count > before_count {
+                    "fresh_or_reloaded"
+                } else {
+                    "cached"
+                },
+                face: Some(rust_manager_lookup_face_public(face)),
+            }))
+        }
+    })
+}
+
+fn c_manager_lookup_face(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let sequence = manager_lookup_face_sequence(&case.inputs.params)?;
+    let mut library: c_abi::FT_Library = ptr::null_mut();
+    let mut cached_face: c_abi::FT_Face = ptr::null_mut();
+    let mut requester_count = 0u32;
+    let output = manager_lookup_face_outputs(sequence, |step_index, action| match action {
+        ManagerLookupFaceAction::RemoveFaceA => {
+            if !cached_face.is_null() {
+                c_done_face(cached_face);
+                cached_face = ptr::null_mut();
+            }
+            if !library.is_null() {
+                c_done_library(library);
+                library = ptr::null_mut();
+            }
+            Ok(None)
+        }
+        ManagerLookupFaceAction::LookupFaceA => {
+            let before_count = requester_count;
+            if cached_face.is_null() {
+                requester_count = requester_count.saturating_add(1);
+                let opened = c_new_face_from_bytes(bytes.as_ref(), face_index)?;
+                library = opened.0;
+                cached_face = opened.1;
+            }
+            Ok(Some(ManagerLookupFaceRowOutput {
+                step_index,
+                face_id: "face-A",
+                status: FT_Err_Ok,
+                requester_count_before: before_count,
+                requester_count_after: requester_count,
+                identity_class: if requester_count > before_count {
+                    "fresh_or_reloaded"
+                } else {
+                    "cached"
+                },
+                face: Some(c_manager_lookup_face_public(cached_face)?),
+            }))
+        }
+    });
+    if !cached_face.is_null() {
+        c_done_face(cached_face);
+    }
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    output
+}
+
+fn wasm_manager_lookup_face(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let sequence = manager_lookup_face_sequence(&case.inputs.params)?;
+    let mut cached_handle = 0usize;
+    let mut requester_count = 0u32;
+    let output = manager_lookup_face_outputs(sequence, |step_index, action| match action {
+        ManagerLookupFaceAction::RemoveFaceA => {
+            if cached_handle != 0 {
+                wasm_done_face(cached_handle);
+                cached_handle = 0;
+            }
+            Ok(None)
+        }
+        ManagerLookupFaceAction::LookupFaceA => {
+            let before_count = requester_count;
+            if cached_handle == 0 {
+                requester_count = requester_count.saturating_add(1);
+                cached_handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index)?;
+            }
+            Ok(Some(ManagerLookupFaceRowOutput {
+                step_index,
+                face_id: "face-A",
+                status: FT_Err_Ok,
+                requester_count_before: before_count,
+                requester_count_after: requester_count,
+                identity_class: if requester_count > before_count {
+                    "fresh_or_reloaded"
+                } else {
+                    "cached"
+                },
+                face: Some(wasm_manager_lookup_face_public(cached_handle)?),
+            }))
+        }
+    });
+    if cached_handle != 0 {
+        wasm_done_face(cached_handle);
+    }
+    output
+}
+
 fn rust_cmap_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = font_bytes(case)?;
     let mut state = RustCmapCacheState {
@@ -30174,6 +30468,168 @@ fn cache_image_scaler_outputs(
         }
     }
     Ok(ok(json!({ "outputs": outputs })))
+}
+
+struct ManagerLookupSizeRowOutput {
+    status: FT_Error,
+    metrics: Option<Value>,
+    requester_count_before: u32,
+    requester_count_after: u32,
+    requester_count_after_repeat: u32,
+    repeat_status: FT_Error,
+    repeat_same_identity: bool,
+}
+
+fn manager_lookup_size_outputs(
+    rows: Vec<CacheScalerRow>,
+    repeat_lookup: bool,
+    mut run: impl FnMut(CacheScalerRow, bool) -> Result<ManagerLookupSizeRowOutput, String>,
+) -> Result<RunOutput, String> {
+    let mut outputs = Vec::with_capacity(rows.len());
+    for row in rows {
+        let row_output = run(row, repeat_lookup)?;
+        outputs.push(manager_lookup_size_row_json(row, row_output));
+    }
+    Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn manager_lookup_size_row_json(row: CacheScalerRow, output: ManagerLookupSizeRowOutput) -> Value {
+    json!({
+        "scaler": cache_scaler_json(row),
+        "status": output.status,
+        "error": output.status,
+        "requester_count_before": output.requester_count_before,
+        "requester_count_after": output.requester_count_after,
+        "requester_count_after_repeat": output.requester_count_after_repeat,
+        "metrics": output.metrics.unwrap_or(Value::Null),
+        "repeat": {
+            "status": output.repeat_status,
+            "same_identity": output.repeat_same_identity,
+            "requester_count": output.requester_count_after_repeat
+        }
+    })
+}
+
+#[derive(Clone, Copy)]
+enum ManagerLookupFaceAction {
+    LookupFaceA,
+    RemoveFaceA,
+}
+
+struct ManagerLookupFaceRowOutput {
+    step_index: usize,
+    face_id: &'static str,
+    status: FT_Error,
+    requester_count_before: u32,
+    requester_count_after: u32,
+    identity_class: &'static str,
+    face: Option<Value>,
+}
+
+fn manager_lookup_face_sequence(params: &Value) -> Result<Vec<ManagerLookupFaceAction>, String> {
+    let Some(values) = params.get("lookup_sequence").and_then(Value::as_array) else {
+        return Err("missing manager lookup_face lookup_sequence".to_string());
+    };
+    if values.is_empty() {
+        return Err("manager lookup_face lookup_sequence must not be empty".to_string());
+    }
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let Some(action) = value.as_str() else {
+                return Err(format!("lookup_sequence[{index}] must be a string"));
+            };
+            match action {
+                "face-A" => Ok(ManagerLookupFaceAction::LookupFaceA),
+                "remove-face-A" => Ok(ManagerLookupFaceAction::RemoveFaceA),
+                _ => Err(format!(
+                    "unsupported lookup_sequence[{index}] action {action}"
+                )),
+            }
+        })
+        .collect()
+}
+
+fn manager_lookup_face_sequence_arg(params: &Value) -> Result<String, String> {
+    let values = params
+        .get("lookup_sequence")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing manager lookup_face lookup_sequence".to_string())?;
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| "lookup_sequence item must be a string".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|items| items.join(","))
+}
+
+fn manager_lookup_face_outputs(
+    sequence: Vec<ManagerLookupFaceAction>,
+    mut run: impl FnMut(
+        usize,
+        ManagerLookupFaceAction,
+    ) -> Result<Option<ManagerLookupFaceRowOutput>, String>,
+) -> Result<RunOutput, String> {
+    let mut outputs = Vec::new();
+    let mut requester_count_final = 0u32;
+    for (step_index, action) in sequence.into_iter().enumerate() {
+        if let Some(row) = run(step_index, action)? {
+            requester_count_final = row.requester_count_after;
+            outputs.push(manager_lookup_face_row_json(row));
+        }
+    }
+    Ok(ok(json!({
+        "outputs": outputs,
+        "requester_count_final": requester_count_final
+    })))
+}
+
+fn manager_lookup_face_row_json(row: ManagerLookupFaceRowOutput) -> Value {
+    json!({
+        "step": row.step_index,
+        "face_id": row.face_id,
+        "status": row.status,
+        "error": row.status,
+        "requester_count_before": row.requester_count_before,
+        "requester_count_after": row.requester_count_after,
+        "identity_class": row.identity_class,
+        "face": row.face.unwrap_or(Value::Null)
+    })
+}
+
+fn rust_manager_lookup_face_public(face: &FT_Face) -> Value {
+    json!({
+        "num_glyphs": face.num_glyphs,
+        "face_flags": face.face_flags,
+        // C FTC_Manager_LookupFace returns a face without establishing a
+        // current size.  The direct Rust face-open helper creates an internal
+        // default size, so this manager-route field follows the FTC observable.
+        "size_is_null": true
+    })
+}
+
+fn c_manager_lookup_face_public(face: c_abi::FT_Face) -> Result<Value, String> {
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    Ok(json!({
+        "num_glyphs": info.num_glyphs,
+        "face_flags": info.face_flags,
+        "size_is_null": true
+    }))
+}
+
+fn wasm_manager_lookup_face_public(handle: usize) -> Result<Value, String> {
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    Ok(json!({
+        "num_glyphs": info.num_glyphs,
+        "face_flags": info.face_flags,
+        "size_is_null": true
+    }))
 }
 
 fn rust_apply_cache_scaler(face: &mut FT_Face, row: CacheScalerRow) -> FT_Error {
