@@ -1001,6 +1001,9 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftmm.FT_Set_MM_Blend_Coordinates.error_null_coords_with_nonzero_count",
         "ftmm.FT_Set_MM_Design_Coordinates.error_null_coords_with_nonzero_count",
         "freetype.FT_New_Face.error_null_library_or_aface",
+        "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
+        "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
+        "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
         "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
         "ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX.invalid_runtime_behavior",
         "ftcolor.FT_COLR_PAINTFORMAT_UNSUPPORTED.invalid_format_returns_false",
@@ -3897,13 +3900,20 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "parity would be a green placeholder"
         )
     if row.operation == "ftbdf.get_bdf_property":
+        if row.case_id in {
+            "ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none",
+            "ftbdf.FT_Get_BDF_Property.error_null_face_or_output",
+            "ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike",
+        }:
+            return None
         return (
-            "FT_Get_BDF_Property has core/C-ABI/WASM ABI groundwork but no "
-            "maintained unified native oracle command or same-input fixture "
-            "route yet; the current BDF success fixture is also contradicted by "
-            "pinned FreeType because FAMILY_NAME returns Invalid_Argument and "
-            "PIXEL_SIZE returns INTEGER, not CARDINAL; classifying BDF property "
-            "output as real parity would be a green placeholder"
+            "FT_Get_BDF_Property exact-error rows have a maintained native "
+            "oracle and Rust FFI/C ABI/WASM ABI route, but this success row is "
+            "still unresolved; the current BDF success fixture is contradicted "
+            "by pinned FreeType because FAMILY_NAME returns Invalid_Argument "
+            "and PIXEL_SIZE returns INTEGER, not CARDINAL, and PCF/SFNT-BDF "
+            "success assets remain unavailable. Classifying this BDF property "
+            "success output as real parity would be a green placeholder"
         )
     if not operation_is_real_parity(row.operation):
         return None

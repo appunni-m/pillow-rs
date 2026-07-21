@@ -4618,6 +4618,44 @@ make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Property.error_null_f
 Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
 audit: `real-parity` `3958`, `generic-error-fallback` `237`.
 
+### Issue Set Promoted: `FT_Get_BDF_Property` exact-error route follow-up
+
+Status: promoted on 2026-07-21 for the exact-error subset only.
+
+Rows promoted:
+
+- `ftbdf.FT_Get_BDF_Property.error_missing_property_sets_none`
+- `ftbdf.FT_Get_BDF_Property.error_null_face_or_output`
+- `ftbdf.FT_Get_BDF_Property.error_unsupported_face_or_unselected_strike`
+
+Fix:
+
+1. Added maintained pinned-C oracle command `--bdf-property-case`.
+2. Added same-input Rust FFI, thin C ABI, and WASM ABI runtime output helpers
+   that compare exact public status plus BDF property type/sentinel state.
+3. Kept the three BDF-property success rows pending; the existing success
+   fixture set is still not a valid promotion target because the declared
+   `FAMILY_NAME`/`PIXEL_SIZE` expectations are contradicted by pinned C and the
+   PCF/SFNT-BDF success assets remain unresolved.
+
+First divergence fixed:
+
+- Pinned FreeType returned public error `8` for the non-BDF unsupported-face
+  property query while Rust returned `6`.
+- Core `FT_Get_BDF_Property` now matches the C `src/base/ftbdf.c` service
+  lookup behavior: non-BDF faces return the observed public `FT_Err_Invalid_Table`
+  value for this route, while missing properties on actual BDF faces remain
+  `FT_Err_Invalid_Argument`.
+
+Focused non-coverage result:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_property
+```
+
+Result: `3 / 3` runtime parity rows passed, `0` failed. The operation still
+reports `3` pending rows for the unresolved/contradicted success cases.
+
 ### Issue Set Promoted: `FT_Get_BDF_Charset_ID` exact-error route
 
 Previous blocker:
