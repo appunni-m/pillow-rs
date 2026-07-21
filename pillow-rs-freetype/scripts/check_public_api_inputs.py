@@ -3887,7 +3887,10 @@ def unresolved_asset_reason(value: object, label: str) -> str | None:
 
 def pending_route_reason(row: ConcreteInput) -> str | None:
     if row.operation == "ftbdf.get_bdf_charset_id":
-        if row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face":
+        if row.case_id in {
+            "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face",
+            "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset",
+        }:
             return None
         unresolved = unresolved_assets_reason(row)
         if unresolved:
@@ -5035,6 +5038,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face"
     ):
         return "FT_Get_BDF_Charset_ID non-BDF-face errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftbdf.get_bdf_charset_id"
+        and row.case_id == "ftbdf.FT_Get_BDF_Charset_ID.success_bdf_face_charset"
+    ):
+        return "FT_Get_BDF_Charset_ID BDF charset strings validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbdf.get_bdf_charset_id"
         and row.case_id

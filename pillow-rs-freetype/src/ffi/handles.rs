@@ -3233,10 +3233,18 @@ pub fn FT_Get_BDF_Charset_ID(
     };
     let inner = face.inner.borrow();
     let (error, encoding, registry) = if inner.font().font_format() == "BDF" {
-        // Successful BDF charset output still needs a maintained fixture with
-        // CHARSET_ENCODING/CHARSET_REGISTRY.  Until that route is implemented,
-        // match FreeType's public error shape for unsupported service output.
-        (FT_Err_Invalid_Argument, ptr::null(), ptr::null())
+        // C parity: `src/base/ftbdf.c:FT_Get_BDF_Charset_ID` delegates to the
+        // BDF service, which returns face-owned strings populated from
+        // CHARSET_ENCODING and CHARSET_REGISTRY in `src/bdf/bdfdrivr.c`.
+        let encoding = inner
+            .font()
+            .bdf_property_atom_c_str("CHARSET_ENCODING")
+            .map_or(ptr::null(), CStr::as_ptr);
+        let registry = inner
+            .font()
+            .bdf_property_atom_c_str("CHARSET_REGISTRY")
+            .map_or(ptr::null(), CStr::as_ptr);
+        (FT_Err_Ok, encoding, registry)
     } else {
         // FreeType 2.14.3 `src/base/ftbdf.c` initializes both local output
         // pointers to NULL and writes them to non-null caller outputs.  For
