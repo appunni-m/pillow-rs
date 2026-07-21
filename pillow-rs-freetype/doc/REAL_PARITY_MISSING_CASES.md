@@ -11316,6 +11316,84 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+## Aggressive batch plan: FTC cache subsystem rows
+
+Status on 2026-07-21: selected as the next 10+ row implementation batch, but
+not promotable by route-audit classification alone.
+
+Current-state evidence:
+
+- `make -C pillow-rs-freetype route-audit` reports
+  `real-parity=4535`, `pending-route=425`.
+- Focused probes show the existing FTC routes are narrow exact-error/control
+  routes, not full cache-manager behavior:
+  - `make -C pillow-rs-freetype test-op OP=ftcache.manager_new`:
+    `2 / 2` runnable passed, `4` pending.
+  - `make -C pillow-rs-freetype test-op OP=ftcache.cmap_cache_new`:
+    `1 / 1` runnable passed, `4` pending.
+  - `make -C pillow-rs-freetype test-op OP=ftcache.cmap_cache_lookup`:
+    `3 / 3` runnable passed, `15` pending.
+  - `make -C pillow-rs-freetype test-op OP=ftcache.manager_lookup_face`:
+    `3 / 3` runnable passed, `4` pending.
+  - `make -C pillow-rs-freetype test-op OP=ftcache.manager_lookup_size`:
+    currently has only narrow routed rows; the pending rows require
+    maintained scaler/requester cache state.
+- The route-audit ledger already counts the runnable control/error rows as
+  real parity.  The remaining rows need new implementation, not stale
+  classification.
+- Scope mismatch to resolve first: `tests/data/interface_map.json` still marks
+  the FTC cache symbols as `out_of_scope`, while route-audit treats the
+  `planned_cache_subsystem_not_out_of_scope` rows as pending public parity work.
+  Do not add C/WASM exports or promote rows until that manifest decision is made
+  explicit in the same change.
+
+Rows owned by this batch if FTC cache APIs are accepted as in-scope:
+
+- `FTC_Manager_New`: planning, custom limits, default limits, lifecycle.
+- `FTC_CMapCache_New`: planning, create/destroy lifecycle, registration limit,
+  reset behavior.
+- `FTC_CMapCache_Lookup`: planned-cache route plus hit/repeat, miss,
+  negative-cmap-index, and remove-face/reset scenarios for variants `cp65`,
+  `cp57344`, and `cp1114111`.
+- `FTC_Manager_LookupFace`: planning, first lookup, repeat lookup, current-size
+  state.
+- `FTC_Manager_LookupSize`: planning, pixel scaler, point scaler, requester
+  failure, size selection failure, repeated lookup/cache identity.
+
+Required implementation plan:
+
+1. Add pure-Rust FTC manager/cache state in `fontdone` first.  It must own:
+   requester callback identity, requester data, face-id key identity, face
+   cache, size cache, CMap cache handles, reset semantics, cache registration
+   limits, and done/invalid-handle behavior.
+2. Keep C ABI and WASM ABI thin.  Wrappers may own opaque handle validation,
+   flat record copying, and lifetime bookkeeping only; no glyph lookup, charmap
+   lookup, cache keying, or requester behavior belongs in wrappers.
+3. Add pinned-C oracle routes that run the same operation sequences with a
+   memory-face requester:
+   manager create, CMap cache create, lookup hit, repeat hit, miss, negative
+   cmap index, manager reset, remove-face-id, lookup face, and lookup size.
+4. Compare exact public outputs only:
+   `FT_Error`, glyph index, requester call counts, cache handle nullness and
+   identity class, face/size reuse class, reset/remove effects, and
+   invalid-handle preservation.  Do not compare private pointer addresses.
+5. Promote rows in slices of at least one complete public operation family:
+   `FTC_Manager_New` + `FTC_CMapCache_New` first, then
+   `FTC_CMapCache_Lookup`, then manager face/size lookup.  Do not count a
+   planning row real until the same-input C/Rust/C-ABI/WASM route runs.
+
+Rejected shortcuts:
+
+- Do not classify `planned_cache_subsystem_not_out_of_scope` rows as real just
+  because null/error routes pass; those rows explicitly require manager-owned
+  cache behavior.
+- Do not use stringified face paths as cache keys.  Pinned C keys by
+  `FTC_FaceID` pointer identity.
+- Do not implement cache behavior in C or WASM wrappers to make tests pass.
+- Do not replace requester behavior with direct `FT_New_Memory_Face` calls in
+  the public route; requester call counts are part of the observable parity
+  contract.
+
 ## FT_Get_BDF_Charset_ID false-green route audit correction
 
 Status: demoted to explicit `pending-route` on 2026-07-21.
