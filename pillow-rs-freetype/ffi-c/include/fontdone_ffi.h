@@ -840,6 +840,7 @@ FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRe
 FT_Error FT_Get_BDF_Charset_ID(FT_Face face, const char** acharset_encoding, const char** acharset_registry);
 FT_Error FT_Get_PS_Font_Info(FT_Face face, PS_FontInfo afont_info);
 FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private);
+FT_Int FT_Has_PS_Glyph_Names(FT_Face face);
 FT_Long FT_Get_PS_Font_Value(FT_Face face, PS_Dict_Keys key, FT_UInt idx, void* value, FT_Long value_len);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);

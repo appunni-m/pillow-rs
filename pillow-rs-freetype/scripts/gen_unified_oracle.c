@@ -13644,6 +13644,27 @@ static int emit_ps_font_info(int argc, char** argv) {
     return 0;
 }
 
+static int emit_has_ps_glyph_names(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Int result = FT_Has_PS_Glyph_Names(face.face);
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":%d}}\n", result);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_has_ps_glyph_names_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_Int result = FT_Has_PS_Glyph_Names(NULL);
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":%d}}\n", result);
+    return 0;
+}
+
 static int oracle_bytes_contains(const unsigned char* data, long data_len, const char* pattern) {
     size_t pattern_len = strlen(pattern);
     if (!data || data_len <= 0 || pattern_len == 0 || (long)pattern_len > data_len) {
@@ -24169,6 +24190,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--ps-font-info")) {
         return emit_ps_font_info(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--has-ps-glyph-names")) {
+        return emit_has_ps_glyph_names(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--has-ps-glyph-names-null-face")) {
+        return emit_has_ps_glyph_names_null_face(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--ps-mm-blend-dictionary")) {
         return emit_ps_mm_blend_dictionary(argc, argv);

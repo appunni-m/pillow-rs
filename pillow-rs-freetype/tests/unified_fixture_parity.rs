@@ -2816,6 +2816,9 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => rust_open_type_validate(case),
             "ftotval.open_type_free" => rust_open_type_free(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                rust_has_ps_glyph_names(case)
+            }
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 rust_get_ps_font_info(case)
             }
@@ -3081,6 +3084,9 @@ impl BackendComparisonWorker {
             }
             "ftwinfnt.get_winfnt_header_mutation" => c_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => c_winfnt_charmap_probe(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                c_has_ps_glyph_names(case)
+            }
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
@@ -3440,6 +3446,9 @@ impl BackendComparisonWorker {
             }
             "ftwinfnt.get_winfnt_header_mutation" => wasm_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => wasm_winfnt_charmap_probe(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                wasm_has_ps_glyph_names(case)
+            }
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
@@ -9346,6 +9355,49 @@ fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
     Ok(output)
 }
 
+fn has_ps_glyph_names_output(result: FT_Int) -> RunOutput {
+    ok(json!({"result": result}))
+}
+
+fn rust_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(FT_Has_PS_Glyph_Names(None)));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    Ok(has_ps_glyph_names_output(FT_Has_PS_Glyph_Names(Some(
+        &face,
+    ))))
+}
+
+fn c_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(c_abi::FT_Has_PS_Glyph_Names(
+            ptr::null_mut(),
+        )));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = has_ps_glyph_names_output(c_abi::FT_Has_PS_Glyph_Names(face));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(
+            wasm_abi::fontdone_wasm_has_ps_glyph_names(0),
+        ));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = has_ps_glyph_names_output(wasm_abi::fontdone_wasm_has_ps_glyph_names(handle));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn wasm_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = mm_blend_dictionary_asset_bytes(case)?;
     let field = mm_blend_dictionary_field(case)?;
@@ -9559,6 +9611,15 @@ fn direct_ps_font_info_case(case: &InputCase) -> bool {
 
 fn direct_ps_font_private_case(case: &InputCase) -> bool {
     case.case_id == "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success"
+}
+
+fn direct_has_ps_glyph_names_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true"
+            | "t1tables.FT_Has_PS_Glyph_Names.truetype_false"
+            | "t1tables.FT_Has_PS_Glyph_Names.null_face_false"
+    )
 }
 
 fn ps_font_value_matrix_scenarios(case: &InputCase) -> Result<Vec<&Value>, String> {
@@ -26552,6 +26613,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                Ok(vec!["--has-ps-glyph-names-null-face".to_string()])
+            } else {
+                let mut args = vec!["--has-ps-glyph-names".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                Ok(args)
+            }
+        }
         "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
             let mut args = vec!["--ps-font-info".to_string()];
             push_font_source_from_param(case, params, &mut args)?;
@@ -29491,6 +29562,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            rust_has_ps_glyph_names(case)
+        }
         "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
             rust_get_ps_font_info(case)
         }
@@ -29653,6 +29727,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            c_has_ps_glyph_names(case)
+        }
         "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => c_get_ps_font_info(case),
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             c_get_ps_font_info(case)
@@ -30695,6 +30772,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            wasm_has_ps_glyph_names(case)
+        }
         "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
             wasm_get_ps_font_info(case)
         }

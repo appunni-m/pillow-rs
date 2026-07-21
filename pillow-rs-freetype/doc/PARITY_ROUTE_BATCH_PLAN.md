@@ -74,6 +74,39 @@ make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Info.type1_fon
 make -C pillow-rs-freetype test-case CASE=t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success
 ```
 
+After the `FT_Has_PS_Glyph_Names` concrete split:
+
+```text
+route audit concrete_cases=7252 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4740}
+focused operation runtime_parity: passed=3 failed=0 total=3 covered_manifest_cases=2
+full fontdone-test runtime_parity: passed=7010 failed=0 total=7010 covered_manifest_cases=3910
+full fontdone-test runtime_cases: runnable=7010 pending=242
+```
+
+Added same-input rows:
+
+- `t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true`
+- `t1tables.FT_Has_PS_Glyph_Names.truetype_false`
+- `t1tables.FT_Has_PS_Glyph_Names.null_face_false`
+
+The rows prove the service-based `FT_Has_PS_Glyph_Names` behavior from
+`freetype/src/base/fttype1.c`: Type 1 returns `1`, null returns `0`, and a
+TrueType control returns `0` even when SFNT glyph-name flags can be present.
+Core owns the behavior; the C ABI and WASM ABI exports are thin handle
+forwarders. The broad
+`t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix` row remains
+pending because Type42, CFF-with-name, CFF-without-name, and CID fixture
+coverage is still absent.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Has_PS_Glyph_Names.truetype_false
+make -C pillow-rs-freetype test-case CASE=t1tables.FT_Has_PS_Glyph_Names.null_face_false
+make -C pillow-rs-freetype test-op OP=t1tables.has_ps_glyph_names
+```
+
 Historical route-audit baseline before the FTC route batches:
 
 ```text

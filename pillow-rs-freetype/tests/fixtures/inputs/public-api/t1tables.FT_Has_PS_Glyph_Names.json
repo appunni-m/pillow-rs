@@ -42,6 +42,91 @@
         "output_shape": {"result": "FT_Int"},
         "compare": {"mode": "exact", "paths": ["result"]}
       }
+    },
+    {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "type1_and_type42_return_true",
+      "covers_manifest_cases": ["type1_and_type42_return_true"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "type1_font",
+            "path": "input/fonts/type1/font-value-populated.pfb"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "Type 1 t1_ps_has_glyph_names returns 1 through the PostScript service callback."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "asset:existing"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Has_PS_Glyph_Names"]
+      }
+    },
+    {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "cid_true_type_and_null_return_false",
+      "covers_manifest_cases": ["cid_true_type_and_null_return_false"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "truetype_font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "TrueType control face without a POSTSCRIPT_INFO ps_has_glyph_names service callback."
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "TrueType may expose FT_FACE_FLAG_GLYPH_NAMES, but FT_Has_PS_Glyph_Names uses the PostScript service callback and returns 0 when that callback is absent."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "asset:existing"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Has_PS_Glyph_Names"]
+      }
+    },
+    {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "cid_true_type_and_null_return_false",
+      "covers_manifest_cases": ["cid_true_type_and_null_return_false"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "face_source": "null",
+          "face_index": 0,
+          "source_behavior": "FT_Has_PS_Glyph_Names initializes result to 0 and returns 0 for a null face."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "asset:existing", "null-face"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Has_PS_Glyph_Names"]
+      }
     }
   ]
 }
