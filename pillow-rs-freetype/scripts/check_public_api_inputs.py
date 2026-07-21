@@ -3424,13 +3424,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if reason is not None:
         return reason
     ftglyph_rows_without_maintained_route = {
-        "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record": (
-            "FT_BitmapGlyph alias parity needs a maintained FT_Get_Glyph or "
-            "FT_Glyph_To_Bitmap route that creates a real bitmap glyph, casts "
-            "it to FT_BitmapGlyph, and compares root fields plus "
-            "FT_BitmapGlyphRec payload across pinned C, Rust FFI, C ABI, and "
-            "WASM ABI"
-        ),
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "
             "allocation/free event route for FT_New_Glyph, FT_Get_Glyph, "
