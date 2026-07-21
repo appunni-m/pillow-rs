@@ -1,5 +1,45 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: FT_Get_BDF_Property BDF property rowset
+
+Status: completed on 2026-07-21 for the maintained BDF success-row fixture.
+PCF and SFNT-BDF success rows remain pending because their declared assets are
+not present.
+
+Implemented real parity row:
+
+- `ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties`
+
+Finding:
+
+- Pinned FreeType 2.14.3 `src/bdf/bdflib.c` / `src/bdf/bdfdrivr.c`
+  behavior for the checked BDF fixture is not the manifest's earlier broad
+  "string/integer/cardinal all succeed" assumption. `FAMILY_NAME` returns
+  missing-property behavior with `BDF_PROPERTY_TYPE_NONE`, while `POINT_SIZE`
+  and `PIXEL_SIZE` both return `BDF_PROPERTY_TYPE_INTEGER` values (`120` and
+  `12` respectively).
+- The row is now treated as a rowset with per-property errors and typed active
+  `BDF_PropertyRec` union output. Rust FFI, thin C ABI, and WASM ABI compare
+  the same pinned-C rowset instead of pretending the missing `FAMILY_NAME`
+  property is a success or reading inactive union fields in the test crate.
+- The C ABI union snapshot helper is `abi-test-support` only and is not a
+  public exported FreeType symbol. It exists only so the unsafe union read stays
+  inside the ABI crate while the unified parity test remains under
+  `-D unsafe-code`.
+
+Impact:
+
+- `real-parity`: `4559 -> 4560`
+- `pending-route`: `401 -> 400`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_property
+```
+
 ### Issue Set Current: CPAL palette null-input verifier routes
 
 Status: completed on 2026-07-21 for two already-routed palette exact-error

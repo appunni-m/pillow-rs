@@ -92,6 +92,15 @@ pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
 pub type BDF_Property = *mut BDF_PropertyRec;
+
+#[cfg(feature = "abi-test-support")]
+#[derive(Clone, Copy)]
+pub struct AbiBdfPropertySnapshot {
+    pub type_: BDF_PropertyType,
+    pub atom: *const FT_String,
+    pub integer: FT_Int32,
+    pub cardinal: FT_UInt32,
+}
 pub type PS_FontInfoRec = rust_ffi::PS_FontInfoRec;
 pub type PS_FontInfo = *mut PS_FontInfoRec;
 pub type T1_FontInfo = PS_FontInfoRec;
@@ -1325,6 +1334,57 @@ pub fn abi_byte_slice(ptr: *const FT_Byte, len: FT_UInt) -> Vec<u8> {
     // SAFETY: test callers pass live FreeType-shaped output pointers with
     // `len` bytes valid for the duration of the snapshot copy.
     unsafe { slice::from_raw_parts(ptr, len).to_vec() }
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_bdf_property_snapshot(property: &BDF_PropertyRec) -> AbiBdfPropertySnapshot {
+    match property.type_ {
+        rust_ffi::BDF_PROPERTY_TYPE_ATOM => {
+            // SAFETY: `type_ == ATOM` means FreeType/fontdone wrote the
+            // `atom` union member according to the public BDF_PropertyRec ABI.
+            let atom = unsafe { property.u.atom };
+            AbiBdfPropertySnapshot {
+                type_: property.type_,
+                atom,
+                integer: 0,
+                cardinal: 0,
+            }
+        }
+        rust_ffi::BDF_PROPERTY_TYPE_INTEGER => {
+            // SAFETY: `type_ == INTEGER` means the active union member is
+            // `integer`.
+            let integer = unsafe { property.u.integer };
+            AbiBdfPropertySnapshot {
+                type_: property.type_,
+                atom: ptr::null(),
+                integer,
+                cardinal: 0,
+            }
+        }
+        rust_ffi::BDF_PROPERTY_TYPE_CARDINAL => {
+            // SAFETY: `type_ == CARDINAL` means the active union member is
+            // `cardinal`.
+            let cardinal = unsafe { property.u.cardinal };
+            AbiBdfPropertySnapshot {
+                type_: property.type_,
+                atom: ptr::null(),
+                integer: 0,
+                cardinal,
+            }
+        }
+        _ => {
+            // SAFETY: error rows initialize the union through `cardinal` before
+            // calling the API.  FreeType leaves that storage untouched when it
+            // returns `BDF_PROPERTY_TYPE_NONE`.
+            let cardinal = unsafe { property.u.cardinal };
+            AbiBdfPropertySnapshot {
+                type_: property.type_,
+                atom: ptr::null(),
+                integer: cardinal as FT_Int32,
+                cardinal,
+            }
+        }
+    }
 }
 
 #[cfg(feature = "abi-test-support")]
