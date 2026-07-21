@@ -51,6 +51,24 @@ Remaining color batches
    - keep malformed-row parity scoped to exact malformed inputs and output
      preservation; do not use success fixtures as substitutes.
 
+Current sub-batch: `FT_Palette_Set_Foreground_Color`
+
+- Fixed core Rust FFI behavior for SFNT faces: FreeType 2.14.3
+  `src/base/ftcolor.c:95-111` stores `foreground_color` on `TT_Face`, sets the
+  validity flag, and returns `FT_Err_Ok`. Rust previously returned
+  `FT_Err_Unimplemented_Feature`.
+- Kept
+  `ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`
+  pending for route audit. The core state mutation is necessary but not enough
+  to count real parity because the row requires observing the later COLR
+  foreground `0xFFFF` output through a maintained public route. That final
+  proof needs rendered/blended foreground output, or an accepted public
+  `FT_Get_Paint`/layer observation that is explicitly treated as sufficient by
+  the manifest.
+- Verified non-SFNT no-op and null-face rows still match pinned C, Rust FFI,
+  thin C ABI, and WASM ABI exactly. Disabled-color-layer rows still require an
+  explicit disabled-color-layer oracle build.
+
 Verification gates for any color commit
 
 - Focused operation target(s), for example:

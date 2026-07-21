@@ -1270,6 +1270,8 @@ pub struct FT_Face {
     cpal: Option<Rc<RefCell<CpalState>>>,
     colr_v0: Option<Rc<ColrV0State>>,
     colr_v1: Option<Rc<ColrV1State>>,
+    have_foreground_color: Rc<RefCell<bool>>,
+    foreground_color: Rc<RefCell<FT_Color>>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
@@ -1417,6 +1419,13 @@ pub struct FT_Palette_Select_Snapshot {
     pub error: FT_Error,
     pub palette_is_null: bool,
     pub entries: Vec<FT_Color>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_Palette_Foreground_Snapshot {
+    pub have_foreground_color: bool,
+    pub foreground_color: FT_Color,
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -5204,6 +5213,16 @@ pub fn FT_Palette_Active_Entries_Copy(face: Option<&FT_Face>) -> Vec<FT_Color> {
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Foreground_Copy(
+    face: Option<&FT_Face>,
+) -> Option<FT_Palette_Foreground_Snapshot> {
+    face.map(|face| FT_Palette_Foreground_Snapshot {
+        have_foreground_color: *face.have_foreground_color.borrow(),
+        foreground_color: *face.foreground_color.borrow(),
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Palette_Set_Active_Entry_For_Test(
     face: Option<&FT_Face>,
     entry_index: usize,
@@ -5230,7 +5249,12 @@ pub fn FT_Palette_Set_Foreground_Color(face: Option<&FT_Face>, color: FT_Color) 
         let _ = color;
         return FT_Err_Ok;
     }
-    FT_Err_Unimplemented_Feature as FT_Error
+    // FreeType 2.14.3 `src/base/ftcolor.c:95-111` stores the foreground
+    // color on TT_Face and marks it valid for later COLR foreground-index
+    // rendering (`src/sfnt/ttcolr.c:1826-1833`).
+    *face.foreground_color.borrow_mut() = color;
+    *face.have_foreground_color.borrow_mut() = true;
+    FT_Err_Ok
 }
 
 fn winfnt_header_to_ffi(header: &WinFntHeader) -> FT_WinFNT_HeaderRec {
@@ -7527,6 +7551,8 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         cpal,
         colr_v0,
         colr_v1,
+        have_foreground_color: Rc::new(RefCell::new(false)),
+        foreground_color: Rc::new(RefCell::new(FT_Color::default())),
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
