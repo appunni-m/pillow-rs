@@ -15047,6 +15047,7 @@ static int emit_colr_variable_gradient_case(OracleFace* face) {
 
 static int is_colr_variable_gradient_case(const char* case_id) {
     return streq(case_id, "ftcolor.FT_ColorStop.iterator_output_values") ||
+           streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values") ||
            streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops");
 }
 
