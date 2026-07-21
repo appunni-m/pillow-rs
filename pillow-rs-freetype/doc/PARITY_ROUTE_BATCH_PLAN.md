@@ -500,6 +500,34 @@ Rows checked after `main` moved to `293f1c151`:
 | `fterrdef.FT_Err_Missing_Property.known_property_success` | Completed 2026-07-21. The active row now uses documented `autofitter:fallback-script` property get output instead of the invalid `svg:svg-hooks` spelling. Focused `FT_Property_Get` passes exact pinned C, Rust FFI, C ABI, and WASM ABI parity; route audit moved `pending-route 351 -> 350` and `real-parity 4609 -> 4610`. | Keep the old `svg:svg-hooks` finding as fixture-contract history; do not reintroduce it as a success row unless a typed `ot-svg:svg-hooks` route is implemented and the input is reviewed. |
 | `ftdriver.*.hinting_engine_property_runtime` | Focused run: `runnable=0 pending=4`. The rows require CFF, Type 1, and CID hinting-sensitive fixtures plus CFF/type1/t1cid `FT_Property_Set/Get` routing and public glyph-output comparison. | Do not count scalar constant values or no-op property sets. Real parity requires engine readback and changed public glyph metrics/outline/bitmap behavior where pinned C supports it. |
 
+### COLRv1 all-paints route classifier correction: 2026-07-21
+
+Rows promoted:
+
+- `ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values`
+- `ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator`
+
+Evidence:
+
+- The maintained all-paints route consumes
+  `fonts/color/colr-v1-all-paints.ttf` and compares pinned C, Rust FFI, thin
+  C ABI, and WASM ABI output for `FT_Get_Color_Glyph_Paint`,
+  `FT_Get_Paint`, `FT_PaintColrGlyph`, and the initialized
+  `FT_PaintColrLayers.layer_iterator`.
+- Focused run: `make -C pillow-rs-freetype test-op OP=ftcolor.get_paint`
+  passed `38/38`; pending rows dropped from six to four.
+- Route audit moved `pending-route 251 -> 249`, `real-parity 4712 -> 4714`,
+  and duplicate pending buckets `46 -> 45`.
+
+Reasoning:
+
+- These rows had already-run exact routes, but stale classifier logic treated a
+  declared future `malformed_font` asset as blocking. That asset is not consumed
+  by the maintained public payload route for these two rows.
+- No fixture output, expected output, threshold, or comparison logic was
+  weakened. The remaining COLRv1 layer terminal/iterator and linear-gradient
+  rows stay pending until they have exact same-input routes.
+
 ## Next 10+ row batches
 
 These are the viable high-count batches. Each must be attacked as an actual

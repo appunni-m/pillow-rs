@@ -2599,6 +2599,20 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
 def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcolor."):
         return None
+    # These rows are routed by `emit_colr_all_paints_case` and the matching
+    # Rust/C-ABI/WASM all-paints harness path.  Their fixture JSON still
+    # declares a future malformed-font asset, but this maintained public
+    # payload route consumes only `colr-v1-all-paints.ttf` and compares the
+    # public union/iterator output against pinned C.
+    if row.case_id in {
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
+    }:
+        return (
+            "COLRv1 all-paints FT_Get_Paint route validates PaintColrGlyph "
+            "payloads and initialized PaintColrLayers iterators through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if unresolved_assets_reason(row) is not None:
         return None
     if row.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform":
