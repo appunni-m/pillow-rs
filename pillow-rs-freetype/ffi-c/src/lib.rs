@@ -1132,6 +1132,30 @@ pub extern "C" fn FT_Get_Paint(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Paint_Layers(
+    face: FT_Face,
+    layer_iterator: *mut FT_LayerIterator,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint_Layers(
+        face_state(face).map(|state| &state.inner),
+        unsafe { layer_iterator.as_mut() },
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_layer_iterator(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    rust_ffi::FT_ColrV1_Paint_Layer_Iterator_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_colr_v1_paint_graph(
     face: FT_Face,

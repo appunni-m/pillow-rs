@@ -32,9 +32,9 @@ pub use handles::{
     FT_Get_Kerning, FT_Get_MM_Blend_Coordinates, FT_Get_MM_Var, FT_Get_MM_WeightVector,
     FT_Get_Module_Interface, FT_Get_Multi_Master, FT_Get_Name_Index, FT_Get_Next_Char,
     FT_Get_Outline_Glyph, FT_Get_PFR_Kerning, FT_Get_PS_Font_Info, FT_Get_PS_Font_Private,
-    FT_Get_PS_Font_Value, FT_Get_Paint, FT_Get_Postscript_Name, FT_Get_Sfnt_LangTag,
-    FT_Get_Sfnt_Name, FT_Get_Sfnt_Name_Count, FT_Get_Sfnt_Table, FT_Get_SubGlyph_Info,
-    FT_Get_Transform, FT_Get_TrueType_Engine_Type, FT_Get_Var_Axis_Flags,
+    FT_Get_PS_Font_Value, FT_Get_Paint, FT_Get_Paint_Layers, FT_Get_Postscript_Name,
+    FT_Get_Sfnt_LangTag, FT_Get_Sfnt_Name, FT_Get_Sfnt_Name_Count, FT_Get_Sfnt_Table,
+    FT_Get_SubGlyph_Info, FT_Get_Transform, FT_Get_TrueType_Engine_Type, FT_Get_Var_Axis_Flags,
     FT_Get_Var_Blend_Coordinates, FT_Get_Var_Design_Coordinates, FT_Get_WinFNT_Header,
     FT_Get_X11_Font_Format, FT_Glyph_Copy, FT_Glyph_Get_CBox, FT_Glyph_To_Bitmap,
     FT_Glyph_Transform_Outline, FT_GlyphSlot, FT_GlyphSlot_AdjustWeight, FT_GlyphSlot_Embolden,
@@ -66,6 +66,9 @@ pub use handles::{
     FT_Vector_Rotate, FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent,
     FTOutlineDecomposeRun,
 };
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub use handles::FT_ColrV1_Paint_Layer_Iterator_Copy;
 #[cfg(any(test, feature = "abi-test-support"))]
 pub use handles::{
     FT_ColrV1_PaintGraph_Copy, FT_ColrV1_PaintGraph_Snapshot, FT_ColrV1_PaintNode_Snapshot,

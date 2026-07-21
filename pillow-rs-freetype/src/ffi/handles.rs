@@ -28,9 +28,9 @@ use super::types::{
     FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
     FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
-    FT_OutlineSnapshot, FT_PaintComposite, FT_PaintGlyph, FT_PaintSolid, FT_Palette_Data,
-    FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode,
-    FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_OutlineSnapshot, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph, FT_PaintSolid,
+    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
+    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
     FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
     FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
@@ -1322,6 +1322,9 @@ struct ColrV1State {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ColrV1Paint {
+    Layers {
+        paints: Vec<ColrV1Paint>,
+    },
     Solid {
         palette_index: FT_UShort,
         alpha: FT_F2Dot14,
@@ -3686,9 +3689,11 @@ fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
         return None;
     }
     let base_glyph_list_offset = usize::try_from(read_u32_be(data, 14)?).ok()?;
+    let layer_list_offset = usize::try_from(read_u32_be(data, 18)?).ok()?;
     if base_glyph_list_offset == 0 {
         return None;
     }
+    let layer_offsets = parse_colr_v1_layer_offsets(data, layer_list_offset)?;
     let base_glyph_count = usize::try_from(read_u32_be(data, base_glyph_list_offset)?).ok()?;
     let records_offset = base_glyph_list_offset.checked_add(4)?;
     let records_end = records_offset.checked_add(base_glyph_count.checked_mul(6)?)?;
@@ -3702,18 +3707,68 @@ fn parse_colr_v1_table(data: &[u8]) -> Option<ColrV1State> {
         let glyph_index = FT_UInt::from(read_u16_be(data, record_offset)?);
         let paint_offset = usize::try_from(read_u32_be(data, record_offset + 2)?).ok()?;
         let paint_start = base_glyph_list_offset.checked_add(paint_offset)?;
-        let paint = parse_colr_v1_paint(data, paint_start, 0)?;
+        let paint = parse_colr_v1_paint(data, paint_start, 0, layer_list_offset, &layer_offsets)?;
         root_paints.insert(glyph_index, paint);
     }
     Some(ColrV1State { root_paints })
 }
 
-fn parse_colr_v1_paint(data: &[u8], offset: usize, depth: usize) -> Option<ColrV1Paint> {
+fn parse_colr_v1_layer_offsets(data: &[u8], layer_list_offset: usize) -> Option<Vec<usize>> {
+    if layer_list_offset == 0 {
+        return Some(Vec::new());
+    }
+    let layer_count = usize::try_from(read_u32_be(data, layer_list_offset)?).ok()?;
+    let offsets_start = layer_list_offset.checked_add(4)?;
+    let offsets_end = offsets_start.checked_add(layer_count.checked_mul(4)?)?;
+    if offsets_end > data.len() {
+        return None;
+    }
+    (0..layer_count)
+        .map(|index| {
+            let offset_pos = offsets_start.checked_add(index.checked_mul(4)?)?;
+            let relative = usize::try_from(read_u32_be(data, offset_pos)?).ok()?;
+            layer_list_offset.checked_add(relative)
+        })
+        .collect()
+}
+
+fn parse_colr_v1_paint(
+    data: &[u8],
+    offset: usize,
+    depth: usize,
+    layer_list_offset: usize,
+    layer_offsets: &[usize],
+) -> Option<ColrV1Paint> {
     if depth > 32 {
         return None;
     }
     let format = *data.get(offset)?;
     match format {
+        1 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:641-662` initializes an
+            // `FT_LayerIterator` from PaintColrLayers' NumLayers and
+            // FirstLayerIndex, then `FT_Get_Paint_Layers` resolves each layer
+            // offset relative to LayerV1List.
+            let num_layers = usize::from(*data.get(offset + 1)?);
+            let first_layer_index = usize::try_from(read_u32_be(data, offset + 2)?).ok()?;
+            let layer_end = first_layer_index.checked_add(num_layers)?;
+            if layer_list_offset == 0 || layer_end > layer_offsets.len() {
+                return None;
+            }
+            let paints = layer_offsets[first_layer_index..layer_end]
+                .iter()
+                .map(|&layer_offset| {
+                    parse_colr_v1_paint(
+                        data,
+                        layer_offset,
+                        depth + 1,
+                        layer_list_offset,
+                        layer_offsets,
+                    )
+                })
+                .collect::<Option<Vec<_>>>()?;
+            Some(ColrV1Paint::Layers { paints })
+        }
         2 => {
             // FreeType 2.14.3 `src/sfnt/ttcolr.c` exposes PaintSolid's
             // palette index and F2DOT14 alpha through `FT_PaintSolid`.
@@ -3728,7 +3783,13 @@ fn parse_colr_v1_paint(data: &[u8], offset: usize, depth: usize) -> Option<ColrV
             let nested_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
             let nested_start = offset.checked_add(nested_offset)?;
             Some(ColrV1Paint::Glyph {
-                paint: Box::new(parse_colr_v1_paint(data, nested_start, depth + 1)?),
+                paint: Box::new(parse_colr_v1_paint(
+                    data,
+                    nested_start,
+                    depth + 1,
+                    layer_list_offset,
+                    layer_offsets,
+                )?),
                 glyph_index: FT_UInt::from(read_u16_be(data, offset + 4)?),
             })
         }
@@ -3742,9 +3803,21 @@ fn parse_colr_v1_paint(data: &[u8], offset: usize, depth: usize) -> Option<ColrV
             let backdrop_offset = usize::try_from(read_u24_be(data, offset + 5)?).ok()?;
             let backdrop_start = offset.checked_add(backdrop_offset)?;
             Some(ColrV1Paint::Composite {
-                source_paint: Box::new(parse_colr_v1_paint(data, source_start, depth + 1)?),
+                source_paint: Box::new(parse_colr_v1_paint(
+                    data,
+                    source_start,
+                    depth + 1,
+                    layer_list_offset,
+                    layer_offsets,
+                )?),
                 composite_mode,
-                backdrop_paint: Box::new(parse_colr_v1_paint(data, backdrop_start, depth + 1)?),
+                backdrop_paint: Box::new(parse_colr_v1_paint(
+                    data,
+                    backdrop_start,
+                    depth + 1,
+                    layer_list_offset,
+                    layer_offsets,
+                )?),
             })
         }
         _ => None,
@@ -3859,6 +3932,9 @@ fn colr_v1_find_paint_by_ptr_in_node(
         return Some(paint);
     }
     match paint {
+        ColrV1Paint::Layers { paints } => paints
+            .iter()
+            .find_map(|paint| colr_v1_find_paint_by_ptr_in_node(paint, ptr)),
         ColrV1Paint::Solid { .. } => None,
         ColrV1Paint::Glyph { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
         ColrV1Paint::Composite {
@@ -3932,6 +4008,14 @@ pub fn FT_Get_Paint(
     };
 
     match node {
+        ColrV1Paint::Layers { paints } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_COLR_LAYERS as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                colr_layers: FT_PaintColrLayers {
+                    layer_iterator: colr_v1_layer_iterator(paints, 0),
+                },
+            };
+        }
         ColrV1Paint::Solid {
             palette_index,
             alpha,
@@ -3973,6 +4057,108 @@ pub fn FT_Get_Paint(
     1
 }
 
+fn colr_v1_layer_iterator(paints: &[ColrV1Paint], layer: usize) -> FT_LayerIterator {
+    FT_LayerIterator {
+        num_layers: paints.len().try_into().unwrap_or(FT_UInt::MAX),
+        layer: layer.try_into().unwrap_or(FT_UInt::MAX),
+        p: paints
+            .as_ptr()
+            .wrapping_add(layer)
+            .cast_mut()
+            .cast::<FT_Byte>(),
+    }
+}
+
+fn colr_v1_find_layer_paints_by_iterator<'a>(
+    state: &'a ColrV1State,
+    iterator: &FT_LayerIterator,
+) -> Option<&'a [ColrV1Paint]> {
+    state
+        .root_paints
+        .values()
+        .find_map(|paint| colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator))
+}
+
+fn colr_v1_find_layer_paints_by_iterator_in_node<'a>(
+    paint: &'a ColrV1Paint,
+    iterator: &FT_LayerIterator,
+) -> Option<&'a [ColrV1Paint]> {
+    match paint {
+        ColrV1Paint::Layers { paints } => {
+            let layer_index = usize::try_from(iterator.layer).ok()?;
+            if iterator.num_layers != paints.len().try_into().ok()? || layer_index > paints.len() {
+                return None;
+            }
+            let expected_p = paints.as_ptr().wrapping_add(layer_index).cast::<FT_Byte>();
+            if std::ptr::addr_eq(expected_p, iterator.p.cast_const()) {
+                Some(paints)
+            } else {
+                None
+            }
+        }
+        ColrV1Paint::Solid { .. } => None,
+        ColrV1Paint::Glyph { paint, .. } => {
+            colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            backdrop_paint,
+            ..
+        } => colr_v1_find_layer_paints_by_iterator_in_node(source_paint, iterator)
+            .or_else(|| colr_v1_find_layer_paints_by_iterator_in_node(backdrop_paint, iterator)),
+    }
+}
+
+pub fn FT_Get_Paint_Layers(
+    face: Option<&FT_Face>,
+    iterator: Option<&mut FT_LayerIterator>,
+    opaque_paint: Option<&mut FT_OpaquePaint>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(opaque_paint) = opaque_paint else {
+        return 0;
+    };
+    if iterator.layer == iterator.num_layers {
+        return 0;
+    }
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(paints) = colr_v1_find_layer_paints_by_iterator(colr, iterator) else {
+        return 0;
+    };
+    let Ok(layer_index) = usize::try_from(iterator.layer) else {
+        return 0;
+    };
+    let Some(layer_paint) = paints.get(layer_index) else {
+        return 0;
+    };
+    *opaque_paint = colr_v1_paint_to_opaque(layer_paint);
+    let next_layer = layer_index.saturating_add(1);
+    *iterator = colr_v1_layer_iterator(paints, next_layer);
+    1
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_Layer_Iterator_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    if opaque_paint.p.is_null() || opaque_paint.insert_root_transform != 0 {
+        return None;
+    }
+    let colr = face?.colr_v1.as_ref()?;
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::Layers { paints } => Some(colr_v1_layer_iterator(paints, 0)),
+        _ => None,
+    }
+}
+
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_ColrV1_PaintGraph_Copy(face: Option<&FT_Face>) -> Option<FT_ColrV1_PaintGraph_Snapshot> {
     let colr = face?.colr_v1.as_ref()?;
@@ -3995,6 +4181,19 @@ fn colr_v1_snapshot_paint(
     nodes: &mut Vec<FT_ColrV1_PaintNode_Snapshot>,
 ) {
     match paint {
+        ColrV1Paint::Layers { paints } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: paints.len().try_into().unwrap_or(FT_UShort::MAX),
+            });
+            for paint in paints {
+                colr_v1_snapshot_paint(paint, depth + 1, nodes);
+            }
+        }
         ColrV1Paint::Solid {
             palette_index,
             alpha,

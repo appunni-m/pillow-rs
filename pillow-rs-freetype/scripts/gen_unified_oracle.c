@@ -14120,6 +14120,89 @@ static void print_colr_paint_node_json(FT_Face face, FT_OpaquePaint opaque, int 
     printf("}");
 }
 
+static void print_colr_paint_layer_call_json(const char* label,
+                                             FT_Bool result,
+                                             FT_LayerIterator iterator,
+                                             FT_OpaquePaint paint) {
+    printf("{\"label\":\"%s\",\"return\":%u,\"iterator\":",
+           label,
+           result);
+    print_layer_iterator_json(iterator);
+    printf(",\"paint\":");
+    print_opaque_paint_json(paint);
+    printf("}");
+}
+
+static void print_colr_paint_layers_sequence_json(FT_Face face,
+                                                  FT_UInt base_glyph,
+                                                  int max_calls) {
+    FT_OpaquePaint root_opaque;
+    memset(&root_opaque, 0, sizeof(root_opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &root_opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, root_opaque, &paint);
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS) {
+        iterator = paint.u.colr_layers.layer_iterator;
+    }
+    FT_LayerIterator initial_iterator = iterator;
+    printf("{\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(root_opaque);
+    printf(",\"paint_return\":%u,\"paint_format\":%d,\"initial_iterator\":",
+           paint_return,
+           paint.format);
+    print_layer_iterator_json(initial_iterator);
+    printf(",\"calls\":[");
+    for (int i = 0; i < max_calls; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_OpaquePaint layer_paint;
+        layer_paint.p = (FT_Byte*)1;
+        layer_paint.insert_root_transform = 0x7F;
+        FT_Bool result = FT_Get_Paint_Layers(face, &iterator, &layer_paint);
+        char label[16];
+        snprintf(label, sizeof(label), "call_%d", i + 1);
+        print_colr_paint_layer_call_json(label, result, iterator, layer_paint);
+    }
+    printf("]}");
+}
+
+static int emit_color_paint_layers_case(const char* case_id, OracleFace* face) {
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequence\":");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequences\":[");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf(",");
+        print_colr_paint_layers_sequence_json(face->face, 37, 4);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequence\":");
+        print_colr_paint_layers_sequence_json(face->face, 37, 5);
+        printf("}}\n");
+        return 0;
+    }
+    return 2;
+}
+
 static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, int depth) {
     FT_COLR_Paint paint;
     memset(&paint, 0, sizeof(paint));
@@ -14190,10 +14273,19 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
         fprintf(stderr, "--color-paint-graph-case requires CASE SOURCE_KIND SOURCE FACE_INDEX\n");
         return 2;
     }
+    const char* case_id = argv[2];
     OracleFace face;
     int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
     if (opened != 0) {
         return opened;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
+        streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
+        int result = emit_color_paint_layers_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
     }
 
     printf("{");

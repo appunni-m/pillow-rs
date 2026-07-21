@@ -190,6 +190,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_color_glyph_layer",
     "fontdone_wasm_get_color_glyph_paint",
     "fontdone_wasm_get_paint",
+    "fontdone_wasm_get_paint_layers",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
@@ -2641,6 +2642,12 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "COLRv1 PaintComposite mode graph validates every real composite "
             "mode and sentinel absence through pinned C oracle, Rust FFI, "
             "C ABI, and WASM ABI"
+        )
+    if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload":
+        return (
+            "COLRv1 PaintColrLayers payload and FT_Get_Paint_Layers traversal "
+            "validate through the maintained layer-list fixture, pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
         row.case_id.endswith(".paint_composite_runtime")
