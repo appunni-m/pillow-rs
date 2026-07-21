@@ -2321,14 +2321,19 @@ pub extern "C" fn FT_Property_Get(
                 None,
             );
         };
-        let face = face_state(prop.face.cast::<FT_FaceRec>()).map(|state| &state.inner);
-        return rust_ffi::FT_Property_Get_GlyphToScriptMap(
+        let requested_face = prop.face.cast::<FT_FaceRec>();
+        let face = face_state(requested_face).map(|state| &state.inner);
+        let error = rust_ffi::FT_Property_Get_GlyphToScriptMap(
             library_ref(library),
             module_name.as_deref(),
             property_name.as_deref(),
             face,
             Some(prop),
         );
+        if error == rust_ffi::FT_Err_Ok {
+            prop.face = requested_face.cast();
+        }
+        return error;
     }
     if is_increase_x_height_property(module_name.as_deref(), property_name.as_deref()) {
         let Some(prop) = (unsafe { value.cast::<rust_ffi::FT_Prop_IncreaseXHeight>().as_mut() })
@@ -2363,6 +2368,16 @@ pub extern "C" fn FT_Property_Get(
         property_name.as_deref(),
         value,
     )
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn abi_glyph_to_script_map_sample(
+    face: FT_Face,
+    glyph_indices: &[FT_UInt],
+) -> Vec<(FT_UInt, FT_UShort)> {
+    face_state(face).map_or_else(Vec::new, |state| {
+        rust_ffi::FT_Glyph_To_Script_Map_Sample_For_Test(&state.inner, glyph_indices)
+    })
 }
 
 #[unsafe(no_mangle)]

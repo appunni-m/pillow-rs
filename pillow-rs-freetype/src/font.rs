@@ -3191,6 +3191,18 @@ impl Font {
             .unwrap_or(0)
     }
 
+    /// Return the FreeType autofitter glyph style map for the active face.
+    ///
+    /// This is the face-owned `glyph_styles` payload exposed by
+    /// `FT_Prop_GlyphToScriptMap`; values are internal autofitter style indexes
+    /// plus flags, not public `FT_AUTOHINTER_SCRIPT_*` constants.
+    pub fn autohint_glyph_style_map(&self) -> Vec<u16> {
+        crate::autohint::globals::build_public_glyph_style_map(
+            &self.data,
+            self.data.maxp.num_glyphs,
+        )
+    }
+
     /// Equivalent to `FT_Face_GetCharVariantIndex`.
     pub fn char_variant_index(&self, codepoint: u32, variant_selector: u32) -> u16 {
         self.data

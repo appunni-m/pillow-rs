@@ -67,6 +67,68 @@ struct FaceCoverage {
     digit_glyphs: Vec<bool>,
 }
 
+const AF_STYLE_MASK: u16 = 0x1FFF;
+const AF_DIGIT: u16 = 0x8000;
+const AF_NONBASE: u16 = 0x4000;
+const AF_HAS_CMAP_ENTRY: u16 = 0x2000;
+const PINNED_FT_STYLE_FALLBACK: u16 = 86;
+
+/// Build the public `AF_FaceGlobalsRec::glyph_styles` map returned by
+/// `FT_Prop_GlyphToScriptMap`.
+///
+/// FreeType exposes this array directly from `af_property_get_face_globals`
+/// (`src/autofit/afmodule.c:296-304`).  Values are not public
+/// `FT_AUTOHINTER_SCRIPT_*` constants: they are internal style indexes ORed
+/// with `AF_HAS_CMAP_ENTRY`, `AF_NONBASE`, and `AF_DIGIT` flags from
+/// `src/autofit/afglobal.h:76-84`.
+pub fn build_public_glyph_style_map(font_data: &FontData, glyph_count: u16) -> Vec<u16> {
+    let ng = usize::from(glyph_count);
+    let mut glyph_styles = vec![AF_STYLE_MASK; ng];
+
+    for (si, style) in STYLE_TABLE.iter().enumerate() {
+        let style_value = u16::try_from(si).unwrap_or(AF_STYLE_MASK);
+        for range in style.uni_ranges {
+            for cp in range.first..=range.last {
+                if let Some(gi) = font_data.cmap.char_index(cp) {
+                    let gi = usize::from(gi);
+                    if gi != 0 && gi < ng && (glyph_styles[gi] & AF_STYLE_MASK) == AF_STYLE_MASK {
+                        glyph_styles[gi] = style_value | AF_HAS_CMAP_ENTRY;
+                    }
+                }
+            }
+        }
+
+        for range in style.non_base_ranges {
+            for cp in range.first..=range.last {
+                if let Some(gi) = font_data.cmap.char_index(cp) {
+                    let gi = usize::from(gi);
+                    if gi != 0 && gi < ng && (glyph_styles[gi] & AF_STYLE_MASK) == style_value {
+                        glyph_styles[gi] |= AF_NONBASE;
+                    }
+                }
+            }
+        }
+    }
+
+    for cp in b'0'..=b'9' {
+        if let Some(gi) = font_data.cmap.char_index(u32::from(cp)) {
+            let gi = usize::from(gi);
+            if gi != 0 && gi < ng {
+                glyph_styles[gi] |= AF_DIGIT;
+            }
+        }
+    }
+
+    for style in &mut glyph_styles {
+        if (*style & AF_STYLE_MASK) == AF_STYLE_MASK {
+            *style &= !AF_STYLE_MASK;
+            *style |= PINNED_FT_STYLE_FALLBACK;
+        }
+    }
+
+    glyph_styles
+}
+
 impl FaceGlobals {
     /// Create FaceGlobals. Script coverage is computed lazily on first
     /// auto-hint metrics access, so default native TrueType loads do not pay

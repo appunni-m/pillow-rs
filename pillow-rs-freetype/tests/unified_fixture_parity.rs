@@ -17811,6 +17811,9 @@ fn property_get_case_output(
         "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c" => {
             property_glyph_to_script_map_invalid_face_output(backend)
         }
+        "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map" => {
+            property_glyph_to_script_map_success_output(case, backend)
+        }
         other => Err(format!("unsupported property get case {other}")),
     }
 }
@@ -18547,6 +18550,149 @@ fn property_map_identity_json(map: *mut FT_UShort) -> Value {
         },
         "nullness": map.is_null()
     })
+}
+
+fn glyph_to_script_map_sample_from_face(face: &FT_Face, map: *mut FT_UShort) -> Vec<Value> {
+    let mut glyph_indices = vec![0];
+    for cp in [0x41, 0x4E2D, 0x0905] {
+        let glyph_index = FT_Get_Char_Index(face, cp);
+        if glyph_index != 0 {
+            glyph_indices.push(glyph_index);
+        }
+    }
+    if map.is_null() {
+        return Vec::new();
+    }
+    FT_Glyph_To_Script_Map_Sample_For_Test(face, &glyph_indices)
+        .into_iter()
+        .map(|(glyph_index, script)| {
+            json!({
+                "glyph_index": glyph_index,
+                "script": script
+            })
+        })
+        .collect()
+}
+
+fn property_glyph_to_script_map_output(
+    error: FT_Error,
+    face_identity: Value,
+    map: *mut FT_UShort,
+    num_glyphs: FT_Long,
+    map_sample: Vec<Value>,
+) -> RunOutput {
+    ok(json!({
+        "error": error,
+        "prop_after": {
+            "face": face_identity,
+            "map": property_map_identity_json(map)
+        },
+        "num_glyphs": num_glyphs,
+        "map_sample": map_sample
+    }))
+}
+
+fn property_glyph_to_script_map_success_output(
+    case: &InputCase,
+    backend: PropertyBackend,
+) -> Result<RunOutput, String> {
+    match backend {
+        PropertyBackend::Rust => {
+            let library = FT_Init_FreeType();
+            let face = open_face(case)?;
+            let face_ptr = (&face as *const FT_Face).cast_mut().cast();
+            let mut prop = FT_Prop_GlyphToScriptMap {
+                face: face_ptr,
+                map: std::ptr::without_provenance_mut(1),
+            };
+            let error = FT_Property_Get_GlyphToScriptMap(
+                Some(&library),
+                Some("autofitter"),
+                Some("glyph-to-script-map"),
+                Some(&face),
+                Some(&mut prop),
+            );
+            let sample = glyph_to_script_map_sample_from_face(&face, prop.map);
+            Ok(property_glyph_to_script_map_output(
+                error,
+                property_face_identity_json(&face, prop.face),
+                prop.map,
+                face.num_glyphs,
+                sample,
+            ))
+        }
+        PropertyBackend::CAbi => {
+            let (library, face) = c_open_face(case)?;
+            let mut prop = FT_Prop_GlyphToScriptMap {
+                face: face.cast(),
+                map: std::ptr::without_provenance_mut(1),
+            };
+            let error = c_abi::FT_Property_Get(
+                library,
+                c"autofitter".as_ptr(),
+                c"glyph-to-script-map".as_ptr(),
+                (&mut prop as *mut FT_Prop_GlyphToScriptMap).cast(),
+            );
+            let mut glyph_indices = vec![0];
+            for cp in [0x41, 0x4E2D, 0x0905] {
+                let glyph_index = c_abi::FT_Get_Char_Index(face, cp);
+                if glyph_index != 0 {
+                    glyph_indices.push(glyph_index);
+                }
+            }
+            let num_glyphs = c_abi::abi_face_info(face)
+                .map(|info| info.num_glyphs)
+                .unwrap_or(0);
+            let sample = c_abi::abi_glyph_to_script_map_sample(face, &glyph_indices)
+                .into_iter()
+                .map(|(glyph_index, script)| json!({"glyph_index": glyph_index, "script": script}))
+                .collect();
+            let output = property_glyph_to_script_map_output(
+                error,
+                property_face_identity_json(face, prop.face),
+                prop.map,
+                num_glyphs,
+                sample,
+            );
+            c_done_face(face);
+            c_done_library(library);
+            Ok(output)
+        }
+        PropertyBackend::Wasm => {
+            let handle = wasm_open_face(case)?;
+            let glyph_indices = [0, 0x41, 0x4E2D, 0x0905]
+                .into_iter()
+                .filter_map(|cp| {
+                    if cp == 0 {
+                        Some(0)
+                    } else {
+                        let glyph = wasm_abi::fontdone_wasm_get_char_index(handle, cp);
+                        (glyph != 0).then_some(glyph)
+                    }
+                })
+                .collect::<Vec<_>>();
+            let snapshot =
+                wasm_abi::abi_property_glyph_to_script_map_snapshot(handle, &glyph_indices);
+            wasm_done_face(handle);
+            Ok(property_glyph_to_script_map_output(
+                snapshot.error,
+                json!({"identity_class": snapshot.face_identity}),
+                if snapshot.map_is_null {
+                    std::ptr::null_mut()
+                } else {
+                    std::ptr::without_provenance_mut(2)
+                },
+                snapshot.num_glyphs,
+                snapshot
+                    .sample
+                    .into_iter()
+                    .map(|(glyph_index, script)| {
+                        json!({"glyph_index": glyph_index, "script": script})
+                    })
+                    .collect(),
+            ))
+        }
+    }
 }
 
 fn property_glyph_to_script_map_invalid_face_output(
@@ -22490,6 +22636,7 @@ fn property_scalar_route_supported(case: &InputCase) -> bool {
             | "fterrdef.FT_Err_Missing_Property.driver_property_unknown_name"
             | "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version"
             | "ftdriver.FT_Prop_GlyphToScriptMap.invalid_face_error_matches_c"
+            | "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map"
             | "ftdriver.FT_Prop_IncreaseXHeight.invalid_face_error_matches_c"
             | "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit"
             | "ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.default_script_property_roundtrip"
@@ -22735,6 +22882,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "FT_Property_Set_then_Get"
             if case.case_id
                 == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
+        {
+            let mut args = vec!["--property-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "FT_Property_Get"
+            if case.case_id
+                == "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map" =>
         {
             let mut args = vec!["--property-case".to_string(), case.case_id.clone()];
             push_font_source(case, &mut args)?;
