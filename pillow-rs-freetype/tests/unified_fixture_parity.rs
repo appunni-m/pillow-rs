@@ -33583,9 +33583,17 @@ fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, S
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
-        Ok(slot) => Ok(ok(rust_bitmap_glyph_json(
-            &slot,
+    match loaded
+        .and_then(|slot| FT_Get_Outline_Glyph(Some(&slot)))
+        .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
+    {
+        Ok(glyph) => Ok(ok(rust_owned_bitmap_glyph_json(
+            glyph.root.format,
+            glyph.root.advance.x,
+            glyph.root.advance.y,
+            glyph.left,
+            glyph.top,
+            &glyph.bitmap,
             bool_param(&case.inputs.params, "destroy", false)?,
         ))),
         Err(err) => Ok(error(err)),
@@ -33598,20 +33606,51 @@ fn c_glyph_to_bitmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    let err = if load_err == FT_Err_Ok {
-        c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?)
-    } else {
-        load_err
-    };
-    if err != FT_Err_Ok {
-        return Ok(error(err));
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut err = load_err;
+    if err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut glyph);
     }
-    let slot = c_abi::abi_slot_snapshot(face)
-        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
-    Ok(ok(c_bitmap_glyph_json(
-        &slot,
-        bool_param(&case.inputs.params, "destroy", false)?,
-    )))
+    if err == FT_Err_Ok {
+        err = c_abi::FT_Glyph_To_Bitmap(
+            &mut glyph,
+            render_mode_param(&case.inputs.params)?,
+            ptr::null(),
+            if bool_param(&case.inputs.params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        );
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(&case.inputs.params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(err)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    Ok(output)
 }
 
 fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
@@ -33620,20 +33659,50 @@ fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, St
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    let err = if load_err == FT_Err_Ok {
-        wasm_abi::fontdone_wasm_render_glyph(handle, render_mode_param(&case.inputs.params)?)
-    } else {
-        load_err
-    };
-    if err != FT_Err_Ok {
-        return Ok(error(err));
+    let mut glyph_handle = 0usize;
+    let mut err = load_err;
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
     }
-    let slot = wasm_abi::abi_slot_snapshot(handle)
-        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
-    Ok(ok(wasm_bitmap_glyph_json(
-        &slot,
-        bool_param(&case.inputs.params, "destroy", false)?,
-    )))
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_glyph_to_bitmap_handle(
+            &mut glyph_handle,
+            render_mode_param(&case.inputs.params)?,
+            ptr::null(),
+            if bool_param(&case.inputs.params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        );
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(&case.inputs.params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(err)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(output)
 }
 
 fn ftglyph_bitmap_record_case(case: &InputCase) -> bool {
@@ -37569,6 +37638,59 @@ fn wasm_bitmap_glyph_json(slot: &wasm_abi::AbiSlotSnapshot, destroy: bool) -> Va
     bitmap_glyph_json(slot.format, slot.advance.x, slot.advance.y, destroy, bitmap)
 }
 
+fn rust_owned_bitmap_glyph_json(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    left: i32,
+    top: i32,
+    bitmap: &FT_Bitmap,
+    destroy: bool,
+) -> Value {
+    bitmap_glyph_json_direct(
+        format,
+        advance_x,
+        advance_y,
+        destroy,
+        bitmap_payload_json(
+            bitmap.width,
+            bitmap.rows,
+            bitmap.pitch,
+            bitmap.pixel_mode,
+            bitmap.num_grays,
+            left,
+            top,
+            &bitmap.buffer,
+        ),
+    )
+}
+
+fn bitmap_payload_json(
+    width: u32,
+    rows: u32,
+    pitch: i32,
+    pixel_mode: i32,
+    num_grays: u16,
+    left: i32,
+    top: i32,
+    buffer: &[u8],
+) -> Value {
+    if buffer.is_empty() {
+        Value::Null
+    } else {
+        json!({
+            "width": width,
+            "rows": rows,
+            "pitch": pitch,
+            "pixel_mode": pixel_mode,
+            "num_grays": num_grays,
+            "left": left,
+            "top": top,
+            "buffer_hex": hex_bytes(buffer)
+        })
+    }
+}
+
 fn bitmap_glyph_json(
     format: i32,
     advance_x: i64,
@@ -37581,6 +37703,24 @@ fn bitmap_glyph_json(
         "advance": {
             "x": glyph_advance_16dot16(advance_x),
             "y": glyph_advance_16dot16(advance_y)
+        },
+        "destroy": destroy,
+        "bitmap": bitmap
+    })
+}
+
+fn bitmap_glyph_json_direct(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    destroy: bool,
+    bitmap: Value,
+) -> Value {
+    json!({
+        "format": format,
+        "advance": {
+            "x": advance_x,
+            "y": advance_y
         },
         "destroy": destroy,
         "bitmap": bitmap
