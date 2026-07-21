@@ -7,7 +7,7 @@ fixture substitutions, or green placeholders as parity.
 Current verified route-audit baseline:
 
 ```text
-route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 422, 'real-null-validation': 9, 'real-parity': 4538}
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 402, 'real-null-validation': 9, 'real-parity': 4558}
 ```
 
 Verification command:
@@ -30,6 +30,7 @@ Rows checked before selecting the next implementation batch:
 | `ftbzip2.*` | `make -C pillow-rs-freetype test-op OP=ftbzip2.stream_open_bzip2`, `stream_read`, `stream_close` | open errors `passed=2`, success/read/close pending | Error rows are already real. Success/read/close need a pure-Rust bzip2 stream implementation; do not fake with fixture-byte comparisons. |
 | `ftcache.FTC_SBitCache_LookupScaler` | `make -C pillow-rs-freetype test-op OP=ftcache.sbit_cache_lookup_scaler` | `passed=7 pending=0` | Completed. Route compares scaler size selection and FT_ULong→FT_Int32 load-flag truncation against pinned C through Rust FFI, C ABI, and WASM ABI. |
 | `ftcache.FTC_CMapCache_Lookup` | `make -C pillow-rs-freetype test-op OP=ftcache.cmap_cache_lookup` | `passed=18 pending=0` | Completed. Route compares pinned C FTC lookup output for glyph index, repeat lookup, requester count, negative cmap-index behavior, RemoveFaceID, and Manager_Reset against Rust FFI, C ABI, and WASM ABI observable behavior. |
+| `ftcache.FTC_ImageCache_LookupScaler` | `make -C pillow-rs-freetype test-op OP=ftcache.image_cache_lookup_scaler` | `passed=24 pending=0` | Completed. Route compares actual pinned C `FTC_ImageCache_LookupScaler` output for scaler size selection, glyph hit/miss, FT_ULong→FT_Int32 load-flag truncation, public glyph records, and node-unref classification against Rust FFI, C ABI, and WASM ABI. |
 
 ## Next 10+ row batches
 
@@ -42,10 +43,8 @@ Current pending rows: at least 70 across `ftcache.*`.
 
 Primary operations:
 
-- `ftcache.image_cache_lookup_scaler`
 - `ftcache.manager_lookup_size`
 - `ftcache.manager_remove_face_id`
-- `ftcache.sbit_cache_lookup_scaler`
 - `ftcache.manager_done`
 - `ftcache.manager_lookup_face`
 - `ftcache.cmap_cache_new`
