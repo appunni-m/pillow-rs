@@ -9387,6 +9387,23 @@ fn wasm_get_ps_font_value_encoding(case: &InputCase) -> Result<RunOutput, String
 }
 
 fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("rows").is_some() {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = font_asset_bytes(font_asset_for_source(case, row)?)?;
+                let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(row)?)?;
+                let mut private = PS_PrivateRec::default();
+                let err = FT_Get_PS_Font_Private(Some(&face), Some(&mut private));
+                if err == FT_Err_Ok {
+                    Ok(ps_private_json(&private))
+                } else {
+                    Ok(Value::Null)
+                }
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = PS_PrivateRec::default();
@@ -9395,6 +9412,27 @@ fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("rows").is_some() {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = font_asset_bytes(font_asset_for_source(case, row)?)?;
+                let (library, face) =
+                    c_new_face_from_bytes(bytes.as_ref(), face_index_param(row)?)?;
+                let mut private = c_abi::PS_PrivateRec::default();
+                let err = c_abi::FT_Get_PS_Font_Private(face, &mut private);
+                let output = if err == FT_Err_Ok {
+                    ps_private_json(&private)
+                } else {
+                    Value::Null
+                };
+                c_done_face(face);
+                c_done_library(library);
+                Ok(output)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
@@ -9406,6 +9444,25 @@ fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
+    if case.inputs.params.get("rows").is_some() {
+        let rows = ps_font_value_standard_rows(case)?
+            .into_iter()
+            .map(|row| {
+                let bytes = font_asset_bytes(font_asset_for_source(case, row)?)?;
+                let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(row)?)?;
+                let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
+                let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, &mut private);
+                let output = if err == FT_Err_Ok {
+                    wasm_ps_private_json(&private)
+                } else {
+                    Value::Null
+                };
+                wasm_done_face(handle);
+                Ok(output)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        return Ok(ok(json!({"rows": rows})));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
@@ -22429,10 +22486,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "t1tables.get_ps_font_private_mm_blend" => {
             if params.get("rows").is_some() {
-                return Err(
-                    "PS private multi-source rows require a maintained multi-row oracle route"
-                        .to_string(),
-                );
+                let rows = ps_font_value_standard_rows(case)?;
+                let mut args = vec![
+                    "--ps-font-private-rowset".to_string(),
+                    rows.len().to_string(),
+                ];
+                for row in rows {
+                    push_font_source_from_param(case, row, &mut args)?;
+                    args.push(face_index_param(row)?.to_string());
+                }
+                return Ok(args);
             }
             let mut args = vec!["--ps-font-private".to_string()];
             push_font_source_from_param(case, params, &mut args)?;

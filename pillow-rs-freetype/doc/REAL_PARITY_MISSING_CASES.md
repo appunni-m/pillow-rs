@@ -11404,6 +11404,40 @@ make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_value_encoding
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: Type1 ForceBold PS private rowset route
+
+Batch target:
+
+- Promote `T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value` without
+  collapsing its declared two-face comparison into a single-font shortcut.
+- Add a maintained multi-row `FT_Get_PS_Font_Private` oracle/harness route that
+  executes each declared face source through pinned C FreeType, Rust FFI, thin C
+  ABI, and WASM ABI.
+
+Row promoted in this batch:
+
+- `t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value`
+
+Implementation notes:
+
+- The row uses both `fonts/type1/mm-blend-fontinfo-private.pfb` and
+  `fonts/type1/non-mm-force-bold.pfb` as declared in the fixture input.  The
+  harness now preserves that rowset shape instead of rejecting it as a
+  multi-source placeholder.
+- The route compares full `PS_PrivateRec` rows, including `force_bold`, rather
+  than special-casing the boolean field.
+- The underline blend dictionary rows remain pending.  They declare
+  `input/fonts/type1-mm/underline-position.pfb` and
+  `input/fonts/type1-mm/underline-thickness.pfb`; those need real generated
+  blend-dictionary fixtures before promotion.
+
+Verification for the ForceBold rowset batch:
+
+```bash
+make -C pillow-rs-freetype test-op OP=t1tables.get_ps_font_private_mm_blend
+make -C pillow-rs-freetype route-audit
+```
+
 ### Type1 PS Private dictionary route promotion
 
 Promoted rows:
