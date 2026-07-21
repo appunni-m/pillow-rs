@@ -2649,6 +2649,12 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "validate through the maintained layer-list fixture, pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI"
         )
+    if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime":
+        return (
+            "COLRv1 PaintColrGlyph payload and referenced BaseGlyphV1List root "
+            "lookup validate through the maintained recursive COLRv1 fixture, "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
         row.case_id.endswith(".paint_composite_runtime")
         or row.case_id.endswith(".paint_composite_mode_runtime")

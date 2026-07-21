@@ -28,14 +28,14 @@ use super::types::{
     FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
     FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
-    FT_OutlineSnapshot, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph, FT_PaintSolid,
-    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
-    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
-    FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
-    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
-    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
-    TT_VertHeader,
+    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph,
+    FT_PaintSolid, FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap,
+    FT_Prop_IncreaseXHeight, FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short,
+    FT_Size, FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream,
+    FT_StreamDesc, FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong,
+    FT_UShort, FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys,
+    PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT,
+    TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -1332,6 +1332,9 @@ enum ColrV1Paint {
     Glyph {
         glyph_index: FT_UInt,
         paint: Box<ColrV1Paint>,
+    },
+    ColrGlyph {
+        glyph_index: FT_UInt,
     },
     Composite {
         source_paint: Box<ColrV1Paint>,
@@ -3793,6 +3796,13 @@ fn parse_colr_v1_paint(
                 glyph_index: FT_UInt::from(read_u16_be(data, offset + 4)?),
             })
         }
+        11 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:706-711` exposes
+            // PaintColrGlyph as a scalar `FT_PaintColrGlyph.glyphID` payload.
+            Some(ColrV1Paint::ColrGlyph {
+                glyph_index: FT_UInt::from(read_u16_be(data, offset + 1)?),
+            })
+        }
         32 => {
             // COLRv1 PaintComposite stores source and backdrop as Offset24
             // values relative to the current record and exposes a public
@@ -3937,6 +3947,7 @@ fn colr_v1_find_paint_by_ptr_in_node(
             .find_map(|paint| colr_v1_find_paint_by_ptr_in_node(paint, ptr)),
         ColrV1Paint::Solid { .. } => None,
         ColrV1Paint::Glyph { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
+        ColrV1Paint::ColrGlyph { .. } => None,
         ColrV1Paint::Composite {
             source_paint,
             backdrop_paint,
@@ -4039,6 +4050,14 @@ pub fn FT_Get_Paint(
                 },
             };
         }
+        ColrV1Paint::ColrGlyph { glyph_index } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_COLR_GLYPH as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                colr_glyph: FT_PaintColrGlyph {
+                    glyphID: *glyph_index,
+                },
+            };
+        }
         ColrV1Paint::Composite {
             source_paint,
             composite_mode,
@@ -4100,6 +4119,7 @@ fn colr_v1_find_layer_paints_by_iterator_in_node<'a>(
         ColrV1Paint::Glyph { paint, .. } => {
             colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
         }
+        ColrV1Paint::ColrGlyph { .. } => None,
         ColrV1Paint::Composite {
             source_paint,
             backdrop_paint,
@@ -4216,6 +4236,14 @@ fn colr_v1_snapshot_paint(
             });
             colr_v1_snapshot_paint(paint, depth + 1, nodes);
         }
+        ColrV1Paint::ColrGlyph { glyph_index } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_COLR_GLYPH as FT_UShort,
+            palette_index: 0,
+            alpha: 0,
+            glyph_index: *glyph_index,
+            composite_mode: 0,
+        }),
         ColrV1Paint::Composite {
             source_paint,
             composite_mode,
