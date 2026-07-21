@@ -6353,6 +6353,129 @@ static void print_done_bitmap_glyph_payload(FT_GlyphSlot slot) {
     }
 }
 
+static void print_done_bitmap_glyph_row(const char* creation_path, FT_Error err, FT_Glyph glyph) {
+    FT_Glyph_Format format = 0;
+    const char* buffer_class = "null";
+    unsigned int width = 0;
+    unsigned int rows = 0;
+    int pitch = 0;
+    if (!err && glyph) {
+        FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
+        FT_Bitmap* bitmap = &bitmap_glyph->bitmap;
+        format = glyph->format;
+        buffer_class = bitmap->buffer ? "owned_non_null" : "null";
+        width = bitmap->width;
+        rows = bitmap->rows;
+        pitch = bitmap->pitch;
+    }
+    printf("{\"creation_path\":\"%s\",", creation_path);
+    printf("\"void\":true,");
+    printf("\"created_glyph_pointer_class\":\"%s\",", glyph ? "non_null" : "null");
+    printf("\"create_error\":%d,", err);
+    if (!err && glyph) {
+        printf("\"format_before_done\":%ld,", (long)format);
+        printf("\"buffer_owner_class\":\"%s\",", buffer_class);
+        printf("\"bitmap_before_done\":{\"width\":%u,\"rows\":%u,\"pitch\":%d},",
+               width,
+               rows,
+               pitch);
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned bitmap glyph\"");
+    } else {
+        printf("\"format_before_done\":null,");
+        printf("\"buffer_owner_class\":null,");
+        printf("\"bitmap_before_done\":null,");
+        printf("\"free_events\":\"none\"");
+    }
+    printf("}");
+}
+
+static int emit_done_bitmap_glyph_paths(int argc, char** argv) {
+    (void)argc;
+    const char* outline_kind = argv[2];
+    const char* outline_value = argv[3];
+    const char* bitmap_kind = argv[4];
+    const char* bitmap_value = argv[5];
+    FT_Long face_index = (FT_Long)strtol(argv[6], NULL, 10);
+    FT_UInt pixel_x = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_y = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt bitmap_glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_UInt outline_glyph_index = (FT_UInt)strtoul(argv[10], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[11], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[12], NULL, 10);
+
+    FT_Library library = NULL;
+    FT_Face bitmap_face = NULL;
+    FT_Face outline_face = NULL;
+    FT_Glyph bitmap_glyph = NULL;
+    FT_Glyph outline_glyph = NULL;
+    unsigned char* bitmap_data = NULL;
+    unsigned char* outline_data = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Error bitmap_err = err;
+    FT_Error outline_err = err;
+
+    if (!err) {
+        bitmap_err = open_record_face(library, bitmap_kind, bitmap_value, face_index, pixel_x, pixel_y, &bitmap_data, &bitmap_face);
+    }
+    if (!bitmap_err) {
+        bitmap_err = FT_Load_Glyph(bitmap_face, bitmap_glyph_index, load_flags);
+    }
+    if (!bitmap_err) {
+        bitmap_err = FT_Get_Glyph(bitmap_face->glyph, &bitmap_glyph);
+    }
+    if (!bitmap_err && (!bitmap_glyph || bitmap_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        bitmap_err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    if (!err) {
+        outline_err = open_record_face(library, outline_kind, outline_value, face_index, pixel_x, pixel_y, &outline_data, &outline_face);
+    }
+    if (!outline_err) {
+        outline_err = FT_Load_Glyph(outline_face, outline_glyph_index, load_flags);
+    }
+    if (!outline_err) {
+        outline_err = FT_Get_Glyph(outline_face->glyph, &outline_glyph);
+    }
+    if (!outline_err) {
+        outline_err = FT_Glyph_To_Bitmap(&outline_glyph, render_mode, NULL, 0);
+    }
+    if (!outline_err && (!outline_glyph || outline_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        outline_err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    err = bitmap_err ? bitmap_err : outline_err;
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"rows\":[");
+        print_done_bitmap_glyph_row("FT_Get_Glyph bitmap", bitmap_err, bitmap_glyph);
+        printf(",");
+        print_done_bitmap_glyph_row("FT_Glyph_To_Bitmap outline", outline_err, outline_glyph);
+        printf("]}}\n");
+    }
+
+    if (bitmap_glyph) {
+        FT_Done_Glyph(bitmap_glyph);
+    }
+    if (outline_glyph) {
+        FT_Done_Glyph(outline_glyph);
+    }
+    if (bitmap_face) {
+        FT_Done_Face(bitmap_face);
+    }
+    if (outline_face) {
+        FT_Done_Face(outline_face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(bitmap_data);
+    free(outline_data);
+    return 0;
+}
+
 static void print_get_glyph_error_row(const char* probe, FT_Error err, FT_Glyph glyph) {
     printf("{\"probe\":\"%s\",\"error\":%d,\"output_pointer_class\":\"%s\"}",
            probe,
@@ -25123,6 +25246,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 13 && streq(argv[1], "--bitmap-glyph-record-paths")) {
         return emit_bitmap_glyph_record_paths(argc, argv);
+    }
+    if (argc == 13 && streq(argv[1], "--done-bitmap-glyph-paths")) {
+        return emit_done_bitmap_glyph_paths(argc, argv);
     }
     if (argc == 9 && (streq(argv[1], "--done-glyph-outline") ||
                       streq(argv[1], "--done-glyph-bitmap"))) {
