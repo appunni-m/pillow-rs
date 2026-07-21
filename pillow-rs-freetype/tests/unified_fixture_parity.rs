@@ -48051,6 +48051,7 @@ fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
             case.case_id.as_str(),
             "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior"
                 | "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior"
+                | "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior"
         )
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE" && case.case == "empty_bitmap_state")
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
@@ -48078,7 +48079,9 @@ fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
             "invalid-none"
         }
         "invalid_target_buffer_errors" if case.subject == "ftimage.FT_Bitmap" => "invalid-buffer",
-        "mono_dropout_behavior" | "mono_smart_dropout_behavior" => "dropout-thin-stems",
+        "mono_dropout_behavior" | "mono_smart_dropout_behavior" | "mono_stub_dropout_behavior" => {
+            "dropout-thin-stems"
+        }
         _ => "unsupported",
     }
 }
@@ -48495,6 +48498,18 @@ fn outline_get_bitmap_dropout_flag_rows(case: &InputCase) -> Vec<(&'static str, 
             (
                 "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS",
                 0x10 | 0x8,
+            ),
+        ],
+        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior" => vec![
+            ("FT_OUTLINE_NONE", 0),
+            ("FT_OUTLINE_INCLUDE_STUBS", 0x20),
+            (
+                "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_SMART_DROPOUTS",
+                0x20 | 0x10,
+            ),
+            (
+                "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_IGNORE_DROPOUTS",
+                0x20 | 0x8,
             ),
         ],
         _ => Vec::new(),
