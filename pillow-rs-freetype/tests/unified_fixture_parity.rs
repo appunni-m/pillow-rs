@@ -24856,6 +24856,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cache_load_flags_param(params)?.to_string());
             Ok(args)
         }
+        "ftcache.sbit_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(params).is_ok() =>
+        {
+            let mut args = vec!["--sbit-cache-lookup-scaler".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cache_scaler_rows_arg(params)?);
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_load_flags_ulong_param(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.manager_reset" => {
             if manager_param_is_null(params) {
                 return Ok(vec!["--manager-reset-null".to_string()]);
@@ -25865,6 +25876,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.sbit_cache_lookup" => {
             let face = open_face_with_size(case, cache_pixel_size_param(&case.inputs.params)?)?;
             rust_sbit_cache_lookup(&face, case)
+        }
+        "ftcache.sbit_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            rust_sbit_cache_lookup_scaler(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -26906,6 +26922,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output
         }
+        "ftcache.sbit_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            c_sbit_cache_lookup_scaler(case)
+        }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
             c_outline_orientation_runtime_output(case)
@@ -27775,6 +27796,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             let output = wasm_sbit_cache_lookup(handle, case);
             wasm_done_face(handle);
             output
+        }
+        "ftcache.sbit_cache_lookup_scaler"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            wasm_sbit_cache_lookup_scaler(case)
         }
         "ftcache.manager_reset" => manager_reset_runtime_output(case),
         "ftoutln.get_orientation" | "ftoutln.outline_get_orientation" => {
@@ -29291,6 +29317,22 @@ fn rust_sbit_cache_lookup(face: &FT_Face, case: &InputCase) -> Result<RunOutput,
     }
 }
 
+fn rust_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    cache_scaler_outputs(rows, load_flags, |row, load_flags| {
+        let size_err = rust_apply_cache_scaler(&mut face, row);
+        if size_err != FT_Err_Ok {
+            return Ok(Err(size_err));
+        }
+        let loaded = FT_Load_Glyph(&face, glyph_index, load_flags);
+        let rendered = loaded.and_then(render_loaded_glyph_normal);
+        Ok(rendered.map(|slot| rust_sbit_json(&slot)))
+    })
+}
+
 fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Glyph(
         face,
@@ -29310,6 +29352,34 @@ fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutp
     Ok(ok(c_sbit_json(&slot)))
 }
 
+fn c_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let output = cache_scaler_outputs(rows, load_flags, |row, load_flags| {
+        let size_err = c_apply_cache_scaler(face, row);
+        if size_err != FT_Err_Ok {
+            return Ok(Err(size_err));
+        }
+        let load_err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            c_render_loaded_glyph_normal(face)
+        } else {
+            load_err
+        };
+        if render_err != FT_Err_Ok {
+            return Ok(Err(render_err));
+        }
+        let slot = c_abi::abi_slot_snapshot(face)
+            .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+        Ok(Ok(c_sbit_json(&slot)))
+    });
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
 fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
@@ -29327,6 +29397,33 @@ fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, 
     let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
     Ok(ok(wasm_sbit_json(&slot)))
+}
+
+fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let rows = cache_scaler_rows(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let output = cache_scaler_outputs(rows, load_flags, |row, load_flags| {
+        let size_err = wasm_apply_cache_scaler(handle, row);
+        if size_err != FT_Err_Ok {
+            return Ok(Err(size_err));
+        }
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(handle)
+        } else {
+            load_err
+        };
+        if render_err != FT_Err_Ok {
+            return Ok(Err(render_err));
+        }
+        let slot = wasm_abi::abi_slot_snapshot(handle)
+            .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+        Ok(Ok(wasm_sbit_json(&slot)))
+    });
+    wasm_done_face(handle);
+    output
 }
 
 fn render_loaded_glyph_normal(slot: FT_GlyphSlot) -> Result<FT_GlyphSlot, FT_Error> {
@@ -29356,6 +29453,186 @@ fn wasm_render_loaded_glyph_normal(handle: usize) -> FT_Error {
         FT_Err_Ok
     } else {
         wasm_abi::fontdone_wasm_render_glyph(handle, FT_RENDER_MODE_NORMAL)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CacheScalerRow {
+    width: u32,
+    height: u32,
+    pixel: bool,
+    x_res: u32,
+    y_res: u32,
+}
+
+fn cache_scaler_rows(params: &Value) -> Result<Vec<CacheScalerRow>, String> {
+    if let Some(rows) = params.get("scalers").and_then(Value::as_array) {
+        if rows.is_empty() {
+            return Err("FTC_Scaler rows must not be empty".to_string());
+        }
+        return rows.iter().map(cache_scaler_row).collect();
+    }
+    let scaler = params
+        .get("scaler")
+        .ok_or_else(|| "missing FTC_Scaler scaler/scalers".to_string())?;
+    Ok(vec![cache_scaler_row(scaler)?])
+}
+
+fn cache_scaler_row(value: &Value) -> Result<CacheScalerRow, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "FTC_Scaler row must be an object".to_string())?;
+    Ok(CacheScalerRow {
+        width: object
+            .get("width")
+            .map_or(Ok(0), |value| u32_value(value, "scaler.width"))?,
+        height: object
+            .get("height")
+            .map_or(Ok(0), |value| u32_value(value, "scaler.height"))?,
+        pixel: match object.get("pixel") {
+            Some(Value::Bool(value)) => *value,
+            Some(value) => u32_value(value, "scaler.pixel")? != 0,
+            None => false,
+        },
+        x_res: object
+            .get("x_res")
+            .map_or(Ok(0), |value| u32_value(value, "scaler.x_res"))?,
+        y_res: object
+            .get("y_res")
+            .map_or(Ok(0), |value| u32_value(value, "scaler.y_res"))?,
+    })
+}
+
+fn cache_scaler_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(cache_scaler_rows(params)?
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{}:{}:{}:{}:{}",
+                row.width,
+                row.height,
+                if row.pixel { 1 } else { 0 },
+                row.x_res,
+                row.y_res
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
+fn cache_load_flags_ulong_param(value: &Value) -> Result<u64, String> {
+    let Some(raw) = value.get("load_flags") else {
+        return Ok(FT_LOAD_DEFAULT as u64);
+    };
+    match raw {
+        Value::Array(items) => {
+            let mut flags = 0u64;
+            for item in items {
+                if item.is_array() {
+                    return Err("load_flags contains aggregate flag sets".to_string());
+                }
+                flags |= u64_value(item, "load_flags")?;
+            }
+            Ok(flags)
+        }
+        _ => u64_value(raw, "load_flags"),
+    }
+}
+
+fn cache_effective_load_flags(params: &Value) -> Result<i32, String> {
+    Ok(cache_load_flags_ulong_param(params)? as u32 as i32)
+}
+
+fn cache_scaler_json(row: CacheScalerRow) -> Value {
+    json!({
+        "width": row.width,
+        "height": row.height,
+        "pixel": if row.pixel { 1 } else { 0 },
+        "x_res": row.x_res,
+        "y_res": row.y_res
+    })
+}
+
+fn cache_scaler_error_json(row: CacheScalerRow, load_flags: i32, err: FT_Error) -> Value {
+    json!({
+        "scaler": cache_scaler_json(row),
+        "effective_load_flags": load_flags,
+        "status": err,
+        "error": err,
+        "sbit": Value::Null,
+        "node": {"locked": false}
+    })
+}
+
+fn cache_scaler_sbit_json(row: CacheScalerRow, load_flags: i32, sbit: Value) -> Value {
+    let mut object = serde_json::Map::new();
+    object.insert("scaler".to_string(), cache_scaler_json(row));
+    object.insert("effective_load_flags".to_string(), json!(load_flags));
+    object.insert("status".to_string(), json!(FT_Err_Ok));
+    object.insert("error".to_string(), json!(FT_Err_Ok));
+    if let Some(sbit_object) = sbit.as_object() {
+        for (key, value) in sbit_object {
+            object.insert(key.clone(), value.clone());
+        }
+    }
+    Value::Object(object)
+}
+
+fn cache_scaler_outputs(
+    rows: Vec<CacheScalerRow>,
+    load_flags: i32,
+    mut run: impl FnMut(CacheScalerRow, i32) -> Result<Result<Value, FT_Error>, String>,
+) -> Result<RunOutput, String> {
+    let mut outputs = Vec::with_capacity(rows.len());
+    for row in rows {
+        let output = match run(row, load_flags)? {
+            Ok(sbit) => cache_scaler_sbit_json(row, load_flags, sbit),
+            Err(err) => cache_scaler_error_json(row, load_flags, err),
+        };
+        outputs.push(output);
+    }
+    Ok(ok(json!({ "outputs": outputs })))
+}
+
+fn rust_apply_cache_scaler(face: &mut FT_Face, row: CacheScalerRow) -> FT_Error {
+    if row.pixel {
+        FT_Set_Pixel_Sizes(face, row.width, row.height)
+    } else {
+        FT_Set_Char_Size(
+            face,
+            i64::from(row.width),
+            i64::from(row.height),
+            row.x_res,
+            row.y_res,
+        )
+    }
+}
+
+fn c_apply_cache_scaler(face: c_abi::FT_Face, row: CacheScalerRow) -> FT_Error {
+    if row.pixel {
+        c_abi::FT_Set_Pixel_Sizes(face, row.width, row.height)
+    } else {
+        c_abi::FT_Set_Char_Size(
+            face,
+            i64::from(row.width),
+            i64::from(row.height),
+            row.x_res,
+            row.y_res,
+        )
+    }
+}
+
+fn wasm_apply_cache_scaler(handle: usize, row: CacheScalerRow) -> FT_Error {
+    if row.pixel {
+        wasm_abi::fontdone_wasm_set_pixel_sizes(handle, row.width, row.height)
+    } else {
+        wasm_abi::fontdone_wasm_set_char_size(
+            handle,
+            i64::from(row.width),
+            i64::from(row.height),
+            row.x_res,
+            row.y_res,
+        )
     }
 }
 
@@ -45392,6 +45669,27 @@ fn comparison_schema(case: &InputCase) -> &str {
 }
 
 fn validate_cache_sbit_output(output: &Value, label: &str, case: &InputCase) -> Result<(), String> {
+    if let Some(outputs) = output.get("outputs").and_then(Value::as_array) {
+        if outputs.is_empty() {
+            return Err(format!(
+                "{label} {} cache sbit outputs are empty",
+                case.case_id
+            ));
+        }
+        for (index, row) in outputs.iter().enumerate() {
+            let row_label = format!("{label}.outputs[{index}]");
+            require_path(row, "/scaler/width", &row_label, case)?;
+            require_path(row, "/scaler/height", &row_label, case)?;
+            require_path(row, "/scaler/pixel", &row_label, case)?;
+            require_path(row, "/effective_load_flags", &row_label, case)?;
+            require_path(row, "/status", &row_label, case)?;
+            if row.get("sbit").is_some_and(Value::is_null) {
+                continue;
+            }
+            validate_cache_sbit_output(row, &row_label, case)?;
+        }
+        return Ok(());
+    }
     require_path(output, "/sbit/width", label, case)?;
     require_path(output, "/sbit/height", label, case)?;
     require_path(output, "/sbit/left", label, case)?;

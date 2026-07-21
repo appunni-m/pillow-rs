@@ -66,6 +66,13 @@ impl ScaleMetrics {
         }
     }
 
+    pub fn from_font_data_public_size(data: &FontData) -> Self {
+        let mut scale = Self::from_font_data(data);
+        scale.x_scale = data.size_public_x_scale.get();
+        scale.y_scale = data.size_public_y_scale.get();
+        scale
+    }
+
     /// Scale a font-unit coordinate to 26.6.
     #[inline]
     pub fn scale_x(&self, fu: i32) -> i32 {
@@ -675,9 +682,15 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(
+    // FreeType keeps `face->size->metrics.x_scale/y_scale` as the public
+    // request scales while `tt_size_reset` may derive separate integer-ppem
+    // TrueType driver scales for bytecode (`ftobjs.c:3240-3368`,
+    // `truetype/ttobjs.c:1255-1262`).  `FT_LOAD_NO_HINTING` uses the public
+    // metrics scales for outline coordinates, not the TT hint scales.
+    scale_glyph_impl_with_scale(
         data,
         glyph_index,
+        ScaleMetrics::from_font_data_public_size(data),
         None,
         HintStyle {
             is_italic,
@@ -696,6 +709,7 @@ pub fn scale_glyph_no_hinting(
         None,
         true,
     )
+    .map(|(glyph, _)| glyph)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -749,7 +763,41 @@ fn scale_glyph_impl_with_context(
     use_hdmx: bool,
 ) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
     let scale = ScaleMetrics::from_font_data(data);
+    scale_glyph_impl_with_scale(
+        data,
+        glyph_index,
+        scale,
+        latin_metrics,
+        style,
+        allow_bytecode,
+        target_mono,
+        native_hint_mode,
+        round_component_offsets,
+        use_autohint_advance,
+        reset_vectors_at_glyph_entry,
+        legacy_hinter_phantoms,
+        bytecode_context,
+        use_hdmx,
+    )
+}
 
+#[allow(clippy::too_many_arguments)]
+fn scale_glyph_impl_with_scale(
+    data: &FontData,
+    glyph_index: u16,
+    scale: ScaleMetrics,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    style: HintStyle,
+    allow_bytecode: bool,
+    target_mono: bool,
+    native_hint_mode: NativeHintMode,
+    round_component_offsets: bool,
+    use_autohint_advance: bool,
+    reset_vectors_at_glyph_entry: bool,
+    legacy_hinter_phantoms: bool,
+    bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+    use_hdmx: bool,
+) -> Result<(ScaledGlyph, Option<crate::tt::hinter::exec::ExecContext>), FontError> {
     let h_metric = data.hmtx.get(glyph_index);
     let lsb = scale.scale_x(h_metric.lsb as i32);
 

@@ -2004,6 +2004,15 @@ def ftcache_sbit_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_SBitCache_LookupScaler pending rows."""
     if row.operation != "ftcache.sbit_cache_lookup_scaler":
         return None
+    if (
+        row.case_id
+        in {
+            "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
+            "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return None
     runtime = runtime_id(row)
     variant = runtime.split("@", 1)[1] if "@" in runtime else "single"
     if row.case_id == "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c":
@@ -4419,6 +4428,20 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "FT_Get_BDF_Property BDF property rowset validates actual pinned C "
             "FAMILY_NAME missing-property behavior and POINT_SIZE/PIXEL_SIZE "
             "integer outputs through Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftcache.sbit_cache_lookup_scaler"
+        and row.case_id
+        in {
+            "ftcache.FTC_SBitCache_LookupScaler.scaler_size_semantics_match_c",
+            "ftcache.FTC_SBitCache_LookupScaler.load_flags_truncate_to_int32",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FTC_SBitCache_LookupScaler scaler size-selection and FT_ULong "
+            "load-flag truncation outputs validate through pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.get_ps_font_value"

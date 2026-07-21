@@ -5932,6 +5932,153 @@ static void print_sbit_payload(FT_GlyphSlot slot) {
     printf("\"},\"node\":{\"locked\":false}}");
 }
 
+static void print_sbit_object(FT_GlyphSlot slot) {
+    FT_Bitmap* bitmap = &slot->bitmap;
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("\"sbit\":{");
+    printf("\"width\":%u,\"height\":%u,\"left\":%d,\"top\":%d,",
+           bitmap->width,
+           bitmap->rows,
+           slot->bitmap_left,
+           slot->bitmap_top);
+    printf("\"format\":%u,\"max_grays\":%u,\"pitch\":%d,",
+           bitmap->pixel_mode,
+           bitmap->num_grays,
+           bitmap->pitch);
+    printf("\"xadvance\":%ld,\"yadvance\":%ld,",
+           slot->advance.x >> 6,
+           slot->advance.y >> 6);
+    printf("\"buffer_null\":%s,\"buffer_hex\":\"",
+           (!bitmap->buffer || len == 0) ? "true" : "false");
+    if (bitmap->buffer && len > 0) {
+        print_hex_bytes(bitmap->buffer, len);
+    }
+    printf("\"},\"node\":{\"locked\":false}");
+}
+
+static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    char* scalers_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!scalers_arg) {
+        return 1;
+    }
+    memcpy(scalers_arg, argv[5], strlen(argv[5]) + 1);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong load_flags_ulong = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_Int32 load_flags = (FT_Int32)load_flags_ulong;
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(scalers_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(scalers_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(scalers_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    FT_Face face = NULL;
+    FT_Error open_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (open_error) {
+        printf("{");
+        print_status(open_error);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    FT_Error first_error = FT_Err_Ok;
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"outputs\":[");
+    char* cursor = scalers_arg;
+    int first = 1;
+    while (cursor && *cursor) {
+        char* next = strchr(cursor, ';');
+        if (next) {
+            *next = '\0';
+        }
+        unsigned int width = 0;
+        unsigned int height = 0;
+        unsigned int pixel = 0;
+        unsigned int x_res = 0;
+        unsigned int y_res = 0;
+        if (sscanf(cursor, "%u:%u:%u:%u:%u", &width, &height, &pixel, &x_res, &y_res) != 5) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            free(scalers_arg);
+            return 2;
+        }
+        FT_Error size_error = pixel
+            ? FT_Set_Pixel_Sizes(face, width, height)
+            : FT_Set_Char_Size(face, (FT_F26Dot6)width, (FT_F26Dot6)height, x_res, y_res);
+        FT_Error load_error = size_error ? size_error : FT_Load_Glyph(face, glyph_index, load_flags);
+        FT_Error render_error = load_error;
+        if (!render_error && face->glyph->format != FT_GLYPH_FORMAT_BITMAP) {
+            render_error = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+        }
+        if (!first_error && render_error) {
+            first_error = render_error;
+        }
+        if (!first) {
+            printf(",");
+        }
+        printf("{\"scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},\"effective_load_flags\":%ld,\"status\":%d,\"error\":%d,",
+               width,
+               height,
+               pixel,
+               x_res,
+               y_res,
+               (long)load_flags,
+               render_error,
+               render_error);
+        if (render_error) {
+            printf("\"sbit\":null,\"node\":{\"locked\":false}}");
+        } else {
+            print_sbit_object(face->glyph);
+            printf("}");
+        }
+        first = 0;
+        cursor = next ? next + 1 : NULL;
+    }
+    printf("]}}\n");
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    free(scalers_arg);
+    (void)first_error;
+    return 0;
+}
+
 static void print_size_metrics_object(FT_Size_Metrics metrics) {
     printf("\"x_ppem\":%u,\"y_ppem\":%u,\"x_scale\":%ld,\"y_scale\":%ld,\"ascender\":%ld,\"descender\":%ld,\"height\":%ld,\"max_advance\":%ld",
            metrics.x_ppem,
@@ -19795,6 +19942,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 9 && streq(argv[1], "--sbit-cache-lookup")) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
+        return emit_sbit_cache_lookup_scaler(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");
