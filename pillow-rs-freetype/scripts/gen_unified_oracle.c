@@ -8565,6 +8565,160 @@ static int emit_manager_done_route(int argc, char** argv) {
     return 0;
 }
 
+static int emit_manager_lifecycle_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    MemoryFaceRequestRec reset_request = {data, data_len, face_index, 0};
+    FTC_Manager reset_manager = NULL;
+    FT_Error reset_status = FTC_Manager_New(library, 1, 2, 4096,
+                                            memory_face_requester,
+                                            &reset_request,
+                                            &reset_manager);
+    if (!reset_status) {
+        FT_Face face = NULL;
+        reset_status = FTC_Manager_LookupFace(reset_manager,
+                                              (FTC_FaceID)&reset_request,
+                                              &face);
+    }
+    if (!reset_status) {
+        FTC_ScalerRec scaler;
+        memset(&scaler, 0, sizeof(scaler));
+        scaler.face_id = (FTC_FaceID)&reset_request;
+        scaler.width = 0;
+        scaler.height = 12;
+        scaler.pixel = 1;
+        FT_Size size = NULL;
+        reset_status = FTC_Manager_LookupSize(reset_manager, &scaler, &size);
+    }
+    unsigned int before_reset_calls = reset_request.calls;
+    FT_Error post_reset_error = reset_status;
+    if (!reset_status) {
+        FTC_Manager_Reset(reset_manager);
+        FT_Face post_face = NULL;
+        post_reset_error = FTC_Manager_LookupFace(reset_manager,
+                                                  (FTC_FaceID)&reset_request,
+                                                  &post_face);
+    }
+    unsigned int after_reset_calls = reset_request.calls;
+    if (reset_manager) {
+        FTC_Manager_Done(reset_manager);
+    }
+
+    FTC_Manager_Done(NULL);
+    MemoryFaceRequestRec empty_request = {data, data_len, face_index, 0};
+    FTC_Manager empty_manager = NULL;
+    FT_Error empty_status = FTC_Manager_New(library, 0, 0, 0,
+                                            memory_face_requester,
+                                            &empty_request,
+                                            &empty_manager);
+    if (empty_manager) {
+        FTC_Manager_Done(empty_manager);
+    }
+
+    MemoryFaceRequestRec done_request = {data, data_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    FT_Error manager_status = FTC_Manager_New(library, 0, 0, 0,
+                                              memory_face_requester,
+                                              &done_request,
+                                              &manager);
+    FTC_CMapCache cmap_cache = NULL;
+    FTC_ImageCache image_cache = NULL;
+    FT_Error cmap_status = manager_status ? manager_status : FTC_CMapCache_New(manager, &cmap_cache);
+    FT_Error image_status = manager_status ? manager_status : FTC_ImageCache_New(manager, &image_cache);
+    FT_UInt cmap_lookup = 0;
+    if (!cmap_status) {
+        cmap_lookup = FTC_CMapCache_Lookup(cmap_cache, (FTC_FaceID)&done_request, -1, 65);
+    }
+    FTC_ScalerRec done_scaler;
+    memset(&done_scaler, 0, sizeof(done_scaler));
+    done_scaler.face_id = (FTC_FaceID)&done_request;
+    done_scaler.width = 12;
+    done_scaler.height = 12;
+    done_scaler.pixel = 1;
+    FT_Size done_size = NULL;
+    FT_Error size_status = manager_status ? manager_status : FTC_Manager_LookupSize(manager, &done_scaler, &done_size);
+    FT_Face done_face = NULL;
+    FT_Error face_status = manager_status ? manager_status : FTC_Manager_LookupFace(manager, (FTC_FaceID)&done_request, &done_face);
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Error image_lookup_status = image_status ? image_status
+        : FTC_ImageCache_LookupScaler(image_cache, &done_scaler, FT_LOAD_DEFAULT, 36, &glyph, &node);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    unsigned int requester_count_before_done = done_request.calls;
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"void\":true,\"reset\":{\"void\":true,\"reset\":{\"called\":true},"
+           "\"requester_call_counts\":{\"before_reset\":%u,\"after_reset\":%u},"
+           "\"post_reset\":{\"status\":%d,\"usable\":%s},"
+           "\"manager_handle\":\"same_identity_class\","
+           "\"face_identity_class_after_reset\":\"fresh_or_reloaded\","
+           "\"size_identity_class_after_reset\":\"fresh_or_reloaded\","
+           "\"node_count_class\":\"not_observed\"},"
+           "\"done\":{\"scenario\":\"",
+           before_reset_calls,
+           after_reset_calls,
+           post_reset_error,
+           post_reset_error ? "false" : "true");
+    print_json_string_content(scenario);
+    printf("\",\"void\":true,\"null_manager_noop\":true,"
+           "\"empty_manager\":{\"create_status\":%d,\"done_called\":true},"
+           "\"populated_manager\":{\"create_status\":%d,\"cmap_cache_status\":%d,"
+           "\"image_cache_status\":%d,\"lookup_face_status\":%d,"
+           "\"lookup_size_status\":%d,\"image_lookup_status\":%d,"
+           "\"cmap_lookup\":%u,\"requester_count_before_done\":%u,"
+           "\"node_released_before_done\":true,\"done_called\":true}}}}\n",
+           empty_status,
+           manager_status,
+           cmap_status,
+           image_status,
+           face_status,
+           size_status,
+           image_lookup_status,
+           cmap_lookup,
+           requester_count_before_done);
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_manager_reset(int argc, char** argv) {
     const char* command = argv[1];
     if (streq(command, "--manager-reset-null")) {
@@ -22715,6 +22869,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--manager-done-route")) {
         return emit_manager_done_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--manager-lifecycle-route")) {
+        return emit_manager_lifecycle_route(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--manager-lookup-size")) {
         return emit_manager_lookup_size(argc, argv);

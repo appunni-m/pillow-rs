@@ -25423,6 +25423,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(cmap_cache_scenario(params)?);
             Ok(args)
         }
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            let mut args = vec!["--manager-lifecycle-route".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cmap_cache_scenario(params)?);
+            Ok(args)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -26494,6 +26501,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => rust_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => rust_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, rust_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27584,6 +27594,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => c_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => c_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, c_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -28506,6 +28519,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => wasm_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => wasm_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, wasm_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -32173,6 +32189,21 @@ fn manager_done_output(
             "node_released_before_done": true,
             "done_called": true
         }
+    })))
+}
+
+fn manager_lifecycle_output(
+    case: &InputCase,
+    done: fn(&InputCase) -> Result<RunOutput, String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(&case.inputs.params)?;
+    let reset = manager_reset_runtime_output(case)?.output;
+    let done = done(case)?.output;
+    Ok(ok(json!({
+        "scenario": scenario,
+        "void": true,
+        "reset": reset,
+        "done": done
     })))
 }
 

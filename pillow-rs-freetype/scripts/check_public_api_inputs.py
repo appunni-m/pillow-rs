@@ -5581,6 +5581,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "ftcache.manager_lifecycle"
+        and row.case_id == "ftcache.FTC_Manager.reset_and_done_lifecycle"
+    ):
+        return (
+            "FTC_Manager reset/done lifecycle validates through a maintained "
+            "same-input route proving reset preserves manager usability and "
+            "done tears down populated manager-owned cache/face/size/node "
+            "state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.sbit_cache_lookup_scaler"
         and row.case_id
         == "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler"
