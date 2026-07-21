@@ -14208,13 +14208,14 @@ static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, i
     memset(&paint, 0, sizeof(paint));
     FT_Bool result = FT_Get_Paint(face, opaque, &paint);
     if (!result) {
-        printf("{\"depth\":%d,\"format\":0,\"palette_index\":0,\"alpha\":0,\"glyph_index\":0,\"composite_mode\":0}", depth);
+    printf("{\"depth\":%d,\"format\":0,\"palette_index\":0,\"alpha\":0,\"glyph_index\":0,\"composite_mode\":0,\"values\":[0,0,0,0,0,0]}", depth);
         return;
     }
     FT_UInt palette_index = 0;
     FT_Int alpha = 0;
     FT_UInt glyph_index = 0;
     FT_Int composite_mode = 0;
+    long values[6] = {0, 0, 0, 0, 0, 0};
     if (paint.format == FT_COLR_PAINTFORMAT_SOLID) {
         palette_index = paint.u.solid.color.palette_index;
         alpha = paint.u.solid.color.alpha;
@@ -14222,14 +14223,54 @@ static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, i
         glyph_index = paint.u.glyph.glyphID;
     } else if (paint.format == FT_COLR_PAINTFORMAT_COLR_GLYPH) {
         glyph_index = paint.u.colr_glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        values[0] = (long)paint.u.transform.affine.xx;
+        values[1] = (long)paint.u.transform.affine.xy;
+        values[2] = (long)paint.u.transform.affine.dx;
+        values[3] = (long)paint.u.transform.affine.yx;
+        values[4] = (long)paint.u.transform.affine.yy;
+        values[5] = (long)paint.u.transform.affine.dy;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSLATE) {
+        values[0] = (long)paint.u.translate.dx;
+        values[1] = (long)paint.u.translate.dy;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SCALE) {
+        values[0] = (long)paint.u.scale.scale_x;
+        values[1] = (long)paint.u.scale.scale_y;
+        values[2] = (long)paint.u.scale.center_x;
+        values[3] = (long)paint.u.scale.center_y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_ROTATE) {
+        values[0] = (long)paint.u.rotate.angle;
+        values[1] = (long)paint.u.rotate.center_x;
+        values[2] = (long)paint.u.rotate.center_y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SKEW) {
+        values[0] = (long)paint.u.skew.x_skew_angle;
+        values[1] = (long)paint.u.skew.y_skew_angle;
+        values[2] = (long)paint.u.skew.center_x;
+        values[3] = (long)paint.u.skew.center_y;
     } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
         composite_mode = paint.u.composite.composite_mode;
     }
-    printf("{\"depth\":%d,\"format\":%d,\"palette_index\":%u,\"alpha\":%d,\"glyph_index\":%u,\"composite_mode\":%d}",
-           depth, paint.format, palette_index, alpha, glyph_index, composite_mode);
+    printf("{\"depth\":%d,\"format\":%d,\"palette_index\":%u,\"alpha\":%d,\"glyph_index\":%u,\"composite_mode\":%d,\"values\":[%ld,%ld,%ld,%ld,%ld,%ld]}",
+           depth, paint.format, palette_index, alpha, glyph_index, composite_mode,
+           values[0], values[1], values[2], values[3], values[4], values[5]);
     if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
         printf(",");
         print_colr_snapshot_node_json(face, paint.u.glyph.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.transform.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSLATE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.translate.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SCALE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.scale.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_ROTATE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.rotate.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SKEW) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.skew.paint, depth + 1);
     } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
         printf(",");
         print_colr_snapshot_node_json(face, paint.u.composite.source_paint, depth + 1);
@@ -14291,6 +14332,74 @@ static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
     return 0;
 }
 
+static void print_colr_transform_paint_row_json(FT_Face face,
+                                                const char* label,
+                                                FT_UInt base_glyph) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    printf("{\"label\":\"%s\",\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static void print_colr_transform_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":10,\"records\":[");
+    for (int i = 0; i < 10; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_snapshot_record_json(face, (FT_UInt)(36 + i));
+    }
+    printf("]}");
+}
+
+static int emit_colr_transform_paint_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    const char* labels[10] = {
+        "transform",
+        "translate",
+        "scale",
+        "scale_center",
+        "scale_uniform",
+        "scale_uniform_center",
+        "rotate",
+        "rotate_center",
+        "skew",
+        "skew_center",
+    };
+    for (int i = 0; i < 10; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_transform_paint_row_json(face->face, labels[i], (FT_UInt)(36 + i));
+    }
+    printf("],\"graph_snapshot\":");
+    print_colr_transform_graph_snapshot_json(face->face);
+    printf("}}\n");
+    return 0;
+}
+
+static int is_colr_transform_paint_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload") ||
+           streq(case_id, "ftcolor.FT_PaintRotate.get_paint_rotate_values") ||
+           streq(case_id, "ftcolor.FT_PaintScale.get_paint_scale_values") ||
+           streq(case_id, "ftcolor.FT_PaintSkew.get_paint_skew_values") ||
+           streq(case_id, "ftcolor.FT_PaintTransform.get_paint_transform_values") ||
+           streq(case_id, "ftcolor.FT_PaintTranslate.get_paint_translate_values");
+}
+
 static int emit_color_paint_graph_case(int argc, char** argv) {
     if (argc != 6) {
         fprintf(stderr, "--color-paint-graph-case requires CASE SOURCE_KIND SOURCE FACE_INDEX\n");
@@ -14312,6 +14421,11 @@ static int emit_color_paint_graph_case(int argc, char** argv) {
     }
     if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime")) {
         int result = emit_colr_glyph_paint_graph_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_transform_paint_case(case_id)) {
+        int result = emit_colr_transform_paint_case(&face);
         close_oracle_face(&face);
         return result;
     }

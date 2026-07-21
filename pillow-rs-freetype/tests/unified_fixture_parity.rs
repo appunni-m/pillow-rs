@@ -10892,6 +10892,7 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.get_paint_layers"
             | "ftcolor.get_paint_graph"
             | "ftcolor.get_paint_graph_node"
+            | "ftcolor.get_normalized_transform_paint"
             | "ftcolor.get_solid_paint_and_palette"
             | "ftcolor.traverse_color_paint_graph"
             | "ftcolor.traverse_paint_graph"
@@ -10917,6 +10918,16 @@ fn color_paint_success_route_supported(case: &InputCase) -> bool {
             | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
             | "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
             | "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime"
+            | "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload"
+            | "ftcolor.FT_PaintRotate.get_paint_rotate_values"
+            | "ftcolor.FT_PaintScale.get_paint_scale_values"
+            | "ftcolor.FT_PaintSkew.get_paint_skew_values"
+            | "ftcolor.FT_PaintTransform.get_paint_transform_values"
+            | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
     ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
         && (case.case_id.ends_with(".paint_composite_runtime")
             || case.case_id.ends_with(".paint_composite_mode_runtime"))
@@ -11154,6 +11165,7 @@ fn colr_v1_snapshot_json(snapshot: Option<FT_ColrV1_PaintGraph_Snapshot>) -> Val
                 "alpha": node.alpha,
                 "glyph_index": node.glyph_index,
                 "composite_mode": node.composite_mode,
+                "values": node.values,
             })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
     })
@@ -11271,6 +11283,71 @@ fn color_colr_glyph_output_for_open_face(
     }))
 }
 
+fn color_transform_paint_row_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    base_glyph: FT_UInt,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let root_paint = color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0);
+    json!({
+        "label": label,
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "root_paint": root_paint,
+    })
+}
+
+fn color_transform_paint_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    ok(json!({
+        "rows": [
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "transform", 36),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "translate", 37),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale", 38),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_center", 39),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_uniform", 40),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_uniform_center", 41),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "rotate", 42),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "rotate_center", 43),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "skew", 44),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "skew_center", 45),
+        ],
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
+fn color_transform_paint_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload"
+            | "ftcolor.FT_PaintRotate.get_paint_rotate_values"
+            | "ftcolor.FT_PaintScale.get_paint_scale_values"
+            | "ftcolor.FT_PaintSkew.get_paint_skew_values"
+            | "ftcolor.FT_PaintTransform.get_paint_transform_values"
+            | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
+    )
+}
+
 fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     if case.operation == "ftcolor.get_paint_layers"
@@ -11286,6 +11363,14 @@ fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     }
     if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
         return Ok(color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_transform_paint_case(&case.case_id) {
+        return Ok(color_transform_paint_output_for_open_face(
             ColorPaintBackend::Rust,
             Some(&face),
             ptr::null_mut(),
@@ -11317,6 +11402,13 @@ fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
         c_done_library(library);
         return Ok(output);
     }
+    if color_transform_paint_case(&case.case_id) {
+        let output =
+            color_transform_paint_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
     let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
     c_done_face(face);
     c_done_library(library);
@@ -11340,6 +11432,16 @@ fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
     }
     if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
         let output = color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_transform_paint_case(&case.case_id) {
+        let output = color_transform_paint_output_for_open_face(
             ColorPaintBackend::Wasm,
             None,
             ptr::null_mut(),

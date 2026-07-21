@@ -2655,6 +2655,31 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
             "lookup validate through the maintained recursive COLRv1 fixture, "
             "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload",
+    }:
+        return (
+            "COLRv1 transform paint format dispatch and FreeType-normalized "
+            "public payload values validate through the maintained transform "
+            "fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_PaintRotate.get_paint_rotate_values",
+        "ftcolor.FT_PaintScale.get_paint_scale_values",
+        "ftcolor.FT_PaintSkew.get_paint_skew_values",
+        "ftcolor.FT_PaintTransform.get_paint_transform_values",
+        "ftcolor.FT_PaintTranslate.get_paint_translate_values",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint public transform union records validate "
+            "exact child opaque-paint classes and fixed-point fields through "
+            "the maintained transform fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
     if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
         row.case_id.endswith(".paint_composite_runtime")
         or row.case_id.endswith(".paint_composite_mode_runtime")
