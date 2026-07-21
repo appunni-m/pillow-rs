@@ -4362,6 +4362,25 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "t1tables.get_ps_font_info"
+        and row.case_id == "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
+            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_private"
+        and row.case_id
+        == "t1tables.FT_Get_PS_Font_Private.truetype_invalid_argument"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private TrueType unsupported-service Invalid_Argument "
+            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.t1_blend_flags_private_group"
         and unresolved_assets_reason(row) is None
     ):

@@ -72,6 +72,36 @@
         "output_shape": {"status": "FT_Error", "private": null},
         "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true}
       }
+    },
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Private.truetype_invalid_argument",
+      "subject": "t1tables.FT_Get_PS_Font_Private",
+      "case": "non_postscript_or_missing_service_invalid_argument",
+      "covers_manifest_cases": ["non_postscript_or_missing_service_invalid_argument"],
+      "operation": "t1tables.get_ps_font_private",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "truetype_font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "TrueType control face without POSTSCRIPT_INFO private service."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "expected_error": "FT_Err_Invalid_Argument",
+          "source_behavior": "TrueType faces without ps_get_font_private service return Invalid_Argument."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_private", "asset:existing"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "private": null},
+        "compare": {"mode": "exact", "paths": ["status", "private"], "compare_error_output": true}
+      }
     }
   ]
 }

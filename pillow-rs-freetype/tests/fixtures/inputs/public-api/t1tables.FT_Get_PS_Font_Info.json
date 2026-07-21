@@ -44,6 +44,36 @@
         "output_shape": {"status": "FT_Error", "font_info": {"version": "nullable FT_String*", "notice": "nullable FT_String*", "full_name": "nullable FT_String*", "family_name": "nullable FT_String*", "weight": "nullable FT_String*", "italic_angle": "FT_Fixed", "is_fixed_pitch": "FT_Bool", "underline_position": "FT_Short", "underline_thickness": "FT_UShort"}},
         "compare": {"mode": "exact", "paths": ["status", "font_info.version", "font_info.notice", "font_info.full_name", "font_info.family_name", "font_info.weight", "font_info.italic_angle", "font_info.is_fixed_pitch", "font_info.underline_position", "font_info.underline_thickness"]}
       }
+    },
+    {
+      "case_id": "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
+      "subject": "t1tables.FT_Get_PS_Font_Info",
+      "case": "non_postscript_or_missing_service_invalid_argument",
+      "covers_manifest_cases": ["non_postscript_or_missing_service_invalid_argument"],
+      "operation": "t1tables.get_ps_font_info",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "truetype_font",
+            "id": "input/fonts/DejaVuSans.ttf",
+            "requirements": "TrueType control face without POSTSCRIPT_INFO font-info service."
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "expected_error": "FT_Err_Invalid_Argument",
+          "source_behavior": "Faces without ps_get_font_info return Invalid_Argument."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_font_info", "asset:existing"],
+      "expectation": {
+        "status": "error",
+        "output_shape": {"status": "FT_Error", "font_info": null},
+        "compare": {"mode": "exact", "paths": ["status", "font_info"], "compare_error_output": true}
+      }
     }
   ]
 }
