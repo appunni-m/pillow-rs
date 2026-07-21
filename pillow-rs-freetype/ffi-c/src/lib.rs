@@ -4265,6 +4265,24 @@ pub extern "C" fn FT_Get_BDF_Property(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_BDF_Charset_ID(
+    face: FT_Face,
+    acharset_encoding: *mut *const c_char,
+    acharset_registry: *mut *const c_char,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for either output pointer
+    // or null, matching FreeType's nullable output contract.
+    let charset_encoding = unsafe { acharset_encoding.as_mut() };
+    // SAFETY: same as above for the registry output pointer.
+    let charset_registry = unsafe { acharset_registry.as_mut() };
+    rust_ffi::FT_Get_BDF_Charset_ID(
+        face_state(face).map(|state| &state.inner),
+        charset_encoding,
+        charset_registry,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Sfnt_Name_Count(face: FT_Face) -> FT_UInt {
     rust_ffi::FT_Get_Sfnt_Name_Count(face_state(face).map(|state| &state.inner))
 }

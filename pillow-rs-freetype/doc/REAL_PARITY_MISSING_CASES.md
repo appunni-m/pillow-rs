@@ -4712,24 +4712,29 @@ Fix plan:
    `FT_Get_BDF_Charset_ID`, and WASM ABI before counting the row as
    `real-parity`.
 
-Verified progress:
+Verified progress on 2026-07-21:
 
-- Exact comparison passed for the concrete BDF charset non-BDF-face row.
-- The previously fallback-classified error row now validates exact
-  status/output against pinned C FreeType through Rust FFI, C ABI, and WASM ABI.
-- No runtime Rust behavior change was needed for this row.
-- The broader `ftbdf.get_bdf_charset_id` operation lane now has three exact
-  error rows promoted and passing. Two success fixture rows remain pending for
-  unresolved BDF charset assets.
+- Added maintained pinned-C oracle command `--bdf-charset-case`.
+- Added same-input Rust FFI, thin C ABI `FT_Get_BDF_Charset_ID`, and WASM ABI
+  `fontdone_wasm_get_bdf_charset_id` output helpers for the concrete non-BDF
+  error row.
+- Exact comparison now passes for the concrete BDF charset non-BDF-face row.
+- First divergence fixed: pinned FreeType returned public error `8` and wrote
+  null charset output pointers for the non-BDF face, while Rust initially
+  returned `6` with the same null output shape. Core now matches the observed
+  public error for the service-missing non-BDF route.
+- The broader `ftbdf.get_bdf_charset_id` operation lane now has one runnable
+  row passing in this branch. Four rows remain pending because the declared BDF
+  charset and SFNT-BDF fixture assets are unresolved.
 
 Focused non-coverage result:
 
 ```bash
-make -C pillow-rs-freetype test-case CASE=ftbdf.FT_Get_BDF_Charset_ID.error_non_bdf_face
+make -C pillow-rs-freetype test-op OP=ftbdf.get_bdf_charset_id
 ```
 
-Result: `1 / 1` runtime parity rows passed, `0` failed, `0` pending. Route
-audit: `real-parity` `3964`, `generic-error-fallback` `231`.
+Result: `1 / 1` runnable runtime parity rows passed, `0` failed, `4` pending.
+Route audit: `real-parity=4534`, `pending-route=426`.
 
 ### Issue Set Current: `FT_Get_PFR_Advance` non-PFR-face exact-error route
 
