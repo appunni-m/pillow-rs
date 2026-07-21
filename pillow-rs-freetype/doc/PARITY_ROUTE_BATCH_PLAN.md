@@ -1373,6 +1373,38 @@ Remaining nearby blocker:
   runtime condition with `TT_CONFIG_OPTION_COLOR_LAYERS` disabled. Promoting it
   in the enabled-color build would be a green placeholder.
 
+### Route combined FT_LayerIterator v0/v1 API parity: 2026-07-22
+
+Status: implemented as a real route promotion for the existing broad
+`FT_LayerIterator` manifest row.
+
+Scope:
+
+- Promoted
+  `ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis` from
+  pending-route to real-parity.
+- Expanded the row output so it no longer proves only the COLR v1
+  `FT_Get_Paint_Layers` iterator path.  It now compares:
+  - COLR v0 `FT_Get_Color_Glyph_Layer` calls for base glyph 36.
+  - COLR v1 `FT_Get_Paint_Layers` calls for base glyphs 36 and 37.
+- The route compares public `FT_LayerIterator` fields (`num_layers`, `layer`,
+  pointer class) plus call return values and public payload fields across the
+  pinned C oracle, Rust FFI, C ABI, and WASM ABI.
+
+Why this was not counted earlier:
+
+- Previous route support for this broad row emitted only the COLR v1 paint-layer
+  sequences.  The manifest row explicitly declares both `colr_v0_layers` and
+  `colr_v1_layers_many`; counting v1-only output would have been a green
+  placeholder.
+
+Observed impact:
+
+- Route audit: `pending-route` 237 → 236, `real-parity` 4730 → 4731.
+- Focused runtime:
+  `make -C pillow-rs-freetype test-case CASE=ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis`
+  passed 1/1 across Rust FFI, C ABI, and WASM ABI.
+
 ### Split static FT_PaintLinearGradient public-record row: 2026-07-22
 
 Status: implemented as an additive split row; the original broad row remains
