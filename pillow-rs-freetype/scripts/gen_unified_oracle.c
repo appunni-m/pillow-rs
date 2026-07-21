@@ -14096,6 +14096,135 @@ static int emit_color_glyph_layer_case(int argc, char** argv) {
     return 0;
 }
 
+static void print_opaque_paint_json(FT_OpaquePaint opaque) {
+    printf("{\"p_class\":\"%s\",\"insert_root_transform\":%u}",
+           opaque.p ? "nonnull" : "null",
+           opaque.insert_root_transform);
+}
+
+static void print_colr_paint_node_json(FT_Face face, FT_OpaquePaint opaque, int depth) {
+    if (depth > 8) {
+        printf("{\"return\":0,\"depth_limit\":true}");
+        return;
+    }
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool result = FT_Get_Paint(face, opaque, &paint);
+    printf("{\"return\":%u,\"opaque\":", result);
+    print_opaque_paint_json(opaque);
+    if (!result) {
+        printf("}");
+        return;
+    }
+    printf(",\"format\":%d", paint.format);
+    printf("}");
+}
+
+static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, int depth) {
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool result = FT_Get_Paint(face, opaque, &paint);
+    if (!result) {
+        printf("{\"depth\":%d,\"format\":0,\"palette_index\":0,\"alpha\":0,\"glyph_index\":0,\"composite_mode\":0}", depth);
+        return;
+    }
+    FT_UInt palette_index = 0;
+    FT_Int alpha = 0;
+    FT_UInt glyph_index = 0;
+    FT_Int composite_mode = 0;
+    if (paint.format == FT_COLR_PAINTFORMAT_SOLID) {
+        palette_index = paint.u.solid.color.palette_index;
+        alpha = paint.u.solid.color.alpha;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
+        glyph_index = paint.u.glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
+        composite_mode = paint.u.composite.composite_mode;
+    }
+    printf("{\"depth\":%d,\"format\":%d,\"palette_index\":%u,\"alpha\":%d,\"glyph_index\":%u,\"composite_mode\":%d}",
+           depth, paint.format, palette_index, alpha, glyph_index, composite_mode);
+    if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.glyph.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.composite.source_paint, depth + 1);
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.composite.backdrop_paint, depth + 1);
+    }
+}
+
+static void print_colr_snapshot_record_json(FT_Face face, FT_UInt base_glyph) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    printf("{\"glyph_index\":%u,\"nodes\":[", base_glyph);
+    print_colr_snapshot_node_json(face, opaque, 0);
+    printf("]}");
+}
+
+static void print_colr_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":30,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    for (int mode = 0; mode < 28; mode++) {
+        printf(",");
+        print_colr_snapshot_record_json(face, (FT_UInt)(39 + mode));
+    }
+    printf("]}");
+}
+
+static void print_colr_root_json(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool result = FT_Get_Color_Glyph_Paint(face, base_glyph, root_transform, &opaque);
+    printf("{\"root_return\":%u,\"root_opaque\":", result);
+    print_opaque_paint_json(opaque);
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static int emit_color_paint_graph_case(int argc, char** argv) {
+    if (argc != 6) {
+        fprintf(stderr, "--color-paint-graph-case requires CASE SOURCE_KIND SOURCE FACE_INDEX\n");
+        return 2;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"solid_root\":");
+    print_colr_root_json(face.face, 36, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"glyph_root\":");
+    print_colr_root_json(face.face, 37, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"composites\":[");
+    for (int mode = 0; mode < 28; mode++) {
+        if (mode) {
+            printf(",");
+        }
+        FT_UInt base_glyph = (FT_UInt)(39 + mode);
+        printf("{\"expected_mode\":%d,\"base_glyph\":%u,", mode, base_glyph);
+        FT_OpaquePaint opaque;
+        memset(&opaque, 0, sizeof(opaque));
+        FT_Bool result = FT_Get_Color_Glyph_Paint(face.face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+        printf("\"root_return\":%u,\"root_opaque\":", result);
+        print_opaque_paint_json(opaque);
+        printf(",\"root_paint\":");
+        print_colr_paint_node_json(face.face, opaque, 0);
+        printf("}");
+    }
+    printf("],\"graph_snapshot\":");
+    print_colr_graph_snapshot_json(face.face);
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_color_palette_case(int argc, char** argv) {
     const char* case_id = argv[2];
     OracleFace face;
@@ -22839,6 +22968,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--color-glyph-layer-case")) {
         return emit_color_glyph_layer_case(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--color-paint-graph-case")) {
+        return emit_color_paint_graph_case(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);

@@ -500,6 +500,13 @@ pub struct FontdoneWasmPaletteData {
     pub palette_entry_name_ids: *const FT_UShort,
 }
 
+pub type FT_OpaquePaint = rust_ffi::FT_OpaquePaint;
+pub type FT_ColorIndex = rust_ffi::FT_ColorIndex;
+pub type FT_PaintSolid = rust_ffi::FT_PaintSolid;
+pub type FT_PaintGlyph = rust_ffi::FT_PaintGlyph;
+pub type FT_PaintComposite = rust_ffi::FT_PaintComposite;
+pub type FT_COLR_Paint = rust_ffi::FT_COLR_Paint;
+
 fn wasm_color_to_rust(color: FontdoneWasmColor) -> rust_ffi::FT_Color {
     rust_ffi::FT_Color {
         blue: color.blue,
@@ -1074,6 +1081,41 @@ pub extern "C" fn fontdone_wasm_get_color_glyph_layer(
         unsafe { acolor_index.as_mut() },
         unsafe { iterator.as_mut() },
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_paint(
+    handle: usize,
+    base_glyph: FT_UInt,
+    root_transform: FT_UInt,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Paint(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        root_transform,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_paint(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+    paint: *mut FT_COLR_Paint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint(
+        face_ref(handle).map(|face| &face.face),
+        opaque_paint,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_graph(
+    handle: usize,
+) -> Option<rust_ffi::FT_ColrV1_PaintGraph_Snapshot> {
+    rust_ffi::FT_ColrV1_PaintGraph_Copy(face_ref(handle).map(|face| &face.face))
 }
 
 #[unsafe(no_mangle)]

@@ -2536,6 +2536,12 @@ impl BackendComparisonWorker {
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 rust_color_glyph_layer_case(case)
             }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                rust_color_paint_graph_case(case)
+            }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
                     == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
@@ -2895,6 +2901,12 @@ impl BackendComparisonWorker {
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 c_color_glyph_layer_case(case)
             }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                c_color_paint_graph_case(case)
+            }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
                     == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy" =>
@@ -3251,6 +3263,12 @@ impl BackendComparisonWorker {
             }
             "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
                 wasm_color_glyph_layer_case(case)
+            }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                wasm_color_paint_graph_case(case)
             }
             "ftbzip2.stream_open_bzip2"
                 if case.case_id
@@ -10853,6 +10871,234 @@ fn wasm_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
     );
     wasm_done_face(handle);
     output
+}
+
+#[derive(Clone, Copy)]
+enum ColorPaintBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_paint_success_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.operation.as_str(),
+        "ftcolor.get_color_glyph_paint"
+            | "ftcolor.get_color_glyph_paint_and_get_paint"
+            | "ftcolor.get_color_glyph_paint_and_resolve"
+            | "ftcolor.get_color_glyph_paint_then_get_paint"
+            | "ftcolor.get_paint"
+            | "ftcolor.get_paint_graph"
+            | "ftcolor.get_paint_graph_node"
+            | "ftcolor.get_solid_paint_and_palette"
+            | "ftcolor.traverse_color_paint_graph"
+            | "ftcolor.traverse_paint_graph"
+    ) && matches!(
+        case.case_id.as_str(),
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform"
+            | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
+            | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
+    ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
+        && (case.case_id.ends_with(".paint_composite_runtime")
+            || case.case_id.ends_with(".paint_composite_mode_runtime"))
+}
+
+fn color_paint_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    glyph: FT_UInt,
+    root_transform: FT_UInt,
+) -> (FT_Bool, FT_OpaquePaint) {
+    let mut opaque = FT_OpaquePaint::default();
+    let result = match backend {
+        ColorPaintBackend::Rust => {
+            FT_Get_Color_Glyph_Paint(rust_face, glyph, root_transform, Some(&mut opaque))
+        }
+        ColorPaintBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_Paint(c_face, glyph, root_transform, &mut opaque)
+        }
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_get_color_glyph_paint(
+            wasm_handle,
+            glyph,
+            root_transform,
+            &mut opaque,
+        ),
+    };
+    (result, opaque)
+}
+
+fn get_paint_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> (FT_Bool, FT_COLR_Paint) {
+    let mut paint = FT_COLR_Paint::default();
+    let result = match backend {
+        ColorPaintBackend::Rust => FT_Get_Paint(rust_face, opaque, Some(&mut paint)),
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Paint(c_face, opaque, &mut paint),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_paint(wasm_handle, opaque, &mut paint)
+        }
+    };
+    (result, paint)
+}
+
+fn opaque_paint_json(opaque: FT_OpaquePaint) -> Value {
+    json!({
+        "p_class": pointer_class(opaque.p.cast_const()),
+        "insert_root_transform": opaque.insert_root_transform,
+    })
+}
+
+fn color_paint_node_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+    depth: usize,
+) -> Value {
+    if depth > 8 {
+        return json!({"return": 0, "depth_limit": true});
+    }
+    let (result, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    if result == 0 {
+        return json!({"return": result, "opaque": opaque_paint_json(opaque)});
+    }
+    json!({
+        "return": result,
+        "opaque": opaque_paint_json(opaque),
+        "format": paint.format,
+    })
+}
+
+fn colr_v1_snapshot_json(snapshot: Option<FT_ColrV1_PaintGraph_Snapshot>) -> Value {
+    let Some(snapshot) = snapshot else {
+        return Value::Null;
+    };
+    json!({
+        "root_count": snapshot.root_count,
+        "records": snapshot.records.into_iter().map(|record| json!({
+            "glyph_index": record.glyph_index,
+            "nodes": record.nodes.into_iter().map(|node| json!({
+                "depth": node.depth,
+                "format": node.format,
+                "palette_index": node.palette_index,
+                "alpha": node.alpha,
+                "glyph_index": node.glyph_index,
+                "composite_mode": node.composite_mode,
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn color_paint_snapshot_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    match backend {
+        ColorPaintBackend::Rust => colr_v1_snapshot_json(FT_ColrV1_PaintGraph_Copy(rust_face)),
+        ColorPaintBackend::CAbi => {
+            colr_v1_snapshot_json(c_abi::abi_support_colr_v1_paint_graph(c_face))
+        }
+        ColorPaintBackend::Wasm => {
+            colr_v1_snapshot_json(wasm_abi::abi_support_colr_v1_paint_graph(wasm_handle))
+        }
+    }
+}
+
+fn color_paint_graph_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let (solid_return, solid_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        36,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (glyph_return, glyph_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        37,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let composites = (0..28)
+        .map(|mode| {
+            let base_glyph = 39 + mode;
+            let (root_return, opaque) = color_paint_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+            );
+            json!({
+                "expected_mode": mode,
+                "base_glyph": base_glyph,
+                "root_return": root_return,
+                "root_opaque": opaque_paint_json(opaque),
+                "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+            })
+        })
+        .collect::<Vec<_>>();
+    ok(json!({
+        "solid_root": {
+            "root_return": solid_return,
+            "root_opaque": opaque_paint_json(solid_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, solid_opaque, 0),
+        },
+        "glyph_root": {
+            "root_return": glyph_return,
+            "root_opaque": opaque_paint_json(glyph_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, glyph_opaque, 0),
+        },
+        "composites": composites,
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
+fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    Ok(color_paint_graph_output_for_open_face(
+        ColorPaintBackend::Rust,
+        Some(&face),
+        ptr::null_mut(),
+        0,
+    ))
+}
+
+fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = color_paint_graph_output_for_open_face(
+        ColorPaintBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    Ok(output)
 }
 
 fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
@@ -24426,6 +24672,14 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(color_glyph_layer_base_glyph(case)?.to_string());
             Ok(args)
         }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            let mut args = vec!["--color-paint-graph-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "size_metrics" => {
             let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
@@ -27161,6 +27415,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
             rust_color_glyph_layer_case(case)
         }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            rust_color_paint_graph_case(case)
+        }
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
                 rust_get_subglyph_info(None, case)
@@ -27314,6 +27573,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "ftcolor.palette_set_foreground_color" => c_palette_case(case),
         "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
             c_color_glyph_layer_case(case)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            c_color_paint_graph_case(case)
         }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
@@ -28329,6 +28593,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         | "ftcolor.palette_set_foreground_color" => wasm_palette_case(case),
         "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
             wasm_color_glyph_layer_case(case)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            wasm_color_paint_graph_case(case)
         }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,

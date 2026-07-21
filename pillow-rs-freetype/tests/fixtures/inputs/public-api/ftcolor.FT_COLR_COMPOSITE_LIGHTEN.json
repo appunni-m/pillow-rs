@@ -57,15 +57,8 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "role": "font",
-            "id": "fonts/color/colr-v1-composite-modes.ttf",
-            "requirements": "Future shared COLR v1 font whose BaseGlyphV1List contains PaintComposite nodes for all real FT_Composite_Mode values, with simple solid source/backdrop terminal paints and deterministic glyph IDs."
-          },
-          "control_font": {
-            "kind": "ref",
-            "role": "control_font",
-            "id": "fonts/color/colr-v0-layer-control.ttf",
-            "requirements": "Future shared COLR v0-only control font proving these COLR v1 paint cases are absent from legacy layer traversal."
+            "id": "fonts/color/colr_v1_composite_modes.ttf",
+            "asset_kind": "font"
           }
         },
         "params": {
