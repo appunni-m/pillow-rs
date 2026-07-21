@@ -2686,6 +2686,7 @@ def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | Non
     if row.case_id in {
         "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers",
         "ftcolor.FT_Get_Paint_Layers.end_of_iteration",
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1",
     }:
         return (
             "COLRv1 FT_Get_Paint_Layers success and terminal iteration "
