@@ -10825,6 +10825,7 @@ enum ColorGlyphLayerBackend {
 fn color_glyph_layer_base_glyph(case: &InputCase) -> Result<FT_UInt, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0"
         | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs" => Ok(36),
         "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => Ok(1),
         other => Err(format!("unsupported color glyph layer case {other}")),
@@ -10835,6 +10836,7 @@ fn color_glyph_layer_success_route_supported(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
         "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0"
             | "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index"
             | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs"
     )
@@ -10923,6 +10925,11 @@ fn color_glyph_layer_output_for_open_face(
         "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success" => Ok(ok(json!({
             "calls": [call("call_1"), call("call_2"), call("call_3"), call("call_4")]
         }))),
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0" => {
+            Ok(ok(json!({
+                "calls": [call("call_1"), call("call_2"), call("call_3"), call("call_4")]
+            })))
+        }
         "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => {
             let output = call("foreground");
             Ok(ok(json!({

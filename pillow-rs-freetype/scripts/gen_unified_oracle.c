@@ -14061,7 +14061,8 @@ static int emit_color_glyph_layer_case(int argc, char** argv) {
 
     printf("{");
     print_status(0);
-    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success")) {
+    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0")) {
         printf(",\"output\":{\"calls\":[");
         for (int i = 0; i < 4; i++) {
             if (i) {
