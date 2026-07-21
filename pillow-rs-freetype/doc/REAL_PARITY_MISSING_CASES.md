@@ -11890,6 +11890,58 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: `FT_Open_Args` abstract open-face route
+
+Status:
+
+- `freetype.FT_Open_Args.open_face_consumes_args_like_c` remains
+  `pending-route`.
+- Focused verification confirms this is not a runtime parity failure yet:
+  `make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Args.open_face_consumes_args_like_c`
+  reports `runtime_cases: runnable=0 pending=1`.
+- The blocker is the input shape and maintained route, not duplicate Rust
+  functions or duplicate public constants/method names.
+
+Current evidence:
+
+- The public input file declares an abstract `arg_variants` list covering
+  `FT_OPEN_MEMORY`, `FT_OPEN_PATHNAME`, `FT_OPEN_STREAM`, `FT_OPEN_DRIVER`,
+  `FT_OPEN_PARAMS`, no-source flags, and multiple-source flags.
+- The unified runner has maintained `FT_Open_Face` variant support only for
+  explicit `variants[]` rows consumed by `memory_face_rows`.
+- Existing `FT_Open_Face` concrete rows are already real parity:
+  `success_open_memory`, `success_open_pathname`,
+  `success_negative_face_index_probe`, `error_invalid_source_flags`, and
+  `error_null_library_args_or_aface` route through pinned C oracle, Rust FFI,
+  C ABI, and WASM ABI.
+- Promoting the broader `FT_Open_Args` case by reusing the memory/pathname rows
+  would be a green placeholder because it would not prove the declared driver,
+  params, stream ownership, no-source, multiple-source, and missing-path
+  behavior from the same `FT_Open_Args` input.
+
+Required fix plan:
+
+1. Convert the abstract `arg_variants` declaration into maintained explicit
+   `variants[]` rows through the generator/manifest flow, not by hand-editing
+   fixture outputs.
+2. Extend the oracle and all actual lanes to consume the same row schema for:
+   memory source, pathname source, memory-backed external stream, unsupported
+   driver, supported/ignored params, no source flag, multiple source flags, and
+   missing pathname.
+3. Compare exact `FT_Error`, face pointer nullness, selected source, relevant
+   public face flags, caller-buffer/stream ownership, and params effect for
+   each row.
+4. Keep the existing concrete `FT_Open_Face` rows real; they prove basic
+   `FT_Open_Face` routing but are not substitutes for the broad
+   `FT_Open_Args` record contract.
+
+Verification before promotion:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Args.open_face_consumes_args_like_c
+make -C pillow-rs-freetype route-audit
+```
+
 ### Issue Set Current: `FT_StreamRec` memory-stream field contract
 
 Current status:
