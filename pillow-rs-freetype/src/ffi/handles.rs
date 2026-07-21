@@ -6056,6 +6056,22 @@ pub fn FT_Unsupported_GlyphSlot(face: &FT_Face) -> FT_GlyphSlot {
     slot
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn FT_Outline_GlyphSlot_With_Advance(
+    face: &FT_Face,
+    advance_x: FT_Pos,
+    advance_y: FT_Pos,
+) -> FT_GlyphSlot {
+    let mut slot = FT_Empty_GlyphSlot(face);
+    slot.advance = FT_Vector {
+        x: advance_x,
+        y: advance_y,
+    };
+    slot.format = FT_GLYPH_FORMAT_OUTLINE;
+    slot.outline = Some(FT_OutlineSnapshot::default());
+    slot
+}
+
 pub fn FT_Load_Glyph(
     face: &FT_Face,
     glyph_index: FT_UInt,

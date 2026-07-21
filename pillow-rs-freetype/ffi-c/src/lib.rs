@@ -1601,6 +1601,14 @@ pub fn abi_render_glyph_from_face(face: FT_Face, render_mode: FT_Render_Mode) ->
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_get_glyph_from_face(face: FT_Face, aglyph: *mut FT_Glyph) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    FT_Get_Glyph(slot.as_ptr(), aglyph)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_set_unsupported_glyph_slot(face: FT_Face) -> FT_Error {
     let Some(state) = face_state(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
@@ -1608,6 +1616,22 @@ pub fn abi_set_unsupported_glyph_slot(face: FT_Face) -> FT_Error {
     store_slot(
         face,
         rust_ffi::FT_Unsupported_GlyphSlot(&state.inner),
+        rust_ffi::FT_LOAD_DEFAULT,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_set_outline_glyph_slot_advance(
+    face: FT_Face,
+    advance_x: FT_Pos,
+    advance_y: FT_Pos,
+) -> FT_Error {
+    let Some(state) = face_state(face) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    store_slot(
+        face,
+        rust_ffi::FT_Outline_GlyphSlot_With_Advance(&state.inner, advance_x, advance_y),
         rust_ffi::FT_LOAD_DEFAULT,
     )
 }

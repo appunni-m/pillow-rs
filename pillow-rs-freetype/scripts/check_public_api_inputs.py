@@ -4044,14 +4044,7 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "WASM; accepting a generic slot error would be a green placeholder"
         )
     if row.case_id == "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range":
-        return (
-            "FT_Get_Glyph advance overflow requires a maintained synthetic "
-            "slot route with slot->advance.x/y at the exact >= 0x8000*64 and "
-            "<= -0x8000*64 boundaries from freetype/src/base/ftglyph.c:651-"
-            "667, proving allocation cleanup and *aglyph=NULL across pinned C, "
-            "Rust FFI, C ABI, and WASM; existing null-slot error coverage "
-            "does not exercise the 26.6-to-16.16 overflow path"
-        )
+        return None
     if row.case_id == "ftglyph.FT_GlyphRec.clazz_is_private_identity_only":
         return (
             "FT_GlyphRec clazz identity requires a maintained record-inspection "
@@ -4974,6 +4967,8 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftglyph.FT_Get_Glyph.error_null_slot_or_output"
     ):
         return "FT_Get_Glyph null slot/output errors validate exact public FT_Error rows through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.case_id == "ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range":
+        return "FT_Get_Glyph advance overflow and just-inside 26.6 boundaries validate exact public FT_Error, glyph output pointer class, and adjacent successful 16.16 advance conversion through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftglyph.glyph_copy"
         and row.case_id == "ftglyph.FT_Glyph_Copy.error_null_source_target_or_class"

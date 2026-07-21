@@ -1,5 +1,80 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: CPAL palette null-input verifier routes
+
+Status: completed on 2026-07-21 for two already-routed palette exact-error
+rows that were blocking full batch verifier execution.
+
+Maintained exact-error rows:
+
+- `ftcolor.FT_Palette_Data_Get.error_null_face_or_output`
+- `ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index`
+
+Finding:
+
+- These rows were already classified as real parity, but the native C oracle
+  `--color-palette-case` dispatcher did not emit complete JSON for the two
+  error case IDs. In full batch mode that stopped the oracle before comparisons.
+- The routes now compare null-face and null-output/null-invalid-index behavior
+  through pinned C oracle, Rust FFI, thin C ABI, and WASM ABI. They preserve
+  sentinel output records/pointers exactly where the C call returns before
+  writing caller storage.
+
+Impact:
+
+- Route audit category counts unchanged.
+- Full `real-parity-verify` now reaches full runtime comparison instead of
+  failing during oracle batch generation. Remaining full-verifier failures after
+  this unblock are separate:
+  - `ftmodapi.FT_Property_Set.invalid_property_or_value` WASM `property_after`
+  - `ftbdf.FT_Get_BDF_Property.success_bdf_string_integer_cardinal_properties`
+    Rust returned oracle error 7
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Data_Get.error_null_face_or_output
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index
+```
+
+### Issue Set Current: FT_Get_Glyph advance overflow boundary route
+
+Status: completed on 2026-07-21 for the public 26.6-to-16.16 advance boundary
+row.
+
+Implemented real parity row:
+
+- `ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range`
+
+Finding:
+
+- FreeType 2.14.3 `src/base/ftglyph.c:647-667` allocates the `FT_Glyph`
+  object, then rejects slot advances that cannot be converted from 26.6 to a
+  signed 16.16 `FT_GlyphRec.advance`: `>= 0x8000 * 64` and `<= -0x8000 * 64`
+  are `FT_Err_Invalid_Argument`, while the adjacent `±2097088` 26.6 values
+  succeed and convert by multiplying by 1024.
+- The maintained route now probes x and y independently for `2097152`,
+  `-2097152`, `2097088`, and `-2097088` through pinned C oracle, Rust FFI,
+  thin C ABI, and WASM ABI. Error rows compare exact `FT_Error` and null output
+  pointer class; adjacent success rows compare root glyph format, 16.16
+  advance, library presence, and class presence.
+- The C and WASM helpers are feature-gated `abi-test-support` utilities only;
+  they do not add public C header symbols or WASM exports. Core behavior
+  remains in `fontdone`.
+
+Impact:
+
+- `real-parity`: `4540 -> 4541`
+- `pending-route`: `420 -> 419`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range
+```
+
 ### Issue Set Current: FT_Glyph_Transform owned outline glyph success route
 
 Status: outline route complete on 2026-07-21 after route audit at `c196de7cd`;
@@ -1064,11 +1139,10 @@ Impact:
 Remaining malformed glyph blockers:
 
 - `ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload`
-- `ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range`
 - `ftglyph.FT_GlyphRec.clazz_is_private_identity_only`
 - `ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original`
 
-These remain pending until maintained synthetic slot, class-hook, cleanup, and
+These remain pending until maintained synthetic slot, class-hook, and
 renderer-failure routes exist across Rust, C ABI, WASM, and pinned C.
 
 Per-case blocker detail:
@@ -1080,11 +1154,6 @@ Per-case blocker detail:
   the selected glyph-class `glyph_init` hook, then compare the public
   `FT_Error` and `*aglyph` null/preservation behavior through pinned C, Rust
   FFI, thin C ABI, and WASM.
-- `ftglyph.FT_Get_Glyph.error_advance_out_of_16_16_range` requires synthetic
-  slot advances at the exact C overflow boundaries from
-  `freetype/src/base/ftglyph.c:651-667`: `slot->advance.x/y >= 0x8000 * 64`
-  and `<= -0x8000 * 64`. Exact parity must prove allocation cleanup and
-  `*aglyph = NULL`; null-slot coverage does not exercise this path.
 - `ftglyph.FT_GlyphRec.clazz_is_private_identity_only` must not compare raw
   private pointers. `freetype/include/freetype/ftglyph.h:93-120` exposes
   `clazz` as a private glyph-class pointer; the maintained route must create

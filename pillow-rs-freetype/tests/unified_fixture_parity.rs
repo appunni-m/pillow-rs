@@ -9228,6 +9228,120 @@ fn palette_data_json(
     })
 }
 
+fn palette_data_snapshot_json(
+    num_palettes: FT_UShort,
+    num_palette_entries: FT_UShort,
+    palette_name_ids_null: bool,
+    palette_flags_null: bool,
+    palette_entry_name_ids_null: bool,
+) -> Value {
+    json!({
+        "num_palettes": num_palettes,
+        "num_palette_entries": num_palette_entries,
+        "pointer_nullness": {
+            "palette_name_ids": palette_name_ids_null,
+            "palette_flags": palette_flags_null,
+            "palette_entry_name_ids": palette_entry_name_ids_null
+        }
+    })
+}
+
+fn palette_data_null_input_row(
+    variant: &str,
+    error: FT_Error,
+    palette_data_snapshot: Option<Value>,
+) -> Value {
+    json!({
+        "variant": variant,
+        "error": error,
+        "palette_data_snapshot": palette_data_snapshot
+    })
+}
+
+fn rust_palette_data_null_inputs(face: &FT_Face) -> Value {
+    let mut data = FT_Palette_Data {
+        num_palettes: 999,
+        palette_name_ids: ptr::dangling::<FT_UShort>(),
+        palette_flags: ptr::dangling::<FT_UShort>(),
+        num_palette_entries: 999,
+        palette_entry_name_ids: ptr::dangling::<FT_UShort>(),
+    };
+    let null_face = FT_Palette_Data_Get(None, Some(&mut data));
+    let null_output = FT_Palette_Data_Get(Some(face), None);
+    json!({
+        "variants": [
+            palette_data_null_input_row(
+                "null_face",
+                null_face,
+                Some(palette_data_snapshot_json(
+                    data.num_palettes,
+                    data.num_palette_entries,
+                    data.palette_name_ids.is_null(),
+                    data.palette_flags.is_null(),
+                    data.palette_entry_name_ids.is_null(),
+                )),
+            ),
+            palette_data_null_input_row("null_apalette", null_output, None),
+        ]
+    })
+}
+
+fn c_palette_data_null_inputs(face: c_abi::FT_Face) -> Value {
+    let mut data = c_abi::FT_Palette_Data {
+        num_palettes: 999,
+        palette_name_ids: ptr::dangling::<c_abi::FT_UShort>(),
+        palette_flags: ptr::dangling::<c_abi::FT_UShort>(),
+        num_palette_entries: 999,
+        palette_entry_name_ids: ptr::dangling::<c_abi::FT_UShort>(),
+    };
+    let null_face = c_abi::FT_Palette_Data_Get(ptr::null_mut(), &mut data);
+    let null_output = c_abi::FT_Palette_Data_Get(face, ptr::null_mut());
+    json!({
+        "variants": [
+            palette_data_null_input_row(
+                "null_face",
+                null_face,
+                Some(palette_data_snapshot_json(
+                    data.num_palettes,
+                    data.num_palette_entries,
+                    data.palette_name_ids.is_null(),
+                    data.palette_flags.is_null(),
+                    data.palette_entry_name_ids.is_null(),
+                )),
+            ),
+            palette_data_null_input_row("null_apalette", null_output, None),
+        ]
+    })
+}
+
+fn wasm_palette_data_null_inputs(handle: usize) -> Value {
+    let mut data = wasm_abi::FontdoneWasmPaletteData {
+        num_palettes: 999,
+        palette_name_ids: ptr::dangling::<wasm_abi::FT_UShort>(),
+        palette_flags: ptr::dangling::<wasm_abi::FT_UShort>(),
+        num_palette_entries: 999,
+        palette_entry_name_ids: ptr::dangling::<wasm_abi::FT_UShort>(),
+    };
+    let null_face = wasm_abi::fontdone_wasm_palette_data_get(0, &mut data);
+    let null_output = wasm_abi::fontdone_wasm_palette_data_get(handle, ptr::null_mut());
+    json!({
+        "variants": [
+            palette_data_null_input_row(
+                "null_face",
+                null_face,
+                Some(palette_data_snapshot_json(
+                    data.num_palettes,
+                    data.num_palette_entries,
+                    data.palette_name_ids.is_null(),
+                    data.palette_flags.is_null(),
+                    data.palette_entry_name_ids.is_null(),
+                )),
+            ),
+            palette_data_null_input_row("null_apalette", null_output, None),
+        ]
+    })
+}
+
 fn rust_palette_data_values_json(snapshot: FT_Palette_Data_Snapshot) -> Value {
     json!({
         "error": snapshot.error,
@@ -9426,6 +9540,88 @@ fn wasm_palette_select_null_output_json(handle: usize) -> Value {
     })
 }
 
+fn palette_select_error_row(
+    variant: &str,
+    error: FT_Error,
+    palette_is_null: bool,
+    active_palette_index: i64,
+) -> Value {
+    json!({
+        "variant": variant,
+        "error": error,
+        "apalette_snapshot": if palette_is_null { "null" } else { "non_null" },
+        "active_palette_index": active_palette_index
+    })
+}
+
+fn rust_palette_select_error_json(face: &FT_Face) -> Value {
+    let mut data = FT_Palette_Data::default();
+    let data_err = FT_Palette_Data_Get(Some(face), Some(&mut data));
+    let equal_num_palettes = if data_err == FT_Err_Ok {
+        data.num_palettes
+    } else {
+        0
+    };
+    let mut null_face_palette = ptr::dangling::<FT_Color>();
+    let mut equal_palette = ptr::dangling::<FT_Color>();
+    let mut max_palette = ptr::dangling::<FT_Color>();
+    let null_face = FT_Palette_Select(None, 0, Some(&mut null_face_palette));
+    let equal_index = FT_Palette_Select(Some(face), equal_num_palettes, Some(&mut equal_palette));
+    let max_index = FT_Palette_Select(Some(face), 65535, Some(&mut max_palette));
+    json!({
+        "variants": [
+            palette_select_error_row("null_face", null_face, null_face_palette.is_null(), -1),
+            palette_select_error_row("palette_index_equal_num_palettes", equal_index, equal_palette.is_null(), -1),
+            palette_select_error_row("palette_index_65535", max_index, max_palette.is_null(), -1),
+        ]
+    })
+}
+
+fn c_palette_select_error_json(face: c_abi::FT_Face) -> Value {
+    let data = c_abi::abi_palette_data_snapshot(face);
+    let equal_num_palettes = if data.error == FT_Err_Ok {
+        data.num_palettes
+    } else {
+        0
+    };
+    let mut null_face_palette = ptr::dangling_mut::<c_abi::FT_Color>();
+    let mut equal_palette = ptr::dangling_mut::<c_abi::FT_Color>();
+    let mut max_palette = ptr::dangling_mut::<c_abi::FT_Color>();
+    let null_face = c_abi::FT_Palette_Select(ptr::null_mut(), 0, &mut null_face_palette);
+    let equal_index = c_abi::FT_Palette_Select(face, equal_num_palettes, &mut equal_palette);
+    let max_index = c_abi::FT_Palette_Select(face, 65535, &mut max_palette);
+    json!({
+        "variants": [
+            palette_select_error_row("null_face", null_face, null_face_palette.is_null(), -1),
+            palette_select_error_row("palette_index_equal_num_palettes", equal_index, equal_palette.is_null(), -1),
+            palette_select_error_row("palette_index_65535", max_index, max_palette.is_null(), -1),
+        ]
+    })
+}
+
+fn wasm_palette_select_error_json(handle: usize) -> Value {
+    let data = wasm_abi::abi_palette_data_snapshot(handle);
+    let equal_num_palettes = if data.error == FT_Err_Ok {
+        data.num_palettes
+    } else {
+        0
+    };
+    let mut null_face_palette = ptr::dangling_mut::<wasm_abi::FontdoneWasmColor>();
+    let mut equal_palette = ptr::dangling_mut::<wasm_abi::FontdoneWasmColor>();
+    let mut max_palette = ptr::dangling_mut::<wasm_abi::FontdoneWasmColor>();
+    let null_face = wasm_abi::fontdone_wasm_palette_select(0, 0, &mut null_face_palette);
+    let equal_index =
+        wasm_abi::fontdone_wasm_palette_select(handle, equal_num_palettes, &mut equal_palette);
+    let max_index = wasm_abi::fontdone_wasm_palette_select(handle, 65535, &mut max_palette);
+    json!({
+        "variants": [
+            palette_select_error_row("null_face", null_face, null_face_palette.is_null(), -1),
+            palette_select_error_row("palette_index_equal_num_palettes", equal_index, equal_palette.is_null(), -1),
+            palette_select_error_row("palette_index_65535", max_index, max_palette.is_null(), -1),
+        ]
+    })
+}
+
 fn rust_palette_reselect_json(face: &FT_Face) -> Value {
     let first = FT_Palette_Select_Copy(Some(face), 0, true);
     let mutate_err = FT_Palette_Set_Active_Entry_For_Test(
@@ -9533,6 +9729,13 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data_Get.error_null_face_or_output" => {
+            let face = open_face(case)?;
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                rust_palette_data_null_inputs(&face),
+            ))
+        }
         "ftcolor.FT_Palette_Data.palette_data_get_values"
         | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
         | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
@@ -9549,6 +9752,13 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index" => {
+            let face = open_face(case)?;
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                rust_palette_select_error_json(&face),
+            ))
         }
         "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
         | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
@@ -9607,6 +9817,16 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data_Get.error_null_face_or_output" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_data_null_inputs(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                output,
+            ))
+        }
         "ftcolor.FT_Palette_Data.palette_data_get_values"
         | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
         | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
@@ -9626,6 +9846,16 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index" => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_palette_select_error_json(face);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                output,
+            ))
         }
         "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
         | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
@@ -9694,6 +9924,15 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 data.palette_entry_name_ids,
             )))
         }
+        "ftcolor.FT_Palette_Data_Get.error_null_face_or_output" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_data_null_inputs(handle);
+            wasm_done_face(handle);
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                output,
+            ))
+        }
         "ftcolor.FT_Palette_Data.palette_data_get_values"
         | "ftcolor.FT_PALETTE_FOR_DARK_BACKGROUND.palette_flags_runtime"
         | "ftcolor.FT_PALETTE_FOR_LIGHT_BACKGROUND.palette_flags_runtime" => {
@@ -9711,6 +9950,15 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 "error": err,
                 "apalette_nullness": if palette.is_null() { "null" } else { "non_null" }
             })))
+        }
+        "ftcolor.FT_Palette_Select.error_null_face_or_invalid_palette_index" => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_palette_select_error_json(handle);
+            wasm_done_face(handle);
+            Ok(error_with_output(
+                FT_Err_Invalid_Face_Handle as FT_Error,
+                output,
+            ))
         }
         "ftcolor.FT_Palette_Select.success_selects_palette_and_returns_entries"
         | "ftcolor.FT_Color.palette_entries_preserve_bgra_order" => {
@@ -22473,6 +22721,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.operation == "ftglyph.get_glyph" && params.get("probes").is_some() {
                 return Ok(vec!["--get-glyph-null-inputs".to_string()]);
             }
+            if case.operation == "ftglyph.get_glyph" && params.get("advance_26_6_values").is_some()
+            {
+                let mut args = vec!["--get-glyph-advance-boundaries".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(advance_26_6_values_arg(params)?);
+                return Ok(args);
+            }
             if case.operation == "ftglyph.glyph_copy" && params.get("probes").is_some() {
                 return Ok(vec!["--glyph-copy-null-inputs".to_string()]);
             }
@@ -23399,6 +23657,10 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             rust_get_glyph_null_inputs()
+        }
+        "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
+            let face = open_face(case)?;
+            rust_get_glyph_advance_boundaries(&face, &case.inputs.params)
         }
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             rust_glyph_copy_null_inputs()
@@ -24357,6 +24619,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             c_get_glyph_null_inputs()
         }
+        "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_get_glyph_advance_boundaries(face, &case.inputs.params);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             c_glyph_copy_null_inputs()
         }
@@ -25205,6 +25474,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             wasm_get_glyph_null_inputs()
+        }
+        "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_get_glyph_advance_boundaries(handle, &case.inputs.params);
+            wasm_done_face(handle);
+            output
         }
         "ftglyph.glyph_copy" if case.inputs.params.get("probes").is_some() => {
             wasm_glyph_copy_null_inputs()
@@ -27767,6 +28042,184 @@ fn get_glyph_null_inputs_output(rows: Vec<Value>) -> RunOutput {
         .find(|error| *error != 0)
         .unwrap_or(FT_Err_Ok as i64) as FT_Error;
     error_with_output(first_error, json!({ "rows": rows }))
+}
+
+fn advance_26_6_values(params: &Value) -> Result<Vec<FT_Pos>, String> {
+    array_param(params, "advance_26_6_values")?
+        .iter()
+        .map(|value| i64_value(value, "advance_26_6_values"))
+        .collect()
+}
+
+fn advance_26_6_values_arg(params: &Value) -> Result<String, String> {
+    Ok(advance_26_6_values(params)?
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn get_glyph_advance_row(
+    axis: &str,
+    advance: FT_Pos,
+    error: FT_Error,
+    output_pointer_class: &str,
+    glyph: Option<Value>,
+) -> Value {
+    let mut row = json!({
+        "probe": format!("{axis}={advance}"),
+        "axis": axis,
+        "advance": advance,
+        "error": error,
+        "output_pointer_class": output_pointer_class
+    });
+    if let Some(glyph) = glyph {
+        row["glyph"] = glyph;
+    }
+    row
+}
+
+fn get_glyph_advance_boundaries_output(rows: Vec<Value>) -> RunOutput {
+    let first_error = rows
+        .iter()
+        .filter_map(|row| row.get("error").and_then(Value::as_i64))
+        .find(|error| *error != 0)
+        .unwrap_or(FT_Err_Ok as i64) as FT_Error;
+    if first_error == FT_Err_Ok {
+        ok(json!({ "rows": rows }))
+    } else {
+        error_with_output(first_error, json!({ "rows": rows }))
+    }
+}
+
+fn glyph_record_payload(format: i32, advance_x: i64, advance_y: i64) -> Value {
+    glyph_record_json(format, advance_x, advance_y)
+        .get("glyph")
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+fn rust_get_glyph_advance_boundaries(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for advance in advance_26_6_values(params)? {
+        for axis in ["x", "y"] {
+            let (advance_x, advance_y) = if axis == "x" {
+                (advance, 0)
+            } else {
+                (0, advance)
+            };
+            let slot = FT_Outline_GlyphSlot_With_Advance(face, advance_x, advance_y);
+            let result = FT_Get_Outline_Glyph(Some(&slot));
+            let (error, pointer_class, glyph) = match result {
+                Ok(glyph) => (
+                    FT_Err_Ok,
+                    "non_null",
+                    Some(glyph_record_payload(
+                        glyph.root.format,
+                        glyph.root.advance.x / 1024,
+                        glyph.root.advance.y / 1024,
+                    )),
+                ),
+                Err(error) => (error, "null", None),
+            };
+            rows.push(get_glyph_advance_row(
+                axis,
+                advance,
+                error,
+                pointer_class,
+                glyph,
+            ));
+        }
+    }
+    Ok(get_glyph_advance_boundaries_output(rows))
+}
+
+fn c_get_glyph_advance_boundaries(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for advance in advance_26_6_values(params)? {
+        for axis in ["x", "y"] {
+            let (advance_x, advance_y) = if axis == "x" {
+                (advance, 0)
+            } else {
+                (0, advance)
+            };
+            let setup = c_abi::abi_set_outline_glyph_slot_advance(face, advance_x, advance_y);
+            let mut glyph = ptr::null_mut();
+            let error = if setup == FT_Err_Ok {
+                c_abi::abi_get_glyph_from_face(face, &mut glyph)
+            } else {
+                setup
+            };
+            let glyph_json = if error == FT_Err_Ok {
+                let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+                    .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+                Some(glyph_record_payload(
+                    FT_GLYPH_FORMAT_OUTLINE,
+                    snapshot.advance.x / 1024,
+                    snapshot.advance.y / 1024,
+                ))
+            } else {
+                None
+            };
+            rows.push(get_glyph_advance_row(
+                axis,
+                advance,
+                error,
+                if glyph.is_null() { "null" } else { "non_null" },
+                glyph_json,
+            ));
+            if !glyph.is_null() {
+                c_abi::FT_Done_Glyph(glyph);
+            }
+        }
+    }
+    Ok(get_glyph_advance_boundaries_output(rows))
+}
+
+fn wasm_get_glyph_advance_boundaries(handle: usize, params: &Value) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for advance in advance_26_6_values(params)? {
+        for axis in ["x", "y"] {
+            let (advance_x, advance_y) = if axis == "x" {
+                (advance, 0)
+            } else {
+                (0, advance)
+            };
+            let setup = wasm_abi::abi_set_outline_glyph_slot_advance(handle, advance_x, advance_y);
+            let mut glyph = 0usize;
+            let error = if setup == FT_Err_Ok {
+                wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+            } else {
+                setup
+            };
+            let glyph_json = if error == FT_Err_Ok {
+                let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph)
+                    .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+                Some(glyph_record_payload(
+                    FT_GLYPH_FORMAT_OUTLINE,
+                    snapshot.advance.x / 1024,
+                    snapshot.advance.y / 1024,
+                ))
+            } else {
+                None
+            };
+            rows.push(get_glyph_advance_row(
+                axis,
+                advance,
+                error,
+                if glyph == 0 { "null" } else { "non_null" },
+                glyph_json,
+            ));
+            if glyph != 0 {
+                let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+                wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+            }
+        }
+    }
+    Ok(get_glyph_advance_boundaries_output(rows))
 }
 
 fn rust_get_glyph_null_inputs() -> Result<RunOutput, String> {
