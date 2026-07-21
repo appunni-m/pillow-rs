@@ -550,6 +550,8 @@ def write_name_cmap_fixture(
     language_id: int,
     name_data: bytes,
     cmap_format: int = 4,
+    name_id: int = 1,
+    cmap_mappings: dict[int, int] | None = None,
 ) -> None:
     path = NAME_CMAP_OUT_DIR / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -565,7 +567,7 @@ def write_name_cmap_fixture(
                     platform_id,
                     encoding_id,
                     language_id,
-                    1,
+                    name_id,
                     name_data,
                 )
             ]
@@ -574,7 +576,12 @@ def write_name_cmap_fixture(
     replace_table_bytes(
         path,
         b"cmap",
-        build_single_mapping_cmap(platform_id, encoding_id, cmap_format),
+        build_single_mapping_cmap(
+            platform_id,
+            encoding_id,
+            cmap_format,
+            cmap_mappings,
+        ),
     )
 
 
@@ -620,6 +627,19 @@ def write_name_cmap_fixtures() -> None:
         0,
         0,
         utf16be("Custom Platform"),
+    )
+    write_name_cmap_fixture(
+        "mac-japanese.ttf",
+        1,
+        1,
+        11,
+        b"Mac Japanese Full Name",
+        name_id=4,
+        cmap_mappings={
+            0x3042: 1,
+            0x30A2: 1,
+            0x4E00: 1,
+        },
     )
 
 
@@ -700,11 +720,16 @@ def build_name_table(
     )
 
 
-def build_single_mapping_cmap(platform_id: int, encoding_id: int, format_: int) -> bytes:
+def build_single_mapping_cmap(
+    platform_id: int,
+    encoding_id: int,
+    format_: int,
+    mappings: dict[int, int] | None = None,
+) -> bytes:
     if format_ == 0:
         subtable = build_format0_cmap()
     elif format_ == 4:
-        subtable = build_format4_cmap()
+        subtable = build_format4_cmap(mappings or {0x0041: 1})
     else:
         raise ValueError(f"unsupported cmap format {format_}")
     return (
@@ -728,32 +753,40 @@ def build_format0_cmap() -> bytes:
     )
 
 
-def build_format4_cmap() -> bytes:
-    # Two segments: U+0041 maps to glyph index 1, followed by the required
-    # 0xFFFF terminator segment.  This keeps the fixture focused on public cmap
-    # platform/encoding metadata while still giving FT_Get_Char_Index one
-    # deterministic mapping to compare.
-    seg_count = 2
+def build_format4_cmap(mappings: dict[int, int]) -> bytes:
+    # One direct idDelta segment per codepoint, followed by the required 0xFFFF
+    # terminator segment.  Keeping each generated segment single-codepoint
+    # avoids glyphIdArray offsets and makes fixture intent obvious.
+    pairs = sorted(mappings.items())
+    seg_count = len(pairs) + 1
     seg_count_x2 = seg_count * 2
     length = 16 + seg_count * 8
-    id_delta = (1 - 0x41) & 0xFFFF
+    search_range = 2
+    entry_selector = 0
+    while search_range * 2 <= seg_count_x2:
+        search_range *= 2
+        entry_selector += 1
+    range_shift = seg_count_x2 - search_range
+    end_codes = [codepoint for codepoint, _ in pairs] + [0xFFFF]
+    start_codes = [codepoint for codepoint, _ in pairs] + [0xFFFF]
+    id_deltas = [
+        ((glyph_index - codepoint) & 0xFFFF) for codepoint, glyph_index in pairs
+    ]
+    id_deltas.append(1)
+    id_range_offsets = [0] * seg_count
     return (
         (4).to_bytes(2, "big")
         + length.to_bytes(2, "big")
         + (0).to_bytes(2, "big")
         + seg_count_x2.to_bytes(2, "big")
-        + (4).to_bytes(2, "big")
-        + (1).to_bytes(2, "big")
+        + search_range.to_bytes(2, "big")
+        + entry_selector.to_bytes(2, "big")
+        + range_shift.to_bytes(2, "big")
+        + b"".join(value.to_bytes(2, "big") for value in end_codes)
         + (0).to_bytes(2, "big")
-        + (0x0041).to_bytes(2, "big")
-        + (0xFFFF).to_bytes(2, "big")
-        + (0).to_bytes(2, "big")
-        + (0x0041).to_bytes(2, "big")
-        + (0xFFFF).to_bytes(2, "big")
-        + id_delta.to_bytes(2, "big")
-        + (1).to_bytes(2, "big")
-        + (0).to_bytes(2, "big")
-        + (0).to_bytes(2, "big")
+        + b"".join(value.to_bytes(2, "big") for value in start_codes)
+        + b"".join(value.to_bytes(2, "big") for value in id_deltas)
+        + b"".join(value.to_bytes(2, "big") for value in id_range_offsets)
     )
 
 
