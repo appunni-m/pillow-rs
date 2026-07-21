@@ -1860,12 +1860,6 @@ def ftcache_image_lookup_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcache."):
         return None
     exact_cases = {
-        "ftcache.FTC_ImageType.points_to_call_owned_descriptor": (
-            "FTC_ImageType pointer-lifetime parity needs a maintained route "
-            "proving the public FTC_ImageType argument is a call-owned "
-            "descriptor whose fields are copied or consumed with pinned-C "
-            "lifetime semantics"
-        ),
         "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup": (
             "FTC_ImageTypeRec descriptor parity needs a maintained route "
             "proving face_id, width, height, flags, and load_flags drive image "
@@ -5587,6 +5581,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcache.FTC_Scaler.points_to_call_owned_scaler"
     ):
         return "FTC_Scaler caller-owned descriptor lifetime validates through actual pinned C FTC_SBitCache_LookupScaler, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_type_descriptor_lifetime"
+        and row.case_id == "ftcache.FTC_ImageType.points_to_call_owned_descriptor"
+    ):
+        return "FTC_ImageType caller-owned descriptor lifetime validates through actual pinned C FTC_ImageCache_Lookup, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcache.sbit_cache_new"
         and row.case_id == "ftcache.FTC_SBitCache_New.error_outputs_null_cache"
