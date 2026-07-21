@@ -5659,11 +5659,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_header(&data))
         .map(Box::new);
-    let sfnt_maxp = font
-        .load_sfnt_table(0x6D617870, 0, None)
-        .ok()
-        .and_then(|data| parse_tt_maxprofile(&data))
-        .map(Box::new);
+    let sfnt_maxp = parse_face_owned_maxprofile(font).map(Box::new);
     let sfnt_hhea = font
         .load_sfnt_table(0x68686561, 0, None)
         .ok()
@@ -5809,7 +5805,7 @@ fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
         return None;
     }
     let version = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-    Some(TT_MaxProfile {
+    let mut record = TT_MaxProfile {
         version: i64::from(version as i32),
         numGlyphs: u16::from_be_bytes([data[4], data[5]]) as FT_UShort,
         maxPoints: data
@@ -5858,7 +5854,24 @@ fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
             .get(30..32)
             .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
             as FT_UShort,
-    })
+    };
+    // FreeType `tt_face_load_maxp` (`src/sfnt/ttload.c`) forces at least 64
+    // function definitions after successfully reading a version-1 maxp frame.
+    if version >= 0x0001_0000 && record.maxFunctionDefs < 64 {
+        record.maxFunctionDefs = 64;
+    }
+    Some(record)
+}
+
+fn parse_face_owned_maxprofile(font: &crate::font::Font) -> Option<TT_MaxProfile> {
+    // FreeType's `tt_face_load_maxp` (`src/sfnt/ttload.c`) positions the
+    // stream at the `maxp` table offset and reads the profile frame from the
+    // stream; it does not bound those reads to the table directory length.
+    // `FT_Load_Sfnt_Table` remains length-bounded, but the face-owned
+    // `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` record must mirror the loader state.
+    let record = font.data.table_directory.record(0x6D61_7870)?;
+    let start = usize::try_from(record.offset).ok()?;
+    parse_tt_maxprofile(font.data.raw_data.get(start..)?)
 }
 
 fn parse_tt_horiheader(data: &[u8]) -> Option<TT_HoriHeader> {
@@ -6922,6 +6935,11 @@ pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Get_Sfnt_VertHeader_Copy(face: &FT_Face) -> Option<TT_VertHeader> {
     face.sfnt_vhea.as_deref().copied()
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Get_Sfnt_MaxProfile_Copy(face: &FT_Face) -> Option<TT_MaxProfile> {
+    face.sfnt_maxp.as_deref().copied()
 }
 
 pub fn FT_Load_Sfnt_Table(

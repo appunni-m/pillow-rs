@@ -1128,6 +1128,26 @@ pub struct FontdoneWasmVertHeader {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmMaxProfile {
+    pub version: FT_Fixed,
+    pub numGlyphs: FT_UShort,
+    pub maxPoints: FT_UShort,
+    pub maxContours: FT_UShort,
+    pub maxCompositePoints: FT_UShort,
+    pub maxCompositeContours: FT_UShort,
+    pub maxZones: FT_UShort,
+    pub maxTwilightPoints: FT_UShort,
+    pub maxStorage: FT_UShort,
+    pub maxFunctionDefs: FT_UShort,
+    pub maxInstructionDefs: FT_UShort,
+    pub maxStackElements: FT_UShort,
+    pub maxSizeOfInstructions: FT_UShort,
+    pub maxComponentElements: FT_UShort,
+    pub maxComponentDepth: FT_UShort,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmString {
     pub string: *const c_uchar,
     pub string_len: u32,
@@ -4358,6 +4378,47 @@ pub extern "C" fn fontdone_wasm_get_sfnt_vhea(
             number_Of_VMetrics: vhea.number_Of_VMetrics,
             long_metrics: vhea.long_metrics.cast(),
             short_metrics: vhea.short_metrics.cast(),
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_maxp(
+    handle: usize,
+    tag: FT_Sfnt_Tag,
+    out: *mut FontdoneWasmMaxProfile,
+) -> FT_Error {
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let table = rust_ffi::FT_Get_Sfnt_Table(&face.face, tag);
+    if table.is_null() {
+        return rust_ffi::FT_Err_Invalid_Table as FT_Error;
+    }
+    // SAFETY: `FT_Get_Sfnt_Table` returns a live face-owned `TT_MaxProfile` pointer for this tag.
+    let maxp = unsafe { &*table.cast::<rust_ffi::TT_MaxProfile>() };
+    // SAFETY: `out` is non-null and caller provides writable storage.
+    unsafe {
+        *out = FontdoneWasmMaxProfile {
+            version: maxp.version,
+            numGlyphs: maxp.numGlyphs,
+            maxPoints: maxp.maxPoints,
+            maxContours: maxp.maxContours,
+            maxCompositePoints: maxp.maxCompositePoints,
+            maxCompositeContours: maxp.maxCompositeContours,
+            maxZones: maxp.maxZones,
+            maxTwilightPoints: maxp.maxTwilightPoints,
+            maxStorage: maxp.maxStorage,
+            maxFunctionDefs: maxp.maxFunctionDefs,
+            maxInstructionDefs: maxp.maxInstructionDefs,
+            maxStackElements: maxp.maxStackElements,
+            maxSizeOfInstructions: maxp.maxSizeOfInstructions,
+            maxComponentElements: maxp.maxComponentElements,
+            maxComponentDepth: maxp.maxComponentDepth,
         };
     }
     rust_ffi::FT_Err_Ok

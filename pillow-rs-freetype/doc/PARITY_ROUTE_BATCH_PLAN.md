@@ -200,7 +200,61 @@ checked into a maintained generator or fixture note.
 | OpenType validation BASE/GDEF/GPOS/GSUB/JSTF/MATH | Public test fonts exist for some layout tables, but exact malformed rows are not available under the declared names. | Generate minimal valid/malformed FontTools fixtures per table, then implement `FT_OpenType_Validate` behavior before promoting. |
 | CID/PFR/GX/AAT | Public corpus fonts exist, but no compact exact declared fixtures were found. | Generate/subset controlled fixtures where possible; otherwise keep rows pending until a license-compatible compact corpus asset is selected and pinned-C behavior is recorded. |
 | TrueType phantom-point backward-compatibility and synthetic outline JSON | No public exact fixtures found. | Generate locally; these are behavior-specific fixtures, not internet corpus assets. |
-| malformed `maxp` | Exact declared files were placeholder symlinks; no internet asset should be used. | Completed asset step in `scripts/build_sfnt_fixtures.py`: `truncated-maxp.ttf` and `invalid-maxp.ttf` are now generated malformed SFNTs. Remaining work is route wiring for `face.load_then_get_sfnt_table.maxp`. |
+| malformed `maxp` | Exact declared files were placeholder symlinks; no internet asset should be used. | Completed. `scripts/build_sfnt_fixtures.py` generates malformed SFNTs and `face.load_then_get_sfnt_table.maxp` now compares pinned-C face-load status, pointer nullness, and adjusted `TT_MaxProfile` fields through Rust FFI, C ABI, and WASM ABI. |
+
+After the malformed `TT_MaxProfile` route:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 349, 'real-null-validation': 9, 'real-parity': 4611}
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+runtime_cases: runnable=1 pending=0
+```
+
+Pinned FreeType 2.14.3 keeps both generated malformed faces open and exposes a
+non-null `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` record. For the truncated table,
+`tt_face_load_maxp` reads from the `maxp` stream offset beyond the declared
+four-byte table length and applies the FreeType compatibility adjustment that
+forces `maxFunctionDefs` to at least 64. Rust now mirrors that for the
+face-owned `TT_MaxProfile` state while keeping `FT_Load_Sfnt_Table`
+length-bounded.
+
+Focused verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table_error_source
+```
+
+### Full unresolved fixture search: 2026-07-21
+
+Current route-audit extraction found 35 fixture-like pending rows. After
+removing wording false positives such as "unavailable module" rows, the real
+asset backlog falls into the buckets below. Internet search did not find
+license-reviewed, exact drop-in files for the declared repo paths; every asset
+below still needs either deterministic generation under `scripts/` or a
+separate provenance/licensing note plus pinned-C output capture before it can be
+promoted.
+
+| Declared fixture / bucket | Blocking rows | Internet/source result | Required action |
+|---|---:|---|---|
+| `fonts/svg/color-svg-glyph.ttf` | 1 | `simoncozens/test-fonts` has compact CFF+SVG fonts; `googlefonts/color-fonts` has generated OT-SVG variants. | Prefer a compact generated OT-SVG fixture if possible; otherwise import one candidate only after license/provenance review and C output pinning. |
+| `fonts/color/sbix-outline.ttf` | 1 | `simoncozens/test-fonts` has `CFF-and-SBIX.otf`; `googlefonts/color-fonts` has generated `sbix` color bitmap fonts. | Use as candidate corpus only; declared row still needs exact `FT_PARAM_TAG_IGNORE_SBIX` open-face route and output shape. |
+| `fonts/opentype/valid-all-layout.otf`, `valid-base.otf`, `valid-gdef.otf`, `valid-gpos.otf`, `valid-gsub.otf`, `valid-jstf.otf`, `valid-math.otf` | 8 | `simoncozens/test-fonts` has BASE examples and feature/layout playground fonts; FontTools can build/round-trip TTX fixtures. | Generate minimal table-specific OpenType fixtures with FontTools/TTX and pin C validator output; do not import broad corpus fonts blindly. |
+| `fonts/opentype/malformed-selected-layout.otf`, `malformed-gdef.otf`, `malformed-gpos.otf`, `malformed-gsub.otf`, `malformed-jstf.otf`, `malformed-math.otf`, `partial-malformed-layout.otf` | 7 | No exact malformed public corpus matching declared names found. BrokenType provides font mutation tooling, but deterministic fixture generation is safer for parity. | Generate minimal malformed table fixtures locally and document the byte-level corruption that triggers pinned-C behavior. |
+| `input/fonts/bdf/sfnt-bdf-table.otb`, `fonts/bitmap/sfnt-bdf-table.otb` | 3 | No exact OTB/SFNT-BDF fixture found. FreeType documents BDF/PCF public behavior, but that is not a fixture source. | Build deterministic BDF and SFNT-wrapped bitmap fixtures locally, then route `FT_Get_BDF_Charset_ID` / `FT_Get_BDF_Property`. |
+| `fonts/pcf/properties-signed-only.pcf` | 1 | No exact PCF found. FreeType docs state PCF integer properties are signed, which defines the semantic target. | Generate a tiny PCF with signed-only properties from maintained BDF/X11 tooling; pin exact C property output. |
+| `fonts/truetype/backward-compat-phantom-points.ttf` | 3 | No exact public behavior-specific fixture found. | Generate locally from a controlled TrueType program that isolates interpreter-version phantom-point behavior. |
+| `outlines/synthetic/negative-and-large-coordinates.json` and other synthetic outline JSON assets | 1+ | Not an internet corpus problem. | Generate maintained JSON outline fixtures in-repo and route coordinate endpoints. |
+| CID-keyed Type1/CFF fixtures such as `input/fonts/cid/type1-cid-ros-and-glyph-map.pfb`, `input/fonts/cid/ot-cff-cid-keyed.otf` | multiple route rows outside the 35-row path extraction | Adobe special-purpose CID-keyed OpenType/CFF fonts exist, including Adobe-Identity-0 based projects; no compact exact declared Type1 CID map fixture found. | Prefer generated/subset CID fixtures with explicit ROS/glyph map; imported Adobe candidates need license/provenance review and C-output pinning. |
+| COLR v0/v1 layer, foreground, and clipbox fixtures | multiple route rows outside this extraction | `googlefonts/color-fonts` provides COLRv1 test fonts including static/variable test glyphs and no-cliplist variants; `simoncozens/test-fonts` has simpler COLR/CPAL examples. | Use candidates to design minimal generated COLR fixtures; exact route still needs layer iterator, foreground sentinel, and clipbox implementation across Rust FFI, C ABI, and WASM. |
+| Compressed stream fixtures for gzip/bzip2/LZW | multiple pending success rows | Internet search is not useful; these are byte-stream facades, not fonts. | Generate maintained compressed byte fixtures and implement pure-Rust stream behavior; no static-byte shortcut. |
+
+Sources checked: `https://github.com/simoncozens/test-fonts`,
+`https://github.com/googlefonts/color-fonts`,
+`https://github.com/freetype/freetype2-testing`,
+`https://github.com/fonttools/fonttools`,
+`https://github.com/googleprojectzero/BrokenType`,
+FreeType 2.14.3 API reference for BDF/PCF behavior, and Adobe
+Adobe-Identity-0/CID-keyed font project pages.
 
 ## Post-merge triage: 2026-07-21
 

@@ -1096,6 +1096,26 @@ pub struct TT_VertHeader {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TT_MaxProfile {
+    pub version: FT_Fixed,
+    pub numGlyphs: FT_UShort,
+    pub maxPoints: FT_UShort,
+    pub maxContours: FT_UShort,
+    pub maxCompositePoints: FT_UShort,
+    pub maxCompositeContours: FT_UShort,
+    pub maxZones: FT_UShort,
+    pub maxTwilightPoints: FT_UShort,
+    pub maxStorage: FT_UShort,
+    pub maxFunctionDefs: FT_UShort,
+    pub maxInstructionDefs: FT_UShort,
+    pub maxStackElements: FT_UShort,
+    pub maxSizeOfInstructions: FT_UShort,
+    pub maxComponentElements: FT_UShort,
+    pub maxComponentDepth: FT_UShort,
+}
+
+#[repr(C)]
 pub struct FT_GlyphSlotRec {
     pub glyph_index: FT_UInt,
     pub metrics: FT_Glyph_Metrics,
@@ -2026,6 +2046,31 @@ pub fn abi_sfnt_vhea(face: FT_Face) -> Option<TT_VertHeader> {
         number_Of_VMetrics: vhea.number_Of_VMetrics,
         long_metrics: vhea.long_metrics.cast(),
         short_metrics: vhea.short_metrics.cast(),
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_sfnt_maxp(face: FT_Face) -> Option<TT_MaxProfile> {
+    let table = FT_Get_Sfnt_Table(face, rust_ffi::FT_SFNT_MAXP as FT_Sfnt_Tag);
+    let table = NonNull::new(table.cast::<rust_ffi::TT_MaxProfile>())?;
+    // SAFETY: `FT_Get_Sfnt_Table` returned a live face-owned `TT_MaxProfile` pointer.
+    let maxp = unsafe { table.as_ref() };
+    Some(TT_MaxProfile {
+        version: maxp.version,
+        numGlyphs: maxp.numGlyphs,
+        maxPoints: maxp.maxPoints,
+        maxContours: maxp.maxContours,
+        maxCompositePoints: maxp.maxCompositePoints,
+        maxCompositeContours: maxp.maxCompositeContours,
+        maxZones: maxp.maxZones,
+        maxTwilightPoints: maxp.maxTwilightPoints,
+        maxStorage: maxp.maxStorage,
+        maxFunctionDefs: maxp.maxFunctionDefs,
+        maxInstructionDefs: maxp.maxInstructionDefs,
+        maxStackElements: maxp.maxStackElements,
+        maxSizeOfInstructions: maxp.maxSizeOfInstructions,
+        maxComponentElements: maxp.maxComponentElements,
+        maxComponentDepth: maxp.maxComponentDepth,
     })
 }
 

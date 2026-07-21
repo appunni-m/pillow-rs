@@ -42,7 +42,7 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
         max_contours,
         max_twilight_points,
         max_storage,
-        max_function_defs,
+        mut max_function_defs,
         max_instruction_defs,
         max_component_depth,
     ) = if version >= 0x0001_0000 {
@@ -63,6 +63,11 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
     } else {
         (0, 0, 0, 0, 0, 0, 0)
     };
+    // FreeType `tt_face_load_maxp` (`src/sfnt/ttload.c`) allocates at least
+    // 64 FDEF entries for broken fonts whose `maxFunctionDefs` is smaller.
+    if version >= 0x0001_0000 && max_function_defs < 64 {
+        max_function_defs = 64;
+    }
     Ok(MaxpTable {
         num_glyphs,
         max_points,

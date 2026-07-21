@@ -1051,15 +1051,13 @@ make -C pillow-rs-freetype test-case CASE=ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.de
 
 Findings:
 
-- `tttables.TT_MaxProfile.malformed_table_error_source` is not an asset-only
-  problem.  The declared assets `input/fonts/sfnt/truncated-maxp.ttf` and
-  `input/fonts/sfnt/invalid-maxp.ttf` are missing, but the operation
-  `face.load_then_get_sfnt_table.maxp` also has no maintained runtime runner.
-  Required next fix: extend `scripts/build_sfnt_fixtures.py` to generate the
-  declared malformed `maxp` assets, then add an explicit pinned-C/Rust/C
-  ABI/WASM route that compares face-open error, nullness, and any loaded
-  `TT_MaxProfile` fields.  Do not alias this to `sfnt.get_sfnt_table.maxp`,
-  which only covers already-open valid faces.
+- `tttables.TT_MaxProfile.malformed_table_error_source` was promoted on
+  2026-07-21.  The maintained SFNT generator now emits the declared malformed
+  `maxp` assets, and the explicit `face.load_then_get_sfnt_table.maxp` route
+  compares pinned-C face-open status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer
+  nullness, and any loaded `TT_MaxProfile` fields through Rust FFI, thin C ABI,
+  and WASM ABI.  This route remains intentionally separate from
+  `sfnt.get_sfnt_table.maxp`, which only covers already-open valid faces.
 - `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output` is a fixture
   expectation mismatch in the pinned build.  The audit records pinned
   FreeType 2.14.3 returning `FT_Err_Unimplemented_Feature` (`7`) for
@@ -2349,8 +2347,9 @@ Required fix plan:
    null output, validated table ownership, and face-memory lifetime semantics.
 5. Implement pure-Rust outline orientation and PFR behavior first: reverse
    orientation toggling, PFR metrics, and non-PFR kerning fallback semantics.
-6. Implement pure-Rust malformed TrueType table behavior first: `maxp` parse
-   errors must preserve the same public error source as C FreeType.
+6. Completed for malformed `maxp` on 2026-07-21: Rust now preserves pinned C's
+   face-owned `TT_MaxProfile` state, including reading from the `maxp` stream
+   offset beyond the declared table length and forcing `maxFunctionDefs >= 64`.
 7. Compare exact return codes, output records, nullness, ownership/free events,
    orientation state, metric values, kerning values, and error classifications
    for the same input.
@@ -7554,7 +7553,7 @@ Missing real-parity rows: 966.
 | `otsvg` | 6 | 6 | 0 | 0 | `otsvg.svg_document_type_import`, `otsvg.svg_document_type_abi`, `otsvg.svg_renderer_callback_capture`, `otsvg.svg_document_rec_abi` |
 | `ftlzw` | 5 | 2 | 3 | 0 | `ftlzw.stream_open_lzw`, `ftlzw.stream_open_lzw_abi` |
 | `ftsystem` | 4 | 4 | 0 | 0 | `ftsystem.open_face_with_external_stream`, `ftsystem.new_library_with_custom_memory`, `ftsystem.memory_stream_probe` |
-| `tttables` | 3 | 2 | 0 | 1 | `face.load_then_get_sfnt_table.maxp`, `face.new`, `sfnt.get_sfnt_table.record` |
+| `tttables` | 3 | 3 | 0 | 0 | `face.load_then_get_sfnt_table.maxp`, `face.new`, `sfnt.get_sfnt_table.record` |
 | `ftbitmap` | 1 | 0 | 0 | 1 | `ftbitmap.glyphslot_own_bitmap` |
 | `fttypes` | 1 | 1 | 0 | 0 | `winfnt.get_header` |
 
@@ -12729,9 +12728,9 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_SVG_ONLY.svg_only_beh
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.tag_data_parameters_match_c_behavior
 ```
 
-### Issue Set Current: `TT_MaxProfile` malformed maxp fixture blocker
+### Issue Set Completed: `TT_MaxProfile` malformed maxp route
 
-Status: classified as explicit pending-route on 2026-07-20.
+Status: promoted on 2026-07-21.
 
 Finding:
 
@@ -12741,34 +12740,41 @@ Finding:
 - The declared assets previously resolved to non-malformed DejaVuSans symlinks.
   That would have compared a normal DejaVuSans face and would not have proved
   the declared `ttload.c:785-835` malformed-table behavior.
-- `scripts/build_sfnt_fixtures.py` now generates real malformed SFNT wrappers
-  for `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
+- `scripts/build_sfnt_fixtures.py` generates real malformed SFNT wrappers for
+  `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
   `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf`.
-- The focused row is still not runtime parity because
-  `face.load_then_get_sfnt_table.maxp` is not an executable same-input route.
+- `face.load_then_get_sfnt_table.maxp` is now an executable same-input route
+  across pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- Pinned FreeType 2.14.3 keeps both malformed faces open and exposes non-null
+  `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` records.  For the truncated table,
+  `tt_face_load_maxp` reads from the `maxp` stream offset beyond the declared
+  four-byte table length, then applies the compatibility adjustment that forces
+  `maxFunctionDefs` to at least 64.
 
 Classification change:
 
-- The row remains `pending-route`, but the route-audit reason now names the
-  exact missing route instead of the old symlink fixture blocker.
+- The row moved from `pending-route` to `real-parity`; route audit changed
+  `pending-route 350 -> 349` and `real-parity 4610 -> 4611`.
 - The stale residual mention of
   `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature` was
   removed from the residual list; current route audit already classifies that
   row as a compile contract.
 
-Required fix plan:
+Implemented fix:
 
 1. Keep the generated malformed SFNT fixtures under the maintained
    `font-fixture-sfnt` workflow.
-2. Add a maintained `face.load_then_get_sfnt_table.maxp` route that opens each
-   malformed face through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+2. Added a maintained `face.load_then_get_sfnt_table.maxp` route that opens
+   each malformed face through pinned C FreeType, Rust FFI, thin C ABI, and
+   WASM ABI.
 3. Compare exact face-load status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer
-   nullness, and any C-adjusted `TT_MaxProfile` fields when FreeType keeps the
-   face open.
-4. Promote the row only after the focused case is runnable and proves exact
-   same-input parity across all four lanes.
+   nullness, and C-adjusted `TT_MaxProfile` fields when FreeType keeps the face
+   open.
+4. Updated Rust's face-owned `TT_MaxProfile` snapshot to mirror
+   `tt_face_load_maxp` stream-offset reads and `maxFunctionDefs >= 64`
+   adjustment while keeping `FT_Load_Sfnt_Table` length-bounded.
 
-Verification for this audit-only clarification:
+Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table_error_source
