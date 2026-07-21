@@ -8918,6 +8918,45 @@ static void setup_outline_get_bitmap_square(FT_Outline* outline, FT_Vector* poin
     outline->flags = 0;
 }
 
+static void setup_outline_get_bitmap_dropout_thin_stems(FT_Outline* outline,
+                                                        FT_Vector* points,
+                                                        unsigned char* tags,
+                                                        unsigned short* contours,
+                                                        int flags) {
+    points[0].x = 512;
+    points[0].y = 512;
+    points[1].x = 576;
+    points[1].y = 512;
+    points[2].x = 576;
+    points[2].y = 1536;
+    points[3].x = 512;
+    points[3].y = 1536;
+    points[4].x = 768;
+    points[4].y = 512;
+    points[5].x = 832;
+    points[5].y = 512;
+    points[6].x = 832;
+    points[6].y = 1536;
+    points[7].x = 768;
+    points[7].y = 1536;
+    tags[0] = FT_CURVE_TAG_ON;
+    tags[1] = FT_CURVE_TAG_ON;
+    tags[2] = FT_CURVE_TAG_ON;
+    tags[3] = FT_CURVE_TAG_ON;
+    tags[4] = FT_CURVE_TAG_ON | (4 << 5);
+    tags[5] = FT_CURVE_TAG_ON;
+    tags[6] = FT_CURVE_TAG_ON;
+    tags[7] = FT_CURVE_TAG_ON;
+    contours[0] = 3;
+    contours[1] = 7;
+    outline->n_contours = 2;
+    outline->n_points = 8;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = flags;
+}
+
 static void setup_outline_get_bitmap_target(FT_Bitmap* bitmap, unsigned char* buffer, unsigned char pixel_mode) {
     memset(buffer, 0, 16 * 16);
     memset(bitmap, 0, sizeof(*bitmap));
@@ -9009,6 +9048,57 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
             print_outline_get_bitmap_success(&bitmap, 0);
             printf("}}\n");
         }
+    } else if (streq(mode, "dropout-thin-stems")) {
+        const char* case_id = argv[3];
+        const char* flag_names[3] = {"FT_OUTLINE_NONE", "", ""};
+        int flag_values[3] = {0, 0, 0};
+        int count = 0;
+        if (streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 2;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_SMART_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_SMART_DROPOUTS;
+            flag_names[2] = "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[2] = FT_OUTLINE_SMART_DROPOUTS | FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 3;
+        }
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < count; i++) {
+            FT_Vector dropout_points[8];
+            unsigned char dropout_tags[8];
+            unsigned short dropout_contours[2];
+            FT_Outline dropout_outline;
+            unsigned char buffer[16 * 16];
+            FT_Bitmap bitmap;
+            setup_outline_get_bitmap_dropout_thin_stems(&dropout_outline,
+                                                        dropout_points,
+                                                        dropout_tags,
+                                                        dropout_contours,
+                                                        flag_values[i]);
+            setup_outline_get_bitmap_target(&bitmap, buffer, FT_PIXEL_MODE_MONO);
+            err = FT_Outline_Get_Bitmap(library, &dropout_outline, &bitmap);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,\"bitmap\":{", flag_names[i], err);
+            printf("\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%d,\"num_grays\":%u,\"buffer_hex\":\"",
+                   bitmap.width,
+                   bitmap.rows,
+                   bitmap.pitch,
+                   bitmap.pixel_mode,
+                   bitmap.num_grays);
+            print_hex_bytes(bitmap.buffer, bitmap.rows * (bitmap.pitch < 0 ? -bitmap.pitch : bitmap.pitch));
+            printf("\"}}");
+        }
+        printf("]}}\n");
     } else if (streq(mode, "empty")) {
         FT_Vector empty_points[1];
         unsigned char empty_tags[1];
