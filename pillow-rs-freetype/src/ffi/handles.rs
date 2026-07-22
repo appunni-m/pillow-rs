@@ -6659,6 +6659,11 @@ pub fn FT_Add_Module(
         init_called: clazz.module_init == FT_Module_Callback_Behavior::RecordThenOk,
         done_called: false,
     });
+    if clazz.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+        && FT_Library_Renderer_Class(Some(library), FT_GLYPH_FORMAT_OUTLINE).is_none()
+    {
+        library.current_outline_renderer = module_name;
+    }
     FT_Err_Ok
 }
 
@@ -6911,6 +6916,13 @@ pub fn FT_Library_Renderer_Class(
     format: FT_Glyph_Format,
 ) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
     let library = library?;
+    if format == FT_GLYPH_FORMAT_OUTLINE
+        && let Some(module) = library.synthetic_module
+        && module.module_name == library.current_outline_renderer
+        && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+    {
+        return Some((module.module_name, FT_GLYPH_FORMAT_OUTLINE, true, false));
+    }
     // FreeType 2.14.3 `FT_Get_Renderer` (`src/base/ftrender.c`) returns the
     // first registered renderer whose `glyph_format` matches the requested
     // format.  Keep only class metadata observable through public renderer
@@ -6949,7 +6961,11 @@ pub fn FT_Library_Set_Renderer_By_Format(
     let Some(library) = library else {
         return FT_Err_Invalid_Library_Handle as FT_Error;
     };
-    if !library.module_names.contains(&module_name) {
+    let synthetic_renderer_matches = library.synthetic_module.is_some_and(|module| {
+        module.module_name == module_name
+            && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+    });
+    if !library.module_names.contains(&module_name) && !synthetic_renderer_matches {
         return FT_Err_Invalid_Argument;
     }
     // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` validates that the
@@ -6962,7 +6978,16 @@ pub fn FT_Library_Set_Renderer_By_Format(
             "smooth" => "smooth",
             "raster1" => "raster1",
             "sdf" => "sdf",
-            _ => return FT_Err_Invalid_Argument,
+            _ => {
+                if let Some(module) = library.synthetic_module
+                    && module.module_name == module_name
+                    && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+                {
+                    module.module_name
+                } else {
+                    return FT_Err_Invalid_Argument;
+                }
+            }
         };
         FT_Err_Ok
     } else {

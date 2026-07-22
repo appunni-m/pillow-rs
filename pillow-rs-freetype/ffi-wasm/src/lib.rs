@@ -3324,18 +3324,13 @@ pub fn abi_support_add_default_modules_observation(
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_add_minimal_module_observation()
 -> (i32, usize, bool, Option<rust_ffi::FT_Installed_Module_Info>) {
-    let (status, module_count, lookup_present, info, _, _, _) =
+    let (status, module_count, lookup_present, info, _, _, _, _) =
         abi_support_add_synthetic_module_observation("fixture_minimal", 0, false, false);
     (status, module_count, lookup_present, info)
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_add_synthetic_module_observation(
-    module_name: &'static str,
-    module_flags: rust_ffi::FT_ULong,
-    module_interface_present: bool,
-    add_default_modules: bool,
-) -> (
+pub type SyntheticModuleObservation = (
     i32,
     usize,
     bool,
@@ -3343,7 +3338,16 @@ pub fn abi_support_add_synthetic_module_observation(
     bool,
     bool,
     bool,
-) {
+    Option<(i32, Option<&'static str>)>,
+);
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_synthetic_module_observation(
+    module_name: &'static str,
+    module_flags: rust_ffi::FT_ULong,
+    module_interface_present: bool,
+    add_default_modules: bool,
+) -> SyntheticModuleObservation {
     let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
     if add_default_modules {
         rust_ffi::FT_Add_Default_Modules(Some(&mut library));
@@ -3366,6 +3370,21 @@ pub fn abi_support_add_synthetic_module_observation(
     let module_count = rust_ffi::FT_Library_Module_Count(Some(&library));
     let lookup_present = rust_ffi::FT_Library_Has_Module(Some(&library), module_name);
     let info = rust_ffi::FT_Library_Synthetic_Module_Info(Some(&library), module_name);
+    let renderer_membership = if module_flags & rust_ffi::FT_MODULE_RENDERER as rust_ffi::FT_ULong
+        != 0
+    {
+        let set_status = rust_ffi::FT_Library_Set_Renderer_By_Format(
+            Some(&mut library),
+            rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+            module_name,
+        );
+        let current_renderer =
+            rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE)
+                .map(|(name, _, _, _)| name);
+        Some((set_status, current_renderer))
+    } else {
+        None
+    };
     (
         status,
         module_count,
@@ -3374,6 +3393,7 @@ pub fn abi_support_add_synthetic_module_observation(
         outline_renderer_before.is_some(),
         outline_renderer_after.is_some(),
         outline_renderer_before == outline_renderer_after,
+        renderer_membership,
     )
 }
 
