@@ -2776,6 +2776,38 @@ pub fn abi_support_stroker_lifecycle(action: i32) -> bool {
     true
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_zero_line() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        128,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 256, y: 256 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = rust_ffi::FT_Stroker_LineTo(stroker, Some(&start));
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && line_error == rust_ffi::FT_Err_Ok
+        && counts_error == rust_ffi::FT_Err_Ok
+        && points == 0
+        && contours == 0
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_new(
     library_handle: usize,
