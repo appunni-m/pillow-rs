@@ -25383,6 +25383,25 @@ fn is_stroker_zero_line_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
 }
 
+fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
+        "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry" => Ok("round"),
+        "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry" => Ok("square"),
+        "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry"
+        | "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry"
+        | "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry"
+        | "ftstroke.FT_StrokerBorder.border_selection_runtime_shape"
+        | "ftstroke.FT_Stroker_Export.exports_left_then_right"
+        | "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export"
+        | "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty" => Ok("all"),
+        _ => Err(format!(
+            "{} is not a maintained open-line stroker geometry route",
+            case.case_id
+        )),
+    }
+}
+
 fn is_stroker_simple_line_counts_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline"
 }
@@ -25522,6 +25541,219 @@ fn wasm_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
         Ok(stroker_zero_line_output(FT_Err_Ok, 0, 0))
     } else {
         Err("unsupported stroker zero-length line route".to_string())
+    }
+}
+
+fn stroker_cap_value(action: &str) -> FT_Int {
+    match action {
+        "butt" => FT_STROKER_LINECAP_BUTT as FT_Int,
+        "square" => FT_STROKER_LINECAP_SQUARE as FT_Int,
+        _ => FT_STROKER_LINECAP_ROUND as FT_Int,
+    }
+}
+
+fn stroker_cap_name(action: &str) -> &'static str {
+    match action {
+        "butt" => "butt",
+        "square" => "square",
+        _ => "round",
+    }
+}
+
+fn stroker_open_line_geometry_output(
+    action: &str,
+    mut run_one: impl FnMut(&str) -> Result<Value, String>,
+) -> Result<RunOutput, String> {
+    let actions: &[&str] = if action == "all" {
+        &["butt", "round", "square"]
+    } else {
+        &[action]
+    };
+    let mut rows = Vec::new();
+    for action in actions {
+        rows.push(run_one(action)?);
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    stroker_open_line_geometry_output(action, |action| {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            return Ok(json!({"cap": stroker_cap_name(action), "status": new_error}));
+        }
+        FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let start = FT_Vector { x: 0, y: 0 };
+        let to = FT_Vector { x: 640, y: 0 };
+        let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 1);
+        let line_error = if begin_error == FT_Err_Ok {
+            FT_Stroker_LineTo(stroker, Some(&to))
+        } else {
+            begin_error
+        };
+        let end_error = if line_error == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            line_error
+        };
+        let mut count_points = 0;
+        let mut count_contours = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            FT_Stroker_GetCounts(stroker, Some(&mut count_points), Some(&mut count_contours))
+        } else {
+            end_error
+        };
+        let mut left = FT_OutlineSnapshot::default();
+        let mut right = FT_OutlineSnapshot::default();
+        let mut combined = FT_OutlineSnapshot::default();
+        if counts_error == FT_Err_Ok {
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, Some(&mut left));
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, Some(&mut right));
+            FT_Stroker_Export(stroker, Some(&mut combined));
+        }
+        FT_Stroker_Done(stroker);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "status": counts_error,
+            "left": outline_snapshot_json(&left),
+            "right": outline_snapshot_json(&right),
+            "combined": outline_snapshot_json(&combined)
+        }))
+    })
+}
+
+fn c_outline_arrays_json(
+    outline: &c_abi::FT_Outline,
+    points: &[c_abi::FT_Vector],
+    tags: &[u8],
+    contours: &[u16],
+) -> Value {
+    let n_points = usize::from(outline.n_points);
+    let n_contours = usize::from(outline.n_contours);
+    json!({
+        "n_points": outline.n_points,
+        "n_contours": outline.n_contours,
+        "points": points.iter().take(n_points).map(|point| json!({"x": point.x, "y": point.y})).collect::<Vec<_>>(),
+        "tags": tags.iter().take(n_points).copied().collect::<Vec<_>>(),
+        "contours": contours.iter().take(n_contours).copied().collect::<Vec<_>>(),
+        "flags": outline.flags
+    })
+}
+
+fn c_empty_outline<'a>(
+    points: &'a mut [c_abi::FT_Vector],
+    tags: &'a mut [u8],
+    contours: &'a mut [u16],
+) -> c_abi::FT_Outline {
+    c_abi::FT_Outline {
+        n_contours: 0,
+        n_points: 0,
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: 0,
+    }
+}
+
+fn c_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    stroker_open_line_geometry_output(action, |action| {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            return Ok(json!({"cap": stroker_cap_name(action), "status": init_error}));
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            return Ok(json!({"cap": stroker_cap_name(action), "status": new_error}));
+        }
+        c_abi::FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let start = c_abi::FT_Vector { x: 0, y: 0 };
+        let to = c_abi::FT_Vector { x: 640, y: 0 };
+        let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 1);
+        let line_error = if begin_error == FT_Err_Ok {
+            c_abi::FT_Stroker_LineTo(stroker, &to)
+        } else {
+            begin_error
+        };
+        let end_error = if line_error == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            line_error
+        };
+        let mut count_points = 0;
+        let mut count_contours = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            c_abi::FT_Stroker_GetCounts(stroker, &mut count_points, &mut count_contours)
+        } else {
+            end_error
+        };
+        let mut left_points = [c_abi::FT_Vector::default(); 64];
+        let mut left_tags = [0u8; 64];
+        let mut left_contours = [0u16; 8];
+        let mut left = c_empty_outline(&mut left_points, &mut left_tags, &mut left_contours);
+        let mut right_points = [c_abi::FT_Vector::default(); 64];
+        let mut right_tags = [0u8; 64];
+        let mut right_contours = [0u16; 8];
+        let mut right = c_empty_outline(&mut right_points, &mut right_tags, &mut right_contours);
+        let mut combined_points = [c_abi::FT_Vector::default(); 128];
+        let mut combined_tags = [0u8; 128];
+        let mut combined_contours = [0u16; 16];
+        let mut combined = c_empty_outline(
+            &mut combined_points,
+            &mut combined_tags,
+            &mut combined_contours,
+        );
+        if counts_error == FT_Err_Ok {
+            c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, &mut left);
+            c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, &mut right);
+            c_abi::FT_Stroker_Export(stroker, &mut combined);
+        }
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "status": counts_error,
+            "left": c_outline_arrays_json(&left, &left_points, &left_tags, &left_contours),
+            "right": c_outline_arrays_json(&right, &right_points, &right_tags, &right_contours),
+            "combined": c_outline_arrays_json(&combined, &combined_points, &combined_tags, &combined_contours)
+        }))
+    })
+}
+
+fn wasm_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    if wasm_abi::abi_support_stroker_open_line_geometry(if action == "all" {
+        0
+    } else if action == "butt" {
+        1
+    } else if action == "round" {
+        2
+    } else {
+        3
+    }) {
+        rust_stroker_open_line_geometry(case)
+    } else {
+        Err(format!(
+            "unsupported stroker open-line geometry route {action}"
+        ))
     }
 }
 
@@ -30349,6 +30581,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => {
             Ok(vec!["--stroker-zero-line".to_string()])
         }
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            Ok(vec![
+                "--stroker-open-line-geometry".to_string(),
+                stroker_open_line_geometry_action(case)?.to_string(),
+            ])
+        }
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             Ok(vec!["--stroker-simple-line-counts".to_string()])
         }
@@ -31913,6 +32156,14 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => rust_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            rust_stroker_open_line_geometry(case)
+        }
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             rust_stroker_simple_line_counts(case)
         }
@@ -33075,6 +33326,14 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => c_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            c_stroker_open_line_geometry(case)
+        }
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             c_stroker_simple_line_counts(case)
         }
@@ -34128,6 +34387,14 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            wasm_stroker_open_line_geometry(case)
+        }
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             wasm_stroker_simple_line_counts(case)
         }

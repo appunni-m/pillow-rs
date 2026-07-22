@@ -19531,6 +19531,100 @@ static int emit_stroker_simple_line_counts(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_outline_json(FT_Outline* outline) {
+    printf("{\"n_points\":%d,\"n_contours\":%d,\"points\":[",
+           outline->n_points,
+           outline->n_contours);
+    for (int i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}",
+               (long)outline->points[i].x,
+               (long)outline->points[i].y);
+    }
+    printf("],\"tags\":[");
+    for (int i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned)outline->tags[i]);
+    }
+    printf("],\"contours\":[");
+    for (int i = 0; i < outline->n_contours; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned)outline->contours[i]);
+    }
+    printf("],\"flags\":%d}", outline->flags);
+}
+
+static int emit_stroker_open_line_geometry(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int caps[3] = { FT_STROKER_LINECAP_BUTT, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINECAP_SQUARE };
+    const char* cap_names[3] = { "butt", "round", "square" };
+    int emitted = 0;
+    for (int i = 0; i < 3; i++) {
+        if ((streq(action, "butt") || streq(action, "round") || streq(action, "square")) &&
+            !streq(action, cap_names[i])) {
+            continue;
+        }
+        FT_Stroker stroker = NULL;
+        FT_Error new_error = FT_Stroker_New(library, &stroker);
+        FT_Error status = new_error;
+        if (!status) {
+            FT_Stroker_Set(stroker, 96, caps[i], FT_STROKER_LINEJOIN_ROUND, 65536);
+            FT_Vector start = { 0, 0 };
+            FT_Vector to = { 640, 0 };
+            status = FT_Stroker_BeginSubPath(stroker, &start, 1);
+            if (!status) status = FT_Stroker_LineTo(stroker, &to);
+            if (!status) status = FT_Stroker_EndSubPath(stroker);
+        }
+        FT_Vector left_points[64] = {0};
+        unsigned char left_tags[64] = {0};
+        unsigned short left_contours[8] = {0};
+        FT_Outline left = {0, 0, left_points, left_tags, left_contours, 0};
+        FT_Vector right_points[64] = {0};
+        unsigned char right_tags[64] = {0};
+        unsigned short right_contours[8] = {0};
+        FT_Outline right = {0, 0, right_points, right_tags, right_contours, 0};
+        FT_Vector both_points[128] = {0};
+        unsigned char both_tags[128] = {0};
+        unsigned short both_contours[16] = {0};
+        FT_Outline both = {0, 0, both_points, both_tags, both_contours, 0};
+        if (!status) {
+            FT_UInt points = 0;
+            FT_UInt contours = 0;
+            status = FT_Stroker_GetCounts(stroker, &points, &contours);
+        }
+        if (!status) {
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &left);
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT, &right);
+            FT_Stroker_Export(stroker, &both);
+        }
+        if (emitted) printf(",");
+        emitted = 1;
+        printf("{\"cap\":\"%s\",\"status\":%d,\"left\":", cap_names[i], status);
+        print_stroker_outline_json(&left);
+        printf(",\"right\":");
+        print_stroker_outline_json(&right);
+        printf(",\"combined\":");
+        print_stroker_outline_json(&both);
+        printf("}");
+        if (stroker) FT_Stroker_Done(stroker);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_finalized_counts(int argc, char** argv) {
     if (argc != 4) return 2;
     int combined_counts = streq(argv[2], "counts");
@@ -26091,6 +26185,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
         return emit_stroker_simple_line_counts(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-open-line-geometry")) {
+        return emit_stroker_open_line_geometry(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
         return emit_stroker_finalized_counts(argc, argv);

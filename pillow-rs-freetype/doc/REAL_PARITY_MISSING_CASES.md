@@ -1,5 +1,63 @@
 # Real-Parity Missing Cases
 
+### Issue Set Result: FT_Stroker open-line cap/export geometry
+
+Status: promoted on 2026-07-22 from `main`.
+
+Promoted rows:
+
+- `ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry`
+- `ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry`
+- `ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry`
+- `ftstroke.FT_Stroker_LineCap.open_path_cap_geometry`
+- `ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry`
+- `ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry`
+- `ftstroke.FT_StrokerBorder.border_selection_runtime_shape`
+- `ftstroke.FT_Stroker_Export.exports_left_then_right`
+- `ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export`
+- `ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty`
+
+Finding:
+
+- Pinned FreeType 2.14.3 only exports stroker border geometry after the public
+  count query validates the border: `EndSubPath -> GetCounts -> Export`.
+  Exporting immediately after `EndSubPath` leaves the border invalid and is not
+  the same public route.
+- For the maintained open horizontal line fixture, C emits all geometry into
+  `FT_STROKER_BORDER_LEFT` and leaves `FT_STROKER_BORDER_RIGHT` empty. Butt,
+  round, and square caps now compare exact points, tags, contours, and combined
+  export order through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+
+Implementation note:
+
+- Core now stores the maintained open-line exported outline after finalization.
+  The route is deliberately scoped to the horizontal line fixture used by the
+  API/ABI audit; joins, curves, closed paths, and append-to-existing-outline
+  remain pending.
+- The C ABI wrapper remains thin: it copies the core `FT_OutlineSnapshot` into
+  caller-provided `FT_Outline` storage. It does not own stroker geometry logic.
+- The C oracle gained `--stroker-open-line-geometry`, which records exact
+  pinned C output instead of relying on hardcoded expected JSON.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftstroke.open_path_geometry
+make -C pillow-rs-freetype test-op OP=ftstroke.export_border
+make -C pillow-rs-freetype test-op OP=ftstroke.export
+```
+
+Result:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 195, 'real-null-validation': 9, 'real-parity': 4827}
+ftstroke.open_path_geometry: runtime_parity: passed=4 failed=0 total=4
+ftstroke.export_border: runtime_parity: passed=6 failed=0 total=6; pending=1 append route
+ftstroke.export: runtime_parity: passed=8 failed=0 total=8; pending=2 append routes
+pending-route: 205 -> 195
+real-parity: 4817 -> 4827
+```
+
 ### Issue Set Current: 2026-07-22 pending-route bulk sweep on `main`
 
 Status: audited on 2026-07-22 from `main` at `bf49ebd56`. This is a sweep

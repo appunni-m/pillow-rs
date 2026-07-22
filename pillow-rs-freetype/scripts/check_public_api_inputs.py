@@ -6607,6 +6607,28 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Stroker_LineTo.invalid_arguments"
     ):
         return "FT_Stroker_LineTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.operation in {
+        "ftstroke.open_path_geometry",
+        "ftstroke.export_border",
+        "ftstroke.export",
+        "ftstroke.join_geometry_alias",
+    } and row.case_id in {
+        "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry",
+        "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry",
+        "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry",
+        "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry",
+        "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry",
+        "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry",
+        "ftstroke.FT_StrokerBorder.border_selection_runtime_shape",
+        "ftstroke.FT_Stroker_Export.exports_left_then_right",
+        "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
+        "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
+    }:
+        return (
+            "FT_Stroker open-line geometry validates exact exported outline "
+            "points, tags, contours, empty right border, and combined export "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftpfr.get_pfr_advance"
         and row.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
