@@ -4601,23 +4601,20 @@ pub extern "C" fn FT_Stroker_ExportBorder(
     border: FT_StrokerBorder,
     outline: *mut FT_Outline,
 ) {
-    // The core route maintained so far covers FreeType's no-op cases for null
-    // inputs, invalid border, and newly allocated/unparsed strokers.  Geometry
-    // export remains pending and must not be implemented in this ABI wrapper.
-    let mut snapshot = rust_ffi::FT_OutlineSnapshot::default();
+    let mut snapshot = outline_snapshot_from_c(outline).unwrap_or_default();
     rust_ffi::FT_Stroker_ExportBorder(
         stroker,
         border,
         (!outline.is_null()).then_some(&mut snapshot),
     );
+    copy_outline_snapshot_to_c(outline, &snapshot, true);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Export(stroker: FT_Stroker, outline: *mut FT_Outline) {
-    // See `FT_Stroker_ExportBorder`; this wrapper intentionally delegates only
-    // the currently maintained no-op route to core.
-    let mut snapshot = rust_ffi::FT_OutlineSnapshot::default();
+    let mut snapshot = outline_snapshot_from_c(outline).unwrap_or_default();
     rust_ffi::FT_Stroker_Export(stroker, (!outline.is_null()).then_some(&mut snapshot));
+    copy_outline_snapshot_to_c(outline, &snapshot, true);
 }
 
 #[unsafe(no_mangle)]
@@ -6212,10 +6209,14 @@ fn copy_outline_snapshot_to_c(
     // SAFETY: `outline` is non-null and still refers to the caller-owned
     // descriptor used to create `snapshot`.
     let outline = unsafe { outline.as_mut() };
+    let snapshot_points = snapshot.points.len();
+    let snapshot_contours = snapshot.contours.len();
     if !outline.points.is_null() {
-        // SAFETY: the public descriptor promises `n_points` writable vectors.
-        let points =
-            unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
+        // SAFETY: the public descriptor is caller-owned and FreeType export
+        // APIs require enough capacity for the counts returned by
+        // FT_Stroker_GetCounts/FT_Stroker_GetBorderCounts.  Thin C ABI code
+        // only copies core output into that caller-provided storage.
+        let points = unsafe { slice::from_raw_parts_mut(outline.points, snapshot_points) };
         for (target, source) in points.iter_mut().zip(&snapshot.points) {
             target.x = source.x;
             target.y = source.y;
@@ -6223,13 +6224,22 @@ fn copy_outline_snapshot_to_c(
     }
     if copy_tags_and_flags {
         if !outline.tags.is_null() {
-            // SAFETY: the public descriptor promises `n_points` writable tag bytes.
-            let tags =
-                unsafe { slice::from_raw_parts_mut(outline.tags, usize::from(outline.n_points)) };
+            // SAFETY: see the points copy above.
+            let tags = unsafe { slice::from_raw_parts_mut(outline.tags, snapshot_points) };
             for (target, source) in tags.iter_mut().zip(&snapshot.tags) {
                 *target = *source;
             }
         }
+        if !outline.contours.is_null() {
+            // SAFETY: see the points copy above.
+            let contours =
+                unsafe { slice::from_raw_parts_mut(outline.contours, snapshot_contours) };
+            for (target, source) in contours.iter_mut().zip(&snapshot.contours) {
+                *target = *source;
+            }
+        }
+        outline.n_points = u16::try_from(snapshot_points).unwrap_or(u16::MAX);
+        outline.n_contours = u16::try_from(snapshot_contours).unwrap_or(u16::MAX);
         outline.flags = snapshot.flags;
     }
 }

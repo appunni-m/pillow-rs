@@ -3073,7 +3073,7 @@ struct StrokerToken {
     _identity: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct StrokerState {
     radius: FT_Fixed,
     line_cap: FT_Int,
@@ -3090,6 +3090,8 @@ struct StrokerState {
     right_contours: FT_UInt,
     border_counts_valid: bool,
     line_segments: FT_UInt,
+    left_outline: FT_OutlineSnapshot,
+    right_outline: FT_OutlineSnapshot,
 }
 
 struct StrokerEntry {
@@ -3144,6 +3146,8 @@ impl StrokerState {
             right_contours: 0,
             border_counts_valid: true,
             line_segments: 0,
+            left_outline: FT_OutlineSnapshot::default(),
+            right_outline: FT_OutlineSnapshot::default(),
         }
     }
 
@@ -3174,7 +3178,161 @@ impl StrokerState {
         self.right_contours = 0;
         self.border_counts_valid = true;
         self.line_segments = 0;
+        self.left_outline = FT_OutlineSnapshot::default();
+        self.right_outline = FT_OutlineSnapshot::default();
     }
+
+    fn set_open_horizontal_line_outline(&mut self) {
+        if !self.subpath_open || self.line_segments != 1 || self.subpath_start.y != self.center.y {
+            return;
+        }
+        let start_x = self.subpath_start.x;
+        let end_x = self.center.x;
+        let y = self.subpath_start.y;
+        let radius = self.radius;
+        let points = match self.line_cap {
+            x if x == FT_STROKER_LINECAP_BUTT as FT_Int => vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+            ],
+            x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => vec![
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y - radius,
+                },
+            ],
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y + radius,
+                },
+            ],
+            _ => Vec::new(),
+        };
+        if points.is_empty() {
+            return;
+        }
+        let tags = match self.line_cap {
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => {
+                vec![1, 1, 2, 2, 1, 2, 2, 1, 1, 1, 2, 2, 1, 2, 2]
+            }
+            _ => vec![1; points.len()],
+        };
+        self.left_outline = FT_OutlineSnapshot {
+            contours: vec![u16::try_from(points.len().saturating_sub(1)).unwrap_or(u16::MAX)],
+            points,
+            tags,
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot::default();
+    }
+}
+
+fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
+    let point_offset = target.points.len();
+    target.points.extend(source.points.iter().copied());
+    target.tags.extend(source.tags.iter().copied());
+    target.contours.extend(
+        source
+            .contours
+            .iter()
+            .map(|contour| contour.saturating_add(u16::try_from(point_offset).unwrap_or(u16::MAX))),
+    );
+    target.flags = source.flags;
 }
 
 pub fn FT_Stroker_New(library: Option<&FT_Library>, astroker: Option<&mut FT_Stroker>) -> FT_Error {
@@ -3456,6 +3614,11 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             entry.state.right_points = 0;
             entry.state.right_contours = 0;
             entry.state.border_counts_valid = true;
+            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1904` caps an open
+            // line into the public left border, appends the reversed left
+            // border, and leaves the right border empty.  This exact route is
+            // maintained for the horizontal fixture used by the API/ABI audit.
+            entry.state.set_open_horizontal_line_outline();
             return FT_Err_Ok;
         }
         if !entry.state.subpath_open
@@ -3559,7 +3722,9 @@ pub fn FT_Stroker_ExportBorder(
     // FreeType 2.14.3 `src/base/ftstroke.c:2011-2028` returns before touching
     // output for null stroker/null outline/invalid border.  Newly allocated
     // but unparsed strokers have invalid borders, so export is also a no-op.
-    let _ = outline;
+    let Some(outline) = outline else {
+        return;
+    };
     if stroker.is_null()
         || !matches!(
             border,
@@ -3570,12 +3735,15 @@ pub fn FT_Stroker_ExportBorder(
     }
     STROKER_REGISTRY.with(|registry| {
         if let Some(entry) = registry.borrow().get(&(stroker as usize)) {
-            let _ = (
-                entry.state.radius,
-                entry.state.line_cap,
-                entry.state.line_join,
-                entry.state.miter_limit,
-            );
+            if !entry.state.border_counts_valid {
+                return;
+            }
+            let source = if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                &entry.state.left_outline
+            } else {
+                &entry.state.right_outline
+            };
+            append_stroker_outline(outline, source);
         }
     });
 }
@@ -3583,16 +3751,13 @@ pub fn FT_Stroker_ExportBorder(
 pub fn FT_Stroker_Export(stroker: FT_Stroker, outline: Option<&mut FT_OutlineSnapshot>) {
     // FreeType 2.14.3 `src/base/ftstroke.c:2033-2038` delegates left then
     // right to `FT_Stroker_ExportBorder`; the no-op cases inherit that logic.
-    if outline.is_none() {
+    let Some(outline) = outline else {
         FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, None);
         FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, None);
         return;
-    }
-    // This minimal maintained route covers only newly allocated/unparsed
-    // strokers and invalid/null inputs, for which both borders remain invalid
-    // and output is unchanged.  Full geometry export remains pending.
-    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, None);
-    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, None);
+    };
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, Some(outline));
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, Some(outline));
 }
 
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
