@@ -4576,6 +4576,17 @@ def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str |
 
 def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
+        row.operation == "ftoutln.outline_render_direct"
+        and row.case_id == "ftimage.FT_Raster_Span_Func.direct_render_emits_spans"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Outline_Render direct span callback output validates emitted "
+            "span y/x/len/coverage tuples, observed clipping, user callback "
+            "identity, and target preservation through pinned C oracle, Rust "
+            "FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftsystem.memory_stream_probe"
         and row.case_id == "ftsystem.FT_StreamRec.memory_stream_field_contract"
         and unresolved_assets_reason(row) is None
