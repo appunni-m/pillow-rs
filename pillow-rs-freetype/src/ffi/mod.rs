@@ -48,9 +48,9 @@ pub use handles::{
     FT_Outline_Decompose_Trace, FT_Outline_Embolden, FT_Outline_EmboldenXY, FT_Outline_Get_BBox,
     FT_Outline_Get_Bitmap, FT_Outline_Get_CBox, FT_Outline_Get_Orientation,
     FT_Outline_GetInsideBorder, FT_Outline_GetOutsideBorder, FT_Outline_Glyph_CBox,
-    FT_Outline_GlyphSlot_With_Advance, FT_Outline_Render, FT_Outline_Render_Direct_Spans,
-    FT_Outline_Render_Error_Output, FT_Outline_Reverse, FT_Outline_Transform, FT_Outline_Translate,
-    FT_Palette_Data_Get, FT_Palette_Select, FT_Palette_Set_Foreground_Color, FT_Property_Get,
+    FT_Outline_Render, FT_Outline_Render_Direct_Spans, FT_Outline_Render_Error_Output,
+    FT_Outline_Reverse, FT_Outline_Transform, FT_Outline_Translate, FT_Palette_Data_Get,
+    FT_Palette_Select, FT_Palette_Set_Foreground_Color, FT_Property_Get,
     FT_Property_Get_GlyphToScriptMap, FT_Property_Get_IncreaseXHeight, FT_Property_Set,
     FT_Property_Set_IncreaseXHeight, FT_Reference_Face, FT_Reference_Library, FT_Render_Glyph,
     FT_Request_Size, FT_RoundFix, FT_Select_Charmap, FT_Select_Size, FT_Set_Char_Size,
@@ -62,6 +62,9 @@ pub use handles::{
     FT_Vector_From_Polar, FT_Vector_Length, FT_Vector_Polarize, FT_Vector_Rotate,
     FT_Vector_Transform, FT_Vector_Unit, FTOutlineDecomposeEvent, FTOutlineDecomposeRun,
 };
+
+#[cfg(feature = "abi-test-support")]
+pub use handles::FT_Outline_GlyphSlot_With_Advance;
 pub use handles::{FT_Done_Library, FT_Library_Memory, FT_Library_Refcount, FT_New_Library};
 #[cfg(any(test, feature = "abi-test-support"))]
 pub use handles::{

@@ -12,17 +12,28 @@ name = "pillow_rs"
 default = ["gpu", "image-codecs-all", "parallel"]
 gpu = ["wgpu", "pollster", "bytemuck"]
 parallel = ["rayon"]
-image-codecs-all = ["image-gif", "image-png", "image-tiff", "image-webp"]
+image-codecs-all = [
+    "image-jpeg",
+    "image-png",
+    "image-gif",
+    "image-bmp",
+    "image-tiff",
+    "image-webp",
+    "image-ico",
+]
+image-jpeg = ["pillow-rs-image/jpeg"]
 image-gif = ["pillow-rs-image/gif"]
 image-png = ["pillow-rs-image/png"]
+image-bmp = ["pillow-rs-image/bmp"]
 image-tiff = ["pillow-rs-image/tiff"]
 image-webp = ["pillow-rs-image/webp"]
+image-ico = ["pillow-rs-image/ico"]
+image-avif = ["pillow-rs-image/avif"]
 
 [dependencies]
-pillow-rs-image = { path = "../pillow-rs-image", default-features = false }
+pillow-rs-image = { package = "image-slash-star", path = "../../image-slash-star", default-features = false }
 fontdone = { path = "../pillow-rs-freetype" }
 log = "0.4"
-png = "0.18"
 thiserror = "2"
 csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }

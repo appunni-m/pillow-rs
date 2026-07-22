@@ -27,8 +27,10 @@
 //! may be deferred. Calling [`Image::materialize`], [`Image::save`], or
 //! [`Image::tobytes`] forces decoding and pipeline execution.
 
-use pillow_rs_image::{DynamicImage, GenericImageView, ImageFormat};
-use std::io::{BufReader, Read, Seek};
+use pillow_rs_image::{
+    Decoded, DecodedImage, DynamicImage, GenericImageView, ImageFormat, ImageInfo, ImageMode,
+    ImagePalette,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -72,6 +74,27 @@ pub struct PalettedData {
     pub indices: pillow_rs_image::GrayImage,
     /// Palette data as 256 RGB triples.
     pub palette: Vec<u8>,
+    /// Optional per-entry alpha values retained from the encoded palette.
+    pub palette_alpha: Vec<u8>,
+    /// Encoded container format when this image was decoded from a source.
+    pub source_format: Option<ImageFormat>,
+    /// Header metadata retained from the encoded source.
+    pub info: Option<ImageInfo>,
+}
+
+/// Materialized non-indexed image storage with retained codec metadata.
+#[derive(Debug, Clone)]
+pub struct LoadedData {
+    /// Operation-ready pixel storage.
+    pub image: DynamicImage,
+    /// Pillow mode override for layouts not represented by `DynamicImage`.
+    pub explicit_mode: Option<String>,
+    /// Exact decoded sample mode before operation-buffer adaptation.
+    pub decoded_mode: ImageMode,
+    /// Encoded container format when this image came from a source.
+    pub source_format: Option<ImageFormat>,
+    /// Header metadata retained from the encoded source.
+    pub info: Option<ImageInfo>,
 }
 
 /// Core image value used by Pillow-style operations.
@@ -81,8 +104,8 @@ pub struct PalettedData {
 /// [`DynamicImage`] is required.
 #[derive(Debug, Clone)]
 pub enum Image {
-    /// Fully decoded, ready to process or save. Optional explicit PIL mode.
-    Loaded(DynamicImage, Option<String>),
+    /// Fully decoded, ready to process or save, with retained source metadata.
+    Loaded(LoadedData),
     /// Fully decoded P-mode (palette) image: index bytes + 768-byte palette.
     Paletted(PalettedData),
     /// Path not yet decoded — lazy.
@@ -91,8 +114,8 @@ pub enum Image {
         path: PathBuf,
         /// Optional decoded or caller-provided image format.
         format: Option<ImageFormat>,
-        /// Whether format probing identified indexed palette storage.
-        is_paletted: bool,
+        /// Cached header metadata.
+        info: Option<ImageInfo>,
     },
     /// Byte buffer not yet decoded — lazy.
     Bytes {
@@ -100,8 +123,8 @@ pub enum Image {
         data: Arc<Vec<u8>>,
         /// Optional detected image format.
         format: Option<ImageFormat>,
-        /// Whether format probing identified indexed palette storage.
-        is_paletted: bool,
+        /// Cached header metadata.
+        info: Option<ImageInfo>,
     },
     /// Lazy pipeline — operations recorded, not executed.
     /// source: the input image (loaded or another pipeline).
@@ -120,6 +143,8 @@ pub enum Image {
         backend: Option<crate::compute::Backend>,
         /// Quantize palette (RGB triples) — populated after Quantize op materializes.
         palette: Option<Vec<u8>>,
+        /// Per-entry palette alpha retained for index-preserving operations.
+        palette_alpha: Option<Vec<u8>>,
     },
 }
 
@@ -205,6 +230,18 @@ impl StatResult {
 }
 
 impl Image {
+    /// Wraps operation-created pixels without claiming an encoded source.
+    pub(crate) fn from_dynamic(image: DynamicImage, explicit_mode: Option<String>) -> Self {
+        let decoded_mode = image.color().into();
+        Self::Loaded(LoadedData {
+            image,
+            explicit_mode,
+            decoded_mode,
+            source_format: None,
+            info: None,
+        })
+    }
+
     // ── Constructors ──
 
     #[allow(clippy::too_many_arguments)]
@@ -262,6 +299,9 @@ impl Image {
                         pillow_rs_image::Luma([0u8]),
                     ),
                     palette: pal,
+                    palette_alpha: Vec::new(),
+                    source_format: None,
+                    info: None,
                 }));
             }
             "CMYK" => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_pixel(
@@ -288,7 +328,7 @@ impl Image {
         } else {
             None
         };
-        Ok(Image::Loaded(img, explicit))
+        Ok(Image::from_dynamic(img, explicit))
     }
 
     /// Creates an image from tightly packed raw bytes.
@@ -350,6 +390,9 @@ impl Image {
                     indices: pillow_rs_image::GrayImage::from_raw(w, h, data[..expected].to_vec())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                     palette: default_palette(),
+                    palette_alpha: Vec::new(),
+                    source_format: None,
+                    info: None,
                 }));
             }
             "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
@@ -398,60 +441,49 @@ impl Image {
             "1" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
             _ => None,
         };
-        Ok(Image::Loaded(img, explicit_mode))
+        Ok(Image::from_dynamic(img, explicit_mode))
     }
 
     /// Creates a lazy image from a filesystem path.
     ///
-    /// The image is decoded when pixel data is first needed. PNG palette data
-    /// may be inspected eagerly so P-mode behavior can be preserved.
+    /// The image is decoded when pixel data is first needed. Header metadata,
+    /// including indexed palette state, is cached without decoding pixels.
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] when the provided format string is unknown or
-    /// palette probing requires I/O that fails.
+    /// Returns [`PilError`] when the provided format string is unknown, the
+    /// source cannot be read, or its header cannot be inspected.
     pub fn open(path: &str, format: Option<&str>) -> Result<Self, PilError> {
-        let fmt = format
-            .and_then(|f| parse_format_str(f).ok())
-            .or_else(|| ImageFormat::from_path(PathBuf::from(path)).ok());
-        // If this is a PNG file, check if it uses a palette (Indexed color type)
-        if fmt == Some(ImageFormat::Png) {
-            let file = std::fs::File::open(path).map_err(PilError::Io)?;
-            let mut reader = BufReader::new(file);
-            if let Ok(paletted) = decode_paletted_png_reader(&mut reader) {
-                return Ok(Image::Paletted(paletted));
-            }
-            // Not paletted (or error) — fall through to lazy Path
+        let requested = format.map(parse_format_str).transpose()?;
+        let data = std::fs::read(path).map_err(PilError::Io)?;
+        let info = inspect_encoded(&data, path)?;
+        if requested.is_some_and(|requested| requested != info.format) {
+            return Err(PilError::ValueError(format!(
+                "requested {requested:?} input but detected {:?}",
+                info.format
+            )));
         }
         Ok(Image::Path {
             path: PathBuf::from(path),
-            format: fmt,
-            is_paletted: false,
+            format: Some(info.format),
+            info: Some(info),
         })
     }
 
     /// Creates a lazy image from encoded image bytes.
     ///
-    /// Format is detected from magic bytes. PNG palette data may be inspected
-    /// eagerly so P-mode behavior can be preserved.
+    /// Format and metadata are detected from encoded headers without decoding
+    /// pixel payloads.
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] if eager palette probing finds invalid data.
+    /// Returns [`PilError`] when the encoded header is unknown or malformed.
     pub fn open_bytes(data: Vec<u8>) -> Result<Self, PilError> {
-        let format = detect_format_from_magic(&data);
-        // If this is a PNG file, check if it uses a palette (Indexed color type)
-        if format == Some(ImageFormat::Png) {
-            let mut cursor = std::io::Cursor::new(&data);
-            if let Ok(paletted) = decode_paletted_png_reader(&mut cursor) {
-                return Ok(Image::Paletted(paletted));
-            }
-            // Not paletted — fall through to lazy Bytes
-        }
+        let info = inspect_encoded(&data, "memory")?;
         Ok(Image::Bytes {
             data: Arc::new(data),
-            format,
-            is_paletted: false,
+            format: Some(info.format),
+            info: Some(info),
         })
     }
 
@@ -465,56 +497,22 @@ impl Image {
     /// convert) need RGB.
     fn is_palette_safe_op(op: &PipelineOp) -> bool {
         match op {
-            // Geometry ops — operate on pixels regardless of meaning
-            PipelineOp::Crop { .. } => true,
+            PipelineOp::Crop { .. }
+            | PipelineOp::Rotate { .. }
+            | PipelineOp::Transpose { .. }
+            | PipelineOp::Flip
+            | PipelineOp::Mirror
+            | PipelineOp::CropBorder { .. }
+            | PipelineOp::EffectSpread { .. }
+            | PipelineOp::Offset { .. }
+            | PipelineOp::Duplicate => true,
             PipelineOp::Resize { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box)
+                matches!(filter, ResampleFilter::Nearest)
             }
-            PipelineOp::Rotate { .. } => true, // Always uses nearest for P-mode
-            PipelineOp::Transpose { .. } => true,
-            PipelineOp::Transform { .. } => true, // Always uses nearest for P-mode
-            PipelineOp::EffectSpread { .. } => true,
-            PipelineOp::Reduce { .. } => true,
             PipelineOp::Thumbnail { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box)
+                matches!(filter, ResampleFilter::Nearest)
             }
-
-            // Value ops — apply function/LUT to each pixel value (index)
-            PipelineOp::PointOp { .. } => true,
-            PipelineOp::Color3DLut { .. } => false, // Needs actual color values, not palette indices
-            PipelineOp::Invert => true,
-            PipelineOp::InvertChops => true,
-            PipelineOp::Eval { .. } => true,
-            PipelineOp::PutPixel { .. } => true,
-            PipelineOp::PutData { .. } => true,
-            PipelineOp::PutAlpha { .. } => true,
-
-            // Duplicate / Constant / Offset — value-safe
-            PipelineOp::Duplicate => true,
-            PipelineOp::Constant { .. } => true,
-            PipelineOp::Offset { .. } => true,
-
-            // Blend / Composite — blend index values
-            PipelineOp::Blend { .. } => true,
-            PipelineOp::BlendModule { .. } => true,
-            PipelineOp::Composite { .. } => true,
-            PipelineOp::CompositeModule { .. } => true,
-
-            // Draw ops — palette-safe (write single-byte index values directly)
-            PipelineOp::DrawLine { .. }
-            | PipelineOp::DrawRectangle { .. }
-            | PipelineOp::DrawRoundedRect { .. }
-            | PipelineOp::DrawEllipse { .. }
-            | PipelineOp::DrawCircle { .. }
-            | PipelineOp::DrawPolygon { .. }
-            | PipelineOp::DrawArc { .. }
-            | PipelineOp::DrawChord { .. }
-            | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::DrawPoint { .. } => true,
-
-            // Enhance ops — NOT safe for P-mode (need color)
-            // Filter ops — NOT safe (need color)
-            // Convert / Quantize — NOT safe (change mode)
+            PipelineOp::Transform { filter, .. } => matches!(filter, ResampleFilter::Nearest),
             _ => false,
         }
     }
@@ -527,20 +525,15 @@ impl Image {
     /// conversion fails.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
-            Image::Loaded(img, _) => Ok(img.clone()),
+            Image::Loaded(data) => Ok(data.image.clone()),
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
-            Image::Path { path, .. } => {
+            Image::Path { path, info, .. } => {
                 let file_data = std::fs::read(path).map_err(PilError::Io)?;
-                let decoded = pillow_rs_image::decode(&file_data)
-                    .ok_or_else(|| PilError::UnidentifiedImageError(path.display().to_string()))?;
-                DynamicImage::from_decoded(&decoded)
-                    .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
+                decode_image_storage(&file_data, info.clone(), &path.display().to_string())?
+                    .materialize()
             }
-            Image::Bytes { data, .. } => {
-                let decoded = pillow_rs_image::decode(data)
-                    .ok_or_else(|| PilError::UnidentifiedImageError("unknown format".into()))?;
-                DynamicImage::from_decoded(&decoded)
-                    .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
+            Image::Bytes { data, info, .. } => {
+                decode_image_storage(data, info.clone(), "memory")?.materialize()
             }
             Image::Pipeline {
                 source,
@@ -548,6 +541,7 @@ impl Image {
                 explicit_mode,
                 backend,
                 palette: _palette,
+                palette_alpha: _palette_alpha,
                 ..
             } => {
                 let mut img = source.materialize()?;
@@ -573,17 +567,12 @@ impl Image {
                         // palette stored on pipeline. Convert indices to RGB.
                         let palette = _palette.clone().or_else(|| source.palette());
                         if let Some(palette) = palette {
-                            let (w, h) = (img.width(), img.height());
                             let indices = img.to_luma8();
-                            let rgb = pillow_rs_image::RgbImage::from_fn(w, h, |x, y| {
-                                let idx = indices.get_pixel(x, y)[0] as usize;
-                                let p = idx * 3;
-                                let r = palette.get(p).copied().unwrap_or(0);
-                                let g = palette.get(p + 1).copied().unwrap_or(0);
-                                let b = palette.get(p + 2).copied().unwrap_or(0);
-                                pillow_rs_image::Rgb([r, g, b])
-                            });
-                            img = DynamicImage::ImageRgb8(rgb);
+                            let palette_alpha = _palette_alpha
+                                .clone()
+                                .or_else(|| source.palette_alpha())
+                                .unwrap_or_default();
+                            img = expand_palette(&indices, &palette, &palette_alpha);
                         }
                     }
                 }
@@ -643,32 +632,40 @@ impl Image {
     /// when the operation can preserve them; operations that fundamentally
     /// change mode clear or replace the explicit mode tag.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
-        // Ops that change the image mode fundamentally should clear explicit_mode
-        let explicit_mode = match &op {
-            PipelineOp::Grayscale | PipelineOp::Convert { .. } | PipelineOp::Quantize { .. } => {
-                None
+        let source_is_paletted =
+            source.explicit_mode() == Some("P") || matches!(source, Image::Paletted(_));
+        let palette_safe = source_is_paletted && Self::is_palette_safe_op(&op);
+        let explicit_mode = if source_is_paletted {
+            palette_safe.then(|| "P".to_owned())
+        } else {
+            match &op {
+                PipelineOp::Grayscale
+                | PipelineOp::Convert { .. }
+                | PipelineOp::Quantize { .. } => None,
+                PipelineOp::DrawLine { .. }
+                | PipelineOp::DrawRectangle { .. }
+                | PipelineOp::DrawRoundedRect { .. }
+                | PipelineOp::DrawEllipse { .. }
+                | PipelineOp::DrawCircle { .. }
+                | PipelineOp::DrawPolygon { .. }
+                | PipelineOp::DrawArc { .. }
+                | PipelineOp::DrawChord { .. }
+                | PipelineOp::DrawPieslice { .. }
+                | PipelineOp::DrawPoint { .. } => None,
+                _ => source.explicit_mode().map(str::to_owned),
             }
-            // Draw ops: preserve explicit_mode for P-mode (draw on palette indices),
-            // but clear for other modes (draw produces RGBA).
-            PipelineOp::DrawLine { .. }
-            | PipelineOp::DrawRectangle { .. }
-            | PipelineOp::DrawRoundedRect { .. }
-            | PipelineOp::DrawEllipse { .. }
-            | PipelineOp::DrawCircle { .. }
-            | PipelineOp::DrawPolygon { .. }
-            | PipelineOp::DrawArc { .. }
-            | PipelineOp::DrawChord { .. }
-            | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::DrawPoint { .. } => {
-                if source.explicit_mode() == Some("P") || matches!(source, Image::Paletted(_)) {
-                    Some("P".to_string())
-                } else {
-                    None
-                }
-            }
-            _ => source.explicit_mode().map(|s| s.to_string()),
         };
-        let source_palette = source.extract_palette();
+        let source_palette = if palette_safe {
+            source.extract_palette()
+        } else {
+            None
+        };
+        let source_palette_alpha = if palette_safe {
+            source.palette_alpha()
+        } else {
+            None
+        };
+        let source_format = source.source_format();
         match source {
             Image::Pipeline {
                 source,
@@ -684,23 +681,19 @@ impl Image {
                     format: *format,
                     explicit_mode,
                     backend: source.backend(),
-                    palette: source_palette.or_else(|| source.palette()),
-                }
-            }
-            other => {
-                let fmt = match other {
-                    Image::Pipeline { format, .. } => *format,
-                    _ => None,
-                };
-                Image::Pipeline {
-                    source: Arc::new(other.clone()),
-                    ops: vec![op],
-                    format: fmt,
-                    explicit_mode,
-                    backend: other.backend(),
                     palette: source_palette,
+                    palette_alpha: source_palette_alpha,
                 }
             }
+            other => Image::Pipeline {
+                source: Arc::new(other.clone()),
+                ops: vec![op],
+                format: source_format,
+                explicit_mode,
+                backend: other.backend(),
+                palette: source_palette,
+                palette_alpha: source_palette_alpha,
+            },
         }
     }
 
@@ -978,7 +971,11 @@ impl Image {
             return Ok(vec!["P".to_string()]);
         }
         // Check explicit mode for non-standard band names
-        if let Image::Loaded(_, Some(m)) = self {
+        if let Image::Loaded(LoadedData {
+            explicit_mode: Some(m),
+            ..
+        }) = self
+        {
             let bands: Vec<String> = match m.as_str() {
                 "CMYK" => vec![
                     "C".to_string(),
@@ -1018,16 +1015,14 @@ impl Image {
     /// Returns [`PilError`] when format detection, encoding, materialization, or
     /// filesystem writing fails.
     pub fn save(&self, path: &str, format: Option<&str>) -> Result<(), PilError> {
-        // Paletted images: convert via the palette to RGB for visual correctness
-        let img = self.paletted_to_rgb().unwrap_or(self.materialize()?);
         let save_format = if let Some(fmt) = format {
             parse_format_str(fmt)?
         } else {
             ImageFormat::from_path(path)
                 .map_err(|_| PilError::UnknownFormat("Cannot determine format from path".into()))?
         };
-        let encoded = pillow_rs_image::encode_default(&img.into_decoded(), save_format)
-            .ok_or_else(|| PilError::UnknownFormat("encoding failed".into()))?;
+        let decoded = self.decoded_for_encoding()?;
+        let encoded = pillow_rs_image::encode_default(&decoded, save_format)?;
         std::fs::write(path, encoded).map_err(PilError::Io)?;
         Ok(())
     }
@@ -1113,7 +1108,10 @@ impl Image {
     /// `"1"`, `"P"`, `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
     pub fn explicit_mode(&self) -> Option<&str> {
         match self {
-            Image::Loaded(_, Some(m)) => Some(m.as_str()),
+            Image::Loaded(LoadedData {
+                explicit_mode: Some(m),
+                ..
+            }) => Some(m.as_str()),
             Image::Paletted(_) => Some("P"),
             Image::Pipeline {
                 explicit_mode: Some(m),
@@ -1131,7 +1129,45 @@ impl Image {
         match self {
             Image::Paletted(data) => Some(data.palette.clone()),
             Image::Pipeline { palette, .. } => palette.clone(),
+            Image::Path { info, .. } | Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .map(|palette| padded_palette(&palette.rgb)),
             _ => None,
+        }
+    }
+
+    /// Returns retained per-entry alpha values for an indexed image.
+    pub fn palette_alpha(&self) -> Option<Vec<u8>> {
+        match self {
+            Image::Paletted(data) => Some(data.palette_alpha.clone()),
+            Image::Pipeline { palette_alpha, .. } => palette_alpha.clone(),
+            Image::Path { info, .. } | Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .map(|palette| palette.alpha.clone()),
+            _ => None,
+        }
+    }
+
+    /// Returns retained source metadata when this value still represents an
+    /// encoded input rather than an operation result.
+    pub fn image_info(&self) -> Option<ImageInfo> {
+        match self {
+            Image::Loaded(data) => data.info.clone(),
+            Image::Paletted(data) => data.info.clone(),
+            Image::Path { info, .. } | Image::Bytes { info, .. } => info.clone(),
+            Image::Pipeline { .. } => None,
+        }
+    }
+
+    fn source_format(&self) -> Option<ImageFormat> {
+        match self {
+            Image::Loaded(data) => data.source_format,
+            Image::Paletted(data) => data.source_format,
+            Image::Path { format, .. }
+            | Image::Bytes { format, .. }
+            | Image::Pipeline { format, .. } => *format,
         }
     }
 
@@ -1150,9 +1186,8 @@ impl Image {
 
     /// Applies stored transparency information when available.
     ///
-    /// Current core storage does not keep a separate palette transparency table.
-    /// For [`Image::Paletted`] values this expands indices to RGBA pixels with
-    /// opaque alpha; other image variants are unchanged.
+    /// For [`Image::Paletted`] values this expands indices to RGBA pixels using
+    /// retained per-entry alpha. Missing alpha entries are opaque.
     ///
     /// # Errors
     ///
@@ -1161,11 +1196,15 @@ impl Image {
     pub fn apply_transparency(&mut self) -> Result<(), PilError> {
         // Extract Paletted data via clone to avoid borrow issues with self-mutation
         let pal_data = match self {
-            Image::Paletted(data) => Some((data.indices.clone(), data.palette.clone())),
+            Image::Paletted(data) => Some((
+                data.indices.clone(),
+                data.palette.clone(),
+                data.palette_alpha.clone(),
+            )),
             _ => None,
         };
 
-        if let Some((indices, palette)) = pal_data {
+        if let Some((indices, palette, palette_alpha)) = pal_data {
             let (w, h) = indices.dimensions();
             let rgba = pillow_rs_image::RgbaImage::from_fn(w, h, |x, y| {
                 let idx = indices.get_pixel(x, y)[0] as usize;
@@ -1173,9 +1212,10 @@ impl Image {
                 let r = palette.get(base).copied().unwrap_or(0);
                 let g = palette.get(base + 1).copied().unwrap_or(0);
                 let b = palette.get(base + 2).copied().unwrap_or(0);
-                pillow_rs_image::Rgba([r, g, b, 255])
+                let a = palette_alpha.get(idx).copied().unwrap_or(255);
+                pillow_rs_image::Rgba([r, g, b, a])
             });
-            *self = Image::Loaded(DynamicImage::ImageRgba8(rgba), None);
+            *self = Image::from_dynamic(DynamicImage::ImageRgba8(rgba), None);
         }
         Ok(())
     }
@@ -1233,21 +1273,27 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization or PNG encoding fails.
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
-        match self.paletted_to_rgb() {
-            Some(img) => {
-                let encoded =
-                    pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
-                        .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
-                Ok(encoded)
-            }
-            None => {
-                let img = self.materialize()?;
-                let encoded =
-                    pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
-                        .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
-                Ok(encoded)
-            }
+        let decoded = self.decoded_for_encoding()?;
+        Ok(pillow_rs_image::encode_default(&decoded, ImageFormat::Png)?)
+    }
+
+    fn decoded_for_encoding(&self) -> Result<DecodedImage, PilError> {
+        if let Image::Paletted(data) = self {
+            let palette =
+                if let Some(palette) = data.info.as_ref().and_then(|info| info.palette.clone()) {
+                    palette
+                } else {
+                    ImagePalette::new(data.palette.clone(), data.palette_alpha.clone())?
+                };
+            return Ok(DecodedImage::with_mode(
+                data.indices.width(),
+                data.indices.height(),
+                data.indices.as_raw().to_vec(),
+                ImageMode::P8,
+            )
+            .with_palette(palette));
         }
+        Ok(self.materialize()?.into_decoded())
     }
 
     /// Materializes the image for color-space image operations.
@@ -1268,17 +1314,9 @@ impl Image {
         if matches!(self, Image::Pipeline { .. }) && self.explicit_mode() == Some("P") {
             let img = self.materialize()?; // Luma8 indices
             if let Some(palette) = self.palette() {
-                let (w, h) = img.dimensions();
                 let indices = img.to_luma8();
-                let rgb = pillow_rs_image::RgbImage::from_fn(w, h, |x, y| {
-                    let idx = indices.get_pixel(x, y)[0] as usize;
-                    let p = idx * 3;
-                    let r = palette.get(p).copied().unwrap_or(0);
-                    let g = palette.get(p + 1).copied().unwrap_or(0);
-                    let b = palette.get(p + 2).copied().unwrap_or(0);
-                    pillow_rs_image::Rgb([r, g, b])
-                });
-                return Ok(DynamicImage::ImageRgb8(rgb));
+                let palette_alpha = self.palette_alpha().unwrap_or_default();
+                return Ok(expand_palette(&indices, &palette, &palette_alpha));
             }
         }
         self.materialize()
@@ -1287,19 +1325,11 @@ impl Image {
     /// Convert Paletted image to RGB for rendering/saving. Returns None for non-Paletted.
     pub(crate) fn paletted_to_rgb(&self) -> Option<DynamicImage> {
         if let Image::Paletted(data) = self {
-            let rgb = pillow_rs_image::RgbImage::from_fn(
-                data.indices.width(),
-                data.indices.height(),
-                |x, y| {
-                    let idx = data.indices.get_pixel(x, y)[0] as usize;
-                    let p = idx * 3;
-                    let r = data.palette.get(p).copied().unwrap_or(0);
-                    let g = data.palette.get(p + 1).copied().unwrap_or(0);
-                    let b = data.palette.get(p + 2).copied().unwrap_or(0);
-                    pillow_rs_image::Rgb([r, g, b])
-                },
-            );
-            Some(DynamicImage::ImageRgb8(rgb))
+            Some(expand_palette(
+                &data.indices,
+                &data.palette,
+                &data.palette_alpha,
+            ))
         } else {
             None
         }
@@ -1312,8 +1342,16 @@ impl Image {
     /// Returns [`PilError`] when a lazy image must be decoded and decoding
     /// fails.
     pub fn size(&self) -> Result<(u32, u32), PilError> {
-        if let Image::Paletted(data) = self {
-            return Ok(data.indices.dimensions());
+        match self {
+            Image::Loaded(data) => return Ok(data.image.dimensions()),
+            Image::Paletted(data) => return Ok(data.indices.dimensions()),
+            Image::Path {
+                info: Some(info), ..
+            }
+            | Image::Bytes {
+                info: Some(info), ..
+            } => return Ok((info.width, info.height)),
+            _ => {}
         }
         let img = self.materialize()?;
         Ok((img.width(), img.height()))
@@ -1326,51 +1364,42 @@ impl Image {
     /// Returns [`PilError`] when lazy data must be materialized to determine
     /// the mode and that materialization fails.
     pub fn mode(&self) -> Result<String, PilError> {
-        if matches!(self, Image::Paletted(_)) {
-            return Ok("P".to_string());
-        }
-        if let Image::Loaded(_, Some(m)) = self {
-            return Ok(m.clone());
-        }
-        if let Image::Pipeline {
-            explicit_mode: Some(m),
-            ..
-        } = self
-        {
-            return Ok(m.clone());
+        match self {
+            Image::Paletted(_) => return Ok("P".to_owned()),
+            Image::Loaded(data) => {
+                return Ok(data
+                    .explicit_mode
+                    .clone()
+                    .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
+            }
+            Image::Path {
+                info: Some(info), ..
+            }
+            | Image::Bytes {
+                info: Some(info), ..
+            } => return Ok(image_mode_name(info.mode).to_owned()),
+            Image::Pipeline {
+                explicit_mode: Some(mode),
+                ..
+            } => return Ok(mode.clone()),
+            _ => {}
         }
         let img = self.materialize()?;
-        // Check format-based mode for Path/Bytes
-        let (fmt, is_paletted) = match self {
-            Image::Path {
-                format,
-                is_paletted: ip,
-                ..
-            } => (*format, *ip),
-            Image::Bytes {
-                format,
-                is_paletted: ip,
-                ..
-            } => (*format, *ip),
-            _ => (None, false),
-        };
-        let mut detected = detect_format_mode(&img, fmt);
-        if detected.is_none() && is_paletted {
-            detected = Some("P".to_string());
-        }
-        if let Some(d) = detected {
-            return Ok(d);
-        }
         Ok(color_type_to_mode(img.color()).to_string())
     }
 
     /// Returns the known image format name, if the image came from encoded input.
     pub fn format_name(&self) -> Option<String> {
         match self {
-            Image::Loaded(_, _) | Image::Paletted(_) => None,
-            Image::Path { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
-            Image::Bytes { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
-            Image::Pipeline { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
+            Image::Loaded(data) => data
+                .source_format
+                .map(|format| format_name(format).to_owned()),
+            Image::Paletted(data) => data
+                .source_format
+                .map(|format| format_name(format).to_owned()),
+            Image::Path { format, .. }
+            | Image::Bytes { format, .. }
+            | Image::Pipeline { format, .. } => format.map(|format| format_name(format).to_owned()),
         }
     }
 
@@ -1379,8 +1408,76 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
-    pub fn load(&self) -> Result<(), PilError> {
-        self.materialize()?;
+    pub fn load(&mut self) -> Result<(), PilError> {
+        let loaded = match &*self {
+            Image::Loaded(_) | Image::Paletted(_) => return Ok(()),
+            Image::Path { path, info, .. } => {
+                let data = std::fs::read(&*path).map_err(PilError::Io)?;
+                decode_image_storage(&data, info.clone(), &path.display().to_string())?
+            }
+            Image::Bytes { data, info, .. } => decode_image_storage(data, info.clone(), "memory")?,
+            Image::Pipeline {
+                explicit_mode,
+                format,
+                palette,
+                palette_alpha,
+                ..
+            } => {
+                if explicit_mode.as_deref() == Some("P") {
+                    if let Some(palette) = palette {
+                        let indices = self.materialize_indices()?.to_luma8();
+                        Image::Paletted(PalettedData {
+                            indices,
+                            palette: palette.clone(),
+                            palette_alpha: palette_alpha.clone().unwrap_or_default(),
+                            source_format: *format,
+                            info: None,
+                        })
+                    } else {
+                        return Err(PilError::PaletteError(
+                            "P-mode pipeline has no retained palette".to_owned(),
+                        ));
+                    }
+                } else {
+                    let image = self.materialize()?;
+                    let decoded_mode = image.color().into();
+                    Image::Loaded(LoadedData {
+                        image,
+                        explicit_mode: explicit_mode.clone(),
+                        decoded_mode,
+                        source_format: *format,
+                        info: None,
+                    })
+                }
+            }
+        };
+        *self = loaded;
+        Ok(())
+    }
+
+    /// Returns whether this handle currently owns materialized pixel storage.
+    pub fn is_materialized(&self) -> bool {
+        matches!(self, Image::Loaded(_) | Image::Paletted(_))
+    }
+
+    /// Fully validates an encoded or deferred image without changing its state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when decoding or pipeline execution fails.
+    pub fn verify(&self) -> Result<(), PilError> {
+        match self {
+            Image::Path { path, .. } => {
+                let data = std::fs::read(path).map_err(PilError::Io)?;
+                decode_encoded(&data, &path.display().to_string())?;
+            }
+            Image::Bytes { data, .. } => {
+                decode_encoded(data, "memory")?;
+            }
+            _ => {
+                self.materialize()?;
+            }
+        }
         Ok(())
     }
 
@@ -1773,126 +1870,160 @@ impl Image {
         Ok(result)
     }
 }
-/// Decode a paletted PNG from a reader, returning the index bytes + palette.
-/// Returns an error if the PNG is not paletted (Indexed color type).
-fn decode_paletted_png_reader<R: Read + Seek>(r: &mut R) -> Result<PalettedData, PilError> {
-    use png::ColorType;
-    let mut reader = BufReader::new(r);
-    let decoder = png::Decoder::new(&mut reader);
-    let mut png_reader = decoder.read_info().map_err(|e| {
-        PilError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            e.to_string(),
-        ))
-    })?;
 
-    // Extract info upfront to release the immutable borrow before next_frame
-    let (w, h, pal) = {
-        let info = png_reader.info();
-        if info.color_type != ColorType::Indexed {
-            return Err(PilError::ValueError("not a paletted PNG".into()));
-        }
-        if info.width == 0 || info.height == 0 {
-            return Err(PilError::ValueError("empty PNG image".into()));
-        }
-        let mut pal = info.palette.clone().unwrap_or_default().to_vec();
-        pal.resize(768, 0u8);
-        (info.width, info.height, pal)
-    };
-
-    let out_size = png_reader
-        .output_buffer_size()
-        .ok_or_else(|| PilError::ValueError("Could not determine output buffer size".into()))?;
-    let mut buf = vec![0u8; out_size];
-    png_reader.next_frame(&mut buf).map_err(|e| {
-        PilError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            e.to_string(),
-        ))
-    })?;
-
-    // For indexed PNGs, output buffer contains palette indices (w*h bytes).
-    let max_size = (w as usize) * (h as usize);
-    let indices = if buf.len() >= max_size {
-        pillow_rs_image::GrayImage::from_raw(w, h, buf[..max_size].to_vec())
-            .ok_or_else(|| PilError::ValueError("paletted PNG decode: buffer error".into()))?
-    } else {
-        return Err(PilError::ValueError(
-            "paletted PNG decode: insufficient data".into(),
-        ));
-    };
-
-    Ok(PalettedData {
-        indices,
-        palette: pal,
-    })
+fn inspect_encoded(data: &[u8], source: &str) -> Result<ImageInfo, PilError> {
+    pillow_rs_image::inspect(data).map_err(|error| map_codec_error(error, source))
 }
 
-/// Detects image format from magic bytes.
-fn detect_format_from_magic(data: &[u8]) -> Option<ImageFormat> {
-    if data.len() >= 3 && &data[..3] == b"GIF" {
-        Some(ImageFormat::Gif)
-    } else if data.len() >= 8 && &data[..8] == b"\x89PNG\r\n\x1a\n" {
-        Some(ImageFormat::Png)
-    } else if data.len() >= 2 && &data[..2] == b"BM" {
-        Some(ImageFormat::Bmp)
-    } else if data.len() >= 2 && &data[..2] == b"\xff\xd8" {
-        Some(ImageFormat::Jpeg)
+fn decode_encoded(data: &[u8], source: &str) -> Result<Decoded<DecodedImage>, PilError> {
+    pillow_rs_image::decode(data).map_err(|error| map_codec_error(error, source))
+}
+
+fn map_codec_error(error: pillow_rs_image::ImageError, source: &str) -> PilError {
+    if matches!(error, pillow_rs_image::ImageError::UnknownFormat) {
+        PilError::UnidentifiedImageError(source.to_owned())
     } else {
-        None
+        PilError::ImageError(error)
     }
 }
 
-/// Detect the correct PIL mode from format + color type after decoding.
-fn detect_format_mode(img: &DynamicImage, format: Option<ImageFormat>) -> Option<String> {
-    match format {
-        Some(ImageFormat::Gif) => {
-            // GIF: bilevel source becomes L in PIL, RGB source becomes P
-            let ch = img.color().channel_count();
-            if ch == 1 || ch == 2 || is_bilevel(img) {
-                Some("L".to_string())
-            } else {
-                Some("P".to_string())
-            }
-        }
-        Some(ImageFormat::Png) => {
-            let ch = img.color().channel_count();
-            if ch == 1 || ch == 2 {
-                if is_bilevel(img) {
-                    Some("1".to_string())
-                } else if ch == 2 {
-                    Some("LA".to_string())
-                } else {
-                    Some("L".to_string())
-                }
-            } else {
-                None // Determined by caller via is_paletted flag
-            }
-        }
-        Some(ImageFormat::Bmp) => {
-            if is_grayscale_rgb(img) {
-                Some("L".to_string())
-            } else {
-                None
-            }
+fn decode_image_storage(
+    data: &[u8],
+    info: Option<ImageInfo>,
+    source: &str,
+) -> Result<Image, PilError> {
+    image_from_decoded(decode_encoded(data, source)?, info)
+}
+
+fn image_from_decoded(
+    decoded: Decoded<DecodedImage>,
+    info: Option<ImageInfo>,
+) -> Result<Image, PilError> {
+    let Decoded { format, content } = decoded;
+    let mode = content.mode;
+    if mode == ImageMode::P8 {
+        let palette = content.palette.ok_or_else(|| {
+            PilError::PaletteError("decoded P-mode image has no retained palette".to_owned())
+        })?;
+        let indices =
+            pillow_rs_image::GrayImage::from_raw(content.width, content.height, content.pixels)
+                .ok_or_else(|| PilError::DimensionError("invalid indexed buffer".to_owned()))?;
+        return Ok(Image::Paletted(PalettedData {
+            indices,
+            palette: padded_palette(&palette.rgb),
+            palette_alpha: palette.alpha,
+            source_format: Some(format),
+            info,
+        }));
+    }
+
+    let explicit_mode = match mode {
+        ImageMode::L1 | ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => {
+            Some(image_mode_name(mode).to_owned())
         }
         _ => None,
+    };
+    let image = match mode {
+        ImageMode::L1 => {
+            let row_bytes = content.width.div_ceil(8) as usize;
+            let mut unpacked = Vec::with_capacity(content.width as usize * content.height as usize);
+            for row in content.pixels.chunks_exact(row_bytes) {
+                for x in 0..content.width as usize {
+                    let bit = (row[x / 8] >> (7 - (x % 8))) & 1;
+                    unpacked.push(if bit == 0 { 0 } else { 255 });
+                }
+            }
+            DynamicImage::ImageLuma8(
+                pillow_rs_image::GrayImage::from_raw(content.width, content.height, unpacked)
+                    .ok_or_else(|| {
+                        PilError::DimensionError("invalid packed bilevel buffer".to_owned())
+                    })?,
+            )
+        }
+        ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => DynamicImage::ImageRgba8(
+            pillow_rs_image::RgbaImage::from_raw(content.width, content.height, content.pixels)
+                .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned()))?,
+        ),
+        _ => DynamicImage::from_decoded(&content)
+            .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}")))?,
+    };
+    Ok(Image::Loaded(LoadedData {
+        image,
+        explicit_mode,
+        decoded_mode: mode,
+        source_format: Some(format),
+        info,
+    }))
+}
+
+fn padded_palette(rgb: &[u8]) -> Vec<u8> {
+    let mut palette = rgb.to_vec();
+    palette.resize(768, 0);
+    palette
+}
+
+fn expand_palette(
+    indices: &pillow_rs_image::GrayImage,
+    palette: &[u8],
+    palette_alpha: &[u8],
+) -> DynamicImage {
+    if palette_alpha.is_empty() {
+        return DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::from_fn(
+            indices.width(),
+            indices.height(),
+            |x, y| {
+                let index = usize::from(indices.get_pixel(x, y)[0]);
+                let base = index * 3;
+                pillow_rs_image::Rgb([
+                    palette.get(base).copied().unwrap_or(0),
+                    palette.get(base + 1).copied().unwrap_or(0),
+                    palette.get(base + 2).copied().unwrap_or(0),
+                ])
+            },
+        ));
+    }
+    DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_fn(
+        indices.width(),
+        indices.height(),
+        |x, y| {
+            let index = usize::from(indices.get_pixel(x, y)[0]);
+            let base = index * 3;
+            pillow_rs_image::Rgba([
+                palette.get(base).copied().unwrap_or(0),
+                palette.get(base + 1).copied().unwrap_or(0),
+                palette.get(base + 2).copied().unwrap_or(0),
+                palette_alpha.get(index).copied().unwrap_or(255),
+            ])
+        },
+    ))
+}
+
+const fn image_mode_name(mode: ImageMode) -> &'static str {
+    match mode {
+        ImageMode::L1 => "1",
+        ImageMode::P8 => "P",
+        ImageMode::L8 => "L",
+        ImageMode::La8 | ImageMode::La16 => "LA",
+        ImageMode::Rgb8 | ImageMode::Rgb16 | ImageMode::Rgb32F => "RGB",
+        ImageMode::Rgba8 | ImageMode::Rgba16 | ImageMode::Rgba32F => "RGBA",
+        ImageMode::Cmyk8 => "CMYK",
+        ImageMode::L16 => "I;16",
+        ImageMode::F32 => "F",
+        ImageMode::I32 => "I",
     }
 }
 
-/// Check if all pixel values are exactly 0 or 255 (bilevel image).
-fn is_bilevel(img: &DynamicImage) -> bool {
-    let luma = img.to_luma8();
-    luma.pixels().all(|p| p[0] == 0 || p[0] == 255)
-}
-
-/// Check if an RGB image is actually grayscale (all channels equal per pixel).
-fn is_grayscale_rgb(img: &DynamicImage) -> bool {
-    if img.color().channel_count() < 3 {
-        return true;
+const fn format_name(format: ImageFormat) -> &'static str {
+    match format {
+        ImageFormat::Jpeg => "JPEG",
+        ImageFormat::Png => "PNG",
+        ImageFormat::Gif => "GIF",
+        ImageFormat::Bmp => "BMP",
+        ImageFormat::WebP => "WEBP",
+        ImageFormat::Tiff => "TIFF",
+        ImageFormat::Ico => "ICO",
+        ImageFormat::Avif => "AVIF",
     }
-    let rgb = img.to_rgb8();
-    rgb.pixels().all(|p| p[0] == p[1] && p[1] == p[2])
 }
 
 /// Preserves the input image color type after operations that may widen to RGBA.

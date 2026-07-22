@@ -115,7 +115,7 @@ impl Image {
         }
 
         let result = crate::image::raw_bytes_to_image(w, h, out, channels)?;
-        Ok(Image::Loaded(result, None))
+        Ok(Image::from_dynamic(result, None))
     }
 
     /// Applies a maximum filter over an odd neighborhood.
@@ -179,6 +179,7 @@ impl Image {
 
         // For palette images: extract palette before materialize
         let palette = self.palette();
+        let palette_alpha = self.palette_alpha();
         let explicit = self.explicit_mode().map(|s| s.to_string());
 
         let img = self.materialize()?;
@@ -234,13 +235,16 @@ impl Image {
             return Ok(Image::Paletted(crate::image::PalettedData {
                 indices,
                 palette: pal,
+                palette_alpha: palette_alpha.unwrap_or_default(),
+                source_format: None,
+                info: None,
             }));
         }
         // Preserve explicit mode (e.g. "1", "P" via explicit_mode)
         if explicit.is_some() {
-            return Ok(Image::Loaded(result, explicit));
+            return Ok(Image::from_dynamic(result, explicit));
         }
-        Ok(Image::Loaded(result, None))
+        Ok(Image::from_dynamic(result, None))
     }
 
     /// Applies a rank filter over an odd neighborhood.

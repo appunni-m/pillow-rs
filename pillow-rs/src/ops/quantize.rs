@@ -1720,7 +1720,7 @@ impl Image {
             pixel[0] = indices.get(i).copied().unwrap_or(0);
         }
         Ok(Image::Pipeline {
-            source: Arc::new(Image::Loaded(
+            source: Arc::new(Image::from_dynamic(
                 DynamicImage::ImageLuma8(out),
                 Some("P".to_string()),
             )),
@@ -1729,6 +1729,7 @@ impl Image {
             explicit_mode: Some("P".to_string()),
             backend: None,
             palette: Some(palette_bytes),
+            palette_alpha: None,
         })
     }
 }

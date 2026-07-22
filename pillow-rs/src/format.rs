@@ -25,6 +25,7 @@ pub fn parse_format_str(s: &str) -> Result<ImageFormat, PilError> {
         "TIFF" | "TIF" => Ok(ImageFormat::Tiff),
         "WEBP" => Ok(ImageFormat::WebP),
         "ICO" => Ok(ImageFormat::Ico),
+        "AVIF" => Ok(ImageFormat::Avif),
         _ => Err(PilError::UnknownFormat(format!(
             "Unsupported format: {}",
             s
