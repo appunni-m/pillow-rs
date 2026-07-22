@@ -2725,6 +2725,11 @@ impl BackendComparisonWorker {
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "ftwinfnt.get_winfnt_header_mutation" => rust_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => rust_winfnt_charmap_probe(case),
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                rust_attach_stream(case)
+            }
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
@@ -3107,6 +3112,11 @@ impl BackendComparisonWorker {
             "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
                 c_has_ps_glyph_names(case)
             }
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                c_attach_stream(case)
+            }
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
@@ -3481,6 +3491,11 @@ impl BackendComparisonWorker {
             "winfnt.charmap_probe" => wasm_winfnt_charmap_probe(case),
             "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
                 wasm_has_ps_glyph_names(case)
+            }
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                wasm_attach_stream(case)
             }
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
@@ -13839,6 +13854,149 @@ fn track_kerning_output(attach_status: FT_Error, rows: Vec<TrackKerningOutputRow
                 })
             })
             .collect::<Vec<_>>()
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn rust_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = rust_attached_afm_kerning_rows(&face, &case.inputs.params)?;
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn c_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = c_attached_afm_kerning_rows(face, &case.inputs.params)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn wasm_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = wasm_attached_afm_kerning_rows(handle, &case.inputs.params)?;
+    wasm_done_face(handle);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn rust_attached_afm_kerning_rows(
+    face: &FT_Face,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = rust_glyph_selector_index(face, &row.left)?;
+            let right_glyph = rust_glyph_selector_index(face, &row.right)?;
+            let mut vector = FT_Vector::default();
+            let status = FT_Get_Kerning(
+                Some(face),
+                left_glyph,
+                right_glyph,
+                row.mode,
+                Some(&mut vector),
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn c_attached_afm_kerning_rows(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = c_glyph_selector_index(face, &row.left)?;
+            let right_glyph = c_glyph_selector_index(face, &row.right)?;
+            let mut vector = c_abi::FT_Vector::default();
+            let status =
+                c_abi::FT_Get_Kerning(face, left_glyph, right_glyph, row.mode, &mut vector);
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn wasm_attached_afm_kerning_rows(
+    handle: usize,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = wasm_glyph_selector_index(handle, &row.left)?;
+            let right_glyph = wasm_glyph_selector_index(handle, &row.right)?;
+            let mut vector = wasm_abi::FontdoneWasmVector::default();
+            let status = wasm_abi::fontdone_wasm_get_kerning(
+                handle,
+                left_glyph,
+                right_glyph,
+                row.mode,
+                &mut vector,
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn attach_stream_output(attach_status: FT_Error, rows: Vec<KerningOutputRow>) -> RunOutput {
+    let mut kerning = kerning_output(rows);
+    let first_error = if attach_status != FT_Err_Ok {
+        attach_status
+    } else {
+        kerning.status.error_code as FT_Error
+    };
+    let post_attach_probe = std::mem::take(&mut kerning.output);
+    let output = json!({
+        "attach_status": attach_status,
+        "status": first_error,
+        "post_attach_probe": post_attach_probe,
     });
     if first_error == FT_Err_Ok {
         ok(output)
@@ -27638,6 +27796,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(optional_symbol_under_test(params));
             Ok(args)
         }
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            let mut args = vec!["--attach-stream".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(attach_stream_kerning_rows_arg(params)?);
+            Ok(args)
+        }
         "freetype.get_kerning" => {
             if kerning_face_is_null(params) {
                 let row = single_kerning_row(params)?;
@@ -29694,6 +29862,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             )?))
         }
         "freetype.get_kerning" => rust_get_kerning(case),
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            rust_attach_stream(case)
+        }
         "freetype.get_track_kerning"
             if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
         {
@@ -30808,6 +30981,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => c_get_gasp(case),
         "tttables.get_cmap_format" => c_get_cmap_format(case),
         "tttables.get_cmap_language_id" => c_get_cmap_language_id(case),
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            c_attach_stream(case)
+        }
         "freetype.get_kerning" => c_get_kerning(case),
         "freetype.get_track_kerning"
             if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
@@ -31820,6 +31998,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => wasm_get_gasp(case),
         "tttables.get_cmap_format" => wasm_get_cmap_format(case),
         "tttables.get_cmap_language_id" => wasm_get_cmap_language_id(case),
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            wasm_attach_stream(case)
+        }
         "freetype.get_kerning" => wasm_get_kerning(case),
         "freetype.get_track_kerning"
             if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
@@ -56239,6 +56422,44 @@ fn kerning_rows_arg(params: &Value) -> Result<String, String> {
         .map(|row| format!("{}|{}|{}", row.left, row.right, row.mode))
         .collect::<Vec<_>>()
         .join(","))
+}
+
+fn attach_stream_kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(attach_stream_kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}|{}", row.left, row.right, row.mode))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn attach_stream_kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
+    let probes = params
+        .get("post_attach_probe")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing post_attach_probe array".to_string())?;
+    if !probes
+        .iter()
+        .any(|value| value.as_str() == Some("FT_Get_Kerning"))
+    {
+        return Err("FT_Attach_Stream success route requires FT_Get_Kerning probe".to_string());
+    }
+    Ok(vec![
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_DEFAULT as u32,
+        },
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_UNFITTED as u32,
+        },
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_UNSCALED as u32,
+        },
+    ])
 }
 
 fn pfr_kerning_rows_arg(params: &Value) -> Result<String, String> {

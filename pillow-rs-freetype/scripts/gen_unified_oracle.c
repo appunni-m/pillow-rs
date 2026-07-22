@@ -21272,6 +21272,123 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--attach-stream")) {
+        const char* attachment_path = argv[7];
+        const char* rows_arg = argv[8];
+        unsigned char* attachment = NULL;
+        long attachment_len = 0;
+        if (load_file(attachment_path, &attachment, &attachment_len) != 0) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        FT_Open_Args open_args;
+        memset(&open_args, 0, sizeof(open_args));
+        open_args.flags = FT_OPEN_MEMORY;
+        open_args.memory_base = attachment;
+        open_args.memory_size = attachment_len;
+        FT_Error attach_error = FT_Attach_Stream(face, &open_args);
+        FT_Error first_error = attach_error;
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            free(attachment);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"attach_status\":%d,\"status\":%d,\"post_attach_probe\":{\"status\":%d,\"kerning_vectors\":[",
+               attach_error,
+               first_error,
+               first_error);
+        char* token = strtok(rows, ",");
+        int first = 1;
+        int have_first_vector = 0;
+        FT_Vector first_vector;
+        first_vector.x = 0;
+        first_vector.y = 0;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                mode_text++;
+                FT_UInt left_glyph = glyph_selector_index(face, left);
+                FT_UInt right_glyph = glyph_selector_index(face, right);
+                FT_UInt mode = (FT_UInt)strtoul(mode_text, NULL, 10);
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_Kerning(face, left_glyph, right_glyph, mode, &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+                if (!have_first_vector) {
+                    first_vector = kerning;
+                    have_first_vector = 1;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld},\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}",
+                       left,
+                       right,
+                       mode,
+                       left_glyph,
+                       right_glyph,
+                       err,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning_units(mode));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"glyph_indexes\":[");
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        token = strtok(rows, ",");
+        first = 1;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":%u,\"right\":%u}",
+                       glyph_selector_index(face, left),
+                       glyph_selector_index(face, right));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld}}}}\n",
+               first_vector.x,
+               first_vector.y,
+               first_vector.x,
+               first_vector.y);
+        free(rows);
+        free(attachment);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-track-kerning")) {
         const char* attachment_path = argv[7];
         const char* rows_arg = argv[8];
@@ -24896,6 +25013,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--attach-stream")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--get-track-kerning")) {
