@@ -16,6 +16,56 @@ This is the authoritative starting point for the next batch. The pending rows
 are still visible and must remain visible until the same declared input runs
 against pinned C, Rust FFI, thin C ABI, and WASM ABI with exact matching output.
 
+Current bulk-reduction sweep on `main` at `7679cbd40`:
+
+```text
+route audit concrete_cases=7294 category_counts={'compile-contract': 2266, 'pending-route': 214, 'real-null-validation': 9, 'real-parity': 4805}
+runtime_parity last verified full run: passed=7075 failed=0 total=7075
+runtime_cases last verified full run: pending=219
+```
+
+The 214 pending-route rows are not primarily duplicate tests. Exact duplicate
+pending `case_id` declarations account for only 12 rows:
+
+- `ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid` x3
+- `ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success` x3
+- `ftimage.FT_GLYPH_FORMAT_SVG.produced_by_svg_glyph_load_when_enabled` x2
+- `ftincrem.FT_Incremental_FuncsRec.glyph_data_success_and_release` x2
+- `ftpfr.FT_Get_PFR_Metrics.pfr_metrics_success` x2
+
+Cleaning those duplicate declarations can reduce audit noise, but it is not the
+main bulk reduction path. The main blockers are shared subsystem surfaces:
+
+| Pending rows | Surface | Current reason | Correct batch strategy |
+|---:|---|---|---|
+| 53 | `ftstroke` path/border/export/glyph stroke geometry | Degenerate no-op path-state rows are real, but real count/export/geometry rows require maintained non-empty path fixtures and a pure-Rust border model matching `src/base/ftstroke.c`. | Continue as one stroker implementation surface: parse manual paths, emit caps/joins/borders, prove counts/export/glyph-stroke rows together. Do not promote optional-output or Set/Rewind rows from empty state. |
+| 47 | GX/OpenType validation (`ftgxval`, `ftotval`) | Most rows require C-openable GX/AAT/OpenType validation fixtures or an enabled validator service. Service-missing/error rows do not prove selected table output, allocation, length, or free semantics. | Treat as validator infrastructure: fixture acquisition/generation, selected/all-table output bytes, validation-buffer lifetime, and free routes. This is a high-count batch only after fixtures and pinned-C service behavior are resolved. |
+| 29 | Rows with no maintained runtime-resolved input | Audit reason is identical: the declared semantic rows have no same input that runs through pinned C, Rust FFI, C ABI, and WASM ABI. Largest groups are old `ftcid`, `ftgxval`, `ftpfr`, and `ttnameid` semantic rows. | Do not mark them real from scalar constants or related fixtures. Either split into concrete maintained rows or delete/retire obsolete duplicate semantic declarations only after confirming the manifest no longer needs them. |
+| 29 | glyph/SVG/object lifecycle (`ftglyph`, `ftimage`, `otsvg`) | Missing OT-SVG fixture and missing owned-glyph/custom-renderer lifecycle facades. Existing outline/bitmap glyph rows do not prove SVG document, transform, allocator, stale-handle, or custom renderer behavior. | Batch by lifecycle facade: owned glyph create/copy/free first; OT-SVG fixture and document route separately; custom renderer lifecycle separately. |
+| 18 | callback/lifecycle infrastructure (`ftcache`, `ftimage`, `ftmodapi`, `ftsystem`, `ftrender`) | Rows need allocator, stream callback, module, cache ownership, or renderer lifecycle event harnesses, not just return-code parity. | Build reusable event-recording facades, then promote related rows in groups. |
+| 14 | format-specific services (`ftbdf`, `ftcid`, `ftpfr`, `t1tables`) | Several are fixture-gated: SFNT-BDF/PCF/PFR/non-SFNT CID. Type1/CFF concrete `t1tables` splits are already real; broad matrix rows still include absent Type42/CID/CFF2 variants. | Acquire/generate real C-openable fixtures and split broad matrix rows by actual format. Do not reuse the already-real Type1/CFF rows as broad proof. |
+| 13 | incremental font interface (`ftincrem`, incremental params) | Needs maintained incremental `FT_Open_Face` fixture with callback event recording, glyph-data ownership, release ordering, and metrics overrides. | Implement one incremental harness and route callback events through all ABI lanes; this can retire many rows together. |
+| 12 | driver/property params (`ftdriver`, `ftparams`) | Needs property routing plus public output proof for CFF/Type1/CID hinting, TrueType interpreter-version glyph effects, sbix ignore behavior, random seed, and stem darkening. | Batch only where the same property route and same fixture prove visible glyph/metric/bitmap output. Scalar property set/get alone is not parity. |
+
+Recommended attack order for bulk reduction:
+
+1. `ftstroke` geometry, because it is the largest single implementation surface
+   and recent degenerate path-state work already established core path state.
+2. Incremental interface, because one event-recording harness can cover many
+   related callback/parameter rows without needing external font formats.
+3. Owned glyph lifecycle, because it shares route plumbing with existing real
+   outline/bitmap glyph rows and can unlock several `ftglyph`/`ftimage` rows.
+4. Validator fixtures/services, because it has high count but is fixture- and
+   pinned-build-gated; start only when real GX/OpenType fixtures are available.
+5. Format-specific fixture acquisition for SFNT-BDF, PCF, PFR, non-SFNT CID,
+   and real OT-SVG.
+
+Do not treat coverage-style line/hash duplication as a parity metric here. The
+route audit artifact records case/runtime/category/reason, not source line
+coverage. For parity, the useful duplicate signal is duplicate `case_id` or
+same declared input/operation; current exact duplicate pending IDs are a small
+noise bucket, not the main blocker.
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained
