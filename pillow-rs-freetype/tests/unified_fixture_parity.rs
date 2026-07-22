@@ -2571,6 +2571,9 @@ impl BackendComparisonWorker {
             "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust))
             }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                rust_inspect_face_rec_initial_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2962,6 +2965,9 @@ impl BackendComparisonWorker {
             "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
             }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                c_inspect_face_rec_initial_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3350,6 +3356,9 @@ impl BackendComparisonWorker {
             }
             "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
                 Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
+            }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                wasm_inspect_face_rec_initial_snapshot(case)
             }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
@@ -27000,6 +27009,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+            let mut args = vec!["--inspect-face-rec-initial".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.inspect_available_sizes" => {
             let mut args = vec!["--inspect-available-sizes".to_string()];
             push_font_source(case, &mut args)?;
@@ -41591,6 +41606,61 @@ fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
         stream: face.memory_stream(),
         ..FT_FaceRecPublic::default()
     }
+}
+
+fn face_rec_initial_snapshot_case(case: &InputCase) -> bool {
+    case.case_id == "freetype.FT_FaceRec.initial_public_fields_match_c"
+}
+
+fn pointer_nullness(is_null: bool) -> &'static str {
+    if is_null { "null" } else { "non-null" }
+}
+
+fn face_rec_initial_snapshot_output(info: &FT_FaceRecPublic) -> Value {
+    json!({
+        "num_faces": info.num_faces,
+        "face_index": info.face_index,
+        "face_flags": info.face_flags,
+        "style_flags": info.style_flags,
+        "num_glyphs": info.num_glyphs,
+        "num_fixed_sizes": info.num_fixed_sizes,
+        "available_sizes_nullness": pointer_nullness(info.available_sizes.is_null()),
+        "bbox": bbox_json(bbox_from_rust_bbox(info.bbox)),
+        "units_per_EM": info.units_per_EM,
+        "ascender": info.ascender,
+        "descender": info.descender,
+        "height": info.height,
+        "max_advance_width": info.max_advance_width,
+        "max_advance_height": info.max_advance_height,
+        "underline_position": info.underline_position,
+        "underline_thickness": info.underline_thickness,
+        "size_nullness": pointer_nullness(info.size.is_null()),
+        "stream_nullness": pointer_nullness(info.stream.is_null())
+    })
+}
+
+fn rust_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    Ok(ok(face_rec_initial_snapshot_output(&rust_face_info(&face))))
+}
+
+fn c_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    let output = face_rec_initial_snapshot_output(&info);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    let output = face_rec_initial_snapshot_output(&info);
+    wasm_done_face(handle);
+    Ok(ok(output))
 }
 
 fn bitmap_sizes_json(sizes: &[FT_Bitmap_Size]) -> Vec<Value> {

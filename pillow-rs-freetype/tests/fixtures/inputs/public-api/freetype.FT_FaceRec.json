@@ -3,6 +3,7 @@
   "subject": "freetype.FT_FaceRec",
   "manifest_cases": [
     "layout_matches_c",
+    "initial_public_fields_match_c",
     "populated_public_fields_match_c"
   ],
   "cases": [
@@ -87,6 +88,61 @@
             "offsets",
             "field_types",
             "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FaceRec.initial_public_fields_match_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "initial_public_fields_match_c",
+      "operation": "freetype.inspect_face_rec",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "stage": "initial_snapshot"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face": "FT_FaceRec stable public scalar and pointer-nullness snapshot immediately after face open"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "num_faces",
+            "face_index",
+            "face_flags",
+            "style_flags",
+            "num_glyphs",
+            "num_fixed_sizes",
+            "available_sizes_nullness",
+            "bbox",
+            "units_per_EM",
+            "ascender",
+            "descender",
+            "height",
+            "max_advance_width",
+            "max_advance_height",
+            "underline_position",
+            "underline_thickness",
+            "size_nullness",
+            "stream_nullness"
           ]
         }
       }

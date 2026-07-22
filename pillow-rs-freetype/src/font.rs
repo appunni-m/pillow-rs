@@ -3084,12 +3084,21 @@ impl Font {
                 .data
                 .vhea
                 .as_ref()
-                .map_or(0, |vhea| i32::from(vhea.advance_height_max)),
+                // FreeType `sfnt_init_face` sets `max_advance_height` from
+                // `vhea.advance_Height_Max` when vertical metrics exist, and
+                // falls back to the face height for scalable faces without
+                // vertical info (`src/sfnt/sfobjs.c`, max_advance_height).
+                .map_or(height, |vhea| i32::from(vhea.advance_height_max)),
             underline_position: self
                 .data
                 .post
                 .as_ref()
-                .map_or(0, |post| post.underline_position),
+                // FreeType converts TrueType `post.underlinePosition` from
+                // top edge to stroke center by subtracting half the underline
+                // thickness (`src/sfnt/sfobjs.c`, underline_position).
+                .map_or(0, |post| {
+                    post.underline_position - post.underline_thickness / 2
+                }),
             underline_thickness: self
                 .data
                 .post

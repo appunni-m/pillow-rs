@@ -369,6 +369,7 @@ REAL_PARITY_OPERATIONS = {
     "charmap.get_char_index",
     "freetype.select_charmap",
     "freetype.set_charmap",
+    "freetype.inspect_face_rec",
     "freetype.inspect_available_sizes",
     "freetype.inspect_charmaps",
     "freetype.charmap_ownership",

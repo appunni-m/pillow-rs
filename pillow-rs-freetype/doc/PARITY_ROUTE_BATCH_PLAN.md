@@ -2667,9 +2667,9 @@ Rows rechecked and intentionally not promoted:
 
 Next non-placeholder implementation targets:
 
-1. Add a concrete `freetype.inspect_face_rec.initial_snapshot` route for one
-   C-openable SFNT face and compare only stable public fields across Rust FFI,
-   C ABI, WASM, and pinned C.
+1. Add the next concrete `freetype.inspect_face_rec` route for post-size or
+   post-glyph-load child-handle identity/nullness after the initial public
+   scalar snapshot has been split and verified.
 2. Add a maintained `FT_OPEN_PATHNAME`/`FT_OPEN_STREAM` route for
    `freetype.open_face_args`, including stream close-event output, before adding
    any pathname/stream split rows.
@@ -2677,3 +2677,37 @@ Next non-placeholder implementation targets:
    pending rows.
 4. Add an SVG-disabled same-input glyph route before promoting any SVG disabled
    classification row.
+
+## 2026-07-22 FT_FaceRec initial public-field split
+
+- Added concrete
+  `freetype.FT_FaceRec.initial_public_fields_match_c` for `DejaVuSans.ttf`
+  through `freetype.inspect_face_rec`.
+- The row compares only stable initial-open public fields across pinned C,
+  Rust FFI, thin C ABI, and WASM ABI: face counts/flags, glyph count, fixed
+  size count, `available_sizes` nullness, bbox, font metrics,
+  `max_advance_*`, underline metrics, active `size` nullness, and `stream`
+  nullness.
+- `freetype.FT_FaceRec.populated_public_fields_match_c` remains pending.  It
+  still declares string contents, charmap arrays/identity, glyph/size/charmap
+  identity, bitmap strikes, auxiliary attachment, and variation mutation.  The
+  initial split must not be treated as full public-record parity.
+- First divergence found by the split:
+  - C `sfnt_init_face` sets `max_advance_height` to
+    `vhea.advance_Height_Max` when vertical metrics exist, otherwise to
+    `root->height` for scalable faces.  Rust previously returned `0` for
+    non-vertical SFNT faces.
+  - C also converts TrueType `post.underlinePosition` from top edge to stroke
+    center by subtracting `post.underlineThickness / 2`.  Rust previously
+    exposed the raw `post` value.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=freetype.FT_FaceRec.initial_public_fields_match_c`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Broader parity: `make fontdone-parity` passed with
+  `runtime_parity: passed=7052 failed=0 total=7052` and
+  `runtime_cases: runnable=7052 pending=226`.
+- Route audit moved from `concrete_cases=7277`, `real-parity=4781`,
+  `pending-route=221` to `concrete_cases=7278`, `real-parity=4782`,
+  `pending-route=221`.
+- Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
+  `make fontdone-lint`, `make fmt`, and `git diff --check`.

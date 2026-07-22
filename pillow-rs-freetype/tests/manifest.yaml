@@ -2322,6 +2322,8 @@ subjects:
     cases:
       - id: layout_matches_c
         description: Size, alignment, and offsets match the pinned C field order from num_faces through internal, including handle, FT_Generic, FT_BBox, FT_ListRec, string pointer, and private pointer fields.
+      - id: initial_public_fields_match_c
+        description: Stable public scalar fields, bbox, and active pointer nullness match the pinned C oracle immediately after opening a scalable SFNT face.
       # needs-input: operation inspect FT_FaceRec immediately after FT_Open_Face/FT_New_Memory_Face and after FT_Set_Char_Size, FT_Load_Glyph, FT_Select_Charmap, FT_Attach_Stream, and variation-coordinate calls; fixture assets scalable SFNT, bitmap-strike font, variable font, and optional auxiliary AFM attachment font; params live FT_Face handles and operation-specific inputs; expected output shape public scalar fields, string contents/pointers, child handle pointers, bbox/metrics, flags, charmap arrays, and available_sizes; comparison rule exact C parity for stable public fields, pointer NULL/non-NULL and identity relationships, and documented mutation behavior after operations.
       - id: populated_public_fields_match_c
         description: Public metadata, strings, flags, metrics, bbox, strike, charmap, glyph, size, and active charmap fields match the pinned C oracle for representative faces and state transitions.

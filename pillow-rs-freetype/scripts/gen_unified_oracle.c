@@ -23033,6 +23033,67 @@ static int emit_available_sizes(int argc, char** argv) {
     return 0;
 }
 
+static void print_face_rec_initial_snapshot(FT_Face face) {
+    printf("{\"num_faces\":%ld", face->num_faces);
+    printf(",\"face_index\":%ld", face->face_index);
+    printf(",\"face_flags\":%ld", face->face_flags);
+    printf(",\"style_flags\":%ld", face->style_flags);
+    printf(",\"num_glyphs\":%ld", face->num_glyphs);
+    printf(",\"num_fixed_sizes\":%d", face->num_fixed_sizes);
+    printf(",\"available_sizes_nullness\":\"%s\"",
+           face->available_sizes ? "non-null" : "null");
+    printf(",\"bbox\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           face->bbox.xMin,
+           face->bbox.yMin,
+           face->bbox.xMax,
+           face->bbox.yMax);
+    printf(",\"units_per_EM\":%u", face->units_per_EM);
+    printf(",\"ascender\":%d", face->ascender);
+    printf(",\"descender\":%d", face->descender);
+    printf(",\"height\":%d", face->height);
+    printf(",\"max_advance_width\":%d", face->max_advance_width);
+    printf(",\"max_advance_height\":%d", face->max_advance_height);
+    printf(",\"underline_position\":%d", face->underline_position);
+    printf(",\"underline_thickness\":%d", face->underline_thickness);
+    printf(",\"size_nullness\":\"%s\"", face->size ? "non-null" : "null");
+    printf(",\"stream_nullness\":\"%s\"", face->stream ? "non-null" : "null");
+    printf("}");
+}
+
+static int emit_face_rec_initial_snapshot(int argc, char** argv) {
+    (void)argc;
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    FT_Face face = NULL;
+    FT_Long face_index = atol(argv[4]);
+    int status = load_memory_face_arg(
+        library, argv[2], argv[3], face_index, &data, &data_len, &face);
+    if (status) {
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_face_rec_initial_snapshot(face);
+    printf("}\n");
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
@@ -25478,6 +25539,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--inspect-available-sizes")) {
         return emit_available_sizes(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--inspect-face-rec-initial")) {
+        return emit_face_rec_initial_snapshot(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--get-sfnt-vhea-mvar-sequence")) {
         return emit_face_or_slot(argc, argv);
