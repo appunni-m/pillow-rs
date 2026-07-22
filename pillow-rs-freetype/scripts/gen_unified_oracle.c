@@ -6565,6 +6565,17 @@ static int emit_get_glyph_null_inputs(void) {
     return 0;
 }
 
+static void print_get_glyph_unsupported_format_payload(FT_GlyphSlot slot) {
+    FT_Glyph glyph = (FT_Glyph)0x1;
+    slot->format = (FT_Glyph_Format)0x12345678;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+
+    print_status(err);
+    printf(",\"output\":{\"rows\":[");
+    print_get_glyph_error_row("unsupported_tag", err, glyph);
+    printf("],\"cleanup_events\":\"none\"}}\n");
+}
+
 static void print_glyph_copy_error_row(const char* probe, FT_Error err, FT_Glyph target) {
     printf("{\"probe\":\"%s\",\"error\":%d,\"target_pointer_class\":\"%s\"}",
            probe,
@@ -22775,7 +22786,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--done-glyph-outline") || streq(command, "--done-glyph-bitmap") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--get-glyph-unsupported-format") || streq(command, "--done-glyph-outline") || streq(command, "--done-glyph-bitmap") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -22830,6 +22841,13 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     if (!err && streq(command, "--glyph-record")) {
         print_get_glyph_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--get-glyph-unsupported-format")) {
+        print_get_glyph_unsupported_format_payload(face->glyph);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -25561,7 +25579,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 8 && (streq(argv[1], "--get-next-char-sequence") || streq(argv[1], "--get-next-char-sequence-null-agindex") || streq(argv[1], "--get-next-char-starts") || streq(argv[1], "--get-next-char-starts-null-agindex"))) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
+    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox") || streq(argv[1], "--get-glyph-unsupported-format"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--active-size-handle")) {

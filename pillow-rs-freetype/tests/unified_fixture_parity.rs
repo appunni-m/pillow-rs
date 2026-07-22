@@ -29001,6 +29001,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftsynth.glyphslot_null_noop" => ftsynth_null_noop_oracle_args(params),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if case.operation == "ftglyph.get_glyph"
+                && params.get("unsupported_slot_formats").is_some()
+            {
+                let mut args = vec!["--get-glyph-unsupported-format".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
+            }
             if case.operation == "ftglyph.get_glyph" && params.get("probes").is_some() {
                 return Ok(vec!["--get-glyph-null-inputs".to_string()]);
             }
@@ -30320,6 +30330,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsynth.glyphslot_embolden_after_load" => rust_ftsynth_weight(case, true),
         "ftsynth.glyphslot_null_noop" => rust_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if case.operation == "ftglyph.get_glyph"
+                && case.inputs.params.get("unsupported_slot_formats").is_some()
+            {
+                let face = open_face(case)?;
+                return rust_get_glyph_unsupported_format(&face);
+            }
             if bitmap_glyph_record_paths_case(case) {
                 return rust_bitmap_glyph_record_paths(case);
             }
@@ -31399,6 +31415,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             c_get_glyph_null_inputs()
         }
+        "ftglyph.get_glyph" if case.inputs.params.get("unsupported_slot_formats").is_some() => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_get_glyph_unsupported_format(face);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
             let (library, face) = c_open_face(case)?;
             let output = c_get_glyph_advance_boundaries(face, &case.inputs.params);
@@ -32410,6 +32433,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             wasm_get_glyph_null_inputs()
+        }
+        "ftglyph.get_glyph" if case.inputs.params.get("unsupported_slot_formats").is_some() => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_get_glyph_unsupported_format(handle);
+            wasm_done_face(handle);
+            output
         }
         "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
             let handle = wasm_open_face(case)?;
@@ -39019,6 +39048,18 @@ fn get_glyph_null_inputs_output(rows: Vec<Value>) -> RunOutput {
     error_with_output(first_error, json!({ "rows": rows }))
 }
 
+fn get_glyph_unsupported_format_output(error: FT_Error, output_pointer_class: &str) -> RunOutput {
+    error_with_output(
+        error,
+        json!({
+            "rows": [
+                get_glyph_error_row("unsupported_tag", error, output_pointer_class)
+            ],
+            "cleanup_events": "none"
+        }),
+    )
+}
+
 fn advance_26_6_values(params: &Value) -> Result<Vec<FT_Pos>, String> {
     array_param(params, "advance_26_6_values")?
         .iter()
@@ -39233,6 +39274,51 @@ fn wasm_get_glyph_null_inputs() -> Result<RunOutput, String> {
         get_glyph_error_row("null_aglyph", null_output_error, "null"),
     ];
     Ok(get_glyph_null_inputs_output(rows))
+}
+
+fn rust_get_glyph_unsupported_format(face: &FT_Face) -> Result<RunOutput, String> {
+    let slot = FT_Unsupported_GlyphSlot(face);
+    let error = FT_Get_Outline_Glyph(Some(&slot)).map_or_else(|err| err, |_| FT_Err_Ok);
+    // FreeType's FT_Get_Glyph exits before writing through aglyph for an
+    // unsupported public slot format, so a caller-owned sentinel remains set.
+    Ok(get_glyph_unsupported_format_output(error, "non_null"))
+}
+
+fn c_get_glyph_unsupported_format(face: c_abi::FT_Face) -> Result<RunOutput, String> {
+    let setup = c_abi::abi_set_unsupported_glyph_slot(face);
+    let mut glyph = 1usize as c_abi::FT_Glyph;
+    let error = if setup == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        c_abi::FT_Get_Glyph(slot, &mut glyph)
+    } else {
+        setup
+    };
+    if !glyph.is_null() && error == FT_Err_Ok {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    Ok(get_glyph_unsupported_format_output(
+        error,
+        if glyph.is_null() { "null" } else { "non_null" },
+    ))
+}
+
+fn wasm_get_glyph_unsupported_format(handle: usize) -> Result<RunOutput, String> {
+    let setup = wasm_abi::abi_set_unsupported_glyph_slot(handle);
+    let mut glyph = 1usize;
+    let error = if setup == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+    } else {
+        setup
+    };
+    if glyph != 0 && error == FT_Err_Ok {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(get_glyph_unsupported_format_output(
+        error,
+        if glyph == 0 { "null" } else { "non_null" },
+    ))
 }
 
 fn done_glyph_null_output() -> RunOutput {

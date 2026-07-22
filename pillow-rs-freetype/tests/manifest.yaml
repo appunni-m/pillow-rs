@@ -6208,6 +6208,8 @@ subjects:
         description: When SVG glyph support is enabled and the slot contains a valid FT_SVG_Document, copies the SVG document bytes, metrics, glyph range, transform, and delta into FT_SvgGlyphRec.
       - id: error_null_slot_or_output
         description: A null slot returns FT_Err_Invalid_Slot_Handle, a null aglyph returns FT_Err_Invalid_Argument, and C output write/preservation behavior is recorded exactly.
+      - id: error_unsupported_synthetic_format
+        description: A live glyph slot with a synthetic unsupported public format returns FT_Err_Invalid_Glyph_Format and preserves the caller's output glyph pointer.
       - id: error_unsupported_format_or_bad_slot_payload
         description: Unsupported glyph formats, mismatched slot format for the class init hook, null SVG document, or zero-length SVG document return C errors and leave *aglyph null.
       - id: error_advance_out_of_16_16_range
