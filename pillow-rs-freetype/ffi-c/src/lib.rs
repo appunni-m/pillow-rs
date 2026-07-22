@@ -1516,6 +1516,7 @@ struct LibraryState {
     allocation_memory: FT_Memory,
     allocation_block: FT_Pointer,
     outline_renderer: FT_RendererRec,
+    synthetic_renderer: FT_RendererRec,
     synthetic_module_handle: Box<FT_ModuleRec>,
 }
 
@@ -1528,6 +1529,10 @@ impl LibraryState {
             outline_renderer: FT_RendererRec {
                 format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
                 module_name: "smooth",
+            },
+            synthetic_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "fixture_renderer",
             },
             synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
@@ -1545,6 +1550,10 @@ impl LibraryState {
             outline_renderer: FT_RendererRec {
                 format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
                 module_name: "smooth",
+            },
+            synthetic_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "fixture_renderer",
             },
             synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
@@ -3030,6 +3039,11 @@ pub extern "C" fn FT_Get_Module(library: FT_Library, module_name: *const FT_Stri
         return ptr::null_mut();
     };
     if rust_ffi::FT_Library_Has_Module(Some(&state.inner), name) {
+        if rust_ffi::FT_Library_Module_Flags(Some(&state.inner), name)
+            .is_some_and(|flags| flags & rust_ffi::FT_MODULE_RENDERER as FT_ULong != 0)
+        {
+            return (&mut state.synthetic_renderer as *mut FT_RendererRec).cast::<FT_ModuleRec>();
+        }
         (&mut *state.synthetic_module_handle) as *mut FT_ModuleRec
     } else {
         ptr::null_mut()
@@ -3105,6 +3119,10 @@ pub extern "C" fn FT_Get_Renderer(library: FT_Library, format: FT_Glyph_Format) 
         && module_name == state.outline_renderer.module_name
     {
         &mut state.outline_renderer
+    } else if glyph_format == state.synthetic_renderer.format
+        && module_name == state.synthetic_renderer.module_name
+    {
+        &mut state.synthetic_renderer
     } else {
         ptr::null_mut()
     }
@@ -3127,17 +3145,22 @@ pub extern "C" fn FT_Set_Renderer(
         return rust_ffi::FT_Err_Invalid_Argument;
     }
     let owned_renderer = &mut state.outline_renderer as *mut FT_RendererRec;
-    if renderer.as_ptr() != owned_renderer {
+    let synthetic_renderer = &mut state.synthetic_renderer as *mut FT_RendererRec;
+    let renderer_name = if renderer.as_ptr() == owned_renderer {
+        state.outline_renderer.module_name
+    } else if renderer.as_ptr() == synthetic_renderer {
+        state.synthetic_renderer.module_name
+    } else {
         return rust_ffi::FT_Err_Invalid_Argument;
-    }
+    };
     // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` performs raw list
     // membership validation in the ABI layer, then updates the library's
     // current outline renderer.  Parameter callbacks are not used by the
     // default smooth renderer for this no-parameter parity route.
     rust_ffi::FT_Library_Set_Renderer_By_Format(
         Some(&mut state.inner),
-        state.outline_renderer.format,
-        state.outline_renderer.module_name,
+        rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+        renderer_name,
     )
 }
 

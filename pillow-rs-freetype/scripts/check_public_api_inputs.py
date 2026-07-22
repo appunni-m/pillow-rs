@@ -3164,6 +3164,17 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "null-library and non-final refcount rows are not final destruction"
         )
     if row.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration":
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_then_FT_Add_Default_Modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_renderer"
+            and "FT_MODULE_RENDERER" in row.params["module_class"].get("module_flags", [])
+            and row.params["module_class"].get("module_interface")
+            == "synthetic_renderer_interface"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -6645,6 +6656,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration"
     ):
         return "FT_MODULE_STYLER registration validates stored styler module flags, FT_Get_Module lookup, private interface presence, module_init callback, and unchanged outline renderer routing through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration"
+    ):
+        return "FT_MODULE_RENDERER registration validates renderer module insertion, FT_Get_Module lookup, stored renderer class fields, module_init callback, preserved default outline renderer lookup, and FT_Set_Renderer membership for the installed renderer through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.add_module"
         and row.case_id == "ftmodapi.FT_Add_Module.rejects_null_library"

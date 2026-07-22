@@ -23595,9 +23595,11 @@ fn add_module_minimal_output(
     module_count: usize,
     lookup_present: bool,
     info: Option<FT_Installed_Module_Info>,
+    module_size_label: &'static str,
     outline_renderer_present_before: bool,
     outline_renderer_present_after: bool,
     outline_renderer_identity_preserved: bool,
+    renderer_membership: Option<Value>,
 ) -> RunOutput {
     let output = json!({
         "status": status,
@@ -23605,7 +23607,7 @@ fn add_module_minimal_output(
         "lookup_result": {"nullness": !lookup_present},
         "stored_class_fields": info.map(|info| json!({
             "module_flags": info.module_flags,
-            "module_size": "sizeof_synthetic_module",
+            "module_size": module_size_label,
             "module_name": info.module_name,
             "module_version": info.module_version,
             "module_requires": 0x0002_0000,
@@ -23616,6 +23618,7 @@ fn add_module_minimal_output(
             "outline_renderer_present_after": outline_renderer_present_after,
             "outline_renderer_identity_preserved": outline_renderer_identity_preserved,
         },
+        "renderer_membership": renderer_membership,
         "callback_log": if info.is_some_and(|info| info.init_called) {
             json!(["module_init"])
         } else {
@@ -23634,6 +23637,8 @@ struct AddModuleFixtureSpec {
     module_flags: FT_ULong,
     module_interface_present: bool,
     add_default_modules: bool,
+    module_size_label: &'static str,
+    is_renderer: bool,
 }
 
 fn add_module_fixture_spec(case: &InputCase) -> Option<AddModuleFixtureSpec> {
@@ -23643,12 +23648,24 @@ fn add_module_fixture_spec(case: &InputCase) -> Option<AddModuleFixtureSpec> {
             module_flags: 0,
             module_interface_present: false,
             add_default_modules: false,
+            module_size_label: "sizeof_synthetic_module",
+            is_renderer: false,
+        }),
+        "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_renderer",
+            module_flags: FT_MODULE_RENDERER as FT_ULong,
+            module_interface_present: true,
+            add_default_modules: true,
+            module_size_label: "sizeof_synthetic_renderer_module",
+            is_renderer: true,
         }),
         "ftmodapi.FT_MODULE_STYLER.styler_module_registration" => Some(AddModuleFixtureSpec {
             module_name: "fixture_styler",
             module_flags: FT_MODULE_STYLER as FT_ULong,
             module_interface_present: true,
             add_default_modules: true,
+            module_size_label: "sizeof_synthetic_module",
+            is_renderer: false,
         }),
         _ => None,
     }
@@ -23681,9 +23698,26 @@ fn rust_add_module(case: &InputCase) -> Result<RunOutput, String> {
         FT_Library_Module_Count(Some(&library)),
         FT_Library_Has_Module(Some(&library), spec.module_name),
         FT_Library_Synthetic_Module_Info(Some(&library), spec.module_name),
+        spec.module_size_label,
         outline_renderer_before.is_some(),
         outline_renderer_after.is_some(),
         outline_renderer_before == outline_renderer_after,
+        if spec.is_renderer {
+            let set_status = FT_Library_Set_Renderer_By_Format(
+                Some(&mut library),
+                FT_GLYPH_FORMAT_OUTLINE,
+                spec.module_name,
+            );
+            let current_renderer =
+                FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE)
+                    .map(|(name, _, _, _)| name);
+            Some(json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": current_renderer,
+            }))
+        } else {
+            None
+        },
     ))
 }
 
@@ -23698,6 +23732,7 @@ fn c_add_module(case: &InputCase) -> Result<RunOutput, String> {
     let outline_renderer_before = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
     let module_name = match spec.module_name {
         "fixture_minimal" => c"fixture_minimal".as_ptr(),
+        "fixture_renderer" => c"fixture_renderer".as_ptr(),
         "fixture_styler" => c"fixture_styler".as_ptr(),
         _ => return Err(format!("unsupported module fixture {}", spec.module_name)),
     };
@@ -23724,9 +23759,27 @@ fn c_add_module(case: &InputCase) -> Result<RunOutput, String> {
         c_abi::abi_support_library_module_count(library),
         !lookup.is_null(),
         c_abi::abi_support_synthetic_module_info(library, spec.module_name),
+        spec.module_size_label,
         !outline_renderer_before.is_null(),
         !outline_renderer_after.is_null(),
         outline_renderer_before == outline_renderer_after,
+        if spec.is_renderer {
+            let renderer = lookup.cast::<c_abi::FT_RendererRec>();
+            let set_status = c_abi::FT_Set_Renderer(library, renderer, 0, ptr::null_mut());
+            let current_renderer = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+            Some(json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": if current_renderer == renderer {
+                    spec.module_name
+                } else if current_renderer.is_null() {
+                    "null"
+                } else {
+                    "other"
+                },
+            }))
+        } else {
+            None
+        },
     );
     c_done_library(library);
     Ok(output)
@@ -23744,6 +23797,7 @@ fn wasm_add_module(case: &InputCase) -> Result<RunOutput, String> {
         outline_renderer_present_before,
         outline_renderer_present_after,
         outline_renderer_identity_preserved,
+        renderer_membership,
     ) = wasm_abi::abi_support_add_synthetic_module_observation(
         spec.module_name,
         spec.module_flags,
@@ -23755,9 +23809,16 @@ fn wasm_add_module(case: &InputCase) -> Result<RunOutput, String> {
         module_count,
         lookup_present,
         info,
+        spec.module_size_label,
         outline_renderer_present_before,
         outline_renderer_present_after,
         outline_renderer_identity_preserved,
+        renderer_membership.map(|(set_status, current_renderer)| {
+            json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": current_renderer,
+            })
+        }),
     ))
 }
 
@@ -28814,6 +28875,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success" =>
         {
             Ok(vec!["--add-module-minimal".to_string()])
+        }
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration" =>
+        {
+            Ok(vec!["--add-module-renderer".to_string()])
         }
         "ftmodapi.add_module"
             if case.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration" =>

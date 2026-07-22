@@ -3158,6 +3158,48 @@ Priority for the next real batches:
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
 
+### Split FT_MODULE_RENDERER synthetic registration: 2026-07-22
+
+- Added the focused same-input route
+  `ftmodapi.FT_MODULE_RENDERER.renderer_module_registration`.
+- Added a pinned C oracle fixture with a real `FT_Renderer_Class` whose root
+  module class uses `FT_MODULE_RENDERER`, `sizeof(FT_RendererRec)`,
+  `fixture_renderer`, a non-null synthetic renderer interface, and a recorded
+  `module_init` callback.  The route proves renderer-list membership by
+  calling `FT_Set_Renderer` with the installed module handle after
+  `FT_Add_Module`.
+- C behavior covered: FreeType 2.14.3 `src/base/ftobjs.c:ft_add_renderer`
+  stores the renderer class, glyph format, and renderer-list node before
+  `module_init`, then `FT_Add_Module` inserts the module.  Because defaults are
+  already registered, `FT_Get_Renderer(OUTLINE)` still returns the first
+  default outline renderer until `FT_Set_Renderer` moves the installed
+  renderer current.
+- First divergence during focused verification: after adding
+  `fixture_renderer`, pinned C accepted `FT_Set_Renderer(library,
+  fixture_renderer, 0, NULL)` and made `fixture_renderer` current; Rust kept
+  `smooth`.  The root cause was core renderer membership validation checking
+  only default `module_names` before the synthetic-renderer branch.  The fix
+  allows a synthetic module to pass that validation only when its stored
+  module flags contain `FT_MODULE_RENDERER`.
+- Thin ABI impact: the C ABI now owns two opaque renderer handles for a
+  library, the default outline renderer and the synthetic renderer, while core
+  owns renderer membership and current-renderer behavior.  WASM observes the
+  same core state through test support.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_MODULE_RENDERER.renderer_module_registration`
+    passed `1/1`.
+- Route audit after the split:
+  `concrete_cases=7294`, `real-parity=4802`, `pending-route=217`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7072 failed=0
+    total=7072`, pending `222`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7294`, `real-parity=4802`, `pending-route=217`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
+
 Pre-split clean-main baseline after `f566ff7c6`:
 
 - Route audit:

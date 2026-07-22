@@ -516,6 +516,7 @@ static void* fixture_module_get_interface(FT_Module module, const char* name) {
 static int emit_add_module_fixture(const char* module_name,
                                    FT_ULong module_flags,
                                    const void* module_interface,
+                                   const char* module_size_label,
                                    int add_default_modules) {
     fixture_module_init_calls = 0;
     fixture_module_done_calls = 0;
@@ -558,7 +559,7 @@ static int emit_add_module_fixture(const char* module_name,
     print_json_bool(module == NULL);
     printf("},\"stored_class_fields\":{");
     printf("\"module_flags\":%lu,", (unsigned long)fixture_class.module_flags);
-    printf("\"module_size\":\"sizeof_synthetic_module\",");
+    printf("\"module_size\":\"%s\",", module_size_label);
     printf("\"module_name\":\"%s\",", module_name);
     printf("\"module_version\":%ld,", (long)fixture_class.module_version);
     printf("\"module_requires\":%ld,", (long)fixture_class.module_requires);
@@ -571,7 +572,7 @@ static int emit_add_module_fixture(const char* module_name,
     print_json_bool(outline_renderer_after != NULL);
     printf(",\"outline_renderer_identity_preserved\":");
     print_json_bool(outline_renderer_before == outline_renderer_after);
-    printf("},\"callback_log\":[");
+    printf("},\"renderer_membership\":null,\"callback_log\":[");
     if (fixture_module_init_calls > 0) {
         printf("\"module_init\"");
     }
@@ -581,7 +582,7 @@ static int emit_add_module_fixture(const char* module_name,
 }
 
 static int emit_add_module_minimal(void) {
-    return emit_add_module_fixture("fixture_minimal", 0, NULL, 0);
+    return emit_add_module_fixture("fixture_minimal", 0, NULL, "sizeof_synthetic_module", 0);
 }
 
 static int emit_add_module_styler(void) {
@@ -589,7 +590,93 @@ static int emit_add_module_styler(void) {
     return emit_add_module_fixture("fixture_styler",
                                    FT_MODULE_STYLER,
                                    &fixture_private_interface,
+                                   "sizeof_synthetic_module",
                                    1);
+}
+
+static int emit_add_module_renderer(void) {
+    fixture_module_init_calls = 0;
+    fixture_module_done_calls = 0;
+    struct FT_MemoryRec_ memory = {0};
+    memory.alloc = oracle_alloc;
+    memory.free = oracle_free;
+    memory.realloc = oracle_realloc;
+    FT_Library library = NULL;
+    FT_Error err = FT_New_Library(&memory, &library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"error\":%d}}\n", err);
+        return 0;
+    }
+    FT_Add_Default_Modules(library);
+    FT_Renderer outline_renderer_before = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    static const char synthetic_renderer_interface = 0;
+    FT_Renderer_Class fixture_renderer_class = {
+        {
+            FT_MODULE_RENDERER,
+            sizeof(FT_RendererRec),
+            "fixture_renderer",
+            0x00010000L,
+            0x00020000L,
+            &synthetic_renderer_interface,
+            fixture_module_init,
+            fixture_module_done,
+            fixture_module_get_interface
+        },
+        FT_GLYPH_FORMAT_OUTLINE,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    };
+    err = FT_Add_Module(library, &fixture_renderer_class.root);
+    FT_Module module = FT_Get_Module(library, "fixture_renderer");
+    FT_Renderer outline_renderer_after = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    FT_Error set_renderer_status = module
+        ? FT_Set_Renderer(library, (FT_Renderer)module, 0, NULL)
+        : FT_Err_Invalid_Argument;
+    FT_Renderer outline_renderer_after_set = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", err);
+    printf("\"module_count\":%u,", library ? library->num_modules : 0);
+    printf("\"lookup_result\":{\"nullness\":");
+    print_json_bool(module == NULL);
+    printf("},\"stored_class_fields\":{");
+    printf("\"module_flags\":%lu,", (unsigned long)fixture_renderer_class.root.module_flags);
+    printf("\"module_size\":\"sizeof_synthetic_renderer_module\",");
+    printf("\"module_name\":\"fixture_renderer\",");
+    printf("\"module_version\":%ld,", (long)fixture_renderer_class.root.module_version);
+    printf("\"module_requires\":%ld,", (long)fixture_renderer_class.root.module_requires);
+    printf("\"module_interface_nullness\":");
+    print_json_bool(fixture_renderer_class.root.module_interface == NULL);
+    printf("},\"routing_effects\":{");
+    printf("\"outline_renderer_present_before\":");
+    print_json_bool(outline_renderer_before != NULL);
+    printf(",\"outline_renderer_present_after\":");
+    print_json_bool(outline_renderer_after != NULL);
+    printf(",\"outline_renderer_identity_preserved\":");
+    print_json_bool(outline_renderer_before == outline_renderer_after);
+    printf("},\"renderer_membership\":{");
+    printf("\"set_renderer_status\":%d,", set_renderer_status);
+    printf("\"current_renderer_after_set\":");
+    if (outline_renderer_after_set == (FT_Renderer)module) {
+        printf("\"fixture_renderer\"");
+    } else if (outline_renderer_after_set == NULL) {
+        printf("\"null\"");
+    } else {
+        printf("\"other\"");
+    }
+    printf("},\"callback_log\":[");
+    if (fixture_module_init_calls > 0) {
+        printf("\"module_init\"");
+    }
+    printf("]}}\n");
+    FT_Done_Library(library);
+    return 0;
 }
 
 static void dirty_bitmap(FT_Bitmap* bitmap) {
@@ -25969,6 +26056,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--add-module-styler")) {
         return emit_add_module_styler();
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-renderer")) {
+        return emit_add_module_renderer();
     }
     if (argc == 6 && streq(argv[1], "--image-cache-new-route")) {
         return emit_image_cache_new_route(argc, argv);
