@@ -2913,3 +2913,40 @@ Duplicate-route findings from the same audit pass:
   - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
+
+### Split external-stream and unparsed stroker lifecycle rows: 2026-07-22
+
+- Added focused same-input rows for maintained routes that already compare
+  pinned C, Rust FFI, thin C ABI, and WASM ABI output:
+  - `freetype.FT_Open_Args.stream_source_success_matches_c`
+  - `ftsystem.FT_Stream.valid_external_memory_stream_face_open`
+  - `ftsystem.FT_StreamRec.external_base_close_fields_match_c`
+  - `ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c`
+- Kept the broader rows pending:
+  - `FT_Open_Args.open_face_consumes_args_like_c` still includes pathname,
+    driver, params, invalid-source, and broader source-selection behavior.
+  - `FT_Stream.external_stream_runtime_contract` and
+    `FT_StreamRec.callback_stream_field_contract` still require malformed
+    read/seek callback harnesses.
+  - `FT_Stroker.lifecycle_contract` still requires real path commands, counts,
+    and exported geometry.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_Open_Args.stream_source_success_matches_c`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=ftsystem.FT_Stream.valid_external_memory_stream_face_open`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=ftsystem.FT_StreamRec.external_base_close_fields_match_c`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c`
+    passed `1/1`.
+- Route audit after adding the split rows:
+  `concrete_cases=7293`, `real-parity=4797`, `pending-route=221`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7067 failed=0
+    total=7067`, pending `226`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7293`, `real-parity=4797`, `pending-route=221`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.

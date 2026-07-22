@@ -21,6 +21,7 @@ Current classification
   - `FT_Stroker_Done.null_stroker_noop`
   - `FT_Stroker_New.valid_library_allocates_stroker`
   - `FT_Stroker_Done.valid_stroker_releases_buffers`
+  - `FT_Stroker.unparsed_handle_lifecycle_matches_c`
   - `FT_Stroker_Export.invalid_inputs_noop`
   - `FT_Stroker_ExportBorder.invalid_inputs_or_border_noop`
 - Must stay pending until real geometry exists:
@@ -63,3 +64,7 @@ Notes
 - FreeType reference is `freetype/src/base/ftstroke.c`.
 - A row that only observes "no crash" is not geometry parity.
 - A row that only observes Rust-private `StrokerState` is not C parity.
+- `FT_Stroker.unparsed_handle_lifecycle_matches_c` is intentionally narrower
+  than `FT_Stroker.lifecycle_contract`: it proves constructor, setter, unparsed
+  export no-op, rewind, and destruction behavior through the same C/Rust/C
+  ABI/WASM harness, but it does not claim path commands, counts, or geometry.
