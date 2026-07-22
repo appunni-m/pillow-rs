@@ -4,6 +4,7 @@
   "manifest_cases": [
     "layout_matches_c",
     "initial_public_fields_match_c",
+    "post_size_public_fields_match_c",
     "populated_public_fields_match_c"
   ],
   "cases": [
@@ -143,6 +144,76 @@
             "underline_thickness",
             "size_nullness",
             "stream_nullness"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FaceRec.post_size_public_fields_match_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "post_size_public_fields_match_c",
+      "operation": "freetype.inspect_face_rec",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "stage": "post_size_snapshot",
+          "request": {
+            "char_width_26_6": 0,
+            "char_height_26_6": 1536,
+            "horz_resolution": 72,
+            "vert_resolution": 72
+          }
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "face": "FT_FaceRec stable public scalar and pointer-nullness snapshot after FT_Set_Char_Size",
+          "size_metrics": "active FT_Size_Metrics record after the size mutation"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "face.num_faces",
+            "face.face_index",
+            "face.face_flags",
+            "face.style_flags",
+            "face.num_glyphs",
+            "face.num_fixed_sizes",
+            "face.available_sizes_nullness",
+            "face.bbox",
+            "face.units_per_EM",
+            "face.ascender",
+            "face.descender",
+            "face.height",
+            "face.max_advance_width",
+            "face.max_advance_height",
+            "face.underline_position",
+            "face.underline_thickness",
+            "face.size_nullness",
+            "face.stream_nullness",
+            "size_metrics.x_ppem",
+            "size_metrics.y_ppem",
+            "size_metrics.x_scale",
+            "size_metrics.y_scale",
+            "size_metrics.ascender",
+            "size_metrics.descender",
+            "size_metrics.height",
+            "size_metrics.max_advance"
           ]
         }
       }

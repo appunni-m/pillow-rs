@@ -2574,6 +2574,9 @@ impl BackendComparisonWorker {
             "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
                 rust_inspect_face_rec_initial_snapshot(case)
             }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                rust_inspect_face_rec_post_size_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2968,6 +2971,9 @@ impl BackendComparisonWorker {
             "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
                 c_inspect_face_rec_initial_snapshot(case)
             }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                c_inspect_face_rec_post_size_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3359,6 +3365,9 @@ impl BackendComparisonWorker {
             }
             "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
                 wasm_inspect_face_rec_initial_snapshot(case)
+            }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                wasm_inspect_face_rec_post_size_snapshot(case)
             }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
@@ -27015,6 +27024,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+            let row = char_size_rows(params)?
+                .into_iter()
+                .next()
+                .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+            let mut args = vec!["--inspect-face-rec-post-size".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(row.char_width.to_string());
+            args.push(row.char_height.to_string());
+            args.push(row.horz_resolution.to_string());
+            args.push(row.vert_resolution.to_string());
+            Ok(args)
+        }
         "freetype.inspect_available_sizes" => {
             let mut args = vec!["--inspect-available-sizes".to_string()];
             push_font_source(case, &mut args)?;
@@ -41698,6 +41721,10 @@ fn face_rec_initial_snapshot_case(case: &InputCase) -> bool {
     case.case_id == "freetype.FT_FaceRec.initial_public_fields_match_c"
 }
 
+fn face_rec_post_size_snapshot_case(case: &InputCase) -> bool {
+    case.case_id == "freetype.FT_FaceRec.post_size_public_fields_match_c"
+}
+
 fn pointer_nullness(is_null: bool) -> &'static str {
     if is_null { "null" } else { "non-null" }
 }
@@ -41747,6 +41774,99 @@ fn wasm_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput,
     let output = face_rec_initial_snapshot_output(&info);
     wasm_done_face(handle);
     Ok(ok(output))
+}
+
+fn face_rec_post_size_snapshot_output(info: &FT_FaceRecPublic, metrics: Value) -> Value {
+    json!({
+        "face": face_rec_initial_snapshot_output(info),
+        "size_metrics": metrics
+    })
+}
+
+fn rust_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut face =
+        rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = FT_Set_Char_Size(
+        &mut face,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(face_rec_post_size_snapshot_output(
+        &rust_face_info(&face),
+        size_metrics_json(&face.size_metrics),
+    )))
+}
+
+fn c_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = c_abi::FT_Set_Char_Size(
+        face,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    let output = if err == FT_Err_Ok {
+        let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+        Some(face_rec_post_size_snapshot_output(
+            &info,
+            c_size_metrics_json(face)?,
+        ))
+    } else {
+        None
+    };
+    c_done_face(face);
+    c_done_library(library);
+    if let Some(output) = output {
+        Ok(ok(output))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = wasm_abi::fontdone_wasm_set_char_size(
+        handle,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    let output = if err == FT_Err_Ok {
+        let info =
+            wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+        Some(face_rec_post_size_snapshot_output(
+            &info,
+            wasm_size_metrics_value(handle)?,
+        ))
+    } else {
+        None
+    };
+    wasm_done_face(handle);
+    if let Some(output) = output {
+        Ok(ok(output))
+    } else {
+        Ok(error(err))
+    }
 }
 
 fn bitmap_sizes_json(sizes: &[FT_Bitmap_Size]) -> Vec<Value> {

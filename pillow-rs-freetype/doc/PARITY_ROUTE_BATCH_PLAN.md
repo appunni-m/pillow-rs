@@ -2667,9 +2667,9 @@ Rows rechecked and intentionally not promoted:
 
 Next non-placeholder implementation targets:
 
-1. Add the next concrete `freetype.inspect_face_rec` route for post-size or
-   post-glyph-load child-handle identity/nullness after the initial public
-   scalar snapshot has been split and verified.
+1. Add the next concrete `freetype.inspect_face_rec` route for post-glyph-load
+   public-record fields that are not already covered by
+   `freetype.FT_Face.owns_slot_size_and_charmaps`.
 2. Add a maintained `FT_OPEN_PATHNAME`/`FT_OPEN_STREAM` route for
    `freetype.open_face_args`, including stream close-event output, before adding
    any pathname/stream split rows.
@@ -2748,3 +2748,32 @@ Duplicate-route findings from the same audit pass:
   `FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership`; preferred-name
   params are covered by the `ftparams.*` rows.  The broad `FT_Open_Args` row
   remains pending for mixed driver/SBIX/argument-dispatch behavior.
+
+## 2026-07-22 FT_FaceRec post-size public-field split
+
+- Added concrete
+  `freetype.FT_FaceRec.post_size_public_fields_match_c` for `DejaVuSans.ttf`
+  through `freetype.inspect_face_rec`.
+- The row opens the face, calls `FT_Set_Char_Size` with a 24ppem 72dpi
+  character-size request, then compares stable `FT_FaceRec` public scalar
+  fields, pointer nullness, and the active `FT_Size_Metrics` record across
+  pinned C, Rust FFI, thin C ABI, and WASM ABI.
+- This is intentionally not the duplicate child-handle identity split.  It
+  proves the post-size public-record stage and exact size metrics; active
+  slot/size/charmap ownership is still covered by
+  `freetype.FT_Face.owns_slot_size_and_charmaps`.
+- `freetype.FT_FaceRec.populated_public_fields_match_c` remains pending.  It
+  still declares string contents, charmap arrays/identity, glyph load effects,
+  bitmap strikes, auxiliary attachment, and variation mutation.  This post-size
+  split must not be treated as full public-record parity.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=freetype.FT_FaceRec.post_size_public_fields_match_c`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Broader parity: `make fontdone-parity` passed with
+  `runtime_parity: passed=7054 failed=0 total=7054` and
+  `runtime_cases: runnable=7054 pending=226`.
+- Route audit moved from `concrete_cases=7279`, `real-parity=4783`,
+  `pending-route=221` to `concrete_cases=7280`, `real-parity=4784`,
+  `pending-route=221`.
+- Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
+  `make fontdone-lint`, `make fmt`, and `git diff --check`.
