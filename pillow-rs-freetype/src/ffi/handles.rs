@@ -21,6 +21,8 @@ use super::convert::{
     FT_LOAD_TARGET_MODE, error_to_ft, glyph_format_from_core, load_flag_for_render_mode,
     load_flags_to_core, render_mode_to_core,
 };
+#[cfg(any(test, feature = "abi-test-support"))]
+use super::types::FT_PaintFormat;
 use super::types::{
     BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
     FT_BitmapGlyphOwned, FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char,
@@ -30,11 +32,11 @@ use super::types::{
     FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
     FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
     FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
-    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintFormat,
-    FT_PaintGlyph, FT_PaintLinearGradient, FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale,
-    FT_PaintSkew, FT_PaintSolid, FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate,
-    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
-    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph,
+    FT_PaintLinearGradient, FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale, FT_PaintSkew,
+    FT_PaintSolid, FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate, FT_Palette_Data,
+    FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode,
+    FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
     FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
     FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
     FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, FTC_Manager, FTC_Node,
@@ -1275,6 +1277,7 @@ pub struct FT_Face {
     colr_v1: Option<Rc<ColrV1State>>,
     have_foreground_color: Rc<RefCell<bool>>,
     foreground_color: Rc<RefCell<FT_Color>>,
+    afm_metrics: Rc<RefCell<Option<AfmMetricsState>>>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
@@ -1282,6 +1285,20 @@ pub struct FT_Face {
     increase_x_height: FT_UInt,
     glyph_to_script_map: Box<[FT_UShort]>,
     refcount: usize,
+}
+
+#[derive(Debug, Clone)]
+struct AfmMetricsState {
+    track_kerns: Vec<AfmTrackKern>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AfmTrackKern {
+    degree: FT_Int,
+    min_ptsize: FT_Fixed,
+    min_kern: FT_Fixed,
+    max_ptsize: FT_Fixed,
+    max_kern: FT_Fixed,
 }
 
 impl FT_Face {
@@ -7984,6 +8001,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         colr_v1,
         have_foreground_color: Rc::new(RefCell::new(false)),
         foreground_color: Rc::new(RefCell::new(FT_Color::default())),
+        afm_metrics: Rc::new(RefCell::new(None)),
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
@@ -7999,6 +8017,146 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     };
     register_face_size_handles(&face);
     face
+}
+
+fn parse_afm_fixed(token: &str) -> Option<FT_Fixed> {
+    let (negative, rest) = if let Some(rest) = token.strip_prefix('-') {
+        (true, rest)
+    } else if let Some(rest) = token.strip_prefix('+') {
+        (false, rest)
+    } else {
+        (false, token)
+    };
+    let (whole, fraction) = rest.split_once('.').unwrap_or((rest, ""));
+    if whole.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    let whole_value = if whole.is_empty() {
+        0_i64
+    } else {
+        whole.parse::<i64>().ok()?
+    };
+    let mut scale = 1_i64;
+    let mut fraction_value = 0_i64;
+    for byte in fraction.bytes() {
+        if !byte.is_ascii_digit() {
+            return None;
+        }
+        fraction_value = fraction_value
+            .checked_mul(10)?
+            .checked_add(i64::from(byte - b'0'))?;
+        scale = scale.checked_mul(10)?;
+    }
+    let mut fixed = whole_value.checked_shl(16)?;
+    if scale > 1 {
+        fixed = fixed.checked_add((fraction_value.checked_mul(1 << 16)?) / scale)?;
+    }
+    if negative {
+        fixed = fixed.checked_neg()?;
+    }
+    FT_Fixed::try_from(fixed).ok()
+}
+
+fn parse_afm_metrics(data: &[u8]) -> Result<AfmMetricsState, FT_Error> {
+    let text = std::str::from_utf8(data).map_err(|_| FT_Err_Unknown_File_Format)?;
+    let mut track_kerns = Vec::new();
+    let mut has_pair_kerning = false;
+    for line in text.lines() {
+        let mut fields = line.split_whitespace();
+        match fields.next() {
+            Some("TrackKern") => {
+                let degree = fields
+                    .next()
+                    .and_then(|value| value.parse::<FT_Int>().ok())
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let min_ptsize = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let min_kern = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let max_ptsize = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let max_kern = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                track_kerns.push(AfmTrackKern {
+                    degree,
+                    min_ptsize,
+                    min_kern,
+                    max_ptsize,
+                    max_kern,
+                });
+            }
+            Some("KPX" | "KPY" | "KP") => has_pair_kerning = true,
+            _ => {}
+        }
+    }
+    // C Type1 attachment (`src/type1/t1afm.c:T1_Read_Metrics`) only keeps the
+    // parsed AFM block on the face when pair kerning exists; track kerning then
+    // reads from that retained AFM state (`T1_Get_Track_Kerning`).
+    if track_kerns.is_empty() || !has_pair_kerning {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    Ok(AfmMetricsState { track_kerns })
+}
+
+pub fn FT_Attach_Stream(face: Option<&mut FT_Face>, data: Option<&[u8]>) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(data) = data else {
+        return FT_Err_Invalid_Argument;
+    };
+    match parse_afm_metrics(data) {
+        Ok(metrics) => {
+            *face.afm_metrics.borrow_mut() = Some(metrics);
+            face.face_flags |= FT_FACE_FLAG_KERNING;
+            FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+pub fn FT_Get_Track_Kerning(
+    face: Option<&FT_Face>,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: Option<&mut FT_Fixed>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(akerning) = akerning else {
+        return FT_Err_Invalid_Argument;
+    };
+    let afm_metrics = face.afm_metrics.borrow();
+    let Some(metrics) = afm_metrics.as_ref() else {
+        return FT_Err_Invalid_Argument;
+    };
+    for track in &metrics.track_kerns {
+        if track.degree != degree {
+            continue;
+        }
+        *akerning = if point_size < track.min_ptsize {
+            track.min_kern
+        } else if point_size > track.max_ptsize {
+            track.max_kern
+        } else {
+            FT_MulDiv(
+                point_size - track.min_ptsize,
+                track.max_kern - track.min_kern,
+                track.max_ptsize - track.min_ptsize,
+            ) + track.min_kern
+        };
+        break;
+    }
+    FT_Err_Ok
 }
 
 fn parse_tt_header(data: &[u8]) -> Option<TT_Header> {

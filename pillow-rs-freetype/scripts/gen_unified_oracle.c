@@ -21272,6 +21272,71 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 0;
     }
 
+    if (streq(command, "--get-track-kerning")) {
+        const char* attachment_path = argv[7];
+        const char* rows_arg = argv[8];
+        unsigned char* attachment = NULL;
+        long attachment_len = 0;
+        if (load_file(attachment_path, &attachment, &attachment_len) != 0) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        FT_Open_Args open_args;
+        memset(&open_args, 0, sizeof(open_args));
+        open_args.flags = FT_OPEN_MEMORY;
+        open_args.memory_base = attachment;
+        open_args.memory_size = attachment_len;
+        FT_Error attach_error = FT_Attach_Stream(face, &open_args);
+        FT_Error first_error = attach_error;
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            free(attachment);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"attach_status\":%d,\"status\":%d,\"rows\":[", attach_error, first_error);
+        char* token = strtok(rows, ",");
+        int first = 1;
+        while (token) {
+            char* point_text = token;
+            char* degree_text = strchr(point_text, '|');
+            if (degree_text) {
+                *degree_text = '\0';
+                degree_text++;
+                FT_Fixed point_size = (FT_Fixed)strtol(point_text, NULL, 10);
+                FT_Int degree = (FT_Int)strtol(degree_text, NULL, 10);
+                FT_Fixed kerning = 0;
+                FT_Error err = FT_Get_Track_Kerning(face, point_size, degree, &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"point_size_16_16\":%ld,\"degree\":%d,\"status\":%d,\"akerning\":%ld}",
+                       point_size,
+                       degree,
+                       err,
+                       kerning);
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("]}}\n");
+        free(rows);
+        free(attachment);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
     if (streq(command, "--get-pfr-kerning")) {
         const char* rows_arg = argv[7];
         char* rows = (char*)malloc(strlen(rows_arg) + 1);
@@ -24831,6 +24896,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--get-track-kerning")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-pfr-kerning")) {

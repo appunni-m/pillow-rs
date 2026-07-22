@@ -3315,6 +3315,33 @@ pub extern "C" fn FT_Open_Face(
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Attach_Stream(face: FT_Face, parameters: *const FT_Open_Args) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(parameters) = non_null(parameters) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `parameters` is non-null and read-only for this call.
+    let parameters = unsafe { parameters.as_ref() };
+    let source_flags = parameters.flags
+        & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME)
+            as FT_UInt);
+    if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    if parameters.memory_base.is_null() || parameters.memory_size < 0 {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Ok(len) = usize::try_from(parameters.memory_size) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `memory_base` is non-null and `memory_size` bytes are readable.
+    let data = unsafe { slice::from_raw_parts(parameters.memory_base, len) };
+    rust_ffi::FT_Attach_Stream(Some(&mut state.inner), Some(data))
+}
+
 fn open_face_name_options(args: &FT_Open_Args) -> rust_ffi::FT_Open_Face_Name_Options {
     let mut options = rust_ffi::FT_Open_Face_Name_Options::default();
     if args.num_params <= 0 || args.params.is_null() {
@@ -5239,6 +5266,30 @@ pub extern "C" fn FT_Get_Sfnt_Name(
                 string: name.string,
                 string_len: name.string_len,
             };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Track_Kerning(
+    face: FT_Face,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: *mut FT_Fixed,
+) -> FT_Error {
+    let mut kerning = 0;
+    let output = non_null_mut(akerning);
+    let error = rust_ffi::FT_Get_Track_Kerning(
+        face_state(face).map(|state| &state.inner),
+        point_size,
+        degree,
+        output.map(|_| &mut kerning),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        if let Some(output) = output {
+            // SAFETY: `akerning` was checked for null and points to writable caller storage.
+            unsafe { *output.as_ptr() = kerning };
         }
     }
     error

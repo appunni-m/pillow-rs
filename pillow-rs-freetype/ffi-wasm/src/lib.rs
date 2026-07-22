@@ -4285,6 +4285,47 @@ pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_attach_stream(
+    handle: usize,
+    file_base: *const FT_Byte,
+    file_size: usize,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if file_base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // SAFETY: caller provides a readable linear-memory range of `file_size` bytes.
+    let data = unsafe { slice::from_raw_parts(file_base, file_size) };
+    rust_ffi::FT_Attach_Stream(Some(&mut face.face), Some(data))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_track_kerning(
+    handle: usize,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: *mut FT_Fixed,
+) -> FT_Error {
+    let mut kerning = 0;
+    let output = ptr::NonNull::new(akerning);
+    let error = rust_ffi::FT_Get_Track_Kerning(
+        face_ref(handle).map(|face| &face.face),
+        point_size,
+        degree,
+        output.map(|_| &mut kerning),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        if let Some(output) = output {
+            // SAFETY: `akerning` was checked for null and points to writable linear memory.
+            unsafe { *output.as_ptr() = kerning };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_gasp(handle: usize, ppem: FT_UInt) -> FT_Int {
     rust_ffi::FT_Get_Gasp(face_ref(handle).map(|face| &face.face), ppem)
 }
