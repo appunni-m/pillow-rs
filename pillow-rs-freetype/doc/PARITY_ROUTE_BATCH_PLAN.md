@@ -848,6 +848,54 @@ promoted.
 | COLR v0/v1 layer, foreground, and clipbox fixtures | multiple route rows outside this extraction | `googlefonts/color-fonts` provides COLRv1 test fonts including static/variable test glyphs and no-cliplist variants; `simoncozens/test-fonts` has simpler COLR/CPAL examples. | Use candidates to design minimal generated COLR fixtures; exact route still needs layer iterator, foreground sentinel, and clipbox implementation across Rust FFI, C ABI, and WASM. |
 | Compressed stream fixtures for gzip/bzip2/LZW | multiple pending success rows | Internet search is not useful; these are byte-stream facades, not fonts. | Generate maintained compressed byte fixtures and implement pure-Rust stream behavior; no static-byte shortcut. |
 
+2026-07-22 BDF/PCF/SFNT-BDF fixture feasibility audit:
+
+- Current route audit rows remain `pending-route`:
+  - `ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only`
+  - `ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike`
+  - `ftbdf.FT_Get_BDF_Charset_ID.success_sfnt_bdf_table_selected_strike`
+  - `ftbdf.FT_Get_BDF_Charset_ID.error_sfnt_bdf_without_selected_strike`
+- Same-input fixture search:
+  - Local tree contains only `fonts/bdf/properties-atoms-integers-cardinals.bdf`,
+    `fonts/bdf/charset-registry.bdf`, and the invalid
+    `fonts/no-horizontal/no-hhea-metrics.pcf` control under the BDF/PCF bucket.
+  - Web search did not find exact drop-in `sfnt-bdf-table.otb` or
+    `properties-signed-only.pcf` fixtures with usable repo provenance.
+  - Official FreeType 2.14.3 BDF/PCF docs confirm the public semantic target:
+    BDF APIs apply to BDF/PCF files and SFNT bitmap fonts with a `BDF ` table;
+    PCF integer properties are always signed, so PCF cannot prove the BDF
+    cardinal branch.
+  - FontForge documentation confirms the `BDF ` SFNT table is a non-standard
+    X11/FontForge table with per-strike property records.  A valid SFNT-BDF
+    row also needs a selectable bitmap strike; a bare `BDF ` table attached to
+    an arbitrary outline font is not enough for the selected-strike rows.
+- Local generator/tool state:
+  - `fontTools` is available.
+  - `fontforge`, `bdftopcf`, and `mkfontscale` are not currently available in
+    this worktree shell.
+  - Therefore the safe next implementation is either a maintained pure-Python
+    fixture generator that writes a C-openable PCF and bitmap-SFNT+BDF table, or
+    adding a checked tool dependency/Makefile target before fixture generation.
+- C checkpoints before any promotion:
+  - `freetype/src/base/ftbdf.c:62-82` initializes output type to
+    `BDF_PROPERTY_TYPE_NONE` and delegates to the face BDF service.
+  - `freetype/src/sfnt/ttbdf.c:67-124` validates the SFNT `BDF ` table header,
+    strike count, string-table offset, and per-strike property block bounds.
+  - `freetype/src/sfnt/ttbdf.c:142-247` requires a valid selected strike and
+    resolves atom/integer/cardinal property values from the selected strike's
+    property records.
+  - `freetype/src/sfnt/sfdriver.c:1141-1156` implements
+    `FT_Get_BDF_Charset_ID` for SFNT by looking up `CHARSET_REGISTRY` and
+    `CHARSET_ENCODING` BDF atom properties after strike selection.
+- Non-negotiable promotion criteria:
+  - Do not reuse the standalone BDF fixtures for the PCF row; that would miss
+    the PCF signed-integer parser branch.
+  - Do not attach a synthetic `BDF ` table to a font unless pinned C opens it,
+    exposes at least one fixed size, accepts `FT_Select_Size`, and returns the
+    exact expected property/charset data.
+  - Promote only after the same declared input compares through pinned C oracle,
+    Rust FFI, thin C ABI, and WASM ABI.
+
 Sources checked: `https://github.com/simoncozens/test-fonts`,
 `https://github.com/googlefonts/color-fonts`,
 `https://github.com/freetype/freetype2-testing`,
