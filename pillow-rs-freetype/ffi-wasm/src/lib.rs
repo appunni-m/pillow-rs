@@ -2915,6 +2915,30 @@ pub fn abi_support_stroker_parse_degenerate() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_end_subpath_no_segment() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let end_error = rust_ffi::FT_Stroker_EndSubPath(stroker);
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok && end_error == rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_degenerate_curve(action: i32) -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();

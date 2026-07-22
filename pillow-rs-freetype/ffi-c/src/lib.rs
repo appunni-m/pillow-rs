@@ -4559,6 +4559,11 @@ pub extern "C" fn FT_Stroker_CubicTo(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
+    rust_ffi::FT_Stroker_EndSubPath(stroker)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_GetBorderCounts(
     stroker: FT_Stroker,
     border: FT_StrokerBorder,
