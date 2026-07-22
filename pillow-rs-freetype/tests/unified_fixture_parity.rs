@@ -26887,6 +26887,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_flag_param(case)?.to_string());
             Ok(args)
         }
+        "freetype.open_face_args" => {
+            let mut args = vec!["--open-face-variants".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(memory_face_rows_arg(params)?);
+            Ok(args)
+        }
         "new_memory_face" => {
             if lifecycle_handle_param(params, "file_base") == Some("null") {
                 return Ok(vec![
@@ -29415,6 +29421,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.open_face_stream" => rust_open_face_stream(case),
         "ftsystem.memory_stream_probe" => rust_memory_stream_probe(case),
+        "freetype.open_face_args" => rust_new_memory_face_variants(case),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -30344,6 +30351,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.open_face_stream" => c_open_face_stream(case),
         "ftsystem.memory_stream_probe" => c_memory_stream_probe(case),
+        "freetype.open_face_args" => c_new_memory_face_variants(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return c_open_face_name_options(case);
@@ -31398,6 +31406,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "freetype.open_face_stream" => wasm_open_face_stream(case),
         "ftsystem.memory_stream_probe" => wasm_memory_stream_probe(case),
+        "freetype.open_face_args" => wasm_new_memory_face_variants(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return wasm_open_face_name_options(case);
@@ -43842,7 +43851,7 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
-        if case.subject == "freetype.FT_Open_Face" {
+        if open_face_args_dispatch_case(case) {
             let source_flags =
                 row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
             if source_flags != FT_OPEN_MEMORY {
@@ -43910,25 +43919,23 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
             num_params: 0,
             params: std::ptr::null_mut(),
         };
-        let err = if case.subject == "freetype.FT_Open_Face"
-            || row.has_open_args
-            || row.open_args_is_null
-        {
-            let args_ptr = if row.open_args_is_null {
-                std::ptr::null()
+        let err =
+            if open_face_args_dispatch_case(case) || row.has_open_args || row.open_args_is_null {
+                let args_ptr = if row.open_args_is_null {
+                    std::ptr::null()
+                } else {
+                    &open_args
+                };
+                c_abi::FT_Open_Face(library_arg, args_ptr, row.face_index, face_ptr)
             } else {
-                &open_args
+                c_abi::FT_New_Memory_Face(
+                    library_arg,
+                    bytes.as_ptr(),
+                    file_size,
+                    row.face_index,
+                    face_ptr,
+                )
             };
-            c_abi::FT_Open_Face(library_arg, args_ptr, row.face_index, face_ptr)
-        } else {
-            c_abi::FT_New_Memory_Face(
-                library_arg,
-                bytes.as_ptr(),
-                file_size,
-                row.face_index,
-                face_ptr,
-            )
-        };
         let face_is_null = face.is_null();
         if err == FT_Err_Ok {
             c_done_face(face);
@@ -43977,7 +43984,7 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
-        if case.subject == "freetype.FT_Open_Face" {
+        if open_face_args_dispatch_case(case) {
             let source_flags =
                 row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
             if source_flags != FT_OPEN_MEMORY {
@@ -44022,6 +44029,10 @@ fn memory_face_outputs(
     } else {
         Ok(error_with_output(first_error, output))
     }
+}
+
+fn open_face_args_dispatch_case(case: &InputCase) -> bool {
+    case.subject == "freetype.FT_Open_Face" || case.operation == "freetype.open_face_args"
 }
 
 fn memory_face_file_size(data_len: usize, row: MemoryFaceRow) -> Result<i64, String> {

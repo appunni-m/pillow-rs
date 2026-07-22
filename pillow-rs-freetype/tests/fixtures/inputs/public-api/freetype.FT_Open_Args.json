@@ -3,6 +3,8 @@
   "subject": "freetype.FT_Open_Args",
   "manifest_cases": [
     "layout_matches_c",
+    "memory_source_success_matches_c",
+    "memory_source_error_variants_match_c",
     "open_face_consumes_args_like_c"
   ],
   "cases": [
@@ -60,6 +62,110 @@
             "offsets",
             "field_types",
             "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_success_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_success_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "face_index": 0,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_error_variants_match_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_error_variants_match_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "flags": []
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_STREAM"
+              ]
+            },
+            {
+              "args": "null"
+            },
+            {
+              "library": "null"
+            },
+            {
+              "aface": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
           ]
         }
       }
