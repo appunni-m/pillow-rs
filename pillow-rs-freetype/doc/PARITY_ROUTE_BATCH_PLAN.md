@@ -2356,11 +2356,14 @@ Checked candidate fixture sources:
   `input/fonts/type1/attach-afm-base.pfb` plus
   `input/aux/type1/attach-afm-base.afm` and
   `input/fonts/type1/track-kern-base.pfb` plus
-  `input/aux/type1/track-kern-base.afm`, but no maintained attach/track-kerning
-  service or ABI route yet.  `FT_Attach_File`, `FT_Attach_Stream`, and
-  `FT_Get_Track_Kerning.type1_afm_track_kerning_success` remain pending until
-  AFM parsing and post-attach observable kerning/track-kerning output are
-  implemented.
+  `input/aux/type1/track-kern-base.afm`.  The Type1 AFM attachment follow-up is
+  no longer pending for the maintained success rows:
+  `FT_Get_Track_Kerning.type1_afm_track_kerning_success`,
+  `FT_Attach_Stream.success_attach_auxiliary_stream`, and
+  `FT_Attach_File.success_attach_auxiliary_file` all have exact Rust FFI,
+  thin C ABI, WASM ABI, and pinned C routes.  Remaining Type1/CID attachment
+  work should target genuinely absent fixtures or new observable behavior, not
+  duplicate the AFM kerning/track-kerning rows.
 
 Next high-value implementation batches:
 
@@ -2384,12 +2387,37 @@ Next high-value implementation batches:
    - Route `FT_Get_PFR_Metrics`, `FT_Get_PFR_Advance`, and PFR kerning success
      rows together; keep the existing non-PFR fallback/error rows unchanged.
 
-4. **Type1 AFM attach batch**
-   - Add a reproducible AFM generator for the existing Type1 attach font, or
-     regenerate both PFB and AFM together.
-   - Implement AFM attachment state and `FT_Get_Track_Kerning` behavior in
-     core, then expose through thin C/WASM wrappers.
-   - Compare attach return code plus post-attach kerning/track-kerning deltas.
+4. **External stream callback batch**
+   - Keep `ftsystem.FT_Stream.external_stream_runtime_contract` and
+     `ftsystem.FT_StreamRec.callback_stream_field_contract` pending until a
+     maintained callback harness exists.
+   - The current exact `freetype.open_face_stream` route proves only the
+     memory-backed `FT_OPEN_STREAM` success path: face open status,
+     `FT_FACE_FLAG_EXTERNAL_STREAM`, stream close-call count, and caller-owned
+     stream lifetime.  Focused probes for the two broad ftsystem rows on
+     `2026-07-22` still report `runnable=0 pending=1` because
+     `streams/harnesses/external-stream-errors.json` and
+     `streams/harnesses/external-stream-callbacks.json` are absent.
+   - Do not add another row that repeats
+     `freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership`; it
+     would duplicate the existing memory-backed line mapping without proving
+     callback read/seek behavior.  The next real work is a callback-event
+     harness that records read(count==0), read(count>0), short-read/seek
+     failures, close events, and stream ownership across pinned C, Rust FFI,
+     thin C ABI, and WASM.
+
+5. **Bzip2 enabled-build batch**
+   - The active pinned C build returns `Unimplemented_Feature` before bzip2
+     stream null/header validation.  The explicit disabled-build rows are real
+     parity, but the original enabled-build rows remain pending:
+     `success_open_valid_bzip2_stream`, `success_read_decompressed_bytes`,
+     `lifecycle_close_does_not_close_source`,
+     `error_null_stream_or_source`, and
+     `error_invalid_or_truncated_bzip2_header`.
+   - Do not promote those rows using the active disabled-build error.  The next
+     real work is either a bzip2-enabled pinned oracle plus pure-Rust bzip2
+     stream implementation, or additional explicit active-build rows that are
+     clearly scoped to disabled-module precedence.
 
 Rejected quick fixes in this audit:
 
