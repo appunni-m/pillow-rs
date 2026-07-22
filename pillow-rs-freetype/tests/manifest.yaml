@@ -6185,6 +6185,8 @@ subjects:
         description: Passing a null glyph returns without reading library memory or mutating observable state.
       - id: lifetime_before_library_done
         description: Detached glyphs are owned by the caller and must be destroyed before the owning library is finalized; fixture comparison records C lifetime ordering and invalid-use behavior through the FFI facade.
+      - id: outline_glyph_before_library_done
+        description: A detached outline glyph created with FT_Get_Glyph is released with FT_Done_Glyph before the face and library are finalized.
     # needs-input: operation=FT_Get_Glyph/FT_New_Glyph followed by FT_Done_Glyph; fixture_asset=outline, bitmap-strike, and OT-SVG capable fonts where available; params={glyph_format, destroy_order, null_glyph}; output shape={no return, allocation/free event stream, sanitizer-safe lifetime classification}; comparison=exact C oracle free/done hook sequence and no-op behavior for null.
   - id: ftglyph.FT_Get_Glyph
     kind: function

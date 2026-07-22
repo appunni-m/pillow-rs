@@ -29044,7 +29044,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 args.push(bitmap_glyph_record_render_mode(params)?.to_string());
                 return Ok(args);
             }
-            if case.case_id == "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
+            if done_outline_glyph_case(case) {
                 let mut args = vec!["--done-glyph-outline".to_string()];
                 push_font_source(case, &mut args)?;
                 push_face_size(params, &mut args)?;
@@ -39243,7 +39243,13 @@ fn done_outline_glyph_output(
             "FT_Done_Glyph called once for owned outline glyph"
         } else {
             "none"
-        }
+        },
+        "lifetime_order": if create_error == FT_Err_Ok {
+            "glyph_before_face_and_library"
+        } else {
+            "glyph_not_created"
+        },
+        "invalid_use_classification": "not_attempted"
     }))
 }
 
@@ -39416,7 +39422,7 @@ fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
             bitmap,
         ));
     }
-    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
     let face = open_face(case)?;
@@ -39562,10 +39568,10 @@ fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
             bitmap,
         ));
     }
-    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    let (_library, face) = c_open_face(case)?;
+    let (library, face) = c_open_face(case)?;
     let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
     let mut create_error = c_abi::FT_Load_Glyph(
         face,
@@ -39593,6 +39599,7 @@ fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
         c_abi::FT_Done_Glyph(glyph);
     }
     c_done_face(face);
+    c_done_library(library);
     Ok(done_outline_glyph_output(
         create_error,
         if glyph.is_null() { "null" } else { "non_null" },
@@ -39736,7 +39743,7 @@ fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
             bitmap,
         ));
     }
-    if case.case_id != "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays" {
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
     let handle = wasm_open_face(case)?;
@@ -39779,6 +39786,14 @@ fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
         outline_owner,
         outline_counts,
     ))
+}
+
+fn done_outline_glyph_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays"
+            | "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
+    )
 }
 
 fn wasm_done_bitmap_glyph_paths(case: &InputCase) -> Result<RunOutput, String> {
