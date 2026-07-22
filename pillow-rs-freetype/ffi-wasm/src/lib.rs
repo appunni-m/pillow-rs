@@ -2809,6 +2809,61 @@ pub fn abi_support_stroker_zero_line() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_simple_line_counts() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let to = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = rust_ffi::FT_Stroker_LineTo(stroker, Some(&to));
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && line_error == rust_ffi::FT_Err_Ok
+        && left_error == rust_ffi::FT_Err_Invalid_Outline
+        && right_error == rust_ffi::FT_Err_Invalid_Outline
+        && total_error == rust_ffi::FT_Err_Invalid_Outline
+        && left_points == 0
+        && left_contours == 0
+        && right_points == 0
+        && right_contours == 0
+        && total_points == 0
+        && total_contours == 0
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_degenerate_curve(action: i32) -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();

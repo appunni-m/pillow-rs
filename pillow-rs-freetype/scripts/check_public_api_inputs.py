@@ -1698,14 +1698,20 @@ def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
 
 def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
     """Exact zero-length LineTo route verified against FreeType ftstroke.c."""
-    if (
-        row.operation == "ftstroke.line_to"
-        and row.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
-    ):
+    if row.operation != "ftstroke.line_to":
+        return None
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop":
         return (
             "FT_Stroker_LineTo zero-length no-op validates through pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI; full non-zero stroker "
             "geometry remains pending"
+        )
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline":
+        return (
+            "FT_Stroker_LineTo first non-zero segment pre-EndSubPath count "
+            "error validates through pinned C oracle, Rust FFI, C ABI, and "
+            "WASM ABI; finalized counts and exported border geometry remain "
+            "pending"
         )
     return None
 

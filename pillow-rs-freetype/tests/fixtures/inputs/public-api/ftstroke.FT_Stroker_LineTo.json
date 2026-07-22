@@ -136,6 +136,75 @@
       }
     },
     {
+      "case_id": "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline",
+      "subject": "ftstroke.FT_Stroker_LineTo",
+      "case": "line_segment_success",
+      "operation": "ftstroke.line_to",
+      "schema": "api_result",
+      "expect_error": true,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_LineTo",
+        "signature": "FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "start": {
+            "x": 0,
+            "y": 0
+          },
+          "to": {
+            "x": 640,
+            "y": 0
+          },
+          "open": false,
+          "radius": 96,
+          "line_join": "FT_STROKER_LINEJOIN_ROUND",
+          "line_cap": "FT_STROKER_LINECAP_ROUND"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:line",
+        "area:counts"
+      ],
+      "expectation": {
+        "status": "error",
+        "error": "FT_Err_Invalid_Outline",
+        "output_shape": {
+          "status": "FT_Error",
+          "left_counts": {
+            "points": "FT_UInt",
+            "contours": "FT_UInt"
+          },
+          "right_counts": {
+            "points": "FT_UInt",
+            "contours": "FT_UInt"
+          },
+          "combined_counts": {
+            "points": "FT_UInt",
+            "contours": "FT_UInt"
+          }
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "status",
+            "left_counts",
+            "right_counts",
+            "combined_counts"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1289-1337",
+          "freetype/src/base/ftstroke.c:1938-2006"
+        ]
+      }
+    },
+    {
       "case_id": "ftstroke.FT_Stroker_LineTo.zero_length_line_noop",
       "subject": "ftstroke.FT_Stroker_LineTo",
       "case": "zero_length_line_noop",

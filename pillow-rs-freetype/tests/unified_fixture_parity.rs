@@ -25383,6 +25383,10 @@ fn is_stroker_zero_line_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
 }
 
+fn is_stroker_simple_line_counts_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline"
+}
+
 fn stroker_zero_line_output(status: FT_Error, points: FT_UInt, contours: FT_UInt) -> RunOutput {
     ok(json!({
         "status": status,
@@ -25489,6 +25493,183 @@ fn wasm_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
         Ok(stroker_zero_line_output(FT_Err_Ok, 0, 0))
     } else {
         Err("unsupported stroker zero-length line route".to_string())
+    }
+}
+
+fn stroker_simple_line_counts_output(
+    status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    total_points: FT_UInt,
+    total_contours: FT_UInt,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "left_counts": {"points": left_points, "contours": left_contours},
+        "right_counts": {"points": right_points, "contours": right_contours},
+        "combined_counts": {"points": total_points, "contours": total_contours}
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let to = FT_Vector { x: 640, y: 0 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&to))
+    } else {
+        begin_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error =
+        FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
+    FT_Stroker_Done(stroker);
+    let status = [line_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    Ok(stroker_simple_line_counts_output(
+        status,
+        left_points,
+        left_contours,
+        right_points,
+        right_contours,
+        total_points,
+        total_contours,
+    ))
+}
+
+fn c_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let to = c_abi::FT_Vector { x: 640, y: 0 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &to)
+    } else {
+        begin_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        &mut left_points,
+        &mut left_contours,
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        &mut right_points,
+        &mut right_contours,
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error = c_abi::FT_Stroker_GetCounts(stroker, &mut total_points, &mut total_contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let status = [line_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    Ok(stroker_simple_line_counts_output(
+        status,
+        left_points,
+        left_contours,
+        right_points,
+        right_contours,
+        total_points,
+        total_contours,
+    ))
+}
+
+fn wasm_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_simple_line_counts() {
+        Ok(stroker_simple_line_counts_output(
+            FT_Err_Invalid_Outline as FT_Error,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ))
+    } else {
+        Err("unsupported stroker simple line-count route".to_string())
     }
 }
 
@@ -29438,6 +29619,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => {
             Ok(vec!["--stroker-zero-line".to_string()])
         }
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            Ok(vec!["--stroker-simple-line-counts".to_string()])
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -30957,6 +31141,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => rust_stroker_zero_line(case),
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            rust_stroker_simple_line_counts(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -32100,6 +32287,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => c_stroker_zero_line(case),
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            c_stroker_simple_line_counts(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -33134,6 +33324,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_stroker_lifecycle(case)
         }
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            wasm_stroker_simple_line_counts(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
