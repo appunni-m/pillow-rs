@@ -2973,3 +2973,86 @@ Duplicate-route findings from the same audit pass:
   - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
+
+### Audited non-promotable pending surfaces: 2026-07-22
+
+Current baseline before this audit:
+`concrete_cases=7294`, `real-parity=4798`, `pending-route=221`,
+`compile-contract=2266`, `real-null-validation=9`; full parity passed
+`7068/7068` runnable rows with `226` pending rows.
+
+This section records rows that looked like possible quick follow-up batches but
+were not safe to promote.  Do not convert these to real-parity by reusing a
+nearby successful row, exact-error-only fallback, or unsupported-feature row.
+
+- `freetype.FT_Open_Args.open_face_consumes_args_like_c`
+  - Existing real rows already cover explicit `FT_OPEN_MEMORY`, null argument,
+    invalid source-flag, short/truncated memory, optional driver/params no-op,
+    negative face-index probe, and valid external-stream behavior.
+  - The broad row still includes pathname, driver selection, full
+    `FT_OPEN_PARAMS`, missing path, and SBIX-specific behavior.  The C ABI
+    currently rejects `FT_OPEN_PATHNAME` in `FT_Open_Face`; WASM has no
+    pathname route.  Promoting this row would duplicate the already-real memory
+    and stream rows and hide the remaining pathname/SBIX work.
+  - Next real batch: add explicit maintained rows per source kind.  Pathname
+    work belongs in thin binding crates only; core must keep taking bytes.
+
+- `ftrender.FT_Set_Renderer.set_outline_renderer_success`
+  - Existing `ftrender.set_renderer` real rows are exact-error validation
+    assertions.  They do not prove success-side renderer-list mutation.
+  - A real success route needs an exported/maintained renderer handle model for
+    `FT_Get_Renderer`/`FT_Set_Renderer`, membership validation against
+    `library->renderers`, `FT_List_Up` ordering, `cur_renderer` update for
+    outline renderers, and identical Rust FFI/C ABI/WASM observable output.
+  - Do not treat `FT_Get_Renderer` class metadata as proof of
+    `FT_Set_Renderer` mutation.
+
+- `ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only` and
+  `ftbdf.FT_Get_BDF_Charset_ID.*sfnt_bdf*`
+  - The current pure-Rust route exposes BDF service properties only.  PCF and
+    SFNT-BDF rows are blocked by parser/service support plus C-openable
+    fixtures, not just missing JSON.
+  - Next real batch: add PCF property parsing and/or SFNT embedded-BDF strike
+    service behavior first, then compare exact property record fields through
+    all ABI lanes.
+
+- `t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix`,
+  `t1tables.FT_Get_PS_Font_Info.signature_and_behavior_matrix`, and
+  `t1tables.FT_Get_PS_Font_Private.signature_and_behavior_matrix`
+  - Type1, CFF, TrueType, CID-keyed CFF, null-face, and null-output split rows
+    already exist where fixtures and routes are maintained.
+  - The broad signature rows still name unmaintained Type42/CID-Type1 or
+    without-name fixture variants.  A locally generated Type42 wrapper around
+    the existing DejaVuSans TrueType bytes was tested against the pinned oracle
+    and returned `FT_Err_Unknown_File_Format` (`3`), while the Type1 control
+    opened successfully.  Do not check in that failed wrapper.
+  - Internet review found Type42 is a PostScript wrapper around TrueType; CTAN
+    documents a Ghostscript-based `TrueTypeToType42` converter and Adobe's
+    Type 42 specification describes the wrapper format.  Ghostscript is not
+    installed in this worktree environment, so a maintained generator remains a
+    prerequisite before Type42 rows can become real parity.
+
+- `ftlzw.FT_Stream_OpenLZW.opens_valid_lzw_stream`
+  - The pending row needs both deterministic `.Z` bytes and pure-Rust
+    open/read/backward-seek/close stream behavior matching FreeType
+    `src/lzw/ftlzw.c`.  Internet search is not the primary path for this; the
+    maintained fixture should be generated from deterministic bytes and checked
+    against the pinned oracle.
+
+- `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  - The current TrueType variable-font row observes pinned C reading past the
+    active axis array for excess outputs.  Rust's safe zero-fill behavior must
+    not be promoted as same-input parity for that row.  A Type1 MM fixture that
+    C actually zero-fills is required for this semantic case.
+
+Priority for the next real batches:
+
+1. Renderer ABI success route only if `FT_Get_Renderer`/`FT_Set_Renderer`
+   handles are added as intentional public ABI, with thin wrappers and core
+   owning renderer-list state.
+2. Pathname/SBIX split rows for `FT_Open_Args` and `FT_Parameter`, with
+   pathname handled in bindings and SBIX proven by a real C-openable font.
+3. PCF/SFNT-BDF parser/service work before promoting BDF property or charset
+   rows.
+4. Type42 generator or licensed fixture acquisition before the remaining
+   `t1tables` signature matrices can be split further.
