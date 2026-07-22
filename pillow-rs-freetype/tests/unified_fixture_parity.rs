@@ -24232,6 +24232,17 @@ fn renderer_formats_arg(params: &Value) -> Result<String, String> {
         .join(","))
 }
 
+fn renderer_source_format(params: &Value) -> Result<FT_Glyph_Format, String> {
+    let source = params
+        .get("renderer_source")
+        .ok_or_else(|| "FT_Set_Renderer requires renderer_source".to_string())?;
+    renderer_format_value(
+        source
+            .get("format")
+            .ok_or_else(|| "FT_Set_Renderer renderer_source requires format".to_string())?,
+    )
+}
+
 fn renderer_class_rows<F>(params: &Value, mut lookup: F) -> Result<Value, String>
 where
     F: FnMut(FT_Glyph_Format) -> Option<(&'static str, FT_Glyph_Format, bool, bool)>,
@@ -24264,6 +24275,42 @@ where
     Ok(json!({ "format_results": rows }))
 }
 
+fn renderer_class_value(
+    format: FT_Glyph_Format,
+    class: Option<(&'static str, FT_Glyph_Format, bool, bool)>,
+) -> Value {
+    if let Some((module_name, glyph_format, has_render_glyph, has_raster_class)) = class {
+        json!({
+            "format": format,
+            "renderer_present": true,
+            "renderer_class": {
+                "module_name": module_name,
+                "glyph_format": glyph_format,
+                "has_render_glyph": has_render_glyph,
+                "has_raster_class": has_raster_class,
+            },
+        })
+    } else {
+        json!({
+            "format": format,
+            "renderer_present": false,
+            "renderer_class": null,
+        })
+    }
+}
+
+fn set_renderer_success_output(error: FT_Error, after: Value) -> RunOutput {
+    let output = json!({
+        "set_error": error,
+        "current_renderer": after,
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
 fn rust_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     let library = if lifecycle_handle_param_is_null(&case.inputs.params, "library") {
         None
@@ -24273,6 +24320,18 @@ fn rust_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
         FT_Library_Renderer_Class(library.as_ref(), format)
     })?))
+}
+
+fn rust_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = FT_Init_FreeType();
+    let format = renderer_source_format(&case.inputs.params)?;
+    let before = FT_Library_Renderer_Class(Some(&library), format)
+        .ok_or_else(|| "FT_Set_Renderer source renderer was not found".to_string())?;
+    let error = FT_Library_Set_Renderer_By_Format(Some(&mut library), before.1, before.0);
+    Ok(set_renderer_success_output(
+        error,
+        renderer_class_value(format, FT_Library_Renderer_Class(Some(&library), format)),
+    ))
 }
 
 fn c_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
@@ -24291,6 +24350,23 @@ fn c_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(output))
 }
 
+fn c_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let format = renderer_source_format(&case.inputs.params)?;
+    let renderer = c_abi::FT_Get_Renderer(library, format);
+    let set_error = c_abi::FT_Set_Renderer(library, renderer, 0, ptr::null_mut());
+    let after = renderer_class_value(
+        format,
+        c_abi::abi_support_library_renderer_class(library, format),
+    );
+    c_done_library(library);
+    Ok(set_renderer_success_output(set_error, after))
+}
+
 fn wasm_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     let use_null = lifecycle_handle_param_is_null(&case.inputs.params, "library");
     Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
@@ -24300,6 +24376,21 @@ fn wasm_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
             wasm_abi::abi_support_default_renderer_class(format)
         }
     })?))
+}
+
+fn wasm_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let format = renderer_source_format(&case.inputs.params)?;
+    if format != FT_GLYPH_FORMAT_OUTLINE {
+        return Ok(set_renderer_success_output(
+            FT_Err_Invalid_Argument,
+            renderer_class_value(format, None),
+        ));
+    }
+    let (error, after) = wasm_abi::abi_support_set_default_outline_renderer();
+    Ok(set_renderer_success_output(
+        error,
+        renderer_class_value(format, after),
+    ))
 }
 
 fn done_mm_var_library_present(params: &Value) -> i32 {
@@ -28593,6 +28684,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             },
             renderer_formats_arg(params)?,
         ]),
+        "ftrender.set_renderer" if !case.expect_error => Ok(vec![
+            "--set-renderer".to_string(),
+            renderer_source_format(params)?.to_string(),
+        ]),
         "ftmm.done_mm_var" => Ok(vec![
             "--done-mm-var".to_string(),
             done_mm_var_library_present(params).to_string(),
@@ -30258,6 +30353,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_incremental_nullness_open(case)
         }
         "ftrender.get_renderer" => rust_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => rust_set_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             rust_ftmm_get_and_done_mm_var(case)
@@ -31393,6 +31489,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_incremental_nullness_open(case)
         }
         "ftrender.get_renderer" => c_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => c_set_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             c_ftmm_get_and_done_mm_var(case)
@@ -32419,6 +32516,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_incremental_nullness_open(case)
         }
         "ftrender.get_renderer" => wasm_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => wasm_set_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             wasm_ftmm_get_and_done_mm_var(case)

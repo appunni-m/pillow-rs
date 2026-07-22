@@ -1197,6 +1197,7 @@ pub struct FT_Library {
     memory: FT_Memory,
     refcount: usize,
     module_names: &'static [&'static str],
+    current_outline_renderer: &'static str,
     truetype_interpreter_version: FT_UInt,
     autofitter_default_script: FT_UInt,
     autofitter_fallback_script: FT_UInt,
@@ -1749,6 +1750,7 @@ pub fn FT_Init_FreeType() -> FT_Library {
         memory: std::ptr::null_mut(),
         refcount: 1,
         module_names: DEFAULT_MODULE_NAMES,
+        current_outline_renderer: "smooth",
         truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
         // FreeType 2.14.3 `src/autofit/afmodule.c:af_autofitter_init`
         // initializes these to internal AF_SCRIPT_DEFAULT and
@@ -6814,6 +6816,18 @@ pub fn FT_Library_Renderer_Class(
     // first registered renderer whose `glyph_format` matches the requested
     // format.  Keep only class metadata observable through public renderer
     // handles; callers must not depend on raw pointer identity.
+    if format == FT_GLYPH_FORMAT_OUTLINE
+        && library
+            .module_names
+            .contains(&library.current_outline_renderer)
+    {
+        return Some((
+            library.current_outline_renderer,
+            FT_GLYPH_FORMAT_OUTLINE,
+            true,
+            true,
+        ));
+    }
     for name in library.module_names {
         let (observable_name, renderer_format, has_raster_class) = match *name {
             "smooth" | "raster1" | "sdf" => (*name, FT_GLYPH_FORMAT_OUTLINE, true),
@@ -6826,6 +6840,35 @@ pub fn FT_Library_Renderer_Class(
         }
     }
     None
+}
+
+pub fn FT_Library_Set_Renderer_By_Format(
+    library: Option<&mut FT_Library>,
+    format: FT_Glyph_Format,
+    module_name: &str,
+) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    if !library.module_names.contains(&module_name) {
+        return FT_Err_Invalid_Argument;
+    }
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` validates that the
+    // renderer belongs to `library->renderers`, moves that node with
+    // `FT_List_Up`, and updates `library->cur_renderer` only for outline
+    // renderers.  The pure-Rust core stores the public current-renderer effect;
+    // thin ABI layers own raw renderer handle validation.
+    if format == FT_GLYPH_FORMAT_OUTLINE {
+        library.current_outline_renderer = match module_name {
+            "smooth" => "smooth",
+            "raster1" => "raster1",
+            "sdf" => "sdf",
+            _ => return FT_Err_Invalid_Argument,
+        };
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Argument
+    }
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]

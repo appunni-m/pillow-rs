@@ -20619,6 +20619,29 @@ static int emit_get_renderer(int argc, char** argv) {
     return 0;
 }
 
+static int emit_set_renderer(int argc, char** argv) {
+    if (argc != 3) return 2;
+    long format = strtol(argv[2], NULL, 10);
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    printf("{");
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Renderer renderer = FT_Get_Renderer(library, (FT_Glyph_Format)format);
+    FT_Error set_error = FT_Set_Renderer(library, renderer, 0, NULL);
+    printf("\"status\":{\"kind\":\"%s\",\"error_code\":%d},\"output\":{\"set_error\":%d,\"current_renderer\":",
+           set_error ? "error" : "ok",
+           set_error,
+           set_error);
+    print_renderer_row(library, format);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_add_default_modules(int argc, char** argv) {
     int action = atoi(argv[2]);
     if (action == 1) {
@@ -24989,6 +25012,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--get-renderer")) {
         return emit_get_renderer(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--set-renderer")) {
+        return emit_set_renderer(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--get-module")) {
         return emit_get_module(argc, argv);
