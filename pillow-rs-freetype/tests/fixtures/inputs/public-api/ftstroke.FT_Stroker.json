@@ -115,6 +115,69 @@
       }
     },
     {
+      "case_id": "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c",
+      "subject": "ftstroke.FT_Stroker",
+      "case": "unparsed_handle_lifecycle_matches_c",
+      "operation": "ftstroke.stroker_lifecycle",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker",
+        "typedef": "typedef struct FT_StrokerRec_* FT_Stroker",
+        "lifecycle": [
+          "FT_Stroker_New",
+          "FT_Stroker_Set",
+          "FT_Stroker_Export",
+          "FT_Stroker_ExportBorder",
+          "FT_Stroker_Rewind",
+          "FT_Stroker_Done"
+        ]
+      },
+      "inputs": {
+        "params": {
+          "radius": 128,
+          "line_cap": "FT_STROKER_LINECAP_ROUND",
+          "line_join": "FT_STROKER_LINEJOIN_ROUND",
+          "miter_limit": 65536,
+          "parsed_path": false
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftstroke",
+        "area:abi",
+        "area:stroker",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "error": "FT_Error",
+          "stroker_nonnull": "bool",
+          "set_called": "bool",
+          "export_unparsed_noop": "bool",
+          "rewind_called": "bool",
+          "done_called": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "stroker_nonnull",
+            "set_called",
+            "export_unparsed_noop",
+            "rewind_called",
+            "done_called"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:791-881",
+          "freetype/src/base/ftstroke.c:2011-2038"
+        ]
+      }
+    },
+    {
       "case_id": "ftstroke.FT_Stroker.lifecycle_contract",
       "subject": "ftstroke.FT_Stroker",
       "case": "lifecycle_contract",

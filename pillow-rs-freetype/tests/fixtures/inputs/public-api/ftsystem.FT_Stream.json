@@ -109,6 +109,63 @@
       }
     },
     {
+      "case_id": "ftsystem.FT_Stream.valid_external_memory_stream_face_open",
+      "subject": "ftsystem.FT_Stream",
+      "case": "valid_external_memory_stream_face_open",
+      "operation": "freetype.open_face_stream",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "open_flags": [
+            "FT_OPEN_STREAM"
+          ],
+          "face_index": 0,
+          "stream_ownership": "caller_owned",
+          "stream_kind": "custom_memory_stream",
+          "verify_client_stream_not_destroyed_by_done_face": true
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftsystem",
+        "area:stream",
+        "operation:external-stream",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "status": "FT_Error",
+          "opened": "bool",
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "stream_close_calls": "u32",
+          "client_stream_alive_after_done_face": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "status",
+            "opened",
+            "face_flags",
+            "bit_set",
+            "stream_close_calls",
+            "client_stream_alive_after_done_face"
+          ]
+        }
+      }
+    },
+    {
       "case_id": "ftsystem.FT_Stream.external_stream_runtime_contract",
       "subject": "ftsystem.FT_Stream",
       "case": "external_stream_runtime_contract",

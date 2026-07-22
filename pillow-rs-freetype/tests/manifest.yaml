@@ -2384,6 +2384,8 @@ subjects:
         description: FT_Open_Face with FT_OPEN_MEMORY plus null FT_OPEN_PARAMS and/or null FT_OPEN_DRIVER opens with the same pinned C status and output face pointer behavior.
       - id: source_flag_error_matrix_matches_c
         description: FT_Open_Face rejects stream-only and multiple-source-flag FT_Open_Args rows with the exact pinned C error and null output face.
+      - id: stream_source_success_matches_c
+        description: FT_Open_Face accepts a valid caller-owned FT_OPEN_STREAM source and returns the same status, external-stream face flag, close-callback count, and caller stream lifetime as C.
       # needs-input: operation FT_Open_Face and FT_Attach_Stream using FT_Open_Args; fixture assets valid font bytes, valid pathname font, invalid/missing source, optional custom stream fixture, and an 'sbix' font for FT_OPEN_PARAMS with FT_PARAM_TAG_IGNORE_SBIX; params FT_Open_Args combinations for FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, FT_OPEN_DRIVER, FT_OPEN_PARAMS, no source flag, and multiple source flags; expected output shape FT_Error, output FT_Face pointer/null, and selected face flags; comparison rule exact C error-code parity, exact source-selection precedence/invalidity behavior, no caller-owned buffer copies or ownership changes beyond C rules, and exact parameter effect where observable.
       - id: open_face_consumes_args_like_c
         description: FT_Open_Face interprets source, driver, and parameter fields with the same validation, ownership, and observable face-state behavior as C.
@@ -10595,6 +10597,8 @@ subjects:
         description: The pinned public header defines FT_Stroker as a pointer to struct FT_StrokerRec_.
       - id: opaque_handle_import_contract
         description: Client code can declare, pass, compare, and destroy FT_Stroker handles without the public header exposing the record fields.
+      - id: unparsed_handle_lifecycle_matches_c
+        description: A non-null unparsed stroker handle can be constructed, configured, exported as a no-op, rewound, and destroyed with the same observable status and no-crash behavior as C.
       - id: lifecycle_contract
         description: Handles produced by FT_Stroker_New are consumed by FT_Stroker_Set, path commands, export/count queries, and FT_Stroker_Done.
     # needs-input: operation=C import/ABI compile probe plus FT_Stroker_New/Done lifecycle fixture; fixture_asset=small C translation unit and no-font lifecycle run; params={include=freetype/ftstroke.h, declare_handle, pass_to_public_functions}; expected output shape={compile_status, pointer_size, lifecycle FT_Error sequence}; comparison=exact C compiler success, ABI pointer shape, and constructor/destructor status.
@@ -10690,6 +10694,8 @@ subjects:
         description: Size, alignment, and field offsets match the pinned C header for base, size, pos, descriptor, pathname, read, close, memory, cursor, and limit.
       - id: memory_stream_field_contract
         description: Memory streams expose base, size, pos, cursor, and limit behavior used by FT_Stream_OpenMemory and frame-reading helpers.
+      - id: external_base_close_fields_match_c
+        description: A caller-owned external FT_StreamRec with base/size and close callback opens a face and preserves the same face flags, close-call count, and stream lifetime as C.
       - id: callback_stream_field_contract
         description: Callback streams use descriptor/pathname unions plus read and close function pointers without changing the public record shape.
     # needs-input: operation=C ABI layout probe plus FT_Open_Args external stream fixture; fixture_asset=in-memory font bytes and custom callback stream binary harness; params={initial FT_StreamRec fields, read callback behavior, close callback behavior}; expected output shape={sizeof, alignof, field_offsets, stream positions, callback event log, face load status}; comparison=exact C ABI layout and stream callback observations.
@@ -10718,6 +10724,8 @@ subjects:
         description: Type alias is present as struct FT_StreamRec_* in the pinned C public interface.
       - id: pointer_abi_contract
         description: The handle has pointer size/alignment and points to the public FT_StreamRec fields used by callbacks.
+      - id: valid_external_memory_stream_face_open
+        description: A valid caller-owned external memory stream can be passed through FT_Open_Args and keeps C-equivalent ownership, face flag, and close-callback behavior.
       - id: external_stream_runtime_contract
         description: Passing a caller-owned FT_Stream through FT_Open_Args keeps stream ownership and invokes the public close callback only according to C's external-stream rules.
     # needs-input: operation=FT_Open_Face using FT_OPEN_STREAM with caller-owned FT_StreamRec; fixture_asset=valid font bytes and malformed stream callback fixture; params={read callback returns, seek behavior, close callback present}; expected output shape={ABI pointer layout, callback event log, face load status, stream field mutations}; comparison=exact C oracle pointer/ownership behavior and returned error.

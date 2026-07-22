@@ -2753,6 +2753,23 @@ pub fn abi_support_stroker_lifecycle(action: i32) -> bool {
             let mut outline = rust_ffi::FT_OutlineSnapshot::default();
             rust_ffi::FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
         }
+        5 => {
+            rust_ffi::FT_Stroker_Set(
+                stroker,
+                128,
+                rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+                rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_Export(stroker, Some(&mut outline));
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            rust_ffi::FT_Stroker_Rewind(stroker);
+        }
         _ => return false,
     }
     rust_ffi::FT_Stroker_Done(stroker);

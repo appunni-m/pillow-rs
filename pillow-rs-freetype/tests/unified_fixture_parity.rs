@@ -24893,6 +24893,7 @@ fn stroker_lifecycle_action(case: &InputCase) -> Result<(&'static str, i32), Str
         "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop" => {
             Ok(("export-border", 3))
         }
+        "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c" => Ok(("unparsed", 5)),
         _ => Err(format!(
             "{} is not an exact stroker lifecycle/no-op parity route",
             case.case_id
@@ -24917,6 +24918,14 @@ fn stroker_lifecycle_output(action: &str) -> Value {
                 {"scenario": "valid_unparsed_left", "target_outline_after": "sentinel_outline", "crash": false}
             ]
         }),
+        "unparsed" => json!({
+            "error": 0,
+            "stroker_nonnull": true,
+            "set_called": true,
+            "export_unparsed_noop": true,
+            "rewind_called": true,
+            "done_called": true
+        }),
         _ => unreachable!(),
     }
 }
@@ -24940,6 +24949,23 @@ fn rust_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 Some(&mut outline),
             );
             FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
+        }
+        "unparsed" => {
+            FT_Stroker_Set(
+                stroker,
+                128,
+                FT_STROKER_LINECAP_ROUND as FT_Int,
+                FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let mut outline = FT_OutlineSnapshot::default();
+            FT_Stroker_Export(stroker, Some(&mut outline));
+            FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            FT_Stroker_Rewind(stroker);
         }
         _ => unreachable!(),
     }
@@ -24973,6 +24999,22 @@ fn c_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 ptr::null_mut(),
             );
             c_abi::FT_Stroker_ExportBorder(stroker, 2, ptr::null_mut());
+        }
+        "unparsed" => {
+            c_abi::FT_Stroker_Set(
+                stroker,
+                128,
+                FT_STROKER_LINECAP_ROUND as FT_Int,
+                FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            c_abi::FT_Stroker_Export(stroker, ptr::null_mut());
+            c_abi::FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                ptr::null_mut(),
+            );
+            c_abi::FT_Stroker_Rewind(stroker);
         }
         _ => unreachable!(),
     }
@@ -28782,6 +28824,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         ]),
         "ftstroke.stroker_new"
         | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
         | "ftstroke.export"
         | "ftstroke.export_border"
             if stroker_lifecycle_action(case).is_ok() =>
@@ -30291,6 +30334,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
         "ftstroke.stroker_new"
         | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
         | "ftstroke.export"
         | "ftstroke.export_border"
             if stroker_lifecycle_action(case).is_ok() =>
@@ -31424,6 +31468,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
         "ftstroke.stroker_new"
         | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
         | "ftstroke.export"
         | "ftstroke.export_border"
             if stroker_lifecycle_action(case).is_ok() =>
@@ -32448,6 +32493,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
         "ftstroke.stroker_new"
         | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
         | "ftstroke.export"
         | "ftstroke.export_border"
             if stroker_lifecycle_action(case).is_ok() =>

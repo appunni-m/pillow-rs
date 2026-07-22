@@ -19172,6 +19172,8 @@ static void print_stroker_lifecycle_output(const char* action) {
         printf("{\"scenario\":\"valid_stroker_invalid_border\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
         printf("{\"scenario\":\"valid_unparsed_left\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false}");
         printf("]}");
+    } else if (streq(action, "unparsed")) {
+        printf("{\"error\":0,\"stroker_nonnull\":true,\"set_called\":true,\"export_unparsed_noop\":true,\"rewind_called\":true,\"done_called\":true}");
     }
 }
 
@@ -19207,6 +19209,16 @@ static int emit_stroker_lifecycle(int argc, char** argv) {
         FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, NULL);
         FT_Stroker_ExportBorder(stroker, (FT_StrokerBorder)2, &outline);
         FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+    } else if (streq(action, "unparsed")) {
+        FT_Stroker_Set(
+            stroker,
+            128,
+            FT_STROKER_LINECAP_ROUND,
+            FT_STROKER_LINEJOIN_ROUND,
+            65536);
+        FT_Stroker_Export(stroker, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+        FT_Stroker_Rewind(stroker);
     } else if (!streq(action, "new") && !streq(action, "done")) {
         FT_Stroker_Done(stroker);
         FT_Done_FreeType(library);

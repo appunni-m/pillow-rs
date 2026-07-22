@@ -4989,6 +4989,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_New.valid_library_allocates_stroker": "FT_Stroker_New non-null allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c": "FT_Stroker unparsed non-null handle lifecycle validates New, Set, unparsed Export/ExportBorder no-op, Rewind, and Done through pinned C oracle, Rust FFI, C ABI, and WASM ABI; path geometry/count lifecycle remains pending",
         "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": "FT_Stroker_ExportBorder null/invalid-border/unparsed-stroker no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.outline_renderer_lookup_success": "FT_Get_Renderer outline renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -7100,6 +7101,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership"
     ):
         return "FT_OPEN_STREAM external-stream ownership validates face_flags, external-stream bit, close-call count, and caller stream lifetime through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_stream"
+        and row.case_id
+        in {
+            "freetype.FT_Open_Args.stream_source_success_matches_c",
+            "ftsystem.FT_Stream.valid_external_memory_stream_face_open",
+            "ftsystem.FT_StreamRec.external_base_close_fields_match_c",
+        }
+    ):
+        return "FT_OPEN_STREAM valid caller-owned external memory stream validates return code, opened flag, external-stream face flag, close-call count, and caller stream lifetime through pinned C oracle, Rust FFI, C ABI, and WASM ABI; malformed callback stream harness rows remain pending"
     if (
         row.operation == "freetype.active_size_handle"
         and row.case_id == "freetype.FT_Size.active_size_handle_runtime"
