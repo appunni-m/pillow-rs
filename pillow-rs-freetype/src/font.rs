@@ -3337,7 +3337,7 @@ impl Font {
         // for non-CID CFF faces independently of the SFNT `post` table.
         // Non-CFF SFNT faces use `sfobjs.c:1118-1121`, exposing glyph names
         // only if `tt_face_load_post` accepted a named `post` format.
-        if self.data.cff.is_some()
+        if (self.data.cff.is_some() && !self.is_cid_keyed())
             || self.data.post.as_ref().is_some_and(|post| {
                 matches!(post.format_type, 0x0001_0000 | 0x0002_0000 | 0x0002_5000)
             })

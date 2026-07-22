@@ -134,6 +134,57 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "freetype.FT_HAS_GLYPH_NAMES.cid_keyed_cff_false",
+      "subject": "freetype.FT_HAS_GLYPH_NAMES",
+      "case": "no_glyph_names_control_false",
+      "operation": "freetype.face_macro",
+      "schema": "macro_probe",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "sfnt_wrapped_cid_font",
+            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+            "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+            "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+            "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+            "license": "OFL-1.1"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "macro": "FT_HAS_GLYPH_NAMES",
+          "source_behavior": "Pinned FreeType leaves FT_FACE_FLAG_GLYPH_NAMES clear for the maintained SFNT-wrapped CID-keyed CFF fixture."
+        }
+      },
+      "classifiers": [
+        "kind:macro",
+        "header:freetype",
+        "area:face-flags",
+        "asset:existing",
+        "cid-keyed"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "macro_result": "int-like boolean",
+          "face_flags": "FT_Long"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "macro_result",
+            "face_flags",
+            "face_index"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/cff/cffobjs.c:cff_face_init"
+        ]
+      }
     }
   ]
 }

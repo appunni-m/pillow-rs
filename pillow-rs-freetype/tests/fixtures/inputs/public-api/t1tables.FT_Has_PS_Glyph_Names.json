@@ -135,6 +135,40 @@
       }
     },
     {
+      "case_id": "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false",
+      "subject": "t1tables.FT_Has_PS_Glyph_Names",
+      "case": "cid_true_type_and_null_return_false",
+      "covers_manifest_cases": ["cid_true_type_and_null_return_false"],
+      "operation": "t1tables.has_ps_glyph_names",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "sfnt_wrapped_cid_font",
+            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+            "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+            "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+            "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+            "license": "OFL-1.1"
+          }
+        },
+        "params": {
+          "face_source": "font",
+          "face_index": 0,
+          "source_behavior": "CID-keyed CFF has no ps_has_glyph_names callback; FT_Has_PS_Glyph_Names keeps the initialized 0 result."
+        }
+      },
+      "classifiers": ["kind:function", "header:t1tables", "area:ps_glyph_names", "asset:existing", "cid-keyed"],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {"result": "FT_Int"},
+        "compare": {"mode": "exact", "paths": ["result"]},
+        "source_refs": ["freetype/src/base/fttype1.c:FT_Has_PS_Glyph_Names", "freetype/src/cff/cffdrivr.c:cff_get_interface"]
+      }
+    },
+    {
       "case_id": "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
       "subject": "t1tables.FT_Has_PS_Glyph_Names",
       "case": "cid_true_type_and_null_return_false",
