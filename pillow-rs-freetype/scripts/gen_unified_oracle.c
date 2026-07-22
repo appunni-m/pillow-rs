@@ -19471,6 +19471,61 @@ static int emit_stroker_zero_line(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_degenerate_curve(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   128,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 100, 100 };
+    FT_Vector near = { 101, 101 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error curve_error = begin_error;
+    if (!curve_error && streq(action, "conic")) {
+        curve_error = FT_Stroker_ConicTo(stroker, &near, &near);
+    } else if (!curve_error && streq(action, "cubic")) {
+        curve_error = FT_Stroker_CubicTo(stroker, &near, &near, &near);
+    } else if (!curve_error) {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_UInt points = 99;
+    FT_UInt contours = 99;
+    FT_Error counts_error = FT_Stroker_GetCounts(stroker, &points, &contours);
+    FT_Error status = curve_error ? curve_error : counts_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":");
+    printf("{\"status\":%d,\"counts_after\":{\"points\":%u,\"contours\":%u},\"center_after\":\"destination vector\"}",
+           status,
+           points,
+           contours);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_truetype_engine_type(int argc, char** argv) {
     (void)argc;
     int library_kind = atoi(argv[2]);
@@ -25698,6 +25753,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-zero-line")) {
         return emit_stroker_zero_line(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-degenerate-curve")) {
+        return emit_stroker_degenerate_curve(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);

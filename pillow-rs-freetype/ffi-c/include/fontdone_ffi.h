@@ -805,6 +805,8 @@ void FT_Stroker_Set(FT_Stroker stroker, FT_Fixed radius, int line_cap, int line_
 void FT_Stroker_Rewind(FT_Stroker stroker);
 FT_Error FT_Stroker_BeginSubPath(FT_Stroker stroker, FT_Vector* to, FT_Bool open);
 FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to);
+FT_Error FT_Stroker_ConicTo(FT_Stroker stroker, FT_Vector* control, FT_Vector* to);
+FT_Error FT_Stroker_CubicTo(FT_Stroker stroker, FT_Vector* control1, FT_Vector* control2, FT_Vector* to);
 FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours);
 FT_Error FT_Stroker_GetCounts(FT_Stroker stroker, FT_UInt* anum_points, FT_UInt* anum_contours);
 void FT_Stroker_Done(FT_Stroker stroker);

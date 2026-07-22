@@ -4476,6 +4476,79 @@ pub extern "C" fn FT_Stroker_LineTo(stroker: FT_Stroker, to: *const FT_Vector) -
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ConicTo(
+    stroker: FT_Stroker,
+    control: *const FT_Vector,
+    to: *const FT_Vector,
+) -> FT_Error {
+    let rust_control = if control.is_null() {
+        None
+    } else {
+        // SAFETY: `control` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control = unsafe { &*control };
+        Some(rust_ffi::FT_Vector {
+            x: control.x,
+            y: control.y,
+        })
+    };
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_ConicTo(stroker, rust_control.as_ref(), rust_to.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_CubicTo(
+    stroker: FT_Stroker,
+    control1: *const FT_Vector,
+    control2: *const FT_Vector,
+    to: *const FT_Vector,
+) -> FT_Error {
+    let rust_control1 = if control1.is_null() {
+        None
+    } else {
+        // SAFETY: `control1` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control1 = unsafe { &*control1 };
+        Some(rust_ffi::FT_Vector {
+            x: control1.x,
+            y: control1.y,
+        })
+    };
+    let rust_control2 = if control2.is_null() {
+        None
+    } else {
+        // SAFETY: `control2` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control2 = unsafe { &*control2 };
+        Some(rust_ffi::FT_Vector {
+            x: control2.x,
+            y: control2.y,
+        })
+    };
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_CubicTo(
+        stroker,
+        rust_control1.as_ref(),
+        rust_control2.as_ref(),
+        rust_to.as_ref(),
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_GetBorderCounts(
     stroker: FT_Stroker,
     border: FT_StrokerBorder,
