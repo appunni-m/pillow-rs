@@ -2879,3 +2879,37 @@ Duplicate-route findings from the same audit pass:
   - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
+### Split FT_Parameter maintained dispatch rows: 2026-07-22
+
+- Added focused `freetype.FT_Parameter` split rows for same-input behavior
+  already supported by maintained exact routes:
+  - `typographic_name_params_match_c` covers null-data typographic
+    family/subfamily tags consumed by `FT_Open_Face`.
+  - `ignored_open_params_match_c` covers ignored/no-effect open-face tags on a
+    non-SBIX SFNT without claiming SBIX outline/bitmap behavior.
+  - `incremental_null_data_matches_c` covers absent/null incremental parameter
+    data and proves embedded glyph loading proceeds with no callback events.
+- Kept `tag_data_parameters_match_c_behavior` pending because it still declares
+  SBIX, real incremental callback, and broader property consumers that are not
+  proven by these split rows.
+- Next verification: focused `test-case` runs for the three new case IDs,
+  route audit, full parity, FFI compatibility, no-runtime-FFI, fmt, clippy, and
+  `git diff --check`.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.typographic_name_params_match_c`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.ignored_open_params_match_c`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.incremental_null_data_matches_c`
+    passed `1/1`.
+- Focused route audit after adding the split rows:
+  `concrete_cases=7289`, `real-parity=4793`, `pending-route=221`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7063 failed=0
+    total=7063`, pending `226`.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7289`, `real-parity=4793`, `pending-route=221`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.

@@ -4840,6 +4840,9 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "freetype.FT_FaceRec.available_sizes_public_fields_match_c": "FT_FaceRec num_fixed_sizes and available_sizes pointer-derived records validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "freetype.FT_FaceRec.charmap_public_fields_match_c": "FT_FaceRec num_charmaps, owned charmap records, active charmap selection, and char-index probes validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.typographic_name_params_match_c": "FT_Parameter typographic family/subfamily tag dispatch validates through FT_Open_Face with pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.ignored_open_params_match_c": "FT_Parameter ignored open-face tags validate no-effect public output through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.incremental_null_data_matches_c": "FT_Parameter incremental absent/null-data dispatch validates embedded glyph loading and null callback state through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 
