@@ -19623,6 +19623,79 @@ static int emit_stroker_finalized_counts(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_reset_counts(int argc, char** argv) {
+    if (argc != 3) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector p1 = { 640, 0 };
+    FT_Vector p2 = { 640, 640 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line1_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &p1);
+    FT_Error line2_error = line1_error ? line1_error : FT_Stroker_LineTo(stroker, &p2);
+    FT_Error end_error = line2_error ? line2_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt before_points = 99;
+    FT_UInt before_contours = 99;
+    FT_Error before_error = FT_Stroker_GetCounts(stroker, &before_points, &before_contours);
+    if (streq(argv[2], "rewind")) {
+        FT_Stroker_Rewind(stroker);
+    } else if (streq(argv[2], "set")) {
+        FT_Stroker_Set(stroker,
+                       128,
+                       FT_STROKER_LINECAP_SQUARE,
+                       FT_STROKER_LINEJOIN_ROUND,
+                       65536);
+    } else {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_UInt after_points = 99;
+    FT_UInt after_contours = 99;
+    FT_Error after_error = FT_Stroker_GetCounts(stroker, &after_points, &after_contours);
+    FT_Error status = end_error ? end_error : before_error;
+    if (!status) status = after_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{");
+    printf("\"counts_before_rewind\":{\"points\":%u,\"contours\":%u},",
+           before_points,
+           before_contours);
+    printf("\"counts_after_rewind\":{\"points\":%u,\"contours\":%u},",
+           after_points,
+           after_contours);
+    printf("\"counts_before_set\":{\"points\":%u,\"contours\":%u},",
+           before_points,
+           before_contours);
+    printf("\"counts_after_set\":{\"points\":%u,\"contours\":%u}",
+           after_points,
+           after_contours);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -26021,6 +26094,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
         return emit_stroker_finalized_counts(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-reset-counts")) {
+        return emit_stroker_reset_counts(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);

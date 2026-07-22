@@ -249,6 +249,43 @@ make fontdone-lint
 git diff --check
 ```
 
+Current continuation result after `FT_Stroker_Set`/`FT_Stroker_Rewind`
+path-clearing count routes:
+
+- Added exact public count routes for three Set/Rewind reset rows:
+  - `ftstroke.FT_Stroker_Set.clears_existing_path`;
+  - `ftstroke.FT_Stroker_Rewind.clears_previous_path`;
+  - `ftstroke.FT_Stroker_Rewind.set_calls_rewind`.
+- The route builds the maintained simple closed two-line round-join path, proves
+  non-zero combined counts before reset (`21/2`), then calls either
+  `FT_Stroker_Rewind` or `FT_Stroker_Set` and proves combined counts reset to
+  `0/0` through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+- This only proves path-clearing count state. Attribute preservation through
+  later geometry, miter-limit fallback geometry, and exported outline
+  point/tag/contour parity remain pending.
+
+Verified focused impact:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 205, 'real-null-validation': 9, 'real-parity': 4817}
+ftstroke.set runtime_parity: passed=3 failed=0 total=3, pending=2
+ftstroke.rewind runtime_parity: passed=2 failed=0 total=2, pending=1
+ftstroke.set_then_rewind_observed runtime_parity: passed=1 failed=0 total=1
+```
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftstroke.set
+make -C pillow-rs-freetype test-op OP=ftstroke.rewind
+make -C pillow-rs-freetype test-op OP=ftstroke.set_then_rewind_observed
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained

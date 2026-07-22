@@ -2941,6 +2941,77 @@ pub fn abi_support_stroker_finalized_counts(open: i32) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_reset_counts(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line1_error = if begin_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut before_points = 99;
+    let mut before_contours = 99;
+    let before_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut before_points),
+        Some(&mut before_contours),
+    );
+    match action {
+        1 => rust_ffi::FT_Stroker_Rewind(stroker),
+        2 => rust_ffi::FT_Stroker_Set(
+            stroker,
+            128,
+            rust_ffi::FT_STROKER_LINECAP_SQUARE as FT_Int,
+            rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        _ => {
+            rust_ffi::FT_Stroker_Done(stroker);
+            return false;
+        }
+    }
+    let mut after_points = 99;
+    let mut after_contours = 99;
+    let after_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut after_points), Some(&mut after_contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    end_error == rust_ffi::FT_Err_Ok
+        && before_error == rust_ffi::FT_Err_Ok
+        && after_error == rust_ffi::FT_Err_Ok
+        && before_points == 21
+        && before_contours == 2
+        && after_points == 0
+        && after_contours == 0
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_parse_degenerate() -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();
