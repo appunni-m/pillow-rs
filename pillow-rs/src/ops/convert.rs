@@ -92,7 +92,7 @@ impl Image {
         if let Some(mat) = matrix {
             let img = self.materialize()?;
             return convert_with_matrix(&img, mode, &mat)
-                .map(|result| Image::Loaded(result, explicit_mode_for(mode)));
+                .map(|result| Image::from_dynamic(result, explicit_mode_for(mode)));
         }
 
         // Handle conversion from non-standard modes (CMYK, HSV, YCbCr, I, F, P).
@@ -129,7 +129,7 @@ impl Image {
                 } else {
                     converted
                 };
-                return Ok(Image::Loaded(result, explicit_mode_for(mode)));
+                return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
             }
         }
 
@@ -232,7 +232,7 @@ impl Image {
                     }
                 }
             }
-            return Ok(Image::Loaded(
+            return Ok(Image::from_dynamic(
                 DynamicImage::ImageLuma8(out),
                 Some("1".to_string()),
             ));
@@ -257,7 +257,7 @@ impl Image {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
             }
             return Ok(Image::Pipeline {
-                source: Arc::new(Image::Loaded(
+                source: Arc::new(Image::from_dynamic(
                     DynamicImage::ImageLuma8(out),
                     Some("P".to_string()),
                 )),
@@ -266,6 +266,7 @@ impl Image {
                 explicit_mode: Some("P".to_string()),
                 backend: None,
                 palette: Some(palette_bytes),
+                palette_alpha: None,
             });
         }
 

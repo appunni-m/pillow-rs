@@ -418,7 +418,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "verify")]
     pub fn verify(&self) -> Result<(), JsValue> {
-        self.inner.materialize().map(|_| ()).map_err(err)
+        self.inner.verify().map_err(err)
     }
     #[wasm_bindgen(js_name = "fromBytes")]
     pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> {
@@ -479,7 +479,9 @@ impl Image {
         self.inner.tobytes().map_err(err)
     }
     #[wasm_bindgen(js_name = "applyTransparency")]
-    pub fn apply_transparency(&self) {}
+    pub fn apply_transparency(&mut self) -> Result<(), JsValue> {
+        self.inner.apply_transparency().map_err(err)
+    }
     #[wasm_bindgen(js_name = "draft")]
     pub fn draft(&self) -> Image {
         Image {

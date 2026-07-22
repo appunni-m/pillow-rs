@@ -62,7 +62,7 @@ impl Draw {
             Some("F") | Some("I") | Some("CMYK") => self.orig_mode.clone(),
             _ => None,
         };
-        self.image = Image::Loaded(DynamicImage::ImageRgba8(canvas), explicit);
+        self.image = Image::from_dynamic(DynamicImage::ImageRgba8(canvas), explicit);
     }
 
     /// Draws a line from `(x0, y0)` to `(x1, y1)`.
@@ -344,7 +344,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageLuma8(luma),
                     Some("1".to_string()),
                 );
@@ -373,7 +373,8 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
+                self.image =
+                    Image::from_dynamic(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -406,7 +407,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageLumaA8(la),
                     Some("LA".to_string()),
                 );
@@ -455,7 +456,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
@@ -489,7 +490,13 @@ impl Draw {
                             }
                         }
                     }
-                    self.image = Image::Paletted(crate::image::PalettedData { indices, palette });
+                    self.image = Image::Paletted(crate::image::PalettedData {
+                        indices,
+                        palette,
+                        palette_alpha: self.image.palette_alpha().unwrap_or_default(),
+                        source_format: None,
+                        info: None,
+                    });
                 } else {
                     let img = self.image.materialize()?;
                     let (img_w, img_h) = (img.width(), img.height());
@@ -513,7 +520,7 @@ impl Draw {
                             }
                         }
                     }
-                    self.image = Image::Loaded(
+                    self.image = Image::from_dynamic(
                         pillow_rs_image::DynamicImage::ImageLuma8(luma),
                         Some("P".to_string()),
                     );
@@ -565,7 +572,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );
@@ -688,6 +695,12 @@ impl Draw {
                                     return Image::Paletted(crate::image::PalettedData {
                                         indices,
                                         palette,
+                                        palette_alpha: self
+                                            .image
+                                            .palette_alpha()
+                                            .unwrap_or_default(),
+                                        source_format: None,
+                                        info: None,
                                     });
                                 }
                                 // Fallback: grayscale approximation
@@ -696,12 +709,12 @@ impl Draw {
                             "CMYK" => {
                                 // Identity: RGBA pixel values ARE CMYK pixel values
                                 // (C→R, M→G, Y→B, K→A). Just tag the buffer as CMYK.
-                                return Image::Loaded(img_loaded, Some("CMYK".to_string()));
+                                return Image::from_dynamic(img_loaded, Some("CMYK".to_string()));
                             }
                             "RGBA" => {
                                 // Identity: RGBA pixel values stay RGBA.
                                 // Tag with explicit mode so mode() always reports "RGBA".
-                                return Image::Loaded(
+                                return Image::from_dynamic(
                                     DynamicImage::ImageRgba8(img_loaded.to_rgba8()),
                                     Some("RGBA".to_string()),
                                 );
@@ -713,7 +726,7 @@ impl Draw {
                             "1" => Some("1".to_string()),
                             _ => None,
                         };
-                        return Image::Loaded(converted, explicit);
+                        return Image::from_dynamic(converted, explicit);
                     }
                 }
             }
@@ -1062,7 +1075,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageLuma8(luma),
                     Some("1".to_string()),
                 );
@@ -1090,7 +1103,8 @@ impl Draw {
                         luma.put_pixel(dx, dy, pillow_rs_image::Luma([result]));
                     }
                 }
-                self.image = Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
+                self.image =
+                    Image::from_dynamic(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -1118,7 +1132,7 @@ impl Draw {
                         la.put_pixel(dx, dy, pillow_rs_image::LumaA([new_l, new_a]));
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageLumaA8(la),
                     Some("LA".to_string()),
                 );
@@ -1161,7 +1175,7 @@ impl Draw {
                         rgba.put_pixel(dx, dy, new_pix);
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
@@ -1187,7 +1201,13 @@ impl Draw {
                             }
                         }
                     }
-                    self.image = Image::Paletted(crate::image::PalettedData { indices, palette });
+                    self.image = Image::Paletted(crate::image::PalettedData {
+                        indices,
+                        palette,
+                        palette_alpha: self.image.palette_alpha().unwrap_or_default(),
+                        source_format: None,
+                        info: None,
+                    });
                 } else {
                     // Fallback: just modify luma8
                     let mut luma = img.to_luma8();
@@ -1202,7 +1222,7 @@ impl Draw {
                             }
                         }
                     }
-                    self.image = Image::Loaded(
+                    self.image = Image::from_dynamic(
                         pillow_rs_image::DynamicImage::ImageLuma8(luma),
                         Some("P".to_string()),
                     );
@@ -1224,7 +1244,7 @@ impl Draw {
                         }
                     }
                 }
-                self.image = Image::Loaded(
+                self.image = Image::from_dynamic(
                     pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );

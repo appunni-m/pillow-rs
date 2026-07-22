@@ -724,9 +724,7 @@ impl PyImage {
     }
 
     fn verify(&self) -> PyResult<()> {
-        // Verify image data integrity
-        self.inner.materialize().map_err(map_error)?;
-        Ok(())
+        self.inner.verify().map_err(map_error)
     }
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {

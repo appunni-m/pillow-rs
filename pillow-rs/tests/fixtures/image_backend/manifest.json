@@ -1,0 +1,117 @@
+{
+  "oracle": {
+    "implementation": "Pillow",
+    "version": "12.2.0",
+    "source": "image-slash-star/pillow-oracle.lock.yaml"
+  },
+  "decode": [
+    {
+      "id": "png_rgb_1x1",
+      "feature": "image-png",
+      "input": "inputs/png_1x1.png",
+      "pixels": "outputs/png_1x1.bin",
+      "format": "PNG",
+      "mode": "RGB",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "png_indexed_alpha",
+      "feature": "image-png",
+      "input": "inputs/png_indexed_alpha.png",
+      "pixels": "outputs/png_indexed_alpha.bin",
+      "format": "PNG",
+      "mode": "P",
+      "width": 128,
+      "height": 128,
+      "palette_hex": "040406fbfaf7fa03045f20e0a0dd1d9aa060dae1611a2061221c9c625d9d59dfa2e2dc9ca51f5be09bdb2062225a6163a39c9a189ba2205fe499272663d5d8e11f6420df60df1fa0dc9f19629fe5e5645aa2e4e81cdf9924e127dc99a49a5d16d9561fd81cd558191424a9dd22685b208fdcdb6e229751a65bd969a464eb692fa15b99145e5e2d9b1ceb570ea892ce5965a52d67b159a62593518f58e261f0a7f2599959d1da4b63a4a3d0ad6fa09d0f1467e411a6a53217906621b29c219e0d",
+      "palette_alpha_hex": "00"
+    },
+    {
+      "id": "jpeg_rgb_1x1",
+      "feature": "image-jpeg",
+      "input": "inputs/jpeg_1x1.jpg",
+      "pixels": "outputs/jpeg_1x1.bin",
+      "format": "JPEG",
+      "mode": "RGB",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "gif_indexed_1x1",
+      "feature": "image-gif",
+      "input": "inputs/gif_1x1.gif",
+      "pixels": "outputs/gif_1x1.bin",
+      "format": "GIF",
+      "mode": "P",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "bmp_rgb_1x1",
+      "feature": "image-bmp",
+      "input": "inputs/bmp_1x1.bmp",
+      "pixels": "outputs/bmp_1x1.bin",
+      "format": "BMP",
+      "mode": "RGB",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "tiff_rgb_little_endian",
+      "feature": "image-tiff",
+      "input": "inputs/tiff_le.tiff",
+      "pixels": "outputs/tiff_le.bin",
+      "format": "TIFF",
+      "mode": "RGB",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "id": "webp_rgb_lossy",
+      "feature": "image-webp",
+      "input": "inputs/webp_lossy.webp",
+      "pixels": "outputs/webp_lossy.bin",
+      "format": "WEBP",
+      "mode": "RGB",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "id": "ico_rgb_single",
+      "feature": "image-ico",
+      "input": "inputs/ico_single.ico",
+      "pixels": "outputs/ico_single.bin",
+      "format": "ICO",
+      "mode": "RGB",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "id": "avif_rgb_baseline",
+      "feature": "image-avif",
+      "input": "inputs/avif_baseline.avif",
+      "pixels": "outputs/avif_baseline.bin",
+      "format": "AVIF",
+      "mode": "RGB",
+      "width": 128,
+      "height": 128
+    }
+  ],
+  "errors": [
+    {
+      "id": "unknown_encoded_input",
+      "feature": "image-png",
+      "input": "inputs/not_a_png.png",
+      "stage": "open",
+      "kind": "unidentified"
+    },
+    {
+      "id": "png_bad_crc",
+      "feature": "image-png",
+      "input": "inputs/png_bad_crc.png",
+      "stage": "verify",
+      "kind": "malformed_png"
+    }
+  ]
+}
