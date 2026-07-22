@@ -46,6 +46,11 @@
 #define FT_ERR_PREFIX FT_Err_
 #endif
 
+static FT_Error cache_no_lookup_requester(FTC_FaceID face_id,
+                                          FT_Library library,
+                                          FT_Pointer req_data,
+                                          FT_Face* aface);
+
 static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
@@ -7691,6 +7696,64 @@ static int emit_cache_node_unref_null_only(void) {
     printf("\"rows\":[");
     printf("{\"node\":\"null\",\"manager\":\"null\",\"void_return\":true,\"side_effects\":\"none\"}");
     printf("]}}\n");
+    return 0;
+}
+
+static int emit_cache_node_unref_null_or_invalid(void) {
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cache_no_lookup_requester,
+                                             NULL,
+                                             &manager);
+    if (manager_error || !manager) {
+        printf("{");
+        print_status(manager_error ? manager_error : FT_Err_Invalid_Argument);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    FTC_Node_Unref(NULL, NULL);
+    FTC_Node_Unref(NULL, manager);
+
+    FTC_NodeRec foreign_node;
+    memset(&foreign_node, 0, sizeof(foreign_node));
+    foreign_node.cache_index = 0xFFFF;
+    foreign_node.ref_count = 7;
+    FT_Short ref_count_before = foreign_node.ref_count;
+    /*
+     * FreeType src/cache/ftcmanag.c:FTC_Node_Unref only touches a non-null
+     * node when cache_index is within manager->num_caches. 0xFFFF is outside
+     * every live manager created by FTC_Manager_New, so this exercises the
+     * documented foreign/bad-cache-index no-op branch without dereferencing a
+     * cache-specific node payload.
+     */
+    FTC_Node_Unref((FTC_Node)&foreign_node, manager);
+    FT_Short ref_count_after = foreign_node.ref_count;
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"void\":true,\"side_effects\":[");
+    printf("{\"node\":\"null\",\"manager\":\"null\",\"void_return\":true,\"side_effects\":\"none\"},");
+    printf("{\"node\":\"null\",\"manager\":\"live_empty\",\"void_return\":true,\"side_effects\":\"none\"},");
+    printf("{\"node\":\"foreign_or_bad_cache_index\",\"manager\":\"live_empty\","
+           "\"void_return\":true,\"side_effects\":\"none\","
+           "\"cache_index_class\":\"out_of_range\",\"ref_count_before\":%d,"
+           "\"ref_count_after\":%d}",
+           ref_count_before,
+           ref_count_after);
+    printf("]}}\n");
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
     return 0;
 }
 
@@ -25561,6 +25624,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--cache-node-unref-null-only")) {
         return emit_cache_node_unref_null_only();
+    }
+    if (argc == 2 && streq(argv[1], "--cache-node-unref-null-or-invalid")) {
+        return emit_cache_node_unref_null_or_invalid();
     }
     if (argc == 8 && streq(argv[1], "--scaler-descriptor-lifetime")) {
         return emit_scaler_descriptor_lifetime(argc, argv);
