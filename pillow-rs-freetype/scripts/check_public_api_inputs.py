@@ -3356,6 +3356,12 @@ def done_glyph_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
         and row.params.get("glyph") is None
     ):
         return None
+    if (
+        row.case_id == "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
+        and row.params.get("destroy_order") == "glyph_before_face_and_library"
+        and "outline_font" in row.assets
+    ):
+        return None
     if row.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer":
         creation_paths = row.params.get("creation_paths")
         if (
@@ -5089,6 +5095,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.done_glyph",
             "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays",
         ): "FT_Done_Glyph outline-glyph ownership validates a real FT_Get_Glyph outline, owned outline flags/counts before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done",
+        ): "FT_Done_Glyph outline glyph-before-library lifetime validates a real FT_Get_Glyph outline is released before face/library teardown through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftglyph.done_glyph",
             "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",

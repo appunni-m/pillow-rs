@@ -6303,12 +6303,16 @@ static void print_done_outline_glyph_payload(FT_GlyphSlot slot) {
         printf("\"outline_counts_before_done\":{\"n_points\":%d,\"n_contours\":%d},",
                n_points,
                n_contours);
-        printf("\"free_events\":\"FT_Done_Glyph called once for owned outline glyph\"");
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned outline glyph\",");
+        printf("\"lifetime_order\":\"glyph_before_face_and_library\",");
+        printf("\"invalid_use_classification\":\"not_attempted\"");
     } else {
         printf("\"format_before_done\":null,");
         printf("\"outline_owner_class\":null,");
         printf("\"outline_counts_before_done\":null,");
-        printf("\"free_events\":\"none\"");
+        printf("\"free_events\":\"none\",");
+        printf("\"lifetime_order\":\"glyph_not_created\",");
+        printf("\"invalid_use_classification\":\"not_attempted\"");
     }
     printf("}}\n");
     if (glyph) {
