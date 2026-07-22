@@ -4744,6 +4744,21 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "freetype.open_face_args"
+        and row.case_id
+        in {
+            "freetype.FT_Open_Args.memory_source_success_matches_c",
+            "freetype.FT_Open_Args.memory_source_error_variants_match_c",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Open_Args FT_OPEN_MEMORY source dispatch, invalid source flags, "
+            "null args/library/aface rows validate exact "
+            "FT_Open_Face status plus output pointer nullness through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.get_ps_font_value"
         and row.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
         and unresolved_assets_reason(row) is None

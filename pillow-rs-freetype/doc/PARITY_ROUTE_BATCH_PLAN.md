@@ -4,10 +4,10 @@ Current objective: exact same-input parity with pinned C FreeType for Rust FFI,
 thin C ABI, and WASM ABI. Do not count coverage-only tests, generic fallback,
 fixture substitutions, or green placeholders as parity.
 
-Current live baseline on `main` after the bitmap-glyph ownership route batch:
+Current live baseline on `main` after the FT_Open_Args memory-source split:
 
 ```text
-route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4760}
+route audit concrete_cases=7264 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4762}
 pending_route_rows=227
 duplicate_operation_input_buckets=41
 ```
@@ -30,6 +30,21 @@ High-leverage duplicate input buckets from
 
 Current-turn candidate decisions:
 
+- `freetype.FT_Open_Args.memory_source_success_matches_c` and
+  `freetype.FT_Open_Args.memory_source_error_variants_match_c` are the
+  concrete split for the memory-source subset of `FT_Open_Args`.  They compare
+  `FT_OPEN_MEMORY` success plus C-safe invalid rows for no source flag,
+  multiple source flags, null args, null library, and null output face through
+  pinned C, Rust FFI, thin C ABI, and WASM ABI.  The attempted `memory_base =
+  NULL` invalid row is intentionally not promoted: pinned FreeType 2.14.3
+  segfaults in the `--open-face-variants` oracle for `FT_OPEN_MEMORY` with a
+  null memory base instead of returning a public `FT_Error`, so treating Rust's
+  safe `Invalid_Argument` as exact C parity would be a green placeholder.
+  Focused `test-op OP=freetype.open_face_args` reports `passed=2 failed=0
+  total=2` with one pending broad row. Full `fontdone-test` reports
+  `runtime_parity: passed=7032 failed=0 total=7032
+  covered_manifest_cases=3925` and `runtime_cases: runnable=7032
+  pending=232`.
 - `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` stays pending even
   though concrete outline and bitmap ownership sub-routes are now real.  The
   broad row still declares optional SVG glyphs, malformed glyph/class facades,
