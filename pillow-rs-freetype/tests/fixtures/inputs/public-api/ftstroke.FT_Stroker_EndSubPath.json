@@ -234,6 +234,60 @@
           "freetype/src/base/ftstroke.c:2229-2237"
         ]
       }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only",
+      "subject": "ftstroke.FT_Stroker_EndSubPath",
+      "case": "no_segment_after_begin",
+      "operation": "ftstroke.end_subpath",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_EndSubPath",
+        "signature": "FT_Error FT_Stroker_EndSubPath(FT_Stroker stroker)"
+      },
+      "inputs": {
+        "assets": {},
+        "params": {
+          "start": {
+            "x": 0,
+            "y": 0
+          },
+          "open": false,
+          "radius": 96,
+          "line_cap": "FT_STROKER_LINECAP_ROUND",
+          "line_join": "FT_STROKER_LINEJOIN_ROUND",
+          "miter_limit": 65536,
+          "observe": "status_only"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:degenerate"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "begin_status": "FT_Error",
+          "end_status": "FT_Error"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "begin_status",
+            "end_status"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:1874-1933"
+        ],
+        "notes": [
+          "Pinned FreeType 2.14.3 returns OK for the direct closed no-segment EndSubPath status. A following GetCounts on this exact state segfaults in the pinned build, so counts-after-direct-no-segment must not be promoted through the normal same-process route."
+        ]
+      }
     }
   ]
 }

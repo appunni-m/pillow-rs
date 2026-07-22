@@ -25391,6 +25391,10 @@ fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
 }
 
+fn is_stroker_end_subpath_no_segment_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only"
+}
+
 fn stroker_zero_line_output(status: FT_Error, points: FT_UInt, contours: FT_UInt) -> RunOutput {
     ok(json!({
         "status": status,
@@ -25815,6 +25819,95 @@ fn wasm_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> 
         ]))
     } else {
         Err("unsupported stroker degenerate ParseOutline route".to_string())
+    }
+}
+
+fn stroker_end_subpath_no_segment_output(status: FT_Error) -> RunOutput {
+    ok(json!({
+        "begin_status": FT_Err_Ok,
+        "end_status": status
+    }))
+}
+
+fn rust_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let begin_status = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let end_status = if begin_status == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        begin_status
+    };
+    FT_Stroker_Done(stroker);
+    Ok(stroker_end_subpath_no_segment_output(end_status))
+}
+
+fn c_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let begin_status = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let end_status = if begin_status == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        begin_status
+    };
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_end_subpath_no_segment_output(end_status))
+}
+
+fn wasm_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_end_subpath_no_segment() {
+        Ok(stroker_end_subpath_no_segment_output(FT_Err_Ok))
+    } else {
+        Err("unsupported stroker EndSubPath no-segment route".to_string())
     }
 }
 
@@ -29778,6 +29871,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             Ok(vec!["--stroker-parse-degenerate".to_string()])
         }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            Ok(vec!["--stroker-end-no-segment".to_string()])
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => Ok(vec![
             "--stroker-null-noop".to_string(),
             stroker_null_noop_action(case)?.0.to_string(),
@@ -31300,6 +31396,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             rust_stroker_parse_degenerate(case)
         }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            rust_stroker_end_subpath_no_segment(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             rust_stroker_null_noop(case)
         }
@@ -32449,6 +32548,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             c_stroker_parse_degenerate(case)
         }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            c_stroker_end_subpath_no_segment(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -33488,6 +33590,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             wasm_stroker_parse_degenerate(case)
+        }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            wasm_stroker_end_subpath_no_segment(case)
         }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             wasm_stroker_null_noop(case)

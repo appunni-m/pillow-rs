@@ -3411,6 +3411,28 @@ pub fn FT_Stroker_ParseOutline(
     })
 }
 
+pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if entry.state.first_point && !entry.state.subpath_open {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` returns OK for
+            // a closed subpath that has only `BeginSubPath` state and no
+            // emitted segment.  A later count query on this exact C state
+            // dereferences unfinished border internals in the pinned build, so
+            // only the public EndSubPath status is promoted as same-input
+            // parity here.
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
 pub fn FT_Stroker_GetBorderCounts(
     stroker: FT_Stroker,
     border: FT_Int,

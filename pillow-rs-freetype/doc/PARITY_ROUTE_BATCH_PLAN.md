@@ -143,6 +143,46 @@ make fontdone-lint
 git diff --check
 ```
 
+Current continuation result after the direct no-segment `FT_Stroker_EndSubPath`
+status split:
+
+- Added `ftstroke.FT_Stroker_EndSubPath.no_segment_status_only` as a concrete
+  split of the broad `no_segment_after_begin` manifest row. The route creates a
+  stroker, sets round cap/join attributes, begins a closed subpath at `(0, 0)`,
+  then calls public `FT_Stroker_EndSubPath` without any line/conic/cubic
+  segment.
+- Pinned FreeType 2.14.3 returns OK for this direct `EndSubPath` status at
+  `src/base/ftstroke.c:1874-1933`. Rust FFI, thin C ABI, and WASM ABI now match
+  that same-input status behavior.
+- A following direct `FT_Stroker_GetCounts` on this exact pinned-C state
+  segfaults in the normal same-process probe, so counts-after-direct-no-segment
+  are intentionally not promoted. The separate `FT_Stroker_ParseOutline`
+  degenerate route remains the safe public path for zero-count no-segment parse
+  behavior because FreeType skips `EndSubPath` when no segment was generated.
+- Closed/open subpath geometry, cap emission, border finalization, and exported
+  outline rows remain pending.
+
+Verified impact:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 214, 'real-null-validation': 9, 'real-parity': 4808}
+focused ftstroke.end_subpath runtime_parity: passed=2 failed=0 total=2, pending=2
+full runtime_parity: passed=7078 failed=0 total=7078
+full runtime_cases: pending=219
+```
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_EndSubPath.no_segment_status_only
+make -C pillow-rs-freetype test-op OP=ftstroke.end_subpath
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained
