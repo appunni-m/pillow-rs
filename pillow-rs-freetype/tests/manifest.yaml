@@ -2364,6 +2364,10 @@ subjects:
         description: FT_Open_Face accepts an FT_Open_Args memory source and returns the exact C status plus output face pointer nullness.
       - id: memory_source_error_variants_match_c
         description: FT_Open_Face rejects missing or multiple source flags, null args, null library, and null output face with the exact pinned C status and output pointer contract.
+      - id: memory_source_negative_face_index_probe_matches_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and face_index -1 performs the same pinned C face-count probe and output pointer behavior.
+      - id: memory_source_out_of_range_face_index_matches_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and an out-of-range face index returns the exact pinned C error and null output face.
       # needs-input: operation FT_Open_Face and FT_Attach_Stream using FT_Open_Args; fixture assets valid font bytes, valid pathname font, invalid/missing source, optional custom stream fixture, and an 'sbix' font for FT_OPEN_PARAMS with FT_PARAM_TAG_IGNORE_SBIX; params FT_Open_Args combinations for FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, FT_OPEN_DRIVER, FT_OPEN_PARAMS, no source flag, and multiple source flags; expected output shape FT_Error, output FT_Face pointer/null, and selected face flags; comparison rule exact C error-code parity, exact source-selection precedence/invalidity behavior, no caller-owned buffer copies or ownership changes beyond C rules, and exact parameter effect where observable.
       - id: open_face_consumes_args_like_c
         description: FT_Open_Face interprets source, driver, and parameter fields with the same validation, ownership, and observable face-state behavior as C.
