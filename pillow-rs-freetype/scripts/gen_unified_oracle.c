@@ -19337,6 +19337,16 @@ static int emit_library_lifecycle(int argc, char** argv) {
         return 0;
     }
 
+    if (action == 4) {
+        FT_Error done_status = FT_Done_Library(library);
+        print_status(FT_Err_Ok);
+        printf(
+            ",\"output\":{\"status\":%d,\"library_kind\":\"default_modules\",\"final_destroy_called\":%s}}\n",
+            done_status,
+            done_status == FT_Err_Ok ? "true" : "false");
+        return 0;
+    }
+
     FT_Done_Library(library);
     print_status(FT_Err_Unimplemented_Feature);
     printf(",\"output\":null}\n");

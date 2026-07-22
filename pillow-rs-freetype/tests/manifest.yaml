@@ -8796,6 +8796,8 @@ subjects:
       # needs-input: operation=FT_Reference_Library then FT_Done_Library; fixture asset=none; params={library: valid, refcount incremented}; output shape={FT_Error, library remains usable, refcount effect}; comparison=exact C status and delayed destruction.
       - id: decrements_reference_without_destroying
         description: Referenced libraries return FT_Err_Ok and remain alive until the final FT_Done_Library call.
+      - id: default_modules_final_destroy_status
+        description: A library populated only with default modules can be finally destroyed with the same public FT_Error status as C.
       # needs-input: operation=FT_Done_Library; fixture asset=font with opened face and default modules; params={library: initialized}; output shape={FT_Error, module destructor order, face closure status}; comparison=exact C success and reverse module removal behavior.
       - id: final_destroy_closes_faces_and_modules
         description: Final destruction closes driver faces, removes modules in reverse table order, frees the library, and returns FT_Err_Ok.

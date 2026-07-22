@@ -89,6 +89,49 @@
       }
     },
     {
+      "case_id": "ftmodapi.FT_Done_Library.default_modules_final_destroy_status",
+      "subject": "ftmodapi.FT_Done_Library",
+      "case": "default_modules_final_destroy_status",
+      "operation": "ftmodapi.final_done_library",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "library": "new_from_FT_New_Library_then_FT_Add_Default_Modules",
+          "open_faces": "none",
+          "synthetic_modules": "none"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftmodapi",
+        "area:library",
+        "area:lifetime",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "library_kind": "default_modules",
+          "final_destroy_called": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "library_kind",
+            "final_destroy_called"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftobjs.c:FT_Done_Library",
+          "freetype/src/base/ftinit.c:FT_Add_Default_Modules"
+        ]
+      }
+    },
+    {
       "case_id": "ftmodapi.FT_Done_Library.final_destroy_closes_faces_and_modules",
       "subject": "ftmodapi.FT_Done_Library",
       "case": "final_destroy_closes_faces_and_modules",

@@ -23918,6 +23918,7 @@ fn library_lifecycle_action(case: &InputCase) -> Result<i32, String> {
         "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount" => Ok(1),
         "ftmodapi.FT_Reference_Library.increments_refcount" => Ok(2),
         "ftmodapi.FT_Done_Library.decrements_reference_without_destroying" => Ok(3),
+        "ftmodapi.FT_Done_Library.default_modules_final_destroy_status" => Ok(4),
         other => Err(format!("unsupported library lifecycle case {other}")),
     }
 }
@@ -23964,6 +23965,14 @@ fn reference_then_done_library_output(
         "status_sequence": [reference_status, done_status],
         "library_still_usable": library_still_usable,
         "module_lookup_after_done": {"nullness": module_nullness},
+    })
+}
+
+fn final_done_library_output(status: FT_Error) -> Value {
+    json!({
+        "status": status,
+        "library_kind": "default_modules",
+        "final_destroy_called": status == FT_Err_Ok,
     })
 }
 
@@ -24024,6 +24033,12 @@ fn rust_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 usable,
                 !usable,
             )))
+        }
+        4 => {
+            let mut library = FT_New_Library_Without_Default_Modules();
+            FT_Add_Default_Modules(Some(&mut library));
+            let status = FT_Done_Library(Some(&mut library));
+            Ok(ok(final_done_library_output(status)))
         }
         action => Err(format!("unsupported library lifecycle action {action}")),
     }
@@ -24098,6 +24113,11 @@ fn c_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
             c_abi::FT_Done_Library(library);
             Ok(ok(output))
         }
+        4 => {
+            c_abi::FT_Add_Default_Modules(library);
+            let status = c_abi::FT_Done_Library(library);
+            Ok(ok(final_done_library_output(status)))
+        }
         other => Err(format!("unsupported C library lifecycle action {other}")),
     }
 }
@@ -24135,6 +24155,10 @@ fn wasm_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 usable,
                 module_nullness,
             )))
+        }
+        4 => {
+            let status = wasm_abi::abi_support_final_done_library_observation();
+            Ok(ok(final_done_library_output(status)))
         }
         action => Err(format!(
             "unsupported WASM library lifecycle action {action}"
@@ -28553,7 +28577,8 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         ]),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
-        | "ftmodapi.reference_then_done_library" => {
+        | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library" => {
             let Ok(action) = library_lifecycle_action(case) else {
                 return oracle_fallback_args(case);
             };
@@ -30221,6 +30246,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             rust_library_lifecycle(case)
@@ -31355,6 +31381,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             c_library_lifecycle(case)
@@ -32380,6 +32407,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             wasm_library_lifecycle(case)
@@ -56103,6 +56131,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftmodapi.new_library"
             | "ftmodapi.reference_library"
             | "ftmodapi.reference_then_done_library"
+            | "ftmodapi.final_done_library"
             | "ftmodapi.face_driver_name"
             | "ftmodapi.face_driver_name_with_font_format" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",

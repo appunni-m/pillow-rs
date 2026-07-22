@@ -4980,6 +4980,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": "FT_Property_Set/Get increase-x-height face-scoped limit roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "fterrdef.FT_Err_Missing_Property.known_property_success": "FT_Property_Get known autofitter fallback-script property success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_Done_Library.default_modules_final_destroy_status": "FT_Done_Library final destroy status for a default-module library validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; owned face closure and synthetic module destructor ordering remain pending",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern": "FT_ClassicKern_Validate MS/classic-kern output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
