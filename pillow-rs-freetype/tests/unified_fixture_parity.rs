@@ -21624,10 +21624,34 @@ fn cid_keyed_run_output(error: FT_Error, is_cid: FT_Bool, ft_is_cid_keyed: bool)
     }
 }
 
+fn cid_keyed_null_output(error: FT_Error, ft_is_cid_keyed: bool) -> RunOutput {
+    let output = json!({
+        "is_cid_output": "null",
+        "ft_is_cid_keyed": if ft_is_cid_keyed { 1 } else { 0 }
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
 fn cid_from_glyph_run_output(error: FT_Error, glyph_index: FT_UInt, cid: FT_UInt) -> RunOutput {
     let output = json!({
         "glyph_index": glyph_index,
         "cid": cid
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_from_glyph_null_output(error: FT_Error, glyph_index: FT_UInt) -> RunOutput {
+    let output = json!({
+        "glyph_index": glyph_index,
+        "cid_output": "null"
     });
     if error == FT_Err_Ok {
         ok(output)
@@ -21709,21 +21733,29 @@ fn cid_route_glyph_index(num_glyphs: FT_Long, params: &Value) -> Result<FT_UInt,
 fn rust_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
     let data = font_bytes(case)?;
     let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let ft_is_cid_keyed = face.face_flags & FT_FACE_FLAG_CID_KEYED != 0;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error = FT_Get_CID_Is_Internally_CID_Keyed(Some(&face), None);
+        return Ok(cid_keyed_null_output(error, ft_is_cid_keyed));
+    }
     let mut is_cid = 0;
     let error = FT_Get_CID_Is_Internally_CID_Keyed(Some(&face), Some(&mut is_cid));
-    Ok(cid_keyed_run_output(
-        error,
-        is_cid,
-        face.face_flags & FT_FACE_FLAG_CID_KEYED != 0,
-    ))
+    Ok(cid_keyed_run_output(error, is_cid, ft_is_cid_keyed))
 }
 
 fn c_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
     let (library, face) = c_new_face_without_size(case)?;
-    let mut is_cid = 0;
-    let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, &mut is_cid);
     let ft_is_cid_keyed = c_abi::abi_face_info(face)
         .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, ptr::null_mut());
+        let output = cid_keyed_null_output(error, ft_is_cid_keyed);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let mut is_cid = 0;
+    let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, &mut is_cid);
     let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
     c_done_face(face);
     c_done_library(library);
@@ -21733,10 +21765,17 @@ fn c_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
     let data = font_bytes(case)?;
     let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
-    let mut is_cid = 0;
-    let error = wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, &mut is_cid);
     let ft_is_cid_keyed = wasm_abi::abi_face_info(handle)
         .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error =
+            wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, ptr::null_mut());
+        let output = cid_keyed_null_output(error, ft_is_cid_keyed);
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let mut is_cid = 0;
+    let error = wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, &mut is_cid);
     let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
     wasm_done_face(handle);
     Ok(output)
@@ -21746,6 +21785,10 @@ fn rust_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, Strin
     let data = font_bytes(case)?;
     let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
     let glyph_index = cid_route_glyph_index(face.num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error = FT_Get_CID_From_Glyph_Index(Some(&face), glyph_index, None);
+        return Ok(cid_from_glyph_null_output(error, glyph_index));
+    }
     let mut cid = 0;
     let error = FT_Get_CID_From_Glyph_Index(Some(&face), glyph_index, Some(&mut cid));
     Ok(cid_from_glyph_run_output(error, glyph_index, cid))
@@ -21757,6 +21800,13 @@ fn c_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> 
         .map(|info| info.num_glyphs)
         .ok_or_else(|| "missing c abi face info".to_string())?;
     let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error = c_abi::FT_Get_CID_From_Glyph_Index(face, glyph_index, ptr::null_mut());
+        let output = cid_from_glyph_null_output(error, glyph_index);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
     let mut cid = 0;
     let error = c_abi::FT_Get_CID_From_Glyph_Index(face, glyph_index, &mut cid);
     let output = cid_from_glyph_run_output(error, glyph_index, cid);
@@ -21772,6 +21822,13 @@ fn wasm_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, Strin
         .map(|info| info.num_glyphs)
         .ok_or_else(|| "missing wasm abi face info".to_string())?;
     let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error =
+            wasm_abi::fontdone_wasm_get_cid_from_glyph_index(handle, glyph_index, ptr::null_mut());
+        let output = cid_from_glyph_null_output(error, glyph_index);
+        wasm_done_face(handle);
+        return Ok(output);
+    }
     let mut cid = 0;
     let error = wasm_abi::fontdone_wasm_get_cid_from_glyph_index(handle, glyph_index, &mut cid);
     let output = cid_from_glyph_run_output(error, glyph_index, cid);
@@ -27116,7 +27173,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftcid.get_cid_is_internally_cid_keyed" => {
             let mut args = vec![
                 "--cid-route".to_string(),
-                "is-internally-cid-keyed".to_string(),
+                if lifecycle_handle_param_is_null(params, "is_cid_output") {
+                    "is-internally-cid-keyed:null-output".to_string()
+                } else {
+                    "is-internally-cid-keyed".to_string()
+                },
             ];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
@@ -27131,6 +27192,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 "glyph-index:last_valid".to_string()
             } else {
                 format!("glyph-index:{}", glyph_index_param(params)?)
+            };
+            let route = if lifecycle_handle_param_is_null(params, "cid_output") {
+                format!("{route}:null-output")
+            } else {
+                route
             };
             let mut args = vec!["--cid-route".to_string(), route];
             push_font_source(case, &mut args)?;

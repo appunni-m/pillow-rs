@@ -2746,6 +2746,40 @@ Next non-placeholder implementation targets:
 - Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
   `make fontdone-lint`, `make fmt`, and `git diff --check`.
 
+## 2026-07-22 CID null-output split
+
+- Added concrete
+  `ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_null_output_ok` and
+  `ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_null_output_ok`
+  rows for the maintained SFNT-wrapped CID-keyed CFF fixture
+  `input/fonts/cid/ot-cff-cid-keyed.otf`.
+- Pinned C behavior: `src/base/ftcid.c` calls the CID service with a local
+  `FT_UInt` or `FT_Bool`, then skips only the final caller-pointer write when
+  `cid` or `is_cid` is null.  The functions still return `FT_Err_Ok` for the
+  maintained CID fixture.
+- Rust behavior before this route split was already correct in the core FFI and
+  thin C/WASM wrappers, but the oracle and unified harness only proved non-null
+  output pointers for this maintained OpenType CID input.  The broad
+  non-SFNT-CID null-output rows remain pending because their declared Type 1
+  CID fixture is still absent.
+- This is not a duplicate of the existing CID success rows: the existing rows
+  prove the returned `cid` and `is_cid` value writes; these rows prove the
+  nullable output-pointer contract and process-survival/output-shape behavior.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_null_output_ok`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_null_output_ok`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Route audit moved from `concrete_cases=7282`, `real-parity=4786`,
+  `pending-route=221` to `concrete_cases=7284`, `real-parity=4788`,
+  `pending-route=221`.
+- Broader parity: `make fontdone-parity` passed with
+  `runtime_parity: passed=7058 failed=0 total=7058` and
+  `runtime_cases: runnable=7058 pending=226`.
+- Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
+  `make fontdone-lint`, `make fmt`, and `git diff --check`.
+
 ## 2026-07-22 FT_Get_Glyph unsupported public-format split
 
 - Added concrete

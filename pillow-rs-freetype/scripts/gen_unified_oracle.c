@@ -8609,23 +8609,50 @@ static int emit_cid_route(int argc, char** argv) {
     }
 
     printf("{");
-    if (streq(route, "is-internally-cid-keyed")) {
+    if (streq(route, "is-internally-cid-keyed") ||
+        streq(route, "is-internally-cid-keyed:null-output")) {
         FT_Bool is_cid = 0;
-        FT_Error err = FT_Get_CID_Is_Internally_CID_Keyed(face, &is_cid);
+        FT_Bool* output = streq(route, "is-internally-cid-keyed:null-output")
+                              ? NULL
+                              : &is_cid;
+        FT_Error err = FT_Get_CID_Is_Internally_CID_Keyed(face, output);
         print_status(err);
-        printf(",\"output\":{\"is_cid\":%u,\"ft_is_cid_keyed\":%d}}\n",
-               (unsigned)is_cid,
-               FT_IS_CID_KEYED(face) ? 1 : 0);
+        if (output) {
+            printf(",\"output\":{\"is_cid\":%u,\"ft_is_cid_keyed\":%d}}\n",
+                   (unsigned)is_cid,
+                   FT_IS_CID_KEYED(face) ? 1 : 0);
+        } else {
+            printf(",\"output\":{\"is_cid_output\":\"null\",\"ft_is_cid_keyed\":%d}}\n",
+                   FT_IS_CID_KEYED(face) ? 1 : 0);
+        }
     } else if (strncmp(route, "glyph-index:", 12) == 0) {
-        FT_UInt glyph_index = streq(route + 12, "last_valid")
+        const char* glyph_part = route + 12;
+        char glyph_buffer[32];
+        const char* suffix = strstr(glyph_part, ":null-output");
+        if (suffix) {
+            size_t len = (size_t)(suffix - glyph_part);
+            if (len >= sizeof(glyph_buffer)) {
+                len = sizeof(glyph_buffer) - 1;
+            }
+            memcpy(glyph_buffer, glyph_part, len);
+            glyph_buffer[len] = '\0';
+            glyph_part = glyph_buffer;
+        }
+        FT_UInt glyph_index = streq(glyph_part, "last_valid")
                                   ? (FT_UInt)(face->num_glyphs - 1)
-                                  : (FT_UInt)strtoul(route + 12, NULL, 10);
+                                  : (FT_UInt)strtoul(glyph_part, NULL, 10);
         FT_UInt cid = 0;
-        FT_Error err = FT_Get_CID_From_Glyph_Index(face, glyph_index, &cid);
+        FT_UInt* output = suffix ? NULL : &cid;
+        FT_Error err = FT_Get_CID_From_Glyph_Index(face, glyph_index, output);
         print_status(err);
-        printf(",\"output\":{\"glyph_index\":%u,\"cid\":%u}}\n",
-               glyph_index,
-               cid);
+        if (output) {
+            printf(",\"output\":{\"glyph_index\":%u,\"cid\":%u}}\n",
+                   glyph_index,
+                   cid);
+        } else {
+            printf(",\"output\":{\"glyph_index\":%u,\"cid_output\":\"null\"}}\n",
+                   glyph_index);
+        }
     } else if (streq(route, "ros")) {
         const char* registry = NULL;
         const char* ordering = NULL;

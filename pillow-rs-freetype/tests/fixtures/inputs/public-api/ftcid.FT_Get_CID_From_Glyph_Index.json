@@ -304,6 +304,59 @@
           "Runner must isolate null-output probe because C source calls service with local cid and only skips final write"
         ]
       }
+    },
+    {
+      "case_id": "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_null_output_ok",
+      "subject": "ftcid.FT_Get_CID_From_Glyph_Index",
+      "case": "null_cid_output_matches_c",
+      "covers_manifest_cases": ["null_cid_output_matches_c", "opentype_cid_face_supported"],
+      "operation": "ftcid.get_cid_from_glyph_index",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "sfnt_wrapped_cid_font",
+            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+            "source": "adobe-fonts/fdarray-test FDArrayTest257.otf",
+            "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+            "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+            "license": "OFL-1.1"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_index": 1,
+          "cid_output": "null",
+          "source_behavior": "ftcid.c calls the CID service with a local FT_UInt and skips only the final caller-pointer write when cid is null."
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcid",
+        "area:cid",
+        "asset:existing",
+        "null-output",
+        "cid-keyed"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "glyph_index": "FT_UInt",
+          "cid_output": "not_written_null_pointer"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "glyph_index",
+            "cid_output"
+          ]
+        },
+        "source_refs": ["freetype/src/base/ftcid.c:FT_Get_CID_From_Glyph_Index"]
+      }
     }
   ]
 }
