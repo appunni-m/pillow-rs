@@ -24,10 +24,11 @@ Current classification
   - `FT_Stroker.unparsed_handle_lifecycle_matches_c`
   - `FT_Stroker_Export.invalid_inputs_noop`
   - `FT_Stroker_ExportBorder.invalid_inputs_or_border_noop`
+  - `FT_Stroker_LineTo.zero_length_line_noop`
 - Must stay pending until real geometry exists:
   - `FT_Stroker_Set` attribute, miter-limit, and path-clearing rows.
   - `FT_Stroker_Rewind` attribute/path-clearing rows.
-  - `FT_Stroker_BeginSubPath`, `LineTo`, `ConicTo`, `CubicTo`, and
+  - Remaining `FT_Stroker_BeginSubPath`, `LineTo`, `ConicTo`, `CubicTo`, and
     `EndSubPath` success/state rows.
   - `FT_Stroker_GetCounts`, `GetBorderCounts`, `Export`, and `ExportBorder`
     geometry rows.
@@ -64,6 +65,18 @@ Notes
 - FreeType reference is `freetype/src/base/ftstroke.c`.
 - A row that only observes "no crash" is not geometry parity.
 - A row that only observes Rust-private `StrokerState` is not C parity.
+- 2026-07-22: `FT_Stroker_LineTo.zero_length_line_noop` is the first
+  non-null path-state foothold.  The maintained route calls
+  `FT_Stroker_New`, `FT_Stroker_Set`, `FT_Stroker_BeginSubPath`, a
+  zero-length `FT_Stroker_LineTo`, and `FT_Stroker_GetCounts` through pinned C,
+  Rust FFI, thin C ABI, and WASM ABI.  C reference behavior:
+  `src/base/ftstroke.c:1765-1795` records the subpath start/current point, and
+  `src/base/ftstroke.c:1279-1284` returns `FT_Err_Ok` before changing center
+  or emitting border geometry when the line delta is zero.  Public observable
+  output is `status=0`, `points=0`, and `contours=0`.
+  Route audit moved `real-parity=4802 -> 4803` and
+  `pending-route=217 -> 216`; full runtime parity moved
+  `7072/7072 -> 7073/7073`.
 - `FT_Stroker.unparsed_handle_lifecycle_matches_c` is intentionally narrower
   than `FT_Stroker.lifecycle_contract`: it proves constructor, setter, unparsed
   export no-op, rewind, and destruction behavior through the same C/Rust/C

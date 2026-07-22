@@ -4446,6 +4446,63 @@ pub extern "C" fn FT_Stroker_Rewind(stroker: FT_Stroker) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_BeginSubPath(
+    stroker: FT_Stroker,
+    to: *const FT_Vector,
+    open: FT_Bool,
+) -> FT_Error {
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_BeginSubPath(stroker, rust_to.as_ref(), open)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_LineTo(stroker: FT_Stroker, to: *const FT_Vector) -> FT_Error {
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_LineTo(stroker, rust_to.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_GetBorderCounts(
+    stroker: FT_Stroker,
+    border: FT_StrokerBorder,
+    anum_points: *mut FT_UInt,
+    anum_contours: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: The optional output pointers, when non-null, are caller-owned
+    // `FT_UInt` records valid for the duration of this C ABI call.
+    let points = unsafe { anum_points.as_mut() };
+    let contours = unsafe { anum_contours.as_mut() };
+    rust_ffi::FT_Stroker_GetBorderCounts(stroker, border, points, contours)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_GetCounts(
+    stroker: FT_Stroker,
+    anum_points: *mut FT_UInt,
+    anum_contours: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: The optional output pointers, when non-null, are caller-owned
+    // `FT_UInt` records valid for the duration of this C ABI call.
+    let points = unsafe { anum_points.as_mut() };
+    let contours = unsafe { anum_contours.as_mut() };
+    rust_ffi::FT_Stroker_GetCounts(stroker, points, contours)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Done(stroker: FT_Stroker) {
     rust_ffi::FT_Stroker_Done(stroker);
 }

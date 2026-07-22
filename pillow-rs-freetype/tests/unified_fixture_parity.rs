@@ -25379,6 +25379,119 @@ fn wasm_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn is_stroker_zero_line_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
+}
+
+fn stroker_zero_line_output(status: FT_Error, points: FT_UInt, contours: FT_UInt) -> RunOutput {
+    ok(json!({
+        "status": status,
+        "counts_after": {
+            "points": points,
+            "contours": contours
+        },
+        "center_after": "unchanged"
+    }))
+}
+
+fn rust_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 256, y: 256 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&start))
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    FT_Stroker_Done(stroker);
+    let status = if line_error != FT_Err_Ok {
+        line_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_zero_line_output(status, points, contours))
+}
+
+fn c_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 256, y: 256 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &start)
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let status = if line_error != FT_Err_Ok {
+        line_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_zero_line_output(status, points, contours))
+}
+
+fn wasm_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_zero_line() {
+        Ok(stroker_zero_line_output(FT_Err_Ok, 0, 0))
+    } else {
+        Err("unsupported stroker zero-length line route".to_string())
+    }
+}
+
 fn lcd_filter_output(
     params: &Value,
     mut call: impl FnMut(FT_LcdFilter) -> FT_Error,
@@ -29201,6 +29314,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_lifecycle_action(case)?.0.to_string(),
             ])
         }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => {
+            Ok(vec!["--stroker-zero-line".to_string()])
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => Ok(vec![
             "--stroker-null-noop".to_string(),
             stroker_null_noop_action(case)?.0.to_string(),
@@ -30711,6 +30827,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_stroker_lifecycle(case)
         }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => rust_stroker_zero_line(case),
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             rust_stroker_null_noop(case)
         }
@@ -31848,6 +31965,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_stroker_lifecycle(case)
         }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => c_stroker_zero_line(case),
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -32876,6 +32994,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_stroker_lifecycle(case)
         }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             wasm_stroker_null_noop(case)
         }

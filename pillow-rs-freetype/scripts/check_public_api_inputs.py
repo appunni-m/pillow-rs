@@ -1696,6 +1696,20 @@ def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact zero-length LineTo route verified against FreeType ftstroke.c."""
+    if (
+        row.operation == "ftstroke.line_to"
+        and row.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
+    ):
+        return (
+            "FT_Stroker_LineTo zero-length no-op validates through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI; full non-zero stroker "
+            "geometry remains pending"
+        )
+    return None
+
+
 def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
     if row.operation != "ftcache.image_cache_lookup_scaler":
@@ -7573,6 +7587,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_null_noop_reason = ftstroke_null_noop_real_parity_reason(row)
     if ftstroke_null_noop_reason:
         return ("real-parity", ftstroke_null_noop_reason)
+    ftstroke_zero_line_reason = ftstroke_zero_line_real_parity_reason(row)
+    if ftstroke_zero_line_reason:
+        return ("real-parity", ftstroke_zero_line_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)

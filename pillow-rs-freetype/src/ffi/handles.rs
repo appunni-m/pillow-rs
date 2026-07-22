@@ -3079,6 +3079,15 @@ struct StrokerState {
     line_cap: FT_Int,
     line_join: FT_Int,
     miter_limit: FT_Fixed,
+    first_point: bool,
+    center: FT_Vector,
+    subpath_start: FT_Vector,
+    subpath_open: bool,
+    handle_wide_strokes: bool,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
 }
 
 struct StrokerEntry {
@@ -3100,19 +3109,59 @@ impl StrokerEntry {
         Self {
             _token: token,
             handle,
-            state: StrokerState {
-                // FreeType 2.14.3 `src/base/ftstroke.c:814-818` immediately
-                // calls `FT_Stroker_Set(stroker, 0, ROUND, ROUND, 0x10000)`.
-                radius: 0,
-                line_cap: FT_STROKER_LINECAP_ROUND as FT_Int,
-                line_join: FT_STROKER_LINEJOIN_ROUND as FT_Int,
-                miter_limit: 65_536,
-            },
+            state: StrokerState::new(),
         }
     }
 
     fn key(&self) -> usize {
         self.handle as usize
+    }
+}
+
+impl StrokerState {
+    fn new() -> Self {
+        Self {
+            radius: 0,
+            line_cap: FT_STROKER_LINECAP_ROUND as FT_Int,
+            line_join: FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            miter_limit: 65_536,
+            first_point: false,
+            center: FT_Vector::default(),
+            subpath_start: FT_Vector::default(),
+            subpath_open: false,
+            handle_wide_strokes: false,
+            left_points: 0,
+            left_contours: 0,
+            right_points: 0,
+            right_contours: 0,
+        }
+    }
+
+    fn with_attributes(
+        radius: FT_Fixed,
+        line_cap: FT_Int,
+        line_join: FT_Int,
+        miter_limit: FT_Fixed,
+    ) -> Self {
+        Self {
+            radius,
+            line_cap,
+            line_join,
+            miter_limit: miter_limit.max(65_536),
+            ..Self::new()
+        }
+    }
+
+    fn rewind_path(&mut self) {
+        self.first_point = false;
+        self.center = FT_Vector::default();
+        self.subpath_start = FT_Vector::default();
+        self.subpath_open = false;
+        self.handle_wide_strokes = false;
+        self.left_points = 0;
+        self.left_contours = 0;
+        self.right_points = 0;
+        self.right_contours = 0;
     }
 }
 
@@ -3146,21 +3195,25 @@ pub fn FT_Stroker_Set(
     }
     STROKER_REGISTRY.with(|registry| {
         if let Some(entry) = registry.borrow_mut().get_mut(&(stroker as usize)) {
-            entry.state = StrokerState {
-                radius,
-                line_cap,
-                line_join,
-                miter_limit: miter_limit.max(65_536),
-            };
+            // FreeType 2.14.3 `src/base/ftstroke.c:824-851` stores the
+            // attributes, clamps the miter limit to one pixel, then calls
+            // `FT_Stroker_Rewind` to clear path/border state.
+            entry.state = StrokerState::with_attributes(radius, line_cap, line_join, miter_limit);
         }
     });
 }
 
 pub fn FT_Stroker_Rewind(stroker: FT_Stroker) {
     // FreeType 2.14.3 `src/base/ftstroke.c:853-862` is a no-op for a null
-    // stroker.  Non-null path clearing remains pending with the rest of the
-    // stroker object lifecycle.
-    let _ = stroker;
+    // stroker and resets both borders for a live stroker.
+    if stroker.is_null() {
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow_mut().get_mut(&(stroker as usize)) {
+            entry.state.rewind_path();
+        }
+    });
 }
 
 pub fn FT_Stroker_Done(stroker: FT_Stroker) {
@@ -3172,6 +3225,128 @@ pub fn FT_Stroker_Done(stroker: FT_Stroker) {
     STROKER_REGISTRY.with(|registry| {
         registry.borrow_mut().remove(&(stroker as usize));
     });
+}
+
+pub fn FT_Stroker_BeginSubPath(
+    stroker: FT_Stroker,
+    to: Option<&FT_Vector>,
+    open: FT_Bool,
+) -> FT_Error {
+    let Some(to) = to else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        // FreeType 2.14.3 `src/base/ftstroke.c:1765-1795` records the first
+        // point without emitting border geometry; caps/joins need later
+        // segments before they become public outline output.
+        entry.state.first_point = true;
+        entry.state.center = *to;
+        entry.state.subpath_start = *to;
+        entry.state.subpath_open = open != 0;
+        entry.state.handle_wide_strokes = entry.state.line_join
+            != FT_STROKER_LINEJOIN_ROUND as FT_Int
+            || (entry.state.subpath_open
+                && entry.state.line_cap == FT_STROKER_LINECAP_BUTT as FT_Int);
+        FT_Err_Ok
+    })
+}
+
+pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Error {
+    let Some(to) = to else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        let delta_x = to.x - entry.state.center.x;
+        let delta_y = to.y - entry.state.center.y;
+        if delta_x == 0 && delta_y == 0 {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1279-1284` returns OK
+            // before changing the current center or emitting border points.
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_GetBorderCounts(
+    stroker: FT_Stroker,
+    border: FT_Int,
+    anum_points: Option<&mut FT_UInt>,
+    anum_contours: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let mut points = 0;
+    let mut contours = 0;
+    let error = if stroker.is_null()
+        || !matches!(
+            border,
+            x if x == FT_STROKER_BORDER_LEFT as FT_Int || x == FT_STROKER_BORDER_RIGHT as FT_Int
+        ) {
+        FT_Err_Invalid_Argument
+    } else {
+        STROKER_REGISTRY.with(|registry| {
+            let registry = registry.borrow();
+            let Some(entry) = registry.get(&(stroker as usize)) else {
+                return FT_Err_Invalid_Argument;
+            };
+            if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                points = entry.state.left_points;
+                contours = entry.state.left_contours;
+            } else {
+                points = entry.state.right_points;
+                contours = entry.state.right_contours;
+            }
+            FT_Err_Ok
+        })
+    };
+    if let Some(anum_points) = anum_points {
+        *anum_points = points;
+    }
+    if let Some(anum_contours) = anum_contours {
+        *anum_contours = contours;
+    }
+    error
+}
+
+pub fn FT_Stroker_GetCounts(
+    stroker: FT_Stroker,
+    anum_points: Option<&mut FT_UInt>,
+    anum_contours: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let mut points = 0;
+    let mut contours = 0;
+    let error = if stroker.is_null() {
+        FT_Err_Invalid_Argument
+    } else {
+        STROKER_REGISTRY.with(|registry| {
+            let registry = registry.borrow();
+            let Some(entry) = registry.get(&(stroker as usize)) else {
+                return FT_Err_Invalid_Argument;
+            };
+            points = entry.state.left_points + entry.state.right_points;
+            contours = entry.state.left_contours + entry.state.right_contours;
+            FT_Err_Ok
+        })
+    };
+    if let Some(anum_points) = anum_points {
+        *anum_points = points;
+    }
+    if let Some(anum_contours) = anum_contours {
+        *anum_contours = contours;
+    }
+    error
 }
 
 pub fn FT_Stroker_ExportBorder(
