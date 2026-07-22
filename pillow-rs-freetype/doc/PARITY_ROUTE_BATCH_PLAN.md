@@ -66,6 +66,45 @@ coverage. For parity, the useful duplicate signal is duplicate `case_id` or
 same declared input/operation; current exact duplicate pending IDs are a small
 noise bucket, not the main blocker.
 
+Current continuation result after the first non-zero `FT_Stroker_LineTo`
+pre-finalization split:
+
+- Added `ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline` as a
+  concrete split of the broad `line_segment_success` manifest row. The route
+  creates a stroker, sets round cap/join attributes, begins a closed subpath at
+  `(0, 0)`, applies a non-zero horizontal `LineTo` to `(640, 0)`, then queries
+  both border counts and combined counts before `FT_Stroker_EndSubPath`.
+- Pinned FreeType 2.14.3 returns `FT_Err_Invalid_Outline` from the count
+  queries at this point and writes zero public count outputs. Rust now preserves
+  that pre-finalized border state instead of exposing premature border counts.
+  This matches `src/base/ftstroke.c:1289-1337` for first-segment border setup
+  and `src/base/ftstroke.c:1938-2006` for count-query error/output behavior.
+- This is not a replacement for the broad geometry rows:
+  `line_segment_success` and `first_segment_starts_subpath` still remain
+  pending for emitted border points, tags, contours, current point advancement,
+  finalized counts after `FT_Stroker_EndSubPath`, and export geometry.
+
+Verified impact:
+
+```text
+route audit concrete_cases=7295 category_counts={'compile-contract': 2266, 'pending-route': 214, 'real-null-validation': 9, 'real-parity': 4806}
+focused ftstroke.line_to runtime_parity: passed=3 failed=0 total=3, pending=2
+full runtime_parity: passed=7076 failed=0 total=7076
+full runtime_cases: pending=219
+```
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline
+make -C pillow-rs-freetype test-op OP=ftstroke.line_to
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained

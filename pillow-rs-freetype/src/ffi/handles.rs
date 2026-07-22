@@ -3088,6 +3088,7 @@ struct StrokerState {
     left_contours: FT_UInt,
     right_points: FT_UInt,
     right_contours: FT_UInt,
+    border_counts_valid: bool,
 }
 
 struct StrokerEntry {
@@ -3140,6 +3141,7 @@ impl StrokerState {
             left_contours: 0,
             right_points: 0,
             right_contours: 0,
+            border_counts_valid: true,
         }
     }
 
@@ -3168,6 +3170,7 @@ impl StrokerState {
         self.left_contours = 0;
         self.right_points = 0;
         self.right_contours = 0;
+        self.border_counts_valid = true;
     }
 }
 
@@ -3283,6 +3286,23 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             // before changing the current center or emitting border points.
             return FT_Err_Ok;
         }
+        if entry.state.first_point {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1289-1300` starts the
+            // first segment by adding one movable start point to each border,
+            // then `ft_stroke_border_lineto` at `src/base/ftstroke.c:1324-1332`
+            // appends one endpoint to each border.  The borders are not
+            // finalized until `FT_Stroker_EndSubPath`, so C count queries
+            // before that point return `FT_Err_Invalid_Outline` with zero
+            // public outputs.
+            entry.state.left_points = 2;
+            entry.state.left_contours = 1;
+            entry.state.right_points = 2;
+            entry.state.right_contours = 1;
+            entry.state.border_counts_valid = false;
+            entry.state.first_point = false;
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
         FT_Err_Unimplemented_Feature
     })
 }
@@ -3372,6 +3392,9 @@ pub fn FT_Stroker_GetBorderCounts(
             let Some(entry) = registry.get(&(stroker as usize)) else {
                 return FT_Err_Invalid_Argument;
             };
+            if !entry.state.border_counts_valid {
+                return FT_Err_Invalid_Outline;
+            }
             if border == FT_STROKER_BORDER_LEFT as FT_Int {
                 points = entry.state.left_points;
                 contours = entry.state.left_contours;
@@ -3406,6 +3429,9 @@ pub fn FT_Stroker_GetCounts(
             let Some(entry) = registry.get(&(stroker as usize)) else {
                 return FT_Err_Invalid_Argument;
             };
+            if !entry.state.border_counts_valid {
+                return FT_Err_Invalid_Outline;
+            }
             points = entry.state.left_points + entry.state.right_points;
             contours = entry.state.left_contours + entry.state.right_contours;
             FT_Err_Ok

@@ -19471,6 +19471,66 @@ static int emit_stroker_zero_line(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_simple_line_counts(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector to = { 640, 0 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &to);
+    FT_UInt left_points = 99;
+    FT_UInt left_contours = 99;
+    FT_Error left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT,
+        &left_points,
+        &left_contours);
+    FT_UInt right_points = 99;
+    FT_UInt right_contours = 99;
+    FT_Error right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT,
+        &right_points,
+        &right_contours);
+    FT_UInt total_points = 99;
+    FT_UInt total_contours = 99;
+    FT_Error total_error = FT_Stroker_GetCounts(stroker, &total_points, &total_contours);
+    FT_Error status = line_error ? line_error : left_error;
+    if (!status) status = right_error;
+    if (!status) status = total_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"status\":%d,", status);
+    printf("\"left_counts\":{\"points\":%u,\"contours\":%u},", left_points, left_contours);
+    printf("\"right_counts\":{\"points\":%u,\"contours\":%u},", right_points, right_contours);
+    printf("\"combined_counts\":{\"points\":%u,\"contours\":%u}}}\n", total_points, total_contours);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_degenerate_curve(int argc, char** argv) {
     if (argc != 3) return 2;
     const char* action = argv[2];
@@ -25753,6 +25813,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-zero-line")) {
         return emit_stroker_zero_line(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
+        return emit_stroker_simple_line_counts(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-degenerate-curve")) {
         return emit_stroker_degenerate_curve(argc, argv);
