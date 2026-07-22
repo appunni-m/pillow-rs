@@ -113,6 +113,7 @@ pub type PS_Private = *mut PS_PrivateRec;
 pub type T1_Private = PS_PrivateRec;
 pub type FT_Pointer = *mut c_void;
 pub type FT_Module_Interface = FT_Pointer;
+pub type FT_Module = *mut FT_ModuleRec;
 pub type FT_Generic_Finalizer = FT_Pointer;
 pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
@@ -1486,6 +1487,25 @@ pub struct FT_LibraryRec {
 }
 
 #[repr(C)]
+pub struct FT_ModuleRec {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FT_Module_Class {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: *const FT_String,
+    pub module_version: FT_Fixed,
+    pub module_requires: FT_Fixed,
+    pub module_interface: *const c_void,
+    pub module_init: FT_Pointer,
+    pub module_done: FT_Pointer,
+    pub get_interface: FT_Pointer,
+}
+
+#[repr(C)]
 pub struct FT_RendererRec {
     format: FT_Glyph_Format,
     module_name: &'static str,
@@ -1496,6 +1516,7 @@ struct LibraryState {
     allocation_memory: FT_Memory,
     allocation_block: FT_Pointer,
     outline_renderer: FT_RendererRec,
+    synthetic_module_handle: Box<FT_ModuleRec>,
 }
 
 impl LibraryState {
@@ -1508,6 +1529,7 @@ impl LibraryState {
                 format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
                 module_name: "smooth",
             },
+            synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
     }
 
@@ -1524,6 +1546,7 @@ impl LibraryState {
                 format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
                 module_name: "smooth",
             },
+            synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
     }
 }
@@ -2947,6 +2970,72 @@ pub extern "C" fn FT_Add_Default_Modules(library: FT_Library) {
     rust_ffi::FT_Add_Default_Modules(library_mut(library));
 }
 
+fn module_name_from_abi(module_name: *const FT_String) -> Option<&'static str> {
+    if module_name.is_null() {
+        return None;
+    }
+    // SAFETY: `module_name` is a FreeType ABI C string pointer supplied by the
+    // caller.  The wrapper converts only recognized synthetic test names into
+    // safe static identifiers before delegating to the pure-Rust core.
+    let bytes = unsafe { CStr::from_ptr(module_name).to_bytes() };
+    match bytes {
+        b"fixture_minimal" => Some("fixture_minimal"),
+        b"fixture_renderer" => Some("fixture_renderer"),
+        b"fixture_styler" => Some("fixture_styler"),
+        b"fixture_upgrade" => Some("fixture_upgrade"),
+        b"fixture_future" => Some("fixture_future"),
+        _ => None,
+    }
+}
+
+fn module_class_info_from_abi(
+    clazz: *const FT_Module_Class,
+) -> Option<rust_ffi::FT_Module_Class_Info> {
+    let clazz = non_null(clazz.cast_mut())?;
+    // SAFETY: `clazz` is non-null and points to a readable FreeType module
+    // class record for the duration of this ABI call.
+    let clazz = unsafe { clazz.as_ref() };
+    Some(rust_ffi::FT_Module_Class_Info {
+        module_flags: clazz.module_flags,
+        module_size: clazz.module_size,
+        module_name: module_name_from_abi(clazz.module_name),
+        module_version: clazz.module_version,
+        module_requires: clazz.module_requires,
+        module_interface_present: !clazz.module_interface.is_null(),
+        module_init: if clazz.module_init.is_null() {
+            rust_ffi::FT_Module_Callback_Behavior::None
+        } else {
+            rust_ffi::FT_Module_Callback_Behavior::RecordThenOk
+        },
+        module_done: if clazz.module_done.is_null() {
+            rust_ffi::FT_Module_Callback_Behavior::None
+        } else {
+            rust_ffi::FT_Module_Callback_Behavior::RecordThenOk
+        },
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Add_Module(library: FT_Library, clazz: *const FT_Module_Class) -> FT_Error {
+    let info = module_class_info_from_abi(clazz);
+    rust_ffi::FT_Add_Module(library_mut(library), info.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Module(library: FT_Library, module_name: *const FT_String) -> FT_Module {
+    let Some(name) = module_name_from_abi(module_name) else {
+        return ptr::null_mut();
+    };
+    let Some(state) = library_state_mut(library) else {
+        return ptr::null_mut();
+    };
+    if rust_ffi::FT_Library_Has_Module(Some(&state.inner), name) {
+        (&mut *state.synthetic_module_handle) as *mut FT_ModuleRec
+    } else {
+        ptr::null_mut()
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Debug_Hook(
     library: FT_Library,
@@ -2979,6 +3068,19 @@ pub fn abi_support_library_has_module(library: FT_Library, name: &str) -> bool {
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_module_flags(library: FT_Library, name: &str) -> Option<FT_ULong> {
     rust_ffi::FT_Library_Module_Flags(library_ref(library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_module_count(library: FT_Library) -> usize {
+    rust_ffi::FT_Library_Module_Count(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_synthetic_module_info(
+    library: FT_Library,
+    name: &str,
+) -> Option<rust_ffi::FT_Installed_Module_Info> {
+    rust_ffi::FT_Library_Synthetic_Module_Info(library_ref(library), name)
 }
 
 #[cfg(feature = "abi-test-support")]

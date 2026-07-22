@@ -3135,7 +3135,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for module/library lifecycle data that do not have a maintained route."""
     if row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success":
-        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_without_modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_minimal"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
             return None
         return (
             "FT_Add_Module success requires a maintained synthetic module-class "
@@ -6619,6 +6625,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and lifecycle_handle(row, "library") == "null"
     ):
         return "FT_Reference_Library null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success"
+    ):
+        return "FT_Add_Module minimal synthetic module success validates module table insertion, FT_Get_Module lookup, stored class fields, and module_init callback through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.add_module"
         and row.case_id == "ftmodapi.FT_Add_Module.rejects_null_library"

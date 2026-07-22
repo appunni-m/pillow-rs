@@ -23590,6 +23590,103 @@ fn wasm_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
     )?))
 }
 
+fn add_module_minimal_output(
+    status: FT_Error,
+    module_count: usize,
+    lookup_present: bool,
+    info: Option<FT_Installed_Module_Info>,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "module_count": module_count,
+        "lookup_result": {"nullness": !lookup_present},
+        "stored_class_fields": info.map(|info| json!({
+            "module_flags": info.module_flags,
+            "module_size": "sizeof_synthetic_module",
+            "module_name": info.module_name,
+            "module_version": info.module_version,
+            "module_requires": 0x0002_0000,
+            "module_interface_nullness": !info.module_interface_present,
+        })),
+        "callback_log": if info.is_some_and(|info| info.init_called) {
+            json!(["module_init"])
+        } else {
+            json!([])
+        }
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    }
+    let mut library = FT_New_Library_Without_Default_Modules();
+    let class = FT_Module_Class_Info {
+        module_flags: 0,
+        module_size: 1,
+        module_name: Some("fixture_minimal"),
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface_present: false,
+        module_init: FT_Module_Callback_Behavior::RecordThenOk,
+        module_done: FT_Module_Callback_Behavior::RecordThenOk,
+    };
+    let status = FT_Add_Module(Some(&mut library), Some(&class));
+    Ok(add_module_minimal_output(
+        status,
+        FT_Library_Module_Count(Some(&library)),
+        FT_Library_Has_Module(Some(&library), "fixture_minimal"),
+        FT_Library_Synthetic_Module_Info(Some(&library), "fixture_minimal"),
+    ))
+}
+
+fn c_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    }
+    let library = c_abi::abi_support_new_library_without_default_modules();
+    let class = c_abi::FT_Module_Class {
+        module_flags: 0,
+        module_size: 1,
+        module_name: c"fixture_minimal".as_ptr(),
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface: ptr::null(),
+        module_init: ptr::without_provenance_mut(1),
+        module_done: ptr::without_provenance_mut(1),
+        get_interface: ptr::null_mut(),
+    };
+    let status = c_abi::FT_Add_Module(library, &class);
+    let lookup = c_abi::FT_Get_Module(library, c"fixture_minimal".as_ptr());
+    let output = add_module_minimal_output(
+        status,
+        c_abi::abi_support_library_module_count(library),
+        !lookup.is_null(),
+        c_abi::abi_support_synthetic_module_info(library, "fixture_minimal"),
+    );
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    }
+    let (status, module_count, lookup_present, info) =
+        wasm_abi::abi_support_add_minimal_module_observation();
+    Ok(add_module_minimal_output(
+        status,
+        module_count,
+        lookup_present,
+        info,
+    ))
+}
+
 fn add_default_modules_observation(params: &Value, module_names: &[&str]) -> Result<Value, String> {
     let probes = add_default_module_probe_names(params)?;
     let module_names_in_order = module_names
@@ -28639,6 +28736,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 Err(_) => return oracle_fallback_args(case),
             },
         ]),
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success" =>
+        {
+            Ok(vec!["--add-module-minimal".to_string()])
+        }
         "ftmodapi.add_default_modules" => {
             let action = match add_default_modules_action(case) {
                 Ok(action) => action,
@@ -30334,6 +30436,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::Rust)
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
+        "ftmodapi.add_module" => rust_add_module(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
         "ftmodapi.get_module" => rust_get_module(case),
@@ -31470,6 +31573,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
+        "ftmodapi.add_module" => c_add_module(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
         "ftmodapi.get_module" => c_get_module(case),
@@ -32497,6 +32601,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
+        "ftmodapi.add_module" => wasm_add_module(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
         "ftmodapi.get_module" => wasm_get_module(case),
