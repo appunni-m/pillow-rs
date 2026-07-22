@@ -2372,6 +2372,8 @@ subjects:
         description: FT_Open_Face with FT_OPEN_MEMORY and very short memory sizes returns the exact pinned C invalid-stream error and null output face.
       - id: memory_source_truncated_sfnt_size_matches_c
         description: FT_Open_Face with FT_OPEN_MEMORY and a truncated SFNT-sized memory slice returns the exact pinned C unknown-format error and null output face.
+      - id: memory_source_optional_flags_noop_match_c
+        description: FT_Open_Face with FT_OPEN_MEMORY plus null FT_OPEN_PARAMS and/or null FT_OPEN_DRIVER opens with the same pinned C status and output face pointer behavior.
       # needs-input: operation FT_Open_Face and FT_Attach_Stream using FT_Open_Args; fixture assets valid font bytes, valid pathname font, invalid/missing source, optional custom stream fixture, and an 'sbix' font for FT_OPEN_PARAMS with FT_PARAM_TAG_IGNORE_SBIX; params FT_Open_Args combinations for FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, FT_OPEN_DRIVER, FT_OPEN_PARAMS, no source flag, and multiple source flags; expected output shape FT_Error, output FT_Face pointer/null, and selected face flags; comparison rule exact C error-code parity, exact source-selection precedence/invalidity behavior, no caller-owned buffer copies or ownership changes beyond C rules, and exact parameter effect where observable.
       - id: open_face_consumes_args_like_c
         description: FT_Open_Face interprets source, driver, and parameter fields with the same validation, ownership, and observable face-state behavior as C.
