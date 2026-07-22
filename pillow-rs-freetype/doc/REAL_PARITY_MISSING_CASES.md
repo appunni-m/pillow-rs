@@ -1,5 +1,59 @@
 # Real-Parity Missing Cases
 
+### Issue Set Current: 2026-07-22 pending-route bulk sweep on `main`
+
+Status: audited on 2026-07-22 from `main` at `bf49ebd56`. This is a sweep
+classification only; no rows were promoted and no fixtures, expected output, or
+thresholds were changed.
+
+Current route-audit baseline:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 205, 'real-null-validation': 9, 'real-parity': 4817}
+pending_route_rows=205
+duplicate_operation_input_buckets=37
+```
+
+High-impact buckets:
+
+| Rows | Bucket | Families | Reducibility |
+| ---: | --- | --- | --- |
+| 66 | Special-format fixture/parser validators | `ftgxval`, `ftotval`, `ftcid`, `ftpfr`, `ftbdf` | Bulk reducible only by adding real C-openable fixtures and parser/routes for GX/AAT, OpenType validation, CID, PFR, BDF/PCF. Do not promote from duplicate declarations alone. |
+| 44 | Stroker geometry/export algorithm | `ftstroke` | One real stroker geometry/export implementation can collapse many rows: caps, joins, borders, parse-outline, export, glyph-stroke ownership. Count-only routes are already exhausted. |
+| 17 | SVG glyph route | `freetype`, `ftglyph`, `ftimage`, `ftrender`, `otsvg` | Bulk reducible by one maintained SVG-enabled glyph route that compares slot format, `FT_SvgGlyphRec`, copy/transform behavior, and unsupported-build classification. |
+| 12 | Incremental font callback contract | `ftincrem` | Bulk reducible by one callback harness proving callback table validation, glyph-data acquire/release, metrics overrides, object identity, and event order. Null/absent behavior is already promoted. |
+| 7 | Driver property runtime effect | `ftdriver` | Reducible by typed `FT_Property_Set/Get` routes plus C-openable CFF/TT fixtures proving public output changes for hinting-engine/interpreter-version settings. |
+| 7 | Glyph object lifetime/record route | `ftglyph` | Reducible with an owned-glyph facade covering `FT_New_Glyph`, `FT_Get_Glyph`, `FT_Glyph_Copy`, `FT_Glyph_To_Bitmap`, valid/null/stale free semantics, and record inspection. |
+| 6 | Custom renderer callback lifecycle | `ftimage` | Reducible by a renderer registration/lifecycle harness proving `new`, `reset`, `set_mode`, `render`, and `done` callback behavior. |
+| 5 | Face-open parameter runtime fixture | `ftparams` | Needs real SBIX/CFF/Type1/CID fixture routes for `IGNORE_SBIX`, `RANDOM_SEED`, and `STEM_DARKENING`. |
+| 5 | Optional compression module contract | `ftbzip2` | Split enabled-build behavior from the active pinned oracle's disabled bzip2 behavior before promoting. |
+| 3 | External stream callback contract | `ftsystem` | Needs maintained external-stream callback/read/seek failure harness. |
+| 3 | Malformed font error contract | `fterrdef` | Needs fixtures that actually reach the named pinned-C public error path. Current generated name-table controls do not. |
+| 30 | Misc small routes | mixed | Sweep individually after the large harness/implementation buckets; these are not a single root cause. |
+
+Duplicate finding:
+
+- The duplicate rows are mostly semantic aliases over the same absent input or
+  same unimplemented route, not redundant tests that can be deleted.
+- Largest duplicate groups are `FT_TrueTypeGX_Validate` constants and output
+  slot indexes, `FT_OpenType_Validate` table selectors, and `ftstroke` public
+  enum aliases. They should collapse only when the shared real route exists.
+- Hash-based duplicate grouping is useful for prioritization, but deleting rows
+  would hide API obligations and create green placeholders.
+
+Sweep order:
+
+1. `ftstroke` geometry/export if the goal is pure implementation progress
+   without searching for new font assets. This has the best chance of reducing
+   dozens of rows through one core algorithm surface.
+2. SVG glyph route if we can add/verify a maintained SVG fixture and feature
+   classification. This is a medium-size cross-family collapse.
+3. Incremental callback harness. This is a coherent callback/lifetime surface
+   and should be handled as one batch, not isolated rows.
+4. Special-format validators only after fixture acquisition is solved. GX/AAT,
+   OpenType validation, CID, PFR, and BDF/PCF are the largest count bucket, but
+   they are fixture/parser gated and unsafe to promote from declarations alone.
+
 ### Issue Set Result: FT_BitmapGlyphRec dual creation-path record fields
 
 Status: promoted on 2026-07-22.
