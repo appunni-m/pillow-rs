@@ -2612,3 +2612,68 @@ Rejected quick fixes in this audit:
 - Route audit impact from this split: `concrete_cases` increased from 7276 to
   7277 and `real-parity` increased from 4780 to 4781; `pending-route` remains
   221 because no broad pending obligation was hidden or removed.
+
+## 2026-07-22 no-promotion audit after glyph lifecycle splits
+
+Baseline: `main` at `e1455d0c8` has route audit
+`concrete_cases=7277`, `real-parity=4781`, `pending-route=221`, and
+`real-null-validation=9`.
+
+Rows rechecked and intentionally not promoted:
+
+- `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` and
+  `ftglyph.FT_Done_Glyph.lifetime_before_library_done` remain broad lifecycle
+  contracts.  The concrete outline and bitmap release rows now prove the two
+  maintained `FT_Get_Glyph` release paths, but the broad rows still require SVG,
+  malformed-slot/class, and allocation-failure routes.  Adding another
+  glyph-before-library row with the same bitmap/outline input would duplicate
+  the line mapping without proving a new public behavior.
+- `freetype.FT_Open_Args.open_face_consumes_args_like_c` remains pending.  The
+  maintained runner proves `FT_OPEN_MEMORY`, invalid source-flag combinations,
+  null args/library/aface, and memory-size variants.  `FT_OPEN_PATHNAME`,
+  `FT_OPEN_STREAM`, driver selection, and parameter dispatch are not implemented
+  across Rust FFI, thin C ABI, and WASM ABI, so adding a pathname or stream row
+  would be a green placeholder.
+- `freetype.FT_FaceRec.populated_public_fields_match_c` remains pending.  The
+  fixture still describes a broad multi-stage snapshot: initial face fields,
+  size mutation, glyph load, charmap selection, auxiliary attachment, and
+  variation mutation.  There is no maintained `inspect_face_rec` runtime route
+  for a concrete initial snapshot yet; a valid next step is to add that route
+  and compare only stable public fields for one C-openable face.
+- `ftimage.FT_GLYPH_FORMAT_SVG.unsupported_svg_build_classification`,
+  `ftglyph.FT_SvgGlyph.feature_availability_recorded`, and
+  `ftglyph.FT_SvgGlyphRec.svg_feature_disabled_classification` remain pending.
+  The current harness has no same-input SVG glyph route that compares the
+  active build's SVG-disabled classification across pinned C, Rust FFI, C ABI,
+  and WASM.  Constant-value checks and generic unsupported-format errors do not
+  prove SVG public behavior.
+- `ftbdf.FT_Get_BDF_Property.success_pcf_properties_signed_only`,
+  `ftbdf.FT_Get_BDF_Property.success_sfnt_bdf_table_selected_strike`, and the
+  SFNT-BDF charset rows remain pending.  Existing BDF text-file property parity
+  is real, but PCF and SFNT-BDF need maintained fixtures plus parser/service
+  support for the same input; symlinking to an existing BDF/PCF font would not
+  prove the declared PCF signed-property or SFNT-BDF selected-strike behavior.
+- `ftbzip2.FT_Stream_OpenBzip2.*` enabled-build rows remain pending.  The
+  active disabled-build precedence rows are already split and real.  The
+  enabled null/header/read/close rows still require either a bzip2-enabled
+  pinned oracle profile plus a pure-Rust bzip2 stream wrapper, or explicit
+  disabled-build rows that do not claim enabled-build validation.
+- `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design` remains
+  pending because the broad glyph index does not load in pinned C after the
+  Type1 MM setup.  The concrete
+  `output_changes_for_mm_design_loadable_glyph` row already covers the
+  loadable-glyph same-input path; reusing that input for the broad row would
+  hide the bad declared glyph.
+
+Next non-placeholder implementation targets:
+
+1. Add a concrete `freetype.inspect_face_rec.initial_snapshot` route for one
+   C-openable SFNT face and compare only stable public fields across Rust FFI,
+   C ABI, WASM, and pinned C.
+2. Add a maintained `FT_OPEN_PATHNAME`/`FT_OPEN_STREAM` route for
+   `freetype.open_face_args`, including stream close-event output, before adding
+   any pathname/stream split rows.
+3. Build real PCF/SFNT-BDF fixture + parser support before promoting the BDF
+   pending rows.
+4. Add an SVG-disabled same-input glyph route before promoting any SVG disabled
+   classification row.
