@@ -2336,9 +2336,12 @@ Checked candidate fixture sources:
   must remain pending until a deterministic generator or license-reviewed asset
   exists and the Rust service reads PCF/SFNT-BDF properties exactly like pinned
   C.
-- The repo has `input/fonts/type1/attach-afm-base.pfb`, but no matching
-  `input/aux/type1/attach-afm-base.afm` and no maintained attach/track-kerning
-  service.  `FT_Attach_File`, `FT_Attach_Stream`, and
+- The repo now has generated Type1/AFM input pairs for
+  `input/fonts/type1/attach-afm-base.pfb` plus
+  `input/aux/type1/attach-afm-base.afm` and
+  `input/fonts/type1/track-kern-base.pfb` plus
+  `input/aux/type1/track-kern-base.afm`, but no maintained attach/track-kerning
+  service or ABI route yet.  `FT_Attach_File`, `FT_Attach_Stream`, and
   `FT_Get_Track_Kerning.type1_afm_track_kerning_success` remain pending until
   AFM parsing and post-attach observable kerning/track-kerning output are
   implemented.

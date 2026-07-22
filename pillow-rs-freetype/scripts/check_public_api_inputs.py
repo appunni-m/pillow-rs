@@ -3711,12 +3711,11 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             return None
         return (
             "FT_Get_Track_Kerning Type1/AFM success requires maintained "
-            "input/fonts/type1/track-kern-base.pfb and "
-            "input/aux/type1/track-kern-base.afm assets plus an attach-first "
-            "route that compares exact akerning values for negative, zero, and "
-            "positive track degrees over declared 16.16 point sizes across "
-            "pinned C, Rust FFI, C ABI, and WASM; null-face and no-track-data "
-            "error rows are not success parity"
+            "attach-first routing, pure-Rust AFM track-kerning state, and exact "
+            "akerning comparisons for negative, zero, and positive track "
+            "degrees over declared 16.16 point sizes across pinned C, Rust "
+            "FFI, C ABI, and WASM; the generated Type1/AFM assets alone are "
+            "not success parity"
         )
     if row.case_id == "freetype.FT_Open_Args.open_face_consumes_args_like_c":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):

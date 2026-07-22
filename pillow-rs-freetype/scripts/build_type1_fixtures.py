@@ -15,6 +15,7 @@ OUT_DIR = FIXTURE_ROOT / "fonts" / "type1"
 MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "type1-mm"
 LEGACY_MM_OUT_DIR = FIXTURE_ROOT / "fonts" / "mm"
 INPUT_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1"
+INPUT_AUX_OUT_DIR = FIXTURE_ROOT / "input" / "aux" / "type1"
 INPUT_ENCODING_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1-encoding"
 INPUT_MM_OUT_DIR = FIXTURE_ROOT / "input" / "fonts" / "type1-mm"
 
@@ -340,6 +341,55 @@ def build_type1_encoding_fixtures() -> None:
         build_encoding_fixture(path, font_name, family_name, encoding)
 
 
+def build_attach_afm_fixture(path: Path) -> None:
+    """Build matching AFM data for the generated attach AFM Type 1 face.
+
+    FreeType 2.14.3 parses Type 1 auxiliary AFM data through
+    `src/type1/t1afm.c:T1_Read_Metrics` and `src/psaux/afmparse.c`.
+    TrackKern records have degree, minimum point size, minimum kern, maximum
+    point size, and maximum kern fields.  Keep the values intentionally simple
+    and non-zero so later `FT_Attach_File`, `FT_Attach_Stream`, and
+    `FT_Get_Track_Kerning` rows can prove observable attachment behavior
+    instead of only proving that a file opened.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "StartFontMetrics 4.1",
+                "Comment Generated for fontdone Type 1 attach/track parity",
+                "FontName AttachAfmBase",
+                "FullName Attach AFM Base",
+                "FamilyName Attach AFM Base",
+                "Weight Regular",
+                "ItalicAngle 0",
+                "IsFixedPitch false",
+                "FontBBox 0 0 500 700",
+                "UnderlinePosition -100",
+                "UnderlineThickness 50",
+                "StartCharMetrics 2",
+                "C -1 ; WX 500 ; N .notdef ; B 0 0 0 0 ;",
+                "C 65 ; WX 500 ; N A ; B 50 0 450 700 ;",
+                "EndCharMetrics",
+                "StartKernData",
+                "StartTrackKern 3",
+                "TrackKern -1 8 -30 72 -90",
+                "TrackKern 0 8 0 72 0",
+                "TrackKern 1 8 20 72 80",
+                "EndTrackKern",
+                "StartKernPairs 1",
+                "KPX A A -25",
+                "EndKernPairs",
+                "EndKernData",
+                "EndFontMetrics",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+
+
 def main() -> None:
     build_simple_type1(
         OUT_DIR / "simple-type1.pfb",
@@ -385,6 +435,14 @@ def main() -> None:
         "Attach AFM Base",
         "Generated for fontdone Type 1 attach/patent coverage",
     )
+    build_attach_afm_fixture(INPUT_AUX_OUT_DIR / "attach-afm-base.afm")
+    build_simple_type1(
+        INPUT_OUT_DIR / "track-kern-base.pfb",
+        "AttachAfmBase",
+        "Attach AFM Base",
+        "Generated for fontdone Type 1 track-kerning coverage",
+    )
+    build_attach_afm_fixture(INPUT_AUX_OUT_DIR / "track-kern-base.afm")
     build_font_value_populated(INPUT_OUT_DIR / "font-value-populated.pfb")
     build_adobe_mm_two_axis(MM_OUT_DIR / "adobe-mm-two-axis.pfb")
     build_adobe_mm_two_axis(LEGACY_MM_OUT_DIR / "adobe-multiple-master.pfb")
