@@ -997,6 +997,10 @@ fn ftglyph_type_runtime_supported(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record"
             | "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record"
+            | "ftglyph.FT_Glyph.outline_caller_owned_lifetime"
+            | "ftglyph.FT_Glyph.bitmap_caller_owned_lifetime"
+            | "ftglyph.FT_Glyph_Class.outline_class_behavior"
+            | "ftglyph.FT_Glyph_Class.bitmap_class_behavior"
     ) && !case.expect_error
         && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)

@@ -5112,6 +5112,22 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap",
         ): "FT_BitmapGlyphRec fields validate both FT_Get_Glyph bitmap and FT_Glyph_To_Bitmap outline creation paths through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph.outline_caller_owned_lifetime",
+        ): "FT_Glyph outline caller-owned lifetime validates a real FT_Get_Glyph outline record and release through public behavior against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph.bitmap_caller_owned_lifetime",
+        ): "FT_Glyph bitmap caller-owned lifetime validates a real FT_Get_Glyph bitmap record and release through public behavior against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph_Class.outline_class_behavior",
+        ): "FT_Glyph_Class outline behavior validates the private class only through public FT_Get_Glyph outline output against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph_Class.bitmap_class_behavior",
+        ): "FT_Glyph_Class bitmap behavior validates the private class only through public FT_Get_Glyph bitmap output against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
         ): "FT_Outline_Copy invalid-pointer/size mismatch error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

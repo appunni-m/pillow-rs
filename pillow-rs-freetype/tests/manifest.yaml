@@ -6399,6 +6399,10 @@ subjects:
         description: Type alias is present in the pinned C public interface as struct FT_GlyphRec_*.
       - id: caller_owned_lifetime
         description: Handles returned by FT_New_Glyph, FT_Get_Glyph, FT_Glyph_Copy, and FT_Glyph_To_Bitmap are caller-owned and must be released with FT_Done_Glyph.
+      - id: outline_caller_owned_lifetime
+        description: An outline FT_Glyph returned by FT_Get_Glyph is caller-owned and released with FT_Done_Glyph before face teardown.
+      - id: bitmap_caller_owned_lifetime
+        description: A bitmap FT_Glyph returned by FT_Get_Glyph is caller-owned and released with FT_Done_Glyph before face teardown.
     # needs-input: operation=create/copy/convert/done glyph lifecycle; fixture_asset=outline and bitmap fonts; params={creation path, destroy order}; output shape={handle nullness, root fields, allocation/free event stream}; comparison=exact C oracle handle ownership and root record relationship.
   - id: ftglyph.FT_Glyph_Class
     kind: type
@@ -6410,6 +6414,10 @@ subjects:
         description: Type alias is present in the pinned C public interface as an opaque forward declaration.
       - id: opaque_class_identity_only
         description: Public tests compare only nullness and stable class identity effects through public operations, not private FT_Glyph_Class_ field names.
+      - id: outline_class_behavior
+        description: The outline glyph class remains private but is observable through public FT_Get_Glyph outline behavior and FT_OutlineGlyphRec-compatible output.
+      - id: bitmap_class_behavior
+        description: The bitmap glyph class remains private but is observable through public FT_Get_Glyph bitmap behavior and FT_BitmapGlyphRec-compatible output.
     # needs-input: operation=FT_New_Glyph/FT_Get_Glyph class identity inspection through public behavior; fixture_asset=outline/bitmap/SVG glyphs; params={glyph format}; output shape={clazz nullness/class-kind classification, supported operation behavior}; comparison=exact C oracle public behavior without private struct dereference.
   - id: ftglyph.FT_OutlineGlyph
     kind: type
