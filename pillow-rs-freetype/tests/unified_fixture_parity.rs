@@ -43536,6 +43536,7 @@ fn open_face_name_options_runtime_supported(case: &InputCase) -> bool {
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted"
+            | "freetype.FT_Parameter.typographic_name_params_match_c"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
         && open_face_name_option_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
@@ -43894,6 +43895,7 @@ fn incremental_nullness_case(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
             | "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c"
+            | "freetype.FT_Parameter.incremental_null_data_matches_c"
     )
 }
 
@@ -44449,6 +44451,7 @@ fn open_face_ignored_params_runtime_supported(case: &InputCase) -> bool {
         "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure"
             | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
             | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored"
+            | "freetype.FT_Parameter.ignored_open_params_match_c"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
 }

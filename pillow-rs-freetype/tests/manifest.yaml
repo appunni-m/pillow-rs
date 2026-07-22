@@ -2396,6 +2396,12 @@ subjects:
     cases:
       - id: layout_matches_c
         description: Size, alignment, and offsets match the pinned C field order tag, data with FT_ULong and FT_Pointer field types.
+      - id: typographic_name_params_match_c
+        description: FT_Open_Face consumes FT_Parameter typographic family/subfamily tags with null data exactly like pinned C.
+      - id: ignored_open_params_match_c
+        description: FT_Open_Face accepts ignored or deprecated FT_Parameter tags without changing public face/glyph output.
+      - id: incremental_null_data_matches_c
+        description: FT_PARAM_TAG_INCREMENTAL with null data behaves like absent incremental data and leaves embedded glyph loading observable exactly like pinned C.
       # needs-input: operation FT_Open_Face with FT_OPEN_PARAMS and FT_Face_Properties where implemented; fixture assets 'sbix' font for FT_PARAM_TAG_IGNORE_SBIX and a face/property case such as LCD filter weights, random seed, or TrueType interpreter version if exposed by the pinned build; params FT_Parameter arrays with known tags, unknown tags, NULL data where accepted, non-NULL data, and num_params zero/nonzero; expected output shape FT_Error plus observable face flags/properties; comparison rule exact tag numeric handling, exact data pointer interpretation/lifetime, exact C error-code parity, and exact ignore/accept/reject behavior for known and unknown parameter tags.
       - id: tag_data_parameters_match_c_behavior
         description: APIs that consume FT_Parameter arrays preserve C tag dispatch, data pointer interpretation, and error behavior.
