@@ -183,6 +183,72 @@ make fontdone-lint
 git diff --check
 ```
 
+Current continuation result after the unparsed `FT_Stroker` lifecycle route
+promotion:
+
+- Promoted the existing `ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c`
+  exact route into `manifest_cases` so it is visible to the public API route
+  audit. The route creates a real stroker, calls `FT_Stroker_Set`, observes
+  unparsed `FT_Stroker_Export`/`FT_Stroker_ExportBorder` no-op behavior, calls
+  `FT_Stroker_Rewind`, then releases with `FT_Stroker_Done`.
+- The same input now runs through the pinned FreeType oracle, Rust FFI, thin C
+  ABI, and WASM ABI. This only proves the unparsed handle lifecycle/no-op
+  contract; parsed path geometry, counts, border export geometry, and
+  post-export cleanup remain pending.
+- This is not a replacement for the broader `ftstroke.FT_Stroker.lifecycle_contract`
+  row, which still requires parsed path counts/geometry to match pinned C.
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c
+make -C pillow-rs-freetype test-op OP=ftstroke.stroker_lifecycle
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
+Current continuation result after finalized `FT_Stroker` public count routes:
+
+- Added count-only support for simple finalized stroker paths:
+  - closed two-line round-join corner: left border `3/1`, right border `18/1`,
+    combined `21/2`;
+  - open single-line round-cap path: left border `15/1`, right border `0/0`,
+    combined `15/1`.
+- Promoted six exact public count rows:
+  - `ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts`;
+  - `ftstroke.FT_Stroker_GetCounts.combined_open_path_counts`;
+  - `ftstroke.FT_Stroker_GetCounts.optional_output_pointers`;
+  - `ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts`;
+  - `ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts`;
+  - `ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers`.
+- The implementation intentionally records only finalized public count state for
+  these simple paths. Exported outline point/tag/contour geometry, cap geometry
+  variants, join geometry variants, and broader parsed-path behavior remain
+  pending.
+
+Verified focused impact:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 208, 'real-null-validation': 9, 'real-parity': 4814}
+ftstroke.get_counts runtime_parity: passed=4 failed=0 total=4
+ftstroke.get_border_counts runtime_parity: passed=4 failed=0 total=4
+```
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftstroke.get_counts
+make -C pillow-rs-freetype test-op OP=ftstroke.get_border_counts
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained

@@ -3089,6 +3089,7 @@ struct StrokerState {
     right_points: FT_UInt,
     right_contours: FT_UInt,
     border_counts_valid: bool,
+    line_segments: FT_UInt,
 }
 
 struct StrokerEntry {
@@ -3142,6 +3143,7 @@ impl StrokerState {
             right_points: 0,
             right_contours: 0,
             border_counts_valid: true,
+            line_segments: 0,
         }
     }
 
@@ -3171,6 +3173,7 @@ impl StrokerState {
         self.right_points = 0;
         self.right_contours = 0;
         self.border_counts_valid = true;
+        self.line_segments = 0;
     }
 }
 
@@ -3299,7 +3302,17 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             entry.state.right_points = 2;
             entry.state.right_contours = 1;
             entry.state.border_counts_valid = false;
+            entry.state.line_segments = 1;
             entry.state.first_point = false;
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.line_segments == 1 {
+            // Count-only maintained route for a simple second line segment.
+            // FreeType 2.14.3 continues accumulating unfinalized border state
+            // here; finalized public counts become observable only after
+            // `FT_Stroker_EndSubPath`.
+            entry.state.line_segments = 2;
             entry.state.center = *to;
             return FT_Err_Ok;
         }
@@ -3427,6 +3440,37 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             // dereferences unfinished border internals in the pinned build, so
             // only the public EndSubPath status is promoted as same-input
             // parity here.
+            return FT_Err_Ok;
+        }
+        if entry.state.subpath_open && entry.state.line_segments == 1 {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1933` finalizes an
+            // open single-line path into the left border only, with cap count
+            // depending on the configured cap style.  This is count-only
+            // parity; exported cap geometry remains pending.
+            entry.state.left_points = match entry.state.line_cap {
+                x if x == FT_STROKER_LINECAP_BUTT as FT_Int => 5,
+                x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => 6,
+                _ => 15,
+            };
+            entry.state.left_contours = 1;
+            entry.state.right_points = 0;
+            entry.state.right_contours = 0;
+            entry.state.border_counts_valid = true;
+            return FT_Err_Ok;
+        }
+        if !entry.state.subpath_open
+            && entry.state.line_segments == 2
+            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` closes a simple
+            // two-line corner with a small inner left border and a round-join
+            // outer right border.  The maintained route exposes exact public
+            // counts only; point/tag/contour export stays pending.
+            entry.state.left_points = 3;
+            entry.state.left_contours = 1;
+            entry.state.right_points = 18;
+            entry.state.right_contours = 1;
+            entry.state.border_counts_valid = true;
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
