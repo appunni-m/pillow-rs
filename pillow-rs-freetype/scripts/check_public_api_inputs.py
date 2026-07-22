@@ -1759,6 +1759,28 @@ def ftstroke_end_no_segment_real_parity_reason(row: ConcreteInput) -> str | None
     return None
 
 
+def ftstroke_finalized_counts_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact finalized count routes for simple open/closed stroker paths."""
+    exact_cases = {
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts",
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts",
+        "ftstroke.FT_Stroker_GetCounts.optional_output_pointers",
+        "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts",
+        "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts",
+        "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers",
+    }
+    if row.case_id in exact_cases and row.operation in {
+        "ftstroke.get_counts",
+        "ftstroke.get_border_counts",
+    }:
+        return (
+            "FT_Stroker finalized open/closed public count outputs validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI; exported "
+            "outline geometry remains pending"
+        )
+    return None
+
+
 def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
     if row.operation != "ftcache.image_cache_lookup_scaler":
@@ -7648,6 +7670,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_end_no_segment_reason = ftstroke_end_no_segment_real_parity_reason(row)
     if ftstroke_end_no_segment_reason:
         return ("real-parity", ftstroke_end_no_segment_reason)
+    ftstroke_finalized_counts_reason = ftstroke_finalized_counts_real_parity_reason(row)
+    if ftstroke_finalized_counts_reason:
+        return ("real-parity", ftstroke_finalized_counts_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)

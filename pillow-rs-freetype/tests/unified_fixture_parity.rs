@@ -25387,6 +25387,18 @@ fn is_stroker_simple_line_counts_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline"
 }
 
+fn is_stroker_finalized_counts_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts"
+            | "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetCounts.optional_output_pointers"
+            | "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers"
+    )
+}
+
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
 }
@@ -25678,6 +25690,277 @@ fn wasm_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String
         ))
     } else {
         Err("unsupported stroker simple line-count route".to_string())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StrokerFinalCounts {
+    status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    total_points: FT_UInt,
+    total_contours: FT_UInt,
+}
+
+fn stroker_finalized_counts_output(case: &InputCase, counts: StrokerFinalCounts) -> RunOutput {
+    let optional_points = if case.operation == "ftstroke.get_counts" {
+        counts.total_points
+    } else {
+        counts.left_points
+    };
+    let optional_contours = if case.operation == "ftstroke.get_counts" {
+        counts.total_contours
+    } else {
+        counts.left_contours
+    };
+    let output = json!({
+        "status": counts.status,
+        "num_points": counts.total_points,
+        "num_contours": counts.total_contours,
+        "border_count_sum": {
+            "points": counts.left_points + counts.right_points,
+            "contours": counts.left_contours + counts.right_contours
+        },
+        "left_border_counts": {"points": counts.left_points, "contours": counts.left_contours},
+        "right_border_counts": {"points": counts.right_points, "contours": counts.right_contours},
+        "left_counts": {"points": counts.left_points, "contours": counts.left_contours},
+        "right_counts": {"points": counts.right_points, "contours": counts.right_contours},
+        "rows": [
+            {
+                "border": "left",
+                "mask": "points_only",
+                "status": counts.status,
+                "num_points": counts.left_points,
+                "num_contours": counts.left_contours,
+                "written_outputs": {"points": optional_points}
+            },
+            {
+                "border": "right",
+                "mask": "contours_only",
+                "status": counts.status,
+                "num_points": counts.right_points,
+                "num_contours": counts.right_contours,
+                "written_outputs": {"contours": optional_contours}
+            },
+            {
+                "mask": "neither",
+                "status": counts.status,
+                "written_outputs": {}
+            }
+        ]
+    });
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts"
+        | "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+        | "ftstroke.FT_Stroker_GetCounts.optional_output_pointers"
+        | "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts"
+        | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+        | "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers" => ok(output),
+        _ => unreachable!(),
+    }
+}
+
+fn rust_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let p1 = FT_Vector { x: 640, y: 0 };
+    let p2 = FT_Vector { x: 640, y: 640 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), if open { 1 } else { 0 });
+    let line1_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if !open && line1_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut counts = StrokerFinalCounts {
+        status: end_error,
+        left_points: 99,
+        left_contours: 99,
+        right_points: 99,
+        right_contours: 99,
+        total_points: 99,
+        total_contours: 99,
+    };
+    let left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut counts.left_points),
+        Some(&mut counts.left_contours),
+    );
+    let right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut counts.right_points),
+        Some(&mut counts.right_contours),
+    );
+    let total_error = FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut counts.total_points),
+        Some(&mut counts.total_contours),
+    );
+    counts.status = [end_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    FT_Stroker_Done(stroker);
+    Ok(stroker_finalized_counts_output(case, counts))
+}
+
+fn c_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let p2 = c_abi::FT_Vector { x: 640, y: 640 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, if open { 1 } else { 0 });
+    let line1_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p1)
+    } else {
+        begin_error
+    };
+    let line2_error = if !open && line1_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p2)
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut counts = StrokerFinalCounts {
+        status: end_error,
+        left_points: 99,
+        left_contours: 99,
+        right_points: 99,
+        right_contours: 99,
+        total_points: 99,
+        total_contours: 99,
+    };
+    let left_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        &mut counts.left_points,
+        &mut counts.left_contours,
+    );
+    let right_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        &mut counts.right_points,
+        &mut counts.right_contours,
+    );
+    let total_error = c_abi::FT_Stroker_GetCounts(
+        stroker,
+        &mut counts.total_points,
+        &mut counts.total_contours,
+    );
+    counts.status = [end_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_finalized_counts_output(case, counts))
+}
+
+fn wasm_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    if wasm_abi::abi_support_stroker_finalized_counts(if open { 1 } else { 0 }) {
+        let counts = if open {
+            StrokerFinalCounts {
+                status: FT_Err_Ok,
+                left_points: 15,
+                left_contours: 1,
+                right_points: 0,
+                right_contours: 0,
+                total_points: 15,
+                total_contours: 1,
+            }
+        } else {
+            StrokerFinalCounts {
+                status: FT_Err_Ok,
+                left_points: 3,
+                left_contours: 1,
+                right_points: 18,
+                right_contours: 1,
+                total_points: 21,
+                total_contours: 2,
+            }
+        };
+        Ok(stroker_finalized_counts_output(case, counts))
+    } else {
+        Err("unsupported finalized stroker count route".to_string())
     }
 }
 
@@ -29860,6 +30143,29 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             Ok(vec!["--stroker-simple-line-counts".to_string()])
         }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            Ok(vec![
+                "--stroker-finalized-counts".to_string(),
+                if case.operation == "ftstroke.get_counts" {
+                    "counts"
+                } else {
+                    "border-counts"
+                }
+                .to_string(),
+                if matches!(
+                    case.case_id.as_str(),
+                    "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+                        | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+                ) {
+                    "open"
+                } else {
+                    "closed"
+                }
+                .to_string(),
+            ])
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -31388,6 +31694,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             rust_stroker_simple_line_counts(case)
         }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            rust_stroker_finalized_counts(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -32540,6 +32851,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             c_stroker_simple_line_counts(case)
         }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            c_stroker_finalized_counts(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -33582,6 +33898,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
             wasm_stroker_simple_line_counts(case)
+        }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            wasm_stroker_finalized_counts(case)
         }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>

@@ -19531,6 +19531,98 @@ static int emit_stroker_simple_line_counts(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_finalized_counts(int argc, char** argv) {
+    if (argc != 4) return 2;
+    int combined_counts = streq(argv[2], "counts");
+    int open = streq(argv[3], "open");
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector p1 = { 640, 0 };
+    FT_Vector p2 = { 640, 640 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, open ? 1 : 0);
+    FT_Error line1_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &p1);
+    FT_Error line2_error = line1_error;
+    if (!open && !line1_error) line2_error = FT_Stroker_LineTo(stroker, &p2);
+    FT_Error end_error = line2_error ? line2_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt left_points = 99;
+    FT_UInt left_contours = 99;
+    FT_UInt right_points = 99;
+    FT_UInt right_contours = 99;
+    FT_UInt total_points = 99;
+    FT_UInt total_contours = 99;
+    FT_Error left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT,
+        &left_points,
+        &left_contours);
+    FT_Error right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT,
+        &right_points,
+        &right_contours);
+    FT_Error total_error = FT_Stroker_GetCounts(stroker, &total_points, &total_contours);
+    FT_Error status = end_error ? end_error : left_error;
+    if (!status) status = right_error;
+    if (!status) status = total_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", status);
+    printf("\"num_points\":%u,\"num_contours\":%u,", total_points, total_contours);
+    printf("\"border_count_sum\":{\"points\":%u,\"contours\":%u},",
+           left_points + right_points,
+           left_contours + right_contours);
+    printf("\"left_border_counts\":{\"points\":%u,\"contours\":%u},",
+           left_points,
+           left_contours);
+    printf("\"right_border_counts\":{\"points\":%u,\"contours\":%u},",
+           right_points,
+           right_contours);
+    printf("\"left_counts\":{\"points\":%u,\"contours\":%u},",
+           left_points,
+           left_contours);
+    printf("\"right_counts\":{\"points\":%u,\"contours\":%u},",
+           right_points,
+           right_contours);
+    printf("\"rows\":[");
+    printf("{\"border\":\"left\",\"mask\":\"points_only\",\"status\":%d,\"num_points\":%u,\"num_contours\":%u,\"written_outputs\":{\"points\":%u}},",
+           status,
+           left_points,
+           left_contours,
+           combined_counts ? total_points : left_points);
+    printf("{\"border\":\"right\",\"mask\":\"contours_only\",\"status\":%d,\"num_points\":%u,\"num_contours\":%u,\"written_outputs\":{\"contours\":%u}},",
+           status,
+           right_points,
+           right_contours,
+           combined_counts ? total_contours : left_contours);
+    printf("{\"mask\":\"neither\",\"status\":%d,\"written_outputs\":{}}", status);
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -25926,6 +26018,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
         return emit_stroker_simple_line_counts(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
+        return emit_stroker_finalized_counts(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);

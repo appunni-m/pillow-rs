@@ -4,6 +4,7 @@
   "manifest_cases": [
     "alias_defined",
     "opaque_handle_import_contract",
+    "unparsed_handle_lifecycle_matches_c",
     "lifecycle_contract"
   ],
   "cases": [
