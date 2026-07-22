@@ -3372,6 +3372,45 @@ pub fn FT_Stroker_CubicTo(
     })
 }
 
+pub fn FT_Stroker_ParseOutline(
+    stroker: FT_Stroker,
+    outline: Option<&FT_OutlineSnapshot>,
+    _opened: FT_Bool,
+) -> FT_Error {
+    let Some(outline) = outline else {
+        return FT_Err_Invalid_Outline;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        // FreeType 2.14.3 `src/base/ftstroke.c:2067-2088` rewinds before
+        // parsing and skips contours whose `last <= first`; later
+        // `src/base/ftstroke.c:2229-2237` avoids EndSubPath if no segment was
+        // generated.  This exact maintained route covers empty outlines and
+        // single-point contours only.  Real segment parsing/export remains
+        // pending for the geometry rows.
+        entry.state.rewind_path();
+        let mut first = 0usize;
+        for &last_raw in &outline.contours {
+            let last = usize::from(last_raw);
+            if last >= outline.points.len() {
+                return FT_Err_Invalid_Outline;
+            }
+            if last <= first {
+                first = last.saturating_add(1);
+                continue;
+            }
+            return FT_Err_Unimplemented_Feature;
+        }
+        FT_Err_Ok
+    })
+}
+
 pub fn FT_Stroker_GetBorderCounts(
     stroker: FT_Stroker,
     border: FT_Int,

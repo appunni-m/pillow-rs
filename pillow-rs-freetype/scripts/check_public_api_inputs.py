@@ -1730,6 +1730,21 @@ def ftstroke_degenerate_curve_real_parity_reason(row: ConcreteInput) -> str | No
     return None
 
 
+def ftstroke_parse_degenerate_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact degenerate ParseOutline no-op route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id
+        == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+    ):
+        return (
+            "FT_Stroker_ParseOutline empty and single-point contour no-op "
+            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; "
+            "full parse/finalization/export geometry remains pending"
+        )
+    return None
+
+
 def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
     if row.operation != "ftcache.image_cache_lookup_scaler":
@@ -7613,6 +7628,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_degenerate_curve_reason = ftstroke_degenerate_curve_real_parity_reason(row)
     if ftstroke_degenerate_curve_reason:
         return ("real-parity", ftstroke_degenerate_curve_reason)
+    ftstroke_parse_degenerate_reason = ftstroke_parse_degenerate_real_parity_reason(row)
+    if ftstroke_parse_degenerate_reason:
+        return ("real-parity", ftstroke_parse_degenerate_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)

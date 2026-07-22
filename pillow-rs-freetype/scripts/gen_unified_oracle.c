@@ -19531,6 +19531,78 @@ static int emit_stroker_simple_line_counts(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_parse_degenerate_row(const char* label,
+                                               FT_Error parse_status,
+                                               FT_Error counts_status,
+                                               FT_UInt points,
+                                               FT_UInt contours) {
+    printf("{\"case\":\"%s\",", label);
+    printf("\"parse_status\":%d,", parse_status);
+    printf("\"counts_status\":%d,", counts_status);
+    printf("\"counts_after\":{\"points\":%u,\"contours\":%u}}", points, contours);
+}
+
+static int emit_stroker_parse_degenerate(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector point = { 0, 0 };
+    unsigned char tag = FT_CURVE_TAG_ON;
+    unsigned short contour = 0;
+    FT_Outline single = { 1, 1, &point, &tag, &contour, 0 };
+    FT_Outline empty = { 0, 0, NULL, NULL, NULL, 0 };
+
+    FT_Error single_parse = FT_Stroker_ParseOutline(stroker, &single, 0);
+    FT_UInt single_points = 99;
+    FT_UInt single_contours = 99;
+    FT_Error single_counts = FT_Stroker_GetCounts(stroker, &single_points, &single_contours);
+
+    FT_Error empty_parse = FT_Stroker_ParseOutline(stroker, &empty, 0);
+    FT_UInt empty_points = 99;
+    FT_UInt empty_contours = 99;
+    FT_Error empty_counts = FT_Stroker_GetCounts(stroker, &empty_points, &empty_contours);
+
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    print_stroker_parse_degenerate_row("single_point_contour",
+                                       single_parse,
+                                       single_counts,
+                                       single_points,
+                                       single_contours);
+    printf(",");
+    print_stroker_parse_degenerate_row("empty_outline",
+                                       empty_parse,
+                                       empty_counts,
+                                       empty_points,
+                                       empty_contours);
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_degenerate_curve(int argc, char** argv) {
     if (argc != 3) return 2;
     const char* action = argv[2];
@@ -25816,6 +25888,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
         return emit_stroker_simple_line_counts(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
+        return emit_stroker_parse_degenerate(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-degenerate-curve")) {
         return emit_stroker_degenerate_curve(argc, argv);

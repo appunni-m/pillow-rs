@@ -804,6 +804,7 @@ FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker);
 void FT_Stroker_Set(FT_Stroker stroker, FT_Fixed radius, int line_cap, int line_join, FT_Fixed miter_limit);
 void FT_Stroker_Rewind(FT_Stroker stroker);
 FT_Error FT_Stroker_BeginSubPath(FT_Stroker stroker, FT_Vector* to, FT_Bool open);
+FT_Error FT_Stroker_ParseOutline(FT_Stroker stroker, FT_Outline* outline, FT_Bool opened);
 FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to);
 FT_Error FT_Stroker_ConicTo(FT_Stroker stroker, FT_Vector* control, FT_Vector* to);
 FT_Error FT_Stroker_CubicTo(FT_Stroker stroker, FT_Vector* control1, FT_Vector* control2, FT_Vector* to);

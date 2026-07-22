@@ -4463,6 +4463,16 @@ pub extern "C" fn FT_Stroker_BeginSubPath(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ParseOutline(
+    stroker: FT_Stroker,
+    outline: *const FT_Outline,
+    opened: FT_Bool,
+) -> FT_Error {
+    let snapshot = outline_snapshot_from_c(outline);
+    rust_ffi::FT_Stroker_ParseOutline(stroker, snapshot.as_ref(), opened)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_LineTo(stroker: FT_Stroker, to: *const FT_Vector) -> FT_Error {
     let rust_to = if to.is_null() {
         None

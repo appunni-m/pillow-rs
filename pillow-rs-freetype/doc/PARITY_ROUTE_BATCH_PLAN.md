@@ -105,6 +105,44 @@ make fontdone-lint
 git diff --check
 ```
 
+Current continuation result after the degenerate `FT_Stroker_ParseOutline`
+split:
+
+- Added `ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop`
+  as a concrete split of the broad `degenerate_contours_skipped` manifest row.
+  The route uses maintained local outline fixtures equivalent to an empty
+  outline and a single-point contour, sets a round-cap/round-join stroker, then
+  calls public `FT_Stroker_ParseOutline` followed by `FT_Stroker_GetCounts`.
+- Pinned FreeType 2.14.3 rewinds the stroker, skips contours where
+  `last <= first`, avoids `FT_Stroker_EndSubPath` when no segment was generated,
+  and returns OK with zero public counts. Rust FFI, thin C ABI, and WASM ABI now
+  match this same-input behavior. This is anchored to
+  `src/base/ftstroke.c:2067-2102` and `src/base/ftstroke.c:2229-2237`.
+- This does not promote the broad parse-outline geometry rows. Mixed
+  line/conic/cubic parsing, opened-outline cap finalization, mixed degenerate
+  plus valid contour output, and exported outline geometry remain pending.
+
+Verified impact:
+
+```text
+route audit concrete_cases=7296 category_counts={'compile-contract': 2266, 'pending-route': 214, 'real-null-validation': 9, 'real-parity': 4807}
+focused ftstroke.parse_outline runtime_parity: passed=3 failed=0 total=3, pending=4
+full runtime_parity: passed=7077 failed=0 total=7077
+full runtime_cases: pending=219
+```
+
+Verification commands:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop
+make -C pillow-rs-freetype test-op OP=ftstroke.parse_outline
+make fontdone-parity
+make fontdone-ffi-compat
+make fontdone-ffi
+make fontdone-lint
+git diff --check
+```
+
 Current continuation result after Type1 auxiliary attachment follow-up:
 
 - `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained
