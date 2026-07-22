@@ -2729,6 +2729,12 @@ impl BackendComparisonWorker {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
             }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                rust_get_track_kerning(case)
+            }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
                     == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
@@ -3105,6 +3111,12 @@ impl BackendComparisonWorker {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
             }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                c_get_track_kerning(case)
+            }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
                     == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
@@ -3473,6 +3485,12 @@ impl BackendComparisonWorker {
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
+            }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                wasm_get_track_kerning(case)
             }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
@@ -8380,6 +8398,18 @@ struct KerningOutputRow {
     status: i32,
     x: i64,
     y: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TrackKerningRow {
+    point_size: FT_Fixed,
+    degree: FT_Int,
+}
+
+struct TrackKerningOutputRow {
+    input: TrackKerningRow,
+    status: FT_Error,
+    akerning: FT_Fixed,
 }
 
 fn rust_set_transform(case: &InputCase) -> Result<RunOutput, String> {
@@ -13706,6 +13736,117 @@ fn wasm_get_kerning_optional(handle: Option<usize>, params: &Value) -> Result<Ru
     Ok(kerning_output(rows))
 }
 
+fn rust_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status =
+                FT_Get_Track_Kerning(Some(&face), row.point_size, row.degree, Some(&mut kerning));
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn c_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status =
+                c_abi::FT_Get_Track_Kerning(face, row.point_size, row.degree, &mut kerning);
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    c_done_face(face);
+    c_done_library(library);
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn wasm_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status = wasm_abi::fontdone_wasm_get_track_kerning(
+                handle,
+                row.point_size,
+                row.degree,
+                &mut kerning,
+            );
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    wasm_done_face(handle);
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn track_kerning_output(attach_status: FT_Error, rows: Vec<TrackKerningOutputRow>) -> RunOutput {
+    let first_error = if attach_status != FT_Err_Ok {
+        attach_status
+    } else {
+        rows.iter()
+            .find_map(|row| (row.status != FT_Err_Ok).then_some(row.status))
+            .unwrap_or(FT_Err_Ok)
+    };
+    let output = json!({
+        "attach_status": attach_status,
+        "status": first_error,
+        "rows": rows
+            .iter()
+            .map(|row| {
+                json!({
+                    "point_size_16_16": row.input.point_size,
+                    "degree": row.input.degree,
+                    "status": row.status,
+                    "akerning": row.akerning,
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
 fn rust_get_pfr_kerning(case: &InputCase) -> Result<RunOutput, String> {
     let bytes = pfr_kerning_font_bytes(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
@@ -16860,6 +17001,21 @@ fn required_asset_bytes(case: &InputCase, key: &str) -> Result<Arc<[u8]>, String
         .get(key)
         .ok_or_else(|| format!("missing asset {key}"))?;
     font_asset_bytes(asset)
+}
+
+fn required_asset_pathname(case: &InputCase, key: &str) -> Result<String, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(key)
+        .ok_or_else(|| format!("missing asset {key}"))?;
+    let path = asset_file_path(asset).ok_or_else(|| {
+        format!(
+            "asset {key} has no resolved file path: {}",
+            asset_label(asset)
+        )
+    })?;
+    Ok(fixture_dir().join(path).display().to_string())
 }
 
 fn ftmm_blend_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
@@ -27508,6 +27664,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(kerning_rows_arg(params)?);
             Ok(args)
         }
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            let mut args = vec!["--get-track-kerning".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(track_kerning_rows_arg(params)?);
+            Ok(args)
+        }
         "ftpfr.get_pfr_kerning"
             if case.case_id
                 == "ftpfr.FT_Get_PFR_Kerning.non_pfr_falls_back_to_unscaled_kerning" =>
@@ -29528,6 +29694,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             )?))
         }
         "freetype.get_kerning" => rust_get_kerning(case),
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            rust_get_track_kerning(case)
+        }
         "freetype.set_transform" => rust_set_transform(case),
         "freetype.get_transform" => rust_get_transform(case),
         "freetype.reference_face" => rust_reference_face(case),
@@ -30638,6 +30809,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "tttables.get_cmap_format" => c_get_cmap_format(case),
         "tttables.get_cmap_language_id" => c_get_cmap_language_id(case),
         "freetype.get_kerning" => c_get_kerning(case),
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            c_get_track_kerning(case)
+        }
         "ftsnames.get_sfnt_name_count" => {
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_name_count_output(face);
@@ -31645,6 +31821,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "tttables.get_cmap_format" => wasm_get_cmap_format(case),
         "tttables.get_cmap_language_id" => wasm_get_cmap_language_id(case),
         "freetype.get_kerning" => wasm_get_kerning(case),
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            wasm_get_track_kerning(case)
+        }
         "ftsnames.get_sfnt_name_count" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_name_count_output(handle);
@@ -56066,6 +56247,46 @@ fn pfr_kerning_rows_arg(params: &Value) -> Result<String, String> {
         .map(|row| format!("{}|{}", row.left, row.right))
         .collect::<Vec<_>>()
         .join(","))
+}
+
+fn track_kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(track_kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}", row.point_size, row.degree))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn track_kerning_rows(params: &Value) -> Result<Vec<TrackKerningRow>, String> {
+    let point_sizes = params
+        .get("point_size_16_16")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing point_size_16_16 array".to_string())?
+        .iter()
+        .enumerate()
+        .map(|(index, value)| i64_value(value, &format!("point_size_16_16[{index}]")))
+        .collect::<Result<Vec<_>, String>>()?;
+    let degrees = params
+        .get("degrees")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing degrees array".to_string())?
+        .iter()
+        .enumerate()
+        .map(|(index, value)| i64_value(value, &format!("degrees[{index}]")))
+        .collect::<Result<Vec<_>, String>>()?;
+    let rows = point_sizes
+        .into_iter()
+        .flat_map(|point_size| {
+            degrees.iter().copied().map(move |degree| TrackKerningRow {
+                point_size,
+                degree: degree as FT_Int,
+            })
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        return Err("track kerning rows cannot be empty".to_string());
+    }
+    Ok(rows)
 }
 
 fn pfr_kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {

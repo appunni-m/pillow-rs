@@ -246,6 +246,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_charmap",
     "fontdone_wasm_set_charmap_from_face",
     "fontdone_wasm_get_fstype_flags",
+    "fontdone_wasm_attach_stream",
+    "fontdone_wasm_get_track_kerning",
     "fontdone_wasm_get_gasp",
     "fontdone_wasm_get_glyph_name",
     "fontdone_wasm_get_name_index",
@@ -375,6 +377,7 @@ REAL_PARITY_OPERATIONS = {
     "freetype.face_properties",
     "freetype.get_fstype_flags",
     "freetype.get_kerning",
+    "freetype.get_track_kerning",
     "freetype.ceil_fix",
     "freetype.floor_fix",
     "freetype.round_fix",
@@ -3708,6 +3711,8 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         )
     if row.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        if row.operation == "freetype.get_track_kerning" and not row.expect_error:
             return None
         return (
             "FT_Get_Track_Kerning Type1/AFM success requires maintained "
