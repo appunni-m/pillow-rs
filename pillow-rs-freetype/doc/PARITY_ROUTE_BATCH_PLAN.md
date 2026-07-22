@@ -16,6 +16,22 @@ This is the authoritative starting point for the next batch. The pending rows
 are still visible and must remain visible until the same declared input runs
 against pinned C, Rust FFI, thin C ABI, and WASM ABI with exact matching output.
 
+Current continuation result after Type1 auxiliary attachment follow-up:
+
+- `freetype.FT_Attach_File.success_attach_auxiliary_file` now has a maintained
+  exact route. The pinned C oracle calls public `FT_Attach_File` with the
+  declared AFM pathname; Rust FFI, thin C ABI, and WASM attach the same AFM
+  bytes through the already-maintained stream entrypoint and compare the
+  resulting post-attach `FT_Get_Kerning` public output. This is not a pathname
+  placeholder: FreeType implements `FT_Attach_File` as the file-source wrapper
+  that reaches the same driver attach behavior, while the repo's thin C/WASM
+  ABI rules deliberately keep filesystem reads out of wrapper crates.
+- Focused verification for
+  `freetype.FT_Attach_File.success_attach_auxiliary_file` passed `1 / 1` and
+  route audit moved to `pending-route=224`, `real-parity=4771`.
+- The null-path and missing/unsupported file cases remain separate exact-error
+  rows; this success route does not promote broader pathname/open-args behavior.
+
 High-leverage duplicate input buckets from
 `python3 scripts/report_pending_route_buckets.py`:
 

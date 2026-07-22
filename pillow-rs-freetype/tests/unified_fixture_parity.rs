@@ -2725,6 +2725,11 @@ impl BackendComparisonWorker {
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "ftwinfnt.get_winfnt_header_mutation" => rust_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => rust_winfnt_charmap_probe(case),
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                rust_attach_file(case)
+            }
             "freetype.attach_stream"
                 if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
             {
@@ -3112,6 +3117,11 @@ impl BackendComparisonWorker {
             "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
                 c_has_ps_glyph_names(case)
             }
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                c_attach_file(case)
+            }
             "freetype.attach_stream"
                 if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
             {
@@ -3491,6 +3501,11 @@ impl BackendComparisonWorker {
             "winfnt.charmap_probe" => wasm_winfnt_charmap_probe(case),
             "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
                 wasm_has_ps_glyph_names(case)
+            }
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                wasm_attach_file(case)
             }
             "freetype.attach_stream"
                 if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
@@ -13860,6 +13875,53 @@ fn track_kerning_output(attach_status: FT_Error, rows: Vec<TrackKerningOutputRow
     } else {
         error_with_output(first_error, output)
     }
+}
+
+fn rust_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    // The pure Rust FFI layer keeps file I/O outside core; this route uses the
+    // declared pathname asset bytes and then verifies the same face mutation
+    // that C `FT_Attach_File` reaches through its stream wrapper.
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = rust_attached_afm_kerning_rows(&face, &case.inputs.params)?;
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn c_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = c_attached_afm_kerning_rows(face, &case.inputs.params)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn wasm_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    // WASM has no filesystem pathname ABI; the JS-facing thin ABI exposes the
+    // same auxiliary file as caller-provided bytes and verifies the post-attach
+    // public output against the pinned C pathname call.
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = wasm_attached_afm_kerning_rows(handle, &case.inputs.params)?;
+    wasm_done_face(handle);
+    Ok(attach_stream_output(attach_status, rows))
 }
 
 fn rust_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
@@ -27806,6 +27868,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(attach_stream_kerning_rows_arg(params)?);
             Ok(args)
         }
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            let mut args = vec!["--attach-file".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(attach_stream_kerning_rows_arg(params)?);
+            Ok(args)
+        }
         "freetype.get_kerning" => {
             if kerning_face_is_null(params) {
                 let row = single_kerning_row(params)?;
@@ -29862,6 +29934,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             )?))
         }
         "freetype.get_kerning" => rust_get_kerning(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            rust_attach_file(case)
+        }
         "freetype.attach_stream"
             if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
         {
@@ -30981,6 +31058,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => c_get_gasp(case),
         "tttables.get_cmap_format" => c_get_cmap_format(case),
         "tttables.get_cmap_language_id" => c_get_cmap_language_id(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            c_attach_file(case)
+        }
         "freetype.attach_stream"
             if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
         {
@@ -31998,6 +32080,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => wasm_get_gasp(case),
         "tttables.get_cmap_format" => wasm_get_cmap_format(case),
         "tttables.get_cmap_language_id" => wasm_get_cmap_language_id(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            wasm_attach_file(case)
+        }
         "freetype.attach_stream"
             if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
         {
