@@ -2950,3 +2950,26 @@ Duplicate-route findings from the same audit pass:
   - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
+
+### Split FT_Done_Library default-module final destroy status: 2026-07-22
+
+- Added focused `ftmodapi.FT_Done_Library.default_modules_final_destroy_status`
+  for the same-input route `FT_New_Library` + `FT_Add_Default_Modules` +
+  final `FT_Done_Library`.
+- Kept `final_destroy_closes_faces_and_modules` pending because it still
+  requires owned face closure, synthetic module destructor ordering, and
+  allocator-balance observations.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Done_Library.default_modules_final_destroy_status`
+    passed `1/1`.
+- Focused route audit after adding the split row:
+  `concrete_cases=7294`, `real-parity=4798`, `pending-route=221`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7068 failed=0
+    total=7068`, pending `226`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7294`, `real-parity=4798`, `pending-route=221`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
