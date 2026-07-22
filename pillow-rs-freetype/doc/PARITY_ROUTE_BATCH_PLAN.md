@@ -25,8 +25,46 @@ High-leverage duplicate input buckets from
 | 9 | `ftgxval.truetype_gx_validate` | Keep pending. Requires C-openable GX/AAT fixtures plus selected table output/free routing. |
 | 9 | `ftotval.open_type_validate` success/selected tables | Keep pending. Required OpenType validator fixtures are absent and the pinned oracle currently reports validator service unavailable before selected table output can be observed. |
 | 7 | `ftotval.open_type_validate` malformed/partial cleanup | Keep pending. Required malformed fixtures are absent; returning only the service-missing error would not prove malformed table parity. |
-| 4 | `ftcid.get_cid_from_glyph_index` | Keep pending. Requires CID-keyed Type1/CFF and SFNT-wrapped CID fixtures with exact glyph-index-to-CID output. Non-CID error routing does not prove success rows. |
+| 4 | `ftcid.get_cid_from_glyph_index` | Keep pending for the old broad rows. The SFNT-wrapped CID split is already real; the remaining bucket requires a non-SFNT CID-keyed Type1/CFF fixture or crash-isolated null-output proof. |
 | 6 | `ftstroke.export_border` | Keep pending. Requires real stroker path/border geometry; an unparsed stroker no-op only proves the existing invalid-input row. |
+
+Next surface audit decisions after the FT_Open_Args source-flag row:
+
+- BDF/SFNT-BDF rows are fixture-generation work, not a classifier-only
+  promotion. `FT_Get_BDF_Charset_ID` and `FT_Get_BDF_Property` already prove
+  BDF success plus exact BDF error rows for the maintained BDF assets, but the
+  SFNT bitmap rows still reference absent `sfnt-bdf-table.otb` assets. FreeType
+  documents that the BDF APIs also apply to SFNT bitmap fonts containing a
+  `BDF ` table, so the correct next step is a reproducible OTB/SFNT-BDF fixture
+  generator plus same-input C/Rust/C-ABI/WASM comparison. Reusing the BDF-only
+  row or classifying the missing-file error as SFNT-BDF parity would be a green
+  placeholder.
+- Type1 auxiliary attachment and track-kerning rows are a single fixture+route
+  batch. The repo currently has `input/fonts/type1/attach-afm-base.pfb`, but no
+  maintained matching AFM/PFM fixture under `input/aux/type1/`. FreeType's public
+  reference says `FT_Get_Track_Kerning` is Type1-driver-only and uses AFM data
+  attached with `FT_Attach_File` or `FT_Attach_Stream`; only a few AFM files have
+  track-kerning data. The honest batch is: generate or import a matching AFM
+  with `StartTrackKern`/`TrackKern`, add attach-file and attach-stream routes,
+  implement pure-Rust AFM attachment state, then compare post-attach kerning or
+  track-kerning output through all ABI lanes. Null/missing-file attach rows and
+  no-track-data errors do not prove success.
+- `ftdriver.hinting_engine_property` remains fixture-gated and route-gated. The
+  four pending rows declare CFF, Type1, and CID hinting-sensitive fonts that are
+  not present locally. Existing TrueType interpreter-version property rows prove
+  the scalar property mechanism, but they do not prove the PostScript
+  `hinting-engine` property or any public glyph-output effect. Promoting those
+  rows through scalar macro values or no-op property acceptance would be a green
+  placeholder.
+- CID rows already have a valid SFNT-wrapped CID split using
+  `input/fonts/cid/ot-cff-cid-keyed.otf`: focused verification passes
+  `ftcid.get_cid_from_glyph_index` at `4/4` with four old non-SFNT semantic
+  rows pending, and `ftcid.get_cid_is_internally_cid_keyed` at `2/2` with two
+  old non-SFNT/null-output semantic rows pending. The old rows stay pending
+  because they require a non-SFNT CID-keyed Type1/CFF fixture or a crash-isolated
+  null-output probe. `ftcid.c` dereferences output pointers before service
+  dispatch, so null-output behavior cannot be promoted through the normal
+  same-process oracle.
 
 Current-turn candidate decisions:
 
