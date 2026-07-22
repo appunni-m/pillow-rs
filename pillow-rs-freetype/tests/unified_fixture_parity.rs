@@ -29028,7 +29028,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if params.get("glyph").is_some_and(Value::is_null) {
                 return Ok(vec!["--done-glyph-null".to_string()]);
             }
-            if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+            if done_bitmap_glyph_from_get_glyph_case(case) {
                 let mut args = vec!["--done-glyph-bitmap".to_string()];
                 push_named_font_source(case, "bitmap_strike_font", &mut args)?;
                 push_face_size(params, &mut args)?;
@@ -39390,7 +39390,7 @@ fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
     if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
         return rust_done_bitmap_glyph_paths(case);
     }
-    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+    if done_bitmap_glyph_from_get_glyph_case(case) {
         let face = open_named_face(case, "bitmap_strike_font")?;
         let loaded = FT_Load_Glyph(
             &face,
@@ -39529,7 +39529,7 @@ fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
     if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
         return c_done_bitmap_glyph_paths(case);
     }
-    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+    if done_bitmap_glyph_from_get_glyph_case(case) {
         let (library, face) = c_open_named_face(case, "bitmap_strike_font")?;
         let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
         let mut create_error = c_abi::FT_Load_Glyph(
@@ -39701,7 +39701,7 @@ fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String>
     if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
         return wasm_done_bitmap_glyph_paths(case);
     }
-    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap" {
+    if done_bitmap_glyph_from_get_glyph_case(case) {
         let handle = wasm_open_named_face(case, "bitmap_strike_font")?;
         let mut glyph_handle = 0usize;
         let mut create_error = wasm_abi::fontdone_wasm_load_glyph(
@@ -39800,6 +39800,14 @@ fn done_outline_glyph_case(case: &InputCase) -> bool {
         "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays"
             | "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph"
             | "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
+    )
+}
+
+fn done_bitmap_glyph_from_get_glyph_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap"
+            | "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph"
     )
 }
 

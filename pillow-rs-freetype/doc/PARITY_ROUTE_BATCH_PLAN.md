@@ -2589,3 +2589,26 @@ Rejected quick fixes in this audit:
 - Route audit impact from this split: `concrete_cases` increased from 7275 to
   7276 and `real-parity` increased from 4779 to 4780; `pending-route` remains
   221 because no broad pending obligation was hidden or removed.
+
+## 2026-07-22 FT_Done_Glyph bitmap ownership split
+
+- Added the concrete
+  `ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph` row using the
+  maintained embedded bitmap strike fixture
+  `fonts/bitmap-strikes/public-bitmap-strike.ttf`.  This is a function-level
+  `FT_Done_Glyph` proof for the bitmap-glyph path; it does not retire the broad
+  `success_releases_owned_glyph` row because SVG, malformed slot/class, and
+  allocation-failure cases remain separate obligations.
+- The row loads the bitmap strike glyph, creates a detached bitmap glyph with
+  `FT_Get_Glyph`, records the bitmap glyph format, buffer owner class, and
+  bitmap dimensions before release, then releases it once with `FT_Done_Glyph`.
+  The public release behavior is tied to
+  `freetype/include/freetype/ftglyph.h:667-677` and
+  `freetype/src/base/ftglyph.c:886-899`.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph`
+  passes as a runnable exact parity row across Rust FFI, thin C ABI, WASM ABI,
+  and the pinned C oracle.
+- Route audit impact from this split: `concrete_cases` increased from 7276 to
+  7277 and `real-parity` increased from 4780 to 4781; `pending-route` remains
+  221 because no broad pending obligation was hidden or removed.

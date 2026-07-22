@@ -6183,6 +6183,8 @@ subjects:
         description: A live outline, bitmap, or SVG glyph invokes the class-specific done hook, releases owned outline/bitmap/SVG storage, and frees the glyph allocation exactly once.
       - id: success_releases_owned_outline_glyph
         description: A detached outline glyph created from a loaded glyph slot with FT_Get_Glyph owns its copied outline arrays and is released once by FT_Done_Glyph.
+      - id: success_releases_owned_bitmap_glyph
+        description: A detached bitmap glyph created from an embedded bitmap slot with FT_Get_Glyph owns its bitmap buffer and is released once by FT_Done_Glyph.
       - id: success_null_is_noop
         description: Passing a null glyph returns without reading library memory or mutating observable state.
       - id: lifetime_before_library_done

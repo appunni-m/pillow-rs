@@ -4,6 +4,7 @@
   "manifest_cases": [
     "success_releases_owned_glyph",
     "success_releases_owned_outline_glyph",
+    "success_releases_owned_bitmap_glyph",
     "success_null_is_noop",
     "lifetime_before_library_done",
     "outline_glyph_before_library_done"
@@ -141,6 +142,64 @@
             "format_before_done",
             "outline_owner_class",
             "outline_counts_before_done",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:667-677",
+          "freetype/src/base/ftglyph.c:886-899"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph",
+      "subject": "ftglyph.FT_Done_Glyph",
+      "case": "success_releases_owned_bitmap_glyph",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_path": "FT_Get_Glyph bitmap",
+          "glyph_index": "bitmap_glyph",
+          "destroy_with": "FT_Done_Glyph"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "runtime:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "create_error": "FT_Error",
+          "created_glyph_pointer_class": "null_or_non_null",
+          "format_before_done": "FT_GLYPH_FORMAT_BITMAP",
+          "buffer_owner_class": "owned_non_null_or_null",
+          "bitmap_before_done": {
+            "width": "u32",
+            "rows": "u32",
+            "pitch": "i32"
+          },
+          "free_events": "FT_Done_Glyph called once for owned bitmap glyph"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "create_error",
+            "created_glyph_pointer_class",
+            "format_before_done",
+            "buffer_owner_class",
+            "bitmap_before_done",
             "free_events"
           ]
         },
