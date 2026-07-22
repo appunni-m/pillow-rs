@@ -3086,3 +3086,86 @@ Priority for the next real batches:
   - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
+
+### Continuation audit for remaining pending routes: 2026-07-22
+
+Current clean-main baseline after `f566ff7c6`:
+
+- Route audit:
+  `concrete_cases=7294`, `real-parity=4799`, `pending-route=220`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Full parity:
+  `runtime_parity: passed=7069 failed=0 total=7069`, pending `225`.
+
+Findings from the next-batch audit:
+
+- `ftglyph.done_glyph`
+  - Concrete ownership rows for `FT_Done_Glyph(NULL)`, owned outline glyphs,
+    owned bitmap glyphs, outline glyph-before-library lifetime, and
+    `FT_BitmapGlyphRec` owned-buffer creation paths are already maintained and
+    counted.
+  - The remaining broad rows are not duplicates that can be promoted.  They
+    still require stale/foreign handle facades, allocation/free-event
+    observability, optional SVG glyph objects, and library-before-glyph invalid
+    use classification.  Counting the current concrete outline/bitmap rows as
+    those broad rows would be a green placeholder.
+
+- `ftotval.open_type_validate`
+  - The active pinned FreeType build returns
+    `FT_Err_Unimplemented_Feature (7)` for `FT_OpenType_Validate` after
+    argument validation.  The focused diagnostic command
+    `make -C pillow-rs-freetype test-case CASE=ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output`
+    produced `runtime_cases: runnable=0 pending=1` because the fixture declares
+    success/null output while the oracle returns unimplemented before table
+    absence is observable.
+  - Do not change Rust to return the declared success value and do not promote
+    missing `valid-*.otf` or `malformed-*.otf` rows until the fixture contract
+    is corrected or the oracle build contract changes.  The next valid batch is
+    either a documented fixture-contract correction for the unimplemented build
+    or a maintained OpenType validation fixture set plus a real parser route.
+
+- `ftgxval` semantic placeholder rows
+  - Several rows still use non-standard operation names such as
+    `FT_TrueTypeGX_Validate` while maintained runtime routes use
+    `ftgxval.truetype_gx_validate`.  Inspection showed these rows are not
+    simple operation-name duplicates: their assets are marked
+    `required_future_asset` and require generated AAT/GX fonts with valid,
+    missing, and malformed `feat`, `mort`, `morx`, `bsln`, `just`, `kern`,
+    `opbd`, `trak`, `prop`, and `lcar` tables.
+  - Do not convert them by aliasing the operation name alone.  The valid batch
+    is a maintained AAT/GX fixture generator plus table-slot/error/lifetime
+    routing through pinned C, Rust FFI, C ABI, and WASM ABI.
+
+- `ftstroke`
+  - Invalid-argument and null/no-op rows are already counted as real parity.
+    The remaining rows are geometry/state rows: begin, line/conic/cubic,
+    end-subpath, border counts, combined counts, export, cap/join variants,
+    glyph stroke, and set/rewind path clearing.
+  - The valid implementation batch is not classifier work.  It requires porting
+    actual `src/base/ftstroke.c` border/path state and exporting exact outline
+    points, tags, contours, and counts for a small maintained synthetic path
+    set before expanding to cap/join matrices.
+
+- `ftmodapi.add_module`
+  - Null-library, null-class, future-version, and duplicate-version error rows
+    are already handled by existing real/error routes.
+  - The remaining success rows require synthetic `FT_Module_Class` and
+    renderer/styler descriptors with callback logs and registry/list effects
+    matching `src/base/ftobjs.c:FT_Add_Module` and `src/base/ftrender.c`.
+    This is real implementation work, not a fixture/classifier change.
+
+Next valid implementation order:
+
+1. Start `ftstroke` with a bounded manual-path batch:
+   `FT_Stroker_BeginSubPath`, `FT_Stroker_LineTo`,
+   `FT_Stroker_EndSubPath`, `FT_Stroker_GetBorderCounts`,
+   `FT_Stroker_GetCounts`, and `FT_Stroker_Export` for one simple line or
+   triangle.  Verify exact outline/count output across all ABI lanes before
+   adding cap/join matrices.
+2. Add a maintained synthetic module-class route for `FT_Add_Module` minimal
+   success, then split renderer and styler registration only after callback
+   logs and module registry state are observable.
+3. Resolve `FT_OpenType_Validate` as a fixture/oracle-build contract issue
+   before attempting success or malformed-table rows.
+4. Generate or acquire licensed AAT/GX fixtures before touching the uppercase
+   `FT_TrueTypeGX_Validate` semantic placeholders.
