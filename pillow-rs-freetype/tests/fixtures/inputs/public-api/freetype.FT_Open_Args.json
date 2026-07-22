@@ -10,6 +10,7 @@
     "memory_source_short_sizes_match_c",
     "memory_source_truncated_sfnt_size_matches_c",
     "memory_source_optional_flags_noop_match_c",
+    "source_flag_error_matrix_matches_c",
     "open_face_consumes_args_like_c"
   ],
   "cases": [
@@ -426,6 +427,71 @@
         "compare": {
           "mode": "exact",
           "paths": [
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.source_flag_error_matrix_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "source_flag_error_matrix_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "flags": [
+                "FT_OPEN_STREAM"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_PATHNAME"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_STREAM",
+                "FT_OPEN_PATHNAME"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_STREAM",
+                "FT_OPEN_PATHNAME"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
             "outputs"
           ]
         }
