@@ -1290,6 +1290,7 @@ pub struct FT_Face {
 #[derive(Debug, Clone)]
 struct AfmMetricsState {
     track_kerns: Vec<AfmTrackKern>,
+    kern_pairs: Vec<AfmKernPair>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1299,6 +1300,14 @@ struct AfmTrackKern {
     min_kern: FT_Fixed,
     max_ptsize: FT_Fixed,
     max_kern: FT_Fixed,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AfmKernPair {
+    left: FT_UInt,
+    right: FT_UInt,
+    x: FT_Int,
+    y: FT_Int,
 }
 
 impl FT_Face {
@@ -8057,10 +8066,10 @@ fn parse_afm_fixed(token: &str) -> Option<FT_Fixed> {
     FT_Fixed::try_from(fixed).ok()
 }
 
-fn parse_afm_metrics(data: &[u8]) -> Result<AfmMetricsState, FT_Error> {
+fn parse_afm_metrics(face: &FT_Face, data: &[u8]) -> Result<AfmMetricsState, FT_Error> {
     let text = std::str::from_utf8(data).map_err(|_| FT_Err_Unknown_File_Format)?;
     let mut track_kerns = Vec::new();
-    let mut has_pair_kerning = false;
+    let mut kern_pairs = Vec::new();
     for line in text.lines() {
         let mut fields = line.split_whitespace();
         match fields.next() {
@@ -8093,17 +8102,44 @@ fn parse_afm_metrics(data: &[u8]) -> Result<AfmMetricsState, FT_Error> {
                     max_kern,
                 });
             }
-            Some("KPX" | "KPY" | "KP") => has_pair_kerning = true,
+            Some(kind @ ("KPX" | "KPY" | "KP")) => {
+                let left_name = fields.next().ok_or(FT_Err_Unknown_File_Format)?;
+                let right_name = fields.next().ok_or(FT_Err_Unknown_File_Format)?;
+                let value_x = fields
+                    .next()
+                    .and_then(|value| value.parse::<FT_Int>().ok())
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let value_y = if kind == "KP" {
+                    fields
+                        .next()
+                        .and_then(|value| value.parse::<FT_Int>().ok())
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                let left = face.inner.borrow().name_index(left_name);
+                let right = face.inner.borrow().name_index(right_name);
+                kern_pairs.push(AfmKernPair {
+                    left,
+                    right,
+                    x: if kind == "KPY" { 0 } else { value_x },
+                    y: if kind == "KPY" { value_x } else { value_y },
+                });
+            }
             _ => {}
         }
     }
     // C Type1 attachment (`src/type1/t1afm.c:T1_Read_Metrics`) only keeps the
     // parsed AFM block on the face when pair kerning exists; track kerning then
     // reads from that retained AFM state (`T1_Get_Track_Kerning`).
-    if track_kerns.is_empty() || !has_pair_kerning {
+    if kern_pairs.is_empty() {
         return Err(FT_Err_Invalid_Argument);
     }
-    Ok(AfmMetricsState { track_kerns })
+    kern_pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
+    Ok(AfmMetricsState {
+        track_kerns,
+        kern_pairs,
+    })
 }
 
 pub fn FT_Attach_Stream(face: Option<&mut FT_Face>, data: Option<&[u8]>) -> FT_Error {
@@ -8113,7 +8149,7 @@ pub fn FT_Attach_Stream(face: Option<&mut FT_Face>, data: Option<&[u8]>) -> FT_E
     let Some(data) = data else {
         return FT_Err_Invalid_Argument;
     };
-    match parse_afm_metrics(data) {
+    match parse_afm_metrics(face, data) {
         Ok(metrics) => {
             *face.afm_metrics.borrow_mut() = Some(metrics);
             face.face_flags |= FT_FACE_FLAG_KERNING;
@@ -8121,6 +8157,49 @@ pub fn FT_Attach_Stream(face: Option<&mut FT_Face>, data: Option<&[u8]>) -> FT_E
         }
         Err(error) => error,
     }
+}
+
+fn afm_pair_kerning(
+    face: &FT_Face,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+) -> Option<FT_Vector> {
+    let afm_metrics = face.afm_metrics.borrow();
+    let metrics = afm_metrics.as_ref()?;
+    metrics
+        .kern_pairs
+        .binary_search_by_key(&(left_glyph, right_glyph), |pair| (pair.left, pair.right))
+        .ok()
+        .map(|index| {
+            let pair = metrics.kern_pairs[index];
+            FT_Vector {
+                x: FT_Long::from(pair.x),
+                y: FT_Long::from(pair.y),
+            }
+        })
+        .or(Some(FT_Vector { x: 0, y: 0 }))
+}
+
+fn ft_pix_round_long(value: FT_Long) -> FT_Long {
+    (value + 32) & !63
+}
+
+fn scale_kerning_vector(face: &FT_Face, mut vector: FT_Vector, kern_mode: FT_UInt) -> FT_Vector {
+    if kern_mode != FT_KERNING_UNSCALED as FT_UInt {
+        vector.x = FT_MulFix(vector.x, face.size_metrics.x_scale);
+        vector.y = FT_MulFix(vector.y, face.size_metrics.y_scale);
+        if kern_mode != FT_KERNING_UNFITTED as FT_UInt {
+            if face.size_metrics.x_ppem < 25 {
+                vector.x = FT_MulDiv(vector.x, FT_Long::from(face.size_metrics.x_ppem), 25);
+            }
+            if face.size_metrics.y_ppem < 25 {
+                vector.y = FT_MulDiv(vector.y, FT_Long::from(face.size_metrics.y_ppem), 25);
+            }
+            vector.x = ft_pix_round_long(vector.x);
+            vector.y = ft_pix_round_long(vector.y);
+        }
+    }
+    vector
 }
 
 pub fn FT_Get_Track_Kerning(
@@ -8774,6 +8853,12 @@ pub fn FT_Get_Kerning(
     };
     akerning.x = 0;
     akerning.y = 0;
+    if let Some(vector) = afm_pair_kerning(face, left_glyph, right_glyph) {
+        let vector = scale_kerning_vector(face, vector, kern_mode);
+        akerning.x = vector.x;
+        akerning.y = vector.y;
+        return FT_Err_Ok;
+    }
     let mode = match kern_mode {
         mode if mode == FT_KERNING_UNFITTED as FT_UInt => KerningMode::Unfitted,
         mode if mode == FT_KERNING_UNSCALED as FT_UInt => KerningMode::Unscaled,

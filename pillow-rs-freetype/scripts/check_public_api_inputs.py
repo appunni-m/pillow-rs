@@ -378,6 +378,7 @@ REAL_PARITY_OPERATIONS = {
     "freetype.get_fstype_flags",
     "freetype.get_kerning",
     "freetype.get_track_kerning",
+    "freetype.attach_stream",
     "freetype.ceil_fix",
     "freetype.floor_fix",
     "freetype.round_fix",
@@ -3688,6 +3689,8 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         )
     if row.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        if row.operation == "freetype.attach_stream" and not row.expect_error:
             return None
         return (
             "FT_Attach_Stream success requires the declared C-openable Type1 "
