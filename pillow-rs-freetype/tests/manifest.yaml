@@ -5214,7 +5214,7 @@ subjects:
         description: Numeric value is exactly 154, matching FT_ERRORDEF_(Invalid_Post_Table_Format, 0x9A) in the pinned header.
       - id: sfnt_post_format_rejected
         description: Loading an SFNT post table whose FormatType is not 1.0, 2.0, 2.5, or 3.0 returns FT_Err_Invalid_Post_Table_Format from ttload.c.
-    # needs-input: operation=new_memory_face; fixture_asset=synthetic SFNT with a present post table and invalid FormatType such as 0x00040000; params={face_index:0}; output shape={FT_Error}; comparison=exact C oracle error code 154 and no face success.
+    # needs-input: operation=FT_New_Face; fixture_asset=generated/sfnt/invalid-post-format.ttf; params={face_index:0}; output shape={FT_Error}; comparison=exact C oracle error code 154 and no face success.
 
   - id: fterrdef.FT_Err_Invalid_Reference
     kind: error
@@ -20316,7 +20316,7 @@ subjects:
       - id: invalid_post_format_error_runtime
         description: C oracle rejects unsupported post FormatType values during face load with Invalid_Post_Table_Format before this record can be used successfully.
     # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/sfnt/post-format-2.ttf; params={tag=FT_SFNT_POST}; expected output shape={pointer_null, FormatType, italicAngle, underlinePosition, underlineThickness, isFixedPitch, minMemType42, maxMemType42, minMemType1, maxMemType1}; comparison=exact C oracle field values, excluding glyph-name data by design.
-    # needs-input: operation=FT_New_Face; fixture_asset=input/fonts/sfnt/post-invalid-format.ttf; params={}; expected output shape={FT_Error}; comparison=exact C oracle error classification Invalid_Post_Table_Format.
+    # needs-input: operation=FT_New_Face; fixture_asset=generated/sfnt/invalid-post-format.ttf; params={}; expected output shape={FT_Error}; comparison=exact C oracle error classification Invalid_Post_Table_Format.
 
   - id: tttables.TT_VertHeader
     kind: record

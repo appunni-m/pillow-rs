@@ -25761,6 +25761,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c"
             || case.case_id == "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_CodeRange.truetype_invalid_coderange"
             || case.case_id
                 == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
