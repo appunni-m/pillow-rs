@@ -6213,6 +6213,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_List_Iterate null-list/iterator errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftrender.set_renderer"
+        and row.case_id == "ftrender.FT_Set_Renderer.set_outline_renderer_success"
+    ):
+        return (
+            "FT_Set_Renderer default outline renderer success validates "
+            "FT_Get_Renderer-selected library-owned renderer handle, OK status, "
+            "and current renderer class through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI; custom renderer set_mode and rendered-output "
+            "mutation remain pending"
+        )
+    if (
+        row.operation == "ftrender.set_renderer"
         and row.case_id == "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params"
     ):
         return "FT_Set_Renderer invalid-library/renderer/params errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"

@@ -3441,6 +3441,23 @@ pub fn abi_support_null_renderer_class(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_set_default_outline_renderer() -> (
+    FT_Error,
+    Option<(&'static str, rust_ffi::FT_Glyph_Format, bool, bool)>,
+) {
+    let mut library = rust_ffi::FT_Init_FreeType();
+    let error = rust_ffi::FT_Library_Set_Renderer_By_Format(
+        Some(&mut library),
+        rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+        "smooth",
+    );
+    (
+        error,
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE),
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_init_free_type_created_library() -> bool {
     let _library = rust_ffi::FT_Init_FreeType();
     true

@@ -70,6 +70,7 @@ pub type FT_UShort = c_ushort;
 pub type FT_Render_Mode = c_int;
 pub type FT_Pixel_Mode = c_int;
 pub type FT_Glyph_Format = c_int;
+pub type FT_Renderer = *mut FT_RendererRec;
 pub type FT_Orientation = c_int;
 pub type FT_Size_Request_Type = c_int;
 pub type FT_Encoding = c_int;
@@ -1484,10 +1485,17 @@ pub struct FT_LibraryRec {
     pub internal: *mut c_void,
 }
 
+#[repr(C)]
+pub struct FT_RendererRec {
+    format: FT_Glyph_Format,
+    module_name: &'static str,
+}
+
 struct LibraryState {
     inner: rust_ffi::FT_Library,
     allocation_memory: FT_Memory,
     allocation_block: FT_Pointer,
+    outline_renderer: FT_RendererRec,
 }
 
 impl LibraryState {
@@ -1496,6 +1504,10 @@ impl LibraryState {
             inner,
             allocation_memory: std::ptr::null_mut(),
             allocation_block: std::ptr::null_mut(),
+            outline_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "smooth",
+            },
         }
     }
 
@@ -1508,6 +1520,10 @@ impl LibraryState {
             inner,
             allocation_memory,
             allocation_block,
+            outline_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "smooth",
+            },
         }
     }
 }
@@ -2971,6 +2987,56 @@ pub fn abi_support_library_renderer_class(
     format: FT_Glyph_Format,
 ) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
     rust_ffi::FT_Library_Renderer_Class(library_ref(library), format)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Renderer(library: FT_Library, format: FT_Glyph_Format) -> FT_Renderer {
+    let Some(state) = library_state_mut(library) else {
+        return ptr::null_mut();
+    };
+    let Some((module_name, glyph_format, _, _)) =
+        rust_ffi::FT_Library_Renderer_Class(Some(&state.inner), format)
+    else {
+        return ptr::null_mut();
+    };
+    if glyph_format == state.outline_renderer.format
+        && module_name == state.outline_renderer.module_name
+    {
+        &mut state.outline_renderer
+    } else {
+        ptr::null_mut()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Renderer(
+    library: FT_Library,
+    renderer: FT_Renderer,
+    num_params: FT_UInt,
+    parameters: *mut FT_Parameter,
+) -> FT_Error {
+    let Some(state) = library_state_mut(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(renderer) = non_null_mut(renderer) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if num_params != 0 && parameters.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let owned_renderer = &mut state.outline_renderer as *mut FT_RendererRec;
+    if renderer.as_ptr() != owned_renderer {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` performs raw list
+    // membership validation in the ABI layer, then updates the library's
+    // current outline renderer.  Parameter callbacks are not used by the
+    // default smooth renderer for this no-parameter parity route.
+    rust_ffi::FT_Library_Set_Renderer_By_Format(
+        Some(&mut state.inner),
+        state.outline_renderer.format,
+        state.outline_renderer.module_name,
+    )
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -5989,6 +6055,15 @@ fn library_ref(library: FT_Library) -> Option<&'static rust_ffi::FT_Library> {
         // SAFETY: `internal` points to a `LibraryState` allocated by this crate.
         Some(unsafe { &(*internal.cast::<LibraryState>()).inner })
     }
+}
+
+fn library_state_mut(library: FT_Library) -> Option<&'static mut LibraryState> {
+    let library = non_null_mut(library)?;
+    // SAFETY: `library` is non-null and must have been allocated by `FT_Init_FreeType`.
+    let internal = unsafe { (*library.as_ptr()).internal };
+    let mut state = NonNull::new(internal.cast::<LibraryState>())?;
+    // SAFETY: `internal` points to a uniquely borrowed `LibraryState`.
+    Some(unsafe { state.as_mut() })
 }
 
 fn library_mut(library: FT_Library) -> Option<&'static mut rust_ffi::FT_Library> {

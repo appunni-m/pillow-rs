@@ -3056,3 +3056,33 @@ Priority for the next real batches:
    rows.
 4. Type42 generator or licensed fixture acquisition before the remaining
    `t1tables` signature matrices can be split further.
+
+### Split FT_Set_Renderer default outline renderer success: 2026-07-22
+
+- Added the focused same-input route
+  `ftrender.FT_Set_Renderer.set_outline_renderer_success`.
+- Implemented intentional public C ABI exports for `FT_Get_Renderer` and
+  `FT_Set_Renderer`, including `fontdone_ffi.h` declarations.  The C ABI owns
+  opaque renderer handle validation; core owns the current outline renderer
+  state.  WASM uses the same default-library ABI support route already used by
+  renderer metadata parity rows.
+- C reference: FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` validates
+  the renderer as library-owned, moves the renderer node with `FT_List_Up`, and
+  updates `library->cur_renderer` for outline renderers.  This split covers
+  the default smooth outline renderer with no parameters.  Custom renderer
+  `set_mode`, renderer-list permutation beyond the default handle, and
+  rendered-output mutation remain pending.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftrender.FT_Set_Renderer.set_outline_renderer_success`
+    passed `1/1`.
+- Route audit after the split:
+  `concrete_cases=7294`, `real-parity=4799`, `pending-route=220`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7069 failed=0
+    total=7069`, pending `225`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7294`, `real-parity=4799`, `pending-route=220`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
