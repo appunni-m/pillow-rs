@@ -493,6 +493,78 @@ static void print_status(FT_Error err) {
     }
 }
 
+static int fixture_module_init_calls = 0;
+static int fixture_module_done_calls = 0;
+
+static FT_Error fixture_module_init(FT_Module module) {
+    (void)module;
+    fixture_module_init_calls++;
+    return FT_Err_Ok;
+}
+
+static void fixture_module_done(FT_Module module) {
+    (void)module;
+    fixture_module_done_calls++;
+}
+
+static void* fixture_module_get_interface(FT_Module module, const char* name) {
+    (void)module;
+    (void)name;
+    return NULL;
+}
+
+static int emit_add_module_minimal(void) {
+    fixture_module_init_calls = 0;
+    fixture_module_done_calls = 0;
+    struct FT_MemoryRec_ memory = {0};
+    memory.alloc = oracle_alloc;
+    memory.free = oracle_free;
+    memory.realloc = oracle_realloc;
+    FT_Library library = NULL;
+    FT_Error err = FT_New_Library(&memory, &library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"error\":%d}}\n", err);
+        return 0;
+    }
+    static const FT_Module_Class fixture_class = {
+        0,
+        sizeof(FT_ModuleRec),
+        "fixture_minimal",
+        0x00010000L,
+        0x00020000L,
+        NULL,
+        fixture_module_init,
+        fixture_module_done,
+        fixture_module_get_interface
+    };
+    err = FT_Add_Module(library, &fixture_class);
+    FT_Module module = FT_Get_Module(library, "fixture_minimal");
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", err);
+    printf("\"module_count\":%u,", library ? library->num_modules : 0);
+    printf("\"lookup_result\":{\"nullness\":");
+    print_json_bool(module == NULL);
+    printf("},\"stored_class_fields\":{");
+    printf("\"module_flags\":%lu,", (unsigned long)fixture_class.module_flags);
+    printf("\"module_size\":\"sizeof_synthetic_module\",");
+    printf("\"module_name\":\"fixture_minimal\",");
+    printf("\"module_version\":%ld,", (long)fixture_class.module_version);
+    printf("\"module_requires\":%ld,", (long)fixture_class.module_requires);
+    printf("\"module_interface_nullness\":");
+    print_json_bool(fixture_class.module_interface == NULL);
+    printf("},\"callback_log\":[");
+    if (fixture_module_init_calls > 0) {
+        printf("\"module_init\"");
+    }
+    printf("]}}\n");
+    FT_Done_Library(library);
+    return 0;
+}
+
 static void dirty_bitmap(FT_Bitmap* bitmap) {
     bitmap->rows = 7;
     bitmap->width = 9;
@@ -25864,6 +25936,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--cmap-cache-new-route")) {
         return emit_cmap_cache_new_route(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-minimal")) {
+        return emit_add_module_minimal();
     }
     if (argc == 6 && streq(argv[1], "--image-cache-new-route")) {
         return emit_image_cache_new_route(argc, argv);

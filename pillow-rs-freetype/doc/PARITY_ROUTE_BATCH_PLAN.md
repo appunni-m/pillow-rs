@@ -3089,7 +3089,40 @@ Priority for the next real batches:
 
 ### Continuation audit for remaining pending routes: 2026-07-22
 
-Current clean-main baseline after `f566ff7c6`:
+### Split FT_Add_Module minimal synthetic module success: 2026-07-22
+
+- Added the focused same-input route
+  `ftmodapi.FT_Add_Module.add_minimal_module_success`.
+- Implemented safe core support for one installed synthetic module record:
+  module table lookup by name, stored class metadata, interface-presence
+  lookup, duplicate-version rejection, future-version rejection, and recorded
+  `module_init` callback behavior.  The C ABI only converts the public
+  `FT_Module_Class` record into the safe core descriptor and returns an opaque
+  module handle; WASM uses a test-support observation route over the same core
+  behavior.
+- C reference: FreeType 2.14.3 `src/base/ftobjs.c:FT_Add_Module` validates the
+  library and class, rejects modules requiring a newer FreeType version,
+  compares duplicate module names by version, allocates a module record, stores
+  class metadata, calls `module_init`, and inserts the module into the
+  library's module table.  This split covers the minimal non-renderer,
+  non-styler class named `fixture_minimal`; renderer/styler registration side
+  effects remain pending.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_Add_Module.add_minimal_module_success`
+    passed `1/1`.
+- Route audit after the split:
+  `concrete_cases=7294`, `real-parity=4800`, `pending-route=219`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7070 failed=0
+    total=7070`, pending `224`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7294`, `real-parity=4800`, `pending-route=219`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
+
+Pre-split clean-main baseline after `f566ff7c6`:
 
 - Route audit:
   `concrete_cases=7294`, `real-parity=4799`, `pending-route=220`,

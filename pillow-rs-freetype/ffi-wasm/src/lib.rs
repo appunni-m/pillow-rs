@@ -3322,6 +3322,27 @@ pub fn abi_support_add_default_modules_observation(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_minimal_module_observation()
+-> (i32, usize, bool, Option<rust_ffi::FT_Installed_Module_Info>) {
+    let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    let class = rust_ffi::FT_Module_Class_Info {
+        module_flags: 0,
+        module_size: 1,
+        module_name: Some("fixture_minimal"),
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface_present: false,
+        module_init: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
+        module_done: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
+    };
+    let status = rust_ffi::FT_Add_Module(Some(&mut library), Some(&class));
+    let module_count = rust_ffi::FT_Library_Module_Count(Some(&library));
+    let lookup_present = rust_ffi::FT_Library_Has_Module(Some(&library), "fixture_minimal");
+    let info = rust_ffi::FT_Library_Synthetic_Module_Info(Some(&library), "fixture_minimal");
+    (status, module_count, lookup_present, info)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_new_library_observation() -> (i32, i32, i32, usize, bool, bool) {
     let mut memory = rust_ffi::FT_MemoryRec::default();
     let mut library = rust_ffi::FT_New_Library(Some(&mut memory))

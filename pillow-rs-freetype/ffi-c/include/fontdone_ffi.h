@@ -50,6 +50,7 @@ typedef struct FT_SizeRec_* FT_Size;
 typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
 typedef struct FT_GlyphRec_* FT_Glyph;
 typedef struct FT_RendererRec_* FT_Renderer;
+typedef struct FT_ModuleRec_* FT_Module;
 typedef struct FT_CharMapRec_* FT_CharMap;
 typedef struct FT_StrokerRec_* FT_Stroker;
 typedef struct FT_ListNodeRec_* FT_ListNode;
@@ -130,6 +131,18 @@ typedef struct FT_Parameter_ {
   FT_ULong tag;
   void* data;
 } FT_Parameter;
+
+typedef struct FT_Module_Class_ {
+  FT_ULong module_flags;
+  FT_Long module_size;
+  const FT_String* module_name;
+  FT_Fixed module_version;
+  FT_Fixed module_requires;
+  const void* module_interface;
+  FT_Pointer module_init;
+  FT_Pointer module_done;
+  FT_Pointer get_interface;
+} FT_Module_Class;
 
 typedef struct FT_MM_Axis_ {
   char* name;
@@ -736,6 +749,8 @@ FT_Error FT_Property_Set(FT_Library library, const FT_String* module_name, const
 void FT_Set_Default_Properties(FT_Library library);
 FT_Error FT_Face_Properties(FT_Face face, FT_UInt num_properties, FT_Parameter* properties);
 void FT_Add_Default_Modules(FT_Library library);
+FT_Error FT_Add_Module(FT_Library library, const FT_Module_Class* clazz);
+FT_Module FT_Get_Module(FT_Library library, const FT_String* module_name);
 void FT_Set_Debug_Hook(FT_Library library, FT_UInt hook_index, FT_DebugHook_Func debug_hook);
 FT_Renderer FT_Get_Renderer(FT_Library library, FT_Glyph_Format format);
 FT_Error FT_Set_Renderer(FT_Library library, FT_Renderer renderer, FT_UInt num_params, FT_Parameter* parameters);

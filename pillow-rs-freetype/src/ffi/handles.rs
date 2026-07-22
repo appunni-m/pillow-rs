@@ -1197,6 +1197,7 @@ pub struct FT_Library {
     memory: FT_Memory,
     refcount: usize,
     module_names: &'static [&'static str],
+    synthetic_module: Option<FT_Installed_Module_Info>,
     current_outline_renderer: &'static str,
     truetype_interpreter_version: FT_UInt,
     autofitter_default_script: FT_UInt,
@@ -1533,6 +1534,35 @@ pub struct FT_Face_Property {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FT_Module_Callback_Behavior {
+    None,
+    RecordThenOk,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FT_Module_Class_Info {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: Option<&'static str>,
+    pub module_version: FT_Fixed,
+    pub module_requires: FT_Fixed,
+    pub module_interface_present: bool,
+    pub module_init: FT_Module_Callback_Behavior,
+    pub module_done: FT_Module_Callback_Behavior,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FT_Installed_Module_Info {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: &'static str,
+    pub module_version: FT_Fixed,
+    pub module_interface_present: bool,
+    pub init_called: bool,
+    pub done_called: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FT_Face_Properties_State {
     pub no_stem_darkening: i32,
     pub random_seed: FT_Int32,
@@ -1750,6 +1780,7 @@ pub fn FT_Init_FreeType() -> FT_Library {
         memory: std::ptr::null_mut(),
         refcount: 1,
         module_names: DEFAULT_MODULE_NAMES,
+        synthetic_module: None,
         current_outline_renderer: "smooth",
         truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
         // FreeType 2.14.3 `src/autofit/afmodule.c:af_autofitter_init`
@@ -6140,6 +6171,15 @@ pub fn FT_Get_Module_Interface(
     let (Some(library), Some(module_name)) = (library, module_name) else {
         return ptr::null_mut();
     };
+    if let Some(module) = library.synthetic_module
+        && module.module_name == module_name
+    {
+        return if module.module_interface_present {
+            0x4649_584Dusize as FT_Module_Interface
+        } else {
+            ptr::null_mut()
+        };
+    }
     if !library.module_names.contains(&module_name) {
         return ptr::null_mut();
     }
@@ -6573,6 +6613,53 @@ pub fn FT_Add_Default_Modules(library: Option<&mut FT_Library>) {
     }
 }
 
+pub fn FT_Add_Module(
+    library: Option<&mut FT_Library>,
+    clazz: Option<&FT_Module_Class_Info>,
+) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(clazz) = clazz else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(module_name) = clazz.module_name else {
+        return FT_Err_Invalid_Argument;
+    };
+    const FREETYPE_VER_FIXED: FT_Fixed = (2 << 16) | 14;
+    if clazz.module_requires > FREETYPE_VER_FIXED {
+        return FT_Err_Invalid_Version as FT_Error;
+    }
+    if library.module_names.contains(&module_name)
+        || library
+            .synthetic_module
+            .is_some_and(|module| module.module_name == module_name)
+    {
+        let current_version = library
+            .synthetic_module
+            .filter(|module| module.module_name == module_name)
+            .map_or(clazz.module_version, |module| module.module_version);
+        if clazz.module_version <= current_version {
+            return FT_Err_Lower_Module_Version as FT_Error;
+        }
+    }
+
+    // FreeType 2.14.3 `src/base/ftobjs.c:5058-5168` validates library/class,
+    // checks `module_requires`, allocates and initializes the module, then
+    // appends it to `library->modules`.  Core stores the public registry
+    // effect; ABI layers own raw callback-pointer decoding for test classes.
+    library.synthetic_module = Some(FT_Installed_Module_Info {
+        module_flags: clazz.module_flags,
+        module_size: clazz.module_size,
+        module_name,
+        module_version: clazz.module_version,
+        module_interface_present: clazz.module_interface_present,
+        init_called: clazz.module_init == FT_Module_Callback_Behavior::RecordThenOk,
+        done_called: false,
+    });
+    FT_Err_Ok
+}
+
 pub fn FT_Set_Debug_Hook(
     library: Option<&mut FT_Library>,
     hook_index: FT_UInt,
@@ -6776,11 +6863,21 @@ pub fn FT_Library_Has_TrueType_Engine_Service(library: Option<&FT_Library>) -> b
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Has_Module(library: Option<&FT_Library>, name: &str) -> bool {
-    library.is_some_and(|library| library.module_names.contains(&name))
+    library.is_some_and(|library| {
+        library.module_names.contains(&name)
+            || library
+                .synthetic_module
+                .is_some_and(|module| module.module_name == name)
+    })
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Option<FT_ULong> {
+    if let Some(module) = library.and_then(|library| library.synthetic_module)
+        && module.module_name == name
+    {
+        return Some(module.module_flags);
+    }
     if !FT_Library_Has_Module(library, name) {
         return None;
     }
@@ -6874,6 +6971,23 @@ pub fn FT_Library_Set_Renderer_By_Format(
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Default_Module_Names(library: Option<&FT_Library>) -> &'static [&'static str] {
     library.map_or(&[], |library| library.module_names)
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Module_Count(library: Option<&FT_Library>) -> usize {
+    library.map_or(0, |library| {
+        library.module_names.len() + usize::from(library.synthetic_module.is_some())
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Synthetic_Module_Info(
+    library: Option<&FT_Library>,
+    module_name: &str,
+) -> Option<FT_Installed_Module_Info> {
+    library
+        .and_then(|library| library.synthetic_module)
+        .filter(|module| module.module_name == module_name)
 }
 
 pub fn FT_Set_Transform(
