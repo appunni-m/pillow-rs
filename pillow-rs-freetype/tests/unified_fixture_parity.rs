@@ -39798,6 +39798,7 @@ fn done_outline_glyph_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
         "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays"
+            | "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph"
             | "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
     )
 }

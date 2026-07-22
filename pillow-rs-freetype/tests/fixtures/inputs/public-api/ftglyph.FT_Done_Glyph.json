@@ -3,6 +3,7 @@
   "subject": "ftglyph.FT_Done_Glyph",
   "manifest_cases": [
     "success_releases_owned_glyph",
+    "success_releases_owned_outline_glyph",
     "success_null_is_noop",
     "lifetime_before_library_done",
     "outline_glyph_before_library_done"
@@ -84,6 +85,68 @@
           "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP.",
           "fonts/svg/ot-svg-glyphs.ttf is optional and must contain a valid OT-SVG document for SVG rows; builds without FT_CONFIG_OPTION_SVG classify these rows as unsupported.",
           "facades/glyph/malformed-slot-and-class-cases.json must describe synthetic C harness cases for null slot/output, bad clazz, unsupported formats, oversized advances, and render/copy allocation failures."
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph",
+      "subject": "ftglyph.FT_Done_Glyph",
+      "case": "success_releases_owned_outline_glyph",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "creation_path": "FT_Get_Glyph outline",
+          "destroy_order": "glyph_before_face_and_library"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "runtime:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "create_error": "FT_Error",
+          "created_glyph_pointer_class": "null_or_non_null",
+          "format_before_done": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_owner_class": "owned",
+          "outline_counts_before_done": {
+            "n_points": "i16",
+            "n_contours": "i16"
+          },
+          "free_events": "FT_Done_Glyph called once for owned outline glyph"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "create_error",
+            "created_glyph_pointer_class",
+            "format_before_done",
+            "outline_owner_class",
+            "outline_counts_before_done",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:667-677",
+          "freetype/src/base/ftglyph.c:886-899"
         ]
       }
     },

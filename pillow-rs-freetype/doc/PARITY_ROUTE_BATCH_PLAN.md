@@ -2568,3 +2568,24 @@ Rejected quick fixes in this audit:
 - Route audit impact: `pending-route` decreased from 222 to 221 and
   `real-parity` increased from 4778 to 4779, with `concrete_cases=7275`
   unchanged.
+
+## 2026-07-22 FT_Done_Glyph outline ownership split
+
+- Added the concrete
+  `ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph` row instead of
+  narrowing the broader `success_releases_owned_glyph` row.  The broad row still
+  names bitmap, optional SVG, malformed-slot, and allocation-failure obligations
+  and must remain pending until those same-input routes exist.
+- The new row uses `input/fonts/DejaVuSans.ttf`, loads glyph 36, creates a
+  detached outline glyph with `FT_Get_Glyph`, records the copied outline owner
+  flag and point/contour counts, then releases it once with `FT_Done_Glyph`.
+  This matches the public lifetime behavior described by
+  `freetype/include/freetype/ftglyph.h:667-677` and the release path in
+  `freetype/src/base/ftglyph.c:886-899`.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph`
+  passes as a runnable exact parity row across Rust FFI, thin C ABI, WASM ABI,
+  and the pinned C oracle.
+- Route audit impact from this split: `concrete_cases` increased from 7275 to
+  7276 and `real-parity` increased from 4779 to 4780; `pending-route` remains
+  221 because no broad pending obligation was hidden or removed.
