@@ -3200,6 +3200,56 @@ Priority for the next real batches:
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
 
+### Sweep identification of remaining bulk blockers: 2026-07-22
+
+Baseline: `main` at `99f5854cd` has route audit
+`concrete_cases=7294`, `real-parity=4802`, `pending-route=217`,
+`compile-contract=2266`, and `real-null-validation=9`.
+
+This sweep groups the current `pending-route` rows by the main reason they are
+still pending.  The goal is to reduce bulk counts through real same-input
+parity work, not by duplicate line mapping, classifier-only promotions, or
+using a narrower input than the manifest declares.
+
+| Bucket | Rows | Bulk-reduction read | Required real work |
+| --- | ---: | --- | --- |
+| `ftstroke` geometry/state machine | 56 | Highest immediate implementation leverage.  These rows share one root cause: no maintained non-null stroker path/border state machine with exact exported outline geometry. | Port a bounded slice of FreeType 2.14.3 `src/base/ftstroke.c`: begin, line, end, border counts, combined counts, export, then expand to conic/cubic/caps/joins/glyph stroke. |
+| AAT/GX and classic kern validation | 32 | High bulk, but not a pure classifier problem.  Most rows wait on real C-openable AAT/GX fixture generation plus validator/free/lifetime routing. | Build or acquire maintained fixtures for `feat`, `mort`, `morx`, `bsln`, `just`, `kern`, `opbd`, `trak`, `prop`, `lcar`; then route `FT_TrueTypeGX_Validate`, `FT_ClassicKern_Validate`, and free/lifetime outputs across all ABI lanes. |
+| Glyph/SVG lifecycle and SVG pipeline | 25 | Mixed bulk.  Owned-glyph lifecycle rows are implementable; SVG rows need SVG-enabled fixtures/routes and must not be counted from scalar unsupported-format checks. | Split non-SVG owned glyph handle/lifetime/copy cleanup first.  Treat SVG slot, SVG glyph, document, transform, and renderer callback rows as a separate SVG-enabled fixture pipeline. |
+| OpenType validation | 17 | Mostly blocked by oracle/build contract.  The active pinned FreeType build returns `FT_Err_Unimplemented_Feature` before success/null table behavior. | Resolve build-contract or fixture-contract first; only then implement table selection, malformed-table cleanup, `FT_OpenType_Free`, and output slot lifetimes. |
+| Mixed one-off contracts | 16 | Not one bulk fix.  Contains final library destruction, module remove/lifecycle, name-table error fixture contracts, MM coordinate effects, Type1 table matrices, LZW, outline lifecycle, and Adobe charmap rows. | Attack as small focused rows only after their exact C behavior is isolated.  Do not batch these under one classifier reason. |
+| Incremental interface route | 13 | Good medium-size batch.  Rows share callback table/object/lifetime/metrics override behavior. | Add a maintained incremental-open fixture route that records callback object identity, get/release ordering, metrics seed and override outputs, and `FT_PARAM_TAG_INCREMENTAL` use. |
+| Property routes and glyph effects | 12 | Medium batch, but only real if set/get state is shown to affect public glyph output. | Implement typed CFF/Type1/t1cid and autohint property routing, then compare property readback and representative glyph-load/render deltas. |
+| Open args, stream, parameter dispatch | 7 | Medium batch, mostly runner/ABI routing plus exact source ownership behavior. | Split `FT_Open_Args`, external streams, custom memory, random seed, SBIX ignore, and parameter data casting into explicit variants consumed by pinned C/Rust/C ABI/WASM. |
+| Custom image renderer/raster lifecycle | 7 | Medium batch tied to renderer callback ownership. | Add synthetic renderer/raster callbacks that record `new`, `reset`, `set_mode`, `render`, and `done` events without using native renderer shortcuts. |
+| CID-keyed Type1 services | 6 | Fixture/parser route batch. | Maintain C-openable CID-keyed Type1 inputs and route `FT_Get_CID_*` outputs, including null-output behavior. |
+| PFR parser/services | 6 | Fixture/parser route batch. | Add real PFR fixture support and route metrics, advances, and kerning through pure Rust plus thin ABI lanes. |
+| Color/COLR/palette routes | 5 | Fixture plus parser/service batch. | Route COLR paint/colorline values and disabled-color-layer palette errors with C-observable color fonts. |
+| bzip2 stream route | 5 | Build configuration split required. | Active pinned build disables bzip2, so enabled-build success/null/header rows need a maintained bzip2-enabled oracle variant or split expectations. |
+| Encoding/charmap fixtures | 2 | Fixture-only blocker. | Add C-openable representative encoding-none and Adobe custom charmap fixtures. |
+| BDF/PCF bitmap support | 2 | Fixture/parser route. | Add SFNT-BDF/PCF fixtures and route charset/property outputs. |
+| Cache manager ownership | 2 | Small but ownership-heavy. | Prove manager-owned face/size/cache/node lifetime and bitmap strike null-buffer behavior. |
+| SFNT name-table error contracts | 2 | Fixture-contract correction. | Current generated bad-name fixtures do not hit the declared C public error.  Create fixtures that actually reach `Name_Table_Missing` or update the plan, not the expected output. |
+| Null-crash and macro control singletons | 2 | Not bulk. | `FT_Face_Properties(NULL, num_properties>0)` is a pinned-C crash contract; `FT_HAS_HORIZONTAL` needs a C-openable no-horizontal-metrics control font. |
+
+Recommended bulk attack order:
+
+1. `ftstroke` manual-path stage 1, because it is the largest real
+   implementation bucket and one core state machine can move many rows after
+   focused proof.  First target should be a small maintained line path proving
+   `BeginSubPath`, `LineTo`, `EndSubPath`, `GetBorderCounts`, `GetCounts`, and
+   `Export` exact outline/count output across pinned C, Rust FFI, C ABI, and
+   WASM.
+2. Incremental interface route, because it has 13 related rows with one
+   callback/object/lifetime model and fewer fixture dependencies than AAT/GX.
+3. Non-SVG glyph lifecycle rows, separated from SVG feature rows, to avoid
+   mixing owned-glyph cleanup with missing SVG pipeline fixtures.
+4. AAT/GX fixture generator only after deciding the maintained fixture source
+   and validation/free output shape; it can reduce 32 rows but the prerequisite
+   is fixture generation, not Rust classifier work.
+5. OpenType validation only after the pinned oracle build/fixture contract is
+   resolved; otherwise success/null-table rows would be green placeholders.
+
 Pre-split clean-main baseline after `f566ff7c6`:
 
 - Route audit:
