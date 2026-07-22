@@ -7,7 +7,7 @@ fixture substitutions, or green placeholders as parity.
 Current live baseline on `main` after the FT_Open_Args memory-source split:
 
 ```text
-route audit concrete_cases=7266 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4764}
+route audit concrete_cases=7268 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4766}
 pending_route_rows=227
 duplicate_operation_input_buckets=41
 ```
@@ -39,15 +39,19 @@ Current-turn candidate decisions:
   `memory_source_negative_face_index_probe_matches_c` and
   `memory_source_out_of_range_face_index_matches_c` rows prove the same
   memory-source route for the `face_index = -1` count probe and an
-  out-of-range face index.  The attempted `memory_base = NULL` invalid row is
-  intentionally not promoted: pinned FreeType 2.14.3 segfaults in the
-  `--open-face-variants` oracle for `FT_OPEN_MEMORY` with a null memory base
-  instead of returning a public `FT_Error`, so treating Rust's safe
-  `Invalid_Argument` as exact C parity would be a green placeholder.
-  Focused `test-op OP=freetype.open_face_args` reports `passed=4 failed=0
-  total=4` with one pending broad row. Full `fontdone-test` reports
-  `runtime_parity: passed=7034 failed=0 total=7034
-  covered_manifest_cases=3927` and `runtime_cases: runnable=7034
+  out-of-range face index.  The `memory_source_short_sizes_match_c` and
+  `memory_source_truncated_sfnt_size_matches_c` rows prove explicit
+  `memory_size` truncation behavior: pinned C returns error 85 for
+  0/4/64-byte buffers and error 2 for a 1024-byte truncated SFNT slice.  The
+  attempted `memory_base = NULL` invalid row is intentionally not promoted:
+  pinned FreeType 2.14.3 segfaults in the `--open-face-variants` oracle for
+  `FT_OPEN_MEMORY` with a null memory base instead of returning a public
+  `FT_Error`, so treating Rust's safe `Invalid_Argument` as exact C parity
+  would be a green placeholder.
+  Focused `test-op OP=freetype.open_face_args` reports `passed=6 failed=0
+  total=6` with one pending broad row. Full `fontdone-test` reports
+  `runtime_parity: passed=7036 failed=0 total=7036
+  covered_manifest_cases=3929` and `runtime_cases: runnable=7036
   pending=232`.
 - `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` stays pending even
   though concrete outline and bitmap ownership sub-routes are now real.  The

@@ -4751,6 +4751,8 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "freetype.FT_Open_Args.memory_source_error_variants_match_c",
             "freetype.FT_Open_Args.memory_source_negative_face_index_probe_matches_c",
             "freetype.FT_Open_Args.memory_source_out_of_range_face_index_matches_c",
+            "freetype.FT_Open_Args.memory_source_short_sizes_match_c",
+            "freetype.FT_Open_Args.memory_source_truncated_sfnt_size_matches_c",
         }
         and unresolved_assets_reason(row) is None
     ):
