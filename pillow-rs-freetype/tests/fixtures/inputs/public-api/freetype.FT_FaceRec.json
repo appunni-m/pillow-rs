@@ -5,6 +5,8 @@
     "layout_matches_c",
     "initial_public_fields_match_c",
     "post_size_public_fields_match_c",
+    "available_sizes_public_fields_match_c",
+    "charmap_public_fields_match_c",
     "populated_public_fields_match_c"
   ],
   "cases": [
@@ -214,6 +216,121 @@
             "size_metrics.descender",
             "size_metrics.height",
             "size_metrics.max_advance"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FaceRec.available_sizes_public_fields_match_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "available_sizes_public_fields_match_c",
+      "operation": "freetype.inspect_available_sizes",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/winfnt/bitmap-header.fnt"
+          },
+          "control_font": {
+            "kind": "ref",
+            "id": "input/fonts/LiberationSerif-Regular.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_New_Memory_Face",
+          "face_index": 0,
+          "probe": [
+            "face.num_fixed_sizes",
+            "face.available_sizes[]"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "num_fixed_sizes": "FT_Int",
+          "available_sizes": "array<FT_Bitmap_Size>",
+          "control_available_sizes": "null_or_empty"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "num_fixed_sizes",
+            "available_sizes[].height",
+            "available_sizes[].width",
+            "available_sizes[].size",
+            "available_sizes[].x_ppem",
+            "available_sizes[].y_ppem",
+            "control_num_fixed_sizes",
+            "control_available_sizes_nullness"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_FaceRec.charmap_public_fields_match_c",
+      "subject": "freetype.FT_FaceRec",
+      "case": "charmap_public_fields_match_c",
+      "operation": "freetype.inspect_charmaps",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "probe_encodings": [
+            "FT_ENCODING_UNICODE",
+            "FT_ENCODING_MS_SYMBOL",
+            "FT_ENCODING_NONE"
+          ],
+          "probe_chars": [
+            65,
+            32,
+            61472
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "FT_Error",
+          "num_charmaps": "FT_Int",
+          "charmaps": "array<FT_CharMapRec>",
+          "selected": "nullable<FT_CharMapRec>",
+          "char_indices": "array"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "num_charmaps",
+            "charmaps[*].encoding",
+            "charmaps[*].platform_id",
+            "charmaps[*].encoding_id",
+            "active_charmap_index",
+            "selected.encoding",
+            "selected.platform_id",
+            "selected.encoding_id",
+            "char_indices"
           ]
         }
       }

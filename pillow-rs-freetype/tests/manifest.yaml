@@ -2326,6 +2326,10 @@ subjects:
         description: Stable public scalar fields, bbox, and active pointer nullness match the pinned C oracle immediately after opening a scalable SFNT face.
       - id: post_size_public_fields_match_c
         description: Stable public scalar fields, active size pointer nullness, and exact FT_Size_Metrics match the pinned C oracle after FT_Set_Char_Size on a scalable SFNT face.
+      - id: available_sizes_public_fields_match_c
+        description: Bitmap strike count and FT_FaceRec::available_sizes records match pinned C for a fixed-size face and a scalable no-strike control.
+      - id: charmap_public_fields_match_c
+        description: FT_FaceRec::num_charmaps, owned charmap records, and active charmap selection behavior match pinned C for a representative SFNT face.
       # needs-input: operation inspect FT_FaceRec immediately after FT_Open_Face/FT_New_Memory_Face and after FT_Set_Char_Size, FT_Load_Glyph, FT_Select_Charmap, FT_Attach_Stream, and variation-coordinate calls; fixture assets scalable SFNT, bitmap-strike font, variable font, and optional auxiliary AFM attachment font; params live FT_Face handles and operation-specific inputs; expected output shape public scalar fields, string contents/pointers, child handle pointers, bbox/metrics, flags, charmap arrays, and available_sizes; comparison rule exact C parity for stable public fields, pointer NULL/non-NULL and identity relationships, and documented mutation behavior after operations.
       - id: populated_public_fields_match_c
         description: Public metadata, strings, flags, metrics, bbox, strike, charmap, glyph, size, and active charmap fields match the pinned C oracle for representative faces and state transitions.
