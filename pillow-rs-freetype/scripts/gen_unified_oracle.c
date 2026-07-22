@@ -23112,6 +23112,52 @@ static int emit_face_rec_initial_snapshot(int argc, char** argv) {
     return 0;
 }
 
+static int emit_face_rec_post_size_snapshot(int argc, char** argv) {
+    (void)argc;
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    FT_Face face = NULL;
+    FT_Long face_index = atol(argv[4]);
+    int status = load_memory_face_arg(
+        library, argv[2], argv[3], face_index, &data, &data_len, &face);
+    if (status) {
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+
+    FT_F26Dot6 char_width = (FT_F26Dot6)strtol(argv[5], NULL, 10);
+    FT_F26Dot6 char_height = (FT_F26Dot6)strtol(argv[6], NULL, 10);
+    FT_UInt horz_resolution = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt vert_resolution = (FT_UInt)strtoul(argv[8], NULL, 10);
+    err = FT_Set_Char_Size(face, char_width, char_height, horz_resolution, vert_resolution);
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"face\":");
+        print_face_rec_initial_snapshot(face);
+        printf(",\"size_metrics\":{");
+        print_size_metrics_object(face->size->metrics);
+        printf("}}}\n");
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
@@ -25560,6 +25606,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 5 && streq(argv[1], "--inspect-face-rec-initial")) {
         return emit_face_rec_initial_snapshot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--inspect-face-rec-post-size")) {
+        return emit_face_rec_post_size_snapshot(argc, argv);
     }
     if (argc == 9 && streq(argv[1], "--get-sfnt-vhea-mvar-sequence")) {
         return emit_face_or_slot(argc, argv);
