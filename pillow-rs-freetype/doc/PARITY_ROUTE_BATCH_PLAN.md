@@ -2712,6 +2712,40 @@ Next non-placeholder implementation targets:
 - Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
   `make fontdone-lint`, `make fmt`, and `git diff --check`.
 
+## 2026-07-22 CID CFF glyph-name flag split
+
+- Added concrete `freetype.FT_HAS_GLYPH_NAMES.cid_keyed_cff_false` and
+  `t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false` rows for the maintained
+  SFNT-wrapped CID-keyed CFF fixture
+  `input/fonts/cid/ot-cff-cid-keyed.otf`.
+- First divergence: pinned C exposes `face_flags=25` and
+  `FT_HAS_GLYPH_NAMES=0` for this CID CFF face, and
+  `FT_Has_PS_Glyph_Names` returns `0`.  Rust previously set the CFF
+  glyph-name face flag for every CFF face, including CID-keyed CFF, so the
+  public macro/function would report reliable glyph names for a CID service
+  shape where C does not.
+- Root fix: `Font::face_flags` now sets `FT_FACE_FLAG_GLYPH_NAMES` for CFF only
+  when the CFF table is not CID keyed.  Thin C ABI and WASM wrappers continue to
+  read the core `FT_FaceRec` public fields and delegate
+  `FT_Has_PS_Glyph_Names`; no wrapper-specific parity behavior was added.
+- This is not a duplicate route: `FT_HAS_GLYPH_NAMES` proves the public
+  face-flag macro bit, while `FT_Has_PS_Glyph_Names` proves the separate
+  t1tables service function result on the same CID fixture.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=freetype.FT_HAS_GLYPH_NAMES.cid_keyed_cff_false`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Route audit moved from `concrete_cases=7280`, `real-parity=4784`,
+  `pending-route=221` to `concrete_cases=7282`, `real-parity=4786`,
+  `pending-route=221`.
+- Broader parity: `make fontdone-parity` passed with
+  `runtime_parity: passed=7056 failed=0 total=7056` and
+  `runtime_cases: runnable=7056 pending=226`.
+- Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
+  `make fontdone-lint`, `make fmt`, and `git diff --check`.
+
 ## 2026-07-22 FT_Get_Glyph unsupported public-format split
 
 - Added concrete

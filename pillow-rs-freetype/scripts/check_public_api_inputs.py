@@ -4331,6 +4331,7 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Get_FSType_Flags.sfnt_restricted_embedding_bits",
         "freetype.FT_Get_First_Char.charcode_zero_disambiguated_by_glyph_index",
         "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
+        "freetype.FT_HAS_GLYPH_NAMES.cid_keyed_cff_false",
         "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
         "freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes",
@@ -4691,6 +4692,7 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true",
             "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true",
             "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
+            "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false",
             "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
         }
         and unresolved_assets_reason(row) is None
@@ -4698,6 +4700,11 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         if row.case_id == "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true":
             return (
                 "FT_Has_PS_Glyph_Names CFF glyph-name flag behavior validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        if row.case_id == "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false":
+            return (
+                "FT_Has_PS_Glyph_Names CID-keyed CFF false result validates "
                 "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
             )
         return (
