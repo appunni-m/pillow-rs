@@ -23595,6 +23595,9 @@ fn add_module_minimal_output(
     module_count: usize,
     lookup_present: bool,
     info: Option<FT_Installed_Module_Info>,
+    outline_renderer_present_before: bool,
+    outline_renderer_present_after: bool,
+    outline_renderer_identity_preserved: bool,
 ) -> RunOutput {
     let output = json!({
         "status": status,
@@ -23608,6 +23611,11 @@ fn add_module_minimal_output(
             "module_requires": 0x0002_0000,
             "module_interface_nullness": !info.module_interface_present,
         })),
+        "routing_effects": {
+            "outline_renderer_present_before": outline_renderer_present_before,
+            "outline_renderer_present_after": outline_renderer_present_after,
+            "outline_renderer_identity_preserved": outline_renderer_identity_preserved,
+        },
         "callback_log": if info.is_some_and(|info| info.init_called) {
             json!(["module_init"])
         } else {
@@ -23621,69 +23629,135 @@ fn add_module_minimal_output(
     }
 }
 
-fn rust_add_module(case: &InputCase) -> Result<RunOutput, String> {
-    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
-        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+struct AddModuleFixtureSpec {
+    module_name: &'static str,
+    module_flags: FT_ULong,
+    module_interface_present: bool,
+    add_default_modules: bool,
+}
+
+fn add_module_fixture_spec(case: &InputCase) -> Option<AddModuleFixtureSpec> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_Add_Module.add_minimal_module_success" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_minimal",
+            module_flags: 0,
+            module_interface_present: false,
+            add_default_modules: false,
+        }),
+        "ftmodapi.FT_MODULE_STYLER.styler_module_registration" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_styler",
+            module_flags: FT_MODULE_STYLER as FT_ULong,
+            module_interface_present: true,
+            add_default_modules: true,
+        }),
+        _ => None,
     }
+}
+
+fn rust_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    let Some(spec) = add_module_fixture_spec(case) else {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    };
     let mut library = FT_New_Library_Without_Default_Modules();
+    if spec.add_default_modules {
+        FT_Add_Default_Modules(Some(&mut library));
+    }
+    let outline_renderer_before =
+        FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE);
     let class = FT_Module_Class_Info {
-        module_flags: 0,
+        module_flags: spec.module_flags,
         module_size: 1,
-        module_name: Some("fixture_minimal"),
+        module_name: Some(spec.module_name),
         module_version: 0x0001_0000,
         module_requires: 0x0002_0000,
-        module_interface_present: false,
+        module_interface_present: spec.module_interface_present,
         module_init: FT_Module_Callback_Behavior::RecordThenOk,
         module_done: FT_Module_Callback_Behavior::RecordThenOk,
     };
     let status = FT_Add_Module(Some(&mut library), Some(&class));
+    let outline_renderer_after = FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE);
     Ok(add_module_minimal_output(
         status,
         FT_Library_Module_Count(Some(&library)),
-        FT_Library_Has_Module(Some(&library), "fixture_minimal"),
-        FT_Library_Synthetic_Module_Info(Some(&library), "fixture_minimal"),
+        FT_Library_Has_Module(Some(&library), spec.module_name),
+        FT_Library_Synthetic_Module_Info(Some(&library), spec.module_name),
+        outline_renderer_before.is_some(),
+        outline_renderer_after.is_some(),
+        outline_renderer_before == outline_renderer_after,
     ))
 }
 
 fn c_add_module(case: &InputCase) -> Result<RunOutput, String> {
-    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
+    let Some(spec) = add_module_fixture_spec(case) else {
         return Ok(error(FT_Err_Invalid_Argument as FT_Error));
-    }
+    };
     let library = c_abi::abi_support_new_library_without_default_modules();
+    if spec.add_default_modules {
+        c_abi::FT_Add_Default_Modules(library);
+    }
+    let outline_renderer_before = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    let module_name = match spec.module_name {
+        "fixture_minimal" => c"fixture_minimal".as_ptr(),
+        "fixture_styler" => c"fixture_styler".as_ptr(),
+        _ => return Err(format!("unsupported module fixture {}", spec.module_name)),
+    };
     let class = c_abi::FT_Module_Class {
-        module_flags: 0,
+        module_flags: spec.module_flags,
         module_size: 1,
-        module_name: c"fixture_minimal".as_ptr(),
+        module_name,
         module_version: 0x0001_0000,
         module_requires: 0x0002_0000,
-        module_interface: ptr::null(),
+        module_interface: if spec.module_interface_present {
+            ptr::without_provenance(1)
+        } else {
+            ptr::null()
+        },
         module_init: ptr::without_provenance_mut(1),
         module_done: ptr::without_provenance_mut(1),
         get_interface: ptr::null_mut(),
     };
     let status = c_abi::FT_Add_Module(library, &class);
-    let lookup = c_abi::FT_Get_Module(library, c"fixture_minimal".as_ptr());
+    let lookup = c_abi::FT_Get_Module(library, module_name);
+    let outline_renderer_after = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
     let output = add_module_minimal_output(
         status,
         c_abi::abi_support_library_module_count(library),
         !lookup.is_null(),
-        c_abi::abi_support_synthetic_module_info(library, "fixture_minimal"),
+        c_abi::abi_support_synthetic_module_info(library, spec.module_name),
+        !outline_renderer_before.is_null(),
+        !outline_renderer_after.is_null(),
+        outline_renderer_before == outline_renderer_after,
     );
     c_done_library(library);
     Ok(output)
 }
 
 fn wasm_add_module(case: &InputCase) -> Result<RunOutput, String> {
-    if case.case_id != "ftmodapi.FT_Add_Module.add_minimal_module_success" {
+    let Some(spec) = add_module_fixture_spec(case) else {
         return Ok(error(FT_Err_Invalid_Argument as FT_Error));
-    }
-    let (status, module_count, lookup_present, info) =
-        wasm_abi::abi_support_add_minimal_module_observation();
+    };
+    let (
+        status,
+        module_count,
+        lookup_present,
+        info,
+        outline_renderer_present_before,
+        outline_renderer_present_after,
+        outline_renderer_identity_preserved,
+    ) = wasm_abi::abi_support_add_synthetic_module_observation(
+        spec.module_name,
+        spec.module_flags,
+        spec.module_interface_present,
+        spec.add_default_modules,
+    );
     Ok(add_module_minimal_output(
         status,
         module_count,
         lookup_present,
         info,
+        outline_renderer_present_before,
+        outline_renderer_present_after,
+        outline_renderer_identity_preserved,
     ))
 }
 
@@ -28740,6 +28814,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success" =>
         {
             Ok(vec!["--add-module-minimal".to_string()])
+        }
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration" =>
+        {
+            Ok(vec!["--add-module-styler".to_string()])
         }
         "ftmodapi.add_default_modules" => {
             let action = match add_default_modules_action(case) {

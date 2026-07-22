@@ -3324,22 +3324,57 @@ pub fn abi_support_add_default_modules_observation(
 #[cfg(feature = "abi-test-support")]
 pub fn abi_support_add_minimal_module_observation()
 -> (i32, usize, bool, Option<rust_ffi::FT_Installed_Module_Info>) {
+    let (status, module_count, lookup_present, info, _, _, _) =
+        abi_support_add_synthetic_module_observation("fixture_minimal", 0, false, false);
+    (status, module_count, lookup_present, info)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_synthetic_module_observation(
+    module_name: &'static str,
+    module_flags: rust_ffi::FT_ULong,
+    module_interface_present: bool,
+    add_default_modules: bool,
+) -> (
+    i32,
+    usize,
+    bool,
+    Option<rust_ffi::FT_Installed_Module_Info>,
+    bool,
+    bool,
+    bool,
+) {
     let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    if add_default_modules {
+        rust_ffi::FT_Add_Default_Modules(Some(&mut library));
+    }
+    let outline_renderer_before =
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE);
     let class = rust_ffi::FT_Module_Class_Info {
-        module_flags: 0,
+        module_flags,
         module_size: 1,
-        module_name: Some("fixture_minimal"),
+        module_name: Some(module_name),
         module_version: 0x0001_0000,
         module_requires: 0x0002_0000,
-        module_interface_present: false,
+        module_interface_present,
         module_init: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
         module_done: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
     };
     let status = rust_ffi::FT_Add_Module(Some(&mut library), Some(&class));
+    let outline_renderer_after =
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE);
     let module_count = rust_ffi::FT_Library_Module_Count(Some(&library));
-    let lookup_present = rust_ffi::FT_Library_Has_Module(Some(&library), "fixture_minimal");
-    let info = rust_ffi::FT_Library_Synthetic_Module_Info(Some(&library), "fixture_minimal");
-    (status, module_count, lookup_present, info)
+    let lookup_present = rust_ffi::FT_Library_Has_Module(Some(&library), module_name);
+    let info = rust_ffi::FT_Library_Synthetic_Module_Info(Some(&library), module_name);
+    (
+        status,
+        module_count,
+        lookup_present,
+        info,
+        outline_renderer_before.is_some(),
+        outline_renderer_after.is_some(),
+        outline_renderer_before == outline_renderer_after,
+    )
 }
 
 #[cfg(feature = "abi-test-support")]
