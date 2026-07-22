@@ -2711,3 +2711,40 @@ Next non-placeholder implementation targets:
   `pending-route=221`.
 - Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
   `make fontdone-lint`, `make fmt`, and `git diff --check`.
+
+## 2026-07-22 FT_Get_Glyph unsupported public-format split
+
+- Added concrete
+  `ftglyph.FT_Get_Glyph.error_unsupported_synthetic_format` for a loaded
+  `DejaVuSans.ttf` glyph slot whose public `format` field is changed to an
+  unsupported tag before `FT_Get_Glyph`.
+- Pinned C behavior: `FT_Get_Glyph` returns
+  `FT_Err_Invalid_Glyph_Format` and exits before writing through `aglyph`, so a
+  caller-provided non-null sentinel remains non-null.  Rust FFI, thin C ABI,
+  and WASM now compare that error and output-pointer preservation exactly.
+- The broader
+  `ftglyph.FT_Get_Glyph.error_unsupported_format_or_bad_slot_payload` row
+  remains pending because it still declares malformed bitmap/SVG facade cases
+  beyond this unsupported public-format split.
+- Focused parity:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Get_Glyph.error_unsupported_synthetic_format`
+  passed with `runtime_parity: passed=1 failed=0 total=1`.
+- Route audit moved from `concrete_cases=7278`, `real-parity=4782`,
+  `pending-route=221` to `concrete_cases=7279`, `real-parity=4783`,
+  `pending-route=221`.
+
+Duplicate-route findings from the same audit pass:
+
+- Do not add a post-size/post-glyph `FT_FaceRec` child-handle row that only
+  checks active slot, size, and charmap ownership.  That behavior is already
+  covered by `freetype.FT_Face.owns_slot_size_and_charmaps`; adding it under
+  `FT_FaceRec` would be duplicate line mapping, not new parity.  The next
+  non-duplicate `FT_FaceRec` split needs either real public-record fields not
+  already covered or a maintained core active-slot record path.
+- Do not add duplicate pathname or stream rows under
+  `freetype.FT_Open_Args.open_face_consumes_args_like_c`.  Pathname open is
+  already real through `freetype.FT_Open_Face.success_open_pathname`; stream
+  ownership is already real through
+  `FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership`; preferred-name
+  params are covered by the `ftparams.*` rows.  The broad `FT_Open_Args` row
+  remains pending for mixed driver/SBIX/argument-dispatch behavior.

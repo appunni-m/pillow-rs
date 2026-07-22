@@ -6507,6 +6507,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Err_Raster_Overflow render-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftglyph.get_glyph"
+        and row.case_id == "ftglyph.FT_Get_Glyph.error_unsupported_synthetic_format"
+    ):
+        return "FT_Get_Glyph unsupported synthetic slot-format error and output-pointer preservation validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "sfnt.load_sfnt_table"
         and row.case_id == "tttables.FT_Load_Sfnt_Table.missing_table_or_invalid_face_error"
     ):
