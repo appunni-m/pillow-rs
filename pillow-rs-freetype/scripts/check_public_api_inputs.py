@@ -4838,6 +4838,8 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         )
     case_reasons = {
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_FaceRec.available_sizes_public_fields_match_c": "FT_FaceRec num_fixed_sizes and available_sizes pointer-derived records validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_FaceRec.charmap_public_fields_match_c": "FT_FaceRec num_charmaps, owned charmap records, active charmap selection, and char-index probes validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 

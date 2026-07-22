@@ -2845,3 +2845,37 @@ Duplicate-route findings from the same audit pass:
   `pending-route=221`.
 - Verification also passed: `make fontdone-ffi-compat`, `make fontdone-ffi`,
   `make fontdone-lint`, `make fmt`, and `git diff --check`.
+
+### Split FT_FaceRec available-sizes and charmap public fields: 2026-07-22
+
+- Added two focused `freetype.FT_FaceRec` split rows instead of promoting the
+  broad `populated_public_fields_match_c` row:
+  - `available_sizes_public_fields_match_c` uses the maintained
+    `freetype.inspect_available_sizes` route with the deterministic WinFNT
+    fixed-size fixture and scalable no-strike control.
+  - `charmap_public_fields_match_c` uses the maintained
+    `freetype.inspect_charmaps` route with DejaVuSans and explicit charmap
+    selection/probe inputs.
+- These rows validate real `FT_FaceRec` public fields through pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI.  They deliberately do not replace the
+  broad populated row, which still includes string contents, glyph/size handle
+  identity after mutation, auxiliary attachment, and variation state.
+- Next verification: focused `test-case` runs for both new case IDs, route
+  audit, full parity, FFI compatibility, no-runtime-FFI, fmt, clippy, and
+  `git diff --check`.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_FaceRec.available_sizes_public_fields_match_c`
+    passed `1/1`.
+  - `make -C pillow-rs-freetype test-case CASE=freetype.FT_FaceRec.charmap_public_fields_match_c`
+    passed `1/1`.
+- Route audit after the focused runs:
+  `concrete_cases=7286`, `real-parity=4790`, `pending-route=221`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7060 failed=0
+    total=7060`, pending `226`.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7286`, `real-parity=4790`, `pending-route=221`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
