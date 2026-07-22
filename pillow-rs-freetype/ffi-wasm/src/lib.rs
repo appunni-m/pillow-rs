@@ -2864,6 +2864,57 @@ pub fn abi_support_stroker_simple_line_counts() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_parse_degenerate() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let single_point = rust_ffi::FT_OutlineSnapshot {
+        points: vec![rust_ffi::FT_Vector { x: 0, y: 0 }],
+        tags: vec![1],
+        contours: vec![0],
+        flags: 0,
+    };
+    let first_error = rust_ffi::FT_Stroker_ParseOutline(stroker, Some(&single_point), 0);
+    let mut points_after_first = 99;
+    let mut contours_after_first = 99;
+    let first_counts_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut points_after_first),
+        Some(&mut contours_after_first),
+    );
+    let empty = rust_ffi::FT_OutlineSnapshot::default();
+    let second_error = rust_ffi::FT_Stroker_ParseOutline(stroker, Some(&empty), 0);
+    let mut points_after_second = 99;
+    let mut contours_after_second = 99;
+    let second_counts_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut points_after_second),
+        Some(&mut contours_after_second),
+    );
+    rust_ffi::FT_Stroker_Done(stroker);
+    first_error == rust_ffi::FT_Err_Ok
+        && first_counts_error == rust_ffi::FT_Err_Ok
+        && points_after_first == 0
+        && contours_after_first == 0
+        && second_error == rust_ffi::FT_Err_Ok
+        && second_counts_error == rust_ffi::FT_Err_Ok
+        && points_after_second == 0
+        && contours_after_second == 0
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_degenerate_curve(action: i32) -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();
