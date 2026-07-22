@@ -1025,6 +1025,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Missing_Font_Field.bdf_chars_before_font",
         "fterrdef.FT_Err_Missing_Fontboundingbox_Field.bdf_chars_before_fontboundingbox",
         "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
+        "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
         "fterrdef.FT_Err_Missing_Size_Field.bdf_chars_before_size",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_encoding_before_startchar",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_nested_startchar_before_endchar",
@@ -4140,10 +4141,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "tracked cache bitmap strike asset is not a C-openable success fixture; "
             "pinned C returns error 6, so exact success would be a green placeholder"
         ),
-        "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected": (
-            "generated unsupported-post-format SFNT opens successfully in pinned C; "
-            "counting any Rust error as parity would be a green placeholder"
-        ),
         "fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds": (
             "generated bad-storage name table returns pinned-C public error 3, not "
             "FT_Err_Name_Table_Missing; exact Name_Table_Missing parity needs a "
@@ -5079,6 +5076,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ffi_error_mapping",
             "fterrdef.FT_Err_Invalid_Outline.rust_invalid_outline_mapping",
         ): "FFI invalid-outline error mapping validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "face.new",
+            "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
+        ): "FT_New_Face invalid-post-format exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "face.new",
             "tttables.TT_Postscript.invalid_post_format_error_runtime",

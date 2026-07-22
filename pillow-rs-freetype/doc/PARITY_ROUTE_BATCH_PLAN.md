@@ -2545,3 +2545,26 @@ Rejected quick fixes in this audit:
 - Counting active-build `Unimplemented_Feature` as enabled-build bzip2,
   OpenType validator, or SVG behavior.  Those rows intentionally remain
   pending unless split by build configuration.
+
+## 2026-07-22 invalid post FormatType route correction
+
+- Corrected the same-input invalid-post-format rows to use the generated
+  malformed SFNT fixture `generated/sfnt/invalid-post-format.ttf`.  The prior
+  `TT_Postscript.invalid_post_format_error_runtime` fixture asset pointed at
+  `input/fonts/sfnt/post-invalid-format.ttf`, which was a DejaVuSans symlink and
+  did not prove the unsupported `post` FormatType path.
+- Moved
+  `fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected` from
+  the stale `new_memory_face` pending assumption to the maintained `face.new`
+  exact-error route.  The verified C behavior is the `tt_face_load_post`
+  rejection in `freetype/src/sfnt/ttload.c:1338-1344`: unsupported `post`
+  FormatType values return `FT_Err_Invalid_Post_Table_Format` during face load.
+- Focused verification:
+  `make -C pillow-rs-freetype test-case CASE=fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected`
+  and
+  `make -C pillow-rs-freetype test-case CASE=tttables.TT_Postscript.invalid_post_format_error_runtime`
+  both pass as runnable exact-error parity rows across Rust FFI, thin C ABI,
+  WASM ABI, and the pinned C oracle.
+- Route audit impact: `pending-route` decreased from 222 to 221 and
+  `real-parity` increased from 4778 to 4779, with `concrete_cases=7275`
+  unchanged.
