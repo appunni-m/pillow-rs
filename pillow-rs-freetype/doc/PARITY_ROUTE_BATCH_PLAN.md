@@ -7,7 +7,7 @@ fixture substitutions, or green placeholders as parity.
 Current live baseline on `main` after the FT_Open_Args memory-source split:
 
 ```text
-route audit concrete_cases=7268 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4766}
+route audit concrete_cases=7269 category_counts={'compile-contract': 2266, 'pending-route': 227, 'real-null-validation': 9, 'real-parity': 4767}
 pending_route_rows=227
 duplicate_operation_input_buckets=41
 ```
@@ -43,15 +43,19 @@ Current-turn candidate decisions:
   `memory_source_truncated_sfnt_size_matches_c` rows prove explicit
   `memory_size` truncation behavior: pinned C returns error 85 for
   0/4/64-byte buffers and error 2 for a 1024-byte truncated SFNT slice.  The
+  `memory_source_optional_flags_noop_match_c` row proves that
+  `FT_OPEN_MEMORY` still opens when combined with null `FT_OPEN_PARAMS`, null
+  `FT_OPEN_DRIVER`, or both; pinned C returns success and a non-null face for
+  those rows.  The
   attempted `memory_base = NULL` invalid row is intentionally not promoted:
   pinned FreeType 2.14.3 segfaults in the `--open-face-variants` oracle for
   `FT_OPEN_MEMORY` with a null memory base instead of returning a public
   `FT_Error`, so treating Rust's safe `Invalid_Argument` as exact C parity
   would be a green placeholder.
-  Focused `test-op OP=freetype.open_face_args` reports `passed=6 failed=0
-  total=6` with one pending broad row. Full `fontdone-test` reports
-  `runtime_parity: passed=7036 failed=0 total=7036
-  covered_manifest_cases=3929` and `runtime_cases: runnable=7036
+  Focused `test-op OP=freetype.open_face_args` reports `passed=7 failed=0
+  total=7` with one pending broad row. Full `fontdone-test` reports
+  `runtime_parity: passed=7037 failed=0 total=7037
+  covered_manifest_cases=3930` and `runtime_cases: runnable=7037
   pending=232`.
 - `ftglyph.FT_Done_Glyph.success_releases_owned_glyph` stays pending even
   though concrete outline and bitmap ownership sub-routes are now real.  The
