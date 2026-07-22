@@ -1781,6 +1781,26 @@ def ftstroke_finalized_counts_real_parity_reason(row: ConcreteInput) -> str | No
     return None
 
 
+def ftstroke_reset_counts_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact Set/Rewind path-clearing routes proven through public counts."""
+    exact_cases = {
+        "ftstroke.FT_Stroker_Set.clears_existing_path",
+        "ftstroke.FT_Stroker_Rewind.clears_previous_path",
+        "ftstroke.FT_Stroker_Rewind.set_calls_rewind",
+    }
+    if row.case_id in exact_cases and row.operation in {
+        "ftstroke.set",
+        "ftstroke.rewind",
+        "ftstroke.set_then_rewind_observed",
+    }:
+        return (
+            "FT_Stroker Set/Rewind path-clearing count outputs validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI; attribute "
+            "geometry remains pending"
+        )
+    return None
+
+
 def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
     if row.operation != "ftcache.image_cache_lookup_scaler":
@@ -7673,6 +7693,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_finalized_counts_reason = ftstroke_finalized_counts_real_parity_reason(row)
     if ftstroke_finalized_counts_reason:
         return ("real-parity", ftstroke_finalized_counts_reason)
+    ftstroke_reset_counts_reason = ftstroke_reset_counts_real_parity_reason(row)
+    if ftstroke_reset_counts_reason:
+        return ("real-parity", ftstroke_reset_counts_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)
