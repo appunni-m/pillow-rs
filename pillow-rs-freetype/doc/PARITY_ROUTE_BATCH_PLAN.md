@@ -72,6 +72,33 @@ Current continuation result after the FT_Done_Glyph outline lifetime split:
   the three broad/facade rows still visible as pending; route audit moved to
   `concrete_cases=7271`, `real-parity=4774`, `pending-route=222`.
 
+Current continuation result after the FT_Glyph / FT_Glyph_Class type-runtime
+split:
+
+- Added four concrete `ftglyph.type_runtime` rows split out of the broad
+  `FT_Glyph.caller_owned_lifetime` and
+  `FT_Glyph_Class.opaque_class_identity_only` placeholders:
+  `ftglyph.FT_Glyph.outline_caller_owned_lifetime`,
+  `ftglyph.FT_Glyph.bitmap_caller_owned_lifetime`,
+  `ftglyph.FT_Glyph_Class.outline_class_behavior`, and
+  `ftglyph.FT_Glyph_Class.bitmap_class_behavior`.
+- The outline rows load DejaVuSans glyph 36 at 24 ppem, create a detached
+  outline glyph through public `FT_Get_Glyph`, and compare public outline/root
+  advance/cbox output. The bitmap rows use the maintained embedded-bitmap
+  strike fixture at 20 ppem and compare the public bitmap glyph record output.
+  `FT_Glyph_Class` remains private: these rows observe class behavior only
+  through public outline/bitmap behavior, not raw private class pointer fields.
+- The broad `ftglyph.FT_Glyph.caller_owned_lifetime` row remains pending
+  because it still declares `FT_New_Glyph`, `FT_Glyph_Copy`,
+  `FT_Glyph_To_Bitmap`, allocation/free event logging, and malformed/stale
+  handle facades. The broad
+  `ftglyph.FT_Glyph_Class.opaque_class_identity_only` row remains pending
+  because it still requires outline, bitmap, and optional SVG classification
+  through public behavior across all ABI lanes.
+- Focused operation verification for `ftglyph.type_runtime` passed `6 / 6`
+  with the two broad rows still visible as pending; route audit moved to
+  `concrete_cases=7275`, `real-parity=4778`, `pending-route=222`.
+
 High-leverage duplicate input buckets from
 `python3 scripts/report_pending_route_buckets.py`:
 
@@ -623,7 +650,7 @@ Rows audited and intentionally kept pending:
 | Surface | Pending rows checked | Current blocker | Correct next batch |
 |---|---:|---|---|
 | `ftdriver.hinting_engine_property` | 4 | Declared fixtures `fonts/cff/cff-hinting-sensitive.otf`, `fonts/type1/type1-hinting-sensitive.pfb`, and `fonts/cid/cid-keyed-type1-hinting-sensitive.otf` are absent. Substitute CFF/Type1 fonts would not prove glyph output after the `hinting-engine` property toggle. | Add maintained hinting-sensitive CFF/Type1/CID fixtures, then implement `cff` driver `hinting-engine` property state through Rust FFI, C ABI, WASM, and oracle route. |
-| `ftglyph.type_runtime` / non-null `ftglyph.done_glyph` | 3 broad/facade rows remain | Maintained routes now prove `FT_Done_Glyph(NULL)`, outline-glyph ownership, bitmap-glyph ownership through both `FT_Get_Glyph bitmap` and `FT_Glyph_To_Bitmap outline`, and concrete outline glyph-before-library lifetime. Remaining rows require optional SVG classification, malformed/stale glyph-handle facades, allocation/free event logging, class identity behavior, and library-before-glyph invalid-use classification. Treating the concrete outline/bitmap splits as those broad rows would be a green placeholder. | Add maintained SVG and malformed/stale-handle/allocation facades, then route broad glyph class/type/lifecycle rows only after those same inputs compare against pinned C, Rust FFI, C ABI, and WASM ABI. |
+| `ftglyph.type_runtime` / non-null `ftglyph.done_glyph` | 3 broad/facade rows remain | Maintained routes now prove `FT_Done_Glyph(NULL)`, outline-glyph ownership, bitmap-glyph ownership through both `FT_Get_Glyph bitmap` and `FT_Glyph_To_Bitmap outline`, concrete outline glyph-before-library lifetime, and four concrete `FT_Glyph` / `FT_Glyph_Class` outline/bitmap public-behavior splits. Remaining rows require optional SVG classification, malformed/stale glyph-handle facades, allocation/free event logging, full class identity behavior, and library-before-glyph invalid-use classification. Treating the concrete outline/bitmap splits as those broad rows would be a green placeholder. | Add maintained SVG and malformed/stale-handle/allocation facades, then route broad glyph class/type/lifecycle rows only after those same inputs compare against pinned C, Rust FFI, C ABI, and WASM ABI. |
 | BDF success variants | 2 | `fonts/pcf/properties-signed-only.pcf` and `fonts/bitmap/sfnt-bdf-table.otb` are absent. The BDF `.bdf` row and exact error rows are already maintained; PCF/SFNT-BDF success needs distinct parser/fixture coverage. | Add C-openable PCF and SFNT-BDF fixtures, then extend the existing BDF property route for signed PCF properties and selected-strike SFNT-BDF properties. |
 | bzip2 stream validation | 2 | The active pinned oracle build is bzip2-disabled and returns `FT_Err_Unimplemented_Feature` before null/source/header validation. The pending rows describe enabled-build behavior, so counting disabled-build `Unimplemented_Feature` would be false parity. | Split enabled-vs-disabled bzip2 policy, or add a bzip2-enabled pinned oracle profile plus pure-Rust bzip2 stream wrapper. |
 | CID success/null-output rows | 10 | Required CID-keyed and SFNT-wrapped CID fixtures are absent (`type1-cid-ros-and-glyph-map.pfb`, `ot-cff-cid-keyed.otf`). Existing non-CID/null-face error controls are already real. | Add maintained CID-keyed fixtures and implement CID service metadata/glyph-index mapping before routing CID success and null-output behavior. |
