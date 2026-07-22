@@ -3175,6 +3175,16 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "constant value alone would be a green placeholder"
         )
     if row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration":
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_then_FT_Add_Default_Modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_styler"
+            and "FT_MODULE_STYLER" in row.params["module_class"].get("module_flags", [])
+            and row.params["module_class"].get("module_interface") == "fixture_private_interface"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -6630,6 +6640,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success"
     ):
         return "FT_Add_Module minimal synthetic module success validates module table insertion, FT_Get_Module lookup, stored class fields, and module_init callback through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration"
+    ):
+        return "FT_MODULE_STYLER registration validates stored styler module flags, FT_Get_Module lookup, private interface presence, module_init callback, and unchanged outline renderer routing through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.add_module"
         and row.case_id == "ftmodapi.FT_Add_Module.rejects_null_library"

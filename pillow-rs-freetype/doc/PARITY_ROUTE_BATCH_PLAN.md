@@ -3122,6 +3122,42 @@ Priority for the next real batches:
   - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
   - `git diff --check` passed.
 
+### Split FT_MODULE_STYLER synthetic registration: 2026-07-22
+
+- Added the focused same-input route
+  `ftmodapi.FT_MODULE_STYLER.styler_module_registration`.
+- Reused the safe synthetic module registry from the minimal
+  `FT_Add_Module` split and added the styler row's declared inputs:
+  `FT_New_Library`, `FT_Add_Default_Modules`, `fixture_styler`,
+  `FT_MODULE_STYLER`, a non-null private module interface, and a recorded
+  `module_init` callback.  The C ABI remains a thin `FT_Module_Class`
+  conversion layer; WASM observes the same core state through test-support.
+- First divergence during focused verification: pinned C reported
+  `module_count=20` after default modules plus `fixture_styler`, while Rust
+  reported `19`.  The root cause was that Rust's default registry omitted the
+  compiled Type1 CID driver.  FreeType 2.14.3 registers that driver as
+  `t1cid` in `src/cid/cidriver.c:t1cid_driver_class`; earlier `"cid"` probes
+  correctly remain absent because `"cid"` is not the module name.
+- C behavior covered: `FT_Add_Module` stores the styler module class and calls
+  `module_init` without renderer registration side effects.  The route compares
+  module count, `FT_Get_Module` lookup, stored class fields, non-null private
+  interface presence, callback log, and unchanged outline-renderer presence
+  across pinned C, Rust FFI, C ABI, and WASM.
+- Focused verification:
+  - `make -C pillow-rs-freetype test-case CASE=ftmodapi.FT_MODULE_STYLER.styler_module_registration`
+    passed `1/1`.
+- Route audit after the split:
+  `concrete_cases=7294`, `real-parity=4801`, `pending-route=218`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Broad verification:
+  - `make fontdone-parity` passed `runtime_parity: passed=7071 failed=0
+    total=7071`, pending `223`; no-runtime-FFI guard was clean.
+  - `make fontdone-ffi-compat` passed; route audit stayed
+    `concrete_cases=7294`, `real-parity=4801`, `pending-route=218`.
+  - `make fontdone-ffi` passed (`no-runtime-FFI guard: clean`).
+  - `make fontdone-lint` passed (`fmt` and `clippy -D warnings`).
+  - `git diff --check` passed.
+
 Pre-split clean-main baseline after `f566ff7c6`:
 
 - Route audit:

@@ -513,7 +513,10 @@ static void* fixture_module_get_interface(FT_Module module, const char* name) {
     return NULL;
 }
 
-static int emit_add_module_minimal(void) {
+static int emit_add_module_fixture(const char* module_name,
+                                   FT_ULong module_flags,
+                                   const void* module_interface,
+                                   int add_default_modules) {
     fixture_module_init_calls = 0;
     fixture_module_done_calls = 0;
     struct FT_MemoryRec_ memory = {0};
@@ -528,19 +531,24 @@ static int emit_add_module_minimal(void) {
         printf(",\"output\":{\"error\":%d}}\n", err);
         return 0;
     }
-    static const FT_Module_Class fixture_class = {
-        0,
+    if (add_default_modules) {
+        FT_Add_Default_Modules(library);
+    }
+    FT_Renderer outline_renderer_before = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    FT_Module_Class fixture_class = {
+        module_flags,
         sizeof(FT_ModuleRec),
-        "fixture_minimal",
+        module_name,
         0x00010000L,
         0x00020000L,
-        NULL,
+        module_interface,
         fixture_module_init,
         fixture_module_done,
         fixture_module_get_interface
     };
     err = FT_Add_Module(library, &fixture_class);
-    FT_Module module = FT_Get_Module(library, "fixture_minimal");
+    FT_Module module = FT_Get_Module(library, module_name);
+    FT_Renderer outline_renderer_after = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
     printf("{");
     print_status(err);
     printf(",\"output\":{");
@@ -551,11 +559,18 @@ static int emit_add_module_minimal(void) {
     printf("},\"stored_class_fields\":{");
     printf("\"module_flags\":%lu,", (unsigned long)fixture_class.module_flags);
     printf("\"module_size\":\"sizeof_synthetic_module\",");
-    printf("\"module_name\":\"fixture_minimal\",");
+    printf("\"module_name\":\"%s\",", module_name);
     printf("\"module_version\":%ld,", (long)fixture_class.module_version);
     printf("\"module_requires\":%ld,", (long)fixture_class.module_requires);
     printf("\"module_interface_nullness\":");
     print_json_bool(fixture_class.module_interface == NULL);
+    printf("},\"routing_effects\":{");
+    printf("\"outline_renderer_present_before\":");
+    print_json_bool(outline_renderer_before != NULL);
+    printf(",\"outline_renderer_present_after\":");
+    print_json_bool(outline_renderer_after != NULL);
+    printf(",\"outline_renderer_identity_preserved\":");
+    print_json_bool(outline_renderer_before == outline_renderer_after);
     printf("},\"callback_log\":[");
     if (fixture_module_init_calls > 0) {
         printf("\"module_init\"");
@@ -563,6 +578,18 @@ static int emit_add_module_minimal(void) {
     printf("]}}\n");
     FT_Done_Library(library);
     return 0;
+}
+
+static int emit_add_module_minimal(void) {
+    return emit_add_module_fixture("fixture_minimal", 0, NULL, 0);
+}
+
+static int emit_add_module_styler(void) {
+    static const char fixture_private_interface = 0;
+    return emit_add_module_fixture("fixture_styler",
+                                   FT_MODULE_STYLER,
+                                   &fixture_private_interface,
+                                   1);
 }
 
 static void dirty_bitmap(FT_Bitmap* bitmap) {
@@ -25939,6 +25966,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--add-module-minimal")) {
         return emit_add_module_minimal();
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-styler")) {
+        return emit_add_module_styler();
     }
     if (argc == 6 && streq(argv[1], "--image-cache-new-route")) {
         return emit_image_cache_new_route(argc, argv);
