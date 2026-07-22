@@ -32,6 +32,26 @@ Current continuation result after Type1 auxiliary attachment follow-up:
 - The null-path and missing/unsupported file cases remain separate exact-error
   rows; this success route does not promote broader pathname/open-args behavior.
 
+Current continuation result after the FTC_Node_Unref invalid-input split:
+
+- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` now has a maintained
+  route for its three declared variants: null node/null manager, null node/live
+  empty manager, and non-null foreign/bad-cache-index node/live empty manager.
+  The pinned C oracle creates a real `FTC_Manager`, synthesizes an internal
+  `FTC_NodeRec` with `cache_index = 0xFFFF`, and calls public
+  `FTC_Node_Unref`. This exercises the exact
+  `src/cache/ftcmanag.c:667-677` branch where C returns without decrementing
+  `ref_count` because the node cache index is outside the manager cache range.
+- Rust FFI, thin C ABI, and WASM ABI run the same public no-return endpoint for
+  the declared null and non-null opaque-pointer variants and compare the public
+  no-write/void output against the pinned C oracle. This does not claim generic
+  cache-node lifecycle parity; the lookup-acquired node reference and
+  flushability rows remain the lifecycle proof.
+- Focused verification for
+  `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` passed `1 / 1`; focused
+  operation verification for `ftcache.node_unref` passed `4 / 4`; route audit
+  moved to `pending-route=222`, `real-parity=4773`.
+
 High-leverage duplicate input buckets from
 `python3 scripts/report_pending_route_buckets.py`:
 
@@ -151,10 +171,10 @@ Rejected same-turn promotions:
   for exported outline preservation and allocation/free event behavior after a
   real path export; the current route only covers invalid/null/unparsed
   no-op export behavior.
-- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending. The
-  already-promoted split covers null node/manager inputs only. The original row
-  also includes a non-null foreign/bad-cache-index node, where pinned C reads
-  `node->cache_index`; null-only behavior cannot be generalized.
+- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` is now covered by the
+  maintained invalid-input split recorded above. It remains separate from cache
+  lifecycle rows because it proves void/no-write behavior only, not referenced
+  node retention or flushability.
 
 After the Type1 PS FontInfo/Private concrete split:
 
@@ -663,7 +683,7 @@ Rows checked before selecting the next implementation batch:
 | `ftcache.FTC_Scaler` pointer lifetime | `make -C pillow-rs-freetype test-op OP=ftcache.scaler_descriptor_lifetime` | `passed=1 pending=0` | Completed. Route calls actual pinned C `FTC_SBitCache_LookupScaler` with a caller-owned `FTC_ScalerRec`, snapshots public `FTC_SBit` fields, mutates the caller scaler after lookup, and compares unchanged result fields against Rust FFI, C ABI, and WASM ABI. The route preserves the FTC record distinction that `FTC_SBit.max_grays` is the maximum gray value (`255`) while rendered `FT_Bitmap.num_grays` is the gray-level count (`256`). |
 | `ftcache.FTC_ImageType` pointer lifetime | `make -C pillow-rs-freetype test-op OP=ftcache.image_type_descriptor_lifetime` | `passed=1 pending=0` | Completed. Route calls actual pinned C `FTC_ImageCache_Lookup` with a caller-owned `FTC_ImageTypeRec`, snapshots returned `FT_Glyph` public fields, mutates the caller descriptor after lookup, and compares unchanged existing node/glyph observations against Rust FFI, C ABI, and WASM ABI. |
 | `ftcache.FTC_ImageTypeRec` image/sbit lookup fields | `make -C pillow-rs-freetype test-op OP=ftcache.image_type_lookup_probe` | `passed=1 pending=0` | Completed. Route compares actual pinned C `FTC_ImageCache_Lookup` and `FTC_SBitCache_Lookup` driven by the same `FTC_ImageTypeRec` face-id, width, height, flags, and glyph index against Rust FFI, C ABI, and WASM ABI. The sbit side models cache materialization by loading without the descriptor's `FT_LOAD_RENDER` bit and rendering once to the `FTC_SBit` public field shape. |
-| `ftcache.FTC_Node` / `FTC_Node_Unref` lifecycle | `make -C pillow-rs-freetype test-op OP=ftcache.node_lifecycle`, `make -C pillow-rs-freetype test-op OP=ftcache.node_unref` | `node_lifecycle passed=1 pending=0`; `node_unref passed=2 pending=1` | Completed for lookup-acquired nodes. Route compares actual pinned C `FTC_SBitCache_Lookup` with non-null `anode`, public `FTC_SBitRec` fields, node cache index, refcount before/after one `FTC_Node_Unref`, pressure lookup statuses, and post-unref survival class against Rust FFI, C ABI, and WASM ABI. `FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending because the fixture includes a foreign/bad-cache-index node that requires a maintained safe layout facade instead of a generic no-op. |
+| `ftcache.FTC_Node` / `FTC_Node_Unref` lifecycle | `make -C pillow-rs-freetype test-op OP=ftcache.node_lifecycle`, `make -C pillow-rs-freetype test-op OP=ftcache.node_unref` | `node_lifecycle passed=1 pending=0`; `node_unref passed=4 pending=0` | Completed for lookup-acquired nodes and invalid-input no-op rows. Lifecycle routes compare actual pinned C `FTC_SBitCache_Lookup` with non-null `anode`, public `FTC_SBitRec` fields, node cache index, refcount before/after one `FTC_Node_Unref`, pressure lookup statuses, and post-unref survival class against Rust FFI, C ABI, and WASM ABI. The invalid-input split separately proves null node/null manager, null node/live manager, and foreign bad-cache-index no-op behavior without claiming generic node lifecycle parity. |
 
 ## Missing fixture sourcing sweep: 2026-07-21
 
@@ -2350,8 +2370,8 @@ Observed impact:
 
 Rows deliberately left pending in the same surface:
 
-- `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` remains pending for the
-  live-manager and foreign/bad-cache-index node variants.
+- None for `ftcache.node_unref`; focused operation verification now reports
+  `passed=4 failed=0 total=4` and `pending=0`.
 
 ### Pending surface audit after CFF OpenType validate split: 2026-07-22
 

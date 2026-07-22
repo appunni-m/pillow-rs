@@ -29125,6 +29125,11 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(vec!["--cache-node-unref-null-only".to_string()])
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            Ok(vec!["--cache-node-unref-null-or-invalid".to_string()])
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             let mut args = vec!["--cache-node-lifecycle".to_string()];
@@ -30341,6 +30346,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_cache_node_unref_null_only()
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            rust_cache_node_unref_null_or_invalid()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             rust_cache_node_lifecycle(case)
@@ -31523,6 +31533,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_cache_node_unref_null_only()
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            c_cache_node_unref_null_or_invalid()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
         {
             c_cache_node_lifecycle(case)
@@ -32519,6 +32534,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
         {
             wasm_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            wasm_cache_node_unref_null_or_invalid()
         }
         "ftcache.node_lifecycle" | "ftcache.node_unref"
             if !case.expect_error && cache_node_lifecycle_has_font(case) =>
@@ -34862,9 +34882,53 @@ fn cache_node_unref_null_only_output() -> RunOutput {
     }))
 }
 
+fn cache_node_unref_null_or_invalid_output() -> RunOutput {
+    ok(json!({
+        "void": true,
+        "side_effects": [
+            {
+                "node": "null",
+                "manager": "null",
+                "void_return": true,
+                "side_effects": "none"
+            },
+            {
+                "node": "null",
+                "manager": "live_empty",
+                "void_return": true,
+                "side_effects": "none"
+            },
+            {
+                "node": "foreign_or_bad_cache_index",
+                "manager": "live_empty",
+                "void_return": true,
+                "side_effects": "none",
+                "cache_index_class": "out_of_range",
+                "ref_count_before": 7,
+                "ref_count_after": 7
+            }
+        ]
+    }))
+}
+
 fn rust_cache_node_unref_null_only() -> Result<RunOutput, String> {
     FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
     Ok(cache_node_unref_null_only_output())
+}
+
+fn rust_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    FTC_Node_Unref(ptr::null_mut(), manager);
+    // FreeType's C branch for this fixture returns before mutation when the
+    // node cache index is out of range (src/cache/ftcmanag.c:667-677). The
+    // pure-Rust FTC_Node_Unref facade does not dereference opaque cache nodes,
+    // matching the no-op public behavior exercised here.
+    FTC_Node_Unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
 }
 
 fn rust_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
@@ -35102,6 +35166,17 @@ fn c_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
 fn c_cache_node_unref_null_only() -> Result<RunOutput, String> {
     c_abi::FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
     Ok(cache_node_unref_null_only_output())
+}
+
+fn c_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    c_abi::FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    c_abi::FTC_Node_Unref(ptr::null_mut(), manager);
+    c_abi::FTC_Node_Unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
 }
 
 fn c_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
@@ -35388,6 +35463,17 @@ fn wasm_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
 fn wasm_cache_node_unref_null_only() -> Result<RunOutput, String> {
     wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), ptr::null_mut());
     Ok(cache_node_unref_null_only_output())
+}
+
+fn wasm_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), ptr::null_mut());
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), manager);
+    wasm_abi::fontdone_wasm_node_unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
 }
 
 fn wasm_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
