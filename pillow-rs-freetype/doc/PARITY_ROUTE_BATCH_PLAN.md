@@ -218,6 +218,63 @@ Rejected same-turn promotions:
   for exported outline preservation and allocation/free event behavior after a
   real path export; the current route only covers invalid/null/unparsed
   no-op export behavior.
+
+Post-`ftstroke` degenerate route sweep on `main` at `5f655b043`:
+
+- Current route audit:
+  `concrete_cases=7294`, `real-parity=4805`, `pending-route=214`,
+  `compile-contract=2266`, `real-null-validation=9`.
+- Full runtime parity after the last verified batch:
+  `runtime_parity: passed=7075 failed=0 total=7075` with
+  `runtime_cases: pending=219`.
+- `ftstroke` remains the largest pending module with 53 rows.  The only rows
+  promoted in the latest stroker batches are exact non-null degenerate
+  path-state observations:
+  `FT_Stroker_LineTo.zero_length_line_noop`,
+  `FT_Stroker_ConicTo.coincident_control_and_end_noop`, and
+  `FT_Stroker_CubicTo.coincident_controls_and_end_noop`.
+
+Rejected post-`5f655b043` sweep promotions:
+
+- `ftstroke.FT_Stroker_GetCounts.optional_output_pointers` and
+  `ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers` remain
+  pending.  C behavior at `src/base/ftstroke.c:1938-2006` accepts null output
+  pointers and writes only non-null outputs, and the Rust core now has the
+  same behavior for empty borders.  The declared rows, however, require
+  `closed-triangle.json` / open-path stroker geometry assets.  Running the
+  pointer-mask checks against empty borders would be a different input.
+- `ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state` and
+  `open_subpath_initial_state` remain pending.  The current core records
+  start/current/open state like `src/base/ftstroke.c:1765-1795`, but the
+  declared rows require later `LineTo`, `EndSubPath`, border counts, and
+  exported outline geometry.  Private state or zero-count observations are not
+  public parity for those rows.
+- `ftstroke.FT_Stroker_Set.clears_existing_path`,
+  `ftstroke.FT_Stroker_Rewind.clears_previous_path`, and
+  `ftstroke.FT_Stroker_Rewind.set_calls_rewind` remain pending.  C does call
+  `FT_Stroker_Rewind` from `FT_Stroker_Set` and resets both borders at
+  `src/base/ftstroke.c:824-862`, but the declared rows require a non-zero
+  first path from `two-manual-paths.json` before proving the clear.  Empty
+  state after Set/Rewind is not enough.
+- CID rows are already split correctly.  The SFNT-wrapped CID fixture
+  `input/fonts/cid/ot-cff-cid-keyed.otf` backs real rows for
+  `opentype_cid_face_supported`, `opentype_cid_null_output_ok`,
+  `sfnt_wrapped_cid_supported`, and `sfnt_wrapped_cid_null_output_ok`.
+  The six remaining CID pending rows are the old non-SFNT CID Type1/CFF
+  semantic rows requiring `input/fonts/cid/type1-cid-ros-and-glyph-map.pfb`;
+  substituting the SFNT-wrapped fixture would be a green placeholder.
+- SVG rows remain pending despite the local
+  `tests/fixtures/fonts/svg/color-svg-glyph.ttf` path because that path is a
+  symlink to `DejaVuSans.ttf`, not a real OT-SVG fixture with both SVG and
+  non-SVG glyph behavior.  The honest batch is a real OT-SVG fixture plus
+  `FT_Load_Glyph`/slot-format/document comparison across C, Rust FFI, C ABI,
+  and WASM ABI.
+- OpenType validator success rows remain pending.  No local
+  `fonts/opentype/valid-all-layout.otf`, `valid-gdef.otf`, `valid-gpos.otf`,
+  `valid-gsub.otf`, `valid-jstf.otf`, `valid-math.otf`, or malformed-layout
+  counterparts exist in the fixture tree.  Existing Type1 service-missing
+  rows are real, but they do not prove selected-table or malformed-table
+  validation parity.
 - `ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop` is now covered by the
   maintained invalid-input split recorded above. It remains separate from cache
   lifecycle rows because it proves void/no-write behavior only, not referenced
