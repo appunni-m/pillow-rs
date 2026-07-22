@@ -25,6 +25,8 @@ Current classification
   - `FT_Stroker_Export.invalid_inputs_noop`
   - `FT_Stroker_ExportBorder.invalid_inputs_or_border_noop`
   - `FT_Stroker_LineTo.zero_length_line_noop`
+  - `FT_Stroker_ConicTo.coincident_control_and_end_noop`
+  - `FT_Stroker_CubicTo.coincident_controls_and_end_noop`
 - Must stay pending until real geometry exists:
   - `FT_Stroker_Set` attribute, miter-limit, and path-clearing rows.
   - `FT_Stroker_Rewind` attribute/path-clearing rows.
@@ -77,6 +79,21 @@ Notes
   Route audit moved `real-parity=4802 -> 4803` and
   `pending-route=217 -> 216`; full runtime parity moved
   `7072/7072 -> 7073/7073`.
+- 2026-07-22: `FT_Stroker_ConicTo.coincident_control_and_end_noop` and
+  `FT_Stroker_CubicTo.coincident_controls_and_end_noop` are the next
+  degenerate path-state routes.  The maintained route calls
+  `FT_Stroker_New`, `FT_Stroker_Set`, `FT_Stroker_BeginSubPath`, the
+  coincident curve command, and `FT_Stroker_GetCounts` through pinned C, Rust
+  FFI, thin C ABI, and WASM ABI.  C reference behavior:
+  `src/base/ftstroke.c:69-71` defines `FT_EPSILON=2` with strict
+  `FT_IS_SMALL` bounds; `src/base/ftstroke.c:1361-1373` and
+  `src/base/ftstroke.c:1566-1581` update only the current center and return OK
+  before curve subdivision or border emission when all control/end deltas are
+  small.  Public observable output is `status=0`, `points=0`, and
+  `contours=0`; full conic/cubic geometry rows remain pending.
+  Route audit moved `real-parity=4803 -> 4805` and
+  `pending-route=216 -> 214`; full runtime parity moved
+  `7073/7073 -> 7075/7075`.
 - `FT_Stroker.unparsed_handle_lifecycle_matches_c` is intentionally narrower
   than `FT_Stroker.lifecycle_contract`: it proves constructor, setter, unparsed
   export no-op, rewind, and destruction behavior through the same C/Rust/C

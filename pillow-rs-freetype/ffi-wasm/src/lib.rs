@@ -2808,6 +2808,46 @@ pub fn abi_support_stroker_zero_line() -> bool {
         && contours == 0
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_degenerate_curve(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        128,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 100, y: 100 };
+    let near = rust_ffi::FT_Vector { x: 101, y: 101 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let curve_error = match action {
+        1 => rust_ffi::FT_Stroker_ConicTo(stroker, Some(&near), Some(&near)),
+        2 => rust_ffi::FT_Stroker_CubicTo(stroker, Some(&near), Some(&near), Some(&near)),
+        _ => {
+            rust_ffi::FT_Stroker_Done(stroker);
+            return false;
+        }
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && curve_error == rust_ffi::FT_Err_Ok
+        && counts_error == rust_ffi::FT_Err_Ok
+        && points == 0
+        && contours == 0
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_new(
     library_handle: usize,

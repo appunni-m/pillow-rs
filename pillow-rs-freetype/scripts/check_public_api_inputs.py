@@ -1710,6 +1710,20 @@ def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
     return None
 
 
+def ftstroke_degenerate_curve_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact coincident conic/cubic no-op routes verified against ftstroke.c."""
+    if row.case_id in {
+        "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop",
+        "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop",
+    }:
+        return (
+            "FT_Stroker conic/cubic coincident-control no-op validates through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI; full curve "
+            "geometry remains pending"
+        )
+    return None
+
+
 def ftcache_image_lookup_scaler_pending_reason(row: ConcreteInput) -> str | None:
     """Case- and variant-specific FTC_ImageCache_LookupScaler pending rows."""
     if row.operation != "ftcache.image_cache_lookup_scaler":
@@ -7590,6 +7604,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_zero_line_reason = ftstroke_zero_line_real_parity_reason(row)
     if ftstroke_zero_line_reason:
         return ("real-parity", ftstroke_zero_line_reason)
+    ftstroke_degenerate_curve_reason = ftstroke_degenerate_curve_real_parity_reason(row)
+    if ftstroke_degenerate_curve_reason:
+        return ("real-parity", ftstroke_degenerate_curve_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)

@@ -3102,6 +3102,12 @@ thread_local! {
     static STROKER_REGISTRY: RefCell<StrokerRegistry> = const { RefCell::new(BTreeMap::new()) };
 }
 
+fn ft_stroker_is_small(value: FT_Pos) -> bool {
+    // FreeType `src/base/ftstroke.c:69-71` defines `FT_EPSILON` as 2 and uses
+    // strict bounds for `FT_IS_SMALL`.
+    value > -2 && value < 2
+}
+
 impl StrokerEntry {
     fn new() -> Self {
         let mut token = Box::new(StrokerToken { _identity: 0 });
@@ -3275,6 +3281,71 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
         if delta_x == 0 && delta_y == 0 {
             // FreeType 2.14.3 `src/base/ftstroke.c:1279-1284` returns OK
             // before changing the current center or emitting border points.
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_ConicTo(
+    stroker: FT_Stroker,
+    control: Option<&FT_Vector>,
+    to: Option<&FT_Vector>,
+) -> FT_Error {
+    let (Some(control), Some(to)) = (control, to) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if ft_stroker_is_small(entry.state.center.x - control.x)
+            && ft_stroker_is_small(entry.state.center.y - control.y)
+            && ft_stroker_is_small(control.x - to.x)
+            && ft_stroker_is_small(control.y - to.y)
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1361-1373` treats a conic
+            // whose current point, control point, and destination are all
+            // within `FT_EPSILON` as a no-op, updating only the current center.
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_CubicTo(
+    stroker: FT_Stroker,
+    control1: Option<&FT_Vector>,
+    control2: Option<&FT_Vector>,
+    to: Option<&FT_Vector>,
+) -> FT_Error {
+    let (Some(control1), Some(control2), Some(to)) = (control1, control2, to) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if ft_stroker_is_small(entry.state.center.x - control1.x)
+            && ft_stroker_is_small(entry.state.center.y - control1.y)
+            && ft_stroker_is_small(control1.x - control2.x)
+            && ft_stroker_is_small(control1.y - control2.y)
+            && ft_stroker_is_small(control2.x - to.x)
+            && ft_stroker_is_small(control2.y - to.y)
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1566-1581` treats a cubic
+            // whose current point, controls, and destination are all within
+            // `FT_EPSILON` as a no-op, updating only the current center.
+            entry.state.center = *to;
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
