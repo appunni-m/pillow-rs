@@ -58,7 +58,30 @@ impl PyImage {
             float_val,
         )
         .map_err(map_error)?;
-        let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
+        let img = if mode == "P" {
+            if let Some(index) = single {
+                RsImage::new_palette_index(size.0, size.1, index)
+            } else if color.is_none() {
+                RsImage::new_palette_index(size.0, size.1, 0)
+            } else {
+                // Preserve tuple provenance: Image::new owns tuple-color
+                // palette allocation, while the resolver normalizes modes
+                // that do not distinguish tuples from scalar samples.
+                let tuple_color = if let Some((r, g, b, a)) = rgba {
+                    if a != 255 {
+                        return Err(PyValueError::new_err(
+                            "cannot add non-opaque RGBA color to RGB palette",
+                        ));
+                    }
+                    (r, g, b, a)
+                } else {
+                    rgb.map(|(r, g, b)| (r, g, b, 255)).unwrap_or(c)
+                };
+                RsImage::new(size.0, size.1, mode, tuple_color).map_err(map_error)?
+            }
+        } else {
+            RsImage::new(size.0, size.1, mode, c).map_err(map_error)?
+        };
         Ok(PyImage { inner: img })
     }
 
@@ -567,8 +590,7 @@ impl PyImage {
                     } else {
                         PyTuple::new(py, color.iter().take(n_bands).copied())?.to_object(py)
                     };
-                    let entry =
-                        PyTuple::new(py, [count.to_object(py), color_value])?;
+                    let entry = PyTuple::new(py, [count.to_object(py), color_value])?;
                     out.append(entry)?;
                 }
                 Ok(Some(out.to_object(py)))
