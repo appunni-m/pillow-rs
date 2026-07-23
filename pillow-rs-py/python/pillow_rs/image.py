@@ -208,7 +208,15 @@ class Image:
         colors: int = 256,
     ) -> "Image":
         if mode is None:
-            mode = self.mode
+            if self.mode == "P":
+                image_palette = self.palette
+                mode = image_palette.mode if image_palette is not None else "RGB"
+                if mode == "RGB" and self.has_transparency_data:
+                    mode = "RGBA"
+            else:
+                return self.copy()
+        elif mode == self.mode and matrix is None:
+            return self.copy()
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
