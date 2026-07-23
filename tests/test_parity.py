@@ -6,6 +6,7 @@ Zero per-operation logic — the engine handles everything.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,10 @@ ASSERTION_METHODS = {
     "typed",
     "tuple",
 }
+HOST_CHECKOUT_PATH = re.compile(
+    r"(?:[A-Za-z]:[\\/]|/(?:Users|home|private/tmp|tmp|workspace|workspaces)/)"
+    r"[^\"']*pillow-rs[\\/]pillow-rs-freetype[\\/]tests[\\/]fixtures"
+)
 
 # Register extra reference image dirs for fixtures_2 support
 _engine.EXTRA_REFERENCE_DIRS = [
@@ -174,6 +179,16 @@ def _fixture_pair_errors():
                         errors.append(
                             f"{base_name}/{name}/{case.get('id')}: "
                             "error assertion lacks exact message"
+                        )
+                    if (
+                        method == "error"
+                        and HOST_CHECKOUT_PATH.search(
+                            str(assertion_node.get("message", ""))
+                        )
+                    ):
+                        errors.append(
+                            f"{base_name}/{name}/{case.get('id')}: "
+                            "error assertion embeds a host checkout path"
                         )
                     if method == "string" and "value" not in assertion_node:
                         errors.append(

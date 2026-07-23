@@ -333,7 +333,18 @@ fn manifest_open_bytes_auto_detects_and_preserves_state_across_load() {
     assert_eq!(manifest.oracle.version, "12.2.0");
     assert_eq!(
         manifest.oracle.source,
-        "image-slash-star/pillow-oracle.lock.yaml"
+        "pillow-rs-py/pyproject.toml"
+    );
+    let oracle_source = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("pillow-rs crate must live in the workspace")
+            .join("pillow-rs-py/pyproject.toml"),
+    )
+    .expect("backend oracle source must exist");
+    assert!(
+        oracle_source.contains("pillow==12.2.0"),
+        "backend oracle source must pin Pillow 12.2.0"
     );
 
     for row in manifest.decode {
