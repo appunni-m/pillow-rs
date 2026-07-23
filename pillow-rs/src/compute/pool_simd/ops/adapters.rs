@@ -1100,20 +1100,6 @@ pub fn simd_eval(
     ))
 }
 
-pub fn simd_effect_noise(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::EffectNoise { sigma } = op {
-        super::scalar::effect_noise(&mut pixels, w, h, mode_code, *sigma);
-    }
-    Ok(dynimg_from_rgba(pixels, w, h))
-}
-
 pub fn simd_point_op(
     img: &DynamicImage,
     op: &PipelineOp,

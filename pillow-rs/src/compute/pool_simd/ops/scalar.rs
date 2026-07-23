@@ -3266,7 +3266,7 @@ pub fn composite_module(pixels: &mut [u32], mode: u32, other: &[u32], mask: &[u3
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Effects + Lookup operations
-//  (paste, alpha_composite, eval, effect_noise, point_op)
+//  (paste, alpha_composite, eval, point_op)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Paste: copy source image pixels onto destination at (paste_x, paste_y).
@@ -3564,94 +3564,6 @@ pub fn eval(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
                 0xFF00_0000
             };
             *p = out_r | (out_r << 8) | (out_r << 16) | out_a;
-        }
-    }
-}
-
-/// Add Gaussian noise to active channels.
-///
-/// Uses Box-Muller transform with deterministic LCG (glibc-style) seeded by
-/// pixel position. Each active channel gets independent noise.
-///
-/// Output per channel = PIL CLIP8(128 + sigma * noise):
-///   CLIP8(v) = v <= 0 ? 0 : v >= 255 ? 255 : (UINT8)(v)
-///   (truncation toward zero, no rounding -- matching PIL's C implementation)
-///
-/// Mode-aware: only noises channels present in the mode.
-/// For L/LA modes: G = B = R (luma carried in R).
-///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn effect_noise(pixels: &mut [u32], w: u32, h: u32, mode: u32, sigma: f64) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let w_u = w as usize;
-
-    // PIL CLIP8: truncation toward zero, matching Imaging.h
-    let clip8 = |v: f64| -> u32 {
-        if v <= 0.0 {
-            0
-        } else if v >= 255.0 {
-            255
-        } else {
-            v as u32
-        }
-    };
-
-    for y in 0..(h as usize) {
-        for x in 0..w_u {
-            let idx = y * w_u + x;
-            let seed = (y * w_u + x) as u64;
-
-            let n_active = match mode {
-                0 => 1, // L
-                1 => 2, // LA
-                2 => 3, // RGB
-                _ => 4, // RGBA
-            };
-
-            // Generate independent gaussian samples via Box-Muller.
-            // Each channel uses a unique seed offset so the noise is uncorrelated.
-            let mut samples = [0.0f64; 4];
-            for ch in 0..n_active {
-                let mut rng = seed.wrapping_add((ch as u64).wrapping_mul(1234567));
-                samples[ch] = loop {
-                    rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-                    let r1 = ((rng >> 16) as i32 & 0x7FFF) as f64;
-                    rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-                    let r2 = ((rng >> 16) as i32 & 0x7FFF) as f64;
-                    // Box-Muller polar transform
-                    let v1 = 2.0 * r1 / 2147483647.0 - 1.0;
-                    let v2 = 2.0 * r2 / 2147483647.0 - 1.0;
-                    let radius = v1 * v1 + v2 * v2;
-                    if radius < 1.0 && radius > 0.0 {
-                        let factor = (-2.0 * radius.ln() / radius).sqrt();
-                        break factor * v1;
-                    }
-                };
-            }
-
-            if has_gb {
-                // RGB/RGBA: R, G, B independent
-                let out_r = clip8(128.0 + sigma * samples[0]);
-                let out_g = clip8(128.0 + sigma * samples[1]);
-                let out_b = clip8(128.0 + sigma * samples[2]);
-                let out_a = if has_a {
-                    clip8(128.0 + sigma * samples[3]) << 24
-                } else {
-                    0xFF00_0000
-                };
-                pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
-            } else {
-                // L/LA: R carries luma, G = B = R
-                let out_r = clip8(128.0 + sigma * samples[0]);
-                let out_a = if has_a {
-                    clip8(128.0 + sigma * samples[1]) << 24
-                } else {
-                    0xFF00_0000
-                };
-                pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
-            }
         }
     }
 }

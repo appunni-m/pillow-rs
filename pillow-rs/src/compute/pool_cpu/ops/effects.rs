@@ -53,6 +53,34 @@ impl GlibcRand {
     }
 }
 
+// ── Darwin-compatible PRNG ───────────────────────────────────────────────
+//
+// Pillow delegates effect_noise randomness to libc rand(). The pinned
+// macOS/Darwin Pillow 12.2.0 oracle uses the Park-Miller sequence, whose
+// process-default state is the same as srand(1). Keep the generator itself
+// independent of libc so native and WASM builds reproduce the oracle without
+// runtime FFI.
+
+struct DarwinRand {
+    state: u32,
+}
+
+impl Default for DarwinRand {
+    fn default() -> Self {
+        Self { state: 1 }
+    }
+}
+
+impl DarwinRand {
+    fn next(&mut self) -> u32 {
+        const MULTIPLIER: u64 = 16_807;
+        const MODULUS: u64 = 2_147_483_647;
+
+        self.state = ((u64::from(self.state) * MULTIPLIER) % MODULUS) as u32;
+        self.state
+    }
+}
+
 // ── EffectSpread ──
 
 pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImage, PilError> {
@@ -639,20 +667,16 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
 // ── EffectNoise ──
 
 pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, PilError> {
-    // PIL's ImagingEffectNoise: Box-Muller polar transform (gaussian noise).
-    // Always produces L mode output. Uses libc rand().
-    // This must exactly match PIL's C implementation to produce
-    // bit-identical output with the same rand seed.
-    //
-    // NOTE: The installed PIL 12.2.0 binary does NOT use the Box-Muller
-    // caching optimization shown in the GitHub source. It calls rand()
-    // twice for EVERY pixel (one Box-Muller pair per pixel, discarding
-    // the second value from the pair).
+    // Pillow 12.2.0 `src/libImaging/Effects.c:75-114` uses a polar
+    // Box-Muller transform and always returns L mode. Its `nextok` flag is
+    // never set, so every accepted pixel consumes one pair and discards the
+    // second deviate.
     let (w, h) = (img.width(), img.height());
     let mut out = GrayImage::new(w, h);
-    // Use glibc-compatible PRNG with seed 1 (PIL's default rand() seed)
-    let mut rng = GlibcRand::new(1);
-    // RAND_MAX on glibc
+    let mut rng = DarwinRand::default();
+    // `_effect_noise` parses sigma with PyArg's `f` conversion before passing
+    // it to ImagingEffectNoise, so round it to FLOAT32 once at the boundary.
+    let sigma = f64::from(sigma as f32);
     const RAND_MAX_F64: f64 = 2147483647.0;
     for pixel in out.pixels_mut() {
         let (v1, radius) = loop {
@@ -663,13 +687,6 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
             let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
             let radius = v1 * v1 + v2 * v2;
             if radius < 1.0 {
-                // Guard: if radius is too close to zero the Box-Muller division
-                // produces Inf/NaN. PIL never hits this with its rand() range
-                // (radius >= 2.0/RAND_MAX^2 ~ 4e-19), but attacker-controlled
-                // noise seeds could in principle produce pathological radii.
-                if radius < 1e-10 {
-                    continue;
-                }
                 break (v1, radius);
             }
         };
@@ -1277,4 +1294,42 @@ pub fn op_effect_mandelbrot(
         }
     }
     Ok(DynamicImage::ImageLuma8(gray))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DarwinRand, op_effect_noise};
+    use image_slash_star::{DynamicImage, GrayImage};
+
+    #[test]
+    fn darwin_rand_matches_pillow_oracle_sequence() {
+        let mut rng = DarwinRand::default();
+
+        assert_eq!(
+            [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()],
+            [
+                16_807,
+                282_475_249,
+                1_622_650_073,
+                984_943_658,
+                1_144_108_930
+            ]
+        );
+    }
+
+    #[test]
+    fn effect_noise_matches_pillow_pair_consumption_and_l_mode() {
+        let input = DynamicImage::ImageLuma8(GrayImage::new(16, 1));
+
+        let output = op_effect_noise(&input, 10.0).expect("noise generation must succeed");
+
+        assert!(matches!(&output, DynamicImage::ImageLuma8(_)));
+        assert_eq!(
+            output.as_bytes(),
+            &[
+                0x90, 0x81, 0x7c, 0x81, 0x68, 0x79, 0x7e, 0x78, 0x81, 0x8c, 0x79, 0x78, 0x82, 0x8b,
+                0x86, 0x88,
+            ]
+        );
+    }
 }

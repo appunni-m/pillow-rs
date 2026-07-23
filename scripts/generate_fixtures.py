@@ -177,12 +177,17 @@ def generate_one(input_path):
         elif op["module"] == "Encode":
             params["source_asset"] = case["source_asset"]
             params["source_format"] = case.get("source_format", op["target"])
-        # Seed srand() for deterministic effect_noise output.
-        # PIL's effect_noise uses C rand() with global state; without a fixed
-        # seed the output varies per process. Pillow-rs uses a deterministic
-        # PRNG seeded with 1, so match that here.
+        # Isolate effect_noise from libc's process-global RNG state. C defines
+        # rand() before any srand() call to use the same sequence as srand(1),
+        # so this resets Pillow to its ordinary fresh-process behavior rather
+        # than choosing a pillow-rs-specific fixture seed.
         if op["module"] == "ImageModule" and op["target"] == "effect_noise":
             _seed_c_rng(1)
+        # Historical fixture warning: seed 42 was added after the Rust
+        # implementation and specifically chosen to match it. Pillow's
+        # effect_spread does not seed libc itself. Keep existing fixtures
+        # reproducible, but do not treat this as Pillow API behavior or use it
+        # to justify a runtime seed.
         if op["module"] == "Image" and op["target"] == "effect_spread":
             _seed_c_rng(42)
         try:

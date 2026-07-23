@@ -207,8 +207,6 @@ pub enum OpId {
     Convert,
     /// Dispatch key for the shader that quantizes pixel colors.
     Quantize,
-    /// Dispatch key for the shader that generates noise.
-    EffectNoise,
     /// Dispatch key for the shader that replaces or sets alpha.
     PutAlpha,
     /// Dispatch key for the shader that writes a single pixel.
@@ -533,7 +531,6 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::Contain { .. } => Some(OpId::Contain),
         PipelineOp::Cover { .. } => Some(OpId::Cover),
         PipelineOp::Fit { .. } => Some(OpId::Fit),
-        PipelineOp::EffectNoise { .. } => Some(OpId::EffectNoise),
         PipelineOp::Transform { .. } => Some(OpId::Transform),
         PipelineOp::PutPixel { .. } => Some(OpId::PutPixel),
         PipelineOp::PutData { .. } => Some(OpId::PutData),
@@ -733,11 +730,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             let c = *colors;
             let levels = 256 / c.max(1);
             vec![c, levels, 256]
-        }
-
-        // ── EffectNoise: sigma bits, seed ──
-        PipelineOp::EffectNoise { sigma } => {
-            vec![(*sigma as f32).to_bits(), 0]
         }
 
         // ── PutAlpha: alpha as u32 ──
@@ -2044,7 +2036,11 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "EffectNoise",
-        gpu_entry!(
+        // Pillow's effect consumes one sequential libc RNG stream with a
+        // rejection loop and returns a new L image. The per-pixel GPU/SIMD
+        // implementations used independent hashes and preserved the input
+        // mode, so advertising those paths returned non-Pillow results.
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2055,7 +2051,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected EffectNoise op".into()))
                 }
             },
-            "effect_noise.wgsl"
         ),
     );
 
@@ -2761,11 +2756,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         adapters::simd_eval,
     );
     simd_set(
-        m.get_mut("EffectNoise")
-            .expect("SIMD key not registered: EffectNoise"),
-        adapters::simd_effect_noise,
-    );
-    simd_set(
         m.get_mut("PointOp")
             .expect("SIMD key not registered: PointOp"),
         adapters::simd_point_op,
@@ -2803,11 +2793,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         m.get_mut("ColorSaturation")
             .expect("SIMD key not registered: ColorSaturation"),
         adapters::simd_color_saturation,
-    );
-    simd_set(
-        m.get_mut("EffectNoise")
-            .expect("SIMD key not registered: EffectNoise"),
-        adapters::simd_effect_noise,
     );
     simd_set(
         m.get_mut("EffectSpread")
