@@ -1780,13 +1780,18 @@ impl PyDraw {
             return Ok((xy.0, xy.1, xy.0, xy.1));
         }
         if lines.len() == 1 {
-            let (w, h) = f.text_bbox(text);
-            return Ok((xy.0, xy.1, xy.0 + w as i32, xy.1 + h as i32));
+            let bbox = pillow_rs::font::imagingft::getbbox(f, text);
+            return Ok((xy.0 + bbox.0, xy.1 + bbox.1, xy.0 + bbox.2, xy.1 + bbox.3));
         }
-        let (_, lh) = f.text_bbox("A");
-        let line_height = spacing as u32 + lh;
-        let widths: Vec<u32> = lines.iter().map(|l| f.text_bbox(l).0).collect();
-        let max_width = *widths.iter().max().unwrap_or(&0);
+        // Pillow ImageText.Text::_split advances by the bottom of "A"'s
+        // FreeType bbox, then unions each line's full bbox. Using only mask
+        // width/height here loses the ascender bearing (and italic overhang).
+        let line_height = spacing + pillow_rs::font::imagingft::getbbox(f, "A").3;
+        let widths: Vec<f32> = lines
+            .iter()
+            .map(|line| pillow_rs::font::imagingft::getlength(f, line))
+            .collect();
+        let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
         let x0 = xy.0 as f64;
         let y0 = xy.1 as f64;
         let mut left = f64::MAX;
@@ -1800,11 +1805,11 @@ impl PyDraw {
                 "right" => x0 + max_width as f64 - widths[i] as f64,
                 _ => x0,
             };
-            let (w, h) = f.text_bbox(line);
-            left = left.min(line_x);
-            top = top.min(line_y);
-            right = right.max(line_x + w as f64);
-            bottom = bottom.max(line_y + h as f64);
+            let bbox = pillow_rs::font::imagingft::getbbox(f, line);
+            left = left.min(line_x + bbox.0 as f64);
+            top = top.min(line_y + bbox.1 as f64);
+            right = right.max(line_x + bbox.2 as f64);
+            bottom = bottom.max(line_y + bbox.3 as f64);
         }
         Ok((left as i32, top as i32, right as i32, bottom as i32))
     }

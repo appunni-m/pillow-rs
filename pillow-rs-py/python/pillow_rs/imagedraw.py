@@ -142,7 +142,7 @@ class Draw:
 
     def getfont(self):
         """Return the current font."""
-        return self._font
+        return self._get_font(None)
 
     def multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
                            direction=None, features=None, language=None, stroke_width=0,
