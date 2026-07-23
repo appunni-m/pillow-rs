@@ -34,6 +34,7 @@ from fixture_coverage import (
     assertion_image_modes as _assertion_image_modes,
     coverage_gaps,
     operation_name as _operation_name,
+    unknown_fixture_operations,
 )
 
 FIXTURES_DIRS = {
@@ -410,8 +411,11 @@ def test_coverage_complete():
     """Every implemented operation must have a fixture, and every declared
     supported_mode must have at least one fixture case. Fails if any gaps exist."""
     missing_operations, missing_modes = coverage_gaps()
-    assert not missing_operations and not missing_modes, (
-        f"Missing fixtures for {len(missing_operations)} operations:\n  "
+    unknown_operations = unknown_fixture_operations()
+    assert not unknown_operations and not missing_operations and not missing_modes, (
+        f"Fixtures for {len(unknown_operations)} unknown operations:\n  "
+        + "\n  ".join(unknown_operations)
+        + f"\n\nMissing fixtures for {len(missing_operations)} operations:\n  "
         + "\n  ".join(missing_operations)
         + f"\n\nMissing mode cases ({len(missing_modes)} gaps):\n  "
         + "\n  ".join(missing_modes)

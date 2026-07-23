@@ -150,6 +150,16 @@ def coverage_gaps(
     return missing_operations, missing_modes
 
 
+def unknown_fixture_operations(
+    manifest_path: Path = REPO_ROOT / "manifest.yaml",
+    fixture_dirs: dict[str, Path] = FIXTURE_DIRS,
+) -> list[str]:
+    """Return fixture operations that are not implemented manifest entries."""
+    declared = manifest_operation_modes(manifest_path)
+    covered = fixture_operation_modes(fixture_dirs)
+    return sorted(set(covered) - set(declared))
+
+
 def fixture_usage_errors(
     fixture_dirs: dict[str, Path] = FIXTURE_DIRS,
 ) -> list[str]:
@@ -212,6 +222,10 @@ def main() -> None:
     """Run the dependency-light fixture coverage gate."""
     errors = fixture_pair_errors()
     errors.extend(fixture_usage_errors())
+    errors.extend(
+        f"unknown fixture operation: {operation}"
+        for operation in unknown_fixture_operations()
+    )
     missing_operations, missing_modes = coverage_gaps()
     errors.extend(
         f"missing fixture operation: {operation}"
