@@ -8,7 +8,7 @@
     {
       "id": "ImageModule_new_1",
       "params": {
-        "mode": "RGB",
+        "mode": "1",
         "size": [
           100,
           100
@@ -19,7 +19,7 @@
     {
       "id": "ImageModule_new_CMYK",
       "params": {
-        "mode": "RGB",
+        "mode": "CMYK",
         "size": [
           100,
           100
@@ -30,7 +30,7 @@
     {
       "id": "ImageModule_new_F",
       "params": {
-        "mode": "RGB",
+        "mode": "F",
         "size": [
           100,
           100
@@ -41,7 +41,7 @@
     {
       "id": "ImageModule_new_HSV",
       "params": {
-        "mode": "RGB",
+        "mode": "HSV",
         "size": [
           100,
           100
@@ -52,7 +52,7 @@
     {
       "id": "ImageModule_new_I",
       "params": {
-        "mode": "RGB",
+        "mode": "I",
         "size": [
           100,
           100
@@ -63,7 +63,7 @@
     {
       "id": "ImageModule_new_L",
       "params": {
-        "mode": "RGB",
+        "mode": "L",
         "size": [
           100,
           100
@@ -74,7 +74,7 @@
     {
       "id": "ImageModule_new_LA",
       "params": {
-        "mode": "RGB",
+        "mode": "LA",
         "size": [
           100,
           100
@@ -85,7 +85,7 @@
     {
       "id": "ImageModule_new_P",
       "params": {
-        "mode": "RGB",
+        "mode": "P",
         "size": [
           100,
           100
@@ -107,7 +107,7 @@
     {
       "id": "ImageModule_new_RGBA",
       "params": {
-        "mode": "RGB",
+        "mode": "RGBA",
         "size": [
           100,
           100
@@ -118,7 +118,7 @@
     {
       "id": "ImageModule_new_YCbCr",
       "params": {
-        "mode": "RGB",
+        "mode": "YCbCr",
         "size": [
           100,
           100

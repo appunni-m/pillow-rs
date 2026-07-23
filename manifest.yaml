@@ -1081,7 +1081,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: width
       type: int
@@ -1090,7 +1090,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: height
       type: int
@@ -1099,7 +1099,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: mode
       type: str
@@ -1108,7 +1108,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: format
       type: str|None
@@ -1117,7 +1117,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: info
       type: dict
@@ -1126,7 +1126,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
   ImageModule:
     functions:
