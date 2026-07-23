@@ -519,12 +519,16 @@ impl GpuInner {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
                 });
-                let second = img2_buf.unwrap_or(output_buf);
+                // Storage read and read_write bindings may not alias within one
+                // compute dispatch. Keep absent optional inputs on their
+                // dedicated auxiliary buffers; shaders guard those reads with
+                // their corresponding presence parameter.
+                let second = img2_buf.unwrap_or(&self.buffers.buf_img2);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 1,
                     resource: second.as_entire_binding(),
                 });
-                let third = img3_buf.unwrap_or(output_buf);
+                let third = img3_buf.unwrap_or(&self.buffers.buf_img3);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 2,
                     resource: third.as_entire_binding(),
@@ -563,7 +567,7 @@ impl GpuInner {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
                 });
-                let second = img2_buf.unwrap_or(output_buf);
+                let second = img2_buf.unwrap_or(&self.buffers.buf_img2);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 1,
                     resource: second.as_entire_binding(),

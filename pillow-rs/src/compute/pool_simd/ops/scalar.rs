@@ -3306,8 +3306,19 @@ pub fn paste(
     } else {
         0
     };
-    let x_end = src_w.min(w.saturating_sub(paste_x.max(0) as u32));
-    let y_end = src_h.min(h.saturating_sub(paste_y.max(0) as u32));
+    // libImaging/Paste.c clips the destination rectangle and advances the
+    // source origin by the clipped leading edge. For a negative placement the
+    // visible source end therefore extends by that same source offset.
+    let x_end = if paste_x < 0 {
+        src_w.min(w.saturating_add(x_start))
+    } else {
+        src_w.min(w.saturating_sub(paste_x as u32))
+    };
+    let y_end = if paste_y < 0 {
+        src_h.min(h.saturating_add(y_start))
+    } else {
+        src_h.min(h.saturating_sub(paste_y as u32))
+    };
 
     if x_start >= x_end || y_start >= y_end {
         return;
