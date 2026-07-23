@@ -286,7 +286,7 @@ def load(filename):
 
 
 def load_default(size=None):
-    """Load default font. Uses pre-rendered bitmap font matching PIL's default."""
+    """Load Pillow's embedded Aileron Regular subset with BASIC layout."""
     if size is None:
         size = 10
     font = object.__new__(FreeTypeFont)
@@ -301,7 +301,7 @@ def load_default_imagefont(size=None):
     """Load default font — alias for compatibility with fixture naming.
 
     :param size: Font size in pixels (default 10).
-    :return: A FreeTypeFont instance backed by the default bitmap font.
+    :return: The compatibility font returned by :func:`load_default`.
     """
     return load_default(size)
 
