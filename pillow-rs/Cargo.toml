@@ -21,17 +21,17 @@ image-codecs-all = [
     "image-webp",
     "image-ico",
 ]
-image-jpeg = ["pillow-rs-image/jpeg"]
-image-gif = ["pillow-rs-image/gif"]
-image-png = ["pillow-rs-image/png"]
-image-bmp = ["pillow-rs-image/bmp"]
-image-tiff = ["pillow-rs-image/tiff"]
-image-webp = ["pillow-rs-image/webp"]
-image-ico = ["pillow-rs-image/ico"]
-image-avif = ["pillow-rs-image/avif"]
+image-jpeg = ["image-slash-star/jpeg"]
+image-gif = ["image-slash-star/gif"]
+image-png = ["image-slash-star/png"]
+image-bmp = ["image-slash-star/bmp"]
+image-tiff = ["image-slash-star/tiff"]
+image-webp = ["image-slash-star/webp"]
+image-ico = ["image-slash-star/ico"]
+image-avif = ["image-slash-star/avif"]
 
 [dependencies]
-pillow-rs-image = { package = "image-slash-star", path = "../../image-slash-star", default-features = false }
+image-slash-star = { path = "../../image-slash-star", default-features = false }
 fontdone = { path = "../pillow-rs-freetype" }
 log = "0.4"
 thiserror = "2"

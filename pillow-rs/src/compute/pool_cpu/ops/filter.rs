@@ -8,7 +8,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 // ─── Clip helper ──
 
@@ -35,19 +35,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, data)
+            image_slash_star::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, data)
+            image_slash_star::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, data)
+            image_slash_star::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, data)
+            image_slash_star::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
@@ -133,7 +133,7 @@ fn filter_3x3_i32(
     }
 
     Ok(DynamicImage::ImageRgba8(
-        pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+        image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
             .ok_or_else(|| PilError::ValueError("filter_3x3_i32: buffer error".into()))?,
     ))
 }
@@ -214,7 +214,7 @@ fn filter_5x5_i32(
     }
 
     Ok(DynamicImage::ImageRgba8(
-        pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+        image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
             .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
     ))
 }
@@ -355,7 +355,7 @@ fn rank_filter_impl(
             }
         }
         let result = DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+            image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
                 .ok_or_else(|| PilError::ValueError("rank_filter_impl(F): buffer error".into()))?,
         );
         return Ok(preserve_mode(img, result));

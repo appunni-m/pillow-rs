@@ -3,8 +3,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use image_slash_star::{ImageError, ImageFormat};
+use pillow_rs::ops::{chops, imageops};
+use pillow_rs::pipeline::ResampleFilter;
 use pillow_rs::{Image, PilError};
-use pillow_rs_image::{ImageError, ImageFormat};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -44,6 +46,48 @@ struct ErrorCase {
     kind: String,
 }
 
+#[derive(Deserialize)]
+struct OperationManifest {
+    oracle: OperationOracle,
+    operations: Vec<OperationCase>,
+}
+
+#[derive(Deserialize)]
+struct OperationOracle {
+    implementation: String,
+    version: String,
+}
+
+#[derive(Deserialize)]
+struct OperationCase {
+    id: String,
+    input: String,
+    pixels: String,
+    encoded: String,
+    operation: String,
+    parameters: OperationParameters,
+    mode: String,
+    width: u32,
+    height: u32,
+    palette_hex: String,
+    palette_alpha_hex: String,
+}
+
+#[derive(Default, Deserialize)]
+struct OperationParameters {
+    #[serde(rename = "box")]
+    box_coords: Option<[u32; 4]>,
+    size: Option<[u32; 2]>,
+    method: Option<String>,
+    angle: Option<f64>,
+    expand: Option<bool>,
+    border: Option<u32>,
+    offset: Option<[i32; 2]>,
+    matrix: Option<Vec<f64>>,
+    point: Option<[u32; 2]>,
+    value: Option<u8>,
+}
+
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/image_backend")
 }
@@ -54,12 +98,88 @@ fn manifest() -> Manifest {
     serde_json::from_slice(&bytes).expect("migration fixture manifest must be valid JSON")
 }
 
+fn operation_manifest() -> OperationManifest {
+    let path = fixture_root().join("operations.json");
+    let bytes = fs::read(path).expect("operation fixture manifest must be readable");
+    serde_json::from_slice(&bytes).expect("operation fixture manifest must be valid JSON")
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+fn expected_format(name: &str) -> ImageFormat {
+    ImageFormat::from_name(name)
+        .unwrap_or_else(|error| panic!("unsupported manifest format {name}: {error}"))
+}
+
+fn required<T: Copy>(value: Option<T>, row: &OperationCase, name: &str) -> T {
+    value.unwrap_or_else(|| panic!("{} missing {name}", row.id))
+}
+
+fn apply_operation(source: &Image, row: &OperationCase) -> Result<Image, PilError> {
+    let parameters = &row.parameters;
+    match row.operation.as_str() {
+        "crop" => {
+            let [left, top, right, bottom] = required(parameters.box_coords, row, "box");
+            source.crop_box(left, top, right, bottom)
+        }
+        "resize_nearest" => {
+            let [width, height] = required(parameters.size, row, "size");
+            source.resize((width, height), Some("NEAREST"))
+        }
+        "thumbnail_nearest" => {
+            let [width, height] = required(parameters.size, row, "size");
+            let mut result = source.copy();
+            result.thumbnail((width, height), Some(ResampleFilter::Nearest))?;
+            Ok(result)
+        }
+        "rotate_27_expand" => source.rotate(
+            required(parameters.angle, row, "angle"),
+            required(parameters.expand, row, "expand"),
+            None,
+        ),
+        operation if operation.starts_with("transpose_") => source.transpose(
+            parameters
+                .method
+                .as_deref()
+                .unwrap_or_else(|| panic!("{} missing method", row.id)),
+        ),
+        "imageops_flip" => imageops::flip(source),
+        "imageops_mirror" => imageops::mirror(source),
+        "imageops_crop" => imageops::crop(source, required(parameters.border, row, "border")),
+        "imagechops_offset" => {
+            let [x, y] = required(parameters.offset, row, "offset");
+            chops::offset(source, x, y)
+        }
+        "imagechops_duplicate" => Ok(chops::duplicate(source)),
+        "putpixel_index" => {
+            let [x, y] = required(parameters.point, row, "point");
+            let mut result = source.copy();
+            result.putpixel_mode(x, y, required(parameters.value, row, "value"), "P")?;
+            Ok(result)
+        }
+        "crop_then_putpixel_index" => {
+            let [left, top, right, bottom] = required(parameters.box_coords, row, "box");
+            let [x, y] = required(parameters.point, row, "point");
+            let mut result = source.crop_box(left, top, right, bottom)?;
+            result.putpixel_mode(x, y, required(parameters.value, row, "value"), "P")?;
+            Ok(result)
+        }
+        "transform_affine_nearest" => {
+            let [width, height] = required(parameters.size, row, "size");
+            let matrix = parameters
+                .matrix
+                .as_deref()
+                .unwrap_or_else(|| panic!("{} missing matrix", row.id));
+            source.transform_affine((width, height), matrix, (0, 0, 0, 0))
+        }
+        _ => panic!("{} has unsupported operation {}", row.id, row.operation),
+    }
+}
+
 #[test]
-fn manifest_decode_rows_preserve_oracle_state_before_and_after_load() {
+fn manifest_open_bytes_auto_detects_and_preserves_state_across_load() {
     let manifest = manifest();
     assert_eq!(manifest.oracle.implementation, "Pillow");
     assert_eq!(manifest.oracle.version, "12.2.0");
@@ -76,6 +196,7 @@ fn manifest_decode_rows_preserve_oracle_state_before_and_after_load() {
             .unwrap_or_else(|error| panic!("{} input fixture: {error}", row.id));
         let expected_pixels = fs::read(fixture_root().join(&row.pixels))
             .unwrap_or_else(|error| panic!("{} pixel fixture: {error}", row.id));
+        let expected_format = expected_format(&row.format);
         let mut image = Image::open_bytes(input)
             .unwrap_or_else(|error| panic!("{} open failed: {error}", row.id));
 
@@ -83,6 +204,11 @@ fn manifest_decode_rows_preserve_oracle_state_before_and_after_load() {
         let info_before = image
             .image_info()
             .unwrap_or_else(|| panic!("{} missing cached ImageInfo", row.id));
+        assert_eq!(
+            info_before.format, expected_format,
+            "{} auto-detected format",
+            row.id
+        );
         assert_eq!(
             image.size().expect("fixture metadata size"),
             (row.width, row.height),
@@ -110,6 +236,43 @@ fn manifest_decode_rows_preserve_oracle_state_before_and_after_load() {
             .verify()
             .unwrap_or_else(|error| panic!("{} verify failed: {error}", row.id));
         assert!(!image.is_materialized(), "{} verify changed state", row.id);
+
+        let peer = image.clone();
+        let concurrent_pixels = std::thread::scope(|scope| {
+            (0..4)
+                .map(|_| {
+                    let image = image.clone();
+                    scope.spawn(move || image.tobytes())
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().expect("fixture decode thread must not panic"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_else(|error| panic!("{} concurrent load failed: {error}", row.id));
+        assert!(
+            image.is_materialized(),
+            "{} implicit load was not cached",
+            row.id
+        );
+        assert!(
+            peer.is_materialized(),
+            "{} clone did not share cache",
+            row.id
+        );
+        assert!(
+            concurrent_pixels
+                .iter()
+                .all(|pixels| pixels == &expected_pixels),
+            "{} concurrent exact Pillow pixels",
+            row.id
+        );
+        assert_eq!(
+            peer.tobytes().expect("shared clone pixels"),
+            expected_pixels,
+            "{} repeated exact Pillow pixels",
+            row.id
+        );
         image
             .load()
             .unwrap_or_else(|error| panic!("{} load failed: {error}", row.id));
@@ -158,6 +321,47 @@ fn manifest_decode_rows_preserve_oracle_state_before_and_after_load() {
 }
 
 #[test]
+fn manifest_path_open_uses_one_stable_snapshot_and_validates_hints() {
+    let manifest = manifest();
+    let row = manifest
+        .decode
+        .iter()
+        .find(|row| row.feature == "image-png")
+        .expect("manifest must contain a PNG success fixture");
+    let replacement = manifest
+        .errors
+        .first()
+        .expect("manifest must contain an encoded error fixture");
+    let input = fs::read(fixture_root().join(&row.input)).expect("path input fixture");
+    let replacement =
+        fs::read(fixture_root().join(&replacement.input)).expect("path replacement fixture");
+    let expected_pixels = fs::read(fixture_root().join(&row.pixels)).expect("path pixel fixture");
+    let path = std::env::temp_dir().join(format!(
+        "pillow-rs-image-snapshot-{}-{}.png",
+        std::process::id(),
+        row.id
+    ));
+    fs::write(&path, &input).expect("write path snapshot fixture");
+    let path_text = path.to_str().expect("temporary path must be UTF-8");
+
+    let image = Image::open(path_text, Some("png")).expect("open path fixture");
+    assert!(!image.is_materialized());
+    fs::write(&path, replacement).expect("replace path after open");
+    image
+        .verify()
+        .expect("verification must use original snapshot");
+    assert_eq!(
+        image.tobytes().expect("decode original path snapshot"),
+        expected_pixels
+    );
+
+    fs::write(&path, input).expect("restore path fixture for hint test");
+    let hint_error = Image::open(path_text, Some("jpeg")).expect_err("hint must be validated");
+    assert!(matches!(hint_error, PilError::ValueError(_)));
+    fs::remove_file(path).expect("remove temporary path fixture");
+}
+
+#[test]
 fn manifest_error_rows_preserve_structured_failures() {
     for row in manifest().errors {
         assert_eq!(row.feature, "image-png", "{} feature", row.id);
@@ -175,6 +379,7 @@ fn manifest_error_rows_preserve_structured_failures() {
             ("verify", "malformed_png") => {
                 let image = Image::open_bytes(input)
                     .unwrap_or_else(|error| panic!("{} open failed: {error}", row.id));
+                let peer = image.clone();
                 let error = image
                     .verify()
                     .expect_err("fixture must fail during verification");
@@ -189,8 +394,149 @@ fn manifest_error_rows_preserve_structured_failures() {
                     "{} returned {error:?}",
                     row.id
                 );
+                assert!(!image.is_materialized(), "{} verify changed state", row.id);
+                let first = image
+                    .tobytes()
+                    .expect_err("fixture must fail during implicit loading");
+                let second = peer
+                    .tobytes()
+                    .expect_err("clone must observe cached loading failure");
+                assert_eq!(
+                    first.to_string(),
+                    second.to_string(),
+                    "{} stable error",
+                    row.id
+                );
+                assert!(!image.is_materialized(), "{} failure is not pixels", row.id);
             }
             _ => panic!("{} has an unsupported error expectation", row.id),
         }
+    }
+}
+
+#[test]
+fn pillow_oracle_rows_prove_palette_safe_operations_exactly() {
+    let manifest = operation_manifest();
+    assert_eq!(manifest.oracle.implementation, "Pillow");
+    assert_eq!(manifest.oracle.version, "12.2.0");
+    let expected_source_pixels = fs::read(fixture_root().join("outputs/png_indexed_alpha.bin"))
+        .expect("indexed source pixel fixture");
+
+    for row in manifest.operations {
+        let input = fs::read(fixture_root().join(&row.input))
+            .unwrap_or_else(|error| panic!("{} input fixture: {error}", row.id));
+        let expected_pixels = fs::read(fixture_root().join(&row.pixels))
+            .unwrap_or_else(|error| panic!("{} pixel fixture: {error}", row.id));
+        let expected_encoded = fs::read(fixture_root().join(&row.encoded))
+            .unwrap_or_else(|error| panic!("{} encoded fixture: {error}", row.id));
+        let source = Image::open_bytes(input)
+            .unwrap_or_else(|error| panic!("{} open failed: {error}", row.id));
+        let mut result = apply_operation(&source, &row)
+            .unwrap_or_else(|error| panic!("{} operation failed: {error}", row.id));
+        let result_peer = result.clone();
+
+        assert_eq!(
+            result.mode().expect("operation mode"),
+            row.mode,
+            "{} mode",
+            row.id
+        );
+        assert_eq!(
+            result.size().expect("operation size"),
+            (row.width, row.height),
+            "{} size",
+            row.id
+        );
+        assert_eq!(
+            hex(&result.getpalette_trimmed().expect("operation palette")),
+            row.palette_hex,
+            "{} exact Pillow palette",
+            row.id
+        );
+        assert_eq!(
+            hex(&result.palette_alpha().expect("operation palette alpha")),
+            row.palette_alpha_hex,
+            "{} exact Pillow palette alpha",
+            row.id
+        );
+        assert_eq!(
+            result.tobytes().expect("operation pixels"),
+            expected_pixels,
+            "{} exact Pillow indices",
+            row.id
+        );
+        assert!(
+            result.is_materialized(),
+            "{} pipeline output not cached",
+            row.id
+        );
+        assert!(
+            result_peer.is_materialized(),
+            "{} pipeline clone did not share output cache",
+            row.id
+        );
+        assert_eq!(
+            result_peer.tobytes().expect("shared pipeline pixels"),
+            expected_pixels,
+            "{} repeated pipeline indices",
+            row.id
+        );
+        assert_eq!(
+            source.tobytes().expect("unchanged operation source"),
+            expected_source_pixels,
+            "{} copy-on-write source isolation",
+            row.id
+        );
+        if row.operation == "putpixel_index" {
+            let mut loaded_source = source.copy();
+            loaded_source.load().expect("materialize mutation source");
+            let loaded_peer = loaded_source.clone();
+            let loaded_result = apply_operation(&loaded_source, &row)
+                .expect("mutate a clone of materialized storage");
+            assert_eq!(
+                loaded_result.tobytes().expect("loaded mutation pixels"),
+                expected_pixels,
+                "{} loaded copy-on-write output",
+                row.id
+            );
+            assert_eq!(
+                loaded_source.tobytes().expect("unchanged loaded source"),
+                expected_source_pixels,
+                "{} loaded source isolation",
+                row.id
+            );
+            assert_eq!(
+                loaded_peer.tobytes().expect("unchanged loaded peer"),
+                expected_source_pixels,
+                "{} loaded peer isolation",
+                row.id
+            );
+        }
+        assert_eq!(
+            result.to_png_bytes().expect("operation PNG encoding"),
+            expected_encoded,
+            "{} exact Pillow PNG",
+            row.id
+        );
+
+        result
+            .load()
+            .unwrap_or_else(|error| panic!("{} persistent load failed: {error}", row.id));
+        assert!(result.is_materialized(), "{} did not persist load", row.id);
+        assert_eq!(result.mode().expect("loaded operation mode"), "P");
+        assert_eq!(
+            result.tobytes().expect("loaded operation pixels"),
+            expected_pixels,
+            "{} exact loaded indices",
+            row.id
+        );
+        assert_eq!(
+            result
+                .to_png_bytes()
+                .expect("loaded operation PNG encoding"),
+            expected_encoded,
+            "{} exact loaded Pillow PNG",
+            row.id
+        );
     }
 }

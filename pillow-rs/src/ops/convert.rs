@@ -2,7 +2,7 @@ use crate::color;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 /// Parses a Pillow mode string into a pipeline color mode.
 ///
@@ -121,7 +121,7 @@ impl Image {
                     // PIL: convert("1") uses truncated grayscale then threshold at 128
                     let gray = color::pil_grayscale_truncate(&converted);
                     let (w, h) = gray.dimensions();
-                    let mut out = pillow_rs_image::GrayImage::new(w, h);
+                    let mut out = image_slash_star::GrayImage::new(w, h);
                     for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
                         op[0] = if gp[0] >= 128 { 255 } else { 0 };
                     }
@@ -154,7 +154,7 @@ impl Image {
                 crate::color::pil_grayscale_truncate(&img)
             };
             let (w, h) = gray.dimensions();
-            let mut out = pillow_rs_image::GrayImage::new(w, h);
+            let mut out = image_slash_star::GrayImage::new(w, h);
             match dither_enum {
                 Some(DitherMethod::None) => {
                     // Threshold at 128 (PIL: pixel >= 128 -> 255, else 0)
@@ -172,7 +172,7 @@ impl Image {
                     // (299*R + 587*G + 114*B) / 1000 to exactly match PIL behavior.
                     // The pre-computed grayscale uses >> 16 which differs for 5 out
                     // of 16M RGB values.
-                    let is_rgb = matches!(img.color(), pillow_rs_image::ColorType::Rgb8);
+                    let is_rgb = matches!(img.color(), image_slash_star::ColorType::Rgb8);
                     let mut errors = vec![0i32; (w + 1) as usize];
                     let wu = w as usize;
                     if is_rgb {
@@ -252,7 +252,7 @@ impl Image {
             let rgb_raw = rgb.into_raw();
             let dither = !matches!(dither_enum, Some(DitherMethod::None));
             let (indices, palette_bytes) = web_palette_quantize(&rgb_raw, w, h, dither);
-            let mut out = pillow_rs_image::GrayImage::new(w, h);
+            let mut out = image_slash_star::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate() {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
             }
@@ -267,6 +267,7 @@ impl Image {
                 backend: None,
                 palette: Some(palette_bytes),
                 palette_alpha: None,
+                materialized: crate::image::materialization_cache(),
             });
         }
 
@@ -301,10 +302,10 @@ fn explicit_mode_for(mode: &str) -> Option<String> {
 }
 
 fn convert_with_matrix(
-    img: &pillow_rs_image::DynamicImage,
+    img: &image_slash_star::DynamicImage,
     target_mode: &str,
     matrix: &[f64],
-) -> Result<pillow_rs_image::DynamicImage, PilError> {
+) -> Result<image_slash_star::DynamicImage, PilError> {
     match (matrix.len(), target_mode) {
         (4, "RGB") => {
             let luma = img.to_luma8();
@@ -320,8 +321,8 @@ fn convert_with_matrix(
                     ]
                 })
                 .collect();
-            Ok(pillow_rs_image::DynamicImage::ImageRgb8(
-                pillow_rs_image::RgbImage::from_raw(w, h, pixels)
+            Ok(image_slash_star::DynamicImage::ImageRgb8(
+                image_slash_star::RgbImage::from_raw(w, h, pixels)
                     .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }
@@ -344,8 +345,8 @@ fn convert_with_matrix(
                     ]
                 })
                 .collect();
-            Ok(pillow_rs_image::DynamicImage::ImageRgb8(
-                pillow_rs_image::RgbImage::from_raw(w, h, pixels)
+            Ok(image_slash_star::DynamicImage::ImageRgb8(
+                image_slash_star::RgbImage::from_raw(w, h, pixels)
                     .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }

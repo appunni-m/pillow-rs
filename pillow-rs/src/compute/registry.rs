@@ -28,7 +28,7 @@
 use crate::compute::pool_simd::ops::adapters;
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
