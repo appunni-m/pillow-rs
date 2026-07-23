@@ -8,7 +8,7 @@ use pillow_rs::error::PilError;
 use pillow_rs::image::Image as RsImage;
 use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyTuple, PyType};
+use pyo3::types::{PyBytes, PyTuple, PyType};
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -285,6 +285,10 @@ impl PyImage {
 
     fn tobytes(&self) -> PyResult<Vec<u8>> {
         self.inner.tobytes().map_err(map_error)
+    }
+
+    fn tobytes_unpacked(&self) -> PyResult<Vec<u8>> {
+        self.inner.tobytes_unpacked().map_err(map_error)
     }
 
     fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
@@ -1015,6 +1019,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
         PilError::ImageError(err) => pyo3::exceptions::PyException::new_err(err.to_string()),
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
@@ -1173,6 +1178,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyImage>()?;
     m.add_class::<PyDraw>()?;
     m.add_class::<PyFont>()?;
+    m.add_class::<PyPilFont>()?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
@@ -1335,6 +1341,129 @@ impl PyFont {
     fn get_size(&self) -> f32 {
         self.inner.font_size()
     }
+}
+
+#[pyclass(name = "PilFont", unsendable)]
+pub struct PyPilFont {
+    inner: pillow_rs::font::pilfont::PilFont,
+    file: Option<String>,
+}
+
+#[pymethods]
+impl PyPilFont {
+    #[staticmethod]
+    fn load(filename: &str) -> PyResult<Self> {
+        let (inner, file) =
+            load_pilfont_from_path(std::path::Path::new(filename)).map_err(map_error)?;
+        Ok(Self {
+            inner,
+            file: Some(file),
+        })
+    }
+
+    #[staticmethod]
+    fn load_path(py: Python<'_>, filename: &str) -> PyResult<Self> {
+        let directories = py
+            .import("sys")?
+            .getattr("path")?
+            .extract::<Vec<String>>()?;
+        for directory in directories {
+            let path = std::path::Path::new(&directory).join(filename);
+            match load_pilfont_from_path(&path) {
+                Ok((inner, file)) => {
+                    return Ok(Self {
+                        inner,
+                        file: Some(file),
+                    });
+                }
+                Err(error) if pilfont_load_path_catches(&error) => {}
+                Err(error) => return Err(map_error(error)),
+            }
+        }
+
+        let mut message = format!("cannot find font file \"{filename}\" in sys.path");
+        if std::path::Path::new(filename).exists() {
+            message.push_str(&format!(
+                ", did you mean ImageFont.load(\"{filename}\") instead?"
+            ));
+        }
+        Err(pyo3::exceptions::PyOSError::new_err(message))
+    }
+
+    #[staticmethod]
+    fn load_default() -> PyResult<Self> {
+        let inner = pillow_rs::font::pilfont::PilFont::load_default().map_err(map_error)?;
+        Ok(Self { inner, file: None })
+    }
+
+    #[getter]
+    fn file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+
+    #[getter]
+    fn info(&self, py: Python<'_>) -> Vec<Py<PyBytes>> {
+        self.inner
+            .info()
+            .iter()
+            .map(|line| PyBytes::new(py, line).unbind())
+            .collect()
+    }
+
+    fn getsize(&self, text: Vec<u8>) -> PyResult<(i32, i32)> {
+        self.inner.getsize(&text).map_err(map_error)
+    }
+
+    #[pyo3(signature = (text, mode=""))]
+    fn getmask(&self, text: Vec<u8>, mode: &str) -> PyResult<PyImage> {
+        let _ = mode;
+        let image = self
+            .inner
+            .getmask(&text)
+            .and_then(|mask| mask.to_image())
+            .map_err(map_error)?;
+        Ok(PyImage { inner: image })
+    }
+}
+
+fn load_pilfont_from_path(
+    path: &std::path::Path,
+) -> Result<(pillow_rs::font::pilfont::PilFont, String), PilError> {
+    let metrics = std::fs::read(path).map_err(PilError::from)?;
+    let root = path.with_extension("");
+
+    for extension in [".png", ".gif", ".pbm"] {
+        let mut candidate_name = root.as_os_str().to_os_string();
+        candidate_name.push(extension);
+        let candidate = std::path::PathBuf::from(candidate_name);
+        let Ok(bitmap) = std::fs::read(&candidate) else {
+            continue;
+        };
+        let Ok(image) = pillow_rs::font::pilfont::PilFont::open_glyph_image(bitmap) else {
+            continue;
+        };
+        match pillow_rs::font::pilfont::PilFont::from_pilfont_data(&metrics, image) {
+            Ok(font) => return Ok((font, candidate.to_string_lossy().into_owned())),
+            Err(PilError::TypeError(message)) if message == "invalid font image mode" => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(PilError::OsError(format!(
+        "cannot find glyph data file {}.{{gif|pbm|png}}",
+        root.display()
+    )))
+}
+
+fn pilfont_load_path_catches(error: &PilError) -> bool {
+    matches!(
+        error,
+        PilError::IOError(_)
+            | PilError::OsError(_)
+            | PilError::UnidentifiedImageError(_)
+            | PilError::ImageError(_)
+            | PilError::Io(_)
+    )
 }
 
 // --- ImageDraw ---

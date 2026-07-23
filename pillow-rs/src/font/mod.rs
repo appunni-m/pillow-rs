@@ -9,6 +9,7 @@ use crate::error::PilError;
 
 mod default_aileron;
 pub mod imagingft;
+pub mod pilfont;
 
 pub enum Font {
     TrueType(TrueTypeFont),

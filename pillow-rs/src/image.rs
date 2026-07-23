@@ -1299,6 +1299,22 @@ impl Image {
         self.tobytes_formatted(self.explicit_mode().unwrap_or(""))
     }
 
+    /// Returns one byte per logical image sample.
+    ///
+    /// Unlike [`Image::tobytes`], mode `"1"` is expanded to one `0` or `255`
+    /// byte per pixel. This matches the sequence representation of Pillow's
+    /// internal `ImagingCore`, which bitmap-font masks expose directly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when the image cannot be materialized.
+    pub fn tobytes_unpacked(&self) -> Result<Vec<u8>, PilError> {
+        if self.mode()? == "1" {
+            return Ok(self.materialize()?.to_luma8().into_raw());
+        }
+        self.tobytes()
+    }
+
     /// Returns raw image bytes using an explicit Pillow mode override.
     ///
     /// This is the binding-facing form of [`Image::tobytes`]. Modes `"F"` and
