@@ -1076,6 +1076,12 @@ impl BackendImpl for GpuPool {
         img: &DynamicImage,
         _mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
+        if let Some(op) = ops.iter().find(|op| !self.supports(op)) {
+            return Err(PilError::ValueError(format!(
+                "GPU: no native impl for {}",
+                registry::variant_key(op)
+            )));
+        }
         // The global pool reuses its upload, auxiliary, output, and readback
         // buffers. Serialize complete batches so concurrent callers cannot
         // overwrite one another between upload and dispatch.

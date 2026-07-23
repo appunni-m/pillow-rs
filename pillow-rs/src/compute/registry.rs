@@ -181,8 +181,6 @@ pub enum OpId {
     Paste,
     /// Dispatch key for the shader that performs alpha compositing.
     AlphaComposite,
-    /// Dispatch key for the shader that randomly spreads nearby pixels.
-    EffectSpread,
     /// Dispatch key for the shader that applies a 3x3 convolution kernel.
     Filter3x3,
     /// Dispatch key for the shader that applies a 5x5 convolution kernel.
@@ -516,7 +514,6 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::Contrast { .. } => Some(OpId::Contrast),
         PipelineOp::ColorSaturation { .. } => Some(OpId::ColorSaturation),
         PipelineOp::Sharpness { .. } => Some(OpId::Sharpen),
-        PipelineOp::EffectSpread { .. } => Some(OpId::EffectSpread),
         PipelineOp::Paste { .. } => Some(OpId::Paste),
         PipelineOp::AlphaComposite { .. } => Some(OpId::AlphaComposite),
         PipelineOp::BlendModule { .. } => Some(OpId::BlendModule),
@@ -653,9 +650,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── RankFilter: size, rank ──
         PipelineOp::RankFilter { size, rank } => vec![*size, *rank],
-
-        // ── EffectSpread: distance ──
-        PipelineOp::EffectSpread { distance } => vec![*distance],
 
         // ── Filter3x3: kernel [9] f32 bits + offset bits ──
         PipelineOp::Filter3x3 {
@@ -1916,9 +1910,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
 
     // ── Effects ──
+    // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
+    // rand() sequentially and performs collision-prone scatter writes. The
+    // former per-pixel SIMD LCG and GPU hash/gather paths were different
+    // algorithms, so EffectSpread is deliberately registered on CPU only.
     m.insert(
         "EffectSpread",
-        gpu_entry!(
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -1929,7 +1927,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected EffectSpread op".into()))
                 }
             },
-            "effect_spread.wgsl"
         ),
     );
     m.insert(
@@ -2518,12 +2515,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             .expect("SIMD key not registered: Autocontrast"),
         adapters::simd_autocontrast,
     );
-    simd_set(
-        m.get_mut("EffectSpread")
-            .expect("SIMD key not registered: EffectSpread"),
-        adapters::simd_effect_spread,
-    );
-
     // Section D: Filter/window ops
     simd_set(
         m.get_mut("MedianFilter")
@@ -2801,11 +2792,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         m.get_mut("ColorSaturation")
             .expect("SIMD key not registered: ColorSaturation"),
         adapters::simd_color_saturation,
-    );
-    simd_set(
-        m.get_mut("EffectSpread")
-            .expect("SIMD key not registered: EffectSpread"),
-        adapters::simd_effect_spread,
     );
     simd_set(
         m.get_mut("GaussianBlur")

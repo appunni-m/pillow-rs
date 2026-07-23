@@ -390,20 +390,6 @@ pub fn simd_autocontrast(
     Ok(dynimg_from_rgba(pixels, w, h))
 }
 
-pub fn simd_effect_spread(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::EffectSpread { distance } = op {
-        super::scalar::effect_spread(&mut pixels, w, h, mode_code, *distance);
-    }
-    Ok(dynimg_from_rgba(pixels, w, h))
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Section D: Filter/window ops (median, max, min, rank, conv, blur)
 // ═══════════════════════════════════════════════════════════════════════
