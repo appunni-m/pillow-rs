@@ -311,6 +311,7 @@ modules:
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       - CMYK
@@ -965,6 +966,7 @@ modules:
       - RGB
       - RGBA
       - P
+      - PA
     - name: get_child_images
       signature: get_child_images(*args, **kwargs)
       status: implemented
@@ -1348,11 +1350,12 @@ modules:
     - name: arc
       signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width:
         int=1) -> None'
-      supported_modes: &id003
+      supported_modes: &id004
       - '1'
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       - CMYK
@@ -1368,7 +1371,7 @@ modules:
     - name: line
       signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: line
       - xy: line
@@ -1381,7 +1384,7 @@ modules:
     - name: rectangle
       signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
       - xy: box
@@ -1395,7 +1398,7 @@ modules:
     - name: ellipse
       signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
       edge_cases: []
@@ -1406,7 +1409,7 @@ modules:
     - name: polygon
       signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: polygon
       edge_cases: []
@@ -1419,7 +1422,14 @@ modules:
         anchor: str|None=None, spacing: float=4, align: str=''left'', direction: str|None=None,
         features: list|None=None, language: str|None=None, stroke_width: float=0,
         stroke_fill=None, embedded_color: bool=False) -> None'
-      supported_modes: *id003
+      supported_modes: &id003
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
+      - CMYK
       param_variants:
       - xy:
         - 0
@@ -1451,7 +1461,7 @@ modules:
     - name: circle
       signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
         width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy:
         - 50
@@ -1465,7 +1475,7 @@ modules:
     - name: rounded_rectangle
       signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
         outline=None, width: int=1, *, corners: tuple|None=None) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         radius: 10
@@ -1487,7 +1497,7 @@ modules:
     - name: chord
       signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
         width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         start: 0
@@ -1500,7 +1510,7 @@ modules:
     - name: pieslice
       signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
         outline=None, width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         start: 0
@@ -1522,7 +1532,7 @@ modules:
       - cpu
     - name: point
       signature: 'point(self, xy: Coords, fill=None) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy:
         - 10

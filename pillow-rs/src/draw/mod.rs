@@ -464,6 +464,12 @@ impl Draw {
             }
             "P" => {
                 if let Some(palette) = self.image.palette() {
+                    // Pillow ImageDraw mutates the existing ImagingCore, so the
+                    // encoded format and pending `info` metadata stay attached.
+                    // Carry them across our immediate indexed-buffer rebuild.
+                    let palette_alpha = self.image.palette_alpha().unwrap_or_default();
+                    let source_format = self.image.source_format();
+                    let info = self.image.image_info();
                     let img = self.image.materialize()?;
                     let luma = img.to_luma8();
                     let (img_w, img_h) = luma.dimensions();
@@ -497,9 +503,9 @@ impl Draw {
                     self.image = Image::Paletted(crate::image::PalettedData {
                         indices,
                         palette,
-                        palette_alpha: self.image.palette_alpha().unwrap_or_default(),
-                        source_format: None,
-                        info: None,
+                        palette_alpha,
+                        source_format,
+                        info,
                         materialized: crate::image::materialization_cache(),
                     });
                 } else {
@@ -639,6 +645,8 @@ impl Draw {
     /// using the carried palette.
     pub fn image_clone(&self) -> Image {
         let img = self.image.clone();
+        let source_format = img.source_format();
+        let info = img.image_info();
         if let Some(ref orig) = self.orig_mode {
             if let Ok(current) = img.mode() {
                 if current != *orig || matches!(orig.as_str(), "RGBA" | "CMYK") {
@@ -697,6 +705,9 @@ impl Draw {
                                         .image
                                         .palette()
                                         .unwrap_or_else(crate::image::default_palette);
+                                    // Pillow keeps format/info on its in-place
+                                    // ImageDraw mutation; retain that provenance
+                                    // when restoring our indexed representation.
                                     return Image::Paletted(crate::image::PalettedData {
                                         indices,
                                         palette,
@@ -704,8 +715,8 @@ impl Draw {
                                             .image
                                             .palette_alpha()
                                             .unwrap_or_default(),
-                                        source_format: None,
-                                        info: None,
+                                        source_format,
+                                        info,
                                         materialized: crate::image::materialization_cache(),
                                     });
                                 }
@@ -1194,6 +1205,11 @@ impl Draw {
             "P" => {
                 // Binary: write palette index where coverage > 0. fontmode="1".
                 if let Some(palette) = self.image.palette() {
+                    // Pillow's in-place text draw preserves format/info. The
+                    // Rust path rebuilds PalettedData, so copy both explicitly.
+                    let palette_alpha = self.image.palette_alpha().unwrap_or_default();
+                    let source_format = self.image.source_format();
+                    let info = self.image.image_info();
                     let img_loaded = img.to_luma8();
                     let (w_i, h_i) = img_loaded.dimensions();
                     let mut indices = image_slash_star::GrayImage::new(w_i, h_i);
@@ -1214,9 +1230,9 @@ impl Draw {
                     self.image = Image::Paletted(crate::image::PalettedData {
                         indices,
                         palette,
-                        palette_alpha: self.image.palette_alpha().unwrap_or_default(),
-                        source_format: None,
-                        info: None,
+                        palette_alpha,
+                        source_format,
+                        info,
                         materialized: crate::image::materialization_cache(),
                     });
                 } else {

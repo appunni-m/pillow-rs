@@ -33,6 +33,7 @@ from engine import (
 import engine as _engine
 from fixture_coverage import (
     assertion_image_modes as _assertion_image_modes,
+    backend_parity_coverage_errors,
     coverage_gaps,
     operation_name as _operation_name,
     unknown_fixture_operations,
@@ -419,6 +420,43 @@ def test_opaque_results_use_semantic_call_styles():
     assert get_call_style("Image", "close") == "terminal_image_method"
     assert get_call_style("Image", "seek") == "seek"
     assert get_call_style("ImageDraw", "getfont") == "draw_getfont"
+
+
+@pytest.mark.coverage_meta
+def test_backend_parity_coverage_metadata_integrity():
+    path = (
+        Path(__file__).parent.parent
+        / "pillow-rs"
+        / "tests"
+        / "fixtures"
+        / "image_backend"
+        / "backend_parity.json"
+    )
+    fixture = json.loads(path.read_text())
+    assert not backend_parity_coverage_errors(fixture, path.parent)
+
+    missing = json.loads(json.dumps(fixture))
+    missing["coverage"].pop()
+    assert any(
+        error.startswith("missing backend coverage row:")
+        for error in backend_parity_coverage_errors(missing, path.parent)
+    )
+
+    orphan = json.loads(json.dumps(fixture))
+    orphan_row = json.loads(json.dumps(orphan["coverage"][0]))
+    orphan_row["case_id"] = "orphan_case"
+    orphan["coverage"].append(orphan_row)
+    assert any(
+        error.startswith("orphan backend coverage row:")
+        for error in backend_parity_coverage_errors(orphan, path.parent)
+    )
+
+    mismatched = json.loads(json.dumps(fixture))
+    mismatched["coverage"][0]["expected"]["pixels_hex"] += "00"
+    assert any(
+        error.startswith("mismatched backend coverage row:")
+        for error in backend_parity_coverage_errors(mismatched, path.parent)
+    )
 
 
 @pytest.mark.coverage_meta

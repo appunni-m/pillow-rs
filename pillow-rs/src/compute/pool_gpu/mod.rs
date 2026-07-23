@@ -760,19 +760,11 @@ impl GpuInner {
     fn execute_batch_impl(
         &self,
         ops: &[PipelineOp],
+        auxiliary_images: &[AuxiliaryImages],
         w: u32,
         h: u32,
         mode: u32,
     ) -> Result<(bool, u32, u32), PilError> {
-        // Pre-materialize second images to avoid interleaved CPU decode during GPU dispatch.
-        // Each dual-input op gets its second image materialized upfront; upload to buf_img2
-        // happens right before dispatch (CPU→GPU, not a round trip).
-        let second_images: Vec<Option<DynamicImage>> =
-            ops.iter().map(extract_second_image).collect();
-
-        // Pre-materialize third images for 3-input ops (Composite/Paste mask).
-        let third_images: Vec<Option<DynamicImage>> = ops.iter().map(extract_third_image).collect();
-
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
@@ -820,7 +812,7 @@ impl GpuInner {
             let img2_buf: Option<&wgpu::Buffer> = if let PipelineOp::PutData { data, mode } = op {
                 self.buffers.upload_put_data(&self.queue, data, *mode);
                 Some(&self.buffers.buf_img2)
-            } else if let Some(ref second) = second_images[i] {
+            } else if let Some(ref second) = auxiliary_images[i].second {
                 let second_rgba = second.to_rgba8();
                 self.buffers.upload_second(&self.queue, &second_rgba)?;
                 Some(&self.buffers.buf_img2)
@@ -829,7 +821,8 @@ impl GpuInner {
             };
 
             // Upload pre-materialized third image to buf_img3 for 3-input ops.
-            let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = third_images[i] {
+            let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = auxiliary_images[i].third
+            {
                 let third_rgba = third.to_rgba8();
                 self.buffers.upload_third(&self.queue, &third_rgba)?;
                 Some(&self.buffers.buf_img3)
@@ -898,24 +891,24 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> DynamicImage {
 
 /// Extract the second (right-hand) image from a dual-input PipelineOp, if present.
 /// Returns the materialized DynamicImage ready for GPU upload.
-fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
+fn extract_second_image(op: &PipelineOp) -> Result<Option<DynamicImage>, PilError> {
     if let PipelineOp::Paste { source, .. } = op {
         // Paste has already converted its source to the destination mode. Keep
         // P-mode sources as their one-byte indices here: expanding them through
         // the palette before packing the GPU upload would make the GPU lane
         // disagree with the CPU and SIMD paste implementations.
-        return if source.mode().ok().as_deref() == Some("P") {
-            source.materialize_indices().ok()
+        return if source.mode()? == "P" {
+            source.materialize_indices().map(Some)
         } else {
-            source.materialize().ok()
+            source.materialize().map(Some)
         };
     }
-    if let PipelineOp::CompositeModule { other, .. } = op
-        && other.mode().ok().as_deref() == Some("P")
-    {
-        // Image.composite blends P indices and gives the result image2's
-        // palette. Upload image2's indices, not its visible RGB expansion.
-        return other.materialize_indices().ok();
+    if let PipelineOp::CompositeModule { other, .. } = op {
+        if other.mode()? == "P" {
+            // Image.composite blends P indices and gives the result image2's
+            // palette. Upload image2's indices, not its visible RGB expansion.
+            return other.materialize_indices().map(Some);
+        }
     }
 
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
@@ -941,18 +934,37 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
         PipelineOp::AlphaComposite { source, .. } => Some(source),
         _ => None,
     };
-    arc_img.and_then(|img| img.materialize().ok())
+    arc_img
+        .map(|image| image.materialize().map(Some))
+        .unwrap_or(Ok(None))
 }
 
 /// Extract the third image (mask) from a 3-input PipelineOp, if present.
 /// Returns the materialized DynamicImage ready for GPU upload.
-fn extract_third_image(op: &PipelineOp) -> Option<DynamicImage> {
+fn extract_third_image(op: &PipelineOp) -> Result<Option<DynamicImage>, PilError> {
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
         PipelineOp::Composite { mask, .. } | PipelineOp::CompositeModule { mask, .. } => Some(mask),
         PipelineOp::Paste { mask, .. } => mask.as_ref(),
         _ => None,
     };
-    arc_img.and_then(|img| img.materialize().ok())
+    arc_img
+        .map(|image| image.materialize().map(Some))
+        .unwrap_or(Ok(None))
+}
+
+struct AuxiliaryImages {
+    second: Option<DynamicImage>,
+    third: Option<DynamicImage>,
+}
+
+fn extract_auxiliary_images(op: &PipelineOp) -> Result<AuxiliaryImages, PilError> {
+    // Pillow resolves each operation's source before its mask, then advances
+    // to the next operation. Preserve that observable error order instead of
+    // collecting one auxiliary slot across the whole batch at a time.
+    Ok(AuxiliaryImages {
+        second: extract_second_image(op)?,
+        third: extract_third_image(op)?,
+    })
 }
 
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
@@ -1096,12 +1108,15 @@ impl BackendImpl for GpuPool {
         img: &DynamicImage,
         _mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        if let Some(op) = ops.iter().find(|op| !self.supports(op)) {
-            return Err(PilError::ValueError(format!(
-                "GPU: no native impl for {}",
-                registry::variant_key(op)
-            )));
-        }
+        // Resolve every nested image before taking the global GPU lock. A
+        // nested explicitly locked pipeline may itself need the GPU pool, and
+        // Pillow surfaces that materialization failure instead of dispatching
+        // the outer shader with an empty auxiliary buffer.
+        let auxiliary_images = ops
+            .iter()
+            .map(extract_auxiliary_images)
+            .collect::<Result<Vec<_>, _>>()?;
+
         // The global pool reuses its upload, auxiliary, output, and readback
         // buffers. Serialize complete batches so concurrent callers cannot
         // overwrite one another between upload and dispatch.
@@ -1125,7 +1140,8 @@ impl BackendImpl for GpuPool {
         gpu.buffers.upload_rgba(&gpu.queue, &rgba)?;
         gpu_log!("[GPU] step=upload_rgba done");
         gpu_log!("[GPU] step=execute_batch_impl start");
-        let (final_is_a, final_w, final_h) = gpu.execute_batch_impl(ops, w, h, mcode)?;
+        let (final_is_a, final_w, final_h) =
+            gpu.execute_batch_impl(ops, &auxiliary_images, w, h, mcode)?;
         gpu_log!(
             "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
             final_w,
