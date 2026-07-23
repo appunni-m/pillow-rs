@@ -174,7 +174,7 @@ pub(crate) fn materialization_cache() -> MaterializationCache {
     Arc::new(OnceLock::new())
 }
 
-/// PIL-compatible statistics result. Scalars for single-band, Vecs for multi-band.
+/// PIL-compatible statistics result. Every statistic is a per-band list.
 #[derive(Debug, Clone)]
 pub struct StatResult {
     /// Number of pixels contributing to each band.
@@ -216,21 +216,11 @@ pub enum StatValue {
 
 impl StatResult {
     fn from_bands(bands: &[Vec<f64>]) -> Self {
-        let n = bands.len();
-        let single = n == 1;
         let fi = |idx: usize| -> StatValue {
-            if single {
-                StatValue::Int(bands[0][idx] as i64)
-            } else {
-                StatValue::IntList(bands.iter().map(|b| b[idx] as i64).collect())
-            }
+            StatValue::IntList(bands.iter().map(|b| b[idx] as i64).collect())
         };
         let ff = |idx: usize| -> StatValue {
-            if single {
-                StatValue::Float(bands[0][idx])
-            } else {
-                StatValue::FloatList(bands.iter().map(|b| b[idx]).collect())
-            }
+            StatValue::FloatList(bands.iter().map(|b| b[idx]).collect())
         };
         let extrema = |min_idx, max_idx| -> StatValue {
             // Always use list format for extrema: [[min, max]] for single, [[min,max], ...] for multi
@@ -1004,8 +994,8 @@ impl Image {
 
     /// Returns Pillow-compatible image statistics in structured form.
     ///
-    /// Single-band results use scalar [`StatValue`] variants. Multi-band
-    /// results use list variants in band order.
+    /// Results use list variants in band order, including single-band images,
+    /// matching Pillow's `ImageStat.Stat` attribute contract.
     ///
     /// # Errors
     ///

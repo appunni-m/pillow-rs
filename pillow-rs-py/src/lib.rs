@@ -382,8 +382,9 @@ impl PyImage {
             if raw.len() == 1 {
                 Ok((raw[0].0, raw[0].1).to_object(py))
             } else {
-                let tuples: Vec<(u8, u8)> = raw.iter().map(|&(a, b)| (a, b)).collect();
-                Ok(tuples.to_object(py))
+                let tuples: Vec<PyObject> =
+                    raw.iter().map(|&(a, b)| (a, b).to_object(py)).collect();
+                Ok(PyTuple::new(py, tuples)?.to_object(py))
             }
         })
     }
@@ -561,14 +562,13 @@ impl PyImage {
                 };
                 let out = pyo3::types::PyList::empty(py);
                 for (count, color) in results {
-                    let entry_list = [count.to_object(py)];
-                    let entry = pyo3::types::PyList::new(py, &entry_list)?;
-                    if n_bands == 1 {
-                        entry.append(color[0].to_object(py))?;
+                    let color_value = if n_bands == 1 {
+                        color[0].to_object(py)
                     } else {
-                        let clist: Vec<u8> = color.iter().take(n_bands).copied().collect();
-                        entry.append(clist.to_object(py))?;
-                    }
+                        PyTuple::new(py, color.iter().take(n_bands).copied())?.to_object(py)
+                    };
+                    let entry =
+                        PyTuple::new(py, [count.to_object(py), color_value])?;
                     out.append(entry)?;
                 }
                 Ok(Some(out.to_object(py)))
@@ -595,7 +595,7 @@ impl PyImage {
             } else {
                 let out = pyo3::types::PyList::empty(py);
                 for chunk in raw.chunks_exact(n_bands) {
-                    out.append(chunk.to_object(py))?;
+                    out.append(PyTuple::new(py, chunk.iter().copied())?)?;
                 }
                 Ok(out.to_object(py))
             }
