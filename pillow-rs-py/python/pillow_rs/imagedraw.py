@@ -56,28 +56,38 @@ class Draw:
             drawn = drawn.convert(self._orig_mode, dither=dither_arg)
         self._image._rust_image = drawn._rust_image
 
+    def _shape_inks(self, fill, outline):
+        # Pillow ImageDraw starts with ink=-1 and fill=0. When both optional
+        # colors are omitted, shape methods therefore draw an all-255 outline.
+        if fill is None and outline is None and self._orig_mode == "PA":
+            outline = (255, 255)
+        return fill, outline
+
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
-        if fill is None:
+        if fill is None and self._orig_mode != "PA":
             fill = (0, 0, 0)
         self._draw.line(xy, fill, width if width > 0 else 1)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.rectangle((x0, y0, x1, y1), fill, outline, width)
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.ellipse((x0, y0, x1, y1), fill, outline, width)
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.polygon(xy, fill, outline, width)
         self._sync()
 
     def point(self, xy, fill=None):
-        if fill is None:
+        if fill is None and self._orig_mode != "PA":
             fill = (0, 0, 0)
         if isinstance(xy[0], (int, float)):
             xy = [xy]
@@ -91,20 +101,24 @@ class Draw:
 
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.chord((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
         self._sync()
 
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.pieslice((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
         self._sync()
 
     def circle(self, xy, radius, fill=None, outline=None, width=1):
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.circle((float(xy[0]), float(xy[1])), float(radius), fill, outline, width)
         self._sync()
 
     def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.rounded_rectangle((x0, y0, x1, y1), float(radius), fill, outline, width)
         self._sync()
 
@@ -181,6 +195,7 @@ class Draw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
+        fill, outline = self._shape_inks(fill, outline)
         self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
         self._sync()
 

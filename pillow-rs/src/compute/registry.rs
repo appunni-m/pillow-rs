@@ -733,7 +733,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── PutAlpha: alpha as u32 ──
-        PipelineOp::PutAlpha { alpha } => vec![*alpha as u32],
+        PipelineOp::PutAlpha { alpha, mode } => vec![*alpha as u32, mode.code()],
 
         // ── PutPixel: x, y, color packed as RGBA u32 ──
         PipelineOp::PutPixel { x, y, color, .. } => {
@@ -820,7 +820,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── PutData: data length ──
-        PipelineOp::PutData { data } => vec![data.len() as u32],
+        PipelineOp::PutData { data, mode } => vec![data.len() as u32, mode.code()],
 
         // ── CropBorder: border ──
         PipelineOp::CropBorder { border } => vec![*border],
@@ -2118,10 +2118,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             mode: Option<&str>|
+             _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutData { data } = op {
-                    op_put_data(img, data, mode)
+                if let PipelineOp::PutData {
+                    data,
+                    mode: data_mode,
+                } = op
+                {
+                    op_put_data(img, data, *data_mode)
                 } else {
                     Err(PilError::ValueError("expected PutData op".into()))
                 }
@@ -2155,10 +2159,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             mode: Option<&str>|
+             _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutAlpha { alpha } = op {
-                    Ok(op_put_alpha(img, *alpha, mode))
+                if let PipelineOp::PutAlpha {
+                    alpha,
+                    mode: alpha_mode,
+                } = op
+                {
+                    Ok(op_put_alpha(img, *alpha, *alpha_mode))
                 } else {
                     Err(PilError::ValueError("expected PutAlpha op".into()))
                 }

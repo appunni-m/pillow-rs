@@ -3168,51 +3168,80 @@ pub fn put_pixel(pixels: &mut [u32], w: u32, mode: u32, x: u32, y: u32, color_rg
     pixels[idx] = r | (out_g << 8) | (out_b << 16) | out_a;
 }
 
-/// Replace pixel data with raw bytes.
-///
-/// Data must be RGBA byte sequences, `data.len()` must match `pixels.len() * 4`.
-/// Each group of 4 bytes [R, G, B, A] is packed into one u32 pixel.
-/// Mode-aware alpha clamp applied at the end.
+/// Replace pixel data with logical Pillow-mode sample bytes.
 ///
 /// Operates in-place on pixels slice.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// Mode codes are defined by `pipeline::PixelMode`.
 #[inline]
 pub fn put_data(pixels: &mut [u32], mode: u32, data: &[u8]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let n = pixels.len();
+    let channels = match mode {
+        0 | 4 | 7 => 1,
+        1 | 5 => 2,
+        2 | 8 | 9 => 3,
+        _ => 4,
+    };
+    let n_copy = data.len().min(pixels.len() * channels);
 
-    for i in 0..n {
-        let base = i * 4;
-        let r = data[base] as u32;
-        let g = data[base + 1] as u32;
-        let b = data[base + 2] as u32;
-        let a = data[base + 3] as u32;
-
-        let out_g = if has_gb { g } else { r };
-        let out_b = if has_gb { b } else { r };
-        let out_a = if has_a { a << 24 } else { 0xFF00_0000 };
-
-        pixels[i] = r | (out_g << 8) | (out_b << 16) | out_a;
+    for (sample_index, &sample) in data[..n_copy].iter().enumerate() {
+        let pixel_index = sample_index / channels;
+        let channel = sample_index % channels;
+        let pixel = &mut pixels[pixel_index];
+        let value = sample as u32;
+        match mode {
+            // L, P, and 1 use the R byte as their packed scalar sample.
+            0 | 4 | 7 => {
+                *pixel = value | (value << 8) | (value << 16) | 0xFF00_0000;
+            }
+            // Packed LA/PA stores luma in R and alpha in A.
+            1 | 5 => {
+                if channel == 0 {
+                    *pixel = (*pixel & 0xFF00_0000) | value | (value << 8) | (value << 16);
+                } else {
+                    *pixel = (*pixel & 0x00FF_FFFF) | (value << 24);
+                }
+            }
+            // RGB-family raw samples occupy the low three packed bytes.
+            2 | 8 | 9 => {
+                let shift = (channel * 8) as u32;
+                *pixel = (*pixel & !(0xFF << shift)) | (value << shift);
+                *pixel |= 0xFF00_0000;
+            }
+            // RGBA, CMYK, I, and F are all four raw bytes in order.
+            _ => {
+                let shift = (channel * 8) as u32;
+                *pixel = (*pixel & !(0xFF << shift)) | (value << shift);
+            }
+        }
     }
 }
 
 /// Set alpha channel of all pixels to `alpha` (0-255).
 ///
-/// For non-alpha modes (L, RGB): no-op (alpha is already 0xFF).
-/// For LA, RGBA: set A byte to alpha value.
-///
 /// Operates in-place on pixels slice.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// Mode codes are defined by `pipeline::PixelMode`.
 #[inline]
 pub fn put_alpha(pixels: &mut [u32], mode: u32, alpha: u8) {
-    let has_a = mode == 1 || mode == 3;
-    if !has_a {
-        return; // no-op for L, RGB
-    }
     let a_packed = (alpha as u32) << 24;
     for p in pixels.iter_mut() {
-        *p = (*p & 0x00FF_FFFF) | a_packed;
+        if mode == 6 {
+            // Pillow Convert.c:cmyk2rgb uses MULDIV255:
+            // t = channel * (255-K) + 128; ((t >> 8) + t) >> 8.
+            let c = *p & 0xFF;
+            let m = (*p >> 8) & 0xFF;
+            let y = (*p >> 16) & 0xFF;
+            let k = (*p >> 24) & 0xFF;
+            let nk = 255 - k;
+            let convert = |channel: u32| {
+                let t = channel * nk + 128;
+                nk.saturating_sub(((t >> 8) + t) >> 8)
+            };
+            let r = convert(c);
+            let g = convert(m);
+            let b = convert(y);
+            *p = r | (g << 8) | (b << 16) | a_packed;
+        } else {
+            *p = (*p & 0x00FF_FFFF) | a_packed;
+        }
     }
 }
 

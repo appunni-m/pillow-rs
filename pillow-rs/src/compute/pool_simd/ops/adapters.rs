@@ -8,8 +8,10 @@
 
 use crate::error::PilError;
 use crate::image::Image;
-use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
-use image_slash_star::{DynamicImage, GenericImageView, RgbaImage};
+use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
+use image_slash_star::{
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
+};
 use std::sync::Arc;
 
 // ── Helper: mode string → encoding ─────────────────────────────────────
@@ -20,7 +22,7 @@ fn mode_to_u32(mode: Option<&str>) -> u32 {
     match mode {
         None | Some("RGBA") => 3,
         Some("RGB") => 2,
-        Some("LA") => 1,
+        Some("LA" | "PA") => 1,
         Some("L" | "1" | "P") => 0,
         _ => 3, // default to RGBA
     }
@@ -88,6 +90,51 @@ fn dynimg_from_rgba(pixels: Vec<u32>, w: u32, h: u32) -> DynamicImage {
         })
         .collect();
     DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, rgba_bytes).expect("internal invariant"))
+}
+
+/// Reconstruct the logical sample layout used by a mode-preserving mutator.
+fn dynimg_from_pixel_mode(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> DynamicImage {
+    match mode {
+        PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
+            let bytes = pixels.iter().map(|pixel| (*pixel & 0xFF) as u8).collect();
+            DynamicImage::ImageLuma8(GrayImage::from_raw(w, h, bytes).expect("internal invariant"))
+        }
+        PixelMode::LA | PixelMode::PA => {
+            let bytes = pixels
+                .iter()
+                .flat_map(|pixel| [(*pixel & 0xFF) as u8, ((*pixel >> 24) & 0xFF) as u8])
+                .collect();
+            DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(w, h, bytes).expect("internal invariant"),
+            )
+        }
+        PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
+            let bytes = pixels
+                .iter()
+                .flat_map(|pixel| {
+                    [
+                        (*pixel & 0xFF) as u8,
+                        ((*pixel >> 8) & 0xFF) as u8,
+                        ((*pixel >> 16) & 0xFF) as u8,
+                    ]
+                })
+                .collect();
+            DynamicImage::ImageRgb8(RgbImage::from_raw(w, h, bytes).expect("internal invariant"))
+        }
+        PixelMode::RGBA | PixelMode::CMYK | PixelMode::I | PixelMode::F => {
+            dynimg_from_rgba(pixels, w, h)
+        }
+    }
+}
+
+/// Reconstruct the promoted result of `Image.putalpha`.
+fn dynimg_from_put_alpha(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> DynamicImage {
+    match mode {
+        PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => {
+            dynimg_from_pixel_mode(pixels, w, h, PixelMode::LA)
+        }
+        _ => dynimg_from_rgba(pixels, w, h),
+    }
 }
 
 /// Materialize an Arc<Image> → DynamicImage.
@@ -1042,39 +1089,29 @@ pub fn simd_put_pixel(
 pub fn simd_put_data(
     img: &DynamicImage,
     op: &PipelineOp,
-    mode: Option<&str>,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutData { data } = op {
-        // Pad short data to avoid out-of-bounds in scalar::put_data
-        let needed = pixels.len() * 4;
-        let padded: Vec<u8> = if data.len() < needed {
-            let mut p = Vec::with_capacity(needed);
-            p.extend_from_slice(data);
-            p.resize(needed, 0u8);
-            p
-        } else {
-            data.to_vec()
-        };
-        super::scalar::put_data(&mut pixels, mode_code, &padded);
+    if let PipelineOp::PutData { data, mode } = op {
+        super::scalar::put_data(&mut pixels, mode.code(), data);
+        return Ok(dynimg_from_pixel_mode(pixels, w, h, *mode));
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Err(PilError::ValueError("expected PutData op".into()))
 }
 
 pub fn simd_put_alpha(
     img: &DynamicImage,
     op: &PipelineOp,
-    mode: Option<&str>,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutAlpha { alpha } = op {
-        super::scalar::put_alpha(&mut pixels, mode_code, *alpha);
+    if let PipelineOp::PutAlpha { alpha, mode } = op {
+        super::scalar::put_alpha(&mut pixels, mode.code(), *alpha);
+        return Ok(dynimg_from_put_alpha(pixels, w, h, *mode));
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Err(PilError::ValueError("expected PutAlpha op".into()))
 }
 
 pub fn simd_eval(
@@ -1131,6 +1168,8 @@ pub fn simd_paste(
     let (w, h) = img.dimensions();
     let mode_code = if mode == Some("P") {
         0
+    } else if mode == Some("PA") {
+        1
     } else if mode.is_some() {
         mode_to_u32(mode)
     } else {
@@ -1147,7 +1186,7 @@ pub fn simd_paste(
         mask_alpha,
     } = op
     {
-        let src_img = if mode == Some("P") {
+        let src_img = if matches!(mode, Some("P" | "PA")) {
             source.materialize_indices()?
         } else {
             arc_to_dynimg(source)?

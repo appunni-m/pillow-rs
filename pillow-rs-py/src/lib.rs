@@ -1969,7 +1969,11 @@ fn parse_draw_color(
 ) -> PyResult<(u8, u8, u8, u8)> {
     let v = match val {
         Some(v) => v,
-        None => return Ok((0, 0, 0, 255)), // default black
+        // Pillow's ImageDraw context starts with ink=-1, which is an all-255
+        // `(index, alpha)` sample in PA. Other modes retain the wrapper's
+        // existing black default.
+        None if mode == Some("PA") => return Ok((255, 255, 255, 255)),
+        None => return Ok((0, 0, 0, 255)),
     };
     // F mode (float32): convert color to f32 LE bytes
     if mode == Some("F") {
@@ -1985,6 +1989,22 @@ fn parse_draw_color(
             let bytes = i.to_le_bytes();
             return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
         }
+    }
+    // PA uses a palette index plus a per-pixel alpha byte. Pillow accepts
+    // scalar/one-item ink as (index, 0) and a two-item tuple verbatim.
+    if mode == Some("PA") {
+        if let Ok((index, alpha)) = v.extract::<(u8, u8)>() {
+            return Ok((index, index, index, alpha));
+        }
+        if let Ok((index,)) = v.extract::<(u8,)>() {
+            return Ok((index, index, index, 0));
+        }
+        if let Ok(index) = v.extract::<u8>() {
+            return Ok((index, index, index, 0));
+        }
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "color must be int, or tuple of one or two elements",
+        ));
     }
     // Standard modes: extract as u8
     if let Ok(s) = v.extract::<String>() {
