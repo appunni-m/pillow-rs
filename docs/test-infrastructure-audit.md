@@ -2,6 +2,38 @@
 
 Date: 2026-06-16
 
+## 2026-07-23 Revalidation
+
+The fixture system no longer uses the adapter and hash workflow described by
+the historical audit below. `tests/engine.py` now calls the public
+`pillow_rs` API directly and preserves exact Python scalar/container types,
+image mode, dimensions, pixel bytes, palette bytes, exception type, and
+exception message. The integrity gate rejects tolerance, prefix, substring
+error, missing, stale, orphaned, and unknown-operation assertions. No mocks or
+monkeypatches are used under `tests/`.
+
+Two remaining lanes must not be counted as proof of exact parity:
+
+- `Image.effect_spread` has no seed argument and delegates to libc's
+  process-global `rand()` state. The fixture generator calls
+  `_seed_c_rng(42)` before each case; that seed was introduced after the Rust
+  implementation specifically to match its then-current output. On macOS,
+  the checked-in oracle bytes exactly match Pillow 12.2.0 after Darwin
+  `srand(42)`, while the Rust implementation uses a glibc-compatible
+  generator. Changing runtime Rust to a fixed Darwin seed would satisfy the
+  fixture rather than Pillow's public contract, so these fixtures remain
+  visible failures until the stochastic API has a principled oracle.
+- `Image.getim` returns a named `PyCapsule` containing a real pointer to
+  Pillow's private `Imaging` ABI. Recording only `PyCapsule` and
+  `<capsule object "Pillow Imaging">` proves the Python wrapper's type and
+  name, but not that a consumer can dereference the pointer. The binding
+  intentionally raises `NotImplementedError` rather than manufacture an
+  invalid capsule that passes this descriptor.
+
+The old statement below that a type-only `getim` comparison is acceptable is
+therefore superseded. Exact parity requires a genuine compatible `Imaging`
+allocation and lifetime implementation.
+
 ## Purpose
 
 This audit reviews every test in the pillow-rs test suite to verify that each test genuinely compares RSPIL Rust code against PIL Python output. It identifies hardcoded stubs, weak assertions, and gaps where Rust code paths are never exercised.
