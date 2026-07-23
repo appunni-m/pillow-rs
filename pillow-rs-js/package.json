@@ -2,16 +2,33 @@
   "name": "pillow-rs",
   "version": "0.1.0",
   "description": "Pillow drop-in replacement for the browser, powered by Rust/WASM",
-  "main": "pkg/pillow_rs_js.js",
-  "module": "pkg/pillow_rs_js.js",
-  "types": "pkg/pillow_rs_js.d.ts",
+  "main": "pkg/core/pillow_rs_js.js",
+  "module": "pkg/core/pillow_rs_js.js",
+  "types": "pkg/core/pillow_rs_js.d.ts",
+  "exports": {
+    ".": {
+      "types": "./pkg/core/pillow_rs_js.d.ts",
+      "import": "./pkg/core/pillow_rs_js.js"
+    },
+    "./extra": {
+      "types": "./pkg/extra/pillow_rs_js.d.ts",
+      "import": "./pkg/extra/pillow_rs_js.js"
+    }
+  },
   "files": [
     "pkg/"
   ],
   "type": "module",
   "scripts": {
-    "build": "wasm-pack build --target web",
-    "build:release": "wasm-pack build --target web --release"
+    "build": "npm run build:core",
+    "build:core": "wasm-pack build --target web --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
+    "build:extra": "wasm-pack build --target web --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "build:release": "npm run build:core:release && npm run build:extra:release",
+    "build:core:release": "wasm-pack build --target web --release --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
+    "build:extra:release": "wasm-pack build --target web --release --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "test:codecs": "node tests/codec_feature_matrix.mjs core && node tests/codec_feature_matrix.mjs extra",
+    "test:package": "node scripts/check_package.mjs",
+    "size": "node scripts/measure_wasm_sizes.mjs"
   },
   "keywords": [
     "image",

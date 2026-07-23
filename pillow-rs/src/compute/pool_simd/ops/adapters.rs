@@ -1032,7 +1032,7 @@ pub fn simd_put_pixel(
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutPixel { x, y, color } = op {
+    if let PipelineOp::PutPixel { x, y, color, .. } = op {
         let packed = pack_rgba(*color);
         super::scalar::put_pixel(&mut pixels, w, mode_code, *x, *y, packed);
     }

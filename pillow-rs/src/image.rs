@@ -80,6 +80,8 @@ pub struct PalettedData {
     pub source_format: Option<ImageFormat>,
     /// Header metadata retained from the encoded source.
     pub info: Option<ImageInfo>,
+    /// Shared operation-ready index view initialized on first read.
+    pub materialized: MaterializationCache,
 }
 
 /// Materialized non-indexed image storage with retained codec metadata.
@@ -317,6 +319,7 @@ impl Image {
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
+                    materialized: materialization_cache(),
                 }));
             }
             "CMYK" => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_pixel(
@@ -408,6 +411,7 @@ impl Image {
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
+                    materialized: materialization_cache(),
                 }));
             }
             "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
@@ -525,8 +529,11 @@ impl Image {
             | PipelineOp::Flip
             | PipelineOp::Mirror
             | PipelineOp::CropBorder { .. }
-            | PipelineOp::Offset { .. }
-            | PipelineOp::PutPixel { .. } => true,
+            | PipelineOp::Offset { .. } => true,
+            PipelineOp::PutPixel {
+                palette_index: true,
+                ..
+            } => true,
             PipelineOp::Rotate { fill: None, .. } => true,
             PipelineOp::Resize { filter, .. } => {
                 matches!(filter, ResampleFilter::Nearest)
@@ -584,7 +591,10 @@ impl Image {
     fn materialized_shared(&self) -> Result<Arc<DynamicImage>, PilError> {
         match self {
             Image::Loaded(data) => Ok(Arc::clone(&data.image)),
-            Image::Paletted(data) => Ok(Arc::new(DynamicImage::ImageLuma8(data.indices.clone()))),
+            Image::Paletted(data) => data
+                .materialized
+                .get_or_init(|| Ok(Arc::new(DynamicImage::ImageLuma8(data.indices.clone()))))
+                .clone(),
             Image::Path {
                 path,
                 source,
@@ -619,52 +629,127 @@ impl Image {
                 ops,
                 explicit_mode,
                 backend,
-                palette: _palette,
-                palette_alpha: _palette_alpha,
+                palette,
+                palette_alpha,
                 materialized,
                 ..
             } => materialized
                 .get_or_init(|| {
-                    let mut img = source.materialize()?;
-                    // At execution time: if source was Paletted, the materialized Luma8
-                    // holds palette indices. For palette-safe ops, operate on indices
-                    // directly (preserving P-mode). For other ops, convert to RGB so
-                    // filters, enhance, etc. work on actual colors.
-                    let is_p_mode = source.has_palette_mode();
-                    if is_p_mode {
-                        let all_safe = ops.iter().all(Self::is_palette_safe_op);
-                        if all_safe {
-                            // Operate directly on palette indices (Luma8 = index bytes)
-                            let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
-                            img = crate::compute::execute_batch(b, ops, &img, Some("P"))?;
-                            return Ok(Arc::new(img));
-                        }
-                        // Non-safe ops: convert to RGB
-                        if let Some(rgb) = source.paletted_to_rgb() {
-                            img = rgb;
-                        } else {
-                            // Pipeline with P-mode Loaded source: indices in img (Luma8),
-                            // palette stored on pipeline. Convert indices to RGB.
-                            let palette = _palette.clone().or_else(|| source.palette());
-                            if let Some(palette) = palette {
-                                let indices = img.to_luma8();
-                                let palette_alpha = _palette_alpha
-                                    .clone()
-                                    .or_else(|| source.palette_alpha())
-                                    .unwrap_or_default();
-                                img = expand_palette(&indices, &palette, &palette_alpha);
-                            }
-                        }
-                    }
-
-                    // Determine the backend for this pipeline.
-                    // Explicit override OR auto-select: first active backend that supports ALL ops.
-                    let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
-
-                    img = crate::compute::execute_batch(b, ops, &img, explicit_mode.as_deref())?;
-                    Ok(Arc::new(img))
+                    Self::evaluate_pipeline(
+                        source,
+                        ops,
+                        explicit_mode,
+                        *backend,
+                        palette,
+                        palette_alpha,
+                    )
                 })
                 .clone(),
+        }
+    }
+
+    /// Evaluates a pipeline without publishing its result into the pipeline's
+    /// ordinary materialization cache.
+    fn evaluate_pipeline(
+        source: &Image,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<String>,
+        backend: Option<crate::compute::Backend>,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        Self::evaluate_pipeline_with_image(
+            source,
+            source.materialize()?,
+            ops,
+            explicit_mode,
+            backend,
+            palette,
+            palette_alpha,
+        )
+    }
+
+    fn evaluate_pipeline_uncached(
+        source: &Image,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<String>,
+        backend: Option<crate::compute::Backend>,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        Self::evaluate_pipeline_with_image(
+            source,
+            source.materialize_uncached()?,
+            ops,
+            explicit_mode,
+            backend,
+            palette,
+            palette_alpha,
+        )
+    }
+
+    fn evaluate_pipeline_with_image(
+        source: &Image,
+        mut img: DynamicImage,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<String>,
+        backend: Option<crate::compute::Backend>,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        if source.has_palette_mode() {
+            let all_safe = ops.iter().all(Self::is_palette_safe_op);
+            if all_safe {
+                let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+                img = crate::compute::execute_batch(selected, ops, &img, Some("P"))?;
+                return Ok(Arc::new(img));
+            }
+            if let Some(rgb) = source.paletted_to_rgb() {
+                img = rgb;
+            } else if let Some(palette) = palette.clone().or_else(|| source.palette()) {
+                let indices = img.to_luma8();
+                let palette_alpha = palette_alpha
+                    .clone()
+                    .or_else(|| source.palette_alpha())
+                    .unwrap_or_default();
+                img = expand_palette(&indices, &palette, &palette_alpha);
+            }
+        }
+
+        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        img = crate::compute::execute_batch(selected, ops, &img, explicit_mode.as_deref())?;
+        Ok(Arc::new(img))
+    }
+
+    fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {
+        match self {
+            Image::Loaded(data) => Ok(data.image.as_ref().clone()),
+            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
+            Image::Path { path, source, .. } => decoded_to_dynamic(
+                &image_slash_star::decode(source.bytes())
+                    .map_err(|error| map_codec_error(error, &path.display().to_string()))?,
+            ),
+            Image::Bytes { source, .. } => decoded_to_dynamic(
+                &image_slash_star::decode(source.bytes())
+                    .map_err(|error| map_codec_error(error, "memory"))?,
+            ),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode,
+                backend,
+                palette,
+                palette_alpha,
+                ..
+            } => Self::evaluate_pipeline_uncached(
+                source,
+                ops,
+                explicit_mode,
+                *backend,
+                palette,
+                palette_alpha,
+            )
+            .map(|image| image.as_ref().clone()),
         }
     }
 
@@ -725,19 +810,20 @@ impl Image {
         let source_format = source.source_format();
         match source {
             Image::Pipeline {
-                source,
+                source: pipeline_source,
                 ops,
                 format,
+                backend,
                 ..
             } => {
                 let mut new_ops = ops.clone();
                 new_ops.push(op);
                 Image::Pipeline {
-                    source: Arc::clone(source),
+                    source: Arc::clone(pipeline_source),
                     ops: new_ops,
                     format: *format,
                     explicit_mode,
-                    backend: source.backend(),
+                    backend: *backend,
                     palette: source_palette,
                     palette_alpha: source_palette_alpha,
                     materialized: materialization_cache(),
@@ -793,16 +879,81 @@ impl Image {
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let new_self = Image::push_op(
+        let (color, palette_index, updated_palette) = if self.has_palette_mode() {
+            if a != 255 {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
+            let (index, palette) = self.resolve_palette_color([r, g, b])?;
+            ((index, index, index, 255), true, palette)
+        } else {
+            ((r, g, b, a), false, None)
+        };
+        let mut new_self = Image::push_op(
             self,
             PipelineOp::PutPixel {
                 x,
                 y,
-                color: (r, g, b, a),
+                color,
+                palette_index,
             },
         );
+        if let Some(updated_palette) = updated_palette {
+            let Image::Pipeline { palette, .. } = &mut new_self else {
+                return Err(PilError::InternalError(
+                    "putpixel did not create an operation pipeline".into(),
+                ));
+            };
+            *palette = Some(updated_palette);
+        }
         *self = new_self;
         Ok(())
+    }
+
+    /// Resolve a Pillow-style RGB tuple to a palette index.
+    ///
+    /// Existing colors retain their first palette index. A missing color uses
+    /// the next table entry, or an unused entry when the table already contains
+    /// 256 colors. The returned palette is present only when allocation changed
+    /// it.
+    fn resolve_palette_color(&self, color: [u8; 3]) -> Result<(u8, Option<Vec<u8>>), PilError> {
+        let mut palette = self.extract_palette().ok_or_else(|| {
+            PilError::PaletteError("P-mode image has no retained palette".to_owned())
+        })?;
+        if let Some(index) = palette
+            .chunks_exact(3)
+            .position(|entry| entry == color.as_slice())
+        {
+            return Ok((index as u8, None));
+        }
+
+        let entries = palette.len() / 3;
+        let index = if entries < 256 {
+            entries
+        } else {
+            let mut used = [false; 256];
+            for index in self.tobytes()? {
+                used[usize::from(index)] = true;
+            }
+            let transparent_index = self
+                .palette_alpha()
+                .filter(|alpha| alpha.len() == 1 && alpha[0] == 0)
+                .map(|_| 0);
+            (0..256)
+                .rev()
+                .find(|&index| !used[index] && Some(index) != transparent_index)
+                .ok_or_else(|| {
+                    PilError::ValueError("cannot allocate more than 256 colors".into())
+                })?
+        };
+
+        if index == entries {
+            palette.extend_from_slice(&color);
+        } else {
+            palette[index * 3..index * 3 + 3].copy_from_slice(&color);
+        }
+        Ok((index as u8, Some(palette)))
     }
 
     /// Queues a Pillow-style single-integer pixel write.
@@ -815,8 +966,24 @@ impl Image {
     ///
     /// Returns the same errors as [`Image::putpixel`].
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
+        if mode == "P" {
+            let (w, h) = self.size()?;
+            if x >= w || y >= h {
+                return Err(PilError::IndexError("image index out of range".into()));
+            }
+            *self = Image::push_op(
+                self,
+                PipelineOp::PutPixel {
+                    x,
+                    y,
+                    color: (v, v, v, 255),
+                    palette_index: true,
+                },
+            );
+            return Ok(());
+        }
         let (r, g, b, a) = match mode {
-            "L" | "1" | "P" => (v, v, v, 255),
+            "L" | "1" => (v, v, v, 255),
             "LA" => (v, 0, 0, 0),
             "RGB" => (v, 0, 0, 255),
             "RGBA" | "CMYK" => (v, 0, 0, 0),
@@ -1319,12 +1486,7 @@ impl Image {
     /// Extract palette from Paletted variant (for Pipeline propagation).
     fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {
-            Image::Paletted(data) => data
-                .info
-                .as_ref()
-                .and_then(|info| info.palette.as_ref())
-                .map(|palette| palette.rgb.clone())
-                .or_else(|| Some(data.palette.clone())),
+            Image::Paletted(data) => Some(operational_palette(data)),
             Image::Pipeline { palette, .. } => palette.clone(),
             Image::Path { info, .. } | Image::Bytes { info, .. } => info
                 .as_ref()
@@ -1352,12 +1514,7 @@ impl Image {
 
     fn decoded_for_encoding(&self) -> Result<DecodedImage, PilError> {
         if let Image::Paletted(data) = self {
-            let palette =
-                if let Some(palette) = data.info.as_ref().and_then(|info| info.palette.clone()) {
-                    palette
-                } else {
-                    ImagePalette::new(data.palette.clone(), data.palette_alpha.clone())?
-                };
+            let palette = ImagePalette::new(operational_palette(data), data.palette_alpha.clone())?;
             return Ok(DecodedImage::with_mode(
                 data.indices.width(),
                 data.indices.height(),
@@ -1514,6 +1671,7 @@ impl Image {
                             palette_alpha: palette_alpha.clone().unwrap_or_default(),
                             source_format: *format,
                             info: source.image_info(),
+                            materialized: materialization_cache(),
                         })
                     } else {
                         return Err(PilError::PaletteError(
@@ -1562,9 +1720,25 @@ impl Image {
             Image::Bytes { source, .. } => source
                 .verify()
                 .map_err(|error| map_codec_error(error, "memory"))?,
-            _ => {
-                self.materialized_shared()?;
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode,
+                backend,
+                palette,
+                palette_alpha,
+                ..
+            } => {
+                Self::evaluate_pipeline_uncached(
+                    source,
+                    ops,
+                    explicit_mode,
+                    *backend,
+                    palette,
+                    palette_alpha,
+                )?;
             }
+            Image::Loaded(_) | Image::Paletted(_) => {}
         }
         Ok(())
     }
@@ -1980,6 +2154,7 @@ fn image_from_materialized(
             palette_alpha: palette.alpha,
             source_format,
             info,
+            materialized: materialization_cache(),
         }));
     }
     let explicit_mode = match mode {
@@ -2082,6 +2257,28 @@ fn expand_palette(
             ])
         },
     ))
+}
+
+/// Return mutable palette state without treating internal zero padding as
+/// encoded palette entries.
+fn operational_palette(data: &PalettedData) -> Vec<u8> {
+    let Some(source_palette) = data
+        .info
+        .as_ref()
+        .and_then(|info| info.palette.as_ref())
+        .map(|palette| &palette.rgb)
+    else {
+        return data.palette.clone();
+    };
+    if data.palette.starts_with(source_palette)
+        && data.palette[source_palette.len()..]
+            .iter()
+            .all(|&component| component == 0)
+    {
+        source_palette.clone()
+    } else {
+        data.palette.clone()
+    }
 }
 
 const fn image_mode_name(mode: ImageMode) -> &'static str {

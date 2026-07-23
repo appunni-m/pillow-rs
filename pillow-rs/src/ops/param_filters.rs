@@ -238,6 +238,7 @@ impl Image {
                 palette_alpha: palette_alpha.unwrap_or_default(),
                 source_format: None,
                 info: None,
+                materialized: crate::image::materialization_cache(),
             }));
         }
         // Preserve explicit mode (e.g. "1", "P" via explicit_mode)

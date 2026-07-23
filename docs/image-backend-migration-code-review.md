@@ -46,6 +46,10 @@ the existing FreeType scalar failures are outside this review.
 - `git diff --check` passed.
 - Per project direction, Coverage MCP was not used for `pillow-rs`; the backend
   migration tests are manual Cargo/Makefile lanes.
+- `cargo test -p pillow-rs --all-features --test image_backend_migration
+  --locked` passes all 8 tests after the palette-write slice. The lane compares
+  exact Pillow 12.2.0 indices, palette bytes, palette alpha, encoded PNG bytes,
+  persistent-load state, and structured operation errors.
 - Strict Clippy currently fails with more than two thousand primarily existing
   arithmetic/cast diagnostics, so it is not yet a useful migration gate.
 
@@ -158,6 +162,16 @@ Recommendation:
   exists;
 - cover both binding paths with exact success/error fixtures.
 
+Implemented (July 2026):
+
+- `PipelineOp::PutPixel` records whether its value is a proven palette index;
+- scalar P-mode writes remain index-preserving;
+- RGB tuple writes reuse or allocate a Pillow-compatible palette entry and
+  retain the updated palette through lazy execution and persistent `load()`;
+- non-opaque RGBA returns the exact Pillow `ValueError` message;
+- the pinned operation manifest contains exact success and error rows, including
+  exact PNG bytes before and after `load()`.
+
 ### P6 — Downstream retains duplicate full decoded pixel buffers
 
 Severity: medium, measurable resource risk.
@@ -241,6 +255,10 @@ Severity: low-medium.
 `scripts/generate_image_backend_operation_fixtures.py` writes current rows but
 does not enforce a bijection between manifest entries and files in
 `outputs/operations`. Renaming or removing a row can leave obsolete artifacts.
+
+Implemented (July 2026): the pinned generator now computes the complete expected
+`.bin`/`.png` set and removes stale operation artifacts before writing the
+authoritative manifest.
 
 Recommendation:
 

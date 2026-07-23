@@ -4,8 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use image_slash_star::{ImageError, ImageFormat};
+use pillow_rs::compute::Backend;
 use pillow_rs::ops::{chops, imageops};
-use pillow_rs::pipeline::ResampleFilter;
+use pillow_rs::pipeline::{PipelineOp, ResampleFilter};
 use pillow_rs::{Image, PilError};
 use serde::Deserialize;
 
@@ -50,6 +51,7 @@ struct ErrorCase {
 struct OperationManifest {
     oracle: OperationOracle,
     operations: Vec<OperationCase>,
+    errors: Vec<OperationErrorCase>,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +75,16 @@ struct OperationCase {
     palette_alpha_hex: String,
 }
 
+#[derive(Deserialize)]
+struct OperationErrorCase {
+    id: String,
+    input: String,
+    operation: String,
+    parameters: OperationParameters,
+    kind: String,
+    message: String,
+}
+
 #[derive(Default, Deserialize)]
 struct OperationParameters {
     #[serde(rename = "box")]
@@ -86,6 +98,7 @@ struct OperationParameters {
     matrix: Option<Vec<f64>>,
     point: Option<[u32; 2]>,
     value: Option<u8>,
+    color: Option<[u8; 4]>,
 }
 
 fn fixture_root() -> PathBuf {
@@ -159,6 +172,13 @@ fn apply_operation(source: &Image, row: &OperationCase) -> Result<Image, PilErro
             result.putpixel_mode(x, y, required(parameters.value, row, "value"), "P")?;
             Ok(result)
         }
+        "putpixel_rgb" => {
+            let [x, y] = required(parameters.point, row, "point");
+            let [r, g, b, a] = required(parameters.color, row, "color");
+            let mut result = source.copy();
+            result.putpixel(x, y, r, g, b, a)?;
+            Ok(result)
+        }
         "crop_then_putpixel_index" => {
             let [left, top, right, bottom] = required(parameters.box_coords, row, "box");
             let [x, y] = required(parameters.point, row, "point");
@@ -176,6 +196,134 @@ fn apply_operation(source: &Image, row: &OperationCase) -> Result<Image, PilErro
         }
         _ => panic!("{} has unsupported operation {}", row.id, row.operation),
     }
+}
+
+fn apply_error_operation(source: &Image, row: &OperationErrorCase) -> Result<Image, PilError> {
+    match row.operation.as_str() {
+        "putpixel_rgba" => {
+            let [x, y] = row
+                .parameters
+                .point
+                .unwrap_or_else(|| panic!("{} missing point", row.id));
+            let [r, g, b, a] = row
+                .parameters
+                .color
+                .unwrap_or_else(|| panic!("{} missing color", row.id));
+            let mut result = source.copy();
+            result.putpixel(x, y, r, g, b, a)?;
+            Ok(result)
+        }
+        _ => panic!("{} has unsupported operation {}", row.id, row.operation),
+    }
+}
+
+#[test]
+fn pipeline_backend_lock_survives_every_append_path() {
+    let source =
+        Image::new(8, 8, "RGB", (12, 34, 56, 255)).expect("backend-lock source must construct");
+    let locked = source
+        .crop_box(0, 0, 7, 7)
+        .expect("first pipeline op")
+        .use_backend(Backend::Cpu);
+    assert_eq!(locked.backend(), Some(Backend::Cpu));
+
+    let extended = locked
+        .transpose("FLIP_LEFT_RIGHT")
+        .expect("second pipeline op");
+    assert_eq!(extended.backend(), Some(Backend::Cpu));
+    let extended_again = extended
+        .resize((4, 4), Some("NEAREST"))
+        .expect("third pipeline op");
+    assert_eq!(extended_again.backend(), Some(Backend::Cpu));
+
+    let unlocked = source
+        .crop_box(0, 0, 7, 7)
+        .expect("unlocked pipeline")
+        .transpose("FLIP_TOP_BOTTOM")
+        .expect("extend unlocked pipeline");
+    assert_eq!(unlocked.backend(), None);
+
+    let row = manifest()
+        .decode
+        .into_iter()
+        .find(|row| row.mode == "P")
+        .expect("manifest must contain a paletted fixture");
+    let input = fs::read(fixture_root().join(row.input)).expect("paletted fixture");
+    let paletted = Image::open_bytes(input).expect("paletted source must open");
+    let palette_safe = paletted
+        .crop_box(0, 0, row.width, row.height)
+        .expect("palette-safe pipeline")
+        .use_backend(Backend::Cpu)
+        .transpose("FLIP_LEFT_RIGHT")
+        .expect("extend palette-safe pipeline");
+    assert_eq!(palette_safe.backend(), Some(Backend::Cpu));
+}
+
+#[test]
+fn pipeline_verify_never_publishes_success_or_failure() {
+    let row = manifest()
+        .decode
+        .into_iter()
+        .find(|row| row.feature == "image-png")
+        .expect("manifest must contain a PNG fixture");
+    let input = fs::read(fixture_root().join(row.input)).expect("pipeline verification fixture");
+    let source = Image::open_bytes(input).expect("pipeline verification source");
+    let pipeline = source
+        .crop_box(0, 0, row.width, row.height)
+        .expect("successful verification pipeline");
+    let peer = pipeline.clone();
+
+    assert!(!source.is_materialized());
+    assert!(!pipeline.is_materialized());
+    pipeline
+        .verify()
+        .expect("pipeline verification must succeed");
+    assert!(!source.is_materialized());
+    assert!(!pipeline.is_materialized());
+    assert!(!peer.is_materialized());
+
+    let failing = Image::push_op(&source, PipelineOp::CropBorder { border: row.width });
+    let failing_peer = failing.clone();
+    failing
+        .verify()
+        .expect_err("invalid pipeline verification must fail");
+    assert!(!source.is_materialized());
+    assert!(!failing.is_materialized());
+    assert!(!failing_peer.is_materialized());
+}
+
+#[test]
+fn loaded_paletted_reads_share_one_index_view() {
+    let row = manifest()
+        .decode
+        .into_iter()
+        .find(|row| row.mode == "P")
+        .expect("manifest must contain a paletted fixture");
+    let input = fs::read(fixture_root().join(row.input)).expect("paletted fixture");
+    let mut image = Image::open_bytes(input).expect("paletted fixture must open");
+    image.load().expect("paletted fixture must load");
+    let peer = image.clone();
+
+    image.getpixel(0, 0).expect("first paletted read");
+    peer.getpixel(0, 0).expect("repeated paletted read");
+
+    let Image::Paletted(image_data) = &image else {
+        panic!("loaded indexed fixture must remain paletted");
+    };
+    let Image::Paletted(peer_data) = &peer else {
+        panic!("loaded indexed peer must remain paletted");
+    };
+    let image_view = image_data
+        .materialized
+        .get()
+        .and_then(|result| result.as_ref().ok())
+        .expect("first read must cache an index view");
+    let peer_view = peer_data
+        .materialized
+        .get()
+        .and_then(|result| result.as_ref().ok())
+        .expect("peer must observe the index view");
+    assert!(std::sync::Arc::ptr_eq(image_view, peer_view));
 }
 
 #[test]
@@ -538,5 +686,31 @@ fn pillow_oracle_rows_prove_palette_safe_operations_exactly() {
             "{} exact loaded Pillow PNG",
             row.id
         );
+    }
+}
+
+#[test]
+fn pillow_oracle_rows_prove_palette_operation_errors_exactly() {
+    let manifest = operation_manifest();
+    assert_eq!(manifest.oracle.implementation, "Pillow");
+    assert_eq!(manifest.oracle.version, "12.2.0");
+
+    for row in manifest.errors {
+        let input = fs::read(fixture_root().join(&row.input))
+            .unwrap_or_else(|error| panic!("{} input fixture: {error}", row.id));
+        let source = Image::open_bytes(input)
+            .unwrap_or_else(|error| panic!("{} open failed: {error}", row.id));
+        let error = apply_error_operation(&source, &row)
+            .err()
+            .unwrap_or_else(|| panic!("{} unexpectedly succeeded", row.id));
+        match row.kind.as_str() {
+            "ValueError" => assert!(
+                matches!(&error, PilError::ValueError(message) if message == &row.message),
+                "{} returned {error:?}",
+                row.id
+            ),
+            _ => panic!("{} has unsupported error kind {}", row.id, row.kind),
+        }
+        assert!(!source.is_materialized(), "{} error decoded source", row.id);
     }
 }

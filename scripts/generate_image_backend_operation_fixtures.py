@@ -38,6 +38,8 @@ def operation_rows(source: Image.Image) -> list[tuple[str, dict[str, object], Im
     putpixel.putpixel((3, 4), 7)
     crop_then_putpixel = source.crop((9, 7, 61, 48))
     crop_then_putpixel.putpixel((3, 4), 7)
+    putpixel_rgb = source.copy()
+    putpixel_rgb.putpixel((3, 4), (1, 2, 3))
 
     return [
         ("crop", {"box": [9, 7, 61, 48]}, source.crop((9, 7, 61, 48))),
@@ -107,6 +109,11 @@ def operation_rows(source: Image.Image) -> list[tuple[str, dict[str, object], Im
             crop_then_putpixel,
         ),
         (
+            "putpixel_rgb",
+            {"point": [3, 4], "color": [1, 2, 3, 255]},
+            putpixel_rgb,
+        ),
+        (
             "transform_affine_nearest",
             {
                 "size": [57, 43],
@@ -130,6 +137,7 @@ def main() -> None:
 
     OUTPUTS.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, object]] = []
+    expected_outputs: set[Path] = set()
     with Image.open(INPUT) as opened:
         source = opened.copy()
         source.info = opened.info.copy()
@@ -140,6 +148,7 @@ def main() -> None:
         output = OUTPUTS / f"{operation}.bin"
         output.write_bytes(result.tobytes())
         encoded_output = OUTPUTS / f"{operation}.png"
+        expected_outputs.update((output, encoded_output))
         encoded = BytesIO()
         result.save(encoded, format="PNG")
         encoded_output.write_bytes(encoded.getvalue())
@@ -160,11 +169,27 @@ def main() -> None:
             }
         )
 
+    for stale_output in OUTPUTS.iterdir():
+        if stale_output.is_file() and stale_output not in expected_outputs:
+            stale_output.unlink()
+
+    errors = [
+        {
+            "id": "putpixel_rgba_nonopaque",
+            "input": "inputs/png_indexed_alpha.png",
+            "operation": "putpixel_rgba",
+            "parameters": {"point": [3, 4], "color": [1, 2, 3, 4]},
+            "kind": "ValueError",
+            "message": "cannot add non-opaque RGBA color to RGB palette",
+        }
+    ]
+
     MANIFEST.write_text(
         json.dumps(
             {
                 "oracle": {"implementation": "Pillow", "version": __version__},
                 "operations": rows,
+                "errors": errors,
             },
             indent=2,
         )

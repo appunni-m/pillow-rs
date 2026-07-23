@@ -500,6 +500,7 @@ impl Draw {
                         palette_alpha: self.image.palette_alpha().unwrap_or_default(),
                         source_format: None,
                         info: None,
+                        materialized: crate::image::materialization_cache(),
                     });
                 } else {
                     let img = self.image.materialize()?;
@@ -705,6 +706,7 @@ impl Draw {
                                             .unwrap_or_default(),
                                         source_format: None,
                                         info: None,
+                                        materialized: crate::image::materialization_cache(),
                                     });
                                 }
                                 // Fallback: grayscale approximation
@@ -1211,6 +1213,7 @@ impl Draw {
                         palette_alpha: self.image.palette_alpha().unwrap_or_default(),
                         source_format: None,
                         info: None,
+                        materialized: crate::image::materialization_cache(),
                     });
                 } else {
                     // Fallback: just modify luma8

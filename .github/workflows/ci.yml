@@ -111,4 +111,4 @@ jobs:
         with:
           tool: wasm-pack
       - working-directory: pillow-rs-js
-        run: wasm-pack build --target web --dev
+        run: npm run build:core && npm run build:extra && npm run test:codecs && npm run test:package

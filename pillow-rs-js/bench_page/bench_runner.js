@@ -5,7 +5,7 @@
  * Outputs JSON with output_hash for cross-target validation.
  * Mirrors bench_wasm_cpu.mjs — same workloads, same result format.
  */
-import init, { Image, ImageOps } from '/pillow-rs-js/pkg/pillow_rs_js.js';
+import init, { Image, ImageOps } from '/pillow-rs-js/pkg/core/pillow_rs_js.js';
 
 const WARMUP_RUNS = 3;
 const BENCH_RUNS = 30;

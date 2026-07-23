@@ -1,8 +1,8 @@
 # image-slash-star Backend Migration Status
 
-Status: native backend migration and lazy-loading correctness slice accepted.
-Binding runtime matrices and the JS/WASM core-extra packaging split remain
-separate follow-on work.
+Status: native backend migration, lazy-loading correctness, and JS/WASM
+core-extra codec packaging are implemented. Broader binding runtime parity
+remains separate work.
 
 The normative design and acceptance criteria live in
 `../image-slash-star/docs/image-backend-migration-spec.md`. This file records
@@ -162,11 +162,12 @@ rows; the corresponding 7,632-case pixel matrix has zero failures. Those
 font-only differences are outside this backend migration.
 
 The upstream `image-slash-star` acceptance remains Coverage MCP run
-`dbd8a9cf-1e51-49aa-94b5-476235da7f3a`, snapshot
-`bc41e67e-4be2-4eac-9444-abe318a0a151`, with exact 100% line, branch,
+`5b0f1ca0-0ecf-433b-a159-722387249757`, snapshot
+`2a9e4148-d559-44db-8368-57df58bf21fc`, with exact 100% line, branch,
 function, and region coverage.
 
-The native workspace and zero-codec core currently compile. The PNG-only WASM
-consumer remains blocked by pre-existing `fontdone` wasm32 C-ABI width
-assumptions; that is a separate core/extra packaging slice and is not evidence
-against the image backend semantics.
+The native workspace and zero-codec core compile. The prior `fontdone` wasm32
+width blocker is resolved with a target-scoped internal arithmetic feature that
+matches the standalone export layer's explicit 64-bit compatibility ABI. Both
+optimized JS/WASM variants compile and pass the fixture codec matrix; exact
+sizes and commands are recorded in `docs/wasm-core-extra-packaging.md`.
