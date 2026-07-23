@@ -72,6 +72,14 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
     }
 }
 
+/// Return whether the loaded face exposes OpenType or Type 1 variation axes.
+pub fn has_variations(font: &Font) -> bool {
+    match font {
+        Font::TrueType(t) => t.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0,
+        Font::Bitmap(_) => false,
+    }
+}
+
 pub fn getlength(font: &Font, text: &str) -> f32 {
     match font {
         Font::TrueType(t) => length_from_basic_layout(t, text).map_or(0.0, |v| v as f32 / 64.0),

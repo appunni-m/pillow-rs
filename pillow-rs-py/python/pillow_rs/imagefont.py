@@ -178,11 +178,10 @@ class FreeTypeFont:
     def get_variation_names(self):
         """Get list of named styles in a variation font.
 
-        :return: A list of named styles (bytes). Empty list for
-                 non-variable fonts.
+        :return: A list of named styles (bytes).
         :raises OSError: If the font is not a variation font.
         """
-        return []
+        self._require_variation_font()
 
     def set_variation_by_name(self, name):
         """Set variation by name.
@@ -190,15 +189,15 @@ class FreeTypeFont:
         :param name: The name of the style.
         :raises OSError: If the font is not a variation font.
         """
-        raise OSError("set_variation_by_name: font is not a variation font")
+        self._require_variation_font()
 
     def get_variation_axes(self):
         """Get variation axes.
 
-        :return: A list of axis dictionaries. Empty list for non-variable fonts.
+        :return: A list of axis dictionaries.
         :raises OSError: If the font is not a variation font.
         """
-        return []
+        self._require_variation_font()
 
     def set_variation_by_axes(self, axes):
         """Set variation by axes values.
@@ -206,7 +205,14 @@ class FreeTypeFont:
         :param axes: A list of values for each axis.
         :raises OSError: If the font is not a variation font.
         """
-        raise OSError("set_variation_by_axes: font is not a variation font")
+        self._require_variation_font()
+
+    def _require_variation_font(self):
+        if not self._rust_font.has_variations():
+            raise OSError("invalid argument")
+        raise NotImplementedError(
+            "variable-font metadata and mutation are not implemented"
+        )
 
 
 class TransposedFont:
