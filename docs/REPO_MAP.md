@@ -280,6 +280,9 @@ generated reports, build outputs, and package installs.
 |       |   `-- mod.rs
 |       |-- error.rs
 |       |-- font/
+|       |   |-- default_aileron.LICENSE.txt
+|       |   |-- default_aileron.b64
+|       |   |-- default_aileron.rs
 |       |   |-- imagingft.rs
 |       |   `-- mod.rs
 |       |-- format.rs
@@ -585,6 +588,7 @@ generated reports, build outputs, and package installs.
 `-- tests/
     |-- conftest.py
     |-- engine.py
+    |-- fixture_coverage.py
     `-- test_parity.py
 ```
 <!-- END GENERATED CODE TREE -->

@@ -113,7 +113,7 @@ use rayon as _;
 //   - compute::op_def: Declarative op registration (no parallel match arms)
 // ============================================================================
 
-/// Built-in bitmap font data and rendering helpers used by default font paths.
+/// Legacy pre-rendered bitmap font data and rendering helpers.
 pub mod bitmap_font;
 /// Validated image dimensions and allocation-size helpers.
 pub mod checked_dims;

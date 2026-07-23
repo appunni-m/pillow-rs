@@ -1058,9 +1058,9 @@ impl ImageFont {
     }
     #[wasm_bindgen(js_name = "loadDefault")]
     pub fn load_default() -> Result<ImageFont, JsValue> {
-        Ok(ImageFont {
-            font: Font::load_default(10.0),
-        })
+        Font::load_default(10.0)
+            .map(|font| ImageFont { font })
+            .map_err(err)
     }
 }
 #[wasm_bindgen(js_name = "imageOpen")]

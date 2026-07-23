@@ -1299,7 +1299,7 @@ impl PyFont {
     #[pyo3(signature = (size=None))]
     fn load_default(size: Option<f32>) -> PyResult<Self> {
         let sz = size.unwrap_or(10.0);
-        let font = pillow_rs::font::Font::load_default(sz);
+        let font = pillow_rs::font::Font::load_default(sz).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
@@ -1738,7 +1738,7 @@ impl PyDraw {
         let bbox = match font {
             Some(f) => pillow_rs::font::imagingft::getbbox(&f.borrow().inner, text),
             None => {
-                let font = pillow_rs::font::Font::load_default(10.0);
+                let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getbbox(&font, text)
             }
         };
@@ -1751,7 +1751,7 @@ impl PyDraw {
         let w = match font {
             Some(f) => pillow_rs::font::imagingft::getlength(&f.borrow().inner, text),
             None => {
-                let font = pillow_rs::font::Font::load_default(10.0);
+                let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getlength(&font, text)
             }
         };
@@ -1772,7 +1772,7 @@ impl PyDraw {
         let f: &pillow_rs::font::Font = if let Some(f) = font {
             &f.borrow().inner
         } else {
-            default_font = pillow_rs::font::Font::load_default(10.0);
+            default_font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
             &default_font
         };
         let lines: Vec<&str> = text.split('\n').collect();
