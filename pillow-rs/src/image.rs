@@ -67,12 +67,13 @@ pub fn default_palette() -> Vec<u8> {
 
 /// A decoded P-mode (palette) image.
 /// `indices` holds one byte per pixel (the palette index, 0-255).
-/// `palette` holds 768 bytes: 256 RGB triples mapping each index to a color.
+/// `palette` holds zero to 768 bytes of retained RGB triples. Missing entries
+/// are black when the indexed image must be expanded for color operations.
 #[derive(Debug, Clone)]
 pub struct PalettedData {
     /// One palette index byte per pixel.
     pub indices: image_slash_star::GrayImage,
-    /// Palette data as 256 RGB triples.
+    /// Retained palette data as RGB triples.
     pub palette: Vec<u8>,
     /// Optional per-entry alpha values retained from the encoded palette.
     pub palette_alpha: Vec<u8>,
@@ -301,8 +302,9 @@ impl Image {
                 // PIL's new("1") stores the raw color value as-is.
                 image_slash_star::Luma([color.0]),
             )),
-            // P-mode: PIL creates a palette where index 0 maps to the given color,
-            // with all other entries zero (not the web palette).
+            // A tuple color allocates palette entry zero. Scalar P fills use
+            // `new_palette_index` because this resolved tuple no longer carries
+            // the Python argument's scalar-versus-tuple distinction.
             "P" => {
                 let mut pal = vec![0u8; 768];
                 pal[0] = color.0;
@@ -346,6 +348,26 @@ impl Image {
             None
         };
         Ok(Image::from_dynamic(img, explicit))
+    }
+
+    /// Creates a `P` image filled with one raw palette index and no palette.
+    ///
+    /// Pillow distinguishes a scalar `Image.new("P", ..., index)` argument
+    /// from a tuple color: the scalar is stored directly in every pixel while
+    /// the image retains an empty palette.
+    pub fn new_palette_index(width: u32, height: u32, index: u8) -> Self {
+        Image::Paletted(PalettedData {
+            indices: image_slash_star::GrayImage::from_pixel(
+                width,
+                height,
+                image_slash_star::Luma([index]),
+            ),
+            palette: Vec::new(),
+            palette_alpha: Vec::new(),
+            source_format: None,
+            info: None,
+            materialized: materialization_cache(),
+        })
     }
 
     /// Creates an image from tightly packed raw bytes.
@@ -406,7 +428,9 @@ impl Image {
                 return Ok(Image::Paletted(PalettedData {
                     indices: image_slash_star::GrayImage::from_raw(w, h, data[..expected].to_vec())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
-                    palette: default_palette(),
+                    // Raw P bytes are indices only. Pillow does not synthesize
+                    // palette entries until a palette is explicitly attached.
+                    palette: Vec::new(),
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
@@ -2505,6 +2529,46 @@ pub fn execute_op(
 #[cfg(test)]
 mod tests {
     use super::Image;
+
+    #[test]
+    fn new_p_scalar_fills_indices_without_synthesizing_palette_entries() {
+        let image = Image::new_palette_index(3, 2, 7);
+
+        assert_eq!(
+            (
+                image.mode().expect("mode must be available"),
+                image.tobytes().expect("indices must be available"),
+                image.getpalette_trimmed()
+            ),
+            ("P".to_owned(), vec![7; 6], Some(Vec::new()))
+        );
+    }
+
+    #[test]
+    fn new_p_tuple_color_allocates_palette_entry_zero() {
+        let image = Image::new(2, 1, "P", (7, 8, 9, 255)).expect("P image must be valid");
+
+        assert_eq!(
+            (
+                image.tobytes().expect("indices must be available"),
+                image.getpalette_trimmed()
+            ),
+            (vec![0, 0], Some(vec![7, 8, 9]))
+        );
+    }
+
+    #[test]
+    fn frombytes_p_preserves_indices_without_synthesizing_palette_entries() {
+        let image = Image::frombytes("P", (3, 1), &[2, 7, 11]).expect("P image must be valid");
+
+        assert_eq!(
+            (
+                image.tobytes().expect("indices must be available"),
+                image.getpalette_trimmed()
+            ),
+            (vec![2, 7, 11], Some(Vec::new()))
+        );
+    }
 
     #[test]
     fn entropy_matches_pillow_c_evaluation_order() {
