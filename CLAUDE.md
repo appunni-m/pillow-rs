@@ -230,7 +230,9 @@ make test-core
 make test
 make test-wasm
 make test-all
+make image-backend-parity-test
 make fixtures
+make pillow-rs-fixtures-check
 make fmt
 make fmt-fix
 make clippy
@@ -240,6 +242,10 @@ make repo-map-update
 make ci
 make verify
 ```
+
+`make pillow-rs-fixtures-check` regenerates the current imagingft fixtures in a
+temporary directory and requires exact JSON and raw-byte equality. The
+crate-local equivalent is `make -C pillow-rs fixtures-check`.
 
 fontdone / FreeType parity targets:
 

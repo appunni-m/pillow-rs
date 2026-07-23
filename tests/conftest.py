@@ -50,6 +50,10 @@ def manifest(request):
 def pytest_configure(config):
     config.addinivalue_line("markers",
         "covers(func, mode=None, variant=None, target=None): mark test as covering a manifest entry")
+    config.addinivalue_line(
+        "markers",
+        "coverage_meta: fixture-integrity or manifest-coverage validation",
+    )
 
 
 def pytest_runtest_teardown(item, nextitem):
@@ -96,6 +100,8 @@ def pytest_collection_modifyitems(config, items):
     valid_targets = {"cpu", "gpu", "wasm", "wasm_gpu"}
 
     for item in items:
+        if item.get_closest_marker("coverage_meta") is not None:
+            continue
         marker = item.get_closest_marker("covers")
         if marker is None:
             warnings.append(f"MISSING @covers: {item.nodeid}")
@@ -160,14 +166,8 @@ def RSPIL():
 
 # ── Parity assertion helpers ───────────────────────────────────
 
-def assert_images_equal(rs_img, pil_img, tolerance=0):
-    """Assert pillow-rs image matches PIL image pixel-for-pixel.
-
-    Args:
-        rs_img: pillow-rs Image
-        pil_img: PIL Image
-        tolerance: max per-channel difference (0 = exact match)
-    """
+def assert_images_equal(rs_img, pil_img):
+    """Assert pillow-rs image matches PIL exactly."""
     assert rs_img.size == pil_img.size, \
         f"Size mismatch: RSPIL={rs_img.size} PIL={pil_img.size}"
     assert rs_img.mode == pil_img.mode, \
@@ -179,19 +179,8 @@ def assert_images_equal(rs_img, pil_img, tolerance=0):
     assert len(rs_bytes) == len(pil_bytes), \
         f"Byte length mismatch: RSPIL={len(rs_bytes)} PIL={len(pil_bytes)}"
 
-    if tolerance == 0:
-        assert rs_bytes == pil_bytes, \
-            "Pixel data differs (expected exact match)"
-    else:
-        mismatches = 0
-        max_diff = 0
-        for i, (r, p) in enumerate(zip(rs_bytes, pil_bytes)):
-            diff = abs(r - p)
-            if diff > tolerance:
-                mismatches += 1
-                max_diff = max(max_diff, diff)
-        assert mismatches == 0, \
-            f"{mismatches} pixels exceed tolerance {tolerance}, max diff={max_diff}"
+    assert rs_bytes == pil_bytes, \
+        "Pixel data differs (expected exact match)"
 
 
 def assert_values_equal(rs_val, pil_val):

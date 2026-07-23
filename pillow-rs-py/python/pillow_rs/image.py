@@ -204,10 +204,9 @@ class Image:
             rust_im = im
         if isinstance(box, Image):
             rust_box = box._rust_image
-            rust_mask = None
         else:
             rust_box = box
-            rust_mask = mask._rust_image if mask is not None else None
+        rust_mask = mask._rust_image if isinstance(mask, Image) else mask
         self._rust_image.paste(rust_im, rust_box, rust_mask)
 
     def split(self) -> Tuple["Image", ...]:
@@ -376,22 +375,11 @@ class Image:
         return Image(self._rust_image.effect_spread(distance))
 
     def apply_transparency(self):
-        """Apply transparency mask to image.
-
-        PIL: For P-mode images with palette transparency, converts the palette
-        from RGB to RGBA format, setting alpha=0 for transparent entries.
-        Our implementation converts P-mode to RGBA, making transparency explicit.
-        """
-        if self._explicit_mode == "P":
-            # P-mode stored as L in Rust (Python-level explicit_mode).
-            # Convert to RGBA to apply transparency.
-            rgb = self._rust_image.convert("RGBA", None, None, None, None)
-            self._rust_image = rgb
-            self._explicit_mode = None
-        else:
-            # Handle Paletted variant at Rust level (loaded P-mode images).
-            # For RGBA/LA/RGB images, this is a no-op.
-            return self._rust_image.apply_transparency()
+        """Commit P-mode transparency to its palette without changing pixels."""
+        result = self._rust_image.apply_transparency()
+        self.__dict__.pop("_palette", None)
+        self.__dict__.pop("_palette_object", None)
+        return result
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""
@@ -419,6 +407,11 @@ class Image:
         trimmed to the last non-zero triple. WEB palette has 226 colors
         (678 bytes). Full custom palette has 256 colors (768 bytes).
         """
+        if rawmode is None:
+            rawmode = self._rust_image.palette_mode()
+        if rawmode == "RGBA":
+            p = self._rust_image.getpalette_rgba()
+            return list(p) if p is not None else None
         if hasattr(self, '_palette'):
             return self._palette
         try:
@@ -672,12 +665,21 @@ class Image:
     @property
     def has_transparency_data(self) -> bool:
         """Whether the image has transparency data."""
-        return False
+        return self._rust_image.has_transparency_data()
 
     @property
     def palette(self):
         """Image palette, if any."""
-        return None
+        if self.mode != "P":
+            return None
+        if hasattr(self, "_palette_object"):
+            return self._palette_object
+        from .imagepalette import ImagePalette
+        mode = self._rust_image.palette_mode() or "RGB"
+        palette = ImagePalette(mode)
+        palette.palette = self.getpalette(mode) or []
+        self._palette_object = palette
+        return palette
 
     @property
     def mode(self) -> str:
@@ -691,6 +693,12 @@ class Image:
 
     @property
     def info(self) -> dict:
+        index = self._rust_image.pending_transparency_index()
+        if index is not None:
+            return {"transparency": index}
+        table = self._rust_image.pending_transparency_table()
+        if table is not None:
+            return {"transparency": bytes(table)}
         return {}
 
     def __repr__(self) -> str:

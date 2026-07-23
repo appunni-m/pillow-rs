@@ -419,6 +419,8 @@ pub enum PipelineOp {
         h: i32,
         /// Optional mask image.
         mask: Option<Arc<Image>>,
+        /// Whether the mask value comes from its alpha band instead of luma.
+        mask_alpha: bool,
     },
     /// Alpha-composite one image over another.
     AlphaComposite {

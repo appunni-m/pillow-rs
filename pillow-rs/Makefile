@@ -20,10 +20,12 @@ help:
 	@printf "\nTest:\n"
 	@printf "  make test             Run all Rust tests\n"
 	@printf "  make test-core        Run unit tests (src/)\n"
+	@printf "  make test-backend-parity Run forced-backend Pillow parity tests\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
 	@printf "\nFixtures:\n"
 	@printf "  make fixtures         Regenerate imagingft fixture matrix\n"
+	@printf "  make fixtures-check   Verify current fixtures reproduce byte-for-byte\n"
 	@printf "  make fixtures-clean   Remove generated fixture outputs\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
@@ -52,17 +54,27 @@ test: test-core test-imagingft
 test-core:
 	$(CARGO) test --lib --locked
 
+.PHONY: test-backend-parity
+test-backend-parity:
+	$(CARGO) test --all-features --test backend_parity --locked -- --nocapture
+
 .PHONY: test-imagingft
-test-imagingft:
+test-imagingft: fixtures
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 	$(CARGO) test --test imagingft_matrix_tests --locked -- --nocapture
 
 .PHONY: test-imagingft-release
-test-imagingft-release:
+test-imagingft-release: fixtures
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 	$(CARGO) test --release --test imagingft_matrix_tests --locked -- --nocapture
 
 .PHONY: fixtures
 fixtures:
 	$(PYTHON) scripts/build_imagingft_fixtures.py
+
+.PHONY: fixtures-check
+fixtures-check:
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 
 .PHONY: fixtures-clean
 fixtures-clean:

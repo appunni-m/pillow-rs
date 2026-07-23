@@ -6,7 +6,7 @@
 
 use pillow_rs::error::PilError;
 use pillow_rs::image::Image as RsImage;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyTuple, PyType};
 
@@ -149,46 +149,82 @@ impl PyImage {
         use pillow_rs::ops::paste::PasteSource;
         // Thin binding: extract Python types, core handles all logic
         let is_abbreviated = box_coords.is_some_and(|b| b.downcast::<PyImage>().is_ok());
+        if is_abbreviated && mask.is_some() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "If using second argument as mask, third argument must be None",
+            ));
+        }
         let effective_mask = if is_abbreviated { box_coords } else { mask };
 
         let src_image = im
             .downcast::<PyImage>()
             .ok()
             .map(|p| p.borrow().inner.clone());
+        let src_single = im
+            .extract::<(u8,)>()
+            .ok()
+            .map(|value| value.0)
+            .or_else(|| im.extract::<u8>().ok());
+        let src_la = im.extract::<(u8, u8)>().ok();
         let src_rgb = im.extract::<(u8, u8, u8)>().ok();
         let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
-        let src_int = im.extract::<u8>().ok();
         let source = if let Some(img) = src_image {
             PasteSource::Image(img)
         } else if let Some((r, g, b, a)) = src_rgba {
-            PasteSource::Color((r, g, b, a))
+            PasteSource::Rgba(r, g, b, a)
         } else if let Some((r, g, b)) = src_rgb {
-            PasteSource::Color((r, g, b, 255))
-        } else if let Some(v) = src_int {
-            PasteSource::Color((v, v, v, 255))
+            PasteSource::Rgb(r, g, b)
+        } else if let Some((l, a)) = src_la {
+            PasteSource::LumaAlpha(l, a)
+        } else if let Some(value) = src_single {
+            PasteSource::Scalar(value)
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
                 "im must be Image or color",
             ));
         };
 
-        let parsed_box = if is_abbreviated {
-            None
+        let (parsed_region, parsed_position) = if is_abbreviated {
+            (None, None)
         } else {
-            box_coords.and_then(|b| {
-                b.extract::<(i32, i32, i32, i32)>()
-                    .ok()
-                    .or_else(|| b.extract::<(i32, i32)>().ok().map(|(x, y)| (x, y, x, y)))
-            })
+            (
+                box_coords.and_then(|b| b.extract::<(i32, i32, i32, i32)>().ok()),
+                box_coords.and_then(|b| b.extract::<(i32, i32)>().ok()),
+            )
+        };
+        if !is_abbreviated
+            && box_coords.is_some()
+            && parsed_region.is_none()
+            && parsed_position.is_none()
+        {
+            let length = box_coords.expect("checked above").len()?;
+            return Err(PyTypeError::new_err(format!(
+                "argument 2 must be sequence of length 4, not {length}"
+            )));
+        }
+
+        let parsed_mask = match effective_mask {
+            Some(value) => match value.downcast::<PyImage>() {
+                Ok(image) => Some(image.borrow().inner.clone()),
+                Err(_) => {
+                    let type_name = value.get_type().name()?;
+                    return Err(PyAttributeError::new_err(format!(
+                        "'{type_name}' object has no attribute 'load'"
+                    )));
+                }
+            },
+            None => None,
         };
 
-        let parsed_mask = effective_mask
-            .and_then(|m| m.downcast::<PyImage>().ok())
-            .map(|p| p.borrow().inner.clone());
-
-        self.inner
-            .paste(source, parsed_box, parsed_mask.as_ref())
-            .map_err(map_error)
+        if let Some(region) = parsed_region {
+            self.inner
+                .paste(source, Some(region), parsed_mask.as_ref())
+                .map_err(map_error)
+        } else {
+            self.inner
+                .paste_at(source, parsed_position, parsed_mask.as_ref())
+                .map_err(map_error)
+        }
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {
@@ -257,6 +293,32 @@ impl PyImage {
     /// Return palette trimmed of trailing zero triples, matching PIL's getpalette().
     fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
         self.inner.getpalette_trimmed()
+    }
+
+    fn getpalette_rgba(&self) -> Option<Vec<u8>> {
+        self.inner.getpalette_rgba()
+    }
+
+    fn palette_mode(&self) -> Option<String> {
+        self.inner.palette_mode().map(str::to_owned)
+    }
+
+    fn pending_transparency_index(&self) -> Option<u8> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Index(index)) => Some(index),
+            _ => None,
+        }
+    }
+
+    fn pending_transparency_table(&self) -> Option<Vec<u8>> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Table(alpha)) => Some(alpha),
+            _ => None,
+        }
+    }
+
+    fn has_transparency_data(&self) -> bool {
+        self.inner.has_transparency_data()
     }
 
     fn apply_transparency(&mut self) -> PyResult<()> {
@@ -1222,6 +1284,10 @@ impl PyFont {
 
     fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
         Ok(pillow_rs::font::imagingft::getmask(&self.inner, text))
+    }
+
+    fn getmask2_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>, (i32, i32))> {
+        Ok(pillow_rs::font::imagingft::getmask2(&self.inner, text))
     }
 
     fn getlength(&self, text: &str) -> f32 {

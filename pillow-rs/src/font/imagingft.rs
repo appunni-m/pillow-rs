@@ -74,7 +74,7 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
 
 pub fn getlength(font: &Font, text: &str) -> f32 {
     match font {
-        Font::TrueType(t) => length_from_nohint_run(t, text).map_or(0.0, |v| v as f32 / 64.0),
+        Font::TrueType(t) => length_from_basic_layout(t, text).map_or(0.0, |v| v as f32 / 64.0),
         Font::Bitmap(b) => b.text_bbox(text).0 as f32,
     }
 }
@@ -94,6 +94,13 @@ pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
         Font::TrueType(t) => mask_from_run(t, text),
         Font::Bitmap(b) => b.getmask(text),
     }
+}
+
+/// Render a Pillow-compatible mask together with its BASIC-layout offset.
+pub fn getmask2(font: &Font, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
+    let (width, height, pixels) = getmask(font, text);
+    let bbox = getbbox(font, text);
+    (width, height, pixels, (bbox.0, bbox.1))
 }
 
 pub fn render_text(
@@ -146,7 +153,6 @@ fn pack_rgba(
 // ── FFI helpers ──────────────────────────────────────────────────────
 
 const KERN_DEFAULT: u32 = 0; // FT_KERNING_DEFAULT as u32
-const NO_HINTING: i32 = ffi::FT_LOAD_NO_HINTING;
 const RDR: i32 = 4; // FT_LOAD_RENDER
 const TGT_NORM: i32 = 0; // FT_LOAD_TARGET_NORMAL
 
@@ -158,6 +164,12 @@ fn kern_26dot6(face: &ffi::FT_Face, l: u32, r: u32) -> i32 {
     let mut v = ffi::FT_Vector::default();
     ffi::FT_Get_Kerning(Some(face), l, r, KERN_DEFAULT, Some(&mut v));
     v.x as i32
+}
+
+fn basic_layout_kern(face: &ffi::FT_Face, left: u32, right: u32) -> i32 {
+    // Pillow 12.2.0 `text_layout_fallback` in `_imagingft.c` adds
+    // `PIXEL(delta.x)` directly to the preceding 26.6 `x_advance`.
+    pixel(i64::from(kern_26dot6(face, left, right)))
 }
 
 fn round26(v: i32) -> i32 {
@@ -176,17 +188,19 @@ fn ceil26(x: i64) -> i32 {
     (((x + 63) & -64) >> 6) as i32
 }
 
-fn length_from_nohint_run(ttf: &TrueTypeFont, text: &str) -> Option<i32> {
+fn length_from_basic_layout(ttf: &TrueTypeFont, text: &str) -> Option<i32> {
     let face = &ttf.engine.face;
     let mut total = 0i32;
     let mut prev: Option<u32> = None;
 
     for ch in text.chars() {
         let g = gid(face, ch);
+        // Pillow 12.2.0 `text_layout_fallback` uses `FT_LOAD_DEFAULT`.
+        // Its hinted `horiAdvance` values are integral pixels for BASIC layout.
+        let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            total = total.saturating_add(kern_26dot6(face, p, g));
+            total = total.saturating_add(basic_layout_kern(face, p, g));
         }
-        let slot = ffi::FT_Load_Glyph(face, g, NO_HINTING).ok()?;
         total = total.saturating_add(slot.metrics.horiAdvance as i32);
         prev = Some(g);
     }
@@ -227,15 +241,14 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
 
     for ch in text.chars() {
         let g = gid(face, ch);
+        // Match Pillow's BASIC layout order: load the current glyph first,
+        // then adjust the preceding advance with pixel-rounded kerning.
+        let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            pen = pen.saturating_add(kern_26dot6(face, p, g));
+            pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
 
         let pen_before = pen;
-
-        // Pillow _imagingft.c:text_layout_fallback loads glyph 0 for missing
-        // characters and stores glyph->metrics.horiAdvance for the layout run.
-        let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
         let adv = slot.metrics.horiAdvance as i32;
 
         out.push(RunGlyph {
@@ -316,8 +329,16 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
 
     for ch in text.chars() {
         let g = gid(face, ch);
+        // Pillow's layout pass obtains the hinted advance before rendering.
+        let layout_slot = match ffi::FT_Load_Glyph(face, g, 0) {
+            Ok(slot) => slot,
+            Err(_) => {
+                prev = None;
+                continue;
+            }
+        };
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            pen = pen.saturating_add(kern_26dot6(face, p, g));
+            pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
 
         let slot = match ffi::FT_Load_Glyph(face, g, RDR | TGT_NORM) {
@@ -340,7 +361,7 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
             slot.bitmap_top as i32,
             slot.bitmap,
         ));
-        pen = pen.saturating_add(slot.metrics.horiAdvance as i32);
+        pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
         prev = Some(g);
     }
 

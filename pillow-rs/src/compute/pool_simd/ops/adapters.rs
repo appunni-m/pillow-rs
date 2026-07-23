@@ -1137,7 +1137,13 @@ pub fn simd_paste(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = if mode == Some("P") {
+        0
+    } else if mode.is_some() {
+        mode_to_u32(mode)
+    } else {
+        dynimg_mode(img)
+    };
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Paste {
         source,
@@ -1146,9 +1152,14 @@ pub fn simd_paste(
         w: _,
         h: _,
         mask,
+        mask_alpha,
     } = op
     {
-        let src_img = arc_to_dynimg(source)?;
+        let src_img = if mode == Some("P") {
+            source.materialize_indices()?
+        } else {
+            arc_to_dynimg(source)?
+        };
         let (src_w, src_h) = src_img.dimensions();
         let src_pixels = pixels_from_dynimg(&src_img);
         let mask_pixels: Option<Vec<u32>> = match mask {
@@ -1166,9 +1177,13 @@ pub fn simd_paste(
             *x,
             *y,
             mask_pixels.as_deref(),
+            *mask_alpha,
         );
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Ok(crate::image::preserve_mode(
+        img,
+        dynimg_from_rgba(pixels, w, h),
+    ))
 }
 
 pub fn simd_alpha_composite(

@@ -84,6 +84,15 @@ pub struct PalettedData {
     pub materialized: MaterializationCache,
 }
 
+/// Pillow-compatible pending transparency stored in `Image.info`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaletteTransparency {
+    /// One fully transparent palette index.
+    Index(u8),
+    /// One alpha byte per palette entry from a PNG `tRNS` table.
+    Table(Vec<u8>),
+}
+
 /// Materialized non-indexed image storage with retained codec metadata.
 #[derive(Debug, Clone)]
 pub struct LoadedData {
@@ -529,7 +538,18 @@ impl Image {
             | PipelineOp::Flip
             | PipelineOp::Mirror
             | PipelineOp::CropBorder { .. }
-            | PipelineOp::Offset { .. } => true,
+            | PipelineOp::Offset { .. }
+            | PipelineOp::Paste { .. }
+            | PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. } => true,
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..
@@ -784,16 +804,6 @@ impl Image {
                 PipelineOp::Grayscale
                 | PipelineOp::Convert { .. }
                 | PipelineOp::Quantize { .. } => None,
-                PipelineOp::DrawLine { .. }
-                | PipelineOp::DrawRectangle { .. }
-                | PipelineOp::DrawRoundedRect { .. }
-                | PipelineOp::DrawEllipse { .. }
-                | PipelineOp::DrawCircle { .. }
-                | PipelineOp::DrawPolygon { .. }
-                | PipelineOp::DrawArc { .. }
-                | PipelineOp::DrawChord { .. }
-                | PipelineOp::DrawPieslice { .. }
-                | PipelineOp::DrawPoint { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
             }
         };
@@ -1412,38 +1422,119 @@ impl Image {
         Some(raw[..last].to_vec())
     }
 
-    /// Applies stored transparency information when available.
+    /// Returns palette bytes converted to RGBA, trimmed to the retained RGB
+    /// palette length.
+    pub fn getpalette_rgba(&self) -> Option<Vec<u8>> {
+        let palette = self.getpalette_trimmed()?;
+        let alpha = if self.pending_palette_transparency().is_none() {
+            self.palette_alpha().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut rgba = Vec::with_capacity(palette.len() / 3 * 4);
+        for (index, color) in palette.chunks_exact(3).enumerate() {
+            rgba.extend_from_slice(color);
+            rgba.push(alpha.get(index).copied().unwrap_or(255));
+        }
+        Some(rgba)
+    }
+
+    /// Returns pending Pillow `info["transparency"]` metadata for a P image.
     ///
-    /// For [`Image::Paletted`] values this expands indices to RGBA pixels using
-    /// retained per-entry alpha. Missing alpha entries are opaque.
+    /// PNG's compact single-transparent-index form is reported as an integer;
+    /// other alpha tables retain their byte representation.
+    pub fn pending_palette_transparency(&self) -> Option<PaletteTransparency> {
+        if !self.has_palette_mode() {
+            return None;
+        }
+        let alpha = self
+            .image_info()?
+            .palette
+            .as_ref()
+            .map(|palette| palette.alpha.as_slice())?
+            .to_vec();
+        if alpha.is_empty() {
+            return None;
+        }
+        let mut transparent_index = None;
+        for (index, value) in alpha.iter().copied().enumerate() {
+            if value == 255 {
+                continue;
+            }
+            if value != 0 || transparent_index.is_some() {
+                return Some(PaletteTransparency::Table(alpha));
+            }
+            transparent_index = u8::try_from(index).ok();
+        }
+        transparent_index
+            .map(PaletteTransparency::Index)
+            .or_else(|| Some(PaletteTransparency::Table(alpha)))
+    }
+
+    /// Returns the observable Pillow palette mode.
+    pub fn palette_mode(&self) -> Option<&'static str> {
+        self.has_palette_mode().then(|| {
+            if self.pending_palette_transparency().is_none()
+                && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
+            {
+                "RGBA"
+            } else {
+                "RGB"
+            }
+        })
+    }
+
+    /// Returns whether mode, pending metadata, or a committed palette carries
+    /// transparency data.
+    pub fn has_transparency_data(&self) -> bool {
+        if self
+            .mode()
+            .is_ok_and(|mode| matches!(mode.as_str(), "LA" | "La" | "PA" | "RGBA" | "RGBa"))
+        {
+            return true;
+        }
+        self.pending_palette_transparency().is_some()
+            || (self.has_palette_mode()
+                && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty()))
+    }
+
+    /// Commits stored palette transparency without changing pixels or mode.
+    ///
+    /// Pillow's `Image.apply_transparency` keeps a `P` image indexed: it moves
+    /// the `info["transparency"]` value into the palette's alpha table. The
+    /// codec layer used here canonicalizes indexed transparency into
+    /// [`PalettedData::palette_alpha`] while decoding. This method retains that
+    /// table, removes the pending `ImageInfo` alpha marker, and materializes a
+    /// lazy or deferred P image as indexed storage. It never expands pixels to
+    /// `RGBA`.
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; the result type is preserved for Pillow API
-    /// compatibility and future metadata-backed transparency handling.
+    /// Returns an error if a lazy/deferred indexed image cannot be materialized.
     pub fn apply_transparency(&mut self) -> Result<(), PilError> {
-        // Extract Paletted data via clone to avoid borrow issues with self-mutation
-        let pal_data = match self {
-            Image::Paletted(data) => Some((
-                data.indices.clone(),
-                data.palette.clone(),
-                data.palette_alpha.clone(),
-            )),
-            _ => None,
-        };
+        if !self.has_palette_mode() || self.pending_palette_transparency().is_none() {
+            return Ok(());
+        }
 
-        if let Some((indices, palette, palette_alpha)) = pal_data {
-            let (w, h) = indices.dimensions();
-            let rgba = image_slash_star::RgbaImage::from_fn(w, h, |x, y| {
-                let idx = indices.get_pixel(x, y)[0] as usize;
-                let base = idx * 3;
-                let r = palette.get(base).copied().unwrap_or(0);
-                let g = palette.get(base + 1).copied().unwrap_or(0);
-                let b = palette.get(base + 2).copied().unwrap_or(0);
-                let a = palette_alpha.get(idx).copied().unwrap_or(255);
-                image_slash_star::Rgba([r, g, b, a])
+        if !matches!(self, Image::Paletted(_)) {
+            let indices = self.materialize()?.to_luma8();
+            let palette = self.palette().unwrap_or_else(default_palette);
+            let palette_alpha = self.palette_alpha().unwrap_or_default();
+            let source_format = self.source_format();
+            let info = self.image_info();
+            *self = Image::Paletted(PalettedData {
+                indices,
+                palette,
+                palette_alpha,
+                source_format,
+                info,
+                materialized: materialization_cache(),
             });
-            *self = Image::from_dynamic(DynamicImage::ImageRgba8(rgba), None);
+        }
+        if let Image::Paletted(data) = self
+            && let Some(palette) = data.info.as_mut().and_then(|info| info.palette.as_mut())
+        {
+            palette.alpha.clear();
         }
         Ok(())
     }
