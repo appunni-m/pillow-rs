@@ -94,7 +94,7 @@ pub enum PaletteTransparency {
     Table(Vec<u8>),
 }
 
-/// Materialized non-indexed image storage with retained codec metadata.
+/// Materialized image storage with retained codec and palette metadata.
 #[derive(Debug, Clone)]
 pub struct LoadedData {
     /// Operation-ready pixel storage.
@@ -103,6 +103,10 @@ pub struct LoadedData {
     pub explicit_mode: Option<String>,
     /// Exact decoded sample mode before operation-buffer adaptation.
     pub decoded_mode: ImageMode,
+    /// Palette RGB entries attached to a `PA` image.
+    pub palette: Option<Vec<u8>>,
+    /// Optional per-entry alpha values for an attached `RGBA` palette.
+    pub palette_alpha: Option<Vec<u8>>,
     /// Encoded container format when this image came from a source.
     pub source_format: Option<ImageFormat>,
     /// Header metadata retained from the encoded source.
@@ -254,6 +258,8 @@ impl Image {
             image: Arc::new(image),
             explicit_mode,
             decoded_mode,
+            palette: None,
+            palette_alpha: None,
             source_format: None,
             info: None,
         })
@@ -1240,6 +1246,7 @@ impl Image {
                 ],
                 "YCbCr" => vec!["Y".to_string(), "Cb".to_string(), "Cr".to_string()],
                 "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
+                "PA" => vec!["P".to_string(), "A".to_string()],
                 "I" | "F" | "P" | "1" => vec![m.clone()],
                 _ => vec![],
             };
@@ -1376,19 +1383,20 @@ impl Image {
         }
     }
 
-    /// Returns palette data for `P` images as RGB triples.
+    /// Returns attached palette data as RGB triples.
     ///
-    /// The full palette is 768 bytes: 256 entries of `R, G, B`. Pipeline images
-    /// can carry a copied palette so palette-safe operations preserve `P` mode.
+    /// A palette contains up to 768 bytes: 256 entries of `R, G, B`. Pipeline
+    /// images can carry a copied palette so palette-safe operations preserve
+    /// `P` mode.
     pub fn palette(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(data.palette.clone()),
+            Image::Loaded(data) => data.palette.clone(),
             Image::Pipeline { palette, .. } => palette.clone(),
             Image::Path { info, .. } | Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| padded_palette(&palette.rgb)),
-            _ => None,
         }
     }
 
@@ -1396,12 +1404,12 @@ impl Image {
     pub fn palette_alpha(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(data.palette_alpha.clone()),
+            Image::Loaded(data) => data.palette_alpha.clone(),
             Image::Pipeline { palette_alpha, .. } => palette_alpha.clone(),
             Image::Path { info, .. } | Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.alpha.clone()),
-            _ => None,
         }
     }
 
@@ -1458,6 +1466,56 @@ impl Image {
         Some(rgba)
     }
 
+    /// Attaches a palette without changing the image's sample bytes.
+    ///
+    /// Pillow reinterprets `L` samples as palette indices (`P`) and `LA`
+    /// samples as index/alpha pairs (`PA`). Existing `P`/`PA` samples are also
+    /// retained byte-for-byte while their palette is replaced. The mutation is
+    /// stored in this core value rather than binding-only shadow state. `P`
+    /// images therefore enter later CPU, SIMD, or GPU work through the existing
+    /// shared indexed representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] for an illegal image mode, unsupported
+    /// raw palette mode, or an oversized palette.
+    pub fn putpalette(&mut self, data: &[u8], rawmode: &str) -> Result<(), PilError> {
+        let mode = self.mode()?;
+        if !matches!(mode.as_str(), "L" | "LA" | "P" | "PA") {
+            return Err(PilError::ValueError("illegal image mode".to_owned()));
+        }
+        let (palette, palette_alpha) = split_palette_data(data, rawmode)?;
+        let source_format = self.source_format();
+        let info = self.image_info();
+        let materialized = self.materialize()?;
+
+        *self = match mode.as_str() {
+            "L" | "P" => Image::Paletted(PalettedData {
+                indices: materialized.to_luma8(),
+                palette,
+                palette_alpha,
+                source_format,
+                info,
+                materialized: materialization_cache(),
+            }),
+            "LA" | "PA" => {
+                let image = DynamicImage::ImageLumaA8(materialized.to_luma_alpha8());
+                let decoded_mode = image.color().into();
+                Image::Loaded(LoadedData {
+                    image: Arc::new(image),
+                    explicit_mode: Some("PA".to_owned()),
+                    decoded_mode,
+                    palette: Some(palette),
+                    palette_alpha: Some(palette_alpha),
+                    source_format,
+                    info,
+                })
+            }
+            _ => unreachable!("putpalette mode was validated"),
+        };
+        Ok(())
+    }
+
     /// Returns pending Pillow `info["transparency"]` metadata for a P image.
     ///
     /// PNG's compact single-transparent-index form is reported as an integer;
@@ -1492,7 +1550,7 @@ impl Image {
 
     /// Returns the observable Pillow palette mode.
     pub fn palette_mode(&self) -> Option<&'static str> {
-        self.has_palette_mode().then(|| {
+        (self.has_palette_mode() || self.explicit_mode() == Some("PA")).then(|| {
             if self.pending_palette_transparency().is_none()
                 && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
             {
@@ -1597,12 +1655,12 @@ impl Image {
     fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(operational_palette(data)),
+            Image::Loaded(data) => data.palette.clone(),
             Image::Pipeline { palette, .. } => palette.clone(),
             Image::Path { info, .. } | Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.rgb.clone()),
-            _ => None,
         }
     }
 
@@ -1795,6 +1853,8 @@ impl Image {
                         image,
                         explicit_mode: explicit_mode.clone(),
                         decoded_mode,
+                        palette: palette.clone(),
+                        palette_alpha: palette_alpha.clone(),
                         source_format: *format,
                         info: source.image_info(),
                     })
@@ -2283,6 +2343,8 @@ fn image_from_materialized(
         image,
         explicit_mode,
         decoded_mode: mode,
+        palette: None,
+        palette_alpha: None,
         source_format,
         info,
     }))
@@ -2337,6 +2399,32 @@ fn padded_palette(rgb: &[u8]) -> Vec<u8> {
     let mut palette = rgb.to_vec();
     palette.resize(768, 0);
     palette
+}
+
+fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    match rawmode {
+        "RGB" => {
+            let complete = data.len() / 3 * 3;
+            if complete > 768 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            Ok((data[..complete].to_vec(), Vec::new()))
+        }
+        "RGBA" => {
+            let complete = data.len() / 4 * 4;
+            if complete > 1024 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            let mut rgb = Vec::with_capacity(complete / 4 * 3);
+            let mut alpha = Vec::with_capacity(complete / 4);
+            for color in data[..complete].chunks_exact(4) {
+                rgb.extend_from_slice(&color[..3]);
+                alpha.push(color[3]);
+            }
+            Ok((rgb, alpha))
+        }
+        _ => Err(PilError::ValueError("unrecognized raw mode".to_owned())),
+    }
 }
 
 fn expand_palette(
@@ -2567,6 +2655,50 @@ mod tests {
                 image.getpalette_trimmed()
             ),
             (vec![2, 7, 11], Some(Vec::new()))
+        );
+    }
+
+    #[test]
+    fn putpalette_reinterprets_l_samples_as_p_indices() {
+        let mut image = Image::new(2, 1, "L", (128, 0, 0, 0)).expect("L image must be valid");
+        let palette: Vec<u8> = (0..48).collect();
+
+        image
+            .putpalette(&palette, "RGB")
+            .expect("RGB palette must be valid");
+
+        assert_eq!(
+            (
+                image.mode().expect("mode must be available"),
+                image.tobytes().expect("indices must be available"),
+                image.getpalette_trimmed()
+            ),
+            ("P".to_owned(), vec![128, 128], Some(palette))
+        );
+    }
+
+    #[test]
+    fn putpalette_reinterprets_la_samples_as_pa_pairs() {
+        let mut image = Image::new(2, 1, "LA", (7, 0, 0, 90)).expect("LA image must be valid");
+        let palette: Vec<u8> = (0..48).collect();
+
+        image
+            .putpalette(&palette, "RGB")
+            .expect("RGB palette must be valid");
+
+        assert_eq!(
+            (
+                image.mode().expect("mode must be available"),
+                image.getbands().expect("bands must be available"),
+                image.tobytes().expect("samples must be available"),
+                image.getpalette_trimmed()
+            ),
+            (
+                "PA".to_owned(),
+                vec!["P".to_owned(), "A".to_owned()],
+                vec![7, 90, 7, 90],
+                Some(palette)
+            )
         );
     }
 

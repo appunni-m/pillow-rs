@@ -9,6 +9,7 @@ from .enums import Palette, Resampling, Transpose
 _BAND_NAMES = {
     "L": ("L",),
     "LA": ("L", "A"),
+    "PA": ("P", "A"),
     "RGB": ("R", "G", "B"),
     "RGBA": ("R", "G", "B", "A"),
     "CMYK": ("C", "M", "Y", "K"),
@@ -464,7 +465,7 @@ class Image:
         except Exception:
             pass
         # PIL: P-mode image with no palette returns empty list, not None
-        if self.mode == "P":
+        if self.mode in ("P", "PA"):
             return []
         return None
 
@@ -474,7 +475,11 @@ class Image:
 
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
-        self._palette = list(data) if data else []
+        result = self._rust_image.putpalette(data, rawmode)
+        self._explicit_mode = self._rust_image.explicit_mode()
+        self.__dict__.pop("_palette", None)
+        self.__dict__.pop("_palette_object", None)
+        return result
 
     def show(self, title=None):
         """Display image. Not applicable in headless/test environments."""
@@ -712,7 +717,7 @@ class Image:
     @property
     def palette(self):
         """Image palette, if any."""
-        if self.mode != "P":
+        if self.mode not in ("P", "PA"):
             return None
         if hasattr(self, "_palette_object"):
             return self._palette_object

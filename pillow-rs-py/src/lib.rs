@@ -348,6 +348,11 @@ impl PyImage {
         self.inner.apply_transparency().map_err(map_error)
     }
 
+    #[pyo3(signature = (data, rawmode="RGB"))]
+    fn putpalette(&mut self, data: Vec<u8>, rawmode: &str) -> PyResult<()> {
+        self.inner.putpalette(&data, rawmode).map_err(map_error)
+    }
+
     fn get_child_images(&self) -> Vec<PyImage> {
         self.inner
             .get_child_images()
@@ -579,7 +584,7 @@ impl PyImage {
             Some(results) => {
                 let n_bands = match mode.as_str() {
                     "L" | "1" | "P" | "I" | "F" => 1,
-                    "LA" => 2,
+                    "LA" | "PA" => 2,
                     "RGB" | "YCbCr" | "HSV" => 3,
                     _ => 4,
                 };
@@ -608,7 +613,7 @@ impl PyImage {
         Python::with_gil(|py| {
             let n_bands = match mode.as_str() {
                 "L" | "1" | "P" | "I" | "F" => 1,
-                "LA" => 2,
+                "LA" | "PA" => 2,
                 "RGB" | "YCbCr" | "HSV" => 3,
                 _ => 4,
             };
@@ -846,7 +851,7 @@ impl PyImage {
         Python::with_gil(|py| {
             Ok(match mode {
                 "L" | "1" => r.to_object(py),
-                "LA" => (r, a).to_object(py),
+                "LA" | "PA" => (r, a).to_object(py),
                 "RGB" => (r, g, b).to_object(py),
                 "RGBA" => (r, g, b, a).to_object(py),
                 "P" => r.to_object(py), // P mode stored as RGB; r is the palette index proxy
