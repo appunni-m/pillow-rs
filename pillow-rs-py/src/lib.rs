@@ -341,14 +341,14 @@ impl PyImage {
         self.inner.getxmp()
     }
 
-    fn getim(&self) -> String {
-        // PIL returns a CPython PyCapsule wrapping a C pointer.
-        // Rust has no C pointer to wrap — return a compatible placeholder string.
-        // The test framework accepts any string starting with "<capsule object".
-        format!(
-            "<capsule object \"Pillow Imaging\" at 0x{:x}>",
-            self as *const PyImage as usize
-        )
+    fn getim(&self) -> PyResult<String> {
+        // Pillow exposes an `Imaging` pointer in a named PyCapsule. A pointer to
+        // this Rust wrapper is not ABI-compatible with `Imaging` and could make
+        // capsule consumers dereference an invalid layout, so keep this endpoint
+        // visibly unsupported until a genuine compatibility layer exists.
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "getim requires a Pillow Imaging-compatible capsule",
+        ))
     }
 
     fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
