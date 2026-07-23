@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,50 +11,71 @@
     {
       "id": "Image_tell_1_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_CMYK_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_LA_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_P_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_RGB_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "Image_tell_RGBA_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     }
   ]

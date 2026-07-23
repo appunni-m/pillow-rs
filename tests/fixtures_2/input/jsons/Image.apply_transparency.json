@@ -66,6 +66,19 @@
           200
         ]
       }
+    },
+    {
+      "id": "Image_apply_transparency_P_suite1",
+      "params": {},
+      "mode": "P",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 7
+      }
     }
   ]
 }

@@ -775,16 +775,23 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── Fit: new_w, new_h, crop_x, crop_y ──
         PipelineOp::Fit { w, h, .. } => vec![*w, *h, 0, 0],
 
-        // ── Paste: src_w, src_h, paste_x, paste_y, has_mask ──
+        // ── Paste: src_w, src_h, paste_x, paste_y, has_mask, mask_alpha ──
         PipelineOp::Paste {
-            w, h, x, y, mask, ..
+            w,
+            h,
+            x,
+            y,
+            mask,
+            mask_alpha,
+            ..
         } => {
             vec![
                 (*w).max(0) as u32,
                 (*h).max(0) as u32,
-                (*x).max(0) as u32,
-                (*y).max(0) as u32,
+                *x as u32,
+                *y as u32,
                 mask.is_some() as u32,
+                *mask_alpha as u32,
             ]
         }
 
@@ -1944,9 +1951,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     w: _,
                     h: _,
                     mask,
+                    mask_alpha,
                 } = op
                 {
-                    op_paste(img, source, *x as i64, *y as i64, mask)
+                    op_paste(img, source, *x as i64, *y as i64, mask, *mask_alpha, _mode)
                 } else {
                     Err(PilError::ValueError("expected Paste op".into()))
                 }

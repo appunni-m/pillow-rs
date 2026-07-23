@@ -6,7 +6,7 @@
 # ── Variables ─────────────────────────────────────────────────────────────────
 MATURIN      := maturin
 PYTHON       := python3
-IMAGE_ORACLE_PYTHON ?= ../image-slash-star/.oracle-venv/bin/python
+IMAGE_ORACLE_PYTHON ?= $(abspath ../image-slash-star/.oracle-venv/bin/python)
 NODE         := node
 CARGO        := cargo
 WASM_PACK    := wasm-pack
@@ -16,6 +16,7 @@ JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_SRC := pillow-rs-freetype
 FIXTURES_DIR := tests/fixtures
+FIXTURES_SUITE1_DIR := tests/fixtures_2
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
 
@@ -49,6 +50,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
+	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs imagingft + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
@@ -56,6 +58,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
 	@printf "  $(CYAN)make pillow-rs-imagingft$(NC) Run imagingft matrix parity tests\n"
 	@printf "  $(CYAN)make pillow-rs-fixtures$(NC) Regenerate imagingft fixture matrix\n"
+	@printf "  $(CYAN)make pillow-rs-fixtures-check$(NC) Verify imagingft fixtures reproduce exactly\n"
 	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
 	@printf "  $(CYAN)make pillow-rs-ci$(NC)   Run pillow-rs CI sequence\n"
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
@@ -73,6 +76,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
+	@printf "  $(CYAN)make fixtures-suite1$(NC) Generate suite1 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-clean$(NC) Remove fixture outputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
@@ -111,10 +115,10 @@ setup: ## Install all dev dependencies
 	@command -v $(MATURIN) >/dev/null 2>&1 || { echo "Installing maturin..."; pip install maturin; }
 	@command -v $(WASM_PACK) >/dev/null 2>&1 || { echo "Installing wasm-pack..."; cargo install wasm-pack; }
 	@[ -n "$$VIRTUAL_ENV" ] || [ -n "$$CONDA_PREFIX" ] || echo "⚠️  No virtualenv detected — consider: python3 -m venv .venv && source .venv/bin/activate"
-	pip install maturin pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	pip install maturin pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 setup-ci: ## Install dev deps for CI
-	pip install maturin pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	pip install maturin pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 .PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
@@ -141,22 +145,22 @@ build-all: build build-wasm-release ## Build Python + WASM
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-core test-wasm test-all
 
-test: ## Run all PIL parity tests
+test: fixtures ## Run all PIL parity tests
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT)
+		--json-report --json-report-file=$(REPORT) --strict-covers
 
-test-suite0: ## Run suite0 only (core functions)
+test-suite0: fixtures-suite0 ## Run suite0 only (core functions)
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
 		--json-report --json-report-file=$(REPORT) \
-		-k "not suite1 and not suite2 and not suite3"
+		--strict-covers -k "not suite1 and not suite2 and not suite3"
 
-test-suite1: ## Run suite1 only
+test-suite1: fixtures-suite1 ## Run suite1 only
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) -k "suite1"
+		--json-report --json-report-file=$(REPORT) --strict-covers -k "suite1"
 
 test-suite2: ## Run suite2 only
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) -k "suite2"
+		--json-report --json-report-file=$(REPORT) --strict-covers -k "suite2"
 
 test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
 	$(MAKE) -C $(CORE_SRC) test
@@ -184,8 +188,9 @@ parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdon
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core pillow-rs-imagingft
-.PHONY: image-backend-test image-backend-feature-test
-.PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-clean
+.PHONY: image-backend-test image-backend-parity-test image-backend-feature-test
+.PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-check
+.PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
 .PHONY: pillow-rs-ci pillow-rs-clean
@@ -196,8 +201,12 @@ pillow-rs-help: ## Show pillow-rs crate targets
 pillow-rs-test: ## Run all pillow-rs Rust tests
 	$(MAKE) -C $(CORE_SRC) test
 
-image-backend-test: ## Run all-feature image backend migration parity tests
-	$(CARGO) test -p pillow-rs --all-features --test image_backend_migration --locked
+image-backend-test: ## Run all image backend migration and forced-backend parity tests
+	$(CARGO) test -p pillow-rs --all-features \
+		--test image_backend_migration --test backend_parity --locked
+
+image-backend-parity-test: ## Run Pillow-exact paste/drawing/transparency backend parity
+	$(CARGO) test -p pillow-rs --all-features --test backend_parity --locked -- --nocapture
 
 image-backend-feature-test: ## Verify disabled image codec feature forwarding
 	$(CARGO) test -p pillow-rs --no-default-features --test image_feature_gates --locked
@@ -206,13 +215,16 @@ pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
 
 pillow-rs-imagingft: ## Run imagingft matrix parity tests
-	$(MAKE) -C $(CORE_SRC) test-imagingft
+	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) test-imagingft
 
 pillow-rs-imagingft-release: ## Run imagingft parity (release)
-	$(MAKE) -C $(CORE_SRC) test-imagingft-release
+	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) test-imagingft-release
 
 pillow-rs-fixtures: ## Regenerate imagingft fixture matrix
-	$(MAKE) -C $(CORE_SRC) fixtures
+	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) fixtures
+
+pillow-rs-fixtures-check: ## Verify imagingft fixtures reproduce byte-for-byte
+	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) fixtures-check
 
 pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
 	$(MAKE) -C $(CORE_SRC) fixtures-clean
@@ -321,20 +333,19 @@ freetype-clean: fontdone-clean
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
 
-fixtures: ## Generate all test fixtures
-	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR)
+fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
 
 imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
-	$(PYTHON) pillow-rs/scripts/build_imagingft_fixtures.py
+	$(IMAGE_ORACLE_PYTHON) pillow-rs/scripts/build_imagingft_fixtures.py
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
 
 fixtures-suite0: ## Generate suite0 fixtures
-	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0
 
 fixtures-suite1: ## Generate suite1 fixtures
-	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 1
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1
 
 fixtures-clean: ## Remove fixture outputs
 	chmod -R u+w $(FIXTURES_DIR)/outputs/ 2>/dev/null || true
@@ -398,7 +409,7 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy pillow-rs-test-core pillow-rs-imagingft fixtures-suite0 test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy pillow-rs-test-core pillow-rs-imagingft test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci fontdone-parity ## Full workspace CI plus FreeType parity

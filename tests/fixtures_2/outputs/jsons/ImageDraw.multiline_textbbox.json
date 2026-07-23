@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageDraw",
@@ -9,22 +11,82 @@
     {
       "id": "ImageDraw.multiline_textbbox_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 5
+            },
+            {
+              "type": "int",
+              "value": 7
+            },
+            {
+              "type": "int",
+              "value": 30
+            },
+            {
+              "type": "int",
+              "value": 15
+            }
+          ]
+        }
       }
     },
     {
       "id": "ImageDraw.multiline_textbbox_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 5
+            },
+            {
+              "type": "int",
+              "value": 7
+            },
+            {
+              "type": "int",
+              "value": 30
+            },
+            {
+              "type": "int",
+              "value": 15
+            }
+          ]
+        }
       }
     },
     {
       "id": "L_suite1",
       "assert": {
-        "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 5
+            },
+            {
+              "type": "int",
+              "value": 7
+            },
+            {
+              "type": "int",
+              "value": 30
+            },
+            {
+              "type": "int",
+              "value": 15
+            }
+          ]
+        }
       }
     }
   ]

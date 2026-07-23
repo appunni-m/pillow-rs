@@ -1272,9 +1272,36 @@ impl Draw {
 
 // ── Drawing primitives ──────────────────────────────────────────────
 
+/// Minimal native-pixel canvas used by the shared rasterizers.
+///
+/// Implementations retain their original storage layout; drawing code never
+/// needs to convert an `L`, `LA`, `RGB`, or indexed buffer through `RGBA`.
+pub(crate) trait DrawCanvas {
+    /// Canvas width in pixels.
+    fn width(&self) -> u32;
+    /// Canvas height in pixels.
+    fn height(&self) -> u32;
+    /// Writes one normalized RGBA color using the canvas's native channels.
+    fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]);
+}
+
+impl DrawCanvas for RgbaImage {
+    fn width(&self) -> u32 {
+        self.width()
+    }
+
+    fn height(&self) -> u32 {
+        self.height()
+    }
+
+    fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]) {
+        self.put_pixel(x, y, Rgba(color));
+    }
+}
+
 /// Bresenham's line algorithm with clamping.
-pub(crate) fn bresenham_line(
-    canvas: &mut RgbaImage,
+pub(crate) fn bresenham_line<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -1284,29 +1311,69 @@ pub(crate) fn bresenham_line(
     h: u32,
     raw: bool,
 ) {
-    let mut x = x0;
-    let mut y = y0;
-    let dx = (x1 - x0).abs();
-    let dy = -(y1 - y0).abs();
-    let sx = if x0 < x1 { 1 } else { -1 };
-    let sy = if y0 < y1 { 1 } else { -1 };
-    let mut err = dx + dy;
+    // Match Pillow src/libImaging/Draw.c::{line8,line32,line32rgba}.
+    // The C primitive omits its final endpoint because draw_lines adds it
+    // once after the segment chain; this helper represents one complete
+    // high-level segment, so it appends that endpoint below.
+    let mut x = i64::from(x0);
+    let mut y = i64::from(y0);
+    let target_x = i64::from(x1);
+    let target_y = i64::from(y1);
+    let mut dx = target_x - x;
+    let step_x = if dx < 0 {
+        dx = -dx;
+        -1
+    } else {
+        1
+    };
+    let mut dy = target_y - y;
+    let step_y = if dy < 0 {
+        dy = -dy;
+        -1
+    } else {
+        1
+    };
 
-    loop {
-        plot(canvas, x, y, color, w, h, raw);
-        if x == x1 && y == y1 {
-            break;
+    if dx == 0 {
+        for _ in 0..dy {
+            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            y += step_y;
         }
-        let e2 = 2 * err;
-        if e2 >= dy {
-            err += dy;
-            x += sx;
+    } else if dy == 0 {
+        for _ in 0..dx {
+            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            x += step_x;
         }
-        if e2 <= dx {
-            err += dx;
-            y += sy;
+    } else if dx > dy {
+        let steps = dx;
+        dy += dy;
+        let mut error = dy - dx;
+        dx += dx;
+        for _ in 0..steps {
+            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            if error >= 0 {
+                y += step_y;
+                error -= dx;
+            }
+            error += dy;
+            x += step_x;
+        }
+    } else {
+        let steps = dy;
+        dx += dx;
+        let mut error = dx - dy;
+        dy += dy;
+        for _ in 0..steps {
+            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            if error >= 0 {
+                x += step_x;
+                error -= dy;
+            }
+            error += dx;
+            y += step_y;
         }
     }
+    plot(canvas, x1, y1, color, w, h, raw);
 }
 
 /// Plot a single pixel with bounds checking.
@@ -1314,13 +1381,13 @@ pub(crate) fn bresenham_line(
 /// When `raw` is true (F/I mode), writes the 4 bytes directly as-is without any
 /// alpha blending — the 4-byte chunk represents a raw float32 or int32 LE value.
 ///
-/// When `raw` is false, applies the standard alpha blending:
-/// - `alpha == 255`: write RGB directly with A=255
-/// - `alpha == 0`: write RGB directly with A=0 (PIL int fill behavior)
-/// - otherwise: blend with existing pixel
+/// When `raw` is false, writes the normalized color directly. Pillow's default
+/// drawing context uses the native-mode `point8`/`point32` primitives; alpha is
+/// a stored channel, not an implicit blend factor. RGBA-on-RGB drawing uses a
+/// separate explicit blend mode at the binding/API layer.
 #[inline]
-pub(crate) fn plot(
-    canvas: &mut RgbaImage,
+pub(crate) fn plot<C: DrawCanvas>(
+    canvas: &mut C,
     x: i32,
     y: i32,
     color: (u8, u8, u8, u8),
@@ -1332,31 +1399,8 @@ pub(crate) fn plot(
         return;
     }
     let (x, y) = (x as u32, y as u32);
-    if raw {
-        // F/I mode: write the 4-byte value as-is (float32 or int32 LE)
-        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, color.3]));
-    } else if color.3 == 255 {
-        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, 255]));
-    } else if color.3 == 0 {
-        // PIL int fill: value goes to first channel, other channels = 0.
-        // Write RGB directly with A=0 (bypass alpha blending) to match
-        // LA mode and other multi-channel modes.
-        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, 0]));
-    } else {
-        let existing = canvas.get_pixel(x, y);
-        let a = color.3 as u16;
-        let inv = 255u16 - a;
-        canvas.put_pixel(
-            x,
-            y,
-            Rgba([
-                ((color.0 as u16 * a + existing[0] as u16 * inv) / 255) as u8,
-                ((color.1 as u16 * a + existing[1] as u16 * inv) / 255) as u8,
-                ((color.2 as u16 * a + existing[2] as u16 * inv) / 255) as u8,
-                color.3.max(existing[3]),
-            ]),
-        );
-    }
+    let _ = raw;
+    canvas.put_rgba(x, y, [color.0, color.1, color.2, color.3]);
 }
 
 #[inline]
@@ -1434,8 +1478,8 @@ pub(crate) fn round_down(f: f64) -> i32 {
 /// 2. For each scanline, compute x-intersections from active edges
 /// 3. Sort intersections and fill between pairs using ROUND_UP/ROUND_DOWN
 /// 4. Horizontal edges drawn directly as filled lines
-pub(crate) fn scanline_polygon_fill(
-    canvas: &mut RgbaImage,
+pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
+    canvas: &mut C,
     points: &[(i32, i32)],
     color: (u8, u8, u8, u8),
     img_w: u32,
@@ -1456,32 +1500,49 @@ pub(crate) fn scanline_polygon_fill(
         xmax: i32,
         ymin: i32,
         ymax: i32,
-        dx: f64,
+        dx: f32,
     }
 
-    // Build edge list
-    let mut edges: Vec<ScanEdge> = Vec::with_capacity(n);
-    for i in 0..n {
-        let (x0, y0) = points[i];
-        let (x1, y1) = points[(i + 1) % n];
-        // Skip zero-length edges (coincident vertices)
-        if x0 == x1 && y0 == y1 {
-            continue;
-        }
-        let dx = if y0 != y1 {
-            (x1 - x0) as f64 / (y1 - y0) as f64
-        } else {
+    let make_edge = |x0: i32, y0: i32, x1: i32, y1: i32| ScanEdge {
+        x0,
+        y0,
+        xmin: x0.min(x1),
+        xmax: x0.max(x1),
+        ymin: y0.min(y1),
+        ymax: y0.max(y1),
+        dx: if y0 == y1 {
             0.0
-        };
-        edges.push(ScanEdge {
-            x0,
-            y0,
-            xmin: x0.min(x1),
-            xmax: x0.max(x1),
-            ymin: y0.min(y1),
-            ymax: y0.max(y1),
-            dx,
-        });
+        } else {
+            (x1 - x0) as f32 / (y1 - y0) as f32
+        },
+    };
+
+    // Build Pillow's edge list, including its consecutive-horizontal-edge
+    // coalescing. That detail affects vertex parity on scanlines that touch a
+    // run of collinear polygon points.
+    let mut edges: Vec<ScanEdge> = Vec::with_capacity(n);
+    for i in 0..n.saturating_sub(1) {
+        let (x0, y0) = points[i];
+        let (x1, y1) = points[i + 1];
+        if y0 == y1 && i != 0 && y0 == points[i - 1].1 {
+            let previous_x = points[i - 1].0;
+            if let Some(last) = edges.last_mut() {
+                if x1 > x0 && x0 > previous_x {
+                    last.xmax = x1;
+                    continue;
+                }
+                if x1 < x0 && x0 < previous_x {
+                    last.xmin = x1;
+                    continue;
+                }
+            }
+        }
+        edges.push(make_edge(x0, y0, x1, y1));
+    }
+    if points[n - 1] != points[0] {
+        let (x0, y0) = points[n - 1];
+        let (x1, y1) = points[0];
+        edges.push(make_edge(x0, y0, x1, y1));
     }
 
     if edges.is_empty() {
@@ -1491,13 +1552,13 @@ pub(crate) fn scanline_polygon_fill(
     // Draw horizontal edges immediately (matching PIL's hline in non-alpha mode)
     let iw = img_w as i32;
     let ih = img_h as i32;
-    let rgba = Rgba([color.0, color.1, color.2, color.3]);
+    let rgba = [color.0, color.1, color.2, color.3];
     for e in &edges {
         if e.ymin == e.ymax && e.ymin >= 0 && e.ymin < ih {
             let x_start = e.xmin.max(0);
             let x_end = e.xmax.min(iw - 1);
             for x in x_start..=x_end {
-                canvas.put_pixel(x as u32, e.ymin as u32, rgba);
+                canvas.put_rgba(x as u32, e.ymin as u32, rgba);
             }
         }
     }
@@ -1522,21 +1583,50 @@ pub(crate) fn scanline_polygon_fill(
     }
 
     // Pre-allocate x-intersection array
-    let mut xx: Vec<f64> = Vec::with_capacity(edge_table.len() * 2);
+    let mut xx: Vec<f32> = Vec::with_capacity(edge_table.len() * 2);
 
     // Scanline sweep
     for y in global_ymin..=global_ymax {
         xx.clear();
-        let yf = y as f64;
+        let yf = y as f32;
 
-        for edge in &edge_table {
+        for (edge_index, edge) in edge_table.iter().enumerate() {
             if y >= edge.ymin && y <= edge.ymax {
-                let x = (yf - edge.y0 as f64) * edge.dx + edge.x0 as f64;
+                let mut x = (yf - edge.y0 as f32) * edge.dx + edge.x0 as f32;
                 xx.push(x);
 
                 // PIL duplicate at ymax (vertex parity)
                 if y == edge.ymax && y < global_ymax {
                     xx.push(x);
+                } else if (y == edge.ymin || y == edge.ymax) && edge.dx != 0.0 {
+                    // Pillow connects discontiguous corners by looking one row
+                    // into the two incident edges and nudging the shared
+                    // intersection when both edges leave in the same direction.
+                    for other in edge_table.iter().take(edge_index) {
+                        if (y != other.ymin && y != other.ymax) || other.dx == 0.0 {
+                            continue;
+                        }
+                        let other_x = (yf - other.y0 as f32) * other.dx + other.x0 as f32;
+                        if x.round() != other_x.round() {
+                            continue;
+                        }
+                        let offset = if y == edge.ymax { -1 } else { 1 };
+                        let adjacent_x = ((y + offset - edge.y0) as f32) * edge.dx + edge.x0 as f32;
+                        if y + offset < other.ymin || y + offset > other.ymax {
+                            continue;
+                        }
+                        let adjacent_other_x =
+                            ((y + offset - other.y0) as f32) * other.dx + other.x0 as f32;
+                        if x > adjacent_x + 1.0 && x > adjacent_other_x + 1.0 {
+                            x = adjacent_x.max(adjacent_other_x).round() + 1.0;
+                        } else if x < adjacent_x - 1.0 && x < adjacent_other_x - 1.0 {
+                            x = adjacent_x.min(adjacent_other_x).round() - 1.0;
+                        }
+                        if let Some(current) = xx.last_mut() {
+                            *current = x;
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -1550,11 +1640,17 @@ pub(crate) fn scanline_polygon_fill(
         // Fill pairs (0-1, 2-3, ...) matching PIL's pair fill
         let mut i = 1;
         while i < xx.len() {
-            let x_start = round_up(xx[i - 1]).max(0).min(iw - 1);
-            let x_end = round_down(xx[i]).max(0).min(iw - 1);
+            let x_start = round_up(f64::from(xx[i - 1]));
+            let x_end = round_down(f64::from(xx[i]));
+            if x_end < 0 || x_start >= iw {
+                i += 2;
+                continue;
+            }
+            let x_start = x_start.max(0);
+            let x_end = x_end.min(iw - 1);
             if x_start <= x_end {
                 for x in x_start..=x_end {
-                    canvas.put_pixel(x as u32, y as u32, rgba);
+                    canvas.put_rgba(x as u32, y as u32, rgba);
                 }
             }
             i += 2;

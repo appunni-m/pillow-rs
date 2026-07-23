@@ -7,14 +7,21 @@ This module is imported by:
 Adding a new operation requires ZERO changes to this file.
 """
 
-import json, hashlib
 from pathlib import Path
 
 # ── Module → call_style lookup ──────────────────────────────────
 
 SINGLE_CHOPS = {"invert", "duplicate", "constant", "offset"}
-MUTATE_TARGETS = {"putpixel", "putdata", "thumbnail", "putalpha"}
-DUAL_TARGETS = {"paste", "alpha_composite"}
+MUTATE_TARGETS = {
+    "apply_transparency",
+    "draft",
+    "putalpha",
+    "putdata",
+    "putpalette",
+    "putpixel",
+    "thumbnail",
+}
+DUAL_MUTATE_TARGETS = {"paste", "alpha_composite"}
 VALUE_TARGETS = {
     "tobytes", "split", "getbands", "getbbox", "getextrema", "histogram",
     "getpixel", "getcolors", "getdata", "getprojection", "entropy",
@@ -43,8 +50,12 @@ def get_call_style(module, target):
         if target in ("open",):                  return "file_open"
         if target in ("toqimage", "toqpixmap"):  return "instance_method_value"
         if target in ("frombytes",):             return "frombytes_instance"
-        if target in ("getim", "load", "getdata"): return "instance_method_bytes"
-        if target in DUAL_TARGETS:               return "instance_method_dual"
+        if target == "getdata":                  return "instance_method_sequence"
+        if target == "load":                     return "pixel_access"
+        if target == "getim":                    return "result_descriptor"
+        if target in ("close", "verify"):         return "terminal_image_method"
+        if target == "seek":                     return "seek"
+        if target in DUAL_MUTATE_TARGETS:        return "instance_method_dual_mutate"
         if target in MUTATE_TARGETS:             return "instance_method_mutate"
         if target in VALUE_TARGETS:              return "instance_method_value"
         return "instance_method"
@@ -56,6 +67,7 @@ def get_call_style(module, target):
         if target == "composite":       return "module_function_triple"
         return "module_function_dual"
     if module == "ImageDraw":
+        if target == "getfont":           return "draw_getfont"
         if target in DRAW_VALUE_TARGETS: return "draw_value"
         if target == "bitmap":           return "draw_bitmap"
         if target == "shape":            return "draw_shape"
@@ -83,7 +95,7 @@ def get_call_style(module, target):
         if target in ("load_default", "load_default_imagefont"):
             return "font_constructor"
         if target in ("ImageFont",):
-            return "module_function_value"
+            return "font_base_descriptor"
         return "module_function_value"
     if module == "ImagePalette":
         return "palette_method"
@@ -101,6 +113,14 @@ def get_call_style(module, target):
 # ── Input creation ──────────────────────────────────────────────
 
 REFERENCE_IMAGE = Path(__file__).parent / "test_reference.png"
+FONT_FIXTURE_DIR = (
+    Path(__file__).parent.parent
+    / "pillow-rs-freetype"
+    / "tests"
+    / "fixtures"
+    / "input"
+    / "fonts"
+)
 # Additional directories to search for named reference images.
 # Populated at test time by test_parity.py for fixtures_2 support.
 EXTRA_REFERENCE_DIRS = []
@@ -112,11 +132,31 @@ ASSETS_DIR = Path(__file__).parent / "fixtures" / "input" / "images"
 
 def _find_reference_image(name):
     """Resolve a named reference image, checking extra dirs first."""
-    for d in EXTRA_REFERENCE_DIRS:
-        candidate = Path(d) / f"{name}.png"
-        if candidate.exists():
-            return candidate
-    return REFERENCE_IMAGE
+    if name:
+        for directory in EXTRA_REFERENCE_DIRS:
+            candidate = Path(directory) / f"{name}.png"
+            if candidate.is_file():
+                return candidate
+        raise FileNotFoundError(f"reference image is missing: {name}.png")
+    if REFERENCE_IMAGE.is_file():
+        return REFERENCE_IMAGE
+    raise FileNotFoundError(f"default reference image is missing: {REFERENCE_IMAGE}")
+
+
+def _resolve_font_path(font):
+    """Resolve legacy host font paths to the same checked-in font bytes."""
+    if not isinstance(font, (str, Path)):
+        return font
+    path = Path(font)
+    fixture_path = FONT_FIXTURE_DIR / path.name
+    if str(path).startswith("/usr/share/fonts/") and fixture_path.is_file():
+        return str(fixture_path)
+    if path.is_file():
+        return str(path)
+    if fixture_path.is_file():
+        return str(fixture_path)
+    return str(path)
+
 
 def _pilify(v):
     """Recursively convert lists to tuples for PIL API compatibility.
@@ -215,13 +255,16 @@ def _make_filter(backend, target, params):
     return filter_cls if target in BUILTINS else filter_cls(**params)
 
 def _stat_to_dict(stat):
-    to_l = lambda v: v if isinstance(v, list) else [v]
     return {
-        "count": to_l(stat.count), "sum": to_l(stat.sum),
-        "mean": to_l(stat.mean), "median": to_l(stat.median),
-        "rms": to_l(stat.rms), "var": to_l(stat.var),
-        "stddev": to_l(stat.stddev),
-        "extrema": [[e[0], e[1]] for e in (stat.extrema if isinstance(stat.extrema, list) else [stat.extrema])]
+        "type": type(stat).__name__,
+        "count": stat.count,
+        "sum": stat.sum,
+        "mean": stat.mean,
+        "median": stat.median,
+        "rms": stat.rms,
+        "var": stat.var,
+        "stddev": stat.stddev,
+        "extrema": stat.extrema,
     }
 
 
@@ -240,77 +283,105 @@ def _font_method(backend, img, target, params):
     """Load default font, then call method on it.
     
     Uses method dispatch: calls getattr(font, target)(**params).
-    For font_variant, returns the variant's getname().
-    For variation getters on non-variable fonts, returns [] (PIL raises,
-    RSPIL returns [] — we normalize to [] for both).
+    Opaque font and mask results are represented by exact type and stable
+    observable data rather than converted to a friendlier result type.
     """
     font = backend.ImageFont.load_default()
     if target == "font_variant":
         variant = font.font_variant(**params)
-        return variant.getname()
+        return _font_descriptor(variant)
     # Some PIL methods need list not tuple (e.g. set_variation_by_axes)
     for key in list(params.keys()):
         if key.endswith("axes") and isinstance(params[key], tuple):
             params[key] = list(params[key])
-    try:
-        return getattr(font, target)(**params)
-    except (OSError, TypeError, ValueError) as e:
-        # Normalize: getters return [], setters return None for PIL/RSPIL parity
-        if "get_" in target:
-            return []
-        return None
+    result = getattr(font, target)(**params)
+    if target == "getmask":
+        return _mask_descriptor(result)
+    if target == "getmask2":
+        mask, offset = result
+        return {
+            "type": type(result).__name__,
+            "mask": _mask_descriptor(mask),
+            "offset": offset,
+        }
+    return result
 
 def _font_truetype(backend, img, target, params):
-    """Load a TrueType font and return its name tuple for comparison.
-    Generic: extracts font/size from params, loads via truetype(), returns getname().
-    Handles truetype, load, load_path, FreeTypeFont targets uniformly."""
-    font_path = params.pop("font")
+    """Call the requested font loader and describe its result exactly."""
+    font_path = _resolve_font_path(params.pop("font"))
     size = params.pop("size", 20)
-    font = backend.ImageFont.truetype(font_path, size)
-    return font.getname()
+    if target == "truetype":
+        font = backend.ImageFont.truetype(font_path, size, **params)
+    else:
+        font = getattr(backend.ImageFont, target)(font_path, **params)
+    return _font_descriptor(font)
 
-def _render_font_mask(backend, font, text="A"):
-    """Render a single glyph and return as an Image for comparison.
 
-    PIL fonts return ImagingCore; RSPIL fonts return Image.
-    Normalize both to Image for uniform comparison.
-    """
-    from PIL import Image as PILImage
-    mask = font.getmask(text)
-    if type(mask).__name__ == 'ImagingCore':
-        b = bytes(mask)
-        return PILImage.frombytes(mask.mode, mask.size, b)
-    # RSPIL or PIL Image — may already have tobytes
-    if hasattr(mask, 'tobytes'):
-        return mask
-    return mask
+def _mask_descriptor(mask):
+    """Describe a Pillow/RSPIL mask without normalizing its concrete type."""
+    pixels = bytes(mask) if type(mask).__name__ == "ImagingCore" else mask.tobytes()
+    return {
+        "type": type(mask).__name__,
+        "mode": getattr(mask, "mode", None),
+        "size": list(getattr(mask, "size", ())),
+        "pixels_hex": pixels.hex(),
+    }
+
+
+def _font_descriptor(font, text="A"):
+    """Describe a font object's type and stable mask behavior."""
+    descriptor = {"type": type(font).__name__}
+    try:
+        mask = font.getmask(text)
+    except Exception as error:
+        descriptor["getmask"] = {
+            "exception": type(error).__name__,
+            "message": str(error),
+        }
+    else:
+        descriptor["getmask"] = _mask_descriptor(mask)
+    return descriptor
 
 
 def _font_constructor(backend, img, target, params):
-    """Create a font via constructor, render 'A', return Image for comparison."""
+    """Create a font and describe its concrete type and mask behavior."""
+    if "font" in params:
+        params["font"] = _resolve_font_path(params["font"])
     font = _call_mod(backend, target)(**params)
-    return _render_font_mask(backend, font)
+    return _font_descriptor(font)
+
+
+def _font_base_descriptor(backend, img, target, params):
+    """Describe the base ImageFont object's observable mask behavior exactly."""
+    font = _call_mod(backend, target)(**params)
+    return _font_descriptor(font)
 
 
 def _draw_getfont(backend, img, target, params):
-    """Get default font from ImageDraw and render 'A' for comparison."""
+    """Get ImageDraw's font and describe its exact observable behavior."""
     draw = backend.ImageDraw.Draw(img)
     font = getattr(draw, target)(**params)
-    return _render_font_mask(backend, font)
+    return _font_descriptor(font)
 
 
 def _palette_method(backend, img, target, params):
     """Create default palette, then call method on it."""
     import io
-    palette = backend.ImagePalette.ImagePalette(mode="RGB")
+    palette_mode = params.pop("_fixture_mode", "RGB")
+    palette = backend.ImagePalette.ImagePalette(mode=palette_mode)
     if target == "save":
         buf = io.BytesIO()
         text_buf = io.TextIOWrapper(buf)
-        getattr(palette, target)(text_buf, **params)
+        result = getattr(palette, target)(text_buf, **params)
         text_buf.flush()
-        return buf.getvalue()
+        return result, buf.getvalue()
     if target == "copy":
-        return palette.copy().tobytes()
+        copied = palette.copy()
+        return {
+            "type": type(copied).__name__,
+            "mode": copied.mode,
+            "palette": copied.palette,
+        }
     return getattr(palette, target)(**params)
 
 class _SimpleDeformer:
@@ -349,8 +420,8 @@ def _draw_shape(backend, img, target, params):
         outline.move(x0, y0)
         for x, y in points[1:]:
             outline.line(x, y)
-    getattr(draw, target)(outline, **params)
-    return img
+    result = getattr(draw, target)(outline, **params)
+    return result, img
 
 def _merge_mod(backend, img, target, params):
     """Image.merge(mode, bands) - create bands from params."""
@@ -365,10 +436,9 @@ def _merge_mod(backend, img, target, params):
     return _call_mod(backend, target)(mode, tuple(bands), **params)
 
 def _sequence_iterator(backend, img, target, params):
-    """ImageSequence.Iterator(img) - returns number of frames."""
+    """ImageSequence.Iterator(img) - return every frame for exact comparison."""
     it = _call_mod(backend, target)(img, **params)
-    frames = list(it)
-    return len(frames)
+    return list(it)
 
 
 
@@ -403,8 +473,8 @@ def _file_save(backend, img, target, params):
     fmt = params.pop("format", None)
     fd, tmp = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
-    getattr(img, target)(tmp, format=fmt)
-    return backend.Image.open(tmp)
+    result = getattr(img, target)(tmp, format=fmt, **params)
+    return result, backend.Image.open(tmp)
 
 
 def _decode_asset(backend, img, img2, target, params):
@@ -436,12 +506,6 @@ def _encode_roundtrip(backend, img, img2, target, params):
     source_path = ASSETS_DIR / source_format / source_asset
     source_img = _call_mod(backend, "open")(str(source_path))
 
-    # Pop known save kwargs; silently drop unknown keys
-    save_kwargs = {}
-    for key in list(params.keys()):
-        if key in {"lossless", "quality", "method", "alpha", "hint", "alpha_q", "exif", "xmp", "icc"}:
-            save_kwargs[key] = params.pop(key)
-
     # Handle resize-before-encode (used by enc_1x1)
     if "size" in params:
         size = tuple(params.pop("size"))
@@ -449,7 +513,7 @@ def _encode_roundtrip(backend, img, img2, target, params):
 
     fd, tmp = tempfile.mkstemp(suffix="." + target)
     os.close(fd)
-    source_img.save(tmp, format=target.upper(), **save_kwargs)
+    source_img.save(tmp, format=target.upper(), **params)
     # NOTE: temp file is NOT deleted — RSPIL may lazily load image data.
     return _call_mod(backend, "open")(tmp)
 
@@ -461,14 +525,14 @@ def _frombytes_instance(backend, img, target, params):
     return the modified image."""
     data_hex = params.pop("data_hex", "")
     data = bytes.fromhex(data_hex)
-    getattr(img, target)(data, **params)
-    return img
+    result = getattr(img, target)(data, **params)
+    return result, img
 
 
 def _transposed_font(backend, img, target, params):
     """Create a TransposedFont and render text with it for image comparison.
     Handles font path → object loading and orientation mapping."""
-    font_path = params.pop("font")
+    font_path = _resolve_font_path(params.pop("font"))
     size = params.pop("size", 20)
     orientation_name = params.pop("orientation", None)
     text = params.pop("text", "Hello")
@@ -483,30 +547,136 @@ def _transposed_font(backend, img, target, params):
 
 
 def _fromarray(backend, img, target, params):
-    """Image.fromarray — creates a numpy array and calls fromarray."""
-    import numpy as np
+    """Image.fromarray — use a deterministic zero-filled array-interface object."""
+
+    class FixtureArray:
+        def __init__(self, shape):
+            self.shape = shape
+            self._data = bytes(_shape_product(shape))
+            stride = 1
+            reversed_strides = []
+            for dimension in reversed(shape):
+                reversed_strides.append(stride)
+                stride *= dimension
+            self.__array_interface__ = {
+                "shape": shape,
+                "strides": tuple(reversed(reversed_strides)),
+                "typestr": "|u1",
+                "version": 3,
+                "data": self._data,
+            }
+
+        def tobytes(self):
+            return self._data
+
+    def _shape_product(shape):
+        total = 1
+        for dimension in shape:
+            total *= dimension
+        return total
+
     mode = params.get("mode", "L")
     size = tuple(params.get("size", [100, 100]))
-    arr = np.zeros(size, dtype=np.uint8)
-    if mode == "RGB":
-        arr = np.zeros((size[0], size[1], 3), dtype=np.uint8)
+    shape = size if mode == "L" else (size[0], size[1], 3)
+    arr = FixtureArray(shape)
     return backend.Image.fromarray(arr)
+
+
+def _instance_method_sequence(backend, img, img2, target, params):
+    """Exercise and describe a returned sequence instead of the source image."""
+    result = getattr(img, target)(**params)
+    return {
+        "type": type(result).__name__,
+        "values": [_typed_value(value) for value in result],
+    }
+
+
+def _pixel_access(backend, img, img2, target, params):
+    """Exercise Image.load() read and write semantics through PixelAccess."""
+    result = getattr(img, target)(**params)
+    width, height = img.size
+    first_xy = (0, 0)
+    last_xy = (width - 1, height - 1)
+    first = result[first_xy]
+    last = result[last_xy]
+    result[first_xy] = first
+    return {
+        "type": type(result).__name__,
+        "first": _typed_value(first),
+        "last": _typed_value(last),
+        "write_roundtrip": _typed_value(result[first_xy]),
+    }
+
+
+def _result_descriptor(backend, img, img2, target, params):
+    """Describe opaque results without accepting an arbitrary placeholder."""
+    result = getattr(img, target)(**params)
+    representation = repr(result)
+    address_marker = " at 0x"
+    if address_marker in representation:
+        representation = representation.split(address_marker, 1)[0] + ">"
+    return {
+        "type": type(result).__name__,
+        "repr": representation,
+    }
+
+
+def _method_and_image(backend, img, img2, target, params):
+    """Preserve both a mutator's return value and its resulting pixels."""
+    result = getattr(img, target)(**params)
+    return result, img
+
+
+def _dual_method_and_image(backend, img, img2, target, params):
+    """Preserve return value and pixels for two-image mutators."""
+    result = getattr(img, target)(img2, **params)
+    return result, img
+
+
+def _terminal_image_method(backend, img, img2, target, params):
+    """Exercise close/verify and describe whether pixels remain accessible."""
+    result = getattr(img, target)(**params)
+    try:
+        img.tobytes()
+    except Exception as error:
+        state = {
+            "accessible": False,
+            "exception": type(error).__name__,
+            "message": str(error),
+        }
+    else:
+        state = {"accessible": True}
+    return result, state
+
+
+def _seek(backend, img, img2, target, params):
+    """Exercise seek's return value and resulting frame position."""
+    result = getattr(img, target)(**params)
+    return result, img.tell()
+
 
 CALL_STYLE = {
     "instance_method":        lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
     "instance_method_value":  lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
-    "instance_method_bytes":lambda b, img, img2, tgt, p: (getattr(img, tgt)(**p), img.tobytes())[1],
-    "instance_method_mutate": lambda b, img, img2, tgt, p: (getattr(img, tgt)(**p), img)[1],
-    "instance_method_dual":   lambda b, img, img2, tgt, p: getattr(img, tgt)(img2, **p),
-    "draw":       lambda b, img, img2, tgt, p: (_draw(b, img, tgt, p), img)[1],
+    "instance_method_sequence": _instance_method_sequence,
+    "pixel_access": _pixel_access,
+    "result_descriptor": _result_descriptor,
+    "terminal_image_method": _terminal_image_method,
+    "seek": _seek,
+    "instance_method_mutate": _method_and_image,
+    "instance_method_dual_mutate": _dual_method_and_image,
+    "draw":       lambda b, img, img2, tgt, p: (_draw(b, img, tgt, p), img),
     "draw_value": lambda b, img, img2, tgt, p: _draw(b, img, tgt, p),
     "draw_getfont":lambda b, img, img2, tgt, p: _draw_getfont(b, img, tgt, p),
-    "draw_bitmap":lambda b, img, img2, tgt, p: (_draw_bitmap(b, img, img2, tgt, p), img)[1],
+    "draw_bitmap":lambda b, img, img2, tgt, p: (_draw_bitmap(b, img, img2, tgt, p), img),
     "filter":     lambda b, img, img2, tgt, p: img.filter(_make_filter(b, tgt if tgt != "filter" else p.pop("filter"), p)),
     "enhance":    lambda b, img, img2, tgt, p: getattr(b.ImageEnhance, tgt)(img).enhance(p.pop("factor", 1.0)),
     "font_method":lambda b, img, img2, tgt, p: _font_method(b, img, tgt, p),
     "font_truetype":lambda b, img, img2, tgt, p: _font_truetype(b, img, tgt, p),
     "font_constructor": lambda b, img, img2, tgt, p: _font_constructor(b, img, tgt, p),
+    "font_base_descriptor": lambda b, img, img2, tgt, p: _font_base_descriptor(
+        b, img, tgt, p
+    ),
     "palette_method":lambda b, img, img2, tgt, p: _palette_method(b, img, tgt, p),
     "module_function":       lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, **p),
     "single_chops":          lambda b, img, img2, tgt, p: _call_mod(b, tgt, prefer_chops=True)(img, **p),
@@ -553,58 +723,181 @@ def _load_reference(path):
         return PILImage.open(str(full))
     return open(str(full), 'rb').read()
 
-def _sha(data):
+def _bytes(data):
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data)
     if hasattr(data, 'tobytes'):
-        return hashlib.sha256(data.tobytes()).hexdigest()
-    # QPixmap/QImage from Qt — convert to image then extract raw bits
-    if hasattr(data, 'toImage'):  # QPixmap → QImage
+        return data.tobytes()
+    if hasattr(data, 'toImage'):
         data = data.toImage()
     if hasattr(data, 'bits') and callable(data.bits):
         raw = data.bits()
-        # PySide6 returns memoryview, PyQt5/PySide2 return sip.voidptr
         if isinstance(raw, bytes):
-            return hashlib.sha256(raw).hexdigest()
+            return raw
         if hasattr(raw, 'tobytes'):
-            return hashlib.sha256(raw.tobytes()).hexdigest()
+            return raw.tobytes()
         if hasattr(raw, 'asstring'):
-            return hashlib.sha256(raw.asstring(data.sizeInBytes())).hexdigest()
-    return hashlib.sha256(data).hexdigest()
+            return raw.asstring(data.sizeInBytes())
+    raise TypeError(f"result does not expose exact bytes: {type(data).__name__}")
 
-def _to_json_compat(val):
-    """Convert any result type to JSON-serializable form."""
-    if val is None: return None
-    if isinstance(val, (int, float, str, bool)): return val
-    if isinstance(val, bytes): return val.hex()
-    if isinstance(val, (tuple, list)): return [_to_json_compat(v) for v in val]
-    if isinstance(val, dict): return {str(k): _to_json_compat(v) for k, v in val.items()}
-    if hasattr(val, 'tobytes'): return _sha(val)
-    if hasattr(val, '__iter__') and not isinstance(val, (str, bytes, dict)):
-        return [_to_json_compat(v) for v in val]
-    return repr(val)
+
+def _typed_value(value):
+    """Encode a value with container and scalar types preserved exactly."""
+    if value is None:
+        return {"type": "NoneType"}
+    if type(value) is bool:
+        return {"type": "bool", "value": value}
+    if type(value) is int:
+        return {"type": "int", "value": value}
+    if type(value) is float:
+        return {"type": "float", "hex": value.hex()}
+    if type(value) is str:
+        return {"type": "str", "value": value}
+    if type(value) is bytes:
+        return {"type": "bytes", "hex": value.hex()}
+    if type(value) is bytearray:
+        return {"type": "bytearray", "hex": value.hex()}
+    if type(value) is memoryview:
+        return {"type": "memoryview", "hex": value.tobytes().hex()}
+    if type(value) is tuple:
+        return {
+            "type": "tuple",
+            "items": [_typed_value(item) for item in value],
+        }
+    if type(value) is list:
+        return {
+            "type": "list",
+            "items": [_typed_value(item) for item in value],
+        }
+    if type(value) is dict:
+        return {
+            "type": "dict",
+            "items": [
+                [_typed_value(key), _typed_value(item)]
+                for key, item in value.items()
+            ],
+        }
+    raise TypeError(f"unsupported exact fixture value: {type(value).__name__}")
+
+
+def _assert_image(case, result):
+    reference = _load_reference(case["reference"])
+    try:
+        if isinstance(reference, bytes):
+            raw_kind = case.get("raw_kind")
+            if raw_kind == "bytes":
+                return (
+                    type(result).__name__ == case.get("result_type")
+                    and bytes(result) == reference
+                )
+            if raw_kind == "qt_image":
+                return (
+                    type(result).__name__ == case.get("result_type")
+                    and _bytes(result) == reference
+                )
+            if raw_kind != "image":
+                return False
+            if (
+                getattr(result, "mode", None) != case.get("mode")
+                or tuple(getattr(result, "size", ())) != tuple(case.get("size", ()))
+                or _bytes(result) != reference
+            ):
+                return False
+            if "palette" in case:
+                return result.getpalette() == case["palette"]
+            return True
+        matches = (
+            getattr(result, "mode", None) == reference.mode
+            and tuple(getattr(result, "size", ())) == tuple(reference.size)
+            and _bytes(result) == reference.tobytes()
+        )
+        if not matches:
+            return False
+        if reference.mode in ("P", "PA"):
+            return result.getpalette() == reference.getpalette()
+        return True
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def _assert_image_list(case, result):
+    items = case.get("items")
+    if items is None:
+        items = [
+            {"method": "image", "reference": reference}
+            for reference in case["references"]
+        ]
+    return (
+        type(result).__name__ == case.get("container_type")
+        and len(result) == len(items)
+        and all(
+            _assert_image(item, band)
+            for band, item in zip(result, items)
+        )
+    )
+
+
+def _assert_string(case, result):
+    return "value" in case and repr(result) == case["value"]
+
+
+def _assert_float(case, result):
+    return type(result) is float and result == case["value"]
+
+
+def _assert_error(case, result):
+    return (
+        isinstance(result, Exception)
+        and type(result).__name__ == case.get("exception")
+        and str(result) == case.get("message")
+    )
+
+
+def _assert_exact(case, result):
+    expected = case["value"]
+    if type(result) is not type(expected):
+        return False
+    if isinstance(expected, list):
+        return len(result) == len(expected) and all(
+            _assert_exact({"value": expected_item}, result_item)
+            for expected_item, result_item in zip(expected, result)
+        )
+    if isinstance(expected, dict):
+        return result.keys() == expected.keys() and all(
+            _assert_exact({"value": expected[key]}, result[key])
+            for key in expected
+        )
+    return result == expected
+
+
+def _assert_typed(case, result):
+    try:
+        return _typed_value(result) == case["value"]
+    except TypeError:
+        return False
+
 
 ASSERT = {
-    "image": lambda case, result:
-        _sha(result) == _sha(_load_reference(case["reference"])),
-    "image_list": lambda case, result:
-        all(_sha(band) == _sha(_load_reference(ref))
-            for band, ref in zip(result, case["references"])),
-    "exact": lambda case, result:
-        result == case["value"],
-    "json": lambda case, result:
-        json.dumps(_to_json_compat(result)) == json.dumps(case["value"]),
-    "string": lambda case, result:
-        repr(result) == case.get("value", "")
-        or str(result).startswith(case.get("prefix", "")),
-    "float": lambda case, result:
-        abs(result - case["value"]) < case.get("tolerance", 0.0001),
-    "error": lambda case, result:
-        isinstance(result, Exception)
-        and case.get("exception", "") in type(result).__name__
-        and case.get("message_contains", "") in str(result),
+    "image": _assert_image,
+    "image_list": _assert_image_list,
+    "exact": _assert_exact,
+    "typed": _assert_typed,
+    "string": _assert_string,
+    "float": _assert_float,
+    "error": _assert_error,
 }
-# Add tuple assertion that dispatches element-wise to ASSERT entries.
-# Must be added after ASSERT is defined so the closure captures it correctly.
-ASSERT["tuple"] = lambda case, result: all(
-    ASSERT[item["method"]](item, result[i])
-    for i, item in enumerate(case["items"])
-)
+
+
+def _assert_tuple(case, result):
+    items = case["items"]
+    return (
+        type(result) is tuple
+        and len(result) == len(items)
+        and all(
+            ASSERT[item["method"]](item, value)
+            for item, value in zip(items, result)
+        )
+    )
+
+
+ASSERT["tuple"] = _assert_tuple

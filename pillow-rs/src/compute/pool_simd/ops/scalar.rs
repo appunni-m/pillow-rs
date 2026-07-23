@@ -3288,6 +3288,7 @@ pub fn paste(
     paste_x: i32,
     paste_y: i32,
     mask: Option<&[u32]>,
+    mask_alpha: bool,
 ) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
@@ -3295,8 +3296,16 @@ pub fn paste(
     // Compute paste region clamped to destination bounds.
     // x_start/y_start = first source pixel visible in dest (0 if paste_x >= 0).
     // x_end/y_end     = last source pixel visible in dest (src_w if paste fits).
-    let x_start = (-paste_x) as u32;
-    let y_start = (-paste_y) as u32;
+    let x_start = if paste_x < 0 {
+        paste_x.unsigned_abs()
+    } else {
+        0
+    };
+    let y_start = if paste_y < 0 {
+        paste_y.unsigned_abs()
+    } else {
+        0
+    };
     let x_end = src_w.min(w.saturating_sub(paste_x.max(0) as u32));
     let y_end = src_h.min(h.saturating_sub(paste_y.max(0) as u32));
 
@@ -3319,7 +3328,11 @@ pub fn paste(
 
                 let sp = source[src_idx];
                 let dp = pixels[dst_idx];
-                let mv = mask_pixels[src_idx] & 0xFF;
+                let mv = if mask_alpha {
+                    (mask_pixels[src_idx] >> 24) & 0xFF
+                } else {
+                    mask_pixels[src_idx] & 0xFF
+                };
 
                 if mv == 0 {
                     continue;

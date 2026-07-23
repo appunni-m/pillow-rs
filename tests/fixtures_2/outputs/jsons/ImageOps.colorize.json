@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageOps",
@@ -11,7 +13,7 @@
       "assert": {
         "method": "error",
         "exception": "AssertionError",
-        "message_contains": ""
+        "message": ""
       }
     },
     {

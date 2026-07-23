@@ -24,6 +24,7 @@ struct Params {
     paste_x: i32,
     paste_y: i32,
     has_mask: u32,
+    mask_alpha: u32,
 }
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
@@ -47,10 +48,11 @@ fn blend_pixel(src: u32, dst: u32, mask: u32, mode: u32) -> u32 {
     let db = (dst >> 16u) & 0xffu;
     let da = (dst >> 24u) & 0xffu;
 
-    let out_r = (sr * mask + dr * (255u - mask)) / 255u;
-    let out_g = select(dg, (sg * mask + dg * (255u - mask)) / 255u, mode_has_g(mode));
-    let out_b = select(db, (sb * mask + db * (255u - mask)) / 255u, mode_has_b(mode));
-    let out_a = select(da, (sa * mask + da * (255u - mask)) / 255u, mode_has_a(mode));
+    // Pillow's DIV255 macro rounds this weighted sum to nearest.
+    let out_r = (sr * mask + dr * (255u - mask) + 127u) / 255u;
+    let out_g = select(dg, (sg * mask + dg * (255u - mask) + 127u) / 255u, mode_has_g(mode));
+    let out_b = select(db, (sb * mask + db * (255u - mask) + 127u) / 255u, mode_has_b(mode));
+    let out_a = select(da, (sa * mask + da * (255u - mask) + 127u) / 255u, mode_has_a(mode));
 
     return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }
@@ -76,7 +78,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         var mask_val: u32 = 255u;
         if params.has_mask == 1u {
             let mask_pixel = input_mask[src_idx];
-            mask_val = mask_pixel & 0xffu;  // mask in low byte
+            mask_val = select(
+                mask_pixel & 0xffu,
+                (mask_pixel >> 24u) & 0xffu,
+                params.mask_alpha == 1u,
+            );
         }
 
         output[dst_idx] = blend_pixel(src_pixel, dst_pixel, mask_val, params.mode);

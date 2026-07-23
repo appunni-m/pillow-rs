@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,43 +11,127 @@
     {
       "id": "Image_getbbox_1_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 0, 10, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 10
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbbox_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 0, 10, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 10
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbbox_LA_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "NoneType"
+        }
       }
     },
     {
       "id": "Image_getbbox_P_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "NoneType"
+        }
       }
     },
     {
       "id": "Image_getbbox_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 0, 32, 32)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 32
+            },
+            {
+              "type": "int",
+              "value": 32
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbbox_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 0, 10, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 10
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     }
   ]

@@ -52,6 +52,18 @@
         ]
       },
       "params": {}
+    },
+    {
+      "id": "Image_apply_transparency_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
     }
   ]
 }

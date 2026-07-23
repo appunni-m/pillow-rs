@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -38,28 +40,52 @@
       "id": "cmyk_50x50_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.new_cmyk_50x50_suite1.bin"
+        "reference": "raws/Image.new_cmyk_50x50_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          50,
+          50
+        ]
       }
     },
     {
       "id": "float_50x50_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.new_float_50x50_suite1.bin"
+        "reference": "raws/Image.new_float_50x50_suite1.bin",
+        "raw_kind": "image",
+        "mode": "F",
+        "size": [
+          50,
+          50
+        ]
       }
     },
     {
       "id": "hsv_50x50_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.new_hsv_50x50_suite1.bin"
+        "reference": "raws/Image.new_hsv_50x50_suite1.bin",
+        "raw_kind": "image",
+        "mode": "HSV",
+        "size": [
+          50,
+          50
+        ]
       }
     },
     {
       "id": "int32_50x50_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.new_int32_50x50_suite1.bin"
+        "reference": "raws/Image.new_int32_50x50_suite1.bin",
+        "raw_kind": "image",
+        "mode": "I",
+        "size": [
+          50,
+          50
+        ]
       }
     },
     {
@@ -73,7 +99,13 @@
       "id": "ycbcr_50x50_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.new_ycbcr_50x50_suite1.bin"
+        "reference": "raws/Image.new_ycbcr_50x50_suite1.bin",
+        "raw_kind": "image",
+        "mode": "YCbCr",
+        "size": [
+          50,
+          50
+        ]
       }
     }
   ]

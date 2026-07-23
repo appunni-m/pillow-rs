@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,43 +11,115 @@
     {
       "id": "Image_getbands_1_suite1",
       "assert": {
-        "method": "string",
-        "value": "('1',)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "1"
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbands_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "('L',)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "L"
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbands_LA_suite1",
       "assert": {
-        "method": "string",
-        "value": "('L', 'A')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "L"
+            },
+            {
+              "type": "str",
+              "value": "A"
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbands_P_suite1",
       "assert": {
-        "method": "string",
-        "value": "('P',)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "P"
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbands_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "('R', 'G', 'B')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "R"
+            },
+            {
+              "type": "str",
+              "value": "G"
+            },
+            {
+              "type": "str",
+              "value": "B"
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getbands_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "('R', 'G', 'B', 'A')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "R"
+            },
+            {
+              "type": "str",
+              "value": "G"
+            },
+            {
+              "type": "str",
+              "value": "B"
+            },
+            {
+              "type": "str",
+              "value": "A"
+            }
+          ]
+        }
       }
     }
   ]

@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,15 +11,37 @@
     {
       "id": "rgb_5x5_png_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.save_rgb_5x5_png_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.save_rgb_5x5_png_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "l_5x5_png_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.save_l_5x5_png_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.save_l_5x5_png_suite1_1.png"
+          }
+        ]
       }
     }
   ]

@@ -283,9 +283,6 @@ generated reports, build outputs, and package installs.
 |       |   |-- imagingft.rs
 |       |   `-- mod.rs
 |       |-- format.rs
-|       |-- formats/
-|       |   |-- handler.rs
-|       |   `-- mod.rs
 |       |-- image.rs
 |       |-- image_utils.rs
 |       |-- infallible.rs
@@ -521,6 +518,7 @@ generated reports, build outputs, and package installs.
 |       |-- browser/
 |       |   |-- test.html
 |       |   `-- wasm_browser.test.mjs
+|       |-- codec_feature_matrix.mjs
 |       |-- execution_engine.mjs
 |       |-- run_wasm_test.mjs
 |       `-- wasm_backend.mjs
@@ -580,6 +578,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- ops_registry.py
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
+|   |-- generate_image_backend_operation_fixtures.py
 |   |-- generate_stubs.py
 |   |-- lint.sh
 |   `-- migrate_fixtures.py

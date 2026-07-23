@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,15 +11,21 @@
     {
       "id": "RGB_suite1",
       "assert": {
-        "method": "exact",
-        "value": {}
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
       }
     },
     {
       "id": "L_suite1",
       "assert": {
-        "method": "exact",
-        "value": {}
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
       }
     }
   ]

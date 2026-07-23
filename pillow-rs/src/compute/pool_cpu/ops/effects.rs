@@ -154,69 +154,103 @@ pub fn op_paste(
     x: i64,
     y: i64,
     mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = source.materialize_for_ops()?;
-    let (src_w, src_h) = (src_img.width(), src_img.height());
-    let paste_x = x;
-    let paste_y = y;
-
-    if let Some(mask_img_ref) = mask {
-        let mask_img = mask_img_ref.materialize_for_ops()?;
-        let mask_gray = mask_img.to_luma8();
-        let mut dest_clone = img.to_rgba8();
-
-        for py in 0..src_h.min(dest_clone.height()) {
-            for px in 0..src_w.min(dest_clone.width()) {
-                let mask_val = if px < mask_gray.width() && py < mask_gray.height() {
-                    mask_gray.get_pixel(px, py)[0]
-                } else {
-                    0
-                };
-                if mask_val == 0 {
-                    continue;
-                }
-                let sp = src_img.get_pixel(px, py);
-                let dx = (paste_x + px as i64) as u32;
-                let dy = (paste_y + py as i64) as u32;
-                if dx >= dest_clone.width() || dy >= dest_clone.height() {
-                    continue;
-                }
-                if mask_val == 255 {
-                    dest_clone.put_pixel(dx, dy, sp);
-                } else {
-                    let inv_alpha = 255u16 - mask_val as u16;
-                    let dp = dest_clone.get_pixel(dx, dy);
-                    let a = sp.0.get(3).copied().unwrap_or(255) as u16;
-                    let da = dp.0.get(3).copied().unwrap_or(255) as u16;
-                    let blended = image_slash_star::Rgba([
-                        ((sp[0] as u16 * mask_val as u16 + dp[0] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((sp[1] as u16 * mask_val as u16 + dp[1] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((sp[2] as u16 * mask_val as u16 + dp[2] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((a * mask_val as u16 + da * inv_alpha + 127) / 255) as u8,
-                    ]);
-                    dest_clone.put_pixel(dx, dy, blended);
-                }
-            }
-        }
-        Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+    let src_img = if mode == Some("P") {
+        source.materialize_indices()?
     } else {
-        let mut dest_clone = img.to_rgba8();
-        let src_rgba = src_img.to_rgba8();
-        let (sw, sh) = (src_rgba.width(), src_rgba.height());
-        for py in 0..sh.min(dest_clone.height()) {
-            for px in 0..sw.min(dest_clone.width()) {
-                let dx = (paste_x + px as i64) as u32;
-                let dy = (paste_y + py as i64) as u32;
-                if dx < dest_clone.width() && dy < dest_clone.height() {
-                    dest_clone.put_pixel(dx, dy, *src_rgba.get_pixel(px, py));
-                }
+        source.materialize_for_ops()?
+    };
+    let (src_w, src_h) = (src_img.width(), src_img.height());
+    let (dest_w, dest_h) = img.dimensions();
+    let source_left = (-x).max(0).min(i64::from(src_w)) as u32;
+    let source_top = (-y).max(0).min(i64::from(src_h)) as u32;
+    let dest_left = x.max(0).min(i64::from(dest_w)) as u32;
+    let dest_top = y.max(0).min(i64::from(dest_h)) as u32;
+    let copy_width = src_w
+        .saturating_sub(source_left)
+        .min(dest_w.saturating_sub(dest_left));
+    let copy_height = src_h
+        .saturating_sub(source_top)
+        .min(dest_h.saturating_sub(dest_top));
+    if copy_width == 0 || copy_height == 0 {
+        return Ok(img.clone());
+    }
+
+    let source_rgba = src_img.to_rgba8();
+    let mut destination = img.to_rgba8();
+    enum PasteMask {
+        Luma(image_slash_star::GrayImage),
+        Alpha(image_slash_star::RgbaImage),
+    }
+    let mask_pixels = match mask {
+        Some(mask_image) => {
+            let materialized = mask_image.materialize()?;
+            if mask_alpha {
+                Some(PasteMask::Alpha(materialized.to_rgba8()))
+            } else {
+                Some(PasteMask::Luma(materialized.to_luma8()))
             }
         }
-        Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+        None => None,
+    };
+
+    for offset_y in 0..copy_height {
+        let source_y = source_top + offset_y;
+        let dest_y = dest_top + offset_y;
+        for offset_x in 0..copy_width {
+            let source_x = source_left + offset_x;
+            let dest_x = dest_left + offset_x;
+            let source_pixel = *source_rgba.get_pixel(source_x, source_y);
+            let Some(mask_image) = mask_pixels.as_ref() else {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            };
+            let mask_value = match mask_image {
+                PasteMask::Luma(pixels)
+                    if source_x < pixels.width() && source_y < pixels.height() =>
+                {
+                    pixels.get_pixel(source_x, source_y)[0]
+                }
+                PasteMask::Alpha(pixels)
+                    if source_x < pixels.width() && source_y < pixels.height() =>
+                {
+                    pixels.get_pixel(source_x, source_y)[3]
+                }
+                _ => 0,
+            };
+            if mask_value == 0 {
+                continue;
+            }
+            if mask_value == 255 {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            }
+
+            // Pillow libImaging uses BLEND/DIV255 for every active band:
+            // DIV255(src * mask + dst * (255 - mask)). Its integer macro is
+            // equivalent to round-to-nearest for this 8-bit input range.
+            let destination_pixel = *destination.get_pixel(dest_x, dest_y);
+            let mask = u16::from(mask_value);
+            let inverse = 255u16 - mask;
+            let blend = |src: u8, dst: u8| -> u8 {
+                ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
+            };
+            destination.put_pixel(
+                dest_x,
+                dest_y,
+                image_slash_star::Rgba([
+                    blend(source_pixel[0], destination_pixel[0]),
+                    blend(source_pixel[1], destination_pixel[1]),
+                    blend(source_pixel[2], destination_pixel[2]),
+                    blend(source_pixel[3], destination_pixel[3]),
+                ]),
+            );
+        }
     }
+
+    Ok(preserve_mode(img, DynamicImage::ImageRgba8(destination)))
 }
 
 // ── AlphaComposite ──

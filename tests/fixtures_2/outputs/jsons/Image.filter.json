@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -17,7 +19,13 @@
       "id": "Image.filter_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.filter_Image.filter_CMYK_suite1.bin"
+        "reference": "raws/Image.filter_Image.filter_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          200,
+          50
+        ]
       }
     },
     {
@@ -39,7 +47,7 @@
       "assert": {
         "method": "error",
         "exception": "ValueError",
-        "message_contains": "cannot filter palette images"
+        "message": "cannot filter palette images"
       }
     },
     {

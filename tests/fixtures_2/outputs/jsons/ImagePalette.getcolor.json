@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImagePalette",
@@ -9,22 +11,31 @@
     {
       "id": "ImagePalette_getcolor_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "ImagePalette_getcolor_P_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     },
     {
       "id": "ImagePalette_getcolor_RGB_suite1",
       "assert": {
-        "method": "exact",
-        "value": 0
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 0
+        }
       }
     }
   ]

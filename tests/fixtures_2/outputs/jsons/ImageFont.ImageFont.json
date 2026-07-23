@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,22 +11,157 @@
     {
       "id": "ImageFont_ImageFont_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x72e32cafca10>"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "exception"
+                    },
+                    {
+                      "type": "str",
+                      "value": "AttributeError"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "message"
+                    },
+                    {
+                      "type": "str",
+                      "value": "'ImageFont' object has no attribute 'font'"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImageFont_ImageFont_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x72e32c3f41a0>"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "exception"
+                    },
+                    {
+                      "type": "str",
+                      "value": "AttributeError"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "message"
+                    },
+                    {
+                      "type": "str",
+                      "value": "'ImageFont' object has no attribute 'font'"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImageFont_ImageFont_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x72e32cafca10>"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "exception"
+                    },
+                    {
+                      "type": "str",
+                      "value": "AttributeError"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "message"
+                    },
+                    {
+                      "type": "str",
+                      "value": "'ImageFont' object has no attribute 'font'"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     }
   ]

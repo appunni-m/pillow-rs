@@ -120,9 +120,15 @@ impl BufferPool {
     }
 
     /// Upload a second image to buf_img2 for dual-input shader ops.
-    fn upload_second(&self, queue: &wgpu::Queue, rgba: &RgbaImage) {
+    fn upload_second(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
         let (w, h) = rgba.dimensions();
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        if n > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "BufferPool capacity {} < second image size {}",
+                self.capacity, n
+            )));
+        }
         let mut packed: Vec<u32> = Vec::with_capacity(n);
         for px in rgba.pixels() {
             packed.push(
@@ -133,12 +139,19 @@ impl BufferPool {
             );
         }
         queue.write_buffer(&self.buf_img2, 0, bytemuck::cast_slice(&packed));
+        Ok(())
     }
 
     /// Upload a third image to buf_img3 for 3-input shader ops (Composite mask).
-    fn upload_third(&self, queue: &wgpu::Queue, rgba: &RgbaImage) {
+    fn upload_third(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
         let (w, h) = rgba.dimensions();
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        if n > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "BufferPool capacity {} < third image size {}",
+                self.capacity, n
+            )));
+        }
         let mut packed: Vec<u32> = Vec::with_capacity(n);
         for px in rgba.pixels() {
             packed.push(
@@ -149,6 +162,7 @@ impl BufferPool {
             );
         }
         queue.write_buffer(&self.buf_img3, 0, bytemuck::cast_slice(&packed));
+        Ok(())
     }
 
     /// Upload LUT data to the storage buffer for Eval/PointOp shaders.
@@ -759,7 +773,7 @@ impl GpuInner {
             // Upload pre-materialized second image to buf_img2 if this is a dual-input op.
             let img2_buf: Option<&wgpu::Buffer> = if let Some(ref second) = second_images[i] {
                 let second_rgba = second.to_rgba8();
-                self.buffers.upload_second(&self.queue, &second_rgba);
+                self.buffers.upload_second(&self.queue, &second_rgba)?;
                 Some(&self.buffers.buf_img2)
             } else {
                 None
@@ -768,7 +782,7 @@ impl GpuInner {
             // Upload pre-materialized third image to buf_img3 for 3-input ops.
             let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = third_images[i] {
                 let third_rgba = third.to_rgba8();
-                self.buffers.upload_third(&self.queue, &third_rgba);
+                self.buffers.upload_third(&self.queue, &third_rgba)?;
                 Some(&self.buffers.buf_img3)
             } else {
                 None
@@ -815,6 +829,18 @@ fn mode_code(img: &DynamicImage) -> u32 {
 /// Extract the second (right-hand) image from a dual-input PipelineOp, if present.
 /// Returns the materialized DynamicImage ready for GPU upload.
 fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
+    if let PipelineOp::Paste { source, .. } = op {
+        // Paste has already converted its source to the destination mode. Keep
+        // P-mode sources as their one-byte indices here: expanding them through
+        // the palette before packing the GPU upload would make the GPU lane
+        // disagree with the CPU and SIMD paste implementations.
+        return if source.mode().ok().as_deref() == Some("P") {
+            source.materialize_indices().ok()
+        } else {
+            source.materialize().ok()
+        };
+    }
+
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
         PipelineOp::Add { other, .. }
         | PipelineOp::Subtract { other, .. }
@@ -835,9 +861,7 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
         | PipelineOp::Composite { other, .. }
         | PipelineOp::BlendModule { other, .. }
         | PipelineOp::CompositeModule { other, .. } => Some(other),
-        PipelineOp::Paste { source, .. } | PipelineOp::AlphaComposite { source, .. } => {
-            Some(source)
-        }
+        PipelineOp::AlphaComposite { source, .. } => Some(source),
         _ => None,
     };
     arc_img.and_then(|img| img.materialize().ok())

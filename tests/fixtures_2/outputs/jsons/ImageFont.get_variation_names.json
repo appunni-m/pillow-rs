@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,22 +11,25 @@
     {
       "id": "non_variable_font_suite1",
       "assert": {
-        "method": "exact",
-        "value": []
+        "method": "error",
+        "exception": "OSError",
+        "message": "invalid argument"
       }
     },
     {
       "id": "get_variation_names_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": []
+        "method": "error",
+        "exception": "OSError",
+        "message": "invalid argument"
       }
     },
     {
       "id": "get_variation_names_RGBA_suite1",
       "assert": {
-        "method": "exact",
-        "value": []
+        "method": "error",
+        "exception": "OSError",
+        "message": "invalid argument"
       }
     }
   ]

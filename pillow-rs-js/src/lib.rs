@@ -114,9 +114,9 @@ impl Image {
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
-            .paste(
+            .paste_at(
                 PasteSource::Image(src.inner.clone()),
-                Some((x, y, x, y)),
+                Some((x, y)),
                 None,
             )
             .map_err(err)
@@ -135,7 +135,11 @@ impl Image {
     ) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
-            .paste(PasteSource::Color((r, g, b, a)), Some((l, t, rt, bt)), None)
+            .paste(
+                PasteSource::Rgba(r, g, b, a),
+                Some((l, t, rt, bt)),
+                None,
+            )
             .map_err(err)
     }
 
@@ -482,6 +486,32 @@ impl Image {
     pub fn apply_transparency(&mut self) -> Result<(), JsValue> {
         self.inner.apply_transparency().map_err(err)
     }
+    #[wasm_bindgen(js_name = "paletteMode")]
+    pub fn palette_mode(&self) -> Option<String> {
+        self.inner.palette_mode().map(str::to_owned)
+    }
+    #[wasm_bindgen(js_name = "paletteRgba")]
+    pub fn palette_rgba(&self) -> Option<Vec<u8>> {
+        self.inner.getpalette_rgba()
+    }
+    #[wasm_bindgen(js_name = "pendingTransparencyIndex")]
+    pub fn pending_transparency_index(&self) -> Option<u8> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Index(index)) => Some(index),
+            _ => None,
+        }
+    }
+    #[wasm_bindgen(js_name = "pendingTransparencyTable")]
+    pub fn pending_transparency_table(&self) -> Option<Vec<u8>> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Table(alpha)) => Some(alpha),
+            _ => None,
+        }
+    }
+    #[wasm_bindgen(js_name = "hasTransparencyData")]
+    pub fn has_transparency_data(&self) -> bool {
+        self.inner.has_transparency_data()
+    }
     #[wasm_bindgen(js_name = "draft")]
     pub fn draft(&self) -> Image {
         Image {
@@ -536,8 +566,11 @@ impl ImageDraw {
         g: u8,
         b: u8,
         a: u8,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
-        self.draw.line(x0, y0, x1, y1, (r, g, b, a), 1).map_err(err)
+        self.draw
+            .line(x0, y0, x1, y1, (r, g, b, a), width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "rectangle")]
     pub fn rect(
@@ -554,11 +587,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .rectangle(x0, y0, x1, y1, fill, out, 1)
+            .rectangle(x0, y0, x1, y1, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "ellipse")]
@@ -576,10 +610,13 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
-        self.draw.ellipse(x0, y0, x1, y1, fill, out, 1).map_err(err)
+        self.draw
+            .ellipse(x0, y0, x1, y1, fill, out, width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "polygon")]
     pub fn polygon(
@@ -593,11 +630,14 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let pts: Vec<(i32, i32)> = points.chunks(2).map(|c| (c[0], c[1])).collect();
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
-        self.draw.polygon(&pts, fill, out, 1).map_err(err)
+        self.draw
+            .polygon(&pts, fill, out, width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "point")]
     pub fn point(&mut self, pts: Vec<i32>, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
@@ -617,9 +657,19 @@ impl ImageDraw {
         g: u8,
         b: u8,
         a: u8,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         self.draw
-            .arc(x0, y0, x1, y1, start, end, (r, g, b, a), 1)
+            .arc(
+                x0,
+                y0,
+                x1,
+                y1,
+                start,
+                end,
+                (r, g, b, a),
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "chord")]
@@ -639,11 +689,22 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .chord(x0, y0, x1, y1, start, end, fill, out, 1)
+            .chord(
+                x0,
+                y0,
+                x1,
+                y1,
+                start,
+                end,
+                fill,
+                out,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pieslice")]
@@ -663,11 +724,22 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .pieslice(x0, y0, x1, y1, start, end, fill, out, 1)
+            .pieslice(
+                x0,
+                y0,
+                x1,
+                y1,
+                start,
+                end,
+                fill,
+                out,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circle")]
@@ -684,11 +756,19 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .circle(cx as i32, cy as i32, radius, fill, out, 1)
+            .circle(
+                cx as i32,
+                cy as i32,
+                radius,
+                fill,
+                out,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "roundedRectangle")]
@@ -707,11 +787,21 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .rounded_rectangle(x0, y0, x1, y1, radius, fill, out, 1)
+            .rounded_rectangle(
+                x0,
+                y0,
+                x1,
+                y1,
+                radius,
+                fill,
+                out,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]

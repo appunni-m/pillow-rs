@@ -1,4 +1,4 @@
-//! ImageDraw CPU operations — direct drawing on RgbaImage canvas.
+//! ImageDraw CPU operations — direct drawing in the destination's native layout.
 //! These are called by the pipeline executor when a DrawXxx PipelineOp
 //! is encountered. They implement the same algorithms as the Draw methods
 //! in draw/mod.rs, but operate directly on DynamicImage to avoid circular
@@ -8,45 +8,88 @@
 //! the Luma8 index buffer and writes palette index values directly, matching
 //! PIL's behavior (fill colors use their R channel as the palette index).
 
-use crate::draw::{bresenham_line, plot, scanline_polygon_fill};
+use crate::draw::{DrawCanvas, bresenham_line, plot, round_down, round_up, scanline_polygon_fill};
 use crate::error::PilError;
-use image_slash_star::{DynamicImage, GrayImage, Rgba, RgbaImage};
-/// Helper: draw on an image, preserving P-mode (Luma8) when possible.
-/// For P-mode (`mode == Some("P")` with Luma8 input), converts to RGBA
-/// temporarily for drawing, then converts back to Luma8 by taking the
-/// R channel (all channels remain equal for P-mode drawing, so this is
-/// lossless and preserves palette index values).
-/// For all other modes, works on RGBA as before.
-fn draw_preserve_p_mode<F>(img: &DynamicImage, mode: Option<&str>, draw_fn: F) -> DynamicImage
-where
-    F: Fn(&mut RgbaImage),
-{
-    // Detect mode from actual image type (LA is native, not explicit_mode)
-    let is_la = matches!(img, DynamicImage::ImageLumaA8(_)) || (mode == Some("LA"));
-    let is_p_mode = matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("P");
-    let mut canvas = img.to_rgba8();
-    draw_fn(&mut canvas);
-    if is_p_mode {
-        // Convert back to Luma8 by extracting R channel (R=G=B for P-mode indices)
-        let (w, h) = canvas.dimensions();
-        DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
-            image_slash_star::Luma([canvas.get_pixel(x, y)[0]])
-        }))
-    } else if is_la {
-        // Convert back to LumaA8 by extracting R (luma) and A (alpha)
-        let (w, h) = canvas.dimensions();
-        DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::from_fn(w, h, |x, y| {
-            let px = canvas.get_pixel(x, y);
-            image_slash_star::LumaA([px[0], px[3]])
-        }))
-    } else {
-        DynamicImage::ImageRgba8(canvas)
+use image_slash_star::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+enum NativeDrawCanvas {
+    L(GrayImage),
+    LA(GrayAlphaImage),
+    RGB(RgbImage),
+    RGBA(RgbaImage),
+}
+
+impl NativeDrawCanvas {
+    fn from_image(image: &DynamicImage) -> Self {
+        match image {
+            DynamicImage::ImageLuma8(pixels) => Self::L(pixels.clone()),
+            DynamicImage::ImageLumaA8(pixels) => Self::LA(pixels.clone()),
+            DynamicImage::ImageRgb8(pixels) => Self::RGB(pixels.clone()),
+            DynamicImage::ImageRgba8(pixels) => Self::RGBA(pixels.clone()),
+            _ => Self::RGBA(image.to_rgba8()),
+        }
+    }
+
+    fn into_image(self) -> DynamicImage {
+        match self {
+            Self::L(pixels) => DynamicImage::ImageLuma8(pixels),
+            Self::LA(pixels) => DynamicImage::ImageLumaA8(pixels),
+            Self::RGB(pixels) => DynamicImage::ImageRgb8(pixels),
+            Self::RGBA(pixels) => DynamicImage::ImageRgba8(pixels),
+        }
     }
 }
 
+impl DrawCanvas for NativeDrawCanvas {
+    fn width(&self) -> u32 {
+        match self {
+            Self::L(pixels) => pixels.width(),
+            Self::LA(pixels) => pixels.width(),
+            Self::RGB(pixels) => pixels.width(),
+            Self::RGBA(pixels) => pixels.width(),
+        }
+    }
+
+    fn height(&self) -> u32 {
+        match self {
+            Self::L(pixels) => pixels.height(),
+            Self::LA(pixels) => pixels.height(),
+            Self::RGB(pixels) => pixels.height(),
+            Self::RGBA(pixels) => pixels.height(),
+        }
+    }
+
+    fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]) {
+        match self {
+            Self::L(pixels) => {
+                pixels.put_pixel(x, y, image_slash_star::Luma([color[0]]));
+            }
+            Self::LA(pixels) => {
+                pixels.put_pixel(x, y, image_slash_star::LumaA([color[0], color[3]]));
+            }
+            Self::RGB(pixels) => {
+                pixels.put_pixel(x, y, image_slash_star::Rgb([color[0], color[1], color[2]]));
+            }
+            Self::RGBA(pixels) => {
+                pixels.put_pixel(x, y, image_slash_star::Rgba(color));
+            }
+        }
+    }
+}
+
+/// Draw directly in the destination's native byte layout.
+fn draw_native<F>(img: &DynamicImage, draw_fn: F) -> DynamicImage
+where
+    F: Fn(&mut NativeDrawCanvas),
+{
+    let mut canvas = NativeDrawCanvas::from_image(img);
+    draw_fn(&mut canvas);
+    canvas.into_image()
+}
+
 /// Draw a line directly on a canvas (Bresenham).
-fn draw_line_on_canvas(
-    canvas: &mut RgbaImage,
+fn draw_line_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -55,27 +98,56 @@ fn draw_line_on_canvas(
     width: u32,
 ) {
     let (w, h) = (canvas.width(), canvas.height());
-    let max_w = w.min(h).min(100);
-    let width = if width > max_w {
-        log::warn!("draw_line: width {} clamped to {}", width, max_w);
-        max_w
-    } else {
-        width
-    };
     if width <= 1 {
         bresenham_line(canvas, x0, y0, x1, y1, fill, w, h, false);
-    } else {
-        let half = (width as i32) / 2;
-        for offset in -half..=half {
-            bresenham_line(canvas, x0 + offset, y0, x1 + offset, y1, fill, w, h, false);
-            bresenham_line(canvas, x0, y0 + offset, x1, y1 + offset, fill, w, h, false);
-        }
+        return;
     }
+
+    let delta_x = i64::from(x1) - i64::from(x0);
+    let delta_y = i64::from(y1) - i64::from(y0);
+    if delta_x == 0 && delta_y == 0 {
+        plot(canvas, x0, y0, fill, w, h, false);
+        return;
+    }
+
+    // Pillow src/libImaging/Draw.c::ImagingDrawWideLine constructs an
+    // asymmetric four-edge polygon for even widths. The two rounded ratios
+    // are what keep an even requested width from becoming one pixel too wide.
+    let squared_length = delta_x
+        .saturating_mul(delta_x)
+        .saturating_add(delta_y.saturating_mul(delta_y));
+    let length = (squared_length as f64).sqrt();
+    let half_width = f64::from(width.saturating_sub(1)) / 2.0;
+    let ratio_max = f64::from(round_up(half_width)) / length;
+    let ratio_min = f64::from(round_down(half_width)) / length;
+    let offset_x_min = round_down(ratio_min * delta_y as f64);
+    let offset_x_max = round_down(ratio_max * delta_y as f64);
+    let offset_y_min = round_down(ratio_min * delta_x as f64);
+    let offset_y_max = round_down(ratio_max * delta_x as f64);
+    let points = [
+        (
+            x0.saturating_sub(offset_x_min),
+            y0.saturating_add(offset_y_max),
+        ),
+        (
+            x1.saturating_sub(offset_x_min),
+            y1.saturating_add(offset_y_max),
+        ),
+        (
+            x1.saturating_add(offset_x_max),
+            y1.saturating_sub(offset_y_min),
+        ),
+        (
+            x0.saturating_add(offset_x_max),
+            y0.saturating_sub(offset_y_min),
+        ),
+    ];
+    scanline_polygon_fill(canvas, &points, fill, w, h, false);
 }
 
 /// Draw a rectangle directly on a canvas.
-fn draw_rect_on_canvas(
-    canvas: &mut RgbaImage,
+fn draw_rect_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -85,262 +157,728 @@ fn draw_rect_on_canvas(
     width: u32,
 ) {
     let (img_w, img_h) = (canvas.width(), canvas.height());
+    if x1 < x0 || y1 < y0 {
+        return;
+    }
 
-    let x0 = x0.clamp(0, img_w as i32 - 1);
-    let y0 = y0.clamp(0, img_h as i32 - 1);
-    let x1 = x1.clamp(0, img_w as i32);
-    let y1 = y1.clamp(0, img_h as i32);
+    let visible_left = x0.max(0) as u32;
+    let visible_top = y0.max(0) as u32;
+    let visible_right = x1.min(img_w.saturating_sub(1) as i32);
+    let visible_bottom = y1.min(img_h.saturating_sub(1) as i32);
+    if visible_right < 0 || visible_bottom < 0 || visible_left >= img_w || visible_top >= img_h {
+        return;
+    }
 
-    // Clamp outline width to prevent CPU DoS from attacker-controlled width
-    let max_w = img_w.min(img_h).min(100);
-    let width = if width > max_w {
-        log::warn!("draw_rect: outline width {} clamped to {}", width, max_w);
-        max_w
-    } else {
-        width
-    };
-
-    // Fill (inclusive range, matching PIL)
+    // Pillow's ImagingDrawRectangle treats both ends as inclusive.
     if let Some(fc) = fill {
-        for py in y0..=y1 {
-            for px in x0..=x1 {
-                if px >= 0 && py >= 0 && (px as u32) < img_w && (py as u32) < img_h {
-                    canvas.put_pixel(px as u32, py as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
-                }
+        for py in visible_top..=visible_bottom as u32 {
+            for px in visible_left..=visible_right as u32 {
+                canvas.put_rgba(px, py, [fc.0, fc.1, fc.2, fc.3]);
             }
         }
     }
 
-    // Outline
-    if let Some(oc) = outline {
-        for w in 0..width as i32 {
-            // Top
-            for px in x0 - w..=x1 + w {
-                plot(canvas, px, y0 - w, oc, img_w, img_h, false);
-                plot(canvas, px, y1 + w, oc, img_w, img_h, false);
-            }
-            // Sides
-            for py in y0 - w..=y1 + w {
-                plot(canvas, x0 - w, py, oc, img_w, img_h, false);
-                plot(canvas, x1 + w, py, oc, img_w, img_h, false);
+    // libImaging draws each additional outline ring inward. Computing the
+    // distance from every visible pixel to the original inclusive edge is
+    // equivalent to the C ring loop, while bounding work by the image size
+    // even when callers provide very large coordinates or widths.
+    if let Some(oc) = outline.filter(|_| width != 0) {
+        let width = i64::from(width);
+        for py in visible_top..=visible_bottom as u32 {
+            for px in visible_left..=visible_right as u32 {
+                let px = i64::from(px);
+                let py = i64::from(py);
+                let edge_distance = (px - i64::from(x0))
+                    .min(i64::from(x1) - px)
+                    .min(py - i64::from(y0))
+                    .min(i64::from(y1) - py);
+                if edge_distance < width {
+                    canvas.put_rgba(px as u32, py as u32, [oc.0, oc.1, oc.2, oc.3]);
+                }
             }
         }
     }
 }
 
-/// Draw an ellipse directly on a canvas using Bresenham quarter-ellipse.
-fn draw_ellipse_on_canvas(
-    canvas: &mut RgbaImage,
+#[derive(Clone)]
+struct QuarterState {
+    cx: i32,
+    cy: i32,
+    ex: i32,
+    ey: i32,
+    a2: i128,
+    b2: i128,
+    a2b2: i128,
+    finished: bool,
+}
+
+impl QuarterState {
+    fn new(a: i32, b: i32) -> Self {
+        if a < 0 || b < 0 {
+            return Self {
+                cx: 0,
+                cy: 0,
+                ex: 0,
+                ey: 0,
+                a2: 0,
+                b2: 0,
+                a2b2: 0,
+                finished: true,
+            };
+        }
+        let a2 = i128::from(a) * i128::from(a);
+        let b2 = i128::from(b) * i128::from(b);
+        Self {
+            cx: a,
+            cy: b % 2,
+            ex: a % 2,
+            ey: b,
+            a2,
+            b2,
+            a2b2: a2 * b2,
+            finished: false,
+        }
+    }
+
+    fn delta(&self, x: i128, y: i128) -> i128 {
+        (self.a2 * y * y + self.b2 * x * x - self.a2b2).abs()
+    }
+
+    fn next(&mut self) -> Option<(i32, i32)> {
+        if self.finished {
+            return None;
+        }
+        let point = (self.cx, self.cy);
+        if self.cx == self.ex && self.cy == self.ey {
+            self.finished = true;
+            return Some(point);
+        }
+
+        let mut next_x = self.cx;
+        let mut next_y = self.cy.saturating_add(2);
+        let mut next_delta = self.delta(i128::from(next_x), i128::from(next_y));
+        if next_x > 1 {
+            let diagonal_delta = self.delta(
+                i128::from(self.cx.saturating_sub(2)),
+                i128::from(self.cy.saturating_add(2)),
+            );
+            if next_delta > diagonal_delta {
+                next_x = self.cx.saturating_sub(2);
+                next_y = self.cy.saturating_add(2);
+                next_delta = diagonal_delta;
+            }
+            let horizontal_delta =
+                self.delta(i128::from(self.cx.saturating_sub(2)), i128::from(self.cy));
+            if next_delta > horizontal_delta {
+                next_x = self.cx.saturating_sub(2);
+                next_y = self.cy;
+            }
+        }
+        self.cx = next_x;
+        self.cy = next_y;
+        Some(point)
+    }
+}
+
+struct EllipseState {
+    outer: QuarterState,
+    inner: QuarterState,
+    previous_y: i32,
+    previous_left: i32,
+    previous_right: i32,
+    buffer: Vec<(i32, i32, i32)>,
+    finished: bool,
+    leftmost: i32,
+}
+
+impl EllipseState {
+    fn new(a: i32, b: i32, width: i32) -> Self {
+        let mut outer = QuarterState::new(a, b);
+        let leftmost = a % 2;
+        let first = if width < 1 { None } else { outer.next() };
+        if let Some((previous_right, previous_y)) = first {
+            let inset = width.saturating_sub(1).saturating_mul(2);
+            Self {
+                outer,
+                inner: QuarterState::new(a.saturating_sub(inset), b.saturating_sub(inset)),
+                previous_y,
+                previous_left: leftmost,
+                previous_right,
+                buffer: Vec::with_capacity(4),
+                finished: false,
+                leftmost,
+            }
+        } else {
+            Self {
+                outer,
+                inner: QuarterState::new(-1, -1),
+                previous_y: 0,
+                previous_left: 0,
+                previous_right: 0,
+                buffer: Vec::with_capacity(4),
+                finished: true,
+                leftmost,
+            }
+        }
+    }
+
+    fn next(&mut self) -> Option<(i32, i32, i32)> {
+        if self.buffer.is_empty() {
+            if self.finished {
+                return None;
+            }
+            let y = self.previous_y;
+            let mut left = self.previous_left;
+            let right = self.previous_right;
+
+            loop {
+                match self.outer.next() {
+                    Some((_, next_y)) if next_y <= y => {}
+                    Some((x, next_y)) => {
+                        self.previous_right = x;
+                        self.previous_y = next_y;
+                        break;
+                    }
+                    None => {
+                        self.finished = true;
+                        break;
+                    }
+                }
+            }
+
+            let mut next_inner = None;
+            loop {
+                match self.inner.next() {
+                    Some((x, next_y)) if next_y <= y => left = x,
+                    Some((x, _)) => {
+                        next_inner = Some(x);
+                        break;
+                    }
+                    None => break,
+                }
+            }
+            self.previous_left = next_inner.unwrap_or(self.leftmost);
+
+            let has_right_segment = left > 0 || left < right;
+            if has_right_segment && y > 0 {
+                self.buffer
+                    .push((if left == 0 { 2 } else { left }, y, right));
+            }
+            if y > 0 {
+                self.buffer.push((-right, y, -left));
+            }
+            if has_right_segment {
+                self.buffer
+                    .push((if left == 0 { 2 } else { left }, -y, right));
+            }
+            self.buffer.push((-right, -y, -left));
+        }
+        self.buffer.pop()
+    }
+}
+
+fn draw_hline<C: DrawCanvas>(canvas: &mut C, x0: i32, y: i32, x1: i32, color: (u8, u8, u8, u8)) {
+    let width = canvas.width();
+    let height = canvas.height();
+    if width == 0 || height == 0 || y < 0 || y >= height as i32 {
+        return;
+    }
+    let left = x0.max(0);
+    let right = x1.min(width as i32 - 1);
+    if left > right {
+        return;
+    }
+    for x in left..=right {
+        canvas.put_rgba(x as u32, y as u32, [color.0, color.1, color.2, color.3]);
+    }
+}
+
+fn draw_ellipse_segments<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    width: i32,
+    color: (u8, u8, u8, u8),
+) {
+    let Some(a) = x1.checked_sub(x0) else {
+        return;
+    };
+    let Some(b) = y1.checked_sub(y0) else {
+        return;
+    };
+    if a < 0 || b < 0 {
+        return;
+    }
+    let mut state = EllipseState::new(a, b, width);
+    while let Some((segment_x0, segment_y, segment_x1)) = state.next() {
+        let map_coordinate = |origin: i32, offset: i32, diameter: i32| {
+            (i64::from(origin) + (i64::from(offset) + i64::from(diameter)) / 2)
+                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+        };
+        draw_hline(
+            canvas,
+            map_coordinate(x0, segment_x0, a),
+            map_coordinate(y0, segment_y, b),
+            map_coordinate(x0, segment_x1, a),
+            color,
+        );
+    }
+}
+
+/// Draw an ellipse using Pillow 12.2's `ellipse_state` scan conversion.
+fn draw_ellipse_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
     y1: i32,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
+    width: u32,
 ) {
-    let (img_w, img_h) = (canvas.width(), canvas.height());
-
-    let rx = ((x1 - x0) as f64 / 2.0).abs();
-    let ry = ((y1 - y0) as f64 / 2.0).abs();
-    if rx < 1.0 || ry < 1.0 {
+    let Some(a) = x1.checked_sub(x0) else {
         return;
-    }
-
-    let a = x1 - x0;
-    let b = y1 - y0;
-    if a <= 0 || b <= 0 {
+    };
+    let Some(b) = y1.checked_sub(y0) else {
         return;
+    };
+    if let Some(fill_color) = fill {
+        draw_ellipse_segments(canvas, x0, y0, x1, y1, a.saturating_add(b), fill_color);
     }
-    let cx_i = (x0 + x1) / 2;
+    if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
+        draw_ellipse_segments(
+            canvas,
+            x0,
+            y0,
+            x1,
+            y1,
+            i32::try_from(width).unwrap_or(i32::MAX),
+            outline_color,
+        );
+    }
+}
 
-    let ex = a % 2;
-    let ey = b;
-    let a2 = a as i64 * a as i64;
-    let b2 = b as i64 * b as i64;
-    let a2b2 = a2 * b2;
-    let quarter_delta = |x: i64, y: i64| -> i64 { (a2 * y * y + b2 * x * x - a2b2).abs() };
+struct BinaryMask {
+    width: u32,
+    height: u32,
+    pixels: Vec<bool>,
+}
 
-    // Fill using PIL's exact Bresenham quarter-ellipse algorithm.
-    if let Some(fc) = fill {
-        let mut pr = a as i64;
-        let mut py = 0i64;
-        let mut qx = a;
-        let mut qy = b % 2;
-        let mut finished = false;
-        while !finished {
-            let y_pos = y0 + ((py + b as i64) / 2) as i32;
-            let y_neg = y0 + ((-py + b as i64) / 2) as i32;
-            let xb = (pr / 2) as i32;
-            let left = (cx_i - xb).max(x0).max(0);
-            let right = (cx_i + xb).min(x1).min(img_w as i32 - 1);
-            for &y_img in &[y_pos, y_neg] {
-                if y_img >= y0 && y_img <= y1 && xb > 0 {
-                    for x in left..=right {
-                        if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
-                            canvas.put_pixel(
-                                x as u32,
-                                y_img as u32,
-                                Rgba([fc.0, fc.1, fc.2, fc.3]),
-                            );
-                        }
-                    }
-                }
-            }
-            loop {
-                if qx < 0 {
-                    finished = true;
-                    break;
-                }
-                if qx == ex && qy == ey {
-                    finished = true;
-                    break;
-                }
-                let mut nx = qx;
-                let mut ny = qy + 2;
-                let mut ndelta = quarter_delta(nx as i64, ny as i64);
-                if qx > 1 {
-                    let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
-                    if ndelta > d1 {
-                        nx = qx - 2;
-                        ny = qy + 2;
-                        ndelta = d1;
-                    }
-                    let d2 = quarter_delta((qx - 2) as i64, qy as i64);
-                    if ndelta > d2 {
-                        nx = qx - 2;
-                        ny = qy;
-                    }
-                }
-                if ny > ey {
-                    finished = true;
-                    break;
-                }
-                if ny as i64 > py {
-                    pr = nx as i64;
-                    py = ny as i64;
-                    qx = nx;
-                    qy = ny;
-                    break;
-                }
-                qx = nx;
-                qy = ny;
-            }
+impl BinaryMask {
+    fn new(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            pixels: vec![false; width as usize * height as usize],
         }
     }
 
-    // Outline via Bresenham boundary + edge detection
-    if let Some(oc) = outline {
-        let mut filled = vec![false; (img_w * img_h) as usize];
-        let mut qx = a;
-        let mut qy = b % 2;
-        let mut pr = a as i64;
-        let mut py = 0i64;
-        let mut finished = false;
-        while !finished {
-            let y_pos = y0 + ((py + b as i64) / 2) as i32;
-            let y_neg = y0 + ((-py + b as i64) / 2) as i32;
-            let xb = (pr / 2) as i32;
-            if xb > 0 {
-                let left = (cx_i - xb).max(x0).max(0);
-                let right = (cx_i + xb).min(x1).min(img_w as i32 - 1);
-                for &y_img in &[y_pos, y_neg] {
-                    if y_img >= y0 && y_img <= y1 && y_img >= 0 && (y_img as u32) < img_h {
-                        for x in left..=right {
-                            filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
-                        }
-                    }
-                }
-            }
-            loop {
-                if qx < 0 {
-                    finished = true;
-                    break;
-                }
-                if qx == ex && qy == ey {
-                    finished = true;
-                    break;
-                }
-                let mut nx = qx;
-                let mut ny = qy + 2;
-                let mut ndelta = quarter_delta(nx as i64, ny as i64);
-                if qx > 1 {
-                    let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
-                    if ndelta > d1 {
-                        nx = qx - 2;
-                        ny = qy + 2;
-                        ndelta = d1;
-                    }
-                    let d2 = quarter_delta((qx - 2) as i64, qy as i64);
-                    if ndelta > d2 {
-                        nx = qx - 2;
-                        ny = qy;
-                    }
-                }
-                if ny > ey {
-                    finished = true;
-                    break;
-                }
-                if ny as i64 > py {
-                    pr = nx as i64;
-                    py = ny as i64;
-                    qx = nx;
-                    qy = ny;
-                    break;
-                }
-                qx = nx;
-                qy = ny;
-            }
-        }
-        // Edge detection
-        let iw = img_w as i32;
-        let ih = img_h as i32;
-        for y in 0..ih {
-            for x in 0..iw {
-                let idx = (y as usize) * (img_w as usize) + (x as usize);
-                if !filled[idx] {
-                    continue;
-                }
-                // Treat out-of-bounds neighbors as "filled" to avoid
-                // false boundaries at image edges (clipped ellipse).
-                let lf = filled[(y as usize) * (img_w as usize) + ((x - 1).max(0) as usize)];
-                let rf = filled[(y as usize) * (img_w as usize) + ((x + 1).min(iw - 1) as usize)];
-                let uf = filled[((y - 1).max(0) as usize) * (img_w as usize) + (x as usize)];
-                let df = filled[((y + 1).min(ih - 1) as usize) * (img_w as usize) + (x as usize)];
-                if !lf || !rf || !uf || !df {
-                    plot(canvas, x, y, oc, img_w, img_h, false);
-                }
-            }
+    fn contains(&self, x: u32, y: u32) -> bool {
+        self.pixels[y as usize * self.width as usize + x as usize]
+    }
+}
+
+impl DrawCanvas for BinaryMask {
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn put_rgba(&mut self, x: u32, y: u32, _color: [u8; 4]) {
+        self.pixels[y as usize * self.width as usize + x as usize] = true;
+    }
+}
+
+struct MaskedCanvas<'a, C> {
+    canvas: &'a mut C,
+    mask: &'a BinaryMask,
+}
+
+impl<C: DrawCanvas> DrawCanvas for MaskedCanvas<'_, C> {
+    fn width(&self) -> u32 {
+        self.canvas.width()
+    }
+
+    fn height(&self) -> u32 {
+        self.canvas.height()
+    }
+
+    fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]) {
+        if self.mask.contains(x, y) {
+            self.canvas.put_rgba(x, y, color);
         }
     }
 }
 
 /// Draw a polygon directly on a canvas.
-fn draw_polygon_on_canvas(
-    canvas: &mut RgbaImage,
+fn draw_polygon_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     points: &[(i32, i32)],
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
+    width: u32,
 ) {
     let (img_w, img_h) = (canvas.width(), canvas.height());
-
-    // Outline
-    if let Some(oc) = outline {
-        for i in 0..points.len() {
-            let (x0, y0) = points[i];
-            let (x1, y1) = points[(i + 1) % points.len()];
-            bresenham_line(canvas, x0, y0, x1, y1, oc, img_w, img_h, false);
-        }
+    if points.is_empty() {
+        return;
     }
 
-    // Fill: PIL-identical scanline algorithm
     if let Some(fc) = fill {
         scanline_polygon_fill(canvas, points, fc, img_w, img_h, false);
     }
+
+    let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) else {
+        return;
+    };
+    if width == 1 {
+        for index in 0..points.len() {
+            let (x0, y0) = points[index];
+            let (x1, y1) = points[(index + 1) % points.len()];
+            bresenham_line(canvas, x0, y0, x1, y1, outline_color, img_w, img_h, false);
+        }
+        return;
+    }
+
+    // ImageDraw.polygon masks a double-width outline with the filled polygon
+    // so the requested stroke grows inward instead of expanding the shape.
+    let mut mask = BinaryMask::new(img_w, img_h);
+    scanline_polygon_fill(&mut mask, points, (255, 255, 255, 255), img_w, img_h, false);
+    let mut masked = MaskedCanvas {
+        canvas,
+        mask: &mask,
+    };
+    let stroke_width = width.saturating_mul(2).saturating_sub(1);
+    for index in 0..points.len() {
+        let (x0, y0) = points[index];
+        let (x1, y1) = points[(index + 1) % points.len()];
+        draw_line_on_canvas(&mut masked, x0, y0, x1, y1, outline_color, stroke_width);
+    }
 }
 
-/// Draw an arc (partial ellipse outline) directly on a canvas.
-fn draw_arc_on_canvas(
-    canvas: &mut RgbaImage,
+#[derive(Clone)]
+enum ClipNode {
+    Clip { a: f64, b: f64, c: f64 },
+    And(Box<ClipNode>, Box<ClipNode>),
+    Or(Box<ClipNode>, Box<ClipNode>),
+}
+
+impl ClipNode {
+    fn transpose(&mut self) {
+        match self {
+            Self::Clip { a, b, .. } => std::mem::swap(a, b),
+            Self::And(left, right) | Self::Or(left, right) => {
+                left.transpose();
+                right.transpose();
+            }
+        }
+    }
+}
+
+fn union_intervals(mut intervals: Vec<(i32, i32)>) -> Vec<(i32, i32)> {
+    intervals.sort_unstable();
+    let mut merged: Vec<(i32, i32)> = Vec::with_capacity(intervals.len());
+    for (left, right) in intervals {
+        if let Some(last) = merged.last_mut()
+            && left <= last.1.saturating_add(1)
+        {
+            last.1 = last.1.max(right);
+        } else {
+            merged.push((left, right));
+        }
+    }
+    merged
+}
+
+fn intersect_intervals(left: &[(i32, i32)], right: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    let mut intersections = Vec::new();
+    for &(left_start, left_end) in left {
+        for &(right_start, right_end) in right {
+            let start = left_start.max(right_start);
+            let end = left_end.min(right_end);
+            if start <= end {
+                intersections.push((start, end));
+            }
+        }
+    }
+    union_intervals(intersections)
+}
+
+fn clip_intervals(node: Option<&ClipNode>, mut x0: i32, y: i32, mut x1: i32) -> Vec<(i32, i32)> {
+    let Some(node) = node else {
+        return vec![(x0, x1)];
+    };
+    match node {
+        ClipNode::Clip { a, b, c } => {
+            const EPSILON: f64 = 1e-9;
+            let y = f64::from(y);
+            if a.abs() < EPSILON {
+                if b * y + c < -EPSILON {
+                    return Vec::new();
+                }
+            } else {
+                let intersection_x = -(b * y + c) / a;
+                if a * f64::from(x0) + b * y + c < EPSILON {
+                    x0 = f64::from(x0).max(intersection_x).round() as i32;
+                }
+                if a * f64::from(x1) + b * y + c < EPSILON {
+                    x1 = f64::from(x1).min(intersection_x).round() as i32;
+                }
+            }
+            (x0 <= x1).then_some((x0, x1)).into_iter().collect()
+        }
+        ClipNode::And(left, right) => {
+            let left = clip_intervals(Some(left), x0, y as i32, x1);
+            let right = clip_intervals(Some(right), x0, y as i32, x1);
+            intersect_intervals(&left, &right)
+        }
+        ClipNode::Or(left, right) => {
+            let mut intervals = clip_intervals(Some(left), x0, y as i32, x1);
+            intervals.extend(clip_intervals(Some(right), x0, y as i32, x1));
+            union_intervals(intervals)
+        }
+    }
+}
+
+struct ClipEllipseState {
+    ellipse: EllipseState,
+    root: Option<ClipNode>,
+    buffer: std::collections::VecDeque<(i32, i32, i32)>,
+}
+
+impl ClipEllipseState {
+    fn new(ellipse: EllipseState, root: Option<ClipNode>) -> Self {
+        Self {
+            ellipse,
+            root,
+            buffer: std::collections::VecDeque::new(),
+        }
+    }
+
+    fn next(&mut self) -> Option<(i32, i32, i32)> {
+        while self.buffer.is_empty() {
+            let (x0, y, x1) = self.ellipse.next()?;
+            for (left, right) in clip_intervals(self.root.as_ref(), x0, y, x1) {
+                self.buffer.push_back((left, y, right));
+            }
+        }
+        self.buffer.pop_front()
+    }
+}
+
+fn normalize_angles(mut start: f32, mut end: f32) -> (f32, f32) {
+    if end - start >= 360.0 {
+        return (0.0, 360.0);
+    }
+    start = if start < 0.0 {
+        360.0 - ((-start) % 360.0)
+    } else {
+        start
+    } % 360.0;
+    end = start
+        + if end < start {
+            360.0 - ((start - end) % 360.0)
+        } else {
+            (end - start) % 360.0
+        };
+    (start, end)
+}
+
+fn clip(a: f64, b: f64, c: f64) -> ClipNode {
+    ClipNode::Clip { a, b, c }
+}
+
+fn and(left: ClipNode, right: ClipNode) -> ClipNode {
+    ClipNode::And(Box::new(left), Box::new(right))
+}
+
+fn or(left: ClipNode, right: ClipNode) -> ClipNode {
+    ClipNode::Or(Box::new(left), Box::new(right))
+}
+
+fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+    if a < b {
+        let mut state = arc_clip_state(b, a, width, 90.0 - end, 90.0 - start);
+        state.ellipse = EllipseState::new(a, b, width);
+        if let Some(root) = state.root.as_mut() {
+            root.transpose();
+        }
+        return state;
+    }
+
+    let (start, end) = normalize_angles(start, end);
+    let root = if end == start + 360.0 {
+        None
+    } else {
+        let start_radians = f64::from(start).to_radians();
+        let end_radians = f64::from(end).to_radians();
+        let axis_delta = (i64::from(a) * i64::from(a) - i64::from(b) * i64::from(b)) as f64;
+        let left = clip(
+            -f64::from(a) * start_radians.sin(),
+            f64::from(b) * start_radians.cos(),
+            axis_delta * (f64::from(start) * std::f64::consts::PI / 90.0).sin() / 2.0,
+        );
+        let right = clip(
+            f64::from(a) * end_radians.sin(),
+            -f64::from(b) * end_radians.cos(),
+            -axis_delta * (f64::from(end) * std::f64::consts::PI / 90.0).sin() / 2.0,
+        );
+        if start % 180.0 == 0.0 || end % 180.0 == 0.0 {
+            Some(if end - start < 180.0 {
+                and(left, right)
+            } else {
+                or(left, right)
+            })
+        } else if (((start / 180.0) as i32 + (end / 180.0) as i32) % 2) == 1 {
+            let start_half_plane = clip(
+                0.0,
+                if ((start / 180.0) as i32) % 2 == 0 {
+                    1.0
+                } else {
+                    -1.0
+                },
+                0.0,
+            );
+            let end_half_plane = clip(
+                0.0,
+                if ((end / 180.0) as i32) % 2 == 0 {
+                    1.0
+                } else {
+                    -1.0
+                },
+                0.0,
+            );
+            Some(or(and(start_half_plane, left), and(end_half_plane, right)))
+        } else {
+            let combine = |left, right| {
+                if end - start < 180.0 {
+                    and(left, right)
+                } else {
+                    or(left, right)
+                }
+            };
+            Some(combine(
+                combine(left, right),
+                clip(
+                    0.0,
+                    if end < 180.0 || end > 540.0 {
+                        1.0
+                    } else {
+                        -1.0
+                    },
+                    0.0,
+                ),
+            ))
+        }
+    };
+    ClipEllipseState::new(EllipseState::new(a, b, width), root)
+}
+
+fn chord_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+    let start = f64::from(start).to_radians();
+    let end = f64::from(end).to_radians();
+    let start_x = f64::from(a) * start.cos();
+    let end_x = f64::from(a) * end.cos();
+    let start_y = f64::from(b) * start.sin();
+    let end_y = f64::from(b) * end.sin();
+    let line_a = end_y - start_y;
+    let line_b = start_x - end_x;
+    let line_c = -(line_a * start_x + line_b * start_y);
+    ClipEllipseState::new(
+        EllipseState::new(a, b, width),
+        Some(clip(line_a, line_b, line_c)),
+    )
+}
+
+fn chord_line_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+    let start = f64::from(start).to_radians();
+    let end = f64::from(end).to_radians();
+    let start_x = f64::from(a) * start.cos();
+    let end_x = f64::from(a) * end.cos();
+    let start_y = f64::from(b) * start.sin();
+    let end_y = f64::from(b) * end.sin();
+    let line_a = end_y - start_y;
+    let line_b = start_x - end_x;
+    let line_c = -(line_a * start_x + line_b * start_y);
+    let opposite_c = 2.0 * f64::from(width) * (line_a * line_a + line_b * line_b).sqrt() - line_c;
+    ClipEllipseState::new(
+        EllipseState::new(a, b, a.saturating_add(b).saturating_add(1)),
+        Some(and(
+            clip(line_a, line_b, line_c),
+            clip(-line_a, -line_b, opposite_c),
+        )),
+    )
+}
+
+fn pie_side_clip_state(a: i32, b: i32, width: i32, angle: f32) -> ClipEllipseState {
+    let angle = f64::from(angle).to_radians();
+    let x = f64::from(a) * angle.cos();
+    let y = f64::from(b) * angle.sin();
+    let line_a = -y;
+    let line_b = x;
+    let line_c = f64::from(width) * (line_a * line_a + line_b * line_b).sqrt();
+    ClipEllipseState::new(
+        EllipseState::new(a, b, a.saturating_add(b).saturating_add(1)),
+        Some(and(
+            and(clip(line_a, line_b, line_c), clip(-line_a, -line_b, line_c)),
+            clip(line_b, -line_a, 0.0),
+        )),
+    )
+}
+
+fn pie_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+    let start_radians = f64::from(start).to_radians();
+    let end_radians = f64::from(end).to_radians();
+    let start_x = f64::from(a) * start_radians.cos();
+    let end_x = f64::from(a) * end_radians.cos();
+    let start_y = f64::from(b) * start_radians.sin();
+    let end_y = f64::from(b) * end_radians.sin();
+    let left = clip(-start_y, start_x, 0.0);
+    let right = clip(end_y, -end_x, 0.0);
+    let mut root = if end - start < 180.0 {
+        and(left, right)
+    } else {
+        or(left, right)
+    };
+    if end - start < 90.0 {
+        root = and(
+            root,
+            clip((start_x + end_x) / 2.0, (start_y + end_y) / 2.0, 0.0),
+        );
+    }
+    ClipEllipseState::new(EllipseState::new(a, b, width), Some(root))
+}
+
+fn draw_clipped_ellipse<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i32,
+    y0: i32,
+    a: i32,
+    b: i32,
+    mut state: ClipEllipseState,
+    color: (u8, u8, u8, u8),
+) {
+    while let Some((segment_x0, segment_y, segment_x1)) = state.next() {
+        let map_coordinate = |origin: i32, offset: i32, diameter: i32| {
+            (i64::from(origin) + (i64::from(offset) + i64::from(diameter)) / 2)
+                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+        };
+        draw_hline(
+            canvas,
+            map_coordinate(x0, segment_x0, a),
+            map_coordinate(y0, segment_y, b),
+            map_coordinate(x0, segment_x1, a),
+            color,
+        );
+    }
+}
+
+fn draw_arc_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -348,140 +886,36 @@ fn draw_arc_on_canvas(
     start: f64,
     end: f64,
     fill: (u8, u8, u8, u8),
+    width: u32,
 ) {
-    let (img_w, img_h) = (canvas.width(), canvas.height());
-    let cx = (x0 + x1) as f64 / 2.0;
-    let cy = (y0 + y1) as f64 / 2.0;
-    let a = x1 - x0;
-    let b = y1 - y0;
-    if a <= 0 || b <= 0 {
+    let (start, end) = normalize_angles(start as f32, end as f32);
+    if start + 360.0 == end {
+        draw_ellipse_segments(
+            canvas,
+            x0,
+            y0,
+            x1,
+            y1,
+            i32::try_from(width).unwrap_or(i32::MAX),
+            fill,
+        );
         return;
     }
-
-    // Normalize angles to 0..360
-    let mut s = start % 360.0;
-    if s < 0.0 {
-        s += 360.0;
+    if start == end {
+        return;
     }
-    let mut e = end % 360.0;
-    if e < 0.0 {
-        e += 360.0;
-    }
-    let angle_in_range = |angle: f64| -> bool {
-        let mut a = angle % 360.0;
-        if a < 0.0 {
-            a += 360.0;
-        }
-        if s <= e {
-            a >= s && a <= e
-        } else {
-            a >= s || a <= e
-        }
+    let (Some(a), Some(b)) = (x1.checked_sub(x0), y1.checked_sub(y0)) else {
+        return;
     };
-
-    let cx_i = (x0 + x1) / 2;
-
-    // Compute full ellipse fill using the Bresenham generator + edge detection
-    let mut filled = vec![false; (img_w * img_h) as usize];
-    let mut qx = a;
-    let mut qy = b % 2;
-    let ex = a % 2;
-    let ey = b;
-    let a2 = a as i64 * a as i64;
-    let b2 = b as i64 * b as i64;
-    let a2b2 = a2 * b2;
-    let quarter_delta = |x: i64, y: i64| -> i64 { (a2 * y * y + b2 * x * x - a2b2).abs() };
-    let mut pr = a as i64;
-    let mut py = 0i64;
-    let mut finished = false;
-
-    while !finished {
-        let y_pos = y0 + ((py + b as i64) / 2) as i32;
-        let y_neg = y0 + ((-py + b as i64) / 2) as i32;
-        let xb = (pr / 2) as i32;
-        if xb > 0 {
-            let left = (cx_i - xb).max(x0);
-            let right = (cx_i + xb).min(x1);
-            for &y_img in &[y_pos, y_neg] {
-                if y_img >= y0 && y_img <= y1 {
-                    for x in left..=right {
-                        if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
-                            filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
-                        }
-                    }
-                }
-            }
-        }
-        loop {
-            if qx < 0 {
-                finished = true;
-                break;
-            }
-            if qx == ex && qy == ey {
-                finished = true;
-                break;
-            }
-            let mut nx = qx;
-            let mut ny = qy + 2;
-            let mut ndelta = quarter_delta(nx as i64, ny as i64);
-            if qx > 1 {
-                let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
-                if ndelta > d1 {
-                    nx = qx - 2;
-                    ny = qy + 2;
-                    ndelta = d1;
-                }
-                let d2 = quarter_delta((qx - 2) as i64, qy as i64);
-                if ndelta > d2 {
-                    nx = qx - 2;
-                    ny = qy;
-                }
-            }
-            if ny > ey {
-                finished = true;
-                break;
-            }
-            if ny as i64 > py {
-                pr = nx as i64;
-                py = ny as i64;
-                qx = nx;
-                qy = ny;
-                break;
-            }
-            qx = nx;
-            qy = ny;
-        }
+    if a < 0 || b < 0 {
+        return;
     }
-
-    // Edge detection — boundary pixels filtered by angle
-    let iw = img_w as i32;
-    let ih = img_h as i32;
-    for y in 0..ih {
-        for x in 0..iw {
-            let idx = (y as usize) * (img_w as usize) + (x as usize);
-            if !filled[idx] {
-                continue;
-            }
-            let left_filled = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
-            let right_filled =
-                x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
-            let up_filled = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
-            let down_filled =
-                y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
-            let is_boundary = !left_filled || !right_filled || !up_filled || !down_filled;
-            if is_boundary {
-                let angle = (y as f64 - cy).atan2(x as f64 - cx).to_degrees();
-                if angle_in_range(angle) {
-                    canvas.put_pixel(x as u32, y as u32, Rgba([fill.0, fill.1, fill.2, fill.3]));
-                }
-            }
-        }
-    }
+    let state = arc_clip_state(a, b, i32::try_from(width).unwrap_or(i32::MAX), start, end);
+    draw_clipped_ellipse(canvas, x0, y0, a, b, state, fill);
 }
 
-/// Draw a pieslice directly on a canvas.
-fn draw_pieslice_on_canvas(
-    canvas: &mut RgbaImage,
+fn draw_chord_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -490,229 +924,85 @@ fn draw_pieslice_on_canvas(
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
+    width: u32,
 ) {
-    let (img_w, img_h) = (canvas.width(), canvas.height());
-    let cx = (x0 + x1) as f64 / 2.0;
-    let cy = (y0 + y1) as f64 / 2.0;
-    let a = x1 - x0;
-    let b = y1 - y0;
-    if a <= 0 || b <= 0 {
+    let (start, end) = normalize_angles(start as f32, end as f32);
+    if start + 360.0 == end {
+        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
         return;
     }
-
-    // Normalize angles
-    let mut s = start % 360.0;
-    if s < 0.0 {
-        s += 360.0;
+    if start == end {
+        return;
     }
-    let mut e = end % 360.0;
-    if e < 0.0 {
-        e += 360.0;
-    }
-    let angle_in_range = |angle: f64| -> bool {
-        let mut a = angle % 360.0;
-        if a < 0.0 {
-            a += 360.0;
-        }
-        if s <= e {
-            a >= s && a <= e
-        } else {
-            a >= s || a <= e
-        }
+    let (Some(a), Some(b)) = (x1.checked_sub(x0), y1.checked_sub(y0)) else {
+        return;
     };
-
-    let cx_i = (x0 + x1) / 2;
-    let cy_i = (y0 + y1) / 2;
-
-    // Bresenham quarter generator
-    let mut qx = a;
-    let mut qy = b % 2;
-    let ex = a % 2;
-    let ey = b;
-    let a2 = a as i64 * a as i64;
-    let b2 = b as i64 * b as i64;
-    let a2b2 = a2 * b2;
-    let quarter_delta = |x: i64, y: i64| -> i64 { (a2 * y * y + b2 * x * x - a2b2).abs() };
-    let mut pr = a as i64;
-    let mut py = 0i64;
-    let mut finished = false;
-
-    // Fill
-    if let Some(fc) = fill {
-        while !finished {
-            let y_pos = y0 + ((py + b as i64) / 2) as i32;
-            let y_neg = y0 + ((-py + b as i64) / 2) as i32;
-            let xb = (pr / 2) as i32;
-            if xb > 0 {
-                let left = (cx_i - xb).max(x0);
-                let right = (cx_i + xb).min(x1);
-                for &y_img in &[y_pos, y_neg] {
-                    if y_img >= y0 && y_img <= y1 {
-                        for x in left..=right {
-                            if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h
-                            {
-                                if x == cx_i && y_img == cy_i {
-                                    canvas.put_pixel(
-                                        x as u32,
-                                        y_img as u32,
-                                        Rgba([fc.0, fc.1, fc.2, fc.3]),
-                                    );
-                                } else {
-                                    let angle =
-                                        (y_img as f64 - cy).atan2(x as f64 - cx).to_degrees();
-                                    if angle_in_range(angle) {
-                                        canvas.put_pixel(
-                                            x as u32,
-                                            y_img as u32,
-                                            Rgba([fc.0, fc.1, fc.2, fc.3]),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            loop {
-                if qx < 0 {
-                    finished = true;
-                    break;
-                }
-                if qx == ex && qy == ey {
-                    finished = true;
-                    break;
-                }
-                let mut nx = qx;
-                let mut ny = qy + 2;
-                let mut ndelta = quarter_delta(nx as i64, ny as i64);
-                if qx > 1 {
-                    let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
-                    if ndelta > d1 {
-                        nx = qx - 2;
-                        ny = qy + 2;
-                        ndelta = d1;
-                    }
-                    let d2 = quarter_delta((qx - 2) as i64, qy as i64);
-                    if ndelta > d2 {
-                        nx = qx - 2;
-                        ny = qy;
-                    }
-                }
-                if ny > ey {
-                    finished = true;
-                    break;
-                }
-                if ny as i64 > py {
-                    pr = nx as i64;
-                    py = ny as i64;
-                    qx = nx;
-                    qy = ny;
-                    break;
-                }
-                qx = nx;
-                qy = ny;
-            }
-        }
+    if a < 0 || b < 0 {
+        return;
     }
+    if let Some(fill_color) = fill {
+        let state = chord_clip_state(a, b, a.saturating_add(b).saturating_add(1), start, end);
+        draw_clipped_ellipse(canvas, x0, y0, a, b, state, fill_color);
+    }
+    if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
+        let width = i32::try_from(width).unwrap_or(i32::MAX);
+        let line_state = chord_line_clip_state(a, b, width, start, end);
+        draw_clipped_ellipse(canvas, x0, y0, a, b, line_state, outline_color);
+        let arc_state = chord_clip_state(a, b, width, start, end);
+        draw_clipped_ellipse(canvas, x0, y0, a, b, arc_state, outline_color);
+    }
+}
 
-    // Outline: radii + arc edge
-    if let Some(oc) = outline {
-        // Radius lines from center to arc endpoints
-        for angle_deg in [start, end] {
-            let rad = angle_deg.to_radians();
-            let ax = (cx + (a as f64 / 2.0) * rad.cos()).round() as i32;
-            let ay = (cy + (b as f64 / 2.0) * rad.sin()).round() as i32;
-            bresenham_line(canvas, cx_i, cy_i, ax, ay, oc, img_w, img_h, false);
+/// Draw a pieslice directly on a canvas.
+fn draw_pieslice_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    start: f64,
+    end: f64,
+    fill: Option<(u8, u8, u8, u8)>,
+    outline: Option<(u8, u8, u8, u8)>,
+    width: u32,
+) {
+    let (start, end) = normalize_angles(start as f32, end as f32);
+    if start + 360.0 == end {
+        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+        return;
+    }
+    if start == end {
+        return;
+    }
+    let (Some(a), Some(b)) = (x1.checked_sub(x0), y1.checked_sub(y0)) else {
+        return;
+    };
+    if a < 0 || b < 0 {
+        return;
+    }
+    if let Some(fill_color) = fill {
+        let state = pie_clip_state(a, b, a.saturating_add(b), start, end);
+        draw_clipped_ellipse(canvas, x0, y0, a, b, state, fill_color);
+    }
+    if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
+        let width = i32::try_from(width).unwrap_or(i32::MAX);
+        for angle in [start, end] {
+            let state = pie_side_clip_state(a, b, width, angle);
+            draw_clipped_ellipse(canvas, x0, y0, a, b, state, outline_color);
         }
-        // Arc edge via Bresenham + edge detection
-        let mut filled = vec![false; (img_w * img_h) as usize];
-        let mut qx = a;
-        let mut qy = b % 2;
-        let mut pr = a as i64;
-        let mut py = 0i64;
-        let mut finished = false;
-        while !finished {
-            let y_pos = y0 + ((py + b as i64) / 2) as i32;
-            let y_neg = y0 + ((-py + b as i64) / 2) as i32;
-            let xb = (pr / 2) as i32;
-            if xb > 0 {
-                let left = (cx_i - xb).max(x0);
-                let right = (cx_i + xb).min(x1);
-                for &y_img in &[y_pos, y_neg] {
-                    if y_img >= y0 && y_img <= y1 {
-                        for x in left..=right {
-                            if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h
-                            {
-                                let angle = (y_img as f64 - cy).atan2(x as f64 - cx).to_degrees();
-                                if angle_in_range(angle) {
-                                    filled[(y_img as usize) * (img_w as usize) + (x as usize)] =
-                                        true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            loop {
-                if qx < 0 {
-                    finished = true;
-                    break;
-                }
-                if qx == ex && qy == ey {
-                    finished = true;
-                    break;
-                }
-                let mut nx = qx;
-                let mut ny = qy + 2;
-                let mut ndelta = quarter_delta(nx as i64, ny as i64);
-                if qx > 1 {
-                    let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
-                    if ndelta > d1 {
-                        nx = qx - 2;
-                        ny = qy + 2;
-                        ndelta = d1;
-                    }
-                    let d2 = quarter_delta((qx - 2) as i64, qy as i64);
-                    if ndelta > d2 {
-                        nx = qx - 2;
-                        ny = qy;
-                    }
-                }
-                if ny > ey {
-                    finished = true;
-                    break;
-                }
-                if ny as i64 > py {
-                    pr = nx as i64;
-                    py = ny as i64;
-                    qx = nx;
-                    qy = ny;
-                    break;
-                }
-                qx = nx;
-                qy = ny;
-            }
-        }
-        // Edge detection
-        let iw = img_w as i32;
-        let ih = img_h as i32;
-        for y in 0..ih {
-            for x in 0..iw {
-                let idx = (y as usize) * (img_w as usize) + (x as usize);
-                if !filled[idx] {
-                    continue;
-                }
-                let left_f = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
-                let right_f =
-                    x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
-                let up_f = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
-                let down_f =
-                    y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
-                if !left_f || !right_f || !up_f || !down_f {
-                    canvas.put_pixel(x as u32, y as u32, Rgba([oc.0, oc.1, oc.2, oc.3]));
-                }
-            }
-        }
+        let center_x = ((f64::from(x0) + f64::from(x1) - f64::from(width)) / 2.0).round() as i32;
+        let center_y = ((f64::from(y0) + f64::from(y1) - f64::from(width)) / 2.0).round() as i32;
+        draw_ellipse_segments(
+            canvas,
+            center_x,
+            center_y,
+            center_x.saturating_add(width - 1),
+            center_y.saturating_add(width - 1),
+            width.saturating_mul(2).saturating_sub(2),
+            outline_color,
+        );
+        let state = pie_clip_state(a, b, width, start, end);
+        draw_clipped_ellipse(canvas, x0, y0, a, b, state, outline_color);
     }
 }
 
@@ -728,7 +1018,7 @@ pub fn op_draw_line(
     width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+    Ok(draw_native(img, |canvas| {
         draw_line_on_canvas(canvas, x0, y0, x1, y1, fill, width);
     }))
 }
@@ -744,7 +1034,7 @@ pub fn op_draw_rectangle(
     width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+    Ok(draw_native(img, |canvas| {
         draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
@@ -758,172 +1048,183 @@ pub fn op_draw_rounded_rect(
     radius: f64,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    _precision_bits: u32,
+    width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let r = radius.round() as i32;
-    let d = r * 2;
-    if d <= 0 || x1 <= x0 + 1 || y1 <= y0 + 1 {
-        return op_draw_rectangle(img, x0, y0, x1, y1, fill, outline, 1, _mode);
+    if x1 < x0 {
+        return Err(PilError::ValueError(
+            "x1 must be greater than or equal to x0".to_owned(),
+        ));
+    }
+    if y1 < y0 {
+        return Err(PilError::ValueError(
+            "y1 must be greater than or equal to y0".to_owned(),
+        ));
     }
 
-    let mut result = img.clone();
-
-    if let Some(fc) = fill {
-        // Corner pieslices
-        result = op_draw_pieslice(
-            &result,
-            x0,
-            y0,
-            x0 + d,
-            y0 + d,
-            180.0,
-            270.0,
-            Some(fc),
-            None,
-            0,
-            _mode,
-        )?;
-        result = op_draw_pieslice(
-            &result,
-            x1 - d,
-            y0,
-            x1,
-            y0 + d,
-            270.0,
-            360.0,
-            Some(fc),
-            None,
-            0,
-            _mode,
-        )?;
-        result = op_draw_pieslice(
-            &result,
-            x1 - d,
-            y1 - d,
-            x1,
-            y1,
-            0.0,
-            90.0,
-            Some(fc),
-            None,
-            0,
-            _mode,
-        )?;
-        result = op_draw_pieslice(
-            &result,
-            x0,
-            y1 - d,
-            x0 + d,
-            y1,
-            90.0,
-            180.0,
-            Some(fc),
-            None,
-            0,
-            _mode,
-        )?;
-        // Center body rectangle
-        result = op_draw_rectangle(&result, x0 + r, y0, x1 - r, y1, Some(fc), None, 1, _mode)?;
-        // Side rectangles
-        if x1 - r > x0 + r + 1 {
-            result = op_draw_rectangle(
-                &result,
-                x0 + r + 1,
-                y0,
-                x1 - r - 1,
-                y1,
-                Some(fc),
-                None,
-                1,
-                _mode,
-            )?;
+    Ok(draw_native(img, |canvas| {
+        let mut diameter = radius * 2.0;
+        let full_x = diameter >= f64::from(x1 - x0 - 1);
+        if full_x {
+            diameter = f64::from(x1 - x0);
         }
-        let rect_left = if x0 + r > x0 { x0 + r } else { x0 + 1 };
-        if rect_left < x1 - r {
-            result = op_draw_rectangle(
-                &result,
-                x0,
-                y0 + r,
-                rect_left,
-                y1 - r,
-                Some(fc),
-                None,
-                1,
-                _mode,
-            )?;
-            result = op_draw_rectangle(
-                &result,
-                x1 - r,
-                y0 + r,
-                x1,
-                y1 - r,
-                Some(fc),
-                None,
-                1,
-                _mode,
-            )?;
+        let full_y = full_x && diameter >= f64::from(y1 - y0 - 1);
+        if full_y {
+            diameter = f64::from(y1 - y0);
         }
-    }
+        if full_x && full_y {
+            draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+            return;
+        }
+        if diameter == 0.0 {
+            draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+            return;
+        }
 
-    if let Some(oc) = outline {
-        // Corner arcs
-        result = op_draw_arc(
-            &result,
-            x0,
-            y0,
-            x0 + d,
-            y0 + d,
-            180.0,
-            270.0,
-            Some(oc),
-            1,
-            _mode,
-        )?;
-        result = op_draw_arc(
-            &result,
-            x1 - d,
-            y0,
-            x1,
-            y0 + d,
-            270.0,
-            360.0,
-            Some(oc),
-            1,
-            _mode,
-        )?;
-        result = op_draw_arc(
-            &result,
-            x1 - d,
-            y1 - d,
-            x1,
-            y1,
-            0.0,
-            90.0,
-            Some(oc),
-            1,
-            _mode,
-        )?;
-        result = op_draw_arc(
-            &result,
-            x0,
-            y1 - d,
-            x0 + d,
-            y1,
-            90.0,
-            180.0,
-            Some(oc),
-            1,
-            _mode,
-        )?;
-        // Edge lines
-        result = op_draw_line(&result, x0 + r, y0, x1 - r, y0, oc, 1, _mode)?;
-        result = op_draw_line(&result, x1, y0 + r, x1, y1 - r, oc, 1, _mode)?;
-        result = op_draw_line(&result, x1 - r, y1, x0 + r, y1, oc, 1, _mode)?;
-        result = op_draw_line(&result, x0, y1 - r, x0, y0 + r, oc, 1, _mode)?;
-    }
+        let diameter = diameter as i32;
+        let radius = diameter / 2;
+        let corners = if full_x {
+            vec![
+                (x0, y0, x0 + diameter, y0 + diameter, 180.0, 360.0),
+                (x0, y1 - diameter, x0 + diameter, y1, 0.0, 180.0),
+            ]
+        } else if full_y {
+            vec![
+                (x0, y0, x0 + diameter, y0 + diameter, 90.0, 270.0),
+                (x1 - diameter, y0, x1, y0 + diameter, 270.0, 90.0),
+            ]
+        } else {
+            vec![
+                (x0, y0, x0 + diameter, y0 + diameter, 180.0, 270.0),
+                (x1 - diameter, y0, x1, y0 + diameter, 270.0, 360.0),
+                (x1 - diameter, y1 - diameter, x1, y1, 0.0, 90.0),
+                (x0, y1 - diameter, x0 + diameter, y1, 90.0, 180.0),
+            ]
+        };
 
-    Ok(result)
+        if let Some(fill_color) = fill {
+            for &(left, top, right, bottom, start, end) in &corners {
+                draw_pieslice_on_canvas(
+                    canvas,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    start,
+                    end,
+                    Some(fill_color),
+                    None,
+                    1,
+                );
+            }
+            if full_x {
+                draw_rect_on_canvas(
+                    canvas,
+                    x0,
+                    y0 + radius + 1,
+                    x1,
+                    y1 - radius - 1,
+                    Some(fill_color),
+                    None,
+                    1,
+                );
+            } else if x1 - radius - 1 >= x0 + radius + 1 {
+                draw_rect_on_canvas(
+                    canvas,
+                    x0 + radius + 1,
+                    y0,
+                    x1 - radius - 1,
+                    y1,
+                    Some(fill_color),
+                    None,
+                    1,
+                );
+            }
+            if !full_x && !full_y {
+                draw_rect_on_canvas(
+                    canvas,
+                    x0,
+                    y0 + radius + 1,
+                    x0 + radius,
+                    y1 - radius - 1,
+                    Some(fill_color),
+                    None,
+                    1,
+                );
+                draw_rect_on_canvas(
+                    canvas,
+                    x1 - radius,
+                    y0 + radius + 1,
+                    x1,
+                    y1 - radius - 1,
+                    Some(fill_color),
+                    None,
+                    1,
+                );
+            }
+        }
+
+        if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
+            for &(left, top, right, bottom, start, end) in &corners {
+                draw_arc_on_canvas(
+                    canvas,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    start,
+                    end,
+                    outline_color,
+                    width,
+                );
+            }
+            let width = i32::try_from(width).unwrap_or(i32::MAX);
+            if !full_x {
+                draw_rect_on_canvas(
+                    canvas,
+                    x0 + radius + 1,
+                    y0,
+                    x1 - radius - 1,
+                    y0.saturating_add(width - 1),
+                    Some(outline_color),
+                    None,
+                    1,
+                );
+                draw_rect_on_canvas(
+                    canvas,
+                    x0 + radius + 1,
+                    y1.saturating_sub(width - 1),
+                    x1 - radius - 1,
+                    y1,
+                    Some(outline_color),
+                    None,
+                    1,
+                );
+            }
+            if !full_y {
+                draw_rect_on_canvas(
+                    canvas,
+                    x0,
+                    y0 + radius + 1,
+                    x0.saturating_add(width - 1),
+                    y1 - radius - 1,
+                    Some(outline_color),
+                    None,
+                    1,
+                );
+                draw_rect_on_canvas(
+                    canvas,
+                    x1.saturating_sub(width - 1),
+                    y0 + radius + 1,
+                    x1,
+                    y1 - radius - 1,
+                    Some(outline_color),
+                    None,
+                    1,
+                );
+            }
+        }
+    }))
 }
 
 pub fn op_draw_ellipse(
@@ -934,11 +1235,11 @@ pub fn op_draw_ellipse(
     y1: i32,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    _precision_bits: u32,
+    width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
-        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline);
+    Ok(draw_native(img, |canvas| {
+        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
 
@@ -970,12 +1271,12 @@ pub fn op_draw_polygon(
     points: &[(i32, i32)],
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    _precision_bits: u32,
+    width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
-        draw_polygon_on_canvas(canvas, &pts, fill, outline);
+    Ok(draw_native(img, |canvas| {
+        draw_polygon_on_canvas(canvas, &pts, fill, outline, width);
     }))
 }
 
@@ -988,12 +1289,14 @@ pub fn op_draw_arc(
     start: f64,
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
-    _precision_bits: u32,
+    width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let fc = fill.unwrap_or((0, 0, 0, 255));
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
-        draw_arc_on_canvas(canvas, x0, y0, x1, y1, start, end, fc);
+    let Some(fc) = fill else {
+        return Ok(img.clone());
+    };
+    Ok(draw_native(img, |canvas| {
+        draw_arc_on_canvas(canvas, x0, y0, x1, y1, start, end, fc, width);
     }))
 }
 
@@ -1010,34 +1313,9 @@ pub fn op_draw_chord(
     width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let Some(fc) = fill {
-        op_draw_pieslice(
-            img,
-            x0,
-            y0,
-            x1,
-            y1,
-            start,
-            end,
-            Some(fc),
-            outline,
-            width,
-            _mode,
-        )
-    } else {
-        op_draw_arc(
-            img,
-            x0,
-            y0,
-            x1,
-            y1,
-            start,
-            end,
-            outline.or(Some((0, 0, 0, 255))),
-            width,
-            _mode,
-        )
-    }
+    Ok(draw_native(img, |canvas| {
+        draw_chord_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
+    }))
 }
 
 pub fn op_draw_pieslice(
@@ -1050,11 +1328,11 @@ pub fn op_draw_pieslice(
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    _precision_bits: u32,
+    width: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
-        draw_pieslice_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline);
+    Ok(draw_native(img, |canvas| {
+        draw_pieslice_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
     }))
 }
 
@@ -1065,7 +1343,7 @@ pub fn op_draw_point(
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
-    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+    Ok(draw_native(img, |canvas| {
         let (img_w, img_h) = (canvas.width(), canvas.height());
         for &(x, y) in &pts {
             plot(canvas, x, y, fill, img_w, img_h, false);

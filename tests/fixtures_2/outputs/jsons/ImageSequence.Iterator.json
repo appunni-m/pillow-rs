@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageSequence",
@@ -9,15 +11,27 @@
     {
       "id": "ImageSequence.Iterator_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": 1
+        "method": "image_list",
+        "container_type": "list",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageSequence.Iterator_ImageSequence.Iterator_L_suite1_0.png"
+          }
+        ]
       }
     },
     {
       "id": "single_frame_suite1",
       "assert": {
-        "method": "exact",
-        "value": 1
+        "method": "image_list",
+        "container_type": "list",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageSequence.Iterator_single_frame_suite1_0.png"
+          }
+        ]
       }
     }
   ]
