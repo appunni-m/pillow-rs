@@ -910,6 +910,13 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
             source.materialize().ok()
         };
     }
+    if let PipelineOp::CompositeModule { other, .. } = op
+        && other.mode().ok().as_deref() == Some("P")
+    {
+        // Image.composite blends P indices and gives the result image2's
+        // palette. Upload image2's indices, not its visible RGB expansion.
+        return other.materialize_indices().ok();
+    }
 
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
         PipelineOp::Add { other, .. }
@@ -951,9 +958,20 @@ fn extract_third_image(op: &PipelineOp) -> Option<DynamicImage> {
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
 /// Each u32 packs RGBA channels for one LUT entry (R in byte 0, G byte 1, B byte 2, A byte 3).
 fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
+    if let PipelineOp::RemapPalette { dest_map } = op {
+        let mut inverse = [0u8; 256];
+        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
+            inverse[usize::from(old_index)] = new_index as u8;
+        }
+        let mut packed = [0u32; 256];
+        for (entry, &value) in packed.iter_mut().zip(inverse.iter()) {
+            let value = u32::from(value);
+            *entry = value | (value << 8) | (value << 16) | (value << 24);
+        }
+        return Some(packed);
+    }
     let lut_bytes: &[u8] = match op {
         PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => lut.as_slice(),
-        PipelineOp::RemapPalette { dest_map } => dest_map.as_slice(),
         _ => return None,
     };
     let mut packed = [0u32; 256];
@@ -1033,6 +1051,8 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
             let new_h = (cur_h as f64 * factor).round().max(1.0) as u32;
             Some((new_w, new_h))
         }
+        PipelineOp::Transform { w, h, .. } => Some(((*w).max(1), (*h).max(1))),
+        PipelineOp::CompositeModule { other, .. } => other.size().ok(),
         _ => None,
     }
 }

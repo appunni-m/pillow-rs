@@ -6,9 +6,9 @@
 
 use pillow_rs::error::PilError;
 use pillow_rs::image::Image as RsImage;
-use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyAttributeError, PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyTuple, PyType};
+use pyo3::types::{PyBytes, PyInt, PyList, PyTuple, PyType};
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -390,10 +390,14 @@ impl PyImage {
         self.inner.thumbnail(size, filter).map_err(map_error)
     }
 
-    fn quantize(&self, colors: Option<u32>, dither: Option<bool>) -> PyResult<PyImage> {
+    fn quantize(&self, colors: Option<i32>, dither: Option<bool>) -> PyResult<PyImage> {
+        let colors = colors.unwrap_or(256);
+        if !(1..=256).contains(&colors) {
+            return Err(PyValueError::new_err("bad number of colors"));
+        }
         let rs = self
             .inner
-            .quantize(colors.unwrap_or(256), 0, None, dither.unwrap_or(true))
+            .quantize(colors as u32, 0, None, dither.unwrap_or(true))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -720,10 +724,17 @@ impl PyImage {
                 let matrix = data.ok_or_else(|| {
                     pyo3::exceptions::PyValueError::new_err("AFFINE requires data")
                 })?;
-                self.inner
-                    .transform_affine(size, &matrix, fill)
-                    .map(|i| PyImage { inner: i })
-                    .map_err(map_error)
+                let transformed = if mode == "P" {
+                    if let Some(index) = parse_palette_transform_fill(fillcolor)? {
+                        self.inner
+                            .transform_affine_palette_index(size, &matrix, index)
+                    } else {
+                        self.inner.transform_affine(size, &matrix, fill)
+                    }
+                } else {
+                    self.inner.transform_affine(size, &matrix, fill)
+                };
+                transformed.map(|i| PyImage { inner: i }).map_err(map_error)
             }
             "MESH" => {
                 let mesh_data = data
@@ -747,9 +758,14 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn remap_palette(&mut self, dest_map: Vec<u8>) -> PyResult<PyImage> {
+    #[pyo3(signature = (dest_map, source_palette=None))]
+    fn remap_palette(
+        &mut self,
+        dest_map: Vec<u8>,
+        source_palette: Option<Vec<u8>>,
+    ) -> PyResult<PyImage> {
         self.inner
-            .remap_palette(&dest_map)
+            .remap_palette_with_source(&dest_map, source_palette.as_deref())
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -788,8 +804,7 @@ impl PyImage {
         let im1 = image1.borrow();
         let im2 = image2.borrow();
         let m = mask.borrow();
-        let mode = im1.inner.explicit_mode();
-        pillow_rs::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner, mode)
+        pillow_rs::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1009,6 +1024,86 @@ impl PyImage {
             Err(_) => "<Image [error loading]>".into(),
         }
     }
+}
+
+fn palette_transform_fill_type_error() -> PyErr {
+    PyTypeError::new_err("color must be int or single-element tuple")
+}
+
+fn clamp_palette_transform_index(value: &Bound<'_, PyAny>) -> PyResult<u8> {
+    let value = value.extract::<i64>().map_err(|error| {
+        if error.is_instance_of::<PyOverflowError>(value.py()) {
+            PyOverflowError::new_err("int too big to convert")
+        } else {
+            error
+        }
+    })?;
+    Ok(value.clamp(0, i64::from(u8::MAX)) as u8)
+}
+
+fn validate_palette_transform_color<'py>(
+    values: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    len: usize,
+    allow_single: bool,
+) -> PyResult<Option<u8>> {
+    let values: Vec<_> = values.into_iter().collect();
+    if allow_single && len == 1 {
+        let value = &values[0];
+        if value.is_instance_of::<PyInt>() {
+            return clamp_palette_transform_index(value).map(Some);
+        }
+        return Err(palette_transform_fill_type_error());
+    }
+    if !matches!(len, 3 | 4) || values.iter().any(|value| !value.is_instance_of::<PyInt>()) {
+        return Err(palette_transform_fill_type_error());
+    }
+
+    // Pillow 12.2 ImagePalette.getcolor rejects non-opaque RGBA before
+    // converting RGB components to bytes.
+    if len == 4 {
+        let alpha = values[3].extract::<i64>().ok();
+        if alpha != Some(i64::from(u8::MAX)) {
+            return Err(PyValueError::new_err(
+                "cannot add non-opaque RGBA color to RGB palette",
+            ));
+        }
+    }
+    for value in &values[..3] {
+        let component = value
+            .extract::<i64>()
+            .map_err(|_| PyValueError::new_err("bytes must be in range(0, 256)"))?;
+        if !(0..=i64::from(u8::MAX)).contains(&component) {
+            return Err(PyValueError::new_err("bytes must be in range(0, 256)"));
+        }
+    }
+    // Image.transform replaces the temporary color palette with the source
+    // palette, so a valid RGB/RGBA fill remains raw palette index zero.
+    Ok(None)
+}
+
+fn parse_palette_transform_fill(fillcolor: Option<&Bound<'_, PyAny>>) -> PyResult<Option<u8>> {
+    let Some(fillcolor) = fillcolor else {
+        return Ok(None);
+    };
+    if fillcolor.is_instance_of::<PyInt>() {
+        return clamp_palette_transform_index(fillcolor).map(Some);
+    }
+    if let Ok(color) = fillcolor.extract::<String>() {
+        pillow_rs::color::parse_color_str(&color).map_err(|_| {
+            let repr = fillcolor
+                .repr()
+                .map_or_else(|_| format!("{color:?}"), |repr| repr.to_string());
+            PyValueError::new_err(format!("unknown color specifier: {repr}"))
+        })?;
+        return Ok(None);
+    }
+    if let Ok(values) = fillcolor.downcast::<PyTuple>() {
+        return validate_palette_transform_color(values.iter(), values.len(), true);
+    }
+    if let Ok(values) = fillcolor.downcast::<PyList>() {
+        return validate_palette_transform_color(values.iter(), values.len(), false);
+    }
+    Err(palette_transform_fill_type_error())
 }
 
 fn map_error(e: PilError) -> PyErr {
@@ -2514,8 +2609,7 @@ fn image_composite(
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
-    let mode = b1.inner.explicit_mode();
-    let rs = pillow_rs::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner, mode)
+    let rs = pillow_rs::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner)
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

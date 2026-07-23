@@ -592,8 +592,10 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         | PipelineOp::Overlay { .. }
         | PipelineOp::HardLight { .. }
         | PipelineOp::SoftLight { .. }
-        | PipelineOp::Composite { .. }
-        | PipelineOp::CompositeModule { .. } => vec![],
+        | PipelineOp::Composite { .. } => vec![],
+
+        // ── CompositeModule: mask_alpha ──
+        PipelineOp::CompositeModule { mask_alpha, .. } => vec![*mask_alpha as u32],
 
         // ── Solarize: threshold ──
         PipelineOp::Solarize { threshold } => vec![*threshold as u32],
@@ -788,6 +790,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             data,
             filter,
             fill,
+            palette_fill,
             ..
         } => {
             let a = (data.first().copied().unwrap_or(0.0) as f32).to_bits();
@@ -796,9 +799,10 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             let d = (data.get(3).copied().unwrap_or(0.0) as f32).to_bits();
             let e = (data.get(4).copied().unwrap_or(0.0) as f32).to_bits();
             let f = (data.get(5).copied().unwrap_or(0.0) as f32).to_bits();
-            let fill_color = match fill {
+            let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+            let fill_color = match resolved_fill {
                 Some((r, g, b, a)) => {
-                    (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24)
+                    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
                 }
                 None => 0,
             };
@@ -2006,8 +2010,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         "CompositeModule",
         gpu_entry!(
             |img, op, mode| {
-                if let PipelineOp::CompositeModule { other, mask } = op {
-                    op_composite_module(img, other, mask, mode)
+                if let PipelineOp::CompositeModule {
+                    other,
+                    mask,
+                    mask_alpha,
+                } = op
+                {
+                    op_composite_module(img, other, mask, *mask_alpha, mode)
                 } else {
                     Err(PilError::ValueError("expected CompositeModule op".into()))
                 }
@@ -2082,9 +2091,11 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     data,
                     filter,
                     fill,
+                    palette_fill,
                 } = op
                 {
-                    op_transform(img, *w, *h, method, data, filter, *fill, mode)
+                    let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+                    op_transform(img, *w, *h, method, data, filter, resolved_fill, mode)
                 } else {
                     Err(PilError::ValueError("expected Transform op".into()))
                 }

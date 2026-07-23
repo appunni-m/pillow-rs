@@ -447,9 +447,9 @@ class Image:
     def getpalette(self, rawmode="RGB"):
         """Return palette data.
 
-        PIL behavior: returns the palette as a flat list of RGB values,
-        trimmed to the last non-zero triple. WEB palette has 226 colors
-        (678 bytes). Full custom palette has 256 colors (768 bytes).
+        PIL behavior: returns the exact retained flat RGB palette. WEB palette
+        has 226 colors (678 bytes), while an encoded or explicitly attached
+        palette may retain trailing black entries.
         """
         if rawmode is None:
             rawmode = self._rust_image.palette_mode()
@@ -674,7 +674,9 @@ class Image:
 
     def remap_palette(self, dest_map, source_palette=None):
         """Remap image palette using destination map."""
-        return Image(self._rust_image.remap_palette(list(dest_map)))
+        return Image(
+            self._rust_image.remap_palette(list(dest_map), source_palette)
+        )
 
     def draft(self, mode, size):
         """Configure decoder for draft mode. Returns None matching PIL."""

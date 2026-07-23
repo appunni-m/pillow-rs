@@ -331,10 +331,7 @@ fn manifest_open_bytes_auto_detects_and_preserves_state_across_load() {
     let manifest = manifest();
     assert_eq!(manifest.oracle.implementation, "Pillow");
     assert_eq!(manifest.oracle.version, "12.2.0");
-    assert_eq!(
-        manifest.oracle.source,
-        "pillow-rs-py/pyproject.toml"
-    );
+    assert_eq!(manifest.oracle.source, "pillow-rs-py/pyproject.toml");
     let oracle_source = fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

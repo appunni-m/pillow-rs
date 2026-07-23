@@ -312,17 +312,16 @@ impl Image {
             // `new_palette_index` because this resolved tuple no longer carries
             // the Python argument's scalar-versus-tuple distinction.
             "P" => {
-                let mut pal = vec![0u8; 768];
-                pal[0] = color.0;
-                pal[1] = color.1;
-                pal[2] = color.2;
                 return Ok(Image::Paletted(PalettedData {
                     indices: image_slash_star::GrayImage::from_pixel(
                         width,
                         height,
                         image_slash_star::Luma([0u8]),
                     ),
-                    palette: pal,
+                    // Pillow retains one structural RGB entry here. Keeping
+                    // 768 zero-padded bytes would make getpalette() invent 255
+                    // trailing black entries now that palette length is exact.
+                    palette: vec![color.0, color.1, color.2],
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
@@ -573,6 +572,12 @@ impl Image {
             | PipelineOp::DrawChord { .. }
             | PipelineOp::DrawPieslice { .. }
             | PipelineOp::DrawPoint { .. }
+            // ImageChops.invert applies 255-index directly to P samples. Its
+            // newly allocated core image intentionally has no palette.
+            | PipelineOp::InvertChops
+            // Image.remap_palette builds an inverse index LUT and separately
+            // installs the reordered palette on the result.
+            | PipelineOp::RemapPalette { .. }
             // Pillow's Image.point maps P indices directly, and Image._new
             // copies the source palette. Image.eval delegates to point.
             | PipelineOp::Eval { .. }
@@ -587,6 +592,7 @@ impl Image {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
             } => true,
+            PipelineOp::CompositeModule { other, .. } => other.has_palette_mode(),
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..
@@ -601,9 +607,9 @@ impl Image {
             PipelineOp::Transform {
                 method: TransformMethod::Affine,
                 filter: ResampleFilter::Nearest,
-                fill: Some((0, 0, 0, 0)),
+                palette_fill,
                 ..
-            } => true,
+            } => palette_fill.is_some(),
             _ => false,
         }
     }
@@ -611,7 +617,7 @@ impl Image {
     /// Whether this value currently represents palette indices rather than
     /// visible luma samples. Lazy inputs use cached header metadata so the
     /// first queued operation does not need to decode merely to preserve mode.
-    fn has_palette_mode(&self) -> bool {
+    pub(crate) fn has_palette_mode(&self) -> bool {
         match self {
             Image::Paletted(_) => true,
             Image::Path {
@@ -1438,18 +1444,74 @@ impl Image {
     /// The backend choice is applied when the image is materialized. Non-pipeline
     /// images are returned unchanged because there is no deferred work to route.
     pub fn use_backend(mut self, b: crate::compute::Backend) -> Image {
-        if let Image::Pipeline {
-            source, backend, ..
-        } = &mut self
-        {
-            // Palette and sample-layout transitions deliberately create nested
-            // materialization boundaries. Lock the primary chain recursively
-            // so a forced-backend parity test cannot execute only its final
-            // suffix on the requested backend.
-            *source = Arc::new(source.as_ref().clone().use_backend(b));
-            *backend = Some(b);
-        }
+        self.lock_backend_recursive(b);
         self
+    }
+
+    fn lock_backend_recursive(&mut self, b: crate::compute::Backend) {
+        let Image::Pipeline {
+            source,
+            ops,
+            backend,
+            materialized,
+            ..
+        } = self
+        else {
+            return;
+        };
+
+        Arc::make_mut(source).lock_backend_recursive(b);
+        for op in ops {
+            Self::lock_op_backend_recursive(op, b);
+        }
+        *backend = Some(b);
+        // A previously inspected/materialized pipeline must execute again
+        // under the newly forced backend, including nested pipeline nodes.
+        *materialized = materialization_cache();
+    }
+
+    fn lock_op_backend_recursive(op: &mut PipelineOp, b: crate::compute::Backend) {
+        match op {
+            PipelineOp::Add { other, .. }
+            | PipelineOp::Subtract { other, .. }
+            | PipelineOp::Multiply { other }
+            | PipelineOp::Screen { other }
+            | PipelineOp::Darker { other }
+            | PipelineOp::Lighter { other }
+            | PipelineOp::Difference { other }
+            | PipelineOp::Overlay { other }
+            | PipelineOp::HardLight { other }
+            | PipelineOp::SoftLight { other }
+            | PipelineOp::AddModulo { other }
+            | PipelineOp::SubtractModulo { other }
+            | PipelineOp::LogicalAnd { other }
+            | PipelineOp::LogicalOr { other }
+            | PipelineOp::LogicalXor { other }
+            | PipelineOp::Blend { other, .. }
+            | PipelineOp::BlendModule { other, .. } => {
+                Arc::make_mut(other).lock_backend_recursive(b);
+            }
+            PipelineOp::Composite { other, mask }
+            | PipelineOp::CompositeModule { other, mask, .. } => {
+                Arc::make_mut(other).lock_backend_recursive(b);
+                Arc::make_mut(mask).lock_backend_recursive(b);
+            }
+            PipelineOp::Paste { source, mask, .. } => {
+                Arc::make_mut(source).lock_backend_recursive(b);
+                if let Some(mask) = mask {
+                    Arc::make_mut(mask).lock_backend_recursive(b);
+                }
+            }
+            PipelineOp::AlphaComposite { source, .. } => {
+                Arc::make_mut(source).lock_backend_recursive(b);
+            }
+            PipelineOp::Merge { bands, .. } => {
+                for band in bands {
+                    band.lock_backend_recursive(b);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Returns the backend explicitly locked on this pipeline, if any.
@@ -1533,17 +1595,13 @@ impl Image {
         }
     }
 
-    /// Returns palette data trimmed like Pillow's `getpalette`.
+    /// Returns the exact retained RGB palette like Pillow's `getpalette`.
     ///
-    /// Trailing all-zero RGB triples are removed. A full palette may still return
-    /// 768 bytes when later entries are non-zero.
+    /// Palette length is structural, not inferred from color values. In
+    /// particular, encoded GIF color tables and explicitly attached palettes
+    /// retain trailing black entries.
     pub fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
-        let raw = self.palette()?;
-        let mut last = raw.len();
-        while last >= 3 && raw[last - 3] == 0 && raw[last - 2] == 0 && raw[last - 1] == 0 {
-            last = last.saturating_sub(3);
-        }
-        Some(raw[..last].to_vec())
+        self.extract_palette()
     }
 
     /// Returns palette bytes converted to RGBA, trimmed to the retained RGB
@@ -1749,7 +1807,7 @@ impl Image {
     }
 
     /// Extract palette from Paletted variant (for Pipeline propagation).
-    fn extract_palette(&self) -> Option<Vec<u8>> {
+    pub(crate) fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(operational_palette(data)),
             Image::Loaded(data) => data.palette.clone(),
@@ -2420,20 +2478,98 @@ impl Image {
     /// Currently returns `Ok(Image)`; invalid map behavior is handled during
     /// pipeline execution.
     pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
-        // Defer remap via pipeline — PipelineOp::RemapPalette handles P/L/RGB modes
-        // PIL: remap_palette always returns a P-mode image (palette indices).
+        self.remap_palette_with_source(dest_map, None)
+    }
+
+    /// Remaps indices and installs colors selected from an optional source palette.
+    ///
+    /// Pillow interprets `dest_map[new_index]` as the old index. Pixel samples
+    /// therefore use the inverse mapping, while palette triples are copied in
+    /// `dest_map` order.
+    pub fn remap_palette_with_source(
+        &self,
+        dest_map: &[u8],
+        source_palette: Option<&[u8]>,
+    ) -> Result<Image, PilError> {
+        let mode = self.mode()?;
+        if !matches!(mode.as_str(), "L" | "P") {
+            return Err(PilError::ValueError("illegal image mode".to_owned()));
+        }
+        if dest_map.len() > 256 {
+            return Err(PilError::ValueError(
+                "byte must be in range(0, 256)".to_owned(),
+            ));
+        }
+
+        let uses_attached_palette = source_palette.is_none() && mode == "P";
+        // Pillow's Image.remap_palette treats every explicit palette longer
+        // than 768 bytes as interleaved RGBA, regardless of the source mode.
+        let source_bands = if source_palette.is_some_and(|palette| palette.len() > 768) {
+            4
+        } else {
+            3
+        };
+        let source_palette = source_palette.map_or_else(
+            || {
+                if mode == "P" {
+                    self.extract_palette().unwrap_or_default()
+                } else {
+                    (0u8..=u8::MAX)
+                        .flat_map(|value| [value, value, value])
+                        .collect()
+                }
+            },
+            <[u8]>::to_vec,
+        );
+        let mut remapped_palette = Vec::with_capacity(dest_map.len() * 3);
+        let mut explicit_alpha = (source_bands == 4).then(|| Vec::with_capacity(dest_map.len()));
+        for &old_index in dest_map {
+            let start = usize::from(old_index) * source_bands;
+            if let Some(color) = source_palette.get(start..start + source_bands) {
+                // Pillow 12.2 PIL.Image.remap_palette passes raw palette bands
+                // through unchanged. Core stores the same RGBA layout as RGB
+                // triples plus a per-entry alpha sidecar.
+                remapped_palette.extend_from_slice(&color[..3]);
+                if let Some(alpha) = &mut explicit_alpha {
+                    alpha.push(color[3]);
+                }
+            }
+        }
+
+        let remapped_alpha = if source_bands == 4 {
+            explicit_alpha
+        } else if uses_attached_palette {
+            self.palette_alpha().and_then(|alpha| {
+                if alpha.is_empty() {
+                    return None;
+                }
+                Some(
+                    dest_map
+                        .iter()
+                        .map(|&index| alpha.get(usize::from(index)).copied().unwrap_or(255))
+                        .collect(),
+                )
+            })
+        } else {
+            None
+        };
+
         let mut result = Image::push_op(
             self,
             PipelineOp::RemapPalette {
                 dest_map: dest_map.to_vec(),
             },
         );
-        // Always tag the result as P-mode, regardless of source mode.
         if let Image::Pipeline {
-            explicit_mode: em, ..
+            explicit_mode,
+            palette,
+            palette_alpha,
+            ..
         } = &mut result
         {
-            *em = Some("P".to_string());
+            *explicit_mode = Some("P".to_owned());
+            *palette = Some(remapped_palette);
+            *palette_alpha = remapped_alpha;
         }
         Ok(result)
     }

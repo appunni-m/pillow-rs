@@ -453,6 +453,8 @@ pub enum PipelineOp {
         other: Arc<Image>,
         /// Mask image.
         mask: Arc<Image>,
+        /// Whether the mask value comes from its alpha band.
+        mask_alpha: bool,
     },
     /// Apply a lookup table to every pixel value.
     Eval {
@@ -495,6 +497,11 @@ pub enum PipelineOp {
         filter: ResampleFilter,
         /// Optional fill color.
         fill: Option<(u8, u8, u8, u8)>,
+        /// Raw palette index used to fill out-of-bounds `P` samples.
+        ///
+        /// Pillow distinguishes scalar palette indices from tuple/string
+        /// colors, which resolve to index zero for affine transforms.
+        palette_fill: Option<u8>,
     },
 
     // ── Mutating ops (pipelined — replace self with Pipeline) ──

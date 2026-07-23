@@ -8,7 +8,7 @@ use pillow_rs::compute::{self, Backend};
 use pillow_rs::draw::Draw;
 use pillow_rs::error::PilError;
 use pillow_rs::image::PaletteTransparency;
-use pillow_rs::ops::{module_fns, paste::PasteSource};
+use pillow_rs::ops::{chops, imageops, module_fns, paste::PasteSource};
 use pillow_rs::pipeline::PipelineOp;
 use serde::Deserialize;
 use serde_json::Value;
@@ -1215,6 +1215,439 @@ fn drawing_is_exact_and_backend_capabilities_are_truthful() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn indexed_ops_are_exact_on_every_declared_native_backend() {
+    let available = compute::available_backends();
+    let registry = compute::registry::registry();
+    for (key, shader) in [
+        ("InvertChops", "invert_chops.wgsl"),
+        ("RemapPalette", "remap_palette.wgsl"),
+        ("Transform", "transform.wgsl"),
+        ("CompositeModule", "composite_module.wgsl"),
+    ] {
+        let entry = registry
+            .get(key)
+            .unwrap_or_else(|| panic!("{key} must be registered"));
+        assert!(
+            entry.cpu_fn.is_some(),
+            "{key} must have a CPU implementation"
+        );
+        assert!(
+            entry.simd_fn.is_some(),
+            "{key} must have a dedicated SIMD-pool implementation"
+        );
+        assert_eq!(entry.gpu_shader, Some(shader), "{key} GPU shader");
+        assert!(
+            entry.gpu_source.is_some(),
+            "{key} must embed its GPU shader"
+        );
+    }
+
+    let palette = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+    let mut source = Image::frombytes("P", (4, 1), &[0, 1, 2, 3]).expect("indexed source image");
+    source
+        .putpalette(&palette, "RGB")
+        .expect("indexed source palette");
+
+    let mut image2 = Image::frombytes("P", (4, 1), &[8, 7, 6, 5]).expect("indexed background");
+    let image2_palette = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    image2
+        .putpalette(&image2_palette, "RGB")
+        .expect("indexed background palette");
+    let mask = Image::frombytes("L", (4, 1), &[0, 127, 128, 255]).expect("composite mask");
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&selected),
+            "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
+        );
+
+        let inverted = chops::invert(&source)
+            .expect("invert P")
+            .use_backend(selected);
+        assert_eq!(inverted.mode().expect("invert mode"), "P");
+        assert_eq!(
+            inverted.tobytes().expect("invert indices"),
+            [255, 254, 253, 252]
+        );
+        assert_eq!(
+            inverted.getpalette_trimmed(),
+            Some(Vec::new()),
+            "Pillow allocates ImageChops.invert(P) without a palette"
+        );
+
+        let remapped = source
+            .remap_palette(&[2, 0, 3])
+            .expect("remap P")
+            .use_backend(selected);
+        assert_eq!(remapped.mode().expect("remap mode"), "P");
+        assert_eq!(remapped.tobytes().expect("remapped indices"), [1, 0, 0, 2]);
+        assert_eq!(
+            remapped.getpalette_trimmed(),
+            Some(vec![70, 80, 90, 10, 20, 30, 100, 110, 120])
+        );
+
+        let transformed = source
+            .transform_affine((4, 1), &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0], (9, 9, 9, 255))
+            .expect("transform P")
+            .use_backend(selected);
+        assert_eq!(transformed.mode().expect("transform mode"), "P");
+        assert_eq!(
+            transformed.tobytes().expect("transformed indices"),
+            [0, 1, 2, 3]
+        );
+        assert_eq!(transformed.getpalette_trimmed(), Some(palette.to_vec()));
+
+        let composited = module_fns::composite(&source, &image2, &mask)
+            .expect("composite P")
+            .use_backend(selected);
+        assert_eq!(composited.mode().expect("composite mode"), "P");
+        assert_eq!(
+            composited.tobytes().expect("composite indices"),
+            [8, 4, 4, 3]
+        );
+        assert_eq!(
+            composited.getpalette_trimmed(),
+            Some(image2_palette.to_vec()),
+            "Image.composite(P) owns image2's palette"
+        );
+    }
+}
+
+#[test]
+fn indexed_affine_fill_and_raw_rgba_palette_match_pillow_12_2() {
+    let available = compute::available_backends();
+    let mut palette = vec![0; 30];
+    palette[15..18].copy_from_slice(&[1, 2, 3]);
+    palette[18..21].copy_from_slice(&[4, 5, 6]);
+    palette[21..24].copy_from_slice(&[7, 8, 9]);
+    palette[27..30].copy_from_slice(&[255, 0, 0]);
+    let mut source = Image::frombytes("P", (2, 1), &[5, 6]).expect("indexed affine source");
+    source
+        .putpalette(&palette, "RGB")
+        .expect("indexed affine palette");
+    let matrix = [1.0, 0.0, -1.0, 0.0, 1.0, 0.0];
+
+    let mut rgba_palette = vec![0; 1024];
+    rgba_palette[..16].copy_from_slice(&[
+        10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160,
+    ]);
+    let l_source = Image::frombytes("L", (4, 1), &[0, 1, 2, 3]).expect("L remap source");
+    let mut p_source = Image::frombytes("P", (4, 1), &[0, 1, 2, 3]).expect("P remap source");
+    p_source
+        .putpalette(&[1, 2, 3, 4, 5, 6, 7, 8, 9], "RGB")
+        .expect("P attached palette");
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&selected),
+            "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
+        );
+
+        let tuple_fill = source
+            .transform_affine((4, 1), &matrix, (255, 0, 0, 255))
+            .expect("tuple fill transform")
+            .use_backend(selected);
+        assert_eq!(tuple_fill.size().expect("tuple fill size"), (4, 1));
+        assert_eq!(
+            tuple_fill.tobytes().expect("tuple fill indices"),
+            [0, 5, 6, 0],
+            "Pillow resolves tuple/string P fill colors to index zero"
+        );
+        assert_eq!(tuple_fill.getpalette_trimmed(), Some(palette.clone()));
+
+        let scalar_fill = source
+            .transform_affine_palette_index((4, 1), &matrix, 7)
+            .expect("scalar fill transform")
+            .use_backend(selected);
+        assert_eq!(scalar_fill.size().expect("scalar fill size"), (4, 1));
+        assert_eq!(
+            scalar_fill.tobytes().expect("scalar fill indices"),
+            [7, 5, 6, 7],
+            "Pillow preserves a scalar P fill as its raw palette index"
+        );
+        assert_eq!(scalar_fill.getpalette_trimmed(), Some(palette.clone()));
+
+        for remap_source in [&l_source, &p_source] {
+            let remapped = remap_source
+                .remap_palette_with_source(&[2, 0, 3], Some(&rgba_palette))
+                .expect("RGBA source palette remap")
+                .use_backend(selected);
+            assert_eq!(remapped.mode().expect("remap mode"), "P");
+            assert_eq!(remapped.tobytes().expect("remapped indices"), [1, 0, 0, 2]);
+            assert_eq!(
+                remapped.getpalette_trimmed(),
+                Some(vec![90, 100, 110, 10, 20, 30, 130, 140, 150])
+            );
+            assert_eq!(remapped.palette_alpha(), Some(vec![120, 40, 160]));
+            assert_eq!(remapped.palette_mode(), Some("RGBA"));
+        }
+    }
+}
+
+#[test]
+fn rgba_fast_octree_retains_exact_pillow_12_2_palette_alpha() {
+    let source = Image::frombytes(
+        "RGBA",
+        (4, 1),
+        &[255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 99, 88, 77, 0],
+    )
+    .expect("RGBA quantize source");
+
+    let two = source
+        .quantize(2, 0, None, false)
+        .expect("FASTOCTREE colors=2");
+    assert_eq!(two.tobytes().expect("colors=2 indices"), [0, 1, 0, 0]);
+    assert_eq!(two.getpalette_trimmed(), Some(vec![99, 88, 77, 0, 255, 0]));
+    assert_eq!(two.palette_alpha(), Some(vec![0, 128]));
+    assert_eq!(two.palette_mode(), Some("RGBA"));
+
+    let four = source
+        .quantize(4, 0, None, false)
+        .expect("FASTOCTREE colors=4");
+    assert_eq!(four.tobytes().expect("colors=4 indices"), [3, 1, 2, 0]);
+    assert_eq!(
+        four.getpalette_trimmed(),
+        Some(vec![99, 88, 77, 0, 255, 0, 0, 0, 255, 255, 0, 0])
+    );
+    assert_eq!(four.palette_alpha(), Some(vec![0, 128, 64, 255]));
+    assert_eq!(four.palette_mode(), Some("RGBA"));
+}
+
+#[test]
+fn quantize_color_bounds_and_single_color_match_pillow_12_2() {
+    let rgb = Image::frombytes("RGB", (3, 1), &[10, 20, 30, 250, 240, 230, 20, 70, 130])
+        .expect("RGB quantize source");
+    let rgb_one = rgb
+        .quantize(1, 0, None, false)
+        .expect("RGB colors=1 is valid");
+    assert_eq!(rgb_one.tobytes().expect("RGB colors=1 indices"), [0, 0, 0]);
+    assert_eq!(
+        rgb_one.getpalette_trimmed(),
+        Some(vec![93, 110, 130]),
+        "Pillow median cut retains its rounded single-box centroid"
+    );
+
+    let rgba = Image::frombytes(
+        "RGBA",
+        (3, 1),
+        &[10, 20, 30, 40, 250, 240, 230, 220, 20, 70, 130, 190],
+    )
+    .expect("RGBA quantize source");
+    let rgba_one = rgba
+        .quantize(1, 0, None, false)
+        .expect("RGBA colors=1 is valid");
+    assert_eq!(
+        rgba_one.tobytes().expect("RGBA colors=1 indices"),
+        [0, 0, 0]
+    );
+    assert_eq!(
+        rgba_one.getpalette_trimmed(),
+        Some(vec![10, 20, 30]),
+        "FASTOCTREE colors=1 keeps Pillow's most-populated coarse bucket"
+    );
+    assert_eq!(rgba_one.palette_alpha(), Some(vec![40]));
+
+    for colors in [0, 257] {
+        match rgb.quantize(colors, 0, None, false) {
+            Err(PilError::ValueError(message)) => {
+                assert_eq!(message, "bad number of colors");
+            }
+            other => panic!("colors={colors} should fail exactly, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn rgba_fast_octree_uses_pillow_float_bucket_average_at_4096_square() {
+    const SIDE: u32 = 4096;
+    let pixel_count = SIDE as usize * SIDE as usize;
+    let mut pixels = vec![255u8; pixel_count * 4];
+    pixels[0] = 254;
+    let source = Image::frombytes("RGBA", (SIDE, SIDE), &pixels).expect("large FASTOCTREE source");
+    drop(pixels);
+
+    let quantized = source
+        .quantize(2, 0, None, false)
+        .expect("large FASTOCTREE colors=2");
+    let palette = quantized
+        .getpalette_trimmed()
+        .expect("large FASTOCTREE palette");
+    assert_eq!(
+        &palette[..3],
+        &[255, 255, 255],
+        "Pillow converts the large bucket sum and count to C float before division"
+    );
+    assert_eq!(quantized.palette_alpha().as_deref(), Some(&[255, 0][..]));
+}
+
+#[test]
+fn composite_uses_image2_mode_canvas_and_palette_on_every_backend() {
+    let available = compute::available_backends();
+    let mask = Image::frombytes("L", (2, 1), &[0, 255]).expect("composite mask");
+
+    let mut p1 = Image::frombytes("P", (2, 1), &[1, 2]).expect("P image1");
+    p1.putpalette(&[0, 0, 0, 10, 20, 30, 200, 100, 50], "RGB")
+        .expect("P image1 palette");
+    let mut p2 = Image::frombytes("P", (2, 1), &[3, 4]).expect("P image2");
+    let p2_palette = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 8, 9, 10];
+    p2.putpalette(&p2_palette, "RGB").expect("P image2 palette");
+    let l = Image::frombytes("L", (2, 1), &[40, 180]).expect("L source");
+    let rgb = Image::frombytes("RGB", (2, 1), &[11, 22, 33, 210, 120, 30]).expect("RGB source");
+
+    let mut large_p2 =
+        Image::frombytes("P", (4, 2), &[3, 4, 5, 6, 7, 8, 9, 10]).expect("large image2");
+    large_p2
+        .putpalette(&p2_palette, "RGB")
+        .expect("large image2 palette");
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&selected),
+            "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
+        );
+
+        let p_over_l = module_fns::composite(&p1, &l, &mask)
+            .expect("P over L")
+            .use_backend(selected);
+        assert_eq!(p_over_l.mode().expect("P over L mode"), "L");
+        assert_eq!(p_over_l.tobytes().expect("P over L bytes"), [40, 124]);
+        assert_eq!(p_over_l.getpalette_trimmed(), None);
+
+        let l_over_p = module_fns::composite(&l, &p2, &mask)
+            .expect("L over P")
+            .use_backend(selected);
+        assert_eq!(l_over_p.mode().expect("L over P mode"), "P");
+        assert_eq!(l_over_p.tobytes().expect("L over P bytes"), [3, 180]);
+        assert_eq!(l_over_p.getpalette_trimmed(), Some(p2_palette.clone()));
+
+        let p_over_rgb = module_fns::composite(&p1, &rgb, &mask)
+            .expect("P over RGB")
+            .use_backend(selected);
+        assert_eq!(p_over_rgb.mode().expect("P over RGB mode"), "RGB");
+        assert_eq!(
+            p_over_rgb.tobytes().expect("P over RGB bytes"),
+            [11, 22, 33, 200, 100, 50]
+        );
+        assert_eq!(p_over_rgb.getpalette_trimmed(), None);
+
+        let rgb_over_p = module_fns::composite(&rgb, &p2, &mask)
+            .expect("RGB over P")
+            .use_backend(selected);
+        assert_eq!(rgb_over_p.mode().expect("RGB over P mode"), "P");
+        assert_eq!(rgb_over_p.tobytes().expect("RGB over P bytes"), [3, 32]);
+        assert_eq!(rgb_over_p.getpalette_trimmed(), Some(p2_palette.clone()));
+
+        let large = module_fns::composite(&p1, &large_p2, &mask)
+            .expect("larger image2 composite")
+            .use_backend(selected);
+        assert_eq!(large.mode().expect("larger image2 mode"), "P");
+        assert_eq!(
+            large.tobytes().expect("larger image2 indices"),
+            [3, 2, 5, 6, 7, 8, 9, 10]
+        );
+        assert_eq!(large.getpalette_trimmed(), Some(p2_palette.clone()));
+    }
+}
+
+#[test]
+fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
+    let available = compute::available_backends();
+    let image1 = Image::frombytes(
+        "RGBA",
+        (3, 1),
+        &[10, 20, 30, 40, 60, 80, 100, 120, 20, 70, 130, 190],
+    )
+    .expect("RGBA image1");
+    let image2 = Image::frombytes(
+        "RGBA",
+        (3, 1),
+        &[250, 240, 230, 220, 200, 180, 160, 140, 220, 160, 100, 40],
+    )
+    .expect("RGBA image2");
+    let rgba_mask = Image::frombytes("RGBA", (3, 1), &[255, 0, 0, 0, 0, 0, 0, 255, 9, 8, 7, 128])
+        .expect("adversarial RGBA mask");
+    let la_mask =
+        Image::frombytes("LA", (3, 1), &[255, 0, 0, 255, 77, 128]).expect("adversarial LA mask");
+    let l_mask = Image::frombytes("L", (3, 1), &[0, 255, 128]).expect("L mask");
+    let mode1_mask = Image::frombytes("1", (3, 1), &[0b0100_0000]).expect("1 mask");
+
+    let alpha_mask_expected = [250, 240, 230, 220, 60, 80, 100, 120, 120, 115, 115, 115];
+    let bit_mask_expected = [250, 240, 230, 220, 60, 80, 100, 120, 220, 160, 100, 40];
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&selected),
+            "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
+        );
+
+        for (label, mask) in [
+            ("RGBA alpha", &rgba_mask),
+            ("LA alpha", &la_mask),
+            ("L luma", &l_mask),
+        ] {
+            let composited = module_fns::composite(&image1, &image2, mask)
+                .unwrap_or_else(|error| panic!("{label} composite setup failed: {error}"))
+                .use_backend(selected);
+            assert_eq!(composited.mode().expect("composite mode"), "RGBA");
+            assert_eq!(
+                composited.tobytes().expect("composite bytes"),
+                alpha_mask_expected,
+                "{label} mask differs on {selected:?}"
+            );
+        }
+
+        let mode1 = module_fns::composite(&image1, &image2, &mode1_mask)
+            .expect("1 mask composite")
+            .use_backend(selected);
+        assert_eq!(
+            mode1.tobytes().expect("1 mask composite bytes"),
+            bit_mask_expected,
+            "1 mask must use unpacked 0/255 luma on {selected:?}"
+        );
+    }
+
+    let invalid_mask = Image::frombytes("RGB", (3, 1), &[0; 9]).expect("invalid RGB mask");
+    match module_fns::composite(&image1, &image2, &invalid_mask) {
+        Err(PilError::ValueError(message)) => assert_eq!(message, "bad transparency mask"),
+        other => panic!("RGB composite mask should fail exactly, got {other:?}"),
+    }
+}
+
+#[test]
+fn backend_lock_reaches_nested_indexed_to_color_pipeline() {
+    let available = compute::available_backends();
+    let mut source = Image::frombytes("P", (4, 1), &[0, 1, 2, 3]).expect("indexed source");
+    source
+        .putpalette(&[10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120], "RGB")
+        .expect("indexed source palette");
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&selected),
+            "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
+        );
+        let remapped = source.remap_palette(&[2, 0, 3]).expect("nested remap");
+        let locked = imageops::grayscale(&remapped)
+            .expect("nested P to grayscale")
+            .use_backend(selected);
+        assert_eq!(locked.backend(), Some(selected));
+        let Image::Pipeline { source: nested, .. } = &locked else {
+            panic!("P to color boundary must remain a nested pipeline");
+        };
+        assert_eq!(
+            nested.backend(),
+            Some(selected),
+            "forced backend must reach the palette-preserving nested source"
+        );
+        assert_eq!(
+            locked.tobytes().expect("nested grayscale bytes"),
+            [18, 78, 78, 108],
+            "{selected:?} nested indexed-to-color output"
+        );
     }
 }
 

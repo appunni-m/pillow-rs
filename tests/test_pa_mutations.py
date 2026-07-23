@@ -1,4 +1,4 @@
-"""Focused Pillow 12.2 PA mutation regressions.
+"""Focused Pillow 12.2 indexed and PA regressions.
 
 These byte expectations come from the pinned Pillow oracle. They exercise the
 public binding normalization that the lower-level backend tests cannot see.
@@ -178,3 +178,74 @@ def test_pa_shape_default_ink_matches_pillow(
     assert image.mode == "PA"
     assert image.tobytes() == bytes.fromhex(expected_hex)
     assert retained_palette(image) == palette
+
+
+def p_affine(fillcolor):
+    image = Image.frombytes("P", (1, 1), b"\x00")
+    image.putpalette(PALETTE, "RGB")
+    return image.transform(
+        (2, 1),
+        "AFFINE",
+        (1, 0, -1, 0, 1, 0),
+        fillcolor=fillcolor,
+    )
+
+
+@pytest.mark.covers("Image.transform", mode="P")
+@pytest.mark.parametrize(
+    ("fillcolor", "expected_fill"),
+    [
+        (-1, 0),
+        (True, 1),
+        (256, 255),
+        (300, 255),
+        ((-1,), 0),
+        ((256,), 255),
+        ((1, 2, 3), 0),
+        ((1, 2, 3, 255), 0),
+        ([1, 2, 3], 0),
+        ("red", 0),
+        ("#010203", 0),
+        (None, 0),
+    ],
+)
+def test_p_affine_fill_normalization_matches_pillow(fillcolor, expected_fill):
+    transformed = p_affine(fillcolor)
+
+    assert transformed.mode == "P"
+    assert transformed.tobytes() == bytes([expected_fill, 0])
+    assert retained_palette(transformed) == PALETTE
+
+
+@pytest.mark.covers("Image.transform", mode="P")
+@pytest.mark.parametrize(
+    ("fillcolor", "error_type", "message"),
+    [
+        (1.5, TypeError, "color must be int or single-element tuple"),
+        ((), TypeError, "color must be int or single-element tuple"),
+        ([], TypeError, "color must be int or single-element tuple"),
+        ((1.5, 2, 3), TypeError, "color must be int or single-element tuple"),
+        ((1, 2), TypeError, "color must be int or single-element tuple"),
+        (b"x", TypeError, "color must be int or single-element tuple"),
+        ((300, 2, 3), ValueError, "bytes must be in range(0, 256)"),
+        ((-1, 2, 3), ValueError, "bytes must be in range(0, 256)"),
+        (
+            (1, 2, 3, 4),
+            ValueError,
+            "cannot add non-opaque RGBA color to RGB palette",
+        ),
+        (
+            "not-a-color",
+            ValueError,
+            "unknown color specifier: 'not-a-color'",
+        ),
+        ("", ValueError, "unknown color specifier: ''"),
+        (1 << 80, OverflowError, "int too big to convert"),
+        ((1 << 80,), OverflowError, "int too big to convert"),
+    ],
+)
+def test_p_affine_fill_errors_match_pillow(fillcolor, error_type, message):
+    with pytest.raises(error_type) as error:
+        p_affine(fillcolor)
+
+    assert str(error.value) == message
