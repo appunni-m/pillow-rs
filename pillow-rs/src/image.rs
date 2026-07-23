@@ -539,7 +539,11 @@ impl Image {
             | PipelineOp::DrawArc { .. }
             | PipelineOp::DrawChord { .. }
             | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::DrawPoint { .. } => true,
+            | PipelineOp::DrawPoint { .. }
+            // Pillow's Image.point maps P indices directly, and Image._new
+            // copies the source palette. Image.eval delegates to point.
+            | PipelineOp::Eval { .. }
+            | PipelineOp::PointOp { .. } => true,
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..

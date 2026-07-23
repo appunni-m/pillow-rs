@@ -1094,7 +1094,10 @@ pub fn simd_eval(
         };
         super::scalar::eval(&mut pixels, mode_code, &lut_arr);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Ok(crate::image::preserve_mode(
+        img,
+        dynimg_from_rgba(pixels, w, h),
+    ))
 }
 
 pub fn simd_effect_noise(
@@ -1128,7 +1131,10 @@ pub fn simd_point_op(
         };
         super::scalar::point_op(&mut pixels, mode_code, &lut_arr);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Ok(crate::image::preserve_mode(
+        img,
+        dynimg_from_rgba(pixels, w, h),
+    ))
 }
 
 pub fn simd_paste(
