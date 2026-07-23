@@ -348,6 +348,7 @@ class Image:
             self._rust_image.putalpha(alpha)
         else:
             self._rust_image.putalpha(int(alpha))
+        self._explicit_mode = self._rust_image.explicit_mode()
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor."""

@@ -26,7 +26,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, PixelMode};
 use image_slash_star::{DynamicImage, RgbaImage};
 use std::collections::HashMap;
 
@@ -168,6 +168,48 @@ impl BufferPool {
     /// Upload LUT data to the storage buffer for Eval/PointOp shaders.
     fn upload_lut(&self, queue: &wgpu::Queue, lut: &[u32; 256]) {
         queue.write_buffer(&self.lut_buf, 0, bytemuck::cast_slice(&lut[..]));
+    }
+
+    /// Pack logical `putdata` samples into the auxiliary storage buffer.
+    ///
+    /// LA/PA place alpha in packed byte 3, matching the GPU's RGBA transport;
+    /// all other modes retain their raw channel order. The shader uses the
+    /// original byte length to preserve every untouched or partial pixel.
+    fn upload_put_data(&self, queue: &wgpu::Queue, data: &[u8], mode: PixelMode) {
+        let channels = mode.channels();
+        let pixel_count = data.len().div_ceil(channels).min(self.capacity as usize);
+        let mut packed = Vec::with_capacity(pixel_count);
+        for pixel_index in 0..pixel_count {
+            let start = pixel_index * channels;
+            let samples = &data[start..data.len().min(start + channels)];
+            let pixel = match mode {
+                PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
+                    samples.first().copied().unwrap_or(0) as u32
+                }
+                PixelMode::LA | PixelMode::PA => {
+                    let luma = samples.first().copied().unwrap_or(0) as u32;
+                    let alpha = samples.get(1).copied().unwrap_or(0) as u32;
+                    luma | (alpha << 24)
+                }
+                PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
+                    let r = samples.first().copied().unwrap_or(0) as u32;
+                    let g = samples.get(1).copied().unwrap_or(0) as u32;
+                    let b = samples.get(2).copied().unwrap_or(0) as u32;
+                    r | (g << 8) | (b << 16)
+                }
+                PixelMode::RGBA | PixelMode::CMYK | PixelMode::I | PixelMode::F => {
+                    let first = samples.first().copied().unwrap_or(0) as u32;
+                    let second = samples.get(1).copied().unwrap_or(0) as u32;
+                    let third = samples.get(2).copied().unwrap_or(0) as u32;
+                    let fourth = samples.get(3).copied().unwrap_or(0) as u32;
+                    first | (second << 8) | (third << 16) | (fourth << 24)
+                }
+            };
+            packed.push(pixel);
+        }
+        if !packed.is_empty() {
+            queue.write_buffer(&self.buf_img2, 0, bytemuck::cast_slice(&packed));
+        }
     }
 
     fn upload_params(&self, queue: &wgpu::Queue, params: &[u32], w: u32, h: u32, mode: u32) {
@@ -775,7 +817,10 @@ impl GpuInner {
             };
 
             // Upload pre-materialized second image to buf_img2 if this is a dual-input op.
-            let img2_buf: Option<&wgpu::Buffer> = if let Some(ref second) = second_images[i] {
+            let img2_buf: Option<&wgpu::Buffer> = if let PipelineOp::PutData { data, mode } = op {
+                self.buffers.upload_put_data(&self.queue, data, *mode);
+                Some(&self.buffers.buf_img2)
+            } else if let Some(ref second) = second_images[i] {
                 let second_rgba = second.to_rgba8();
                 self.buffers.upload_second(&self.queue, &second_rgba)?;
                 Some(&self.buffers.buf_img2)
@@ -815,6 +860,7 @@ impl GpuInner {
 }
 
 static GPU: std::sync::OnceLock<GpuInner> = std::sync::OnceLock::new();
+static GPU_EXECUTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 // ─── Mode helpers ───────────────────────────────────────────────────────────
 
@@ -827,6 +873,26 @@ fn mode_code(img: &DynamicImage) -> u32 {
         DynamicImage::ImageRgb8(_) => 2,
         DynamicImage::ImageRgba8(_) => 3,
         _ => 3, // fallback: treat as RGBA
+    }
+}
+
+fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> DynamicImage {
+    if matches!(
+        mode,
+        PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA
+    ) {
+        let rgba = result.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let samples = rgba
+            .pixels()
+            .flat_map(|pixel| [pixel[0], pixel[3]])
+            .collect();
+        DynamicImage::ImageLumaA8(
+            image_slash_star::GrayAlphaImage::from_raw(w, h, samples)
+                .expect("GPU putalpha dimensions already validated"),
+        )
+    } else {
+        DynamicImage::ImageRgba8(result.to_rgba8())
     }
 }
 
@@ -1010,6 +1076,12 @@ impl BackendImpl for GpuPool {
         img: &DynamicImage,
         _mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
+        // The global pool reuses its upload, auxiliary, output, and readback
+        // buffers. Serialize complete batches so concurrent callers cannot
+        // overwrite one another between upload and dispatch.
+        let _execution = GPU_EXECUTION
+            .lock()
+            .map_err(|_| PilError::InternalError("GPU execution lock poisoned".into()))?;
         let gpu = Self::ensure_init()?;
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();
@@ -1040,15 +1112,26 @@ impl BackendImpl for GpuPool {
         gpu_log!("[GPU] step=poll done, readback start");
         let result = gpu.readback_to_image(final_w, final_h, final_is_a)?;
         gpu_log!("[GPU] step=readback done");
-        // Detect mode-changing ops that need output mode override.
-        // Grayscale: always outputs L, regardless of input mode.
-        // Convert: output matches target mode (handled by CPU fallback for now).
-        let out_mode: Option<image_slash_star::ColorType> =
-            if ops.iter().any(|op| matches!(op, PipelineOp::Grayscale)) {
-                Some(image_slash_star::ColorType::L8)
-            } else {
-                None
-            };
+        // Track the last mode-changing operation. Geometry and other
+        // mode-preserving operations after it do not undo the promotion.
+        let mut put_alpha_mode = None;
+        let mut out_mode = None;
+        for op in ops {
+            match op {
+                PipelineOp::Grayscale => {
+                    put_alpha_mode = None;
+                    out_mode = Some(image_slash_star::ColorType::L8);
+                }
+                PipelineOp::PutAlpha { mode, .. } => {
+                    put_alpha_mode = Some(*mode);
+                    out_mode = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(mode) = put_alpha_mode {
+            return Ok(put_alpha_output(result, mode));
+        }
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
             match ct {

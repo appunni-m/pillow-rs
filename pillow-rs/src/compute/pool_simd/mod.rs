@@ -25,6 +25,33 @@ pub mod ops;
 /// Executes only operations with a registered SIMD implementation.
 pub struct SimdPool;
 
+fn normalize_palette_result(result: DynamicImage, mode: Option<&str>) -> DynamicImage {
+    match mode {
+        Some("P") => {
+            let rgba = result.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            let indices = rgba.pixels().map(|pixel| pixel[0]).collect();
+            DynamicImage::ImageLuma8(
+                image_slash_star::GrayImage::from_raw(width, height, indices)
+                    .expect("SIMD P-mode dimensions already validated"),
+            )
+        }
+        Some("PA") => {
+            let rgba = result.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            let samples = rgba
+                .pixels()
+                .flat_map(|pixel| [pixel[0], pixel[3]])
+                .collect();
+            DynamicImage::ImageLumaA8(
+                image_slash_star::GrayAlphaImage::from_raw(width, height, samples)
+                    .expect("SIMD PA-mode dimensions already validated"),
+            )
+        }
+        _ => result,
+    }
+}
+
 impl BackendImpl for SimdPool {
     fn name(&self) -> Backend {
         Backend::Simd
@@ -64,6 +91,6 @@ impl BackendImpl for SimdPool {
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
             current = f(&current, op, mode)?;
         }
-        Ok(current)
+        Ok(normalize_palette_result(current, mode))
     }
 }

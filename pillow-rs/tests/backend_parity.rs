@@ -217,6 +217,15 @@ fn assert_image(case_id: &str, actual: &Image, expected: &ImageSpec) {
     );
 }
 
+fn assert_exact_samples(case_id: &str, actual: &Image, mode: &str, expected: &[u8]) {
+    assert_eq!(actual.mode().expect("actual mode"), mode, "{case_id}: mode");
+    assert_eq!(
+        actual.tobytes().expect("actual pixels"),
+        expected,
+        "{case_id}: exact pixels"
+    );
+}
+
 fn error_kind(error: &PilError) -> &'static str {
     match error {
         PilError::ValueError(_) => "ValueError",
@@ -528,6 +537,584 @@ fn paste_validation_matches_exact_pillow_errors() {
 }
 
 #[test]
+fn putalpha_and_core_sample_replacement_match_on_each_native_backend() {
+    let available = compute::available_backends();
+    for required in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        assert!(
+            available.contains(&required),
+            "forced-backend parity requires {required:?}; compiled backends: {available:?}"
+        );
+    }
+
+    let registry = compute::registry::registry();
+    for (operation, shader) in [("PutAlpha", "put_alpha.wgsl"), ("PutData", "put_data.wgsl")] {
+        let entry = registry
+            .get(operation)
+            .unwrap_or_else(|| panic!("{operation} must be registered"));
+        assert!(
+            entry.cpu_fn.is_some(),
+            "{operation} must have a CPU implementation"
+        );
+        assert!(
+            entry.simd_fn.is_some(),
+            "{operation} must have a dedicated SIMD implementation"
+        );
+        assert_eq!(
+            entry.gpu_shader,
+            Some(shader),
+            "{operation} must have its own GPU shader"
+        );
+        assert!(
+            entry.gpu_source.is_some(),
+            "{operation} must embed its GPU implementation"
+        );
+    }
+
+    for (mode, pixels, message) in [
+        ("1", vec![0x80], "conversion from 1 to LA not supported"),
+        (
+            "YCbCr",
+            vec![1, 2, 3],
+            "conversion from YCbCr to RGBA not supported",
+        ),
+        (
+            "HSV",
+            vec![1, 2, 3],
+            "conversion from HSV to RGBA not supported",
+        ),
+        (
+            "I",
+            vec![1, 0, 0, 0],
+            "conversion from I to LA not supported",
+        ),
+        (
+            "F",
+            1.0f32.to_le_bytes().to_vec(),
+            "conversion from F to LA not supported",
+        ),
+    ] {
+        let mut image =
+            Image::frombytes(mode, (1, 1), &pixels).expect("unsupported putalpha input");
+        let error = image
+            .putalpha(128)
+            .expect_err("unsupported putalpha mode must fail before dispatch");
+        assert_eq!(error.to_string(), message, "putalpha {mode} exact error");
+    }
+
+    let palette = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        let backend_name = format!("{selected:?}");
+
+        let mut luma = Image::frombytes("L", (3, 1), &[7, 99, 250]).expect("L input");
+        luma.putalpha(128).expect("L putalpha");
+        let luma = luma.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha L [{backend_name}]"),
+            &luma,
+            "LA",
+            &[7, 128, 99, 128, 250, 128],
+        );
+
+        let mut luma_alpha =
+            Image::frombytes("LA", (3, 1), &[7, 8, 99, 100, 250, 251]).expect("LA input");
+        luma_alpha.putalpha(128).expect("LA putalpha");
+        let luma_alpha = luma_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha LA [{backend_name}]"),
+            &luma_alpha,
+            "LA",
+            &[7, 128, 99, 128, 250, 128],
+        );
+
+        let mut rgb = Image::frombytes("RGB", (3, 1), &[1, 2, 3, 40, 50, 60, 250, 0, 128])
+            .expect("RGB input");
+        rgb.putalpha(128).expect("RGB putalpha");
+        let rgb = rgb.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha RGB [{backend_name}]"),
+            &rgb,
+            "RGBA",
+            &[1, 2, 3, 128, 40, 50, 60, 128, 250, 0, 128, 128],
+        );
+
+        let mut rgba = Image::frombytes(
+            "RGBA",
+            (3, 1),
+            &[1, 2, 3, 4, 40, 50, 60, 70, 250, 0, 128, 255],
+        )
+        .expect("RGBA input");
+        rgba.putalpha(128).expect("RGBA putalpha");
+        let rgba = rgba.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha RGBA [{backend_name}]"),
+            &rgba,
+            "RGBA",
+            &[1, 2, 3, 128, 40, 50, 60, 128, 250, 0, 128, 128],
+        );
+
+        let mut cmyk = Image::frombytes(
+            "CMYK",
+            (3, 1),
+            &[50, 100, 150, 200, 0, 255, 17, 0, 255, 0, 255, 128],
+        )
+        .expect("CMYK input");
+        cmyk.putalpha(128).expect("CMYK putalpha");
+        let cmyk = cmyk.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha CMYK [{backend_name}]"),
+            &cmyk,
+            "RGBA",
+            &[44, 33, 23, 128, 255, 0, 238, 128, 0, 127, 0, 128],
+        );
+
+        let mut paletted = Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("P putalpha input");
+        paletted
+            .putpalette(&palette, "RGB")
+            .expect("P putalpha palette");
+        let source_palette = paletted.palette();
+        paletted.putalpha(128).expect("P putalpha");
+        let paletted = paletted.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha P [{backend_name}]"),
+            &paletted,
+            "PA",
+            &[0, 128, 2, 128, 1, 128],
+        );
+        assert_eq!(
+            paletted.getbands().expect("PA bands"),
+            vec!["P".to_owned(), "A".to_owned()],
+            "putalpha P [{backend_name}]: bands"
+        );
+        assert_eq!(
+            paletted.palette(),
+            source_palette,
+            "putalpha P [{backend_name}]: palette"
+        );
+
+        let mut repeated_alpha =
+            Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("repeated P putalpha input");
+        repeated_alpha
+            .putpalette(&palette, "RGB")
+            .expect("repeated P putalpha palette");
+        let source_palette = repeated_alpha.palette();
+        repeated_alpha
+            .putalpha(128)
+            .expect("first P to PA putalpha");
+        repeated_alpha.putalpha(17).expect("second PA putalpha");
+        let repeated_alpha = repeated_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha PA [{backend_name}]"),
+            &repeated_alpha,
+            "PA",
+            &[0, 17, 2, 17, 1, 17],
+        );
+        assert_eq!(
+            repeated_alpha.palette(),
+            source_palette,
+            "putalpha PA [{backend_name}]: palette"
+        );
+
+        let mut pa_data = Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("PA putdata input");
+        pa_data
+            .putpalette(&palette, "RGB")
+            .expect("PA putdata palette");
+        let source_palette = pa_data.palette();
+        pa_data.putalpha(128).expect("P to PA before putdata");
+        pa_data
+            .putdata(&[9, 33])
+            .expect("one complete PA replacement");
+        let pa_data = pa_data.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata PA [{backend_name}]"),
+            &pa_data,
+            "PA",
+            &[9, 33, 2, 128, 1, 128],
+        );
+        assert_eq!(
+            pa_data.palette(),
+            source_palette,
+            "putdata PA [{backend_name}]: palette"
+        );
+
+        let mut pa_crop = Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("PA crop input");
+        pa_crop
+            .putpalette(&palette, "RGB")
+            .expect("PA crop palette");
+        let source_palette = pa_crop.palette();
+        pa_crop.putalpha(128).expect("P to PA before crop");
+        let pa_crop = pa_crop
+            .crop_box(1, 0, 3, 1)
+            .expect("PA crop")
+            .use_backend(selected);
+        assert_eq!(
+            pa_crop.size().expect("PA crop size"),
+            (2, 1),
+            "crop PA [{backend_name}]: size"
+        );
+        assert_exact_samples(
+            &format!("crop PA [{backend_name}]"),
+            &pa_crop,
+            "PA",
+            &[2, 128, 1, 128],
+        );
+        assert_eq!(
+            pa_crop.palette(),
+            source_palette,
+            "crop PA [{backend_name}]: palette"
+        );
+
+        let mut paste_pa_destination =
+            Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("PA paste destination");
+        paste_pa_destination
+            .putpalette(&palette, "RGB")
+            .expect("PA paste destination palette");
+        paste_pa_destination
+            .putalpha(128)
+            .expect("PA paste destination alpha");
+        let mut paste_pa_source =
+            Image::frombytes("P", (1, 1), &[2]).expect("PA paste source indices");
+        paste_pa_source
+            .putpalette(&palette, "RGB")
+            .expect("PA paste source palette");
+        paste_pa_source.putalpha(33).expect("PA paste source alpha");
+        paste_pa_destination
+            .paste_at(PasteSource::Image(paste_pa_source), Some((1, 0)), None)
+            .expect("paste PA source into PA destination");
+        let paste_pa_destination = paste_pa_destination.use_backend(selected);
+        assert_exact_samples(
+            &format!("paste PA into PA [{backend_name}]"),
+            &paste_pa_destination,
+            "PA",
+            &[0, 128, 2, 33, 0, 128],
+        );
+
+        let mut paste_p_destination =
+            Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("P-to-PA paste destination");
+        paste_p_destination
+            .putpalette(&palette, "RGB")
+            .expect("P-to-PA paste destination palette");
+        paste_p_destination
+            .putalpha(128)
+            .expect("P-to-PA paste destination alpha");
+        let mut paste_p_source =
+            Image::frombytes("P", (1, 1), &[2]).expect("P paste source indices");
+        paste_p_source
+            .putpalette(&palette, "RGB")
+            .expect("P paste source palette");
+        paste_p_destination
+            .paste_at(PasteSource::Image(paste_p_source), Some((1, 0)), None)
+            .expect("paste P source into PA destination");
+        let paste_p_destination = paste_p_destination.use_backend(selected);
+        assert_exact_samples(
+            &format!("paste P into PA [{backend_name}]"),
+            &paste_p_destination,
+            "PA",
+            &[0, 128, 2, 255, 0, 128],
+        );
+
+        for (source, expected, label) in [
+            (PasteSource::Scalar(2), [0, 128, 2, 0, 0, 128], "scalar"),
+            (
+                PasteSource::LumaAlpha(2, 33),
+                [0, 128, 2, 33, 0, 128],
+                "two-band",
+            ),
+        ] {
+            let mut solid_destination =
+                Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("PA solid paste destination");
+            solid_destination
+                .putpalette(&palette, "RGB")
+                .expect("PA solid paste palette");
+            solid_destination
+                .putalpha(128)
+                .expect("PA solid paste destination alpha");
+            solid_destination
+                .paste(source, Some((1, 0, 2, 1)), None)
+                .expect("solid PA paste");
+            let solid_destination = solid_destination.use_backend(selected);
+            assert_exact_samples(
+                &format!("paste PA {label} [{backend_name}]"),
+                &solid_destination,
+                "PA",
+                &expected,
+            );
+        }
+
+        let mut paste_before_alpha =
+            Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("P paste-before-alpha destination");
+        paste_before_alpha
+            .putpalette(&palette, "RGB")
+            .expect("P paste-before-alpha destination palette");
+        let mut paste_before_alpha_source =
+            Image::frombytes("P", (1, 1), &[2]).expect("P paste-before-alpha source");
+        paste_before_alpha_source
+            .putpalette(&palette, "RGB")
+            .expect("P paste-before-alpha source palette");
+        paste_before_alpha
+            .paste_at(
+                PasteSource::Image(paste_before_alpha_source),
+                Some((1, 0)),
+                None,
+            )
+            .expect("paste P before putalpha");
+        paste_before_alpha
+            .putalpha(33)
+            .expect("promote pasted P samples to PA");
+        let paste_before_alpha = paste_before_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("paste P then putalpha [{backend_name}]"),
+            &paste_before_alpha,
+            "PA",
+            &[0, 33, 2, 33, 0, 33],
+        );
+
+        let mut data_before_alpha =
+            Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("P putdata-before-alpha input");
+        data_before_alpha
+            .putpalette(&palette, "RGB")
+            .expect("P putdata-before-alpha palette");
+        data_before_alpha
+            .putdata(&[2])
+            .expect("replace one P sample before putalpha");
+        data_before_alpha
+            .putalpha(33)
+            .expect("promote replaced P samples to PA");
+        let data_before_alpha = data_before_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata P then putalpha [{backend_name}]"),
+            &data_before_alpha,
+            "PA",
+            &[2, 33, 1, 33, 0, 33],
+        );
+
+        let mut crop_before_alpha =
+            Image::frombytes("P", (3, 1), &[0, 1, 2]).expect("P crop-before-alpha input");
+        crop_before_alpha
+            .putpalette(&palette, "RGB")
+            .expect("P crop-before-alpha palette");
+        let mut crop_before_alpha = crop_before_alpha
+            .crop_box(1, 0, 3, 1)
+            .expect("crop P before putalpha");
+        crop_before_alpha
+            .putalpha(33)
+            .expect("promote cropped P samples to PA");
+        let crop_before_alpha = crop_before_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("crop P then putalpha [{backend_name}]"),
+            &crop_before_alpha,
+            "PA",
+            &[1, 33, 2, 33],
+        );
+
+        let rgb_palette = vec![255, 0, 0, 0, 255, 0, 0, 0, 255];
+        let mut alpha_then_convert =
+            Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("P conversion input");
+        alpha_then_convert
+            .putpalette(&rgb_palette, "RGB")
+            .expect("P conversion palette");
+        alpha_then_convert
+            .putalpha(128)
+            .expect("P to PA before conversion");
+        let alpha_then_convert = alpha_then_convert
+            .convert("RGBA", None, None, None, None)
+            .expect("PA to RGBA conversion")
+            .use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha P then convert RGBA [{backend_name}]"),
+            &alpha_then_convert,
+            "RGBA",
+            &[255, 0, 0, 128, 0, 0, 255, 128, 0, 255, 0, 128],
+        );
+
+        let mut data_then_convert =
+            Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("PA data conversion input");
+        data_then_convert
+            .putpalette(&rgb_palette, "RGB")
+            .expect("PA data conversion palette");
+        data_then_convert
+            .putalpha(128)
+            .expect("P to PA before sample replacement");
+        data_then_convert
+            .putdata(&[2, 33, 1, 44, 0, 55])
+            .expect("complete PA sample replacement");
+        let data_then_convert = data_then_convert
+            .convert("RGBA", None, None, None, None)
+            .expect("mutated PA to RGBA conversion")
+            .use_backend(selected);
+        assert_exact_samples(
+            &format!("putalpha and putdata PA then convert RGBA [{backend_name}]"),
+            &data_then_convert,
+            "RGBA",
+            &[0, 0, 255, 33, 0, 255, 0, 44, 255, 0, 0, 55],
+        );
+
+        let rgba_palette = vec![
+            255, 0, 0, 0, //
+            0, 255, 0, 64, //
+            0, 0, 255, 255,
+        ];
+        let mut palette_alpha_ignored =
+            Image::frombytes("P", (3, 1), &[0, 1, 2]).expect("RGBA-palette P input");
+        palette_alpha_ignored
+            .putpalette(&rgba_palette, "RGBA")
+            .expect("RGBA palette");
+        palette_alpha_ignored
+            .putalpha(128)
+            .expect("P to PA with RGBA palette");
+        let palette_alpha_ignored = palette_alpha_ignored
+            .convert("RGBA", None, None, None, None)
+            .expect("PA with RGBA palette to RGBA")
+            .use_backend(selected);
+        assert_exact_samples(
+            &format!("PA sample alpha overrides palette alpha [{backend_name}]"),
+            &palette_alpha_ignored,
+            "RGBA",
+            &[255, 0, 0, 128, 0, 255, 0, 128, 0, 0, 255, 128],
+        );
+
+        let mut paletted = Image::frombytes("P", (3, 1), &[0, 2, 1]).expect("P putdata input");
+        paletted
+            .putpalette(&palette, "RGB")
+            .expect("P putdata palette");
+        let source_palette = paletted.palette();
+        paletted.putdata(&[128]).expect("P putdata");
+        let paletted = paletted.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata P [{backend_name}]"),
+            &paletted,
+            "P",
+            &[128, 2, 1],
+        );
+        assert_eq!(
+            paletted.palette(),
+            source_palette,
+            "putdata P [{backend_name}]: palette"
+        );
+
+        let mut luma_alpha =
+            Image::frombytes("LA", (3, 1), &[7, 8, 99, 100, 250, 251]).expect("LA putdata input");
+        luma_alpha.putdata(&[128, 17]).expect("LA putdata");
+        let luma_alpha = luma_alpha.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata LA [{backend_name}]"),
+            &luma_alpha,
+            "LA",
+            &[128, 17, 99, 100, 250, 251],
+        );
+
+        let mut rgb = Image::frombytes("RGB", (3, 1), &[1, 2, 3, 40, 50, 60, 250, 0, 128])
+            .expect("RGB putdata input");
+        rgb.putdata(&[128, 0, 0]).expect("RGB putdata");
+        let rgb = rgb.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata RGB [{backend_name}]"),
+            &rgb,
+            "RGB",
+            &[128, 0, 0, 40, 50, 60, 250, 0, 128],
+        );
+
+        let mut rgba = Image::frombytes(
+            "RGBA",
+            (3, 1),
+            &[1, 2, 3, 4, 40, 50, 60, 70, 250, 0, 128, 255],
+        )
+        .expect("RGBA putdata input");
+        rgba.putdata(&[128, 0, 0, 17]).expect("RGBA putdata");
+        let rgba = rgba.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata RGBA [{backend_name}]"),
+            &rgba,
+            "RGBA",
+            &[128, 0, 0, 17, 40, 50, 60, 70, 250, 0, 128, 255],
+        );
+
+        let mut cmyk = Image::frombytes(
+            "CMYK",
+            (3, 1),
+            &[50, 100, 150, 200, 0, 255, 17, 0, 255, 0, 255, 128],
+        )
+        .expect("CMYK putdata input");
+        cmyk.putdata(&[128, 0, 0, 0]).expect("CMYK putdata");
+        let cmyk = cmyk.use_backend(selected);
+        assert_exact_samples(
+            &format!("putdata CMYK [{backend_name}]"),
+            &cmyk,
+            "CMYK",
+            &[128, 0, 0, 0, 0, 255, 17, 0, 255, 0, 255, 128],
+        );
+
+        let mut binary = Image::new(1, 1, "1", (0, 0, 0, 255)).expect("mode 1 input");
+        binary.putdata(&[2]).expect("mode 1 putdata");
+        let binary = binary.use_backend(selected);
+        assert_eq!(
+            binary.getdata(None).expect("mode 1 logical samples"),
+            vec![2],
+            "mode 1 must retain the assigned value on {selected:?}"
+        );
+        assert_eq!(
+            binary.getpixel(0, 0).expect("mode 1 pixel").0,
+            2,
+            "mode 1 getpixel must expose the assigned value on {selected:?}"
+        );
+        assert_eq!(
+            binary.tobytes().expect("packed mode 1 bytes"),
+            vec![0x80],
+            "mode 1 tobytes packs truthiness on {selected:?}"
+        );
+    }
+}
+
+#[test]
+fn pa_draw_point_is_native_on_cpu_and_truthfully_rejected_elsewhere() {
+    let entry = compute::registry::registry()
+        .get("DrawPoint")
+        .expect("DrawPoint registration");
+    assert!(
+        entry.cpu_fn.is_some(),
+        "DrawPoint must have a CPU implementation"
+    );
+    assert!(
+        entry.simd_fn.is_none(),
+        "DrawPoint must not claim a SIMD implementation"
+    );
+    assert!(
+        entry.gpu_shader.is_none(),
+        "DrawPoint must not claim a GPU shader"
+    );
+
+    let palette = vec![255, 0, 0, 0, 255, 0, 0, 0, 255];
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        let mut image = Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("PA draw destination");
+        image.putpalette(&palette, "RGB").expect("PA draw palette");
+        image.putalpha(128).expect("PA draw alpha");
+        let source_palette = image.palette();
+        let mut draw = Draw::new(image, Some("PA".to_owned()));
+        draw.point(&[(1, 0)], (2, 2, 2, 33))
+            .expect("queue PA point");
+        let image = draw.into_image().use_backend(selected);
+
+        if selected == Backend::Cpu {
+            assert_exact_samples(
+                "draw point PA [Cpu]",
+                &image,
+                "PA",
+                &[0, 128, 2, 33, 0, 128],
+            );
+            assert_eq!(
+                image.palette(),
+                source_palette,
+                "PA drawing must retain its palette"
+            );
+        } else {
+            assert!(
+                image.materialize().is_err(),
+                "forcing {selected:?} must reject unsupported PA DrawPoint"
+            );
+        }
+    }
+}
+
+#[test]
 fn drawing_is_exact_and_backend_capabilities_are_truthful() {
     let registry = compute::registry::registry();
     for case in manifest().draw_cases {
@@ -663,6 +1250,46 @@ fn apply_transparency_preserves_indices_and_commits_palette_alpha() {
             decode_hex(&case.expected.palette_rgba_hex),
             "{} exact RGBA palette",
             case.id
+        );
+    }
+}
+
+#[test]
+fn apply_transparency_is_a_noop_after_p_is_promoted_to_pa() {
+    let case = manifest()
+        .apply_transparency_cases
+        .into_iter()
+        .find(|case| case.id == "indexed_png_single_index")
+        .expect("single-index transparency case");
+    let input = fs::read(fixture_root().join(&case.input)).expect("indexed PNG input");
+
+    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+        let mut image = Image::open_bytes(input.clone()).expect("open indexed PNG");
+        image.putalpha(128).expect("promote P to PA");
+        image = image.use_backend(selected);
+
+        let before_mode = image.mode().expect("PA mode");
+        let before_pixels = image.tobytes().expect("PA samples");
+        let before_palette = image.palette();
+        let before_palette_alpha = image.palette_alpha();
+        let before_info = transparency_info(&image);
+
+        image
+            .apply_transparency()
+            .expect("apply_transparency on PA");
+
+        assert_eq!(image.mode().expect("mode after no-op"), before_mode);
+        assert_eq!(
+            image.tobytes().expect("samples after no-op"),
+            before_pixels,
+            "PA pixels must remain unchanged on {selected:?}"
+        );
+        assert_eq!(image.palette(), before_palette);
+        assert_eq!(image.palette_alpha(), before_palette_alpha);
+        assert_eq!(
+            transparency_info(&image),
+            before_info,
+            "PA transparency metadata must remain pending on {selected:?}"
         );
     }
 }

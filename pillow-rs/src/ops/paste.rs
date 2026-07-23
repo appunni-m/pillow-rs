@@ -51,9 +51,9 @@ impl PasteSource {
         match (mode, self) {
             ("1" | "L" | "P", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 255)),
             ("1" | "L" | "P", _) => Err(bad_single()),
-            ("LA", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 0)),
-            ("LA", PasteSource::LumaAlpha(luma, alpha)) => Ok((*luma, *luma, *luma, *alpha)),
-            ("LA", _) => Err(bad_la()),
+            ("LA" | "PA", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 0)),
+            ("LA" | "PA", PasteSource::LumaAlpha(luma, alpha)) => Ok((*luma, *luma, *luma, *alpha)),
+            ("LA" | "PA", _) => Err(bad_la()),
             ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
                 Ok((*value, 0, 0, 0))
             }
@@ -183,6 +183,12 @@ impl Image {
                         && matches!(source_mode.as_str(), "LA" | "RGBA" | "RGBa"))
                 {
                     image
+                } else if destination_mode == "PA" && source_mode == "P" {
+                    // Pillow promotes a P source to opaque PA samples before
+                    // pasting, retaining the source index byte verbatim.
+                    let mut promoted = image;
+                    promoted.putalpha(255)?;
+                    promoted
                 } else {
                     // Pillow Image.py converts a mismatched source before entering
                     // libImaging/Paste.c. Keep that conversion shared by every
@@ -197,6 +203,10 @@ impl Image {
                     let mut indices = dims.alloc_buffer();
                     indices.fill(color.0);
                     Image::frombytes("P", (width, height), &indices)?
+                } else if destination_mode == "PA" {
+                    // PA's two raw bands use the same physical layout as LA;
+                    // the destination retains the palette and PA mode tag.
+                    Image::new(width, height, "LA", color)?
                 } else {
                     Image::new(width, height, &destination_mode, color)?
                 }

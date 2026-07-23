@@ -573,7 +573,17 @@ impl Image {
             // Pillow's Image.point maps P indices directly, and Image._new
             // copies the source palette. Image.eval delegates to point.
             | PipelineOp::Eval { .. }
-            | PipelineOp::PointOp { .. } => true,
+            | PipelineOp::PointOp { .. }
+            // Pillow mutates palette indices directly for putdata, while
+            // putalpha promotes each index to a PA (index, alpha) pair.
+            | PipelineOp::PutData {
+                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                ..
+            }
+            | PipelineOp::PutAlpha {
+                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                ..
+            } => true,
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..
@@ -617,6 +627,16 @@ impl Image {
             }) => mode == "P",
             _ => false,
         }
+    }
+
+    /// Whether samples are palette indices, optionally paired with per-pixel
+    /// alpha in PA mode.
+    ///
+    /// Keep this separate from `has_palette_mode`: callers such as
+    /// `apply_transparency`, P encoding, and palette-index `putpixel` implement
+    /// Pillow behavior that applies only to single-band P images.
+    fn has_palette_samples(&self) -> bool {
+        self.has_palette_mode() || self.explicit_mode() == Some("PA")
     }
 
     /// Decodes or executes this image into a concrete pixel buffer.
@@ -741,22 +761,40 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        if source.has_palette_mode() {
+        if source.has_palette_samples() {
             let all_safe = ops.iter().all(Self::is_palette_safe_op);
             if all_safe {
                 let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
-                img = crate::compute::execute_batch(selected, ops, &img, Some("P"))?;
+                let palette_mode = if explicit_mode.as_deref() == Some("PA")
+                    || source.explicit_mode() == Some("PA")
+                {
+                    "PA"
+                } else {
+                    "P"
+                };
+                img = crate::compute::execute_batch(selected, ops, &img, Some(palette_mode))?;
                 return Ok(Arc::new(img));
             }
-            if let Some(rgb) = source.paletted_to_rgb() {
-                img = rgb;
-            } else if let Some(palette) = palette.clone().or_else(|| source.palette()) {
-                let indices = img.to_luma8();
+
+            let palette_mode = if source.explicit_mode() == Some("PA") {
+                "PA"
+            } else {
+                "P"
+            };
+
+            if let Some(palette) = palette.clone().or_else(|| source.extract_palette()) {
                 let palette_alpha = palette_alpha
                     .clone()
                     .or_else(|| source.palette_alpha())
                     .unwrap_or_default();
-                img = expand_palette(&indices, &palette, &palette_alpha);
+                img = if palette_mode == "PA" {
+                    // PIL's Convert.c PA path takes RGB from the palette and
+                    // alpha exclusively from each PA sample. Any RGBA palette
+                    // alpha is intentionally ignored.
+                    expand_palette_alpha(&img.to_luma_alpha8(), &palette)
+                } else {
+                    expand_palette(&img.to_luma8(), &palette, &palette_alpha)
+                };
             }
         }
 
@@ -819,10 +857,24 @@ impl Image {
     /// when the operation can preserve them; operations that fundamentally
     /// change mode clear or replace the explicit mode tag.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
-        let source_is_paletted = source.has_palette_mode();
+        let source_is_paletted = source.has_palette_samples();
         let palette_safe = source_is_paletted && Self::is_palette_safe_op(&op);
+        let promotes_p_to_pa = source.has_palette_mode()
+            && matches!(
+                &op,
+                PipelineOp::PutAlpha {
+                    mode: crate::pipeline::PixelMode::P,
+                    ..
+                }
+            );
         let explicit_mode = if source_is_paletted {
-            palette_safe.then(|| "P".to_owned())
+            palette_safe.then(|| {
+                if source.explicit_mode() == Some("PA") {
+                    "PA".to_owned()
+                } else {
+                    "P".to_owned()
+                }
+            })
         } else {
             match &op {
                 PipelineOp::Grayscale
@@ -844,6 +896,27 @@ impl Image {
         };
         let source_format = source.source_format();
         match source {
+            // Keep a concrete sample-layout boundary around palette expansion
+            // and P↔PA transitions. A flattened batch has only one external
+            // mode tag, so it cannot correctly run P operations before
+            // putalpha or PA operations after it (especially on the GPU).
+            Image::Pipeline { .. }
+                if source_is_paletted
+                    && (!palette_safe
+                        || promotes_p_to_pa
+                        || source.explicit_mode() == Some("PA")) =>
+            {
+                Image::Pipeline {
+                    source: Arc::new(source.clone()),
+                    ops: vec![op],
+                    format: source_format,
+                    explicit_mode,
+                    backend: source.backend(),
+                    palette: source_palette,
+                    palette_alpha: source_palette_alpha,
+                    materialized: materialization_cache(),
+                }
+            }
             Image::Pipeline {
                 source: pipeline_source,
                 ops,
@@ -1231,13 +1304,10 @@ impl Image {
         if matches!(self, Image::Paletted(_)) {
             return Ok(vec!["P".to_string()]);
         }
-        // Check explicit mode for non-standard band names
-        if let Image::Loaded(LoadedData {
-            explicit_mode: Some(m),
-            ..
-        }) = self
-        {
-            let bands: Vec<String> = match m.as_str() {
+        // Check explicit mode for non-standard band names. Deferred pipelines
+        // carry the same side-channel modes as loaded images (notably PA).
+        if let Some(m) = self.explicit_mode() {
+            let bands: Vec<String> = match m {
                 "CMYK" => vec![
                     "C".to_string(),
                     "M".to_string(),
@@ -1247,7 +1317,7 @@ impl Image {
                 "YCbCr" => vec!["Y".to_string(), "Cb".to_string(), "Cr".to_string()],
                 "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
                 "PA" => vec!["P".to_string(), "A".to_string()],
-                "I" | "F" | "P" | "1" => vec![m.clone()],
+                "I" | "F" | "P" | "1" => vec![m.to_owned()],
                 _ => vec![],
             };
             if !bands.is_empty() {
@@ -1365,7 +1435,15 @@ impl Image {
     /// The backend choice is applied when the image is materialized. Non-pipeline
     /// images are returned unchanged because there is no deferred work to route.
     pub fn use_backend(mut self, b: crate::compute::Backend) -> Image {
-        if let Image::Pipeline { backend, .. } = &mut self {
+        if let Image::Pipeline {
+            source, backend, ..
+        } = &mut self
+        {
+            // Palette and sample-layout transitions deliberately create nested
+            // materialization boundaries. Lock the primary chain recursively
+            // so a forced-backend parity test cannot execute only its final
+            // suffix on the requested backend.
+            *source = Arc::new(source.as_ref().clone().use_backend(b));
             *backend = Some(b);
         }
         self
@@ -1537,7 +1615,7 @@ impl Image {
     /// PNG's compact single-transparent-index form is reported as an integer;
     /// other alpha tables retain their byte representation.
     pub fn pending_palette_transparency(&self) -> Option<PaletteTransparency> {
-        if !self.has_palette_mode() {
+        if !self.has_palette_samples() {
             return None;
         }
         let alpha = self
@@ -1988,10 +2066,15 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports invalid byte length
     /// or mode mismatches.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
+        let mode_name = self.mode()?;
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        })?;
         let new_self = Image::push_op(
             self,
             PipelineOp::PutData {
                 data: data.to_vec(),
+                mode,
             },
         );
         *self = new_self;
@@ -2039,7 +2122,35 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports later pipeline
     /// failures.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
-        let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha });
+        let mode_name = self.mode()?;
+        if let Some(target) = match mode_name.as_str() {
+            "1" | "I" | "I;16" | "I;16L" | "I;16B" | "F" => Some("LA"),
+            "YCbCr" | "HSV" => Some("RGBA"),
+            _ => None,
+        } {
+            // Pillow Image.py derives the alpha mode from getmodebase(), then
+            // surfaces the exact failed core conversion when neither in-place
+            // setmode nor ImagingConvert supports this source/target pair.
+            return Err(PilError::ValueError(format!(
+                "conversion from {mode_name} to {target} not supported"
+            )));
+        }
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
+        })?;
+        let mut new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha, mode });
+        if let Image::Pipeline { explicit_mode, .. } = &mut new_self {
+            // Pillow Image.putalpha promotes P to PA without expanding palette
+            // indices. CMYK is converted through RGB and therefore becomes
+            // ordinary RGBA rather than retaining a CMYK side-channel tag.
+            *explicit_mode = match mode {
+                crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA => {
+                    Some("PA".to_owned())
+                }
+                crate::pipeline::PixelMode::CMYK => None,
+                _ => explicit_mode.clone(),
+            };
+        }
         *self = new_self;
         Ok(())
     }
@@ -2474,6 +2585,31 @@ fn expand_palette(
                 palette.get(base + 1).copied().unwrap_or(0),
                 palette.get(base + 2).copied().unwrap_or(0),
                 palette_alpha.get(index).copied().unwrap_or(255),
+            ])
+        },
+    ))
+}
+
+/// Expands Pillow `PA` samples through their RGB palette.
+///
+/// Unlike `P`, `PA` owns alpha per pixel. Pillow therefore ignores any alpha
+/// attached to the palette while converting `PA` to `RGBA`.
+fn expand_palette_alpha(
+    indices_alpha: &image_slash_star::GrayAlphaImage,
+    palette: &[u8],
+) -> DynamicImage {
+    DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_fn(
+        indices_alpha.width(),
+        indices_alpha.height(),
+        |x, y| {
+            let pixel = indices_alpha.get_pixel(x, y);
+            let index = usize::from(pixel[0]);
+            let base = index * 3;
+            image_slash_star::Rgba([
+                palette.get(base).copied().unwrap_or(0),
+                palette.get(base + 1).copied().unwrap_or(0),
+                palette.get(base + 2).copied().unwrap_or(0),
+                pixel[1],
             ])
         },
     ))

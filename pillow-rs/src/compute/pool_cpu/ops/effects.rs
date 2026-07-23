@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
+use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
 use image_slash_star::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
@@ -185,7 +185,7 @@ pub fn op_paste(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = if mode == Some("P") {
+    let src_img = if matches!(mode, Some("P" | "PA")) {
         source.materialize_indices()?
     } else {
         source.materialize_for_ops()?
@@ -941,41 +941,31 @@ pub fn op_put_pixel(
 pub fn op_put_data(
     img: &DynamicImage,
     data: &[u8],
-    explicit_mode: Option<&str>,
+    mode: PixelMode,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width() as usize, img.height() as usize);
-    let expected = match img.color() {
-        image_slash_star::ColorType::L8 => w * h,
-        image_slash_star::ColorType::La8 => w * h * 2,
-        image_slash_star::ColorType::Rgb8 => w * h * 3,
-        _ => w * h * 4,
-    };
+    let expected = w * h * mode.channels();
     // PIL: putdata accepts data shorter than the image — only the first
     // data.len() bytes are replaced; remaining pixels stay unchanged.
     let n_copy = data.len().min(expected);
-    let clip = explicit_mode == Some("1");
-    match img.color() {
-        image_slash_star::ColorType::Rgb8 => {
+    match mode {
+        PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
             let orig = img.to_rgb8();
             let mut pixels = orig.into_raw();
-            for (i, &v) in data[..n_copy].iter().enumerate() {
-                pixels[i] = if clip && v != 0 { 255 } else { v };
-            }
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
             let rgb = RgbImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgb8(rgb))
         }
-        image_slash_star::ColorType::L8 => {
+        PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
             let orig = img.to_luma8();
             let mut pixels = orig.into_raw();
-            for (i, &v) in data[..n_copy].iter().enumerate() {
-                pixels[i] = if clip && v != 0 { 255 } else { v };
-            }
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
             let gray = GrayImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(gray))
         }
-        image_slash_star::ColorType::La8 => {
+        PixelMode::LA | PixelMode::PA => {
             let orig = img.to_luma_alpha8();
             let mut pixels = orig.into_raw();
             pixels[..n_copy].copy_from_slice(&data[..n_copy]);
@@ -996,42 +986,28 @@ pub fn op_put_data(
 
 // ── PutAlpha ──
 
-pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) -> DynamicImage {
-    // Handle explicit PIL modes that need special treatment
-    if let Some(mode) = explicit_mode {
-        match mode {
-            "CMYK" => {
-                // PIL putalpha on CMYK converts to RGBA (proper color space),
-                // sets alpha, and returns RGBA.
-                // CMYK→RGB: R = 255*(1-C/255)*(1-K/255), etc.
-                let raw = img.as_bytes();
-                let (w, h) = img.dimensions();
-                let mut rgba = RgbaImage::new(w, h);
-                for (i, p) in rgba.pixels_mut().enumerate() {
-                    let c = raw[i * 4] as f64 / 255.0;
-                    let m = raw[i * 4 + 1] as f64 / 255.0;
-                    let y = raw[i * 4 + 2] as f64 / 255.0;
-                    let k = raw[i * 4 + 3] as f64 / 255.0;
-                    p[0] = (255.0 * (1.0 - c) * (1.0 - k) + 0.5) as u8;
-                    p[1] = (255.0 * (1.0 - m) * (1.0 - k) + 0.5) as u8;
-                    p[2] = (255.0 * (1.0 - y) * (1.0 - k) + 0.5) as u8;
-                    p[3] = alpha;
-                }
-                return DynamicImage::ImageRgba8(rgba);
-            }
-            "P" => {
-                // PIL putalpha on P converts to PA (palette index + alpha).
-                // Stored as Luma8, convert to LumaA8 with alpha.
-                let luma = img.to_luma8();
-                let mut la = GrayAlphaImage::new(luma.width(), luma.height());
-                for (o, i) in la.pixels_mut().zip(luma.pixels()) {
-                    o[0] = i[0];
-                    o[1] = alpha;
-                }
-                return DynamicImage::ImageLumaA8(la);
-            }
-            _ => {}
+pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicImage {
+    if mode == PixelMode::CMYK {
+        // Pillow Image.putalpha falls back from ImagingCore.setmode to
+        // Convert.c:cmyk2rgb. That path uses MULDIV255 integer rounding before
+        // Bands.c:ImagingFillBand replaces the promoted RGBA alpha channel.
+        let rgb = crate::color::cmyk_to_rgb(img).to_rgb8();
+        let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
+        for (output, input) in rgba.pixels_mut().zip(rgb.pixels()) {
+            *output = image_slash_star::Rgba([input[0], input[1], input[2], alpha]);
         }
+        return DynamicImage::ImageRgba8(rgba);
+    }
+    if matches!(mode, PixelMode::P | PixelMode::PA) {
+        // Convert.c:p2pa retains the palette index byte and adds one alpha byte
+        // per pixel; the palette itself remains attached at the Image layer.
+        let luma = img.to_luma8();
+        let mut la = GrayAlphaImage::new(luma.width(), luma.height());
+        for (output, input) in la.pixels_mut().zip(luma.pixels()) {
+            output[0] = input[0];
+            output[1] = alpha;
+        }
+        return DynamicImage::ImageLumaA8(la);
     }
     let out = match img.color() {
         image_slash_star::ColorType::L8 => {
