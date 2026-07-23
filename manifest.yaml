@@ -1240,13 +1240,7 @@ modules:
     - name: effect_noise
       signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
       supported_modes:
-      - '1'
-      - CMYK
       - L
-      - LA
-      - P
-      - RGB
-      - RGBA
       param_variants:
       - size:
         - 100
@@ -1348,8 +1342,6 @@ modules:
       - RGB
       - RGBA
       - CMYK
-      - YCbCr
-      - HSV
       - I
       - F
   ImageDraw:
@@ -2265,9 +2257,6 @@ modules:
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
     - name: getcolor
       signature: 'getcolor(color: str, mode: str) -> int|tuple[int,...]'
       status: implemented
@@ -2331,29 +2320,17 @@ modules:
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_default
       signature: 'load_default(size: float|None=None) -> FreeTypeFont|ImageFont'
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: truetype
       signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
         encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_default_imagefont
       signature: load_default_imagefont(*args, **kwargs)
       status: implemented
@@ -2362,10 +2339,6 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_path
       signature: load_path(*args, **kwargs)
       status: implemented
@@ -2374,10 +2347,6 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     classes:
     - name: FreeTypeFont
       methods:

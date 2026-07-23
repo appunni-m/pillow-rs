@@ -20,12 +20,13 @@ Pillow `ImagingCore` font masks are no longer converted into `Image` objects:
 font fixtures record the concrete return type, mode, size, and bytes so a
 wrapper-type mismatch remains a visible parity failure.
 
-Strict fixture coverage currently exposes 12 operations with no fixture and 32
-declared-mode gaps. Several older cases only carried a mode-looking ID while
-calling a different mode in their parameters (notably `open`, `frombytes`,
-`fromarray`, and `merge`). Those rows do not count as coverage. Keep these gaps
-failing until the inputs genuinely exercise the declared mode or the manifest
-is corrected to match Pillow.
+Strict fixture coverage initially exposed 12 operations with no fixture and 32
+declared-mode gaps. The coverage gate now rejects input images and top-level
+mode labels that the selected call style does not consume. Exact property,
+base-font, and transposed-font fixtures were added; `open`, `frombytes`,
+`fromarray`, and `merge` now exercise their real modes. Unsupported or
+mode-independent declarations were removed from the manifest instead of being
+papered over with relabeled cases.
 
 ## Root Cause
 
