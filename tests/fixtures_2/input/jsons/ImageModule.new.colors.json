@@ -2,7 +2,7 @@
   "format_version": 2,
   "suite": 1,
   "operation": {
-    "module": "Image",
+    "module": "ImageModule",
     "target": "new"
   },
   "cases": [
