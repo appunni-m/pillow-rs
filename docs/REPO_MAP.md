@@ -211,7 +211,6 @@ generated reports, build outputs, and package installs.
 |       |   |       |-- duplicate.wgsl
 |       |   |       |-- effect_mandelbrot.wgsl
 |       |   |       |-- effect_noise.wgsl
-|       |   |       |-- effect_spread.wgsl
 |       |   |       |-- equalize.wgsl
 |       |   |       |-- equalize_cdf.wgsl
 |       |   |       |-- equalize_histogram.wgsl
@@ -592,6 +591,7 @@ generated reports, build outputs, and package installs.
     |-- conftest.py
     |-- engine.py
     |-- fixture_coverage.py
+    |-- test_pa_mutations.py
     `-- test_parity.py
 ```
 <!-- END GENERATED CODE TREE -->

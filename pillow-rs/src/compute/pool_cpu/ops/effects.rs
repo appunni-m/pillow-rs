@@ -84,7 +84,7 @@ impl DarwinRand {
 // ── EffectSpread ──
 
 pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImage, PilError> {
-    // PIL's ImagingEffectSpread:
+    // Pillow 12.2.0 libImaging/Effects.c:117-159:
     // For image8 (L, P, 1): 1 byte per pixel, SPREAD(UINT8, image8)
     // For image32 (RGB, RGBA, etc): 4 bytes per pixel, SPREAD(INT32, image32)
     // Creates a new output image. For each pixel (x,y) in the input:
@@ -96,6 +96,10 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     //     output[y][x] = input[y][x]
     // Input is NEVER modified; output is a new image.
     // Multiple pixels CAN map to the same (xx,yy); last write wins.
+    // The C function consumes process-global rand() state. The existing
+    // isolated generator below is not claimed as stochastic pixel parity;
+    // only seed-independent contracts are exact until a principled oracle
+    // replaces the historical fixture-selected seed.
     if distance == 0 {
         return Ok(img.clone());
     }
@@ -129,7 +133,8 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     let input_pixels = pixels;
     let mut out_pixels = input_pixels.clone();
 
-    // Use glibc-compatible PRNG (works on ALL platforms including WASM)
+    // Preserve the existing deterministic sequence without treating it as
+    // Pillow's process-global rand() contract.
     let mut rng = GlibcRand::new(42);
     for y in 0..h {
         for x in 0..w {

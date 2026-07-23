@@ -1324,65 +1324,6 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
     }
 }
 
-/// Effect spread: randomly scatter pixels within a given distance.
-///
-/// For each pixel at (x, y), computes a random offset (dx, dy) in
-/// [-distance/2, distance/2] and swaps the pixel values — matching PIL's
-/// ImagingEffectSpread. Uses a deterministic LCG seeded by pixel position
-/// for reproducible results across platforms.
-///
-/// Border pixels are handled by clamping the random offset to image bounds.
-/// When the random offset lands out of bounds, the pixel stays at its
-/// original position. Multiple pixels mapping to the same destination
-/// follow PIL's last-write-wins semantics.
-///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn effect_spread(pixels: &mut [u32], w: u32, h: u32, mode: u32, distance: u32) {
-    if distance == 0 {
-        return;
-    }
-    let d = distance as i32;
-    let half_d = d / 2;
-    let has_a = mode == 1 || mode == 3;
-    let src = pixels.to_vec();
-    let w_i = w as i32;
-    let h_i = h as i32;
-
-    for y in 0..h_i {
-        for x in 0..w_i {
-            // Deterministic LCG: glibc-style rand() seeded by pixel position.
-            // Two iterations give two independent random values for dx and dy.
-            let mut rng = (y * w_i + x) as u64;
-            rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-            let rand1 = (rng >> 16) as i32 & 0x7FFF;
-            rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-            let rand2 = (rng >> 16) as i32 & 0x7FFF;
-
-            let xx = x + (rand1 % d) - half_d;
-            let yy = y + (rand2 % d) - half_d;
-
-            if xx >= 0 && xx < w_i && yy >= 0 && yy < h_i {
-                let src_idx = (y * w_i + x) as usize;
-                let dst_idx = (yy * w_i + xx) as usize;
-                // Swap: current pixel goes to random offset, random pixel
-                // comes to current position (PIL ImagingEffectSpread behavior).
-                let cur = src[src_idx];
-                pixels[dst_idx] = cur;
-                pixels[src_idx] = src[dst_idx];
-            }
-            // Out of bounds: pixel stays at original position (no write needed)
-        }
-    }
-
-    // Clamp alpha for non-alpha modes (swapped pixels may carry garbage alpha)
-    if !has_a {
-        for p in pixels.iter_mut() {
-            *p |= 0xFF00_0000;
-        }
-    }
-}
-
 // ── Spatial operations (mirror, transpose, box_blur, gaussian_blur) ──────────
 
 /// Mirror: horizontal coordinate remap. output[y][x] = input[y][W-1-x]

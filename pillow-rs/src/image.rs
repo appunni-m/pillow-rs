@@ -560,6 +560,9 @@ impl Image {
             | PipelineOp::CropBorder { .. }
             | PipelineOp::Offset { .. }
             | PipelineOp::Paste { .. }
+            // Pillow 12.2.0 libImaging/Effects.c:117-159 scatters the
+            // one-byte P indices, then duplicates the complete palette.
+            | PipelineOp::EffectSpread { .. }
             | PipelineOp::DrawLine { .. }
             | PipelineOp::DrawRectangle { .. }
             | PipelineOp::DrawRoundedRect { .. }
@@ -2769,6 +2772,8 @@ pub fn execute_op(
 #[cfg(test)]
 mod tests {
     use super::Image;
+    use crate::compute::Backend;
+    use crate::ops::module_fns;
 
     #[test]
     fn new_p_scalar_fills_indices_without_synthesizing_palette_entries() {
@@ -2807,6 +2812,67 @@ mod tests {
                 image.getpalette_trimmed()
             ),
             (vec![2, 7, 11], Some(Vec::new()))
+        );
+    }
+
+    #[test]
+    fn effect_spread_zero_preserves_exact_p_samples_and_rgba_palette() {
+        let mut image =
+            Image::frombytes("P", (4, 1), &[2, 0, 1, 2]).expect("P image must be valid");
+        image
+            .putpalette(&[10, 20, 30, 5, 40, 50, 60, 128, 70, 80, 90, 255], "RGBA")
+            .expect("RGBA palette must be valid");
+
+        let spread = module_fns::effect_spread(&image, 0)
+            .expect("zero-distance spread must queue")
+            .use_backend(Backend::Cpu);
+
+        assert_eq!(
+            (
+                spread.mode().expect("spread mode"),
+                spread.size().expect("spread size"),
+                spread.tobytes().expect("spread indices"),
+                spread.palette(),
+                spread.palette_alpha(),
+                spread.palette_mode(),
+            ),
+            (
+                "P".to_owned(),
+                (4, 1),
+                vec![2, 0, 1, 2],
+                Some(vec![10, 20, 30, 40, 50, 60, 70, 80, 90]),
+                Some(vec![5, 128, 255]),
+                Some("RGBA"),
+            )
+        );
+    }
+
+    #[test]
+    fn effect_spread_positive_distance_preserves_single_p_sample_and_palette() {
+        let mut image = Image::frombytes("P", (1, 1), &[1]).expect("P image must be valid");
+        image
+            .putpalette(&[1, 2, 3, 11, 4, 5, 6, 222], "RGBA")
+            .expect("RGBA palette must be valid");
+
+        let spread = module_fns::effect_spread(&image, 17)
+            .expect("positive-distance spread must queue")
+            .use_backend(Backend::Cpu);
+
+        assert_eq!(
+            (
+                spread.mode().expect("spread mode"),
+                spread.size().expect("spread size"),
+                spread.tobytes().expect("spread indices"),
+                spread.palette(),
+                spread.palette_alpha(),
+            ),
+            (
+                "P".to_owned(),
+                (1, 1),
+                vec![1],
+                Some(vec![1, 2, 3, 4, 5, 6]),
+                Some(vec![11, 222]),
+            )
         );
     }
 

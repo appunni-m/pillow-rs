@@ -8,7 +8,8 @@ use pillow_rs::compute::{self, Backend};
 use pillow_rs::draw::Draw;
 use pillow_rs::error::PilError;
 use pillow_rs::image::PaletteTransparency;
-use pillow_rs::ops::paste::PasteSource;
+use pillow_rs::ops::{module_fns, paste::PasteSource};
+use pillow_rs::pipeline::PipelineOp;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -431,6 +432,50 @@ fn pillow_oracle_is_version_pinned() {
     let manifest = manifest();
     assert_eq!(manifest.oracle.implementation, "Pillow");
     assert_eq!(manifest.oracle.version, "12.2.0");
+}
+
+#[test]
+fn effect_spread_registry_exposes_only_the_sequential_cpu_lane() {
+    let op = PipelineOp::EffectSpread { distance: 0 };
+    let entry = compute::registry::registry()
+        .get("EffectSpread")
+        .expect("EffectSpread must be registered");
+
+    assert_eq!(
+        (
+            entry.cpu_fn.is_some(),
+            entry.simd_fn.is_some(),
+            entry.gpu_shader,
+            entry.gpu_source.is_some(),
+            compute::registry::cpu_supports(&op),
+            compute::registry::simd_supports(&op),
+            compute::registry::gpu_supports(&op),
+            compute::registry::map_op_to_gpu(&op).is_some(),
+        ),
+        (true, false, None, false, true, false, false, false)
+    );
+}
+
+#[test]
+fn forced_non_cpu_backends_reject_effect_spread_without_fallback() {
+    for (backend, expected) in [
+        (Backend::Simd, "SIMD: no native impl for EffectSpread"),
+        (Backend::Gpu, "GPU: no native impl for EffectSpread"),
+    ] {
+        let image = Image::frombytes("L", (2, 1), &[17, 231]).expect("spread source");
+        let spread = module_fns::effect_spread(&image, 0)
+            .expect("spread must queue")
+            .use_backend(backend);
+        let error = spread
+            .tobytes()
+            .expect_err("unsupported forced backend must reject EffectSpread");
+
+        assert_eq!(
+            (error_kind(&error), error.to_string()),
+            ("ValueError", expected.to_owned()),
+            "{backend:?}"
+        );
+    }
 }
 
 #[test]
