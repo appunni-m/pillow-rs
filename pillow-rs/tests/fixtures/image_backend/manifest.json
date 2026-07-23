@@ -2,7 +2,7 @@
   "oracle": {
     "implementation": "Pillow",
     "version": "12.2.0",
-    "source": "image-slash-star/pillow-oracle.lock.yaml"
+    "source": "pillow-rs-py/pyproject.toml"
   },
   "decode": [
     {

@@ -13,7 +13,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find font file \"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
+        "message": "cannot find font file \"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
       }
     },
     {
@@ -21,7 +21,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find font file \"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
+        "message": "cannot find font file \"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
       }
     },
     {
@@ -29,7 +29,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find font file \"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"/Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
+        "message": "cannot find font file \"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\" in sys.path, did you mean ImageFont.load(\"pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.ttf\") instead?"
       }
     }
   ]

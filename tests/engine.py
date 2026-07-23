@@ -188,17 +188,17 @@ def _find_reference_image(name):
 
 
 def _resolve_font_path(font):
-    """Resolve legacy host font paths to the same checked-in font bytes."""
+    """Resolve legacy host font paths to stable checked-in fixture paths."""
     if not isinstance(font, (str, Path)):
         return font
     path = Path(font)
     fixture_path = FONT_FIXTURE_DIR / path.name
     if str(path).startswith("/usr/share/fonts/") and fixture_path.is_file():
-        return str(fixture_path)
+        return fixture_path.relative_to(Path(__file__).parent.parent).as_posix()
     if path.is_file():
         return str(path)
     if fixture_path.is_file():
-        return str(fixture_path)
+        return fixture_path.relative_to(Path(__file__).parent.parent).as_posix()
     return str(path)
 
 

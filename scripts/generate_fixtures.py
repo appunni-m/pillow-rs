@@ -8,6 +8,7 @@ Reference images are saved as PNGs in tests/fixtures/outputs/images/.
 Usage:
     python scripts/generate_fixtures.py                          # process default fixture directory
     python scripts/generate_fixtures.py --fixtures-dir tests/fixtures_2 --suite 1
+    python scripts/generate_fixtures.py --fixture ImageFont.load # process one fixture
 """
 
 import argparse
@@ -300,7 +301,7 @@ def generate_one(input_path):
 
 
 def main():
-    """Generate output fixtures for all input fixtures (filtered by --suite)."""
+    """Generate output fixtures, optionally filtered by suite or fixture."""
     global FIXTURES_DIR, INPUT_DIR, OUTPUT_JSONS_DIR, OUTPUT_IMAGES_DIR, OUTPUT_RAWS_DIR, TARGET_SUITE
 
     parser = argparse.ArgumentParser(
@@ -316,6 +317,16 @@ def main():
         type=int,
         default=None,
         help="Suite number 0-9 to generate (default: all suites). 0 = main fixtures.",
+    )
+    parser.add_argument(
+        "--fixture",
+        action="append",
+        default=[],
+        metavar="STEM",
+        help=(
+            "Generate only the named input stem, for example ImageFont.load. "
+            "May be repeated."
+        ),
     )
     args = parser.parse_args()
 
@@ -354,6 +365,20 @@ def main():
     if not input_files:
         print("No input fixtures found in", INPUT_DIR)
         return
+    requested_fixtures = {
+        fixture[:-5] if fixture.endswith(".json") else fixture
+        for fixture in args.fixture
+    }
+    if requested_fixtures:
+        available_fixtures = {path.stem for path in input_files}
+        missing_fixtures = sorted(requested_fixtures - available_fixtures)
+        if missing_fixtures:
+            parser.error(
+                "unknown fixture stem(s): " + ", ".join(missing_fixtures)
+            )
+        input_files = [
+            path for path in input_files if path.stem in requested_fixtures
+        ]
 
     generated = 0
     generated_jsons = set()
@@ -398,7 +423,7 @@ def main():
 
     # A complete suite generation defines the entire output set. Remove stale
     # JSON and binary/image artifacts only after every input generated cleanly.
-    if skipped == 0:
+    if skipped == 0 and not requested_fixtures:
         for path in OUTPUT_JSONS_DIR.glob("*.json"):
             if path.name not in generated_jsons:
                 path.unlink()

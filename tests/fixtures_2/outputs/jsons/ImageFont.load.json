@@ -13,7 +13,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find glyph data file /Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     },
     {
@@ -21,7 +21,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find glyph data file /Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     },
     {
@@ -29,7 +29,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find glyph data file /Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.{gif|pbm|png}"
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.{gif|pbm|png}"
       }
     },
     {
@@ -37,7 +37,7 @@
       "assert": {
         "method": "error",
         "exception": "OSError",
-        "message": "cannot find glyph data file /Users/lazytrot/work/pillow-rs/pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     }
   ]
