@@ -21,6 +21,34 @@ _BAND_NAMES = {
 }
 
 
+class ImagingCore:
+    """Sequence view matching Pillow's internal ``ImagingCore`` contract."""
+
+    __slots__ = ("_values",)
+
+    def __init__(self, values):
+        self._values = values
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+
+class _ClosedImage:
+    """Released image storage that preserves Pillow's closed-image error."""
+
+    def close(self):
+        return None
+
+    def __getattr__(self, _name):
+        raise ValueError("Operation on closed image")
+
+
 class Image:
     """A high-performance image class backed by Rust. Pillow-compatible API."""
 
@@ -317,9 +345,9 @@ class Image:
         return Image(self._rust_image.reduce(factor))
 
     def load(self):
-        """Load pixel data. Returns PixelAccess stub matching PIL's format."""
+        """Load pixel data and return a mutable Pillow-style pixel view."""
         self._rust_image.load()
-        return _PixelAccessStub(self)
+        return PixelAccess(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self. Returns None (mutates in-place)."""
@@ -330,8 +358,11 @@ class Image:
         return self._rust_image.getcolors_formatted(maxcolors)
 
     def getdata(self, band=None):
-        """Return pixel data as sequence of tuples (matching PIL)."""
-        return self._rust_image.getdata_formatted(band if band is not None else -1)
+        """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
+        values = self._rust_image.getdata_formatted(
+            band if band is not None else -1
+        )
+        return ImagingCore(values)
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixel data from a sequence. Flattening done in Rust.
@@ -359,7 +390,10 @@ class Image:
 
     def close(self):
         """Close the image file and release resources."""
+        if isinstance(self._rust_image, _ClosedImage):
+            return None
         self._rust_image.close()
+        self._rust_image = _ClosedImage()
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
@@ -557,7 +591,7 @@ class Image:
             mode = self.mode
             size = self.size
             self._rust_image = RustImage.frombytes(mode, size, bytes(data))
-            return self
+            return None
 
         # Class method: Image.frombytes(mode, size, data, ...)
         mode = self if isinstance(self, str) else data
@@ -714,11 +748,22 @@ class Image:
         )
 
 
-class _PixelAccessStub:
-    """Stub that mimics PIL's PixelAccess for pytest comparisons."""
+class PixelAccess:
+    """Mutable pixel view matching Pillow's ``PixelAccess`` behavior."""
+
+    __slots__ = ("_image",)
+
     def __init__(self, image):
         self._image = image
+
+    def __getitem__(self, xy):
+        return self._image.getpixel(xy)
+
+    def __setitem__(self, xy, value):
+        self._image.putpixel(xy, value)
+
     def __str__(self):
         return f'<PixelAccess object at 0x{id(self):x}>'
+
     def __repr__(self):
         return str(self)

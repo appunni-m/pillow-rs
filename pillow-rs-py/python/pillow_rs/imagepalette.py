@@ -7,12 +7,12 @@ class ImagePalette:
 
     def __init__(self, mode="RGB"):
         self.mode = mode
-        self.palette = []
+        self.palette = bytearray()
 
     def copy(self):
         """Return a copy of the palette."""
         p = ImagePalette(self.mode)
-        p.palette = list(self.palette)
+        p.palette = bytearray(self.palette)
         return p
 
     def getcolor(self, color, image=None):
@@ -20,7 +20,7 @@ class ImagePalette:
         if not isinstance(color, (tuple, list)):
             raise ValueError(f"unknown color specifier: {repr(color)}")
         palette_bytes, idx = _core.palette_getcolor_validate(self.palette, list(color), self.mode)
-        self.palette = list(palette_bytes)
+        self.palette = bytearray(palette_bytes)
         return idx
 
     def getdata(self):

@@ -321,7 +321,11 @@ pub fn palette_getcolor_append(
 /// The output contains a header and 256 indexed rows. Missing palette entries
 /// are emitted as zeroes, matching Pillow's fixed-size text palette format.
 pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
-    let step = if mode == "RGBA" { 4 } else { 3 };
+    let step = match mode {
+        "L" | "P" => 1,
+        "RGBA" => 4,
+        _ => 3,
+    };
     let _palette_len = palette.len();
     let mut out = String::with_capacity(4096);
     out.push_str("# Palette\n");
