@@ -638,11 +638,9 @@ impl PyImage {
         let n_bands = self.inner.getbands().map_err(map_error)?.len();
         let expected = 256 * n_bands;
         if lut.len() != expected {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "wrong number of lut entries: expected {} got {}",
-                expected,
-                lut.len()
-            )));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "wrong number of lut entries",
+            ));
         }
         self.point(lut)
     }
