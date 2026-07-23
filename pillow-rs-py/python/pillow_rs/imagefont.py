@@ -23,7 +23,7 @@ class ImagingCore:
         return self._image.size
 
     def tobytes(self):
-        return self._image.tobytes()
+        return self._rust_image.tobytes_unpacked()
 
     def __bytes__(self):
         return self.tobytes()
@@ -37,17 +37,33 @@ class ImageFont:
 
     def getbbox(self, text, *args, **kwargs):
         """Return the bitmap font's bounding box."""
-        width, height = self.font.getsize(text)
+        width, height = self.font.getsize(_pilfont_text(text))
         return 0, 0, width, height
 
     def getlength(self, text, *args, **kwargs):
         """Return the bitmap font's horizontal advance."""
-        width, _height = self.font.getsize(text)
+        width, _height = self.font.getsize(_pilfont_text(text))
         return width
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Return the loaded bitmap font's native mask object."""
-        return self.font.getmask(text, mode)
+        from .image import Image as PILImage
+        return ImagingCore(PILImage(self.font.getmask(_pilfont_text(text), mode)))
+
+
+def _pilfont_text(text):
+    if isinstance(text, str):
+        return text.encode("latin-1")
+    return text
+
+
+def _wrap_pilfont(font):
+    wrapped = ImageFont()
+    wrapped.font = font
+    wrapped.info = font.info
+    if font.file is not None:
+        wrapped.file = font.file
+    return wrapped
 
 
 class FreeTypeFont:
@@ -281,8 +297,15 @@ class TransposedFont:
 
 
 def load(filename):
-    """Load a font file. Delegates to truetype()."""
-    return truetype(str(filename))
+    """Load a PILfont metrics file and its sibling glyph bitmap."""
+    return _wrap_pilfont(_core.PilFont.load(str(filename)))
+
+
+def load_path(filename):
+    """Load a PILfont by searching for it along ``sys.path``."""
+    if not isinstance(filename, str):
+        filename = filename.decode("utf-8")
+    return _wrap_pilfont(_core.PilFont.load_path(filename))
 
 
 def load_default(size=None):
@@ -297,13 +320,9 @@ def load_default(size=None):
     return font
 
 
-def load_default_imagefont(size=None):
-    """Load default font — alias for compatibility with fixture naming.
-
-    :param size: Font size in pixels (default 10).
-    :return: The compatibility font returned by :func:`load_default`.
-    """
-    return load_default(size)
+def load_default_imagefont():
+    """Load Pillow's embedded courB08 legacy PILfont."""
+    return _wrap_pilfont(_core.PilFont.load_default())
 
 
 def truetype(font, size=10, index=0, encoding="", layout_engine=None):

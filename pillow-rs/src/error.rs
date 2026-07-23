@@ -50,6 +50,10 @@ pub enum PilError {
     #[error("{0}")]
     ValueError(String),
 
+    /// Input bytes do not follow the syntax required by a legacy Pillow format.
+    #[error("{0}")]
+    SyntaxError(String),
+
     /// Input type or mode is incompatible with the requested Pillow operation.
     #[error("{0}")]
     TypeError(String),
