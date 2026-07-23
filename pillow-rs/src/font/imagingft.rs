@@ -97,6 +97,17 @@ pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     }
 }
 
+/// Return the bbox produced by Pillow's `fontmode="1"` FreeType load target.
+pub fn getbbox_binary(font: &Font, text: &str) -> (i32, i32, i32, i32) {
+    match font {
+        Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO),
+        Font::Bitmap(b) => {
+            let (w, h) = b.text_bbox(text);
+            (0, 0, w as i32, h as i32)
+        }
+    }
+}
+
 pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
     match font {
         Font::TrueType(t) => mask_from_run(t, text),
@@ -117,22 +128,21 @@ pub fn render_text(
     fill: (u8, u8, u8, u8),
     _spacing: f32,
 ) -> (u32, u32, Vec<u8>) {
-    pack_rgba(getmask(font, text), fill, false)
+    pack_rgba(getmask(font, text), fill)
 }
 pub fn render_text_binary(
     font: &Font,
     text: &str,
     fill: (u8, u8, u8, u8),
-    _spacing: f32,
+    spacing: f32,
 ) -> (u32, u32, Vec<u8>) {
-    pack_rgba(getmask(font, text), fill, true)
+    match font {
+        Font::TrueType(t) => pack_rgba(mask_from_run_with_flags(t, text, TGT_MONO), fill),
+        Font::Bitmap(b) => b.render_text_binary(text, fill, spacing),
+    }
 }
 
-fn pack_rgba(
-    (w, h, mask): (u32, u32, Vec<u8>),
-    fill: (u8, u8, u8, u8),
-    binary: bool,
-) -> (u32, u32, Vec<u8>) {
+fn pack_rgba((w, h, mask): (u32, u32, Vec<u8>), fill: (u8, u8, u8, u8)) -> (u32, u32, Vec<u8>) {
     if w == 0 || h == 0 {
         return (w, h, mask);
     }
@@ -145,15 +155,14 @@ fn pack_rgba(
     };
     let mut canvas = vec![0u8; len];
     for (i, cov) in mask.into_iter().enumerate() {
-        let c = if binary && cov < 128 { 0 } else { cov };
-        if c == 0 {
+        if cov == 0 {
             continue;
         }
         let o = i * 4;
         canvas[o] = fill.0;
         canvas[o + 1] = fill.1;
         canvas[o + 2] = fill.2;
-        canvas[o + 3] = c;
+        canvas[o + 3] = cov;
     }
     (w, h, canvas)
 }
@@ -163,6 +172,7 @@ fn pack_rgba(
 const KERN_DEFAULT: u32 = 0; // FT_KERNING_DEFAULT as u32
 const RDR: i32 = 4; // FT_LOAD_RENDER
 const TGT_NORM: i32 = 0; // FT_LOAD_TARGET_NORMAL
+const TGT_MONO: i32 = 2 << 16; // FT_LOAD_TARGET_MONO
 
 fn gid(face: &ffi::FT_Face, ch: char) -> u32 {
     ffi::FT_Get_Char_Index(face, ch as u64)
@@ -234,7 +244,7 @@ struct RunGlyph {
 }
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
-fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
+fn glyph_run(ttf: &TrueTypeFont, text: &str, load_flags: i32) -> Option<GlyphRun> {
     if text.is_empty() {
         return Some(GlyphRun {
             glyphs: vec![],
@@ -251,7 +261,7 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
         let g = gid(face, ch);
         // Match Pillow's BASIC layout order: load the current glyph first,
         // then adjust the preceding advance with pixel-rounded kerning.
-        let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
+        let slot = ffi::FT_Load_Glyph(face, g, load_flags).ok()?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
@@ -278,7 +288,15 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str) -> Option<GlyphRun> {
 }
 
 fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
-    let Some(run) = glyph_run(ttf, text) else {
+    bbox_from_run_with_flags(ttf, text, TGT_NORM)
+}
+
+fn bbox_from_run_with_flags(
+    ttf: &TrueTypeFont,
+    text: &str,
+    load_flags: i32,
+) -> (i32, i32, i32, i32) {
+    let Some(run) = glyph_run(ttf, text, load_flags) else {
         return (0, 0, 0, 0);
     };
     if run.glyphs.is_empty() {
@@ -315,10 +333,22 @@ fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
 // ── Mask render ──────────────────────────────────────────────────────
 
 fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
+    mask_from_run_with_flags(ttf, text, TGT_NORM)
+}
+
+fn mask_from_run_with_flags(
+    ttf: &TrueTypeFont,
+    text: &str,
+    load_flags: i32,
+) -> (u32, u32, Vec<u8>) {
     if text.is_empty() {
         return (0, 0, vec![]);
     }
-    let bbox = bbox_from_run(ttf, text);
+    // Pillow 12.2.0 `_imagingft.c` uses FT_LOAD_TARGET_MONO consistently
+    // during BASIC layout, bbox calculation, and both render passes for
+    // `fontmode="1"`. Thresholding the normal grayscale mask is not
+    // equivalent: monochrome hinting changes advances and glyph geometry.
+    let bbox = bbox_from_run_with_flags(ttf, text, load_flags);
     let w = (bbox.2 - bbox.0).max(0) as u32;
     let h = (bbox.3 - bbox.1).max(0) as u32;
     let wu = w as usize;
@@ -338,7 +368,7 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
     for ch in text.chars() {
         let g = gid(face, ch);
         // Pillow's layout pass obtains the hinted advance before rendering.
-        let layout_slot = match ffi::FT_Load_Glyph(face, g, 0) {
+        let layout_slot = match ffi::FT_Load_Glyph(face, g, load_flags) {
             Ok(slot) => slot,
             Err(_) => {
                 prev = None;
@@ -349,9 +379,9 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
 
-        let slot = match ffi::FT_Load_Glyph(face, g, RDR | TGT_NORM) {
+        let slot = match ffi::FT_Load_Glyph(face, g, RDR | load_flags) {
             Ok(s) => s,
-            Err(_) => match ffi::FT_Load_Glyph(face, g, 0) {
+            Err(_) => match ffi::FT_Load_Glyph(face, g, load_flags) {
                 Ok(s) => s,
                 Err(_) => {
                     prev = None;
@@ -403,16 +433,42 @@ fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
             if row >= ch {
                 break;
             }
-            let src = row * sx;
             let dst = (dy + row) * wu + dx;
-            if let (Some(sr), Some(dr)) =
-                (bm.buffer.get(src..src + cw), canvas.get_mut(dst..dst + cw))
-            {
-                for (dc, sc) in dr.iter_mut().zip(sr) {
-                    *dc = (*dc).max(*sc);
+            if let Some(dr) = canvas.get_mut(dst..dst + cw) {
+                for (column, dc) in dr.iter_mut().enumerate() {
+                    let Some(sc) = bitmap_coverage(bm, row, column) else {
+                        continue;
+                    };
+                    if sc > 0 {
+                        let under = crate::color::muldiv255(u32::from(*dc), u32::from(255 - sc));
+                        *dc = sc.saturating_add(under as u8);
+                    }
                 }
             }
         }
     }
     (w, h, canvas)
+}
+
+fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> Option<u8> {
+    let rows = bitmap.rows as usize;
+    let pitch = usize::try_from(bitmap.pitch.unsigned_abs()).ok()?;
+    let storage_row = if bitmap.pitch < 0 {
+        rows.checked_sub(row + 1)?
+    } else {
+        row
+    };
+    let row_start = storage_row.checked_mul(pitch)?;
+    match bitmap.pixel_mode {
+        ffi::FT_PIXEL_MODE_MONO => {
+            let byte = *bitmap.buffer.get(row_start + column / 8)?;
+            Some(if byte & (0x80 >> (column & 7)) != 0 {
+                255
+            } else {
+                0
+            })
+        }
+        ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied(),
+        _ => None,
+    }
 }
