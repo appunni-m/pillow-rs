@@ -29,6 +29,7 @@ image-tiff = ["image-slash-star/tiff"]
 image-webp = ["image-slash-star/webp"]
 image-ico = ["image-slash-star/ico"]
 image-avif = ["image-slash-star/avif"]
+wasm-wide-font-internals = ["fontdone/wasm-wide-internals"]
 
 [dependencies]
 image-slash-star = { path = "../../image-slash-star", default-features = false }

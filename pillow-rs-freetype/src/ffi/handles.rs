@@ -6373,7 +6373,6 @@ pub fn FT_Load_Char(
     FT_Load_Glyph(face, FT_Get_Char_Index(face, char_code), load_flags)
 }
 
-#[cfg(feature = "abi-test-support")]
 pub fn FT_Empty_GlyphSlot(face: &FT_Face) -> FT_GlyphSlot {
     slot_to_ffi(face, api::GlyphSlot::empty(), api::LoadFlags::DEFAULT)
 }

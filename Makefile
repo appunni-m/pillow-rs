@@ -117,7 +117,7 @@ setup-ci: ## Install dev deps for CI
 	pip install maturin pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-dev build-wasm build-wasm-release build-all
+.PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
 
 build: ## Build Python package (release)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --release
@@ -125,11 +125,16 @@ build: ## Build Python package (release)
 build-dev: ## Build Python package (debug, faster compile)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml
 
-build-wasm: ## Build WASM package (dev)
-	cd $(JS_SRC) && $(WASM_PACK) build --target web --dev
+build-wasm: build-wasm-core ## Build the default core WASM package (dev)
+
+build-wasm-core: ## Build PNG-only core WASM package (dev)
+	cd $(JS_SRC) && npm run build:core
+
+build-wasm-extra: ## Build Rust-codec extra WASM package (dev)
+	cd $(JS_SRC) && npm run build:extra
 
 build-wasm-release: ## Build WASM package (release)
-	cd $(JS_SRC) && $(WASM_PACK) build --target web --release
+	cd $(JS_SRC) && npm run build:release
 
 build-all: build build-wasm-release ## Build Python + WASM
 
@@ -157,8 +162,8 @@ test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
 	$(MAKE) -C $(CORE_SRC) test
 
 test-wasm: ## Run WASM/JS tests
-	@[ -f "$(JS_SRC)/tests/run_wasm_test.mjs" ] || { echo "No WASM test runner found"; exit 1; }
-	$(NODE) $(JS_SRC)/tests/run_wasm_test.mjs
+	cd $(JS_SRC) && npm run test:codecs
+	cd $(JS_SRC) && npm run test:package
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 

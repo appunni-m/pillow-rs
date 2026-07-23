@@ -12,7 +12,7 @@ name = "fontdone_ffi_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-fontdone = { path = ".." }
+fontdone = { path = "..", features = ["wasm-wide-internals"] }
 
 [features]
 abi-test-support = ["fontdone/abi-test-support"]

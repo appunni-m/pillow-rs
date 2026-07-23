@@ -504,6 +504,8 @@ pub enum PipelineOp {
         y: u32,
         /// Pixel color.
         color: (u8, u8, u8, u8),
+        /// Whether the scalar value is proven to be a palette index.
+        palette_index: bool,
     },
     /// Replace image data from raw bytes.
     PutData {

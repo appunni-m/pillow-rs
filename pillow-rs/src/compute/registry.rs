@@ -744,7 +744,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         PipelineOp::PutAlpha { alpha } => vec![*alpha as u32],
 
         // ── PutPixel: x, y, color packed as RGBA u32 ──
-        PipelineOp::PutPixel { x, y, color } => {
+        PipelineOp::PutPixel { x, y, color, .. } => {
             let (r, g, b, a) = *color;
             let packed = (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24);
             vec![*x, *y, packed]
@@ -2101,7 +2101,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
              op: &PipelineOp,
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutPixel { x, y, color } = op {
+                if let PipelineOp::PutPixel { x, y, color, .. } = op {
                     op_put_pixel(img, *x, *y, *color)
                 } else {
                     Err(PilError::ValueError("expected PutPixel op".into()))
