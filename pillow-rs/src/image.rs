@@ -797,7 +797,8 @@ impl Image {
             match &op {
                 PipelineOp::Grayscale
                 | PipelineOp::Convert { .. }
-                | PipelineOp::Quantize { .. } => None,
+                | PipelineOp::Quantize { .. }
+                | PipelineOp::ExtractBand { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
             }
         };
