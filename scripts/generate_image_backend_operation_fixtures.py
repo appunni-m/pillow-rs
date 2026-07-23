@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Generate exact Pillow references for backend and palette operations.
 
-Run with the Pillow version pinned by image-slash-star/pillow-oracle.lock.yaml.
-The script consumes the checked-in indexed PNG fixture, creates deterministic
-additional oracle inputs, and writes exact pixel/metadata expectations.
+Run with the Pillow version pinned by the ``pillow-rs-py`` ``dev`` extra in
+``pillow-rs-py/pyproject.toml`` (the root editable-install workflow). The script
+consumes the checked-in indexed PNG fixture, creates deterministic additional
+oracle inputs, and writes exact pixel/metadata expectations.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageOps, __version__
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps, __version__
 
 
 ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/image_backend"
@@ -22,6 +23,7 @@ OUTPUTS = ROOT / "outputs/operations"
 MANIFEST = ROOT / "operations.json"
 BACKEND_PARITY_MANIFEST = ROOT / "backend_parity.json"
 EXPECTED_PILLOW = "12.2.0"
+EXPECTED_FREETYPE = "2.14.3"
 
 
 def transparency_hex(image: Image.Image) -> str | None:
@@ -148,10 +150,12 @@ def operation_rows(source: Image.Image) -> list[tuple[str, dict[str, object], Im
 
 def image_spec(image: Image.Image) -> dict[str, object]:
     """Serialize an uncompressed Pillow image for backend-execution tests."""
+    palette = image.getpalette()
     return {
         "mode": image.mode,
         "size": list(image.size),
         "pixels_hex": image.tobytes().hex(),
+        "palette_hex": bytes(palette).hex() if palette is not None else None,
     }
 
 
@@ -263,10 +267,17 @@ def write_table_transparency_input() -> None:
     image.save(TABLE_INPUT, format="PNG", transparency=bytes([0, 64, 128, 255]))
 
 
-def apply_transparency_case(case_id: str, input_path: Path) -> dict[str, object]:
+def apply_transparency_case(
+    case_id: str,
+    input_path: Path,
+    *,
+    prepare_alpha: int | None = None,
+) -> dict[str, object]:
     with Image.open(input_path) as opened:
         indexed = opened.copy()
         indexed.info = opened.info.copy()
+    if prepare_alpha is not None:
+        indexed.putalpha(prepare_alpha)
     before_info = transparency_info_descriptor(indexed)
     before_palette_mode = indexed.palette.mode if indexed.palette is not None else None
     before_has_transparency = indexed.has_transparency_data
@@ -276,6 +287,8 @@ def apply_transparency_case(case_id: str, input_path: Path) -> dict[str, object]
     return {
         "id": case_id,
         "input": input_path.relative_to(ROOT).as_posix(),
+        "prepare_alpha": prepare_alpha,
+        "backends": ["cpu", "simd", "gpu"] if prepare_alpha is not None else ["cpu"],
         "expected": {
             **image_spec(indexed),
             "palette_rgba_hex": bytes(rgba_palette).hex(),
@@ -285,6 +298,67 @@ def apply_transparency_case(case_id: str, input_path: Path) -> dict[str, object]
             "info": transparency_info_descriptor(indexed),
             "palette_mode": indexed.palette.mode if indexed.palette is not None else None,
             "has_transparency_data": indexed.has_transparency_data,
+        },
+    }
+
+
+def indexed_immediate_draw_case(
+    case_id: str,
+    operation: str,
+    parameters: dict[str, object],
+) -> dict[str, object]:
+    with Image.open(TABLE_INPUT) as target:
+        target.load()
+        if operation == "bitmap":
+            bitmap = Image.frombytes("L", (1, 1), bytes([255]))
+            ImageDraw.Draw(target).bitmap(
+                tuple(parameters["xy"]),
+                bitmap,
+                fill=parameters["fill"],
+            )
+        elif operation == "text":
+            font = ImageFont.load_default(size=parameters["font_size"])
+            ImageDraw.Draw(target).text(
+                tuple(parameters["xy"]),
+                parameters["text"],
+                font=font,
+                fill=parameters["fill"],
+            )
+        else:
+            raise AssertionError(f"unsupported indexed draw operation {operation}")
+        rgba_palette = target.getpalette("RGBA")
+        assert rgba_palette is not None
+        expected = {
+            **image_spec(target),
+            "format": target.format,
+            "info": transparency_info_descriptor(target),
+            "palette_mode": target.palette.mode if target.palette is not None else None,
+            "has_transparency_data": target.has_transparency_data,
+            "palette_rgba_hex": bytes(rgba_palette).hex(),
+        }
+    return {
+        "id": case_id,
+        "input": TABLE_INPUT.relative_to(ROOT).as_posix(),
+        "operation": operation,
+        "parameters": parameters,
+        "expected": expected,
+    }
+
+
+def coverage_row(
+    operation: str,
+    case: dict[str, object],
+) -> dict[str, object]:
+    """Bind one exact oracle image to the semantic operation it covers."""
+    expected = case["expected"]
+    assert isinstance(expected, dict)
+    return {
+        "operation": operation,
+        "mode": expected["mode"],
+        "case_id": case["id"],
+        "expected": {
+            key: expected.get(key)
+            for key in ("mode", "size", "pixels_hex", "palette_hex")
         },
     }
 
@@ -309,6 +383,23 @@ def backend_parity_manifest() -> dict[str, object]:
     )
     p_destination = Image.frombytes("P", (4, 3), bytes(range(12)))
     p_source = Image.frombytes("P", (2, 2), bytes([7, 8, 9, 10]))
+    palette = bytes(
+        channel
+        for index in range(256)
+        for channel in (index, index * 3 % 256, index * 7 % 256)
+    )
+    pa_destination = Image.frombytes(
+        "PA",
+        (4, 3),
+        bytes(
+            channel
+            for index, alpha in zip(range(12), range(17, 221, 17), strict=True)
+            for channel in (index, alpha)
+        ),
+    )
+    pa_destination.putpalette(palette)
+    pa_source = Image.frombytes("PA", (2, 2), bytes([7, 31, 8, 63, 9, 127, 10, 255]))
+    pa_source.putpalette(palette)
 
     paste_cases = [
         paste_case("rgba_position", destination, source, (1, 1)),
@@ -361,6 +452,7 @@ def backend_parity_manifest() -> dict[str, object]:
             (1, 1),
         ),
         paste_case("p_index_copy", p_destination, p_source, (1, 1)),
+        paste_case("pa_index_alpha_copy", pa_destination, pa_source, (1, 1)),
         paste_case(
             "p_index_mask",
             p_destination,
@@ -620,17 +712,174 @@ def backend_parity_manifest() -> dict[str, object]:
             {"xy": [2, 2, 13, 9], "fill": 7, "outline": 9, "width": 2},
         ),
     ]
+    pa = Image.frombytes(
+        "PA",
+        (5, 5),
+        bytes(channel for _ in range(25) for channel in (0, 128)),
+    )
+    pa.putpalette(palette)
+    pa_fill = [2, 33]
+    pa_outline = [3, 44]
+    draw_cases.extend(
+        [
+            draw_case(
+                "pa_line",
+                pa,
+                "line",
+                {"xy": [0, 0, 4, 4], "fill": pa_fill, "width": 1},
+            ),
+            draw_case(
+                "pa_rectangle",
+                pa,
+                "rectangle",
+                {
+                    "xy": [1, 1, 3, 3],
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_ellipse",
+                pa,
+                "ellipse",
+                {
+                    "xy": [1, 1, 3, 3],
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_polygon",
+                pa,
+                "polygon",
+                {
+                    "xy": [[0, 4], [2, 0], [4, 4]],
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_point",
+                pa,
+                "point",
+                {"xy": [[1, 2], [3, 4]], "fill": pa_fill},
+            ),
+            draw_case(
+                "pa_arc",
+                pa,
+                "arc",
+                {
+                    "xy": [0, 0, 4, 4],
+                    "start": 0.0,
+                    "end": 180.0,
+                    "fill": pa_fill,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_chord",
+                pa,
+                "chord",
+                {
+                    "xy": [0, 0, 4, 4],
+                    "start": 0.0,
+                    "end": 180.0,
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_pieslice",
+                pa,
+                "pieslice",
+                {
+                    "xy": [0, 0, 4, 4],
+                    "start": 0.0,
+                    "end": 180.0,
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_circle",
+                pa,
+                "circle",
+                {
+                    "xy": [2, 2],
+                    "radius": 2.0,
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+            draw_case(
+                "pa_rounded_rectangle",
+                pa,
+                "rounded_rectangle",
+                {
+                    "xy": [0, 0, 4, 4],
+                    "radius": 1.0,
+                    "fill": pa_fill,
+                    "outline": pa_outline,
+                    "width": 1,
+                },
+            ),
+        ]
+    )
 
     apply_cases = [
         apply_transparency_case("indexed_png_single_index", INPUT),
         apply_transparency_case("indexed_png_alpha_table", TABLE_INPUT),
+        apply_transparency_case(
+            "indexed_png_alpha_table_after_pa_promotion",
+            TABLE_INPUT,
+            prepare_alpha=128,
+        ),
+    ]
+    indexed_immediate_draw_cases = [
+        indexed_immediate_draw_case(
+            "indexed_bitmap",
+            "bitmap",
+            {"xy": [1, 0], "fill": 3},
+        ),
+        indexed_immediate_draw_case(
+            "indexed_text",
+            "text",
+            {"xy": [0, -2], "text": "A", "font_size": 10.0, "fill": 3},
+        ),
+    ]
+    coverage = [
+        *(coverage_row("Image.paste", case) for case in paste_cases),
+        *(
+            coverage_row(f"ImageDraw.{case['operation']}", case)
+            for case in draw_cases
+        ),
+        *(
+            coverage_row("Image.apply_transparency", case)
+            for case in apply_cases
+        ),
+        *(
+            coverage_row(f"ImageDraw.{case['operation']}", case)
+            for case in indexed_immediate_draw_cases
+        ),
     ]
     return {
-        "oracle": {"implementation": "Pillow", "version": __version__},
+        "oracle": {
+            "implementation": "Pillow",
+            "version": __version__,
+            "freetype_version": ImageFont.core.freetype2_version,
+        },
+        "coverage": coverage,
         "paste_cases": paste_cases,
         "paste_error_cases": paste_error_cases,
         "draw_cases": draw_cases,
         "apply_transparency_cases": apply_cases,
+        "indexed_immediate_draw_cases": indexed_immediate_draw_cases,
     }
 
 
@@ -638,6 +887,11 @@ def main() -> None:
     if __version__ != EXPECTED_PILLOW:
         raise SystemExit(
             f"Pillow {EXPECTED_PILLOW} is required, found {__version__}"
+        )
+    if ImageFont.core.freetype2_version != EXPECTED_FREETYPE:
+        raise SystemExit(
+            f"FreeType {EXPECTED_FREETYPE} is required, "
+            f"found {ImageFont.core.freetype2_version}"
         )
 
     write_table_transparency_input()

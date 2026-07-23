@@ -7,6 +7,7 @@ use pillow_rs::Image;
 use pillow_rs::compute::{self, Backend};
 use pillow_rs::draw::Draw;
 use pillow_rs::error::PilError;
+use pillow_rs::font::Font;
 use pillow_rs::image::{PaletteTransparency, PutDataValue};
 use pillow_rs::ops::{chops, imageops, module_fns, paste::PasteSource};
 use pillow_rs::pipeline::PipelineOp;
@@ -16,23 +17,35 @@ use serde_json::Value;
 #[derive(Deserialize)]
 struct Manifest {
     oracle: Oracle,
+    coverage: Vec<CoverageRow>,
     paste_cases: Vec<PasteCase>,
     paste_error_cases: Vec<PasteErrorCase>,
     draw_cases: Vec<DrawCase>,
     apply_transparency_cases: Vec<ApplyTransparencyCase>,
+    indexed_immediate_draw_cases: Vec<IndexedImmediateDrawCase>,
 }
 
 #[derive(Deserialize)]
 struct Oracle {
     implementation: String,
     version: String,
+    freetype_version: String,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 struct ImageSpec {
     mode: String,
     size: [u32; 2],
     pixels_hex: String,
+    palette_hex: Option<String>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+struct CoverageRow {
+    operation: String,
+    mode: String,
+    case_id: String,
+    expected: ImageSpec,
 }
 
 #[derive(Deserialize)]
@@ -87,6 +100,8 @@ struct DrawCase {
 struct ApplyTransparencyCase {
     id: String,
     input: String,
+    prepare_alpha: Option<u8>,
+    backends: Vec<String>,
     expected: ApplyTransparencyExpected,
 }
 
@@ -95,6 +110,7 @@ struct ApplyTransparencyExpected {
     mode: String,
     size: [u32; 2],
     pixels_hex: String,
+    palette_hex: Option<String>,
     palette_rgba_hex: String,
     before_info: Value,
     before_palette_mode: String,
@@ -102,6 +118,28 @@ struct ApplyTransparencyExpected {
     info: Value,
     palette_mode: String,
     has_transparency_data: bool,
+}
+
+#[derive(Deserialize)]
+struct IndexedImmediateDrawCase {
+    id: String,
+    input: String,
+    operation: String,
+    parameters: Value,
+    expected: IndexedImmediateDrawExpected,
+}
+
+#[derive(Deserialize)]
+struct IndexedImmediateDrawExpected {
+    mode: String,
+    size: [u32; 2],
+    pixels_hex: String,
+    palette_hex: Option<String>,
+    format: String,
+    info: Value,
+    palette_mode: String,
+    has_transparency_data: bool,
+    palette_rgba_hex: String,
 }
 
 fn fixture_root() -> PathBuf {
@@ -148,12 +186,19 @@ fn transparency_info(image: &Image) -> Value {
 }
 
 fn image_from_spec(spec: &ImageSpec) -> Image {
-    Image::frombytes(
-        &spec.mode,
+    let storage_mode = if spec.mode == "PA" { "LA" } else { &spec.mode };
+    let mut image = Image::frombytes(
+        storage_mode,
         (spec.size[0], spec.size[1]),
         &decode_hex(&spec.pixels_hex),
     )
-    .unwrap_or_else(|error| panic!("{} fixture image: {error}", spec.mode))
+    .unwrap_or_else(|error| panic!("{} fixture image: {error}", spec.mode));
+    if let Some(palette_hex) = &spec.palette_hex {
+        image
+            .putpalette(&decode_hex(palette_hex), "RGB")
+            .unwrap_or_else(|error| panic!("{} fixture palette: {error}", spec.mode));
+    }
+    image
 }
 
 fn backend(name: &str) -> Backend {
@@ -216,6 +261,13 @@ fn assert_image(case_id: &str, actual: &Image, expected: &ImageSpec) {
         decode_hex(&expected.pixels_hex),
         "{case_id}: exact pixels"
     );
+    if let Some(palette_hex) = &expected.palette_hex {
+        assert_eq!(
+            actual.getpalette_trimmed(),
+            Some(decode_hex(palette_hex)),
+            "{case_id}: exact palette"
+        );
+    }
 }
 
 fn assert_exact_samples(case_id: &str, actual: &Image, mode: &str, expected: &[u8]) {
@@ -233,6 +285,11 @@ fn error_kind(error: &PilError) -> &'static str {
         PilError::TypeError(_) => "TypeError",
         other => panic!("unexpected paste error category: {other:?}"),
     }
+}
+
+fn assert_value_error(case_id: &str, error: PilError, expected: &str) {
+    assert_eq!(error_kind(&error), "ValueError", "{case_id}: error type");
+    assert_eq!(error.to_string(), expected, "{case_id}: exact error");
 }
 
 fn byte(value: &Value) -> u8 {
@@ -432,6 +489,66 @@ fn pillow_oracle_is_version_pinned() {
     let manifest = manifest();
     assert_eq!(manifest.oracle.implementation, "Pillow");
     assert_eq!(manifest.oracle.version, "12.2.0");
+    assert_eq!(manifest.oracle.freetype_version, "2.14.3");
+}
+
+#[test]
+fn backend_coverage_metadata_matches_every_exact_case() {
+    let Manifest {
+        coverage,
+        paste_cases,
+        draw_cases,
+        apply_transparency_cases,
+        indexed_immediate_draw_cases,
+        ..
+    } = manifest();
+    let mut expected = Vec::new();
+    expected.extend(paste_cases.into_iter().map(|case| CoverageRow {
+        operation: "Image.paste".to_owned(),
+        mode: case.expected.mode.clone(),
+        case_id: case.id,
+        expected: case.expected,
+    }));
+    expected.extend(draw_cases.into_iter().map(|case| CoverageRow {
+        operation: format!("ImageDraw.{}", case.operation),
+        mode: case.expected.mode.clone(),
+        case_id: case.id,
+        expected: case.expected,
+    }));
+    expected.extend(
+        apply_transparency_cases
+            .into_iter()
+            .map(|case| CoverageRow {
+                operation: "Image.apply_transparency".to_owned(),
+                mode: case.expected.mode.clone(),
+                case_id: case.id,
+                expected: ImageSpec {
+                    mode: case.expected.mode,
+                    size: case.expected.size,
+                    pixels_hex: case.expected.pixels_hex,
+                    palette_hex: case.expected.palette_hex,
+                },
+            }),
+    );
+    expected.extend(
+        indexed_immediate_draw_cases
+            .into_iter()
+            .map(|case| CoverageRow {
+                operation: format!("ImageDraw.{}", case.operation),
+                mode: case.expected.mode.clone(),
+                case_id: case.id,
+                expected: ImageSpec {
+                    mode: case.expected.mode,
+                    size: case.expected.size,
+                    pixels_hex: case.expected.pixels_hex,
+                    palette_hex: case.expected.palette_hex,
+                },
+            }),
+    );
+    assert_eq!(
+        coverage, expected,
+        "generated coverage rows must exactly mirror every Rust-consumed oracle image"
+    );
 }
 
 #[test]
@@ -538,7 +655,7 @@ fn paste_is_exact_on_every_declared_native_backend() {
                 &destination,
                 &case.expected,
             );
-            if case.destination.mode == "P" {
+            if matches!(case.destination.mode.as_str(), "P" | "PA") {
                 assert_eq!(
                     destination.palette(),
                     destination_palette,
@@ -579,6 +696,165 @@ fn paste_validation_matches_exact_pillow_errors() {
             case.id
         );
     }
+}
+
+#[test]
+fn gpu_paste_propagates_nested_auxiliary_errors_before_dispatch() {
+    let mut deferred_source =
+        Image::frombytes("P", (2, 1), &[1, 2]).expect("deferred paste source");
+    let source_mode = deferred_source.mode().expect("source mode");
+    let mut source_draw = Draw::new(deferred_source, Some(source_mode));
+    source_draw
+        .point(&[(0, 0)], (1, 2, 3, 255))
+        .expect("queue CPU-only source draw");
+    deferred_source = source_draw.into_image().use_backend(Backend::Gpu);
+
+    let mut destination = Image::frombytes("P", (2, 1), &[0, 0]).expect("paste destination");
+    destination
+        .paste_at(PasteSource::Image(deferred_source), Some((0, 0)), None)
+        .expect("queue paste with deferred source");
+    let error = destination
+        .use_backend(Backend::Gpu)
+        .materialize()
+        .expect_err("nested source backend error must escape GPU paste");
+    assert_value_error(
+        "GPU Paste nested source",
+        error,
+        "GPU: no native impl for DrawPoint",
+    );
+
+    let source = Image::new(2, 1, "RGBA", (10, 20, 30, 255)).expect("plain paste source");
+    let mut deferred_mask = Image::frombytes("1", (2, 1), &[255, 255]).expect("deferred mask");
+    let mask_mode = deferred_mask.mode().expect("mask mode");
+    let mut mask_draw = Draw::new(deferred_mask, Some(mask_mode));
+    mask_draw
+        .point(&[(0, 0)], (0, 0, 0, 255))
+        .expect("queue CPU-only mask draw");
+    deferred_mask = mask_draw.into_image().use_backend(Backend::Gpu);
+
+    let mut destination =
+        Image::new(2, 1, "RGBA", (0, 0, 0, 255)).expect("masked paste destination");
+    destination
+        .paste_at(
+            PasteSource::Image(source),
+            Some((0, 0)),
+            Some(&deferred_mask),
+        )
+        .expect("queue paste with deferred mask");
+    let error = destination
+        .use_backend(Backend::Gpu)
+        .materialize()
+        .expect_err("nested mask backend error must escape GPU paste");
+    assert_value_error(
+        "GPU Paste nested mask",
+        error,
+        "GPU: no native impl for DrawPoint",
+    );
+}
+
+#[test]
+fn forced_unsupported_backend_wins_before_source_decode() {
+    let mut corrupt = fs::read(fixture_root().join("inputs/png_indexed_alpha_table.png"))
+        .expect("indexed PNG fixture");
+    let mut position = 8usize;
+    loop {
+        let length = u32::from_be_bytes(
+            corrupt[position..position + 4]
+                .try_into()
+                .expect("PNG chunk length"),
+        ) as usize;
+        if &corrupt[position + 4..position + 8] == b"IDAT" {
+            assert_ne!(length, 0, "fixture IDAT must contain compressed bytes");
+            corrupt[position + 8] ^= 0xff;
+            break;
+        }
+        position += length + 12;
+    }
+    Image::open_bytes(corrupt.clone())
+        .expect("corrupt payload still has an inspectable PNG header")
+        .materialize()
+        .expect_err("corrupt IDAT must fail source decoding");
+
+    for selected in [Backend::Simd, Backend::Gpu] {
+        let source = Image::open_bytes(corrupt.clone()).expect("inspectable corrupt PNG");
+        let mode = source.mode().expect("header mode");
+        let mut draw = Draw::new(source, Some(mode));
+        draw.point(&[(0, 0)], (3, 3, 3, 255))
+            .expect("queue unsupported point without decoding");
+        let error = draw
+            .into_image()
+            .use_backend(selected)
+            .materialize()
+            .expect_err("unsupported backend must win before corrupt source decode");
+        let expected = match selected {
+            Backend::Simd => "SIMD: no native impl for DrawPoint",
+            Backend::Gpu => "GPU: no native impl for DrawPoint",
+            Backend::Cpu => unreachable!(),
+        };
+        assert_value_error(
+            &format!("pre-materialization DrawPoint [{selected:?}]"),
+            error,
+            expected,
+        );
+    }
+}
+
+#[test]
+fn gpu_auxiliary_failures_follow_operation_then_slot_order() {
+    let palette = (0..=255u8)
+        .flat_map(|index| [index, index, index])
+        .collect::<Vec<_>>();
+    let mut plain_source = Image::frombytes("P", (2, 1), &[1, 2]).expect("first paste source");
+    plain_source
+        .putpalette(&palette, "RGB")
+        .expect("first source palette");
+
+    let deferred_mask = Image::frombytes("1", (2, 1), &[0]).expect("first paste mask");
+    let mask_mode = deferred_mask.mode().expect("mask mode");
+    let mut mask_draw = Draw::new(deferred_mask, Some(mask_mode));
+    mask_draw
+        .point(&[(0, 0)], (255, 255, 255, 255))
+        .expect("queue first operation's failing mask");
+    let deferred_mask = mask_draw.into_image().use_backend(Backend::Simd);
+
+    let mut deferred_source = Image::frombytes("P", (2, 1), &[3, 4]).expect("second paste source");
+    deferred_source
+        .putpalette(&palette, "RGB")
+        .expect("second source palette");
+    let source_mode = deferred_source.mode().expect("source mode");
+    let mut source_draw = Draw::new(deferred_source, Some(source_mode));
+    source_draw
+        .line(0, 0, 1, 0, (1, 1, 1, 255), 1)
+        .expect("queue second operation's failing source");
+    let deferred_source = source_draw.into_image().use_backend(Backend::Gpu);
+
+    let mut destination = Image::frombytes("P", (2, 1), &[0, 0]).expect("paste destination");
+    destination
+        .putpalette(&palette, "RGB")
+        .expect("destination palette");
+    let mut destination = destination
+        .crop((0, 0, 2, 1))
+        .expect("queue supported outer operation")
+        .use_backend(Backend::Gpu);
+    destination
+        .paste_at(
+            PasteSource::Image(plain_source),
+            Some((0, 0)),
+            Some(&deferred_mask),
+        )
+        .expect("queue first paste");
+    destination
+        .paste_at(PasteSource::Image(deferred_source), Some((0, 0)), None)
+        .expect("queue second paste");
+
+    let error = destination
+        .materialize()
+        .expect_err("first operation's third slot must fail before second operation's source");
+    assert_value_error(
+        "GPU auxiliary operation/slot order",
+        error,
+        "SIMD: no native impl for DrawPoint",
+    );
 }
 
 #[test]
@@ -1197,35 +1473,125 @@ fn pa_draw_point_is_native_on_cpu_and_truthfully_rejected_elsewhere() {
         "DrawPoint must not claim a GPU shader"
     );
 
-    let palette = vec![255, 0, 0, 0, 255, 0, 0, 0, 255];
-    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+    for selected in [Backend::Simd, Backend::Gpu] {
         let mut image = Image::frombytes("P", (3, 1), &[0, 1, 0]).expect("PA draw destination");
-        image.putpalette(&palette, "RGB").expect("PA draw palette");
+        image
+            .putpalette(&[255, 0, 0, 0, 255, 0, 0, 0, 255], "RGB")
+            .expect("PA draw palette");
         image.putalpha(128).expect("PA draw alpha");
-        let source_palette = image.palette();
         let mut draw = Draw::new(image, Some("PA".to_owned()));
         draw.point(&[(1, 0)], (2, 2, 2, 33))
             .expect("queue PA point");
         let image = draw.into_image().use_backend(selected);
 
-        if selected == Backend::Cpu {
-            assert_exact_samples(
-                "draw point PA [Cpu]",
-                &image,
-                "PA",
-                &[0, 128, 2, 33, 0, 128],
-            );
-            assert_eq!(
-                image.palette(),
-                source_palette,
-                "PA drawing must retain its palette"
-            );
-        } else {
-            assert!(
-                image.materialize().is_err(),
-                "forcing {selected:?} must reject unsupported PA DrawPoint"
-            );
+        let expected = match selected {
+            Backend::Simd => "SIMD: no native impl for DrawPoint",
+            Backend::Gpu => "GPU: no native impl for DrawPoint",
+            Backend::Cpu => unreachable!(),
+        };
+        let error = image
+            .materialize()
+            .expect_err("forced backend must reject unsupported PA DrawPoint");
+        assert_value_error(&format!("PA DrawPoint [{selected:?}]"), error, expected);
+    }
+}
+
+#[test]
+fn indexed_bitmap_and_text_preserve_pillow_format_and_pending_transparency() {
+    for case in manifest().indexed_immediate_draw_cases {
+        let input = fs::read(fixture_root().join(&case.input))
+            .unwrap_or_else(|error| panic!("{} input: {error}", case.id));
+        let target =
+            Image::open_bytes(input).unwrap_or_else(|error| panic!("{} open: {error}", case.id));
+        let mut draw = Draw::new(target, Some("P".to_owned()));
+        match case.operation.as_str() {
+            "bitmap" => {
+                let mask = Image::frombytes("L", (1, 1), &[255]).expect("bitmap mask");
+                let xy = case.parameters["xy"].as_array().expect("bitmap xy");
+                let fill = byte(&case.parameters["fill"]);
+                draw.bitmap(
+                    xy[0].as_i64().expect("bitmap x") as i32,
+                    xy[1].as_i64().expect("bitmap y") as i32,
+                    &mask,
+                    Some((fill, fill, fill, 255)),
+                )
+                .expect("draw indexed bitmap");
+            }
+            "text" => {
+                let xy = case.parameters["xy"].as_array().expect("text xy");
+                let fill = byte(&case.parameters["fill"]);
+                let font = Font::load_default(
+                    case.parameters["font_size"]
+                        .as_f64()
+                        .expect("default font size") as f32,
+                )
+                .expect("Pillow default font");
+                draw.text(
+                    xy[0].as_i64().expect("text x") as i32,
+                    xy[1].as_i64().expect("text y") as i32,
+                    case.parameters["text"].as_str().expect("text"),
+                    &font,
+                    (fill, fill, fill, 255),
+                )
+                .expect("draw indexed text");
+            }
+            operation => panic!("unsupported indexed immediate draw operation {operation}"),
         }
+        let actual = draw.into_image();
+        assert_eq!(
+            actual.mode().expect("mode"),
+            case.expected.mode,
+            "{}",
+            case.id
+        );
+        assert_eq!(
+            actual.size().expect("size"),
+            (case.expected.size[0], case.expected.size[1]),
+            "{}",
+            case.id
+        );
+        assert_eq!(
+            actual.tobytes().expect("pixels"),
+            decode_hex(&case.expected.pixels_hex),
+            "{} exact Pillow pixels",
+            case.id
+        );
+        assert_eq!(
+            actual.getpalette_trimmed(),
+            case.expected.palette_hex.as_deref().map(decode_hex),
+            "{} exact palette",
+            case.id
+        );
+        assert_eq!(
+            actual.format_name().as_deref(),
+            Some(case.expected.format.as_str()),
+            "{} source format",
+            case.id
+        );
+        assert_eq!(
+            transparency_info(&actual),
+            case.expected.info,
+            "{}",
+            case.id
+        );
+        assert_eq!(
+            actual.palette_mode(),
+            Some(case.expected.palette_mode.as_str()),
+            "{}",
+            case.id
+        );
+        assert_eq!(
+            actual.has_transparency_data(),
+            case.expected.has_transparency_data,
+            "{}",
+            case.id
+        );
+        assert_eq!(
+            actual.getpalette_rgba(),
+            Some(decode_hex(&case.expected.palette_rgba_hex)),
+            "{} exact RGBA palette",
+            case.id
+        );
     }
 }
 
@@ -1239,19 +1605,30 @@ fn drawing_is_exact_and_backend_capabilities_are_truthful() {
             .unwrap_or_else(|| panic!("{} missing registry entry {key}", case.id));
         assert!(entry.cpu_fn.is_some(), "{} must have CPU drawing", case.id);
         for backend_name in &case.unsupported_backends {
-            match backend(backend_name) {
-                Backend::Gpu => assert!(
-                    entry.gpu_shader.is_none(),
-                    "{} must not claim a GPU shader",
-                    case.id
-                ),
-                Backend::Simd => assert!(
-                    entry.simd_fn.is_none(),
-                    "{} must not claim a SIMD function",
-                    case.id
-                ),
+            let selected = backend(backend_name);
+            let expected = match selected {
+                Backend::Gpu => {
+                    assert!(
+                        entry.gpu_shader.is_none(),
+                        "{} must not claim a GPU shader",
+                        case.id
+                    );
+                    format!("GPU: no native impl for {key}")
+                }
+                Backend::Simd => {
+                    assert!(
+                        entry.simd_fn.is_none(),
+                        "{} must not claim a SIMD function",
+                        case.id
+                    );
+                    format!("SIMD: no native impl for {key}")
+                }
                 Backend::Cpu => panic!("CPU cannot be listed as unsupported"),
-            }
+            };
+            let error = draw_case(&case, selected)
+                .materialize()
+                .expect_err("forced backend must reject unsupported drawing");
+            assert_value_error(&format!("{} [{backend_name}]", case.id), error, &expected);
         }
         for backend_name in &case.backends {
             let selected = backend(backend_name);
@@ -1724,120 +2101,81 @@ fn backend_lock_reaches_nested_indexed_to_color_pipeline() {
 #[test]
 fn apply_transparency_preserves_indices_and_commits_palette_alpha() {
     for case in manifest().apply_transparency_cases {
-        let input = fs::read(fixture_root().join(&case.input))
-            .unwrap_or_else(|error| panic!("{} input: {error}", case.id));
-        let mut image =
-            Image::open_bytes(input).unwrap_or_else(|error| panic!("{} open: {error}", case.id));
-        assert_eq!(
-            transparency_info(&image),
-            case.expected.before_info,
-            "{} exact info before apply_transparency",
-            case.id
-        );
-        assert_eq!(
-            image.palette_mode(),
-            Some(case.expected.before_palette_mode.as_str()),
-            "{} palette mode before apply_transparency",
-            case.id
-        );
-        assert_eq!(
-            image.has_transparency_data(),
-            case.expected.before_has_transparency_data,
-            "{} transparency flag before apply_transparency",
-            case.id
-        );
-        image
-            .apply_transparency()
-            .unwrap_or_else(|error| panic!("{} apply_transparency: {error}", case.id));
-        assert_eq!(
-            transparency_info(&image),
-            case.expected.info,
-            "{} exact info after apply_transparency",
-            case.id
-        );
-        assert_eq!(
-            image.palette_mode(),
-            Some(case.expected.palette_mode.as_str()),
-            "{} palette mode after apply_transparency",
-            case.id
-        );
-        assert_eq!(
-            image.has_transparency_data(),
-            case.expected.has_transparency_data,
-            "{} transparency flag after apply_transparency",
-            case.id
-        );
-        assert_eq!(
-            image.mode().expect("mode"),
-            case.expected.mode,
-            "{}",
-            case.id
-        );
-        assert_eq!(
-            image.size().expect("size"),
-            (case.expected.size[0], case.expected.size[1]),
-            "{}",
-            case.id
-        );
-        assert_eq!(
-            image.tobytes().expect("pixels"),
-            decode_hex(&case.expected.pixels_hex),
-            "{} exact indices",
-            case.id
-        );
-
-        let palette = image.getpalette_trimmed().expect("indexed image palette");
-        let alpha = image.palette_alpha().expect("indexed image alpha");
-        let mut rgba = Vec::with_capacity(palette.len() / 3 * 4);
-        for (index, rgb) in palette.chunks_exact(3).enumerate() {
-            rgba.extend_from_slice(rgb);
-            rgba.push(alpha.get(index).copied().unwrap_or(255));
+        for backend_name in &case.backends {
+            let selected = backend(backend_name);
+            let input = fs::read(fixture_root().join(&case.input))
+                .unwrap_or_else(|error| panic!("{} input: {error}", case.id));
+            let mut image = Image::open_bytes(input)
+                .unwrap_or_else(|error| panic!("{} open: {error}", case.id));
+            if let Some(alpha) = case.prepare_alpha {
+                image
+                    .putalpha(alpha)
+                    .unwrap_or_else(|error| panic!("{} prepare PA: {error}", case.id));
+            }
+            image = image.use_backend(selected);
+            assert_eq!(
+                transparency_info(&image),
+                case.expected.before_info,
+                "{} [{backend_name}] exact info before apply_transparency",
+                case.id
+            );
+            assert_eq!(
+                image.palette_mode(),
+                Some(case.expected.before_palette_mode.as_str()),
+                "{} [{backend_name}] palette mode before apply_transparency",
+                case.id
+            );
+            assert_eq!(
+                image.has_transparency_data(),
+                case.expected.before_has_transparency_data,
+                "{} [{backend_name}] transparency before apply_transparency",
+                case.id
+            );
+            image
+                .apply_transparency()
+                .unwrap_or_else(|error| panic!("{} apply_transparency: {error}", case.id));
+            assert_eq!(
+                transparency_info(&image),
+                case.expected.info,
+                "{} [{backend_name}] exact info after apply_transparency",
+                case.id
+            );
+            assert_eq!(
+                image.palette_mode(),
+                Some(case.expected.palette_mode.as_str()),
+                "{} [{backend_name}] palette mode after apply_transparency",
+                case.id
+            );
+            assert_eq!(
+                image.has_transparency_data(),
+                case.expected.has_transparency_data,
+                "{} [{backend_name}] transparency after apply_transparency",
+                case.id
+            );
+            assert_eq!(
+                image.mode().expect("mode"),
+                case.expected.mode,
+                "{} [{backend_name}]",
+                case.id
+            );
+            assert_eq!(
+                image.size().expect("size"),
+                (case.expected.size[0], case.expected.size[1]),
+                "{} [{backend_name}]",
+                case.id
+            );
+            assert_eq!(
+                image.tobytes().expect("pixels"),
+                decode_hex(&case.expected.pixels_hex),
+                "{} [{backend_name}] exact samples",
+                case.id
+            );
+            assert_eq!(
+                image.getpalette_rgba(),
+                Some(decode_hex(&case.expected.palette_rgba_hex)),
+                "{} [{backend_name}] exact RGBA palette",
+                case.id
+            );
         }
-        assert_eq!(
-            rgba,
-            decode_hex(&case.expected.palette_rgba_hex),
-            "{} exact RGBA palette",
-            case.id
-        );
-    }
-}
-
-#[test]
-fn apply_transparency_is_a_noop_after_p_is_promoted_to_pa() {
-    let case = manifest()
-        .apply_transparency_cases
-        .into_iter()
-        .find(|case| case.id == "indexed_png_single_index")
-        .expect("single-index transparency case");
-    let input = fs::read(fixture_root().join(&case.input)).expect("indexed PNG input");
-
-    for selected in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
-        let mut image = Image::open_bytes(input.clone()).expect("open indexed PNG");
-        image.putalpha(128).expect("promote P to PA");
-        image = image.use_backend(selected);
-
-        let before_mode = image.mode().expect("PA mode");
-        let before_pixels = image.tobytes().expect("PA samples");
-        let before_palette = image.palette();
-        let before_palette_alpha = image.palette_alpha();
-        let before_info = transparency_info(&image);
-
-        image
-            .apply_transparency()
-            .expect("apply_transparency on PA");
-
-        assert_eq!(image.mode().expect("mode after no-op"), before_mode);
-        assert_eq!(
-            image.tobytes().expect("samples after no-op"),
-            before_pixels,
-            "PA pixels must remain unchanged on {selected:?}"
-        );
-        assert_eq!(image.palette(), before_palette);
-        assert_eq!(image.palette_alpha(), before_palette_alpha);
-        assert_eq!(
-            transparency_info(&image),
-            before_info,
-            "PA transparency metadata must remain pending on {selected:?}"
-        );
     }
 }

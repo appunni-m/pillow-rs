@@ -757,6 +757,22 @@ impl Image {
         }
     }
 
+    fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {
+        matches!(
+            op,
+            PipelineOp::DrawLine { .. }
+                | PipelineOp::DrawRectangle { .. }
+                | PipelineOp::DrawRoundedRect { .. }
+                | PipelineOp::DrawEllipse { .. }
+                | PipelineOp::DrawCircle { .. }
+                | PipelineOp::DrawPolygon { .. }
+                | PipelineOp::DrawArc { .. }
+                | PipelineOp::DrawChord { .. }
+                | PipelineOp::DrawPieslice { .. }
+                | PipelineOp::DrawPoint { .. }
+        )
+    }
+
     /// Whether this value currently represents palette indices rather than
     /// visible luma samples. Lazy inputs use cached header metadata so the
     /// first queued operation does not need to decode merely to preserve mode.
@@ -874,12 +890,14 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
+        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        crate::compute::validate_backend_support(selected, ops)?;
         Self::evaluate_pipeline_with_image(
             source,
             source.materialize()?,
             ops,
             explicit_mode,
-            backend,
+            Some(selected),
             palette,
             palette_alpha,
         )
@@ -893,12 +911,14 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
+        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        crate::compute::validate_backend_support(selected, ops)?;
         Self::evaluate_pipeline_with_image(
             source,
             source.materialize_uncached()?,
             ops,
             explicit_mode,
-            backend,
+            Some(selected),
             palette,
             palette_alpha,
         )
@@ -1728,7 +1748,7 @@ impl Image {
         }
     }
 
-    fn source_format(&self) -> Option<ImageFormat> {
+    pub(crate) fn source_format(&self) -> Option<ImageFormat> {
         match self {
             Image::Loaded(data) => data.source_format,
             Image::Paletted(data) => data.source_format,
@@ -2061,6 +2081,11 @@ impl Image {
             | Image::Bytes {
                 info: Some(info), ..
             } => return Ok((info.width, info.height)),
+            Image::Pipeline { source, ops, .. }
+                if ops.iter().all(Self::is_dimension_preserving_draw) =>
+            {
+                return source.size();
+            }
             _ => {}
         }
         let img = self.materialized_shared()?;

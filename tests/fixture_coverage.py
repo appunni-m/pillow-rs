@@ -21,6 +21,169 @@ FIXTURE_DIRS = {
     "fixtures": REPO_ROOT / "tests" / "fixtures",
     "fixtures_2": REPO_ROOT / "tests" / "fixtures_2",
 }
+BACKEND_FIXTURE_DIR = (
+    REPO_ROOT / "pillow-rs" / "tests" / "fixtures" / "image_backend"
+)
+BACKEND_PARITY_MANIFEST = BACKEND_FIXTURE_DIR / "backend_parity.json"
+
+
+def exact_image_spec(value: object) -> bool:
+    """Return whether a backend fixture contains concrete exact image bytes."""
+    if not isinstance(value, dict):
+        return False
+    size = value.get("size")
+    pixels = value.get("pixels_hex")
+    return (
+        isinstance(value.get("mode"), str)
+        and isinstance(size, list)
+        and len(size) == 2
+        and all(isinstance(dimension, int) and dimension > 0 for dimension in size)
+        and isinstance(pixels, str)
+        and len(pixels) % 2 == 0
+    )
+
+
+def coverage_expected_image(expected: dict) -> dict:
+    """Select the exact image fields duplicated into one coverage row."""
+    return {
+        key: expected.get(key)
+        for key in ("mode", "size", "pixels_hex", "palette_hex")
+    }
+
+
+def expected_backend_coverage_rows(
+    fixture: dict,
+    fixture_dir: Path = BACKEND_FIXTURE_DIR,
+) -> tuple[list[dict], list[str]]:
+    """Derive trusted coverage rows from concrete generated oracle cases."""
+    rows = []
+    errors = []
+
+    def add_case(operation: str, case: object, source_key: str | None) -> None:
+        if not isinstance(case, dict):
+            errors.append(f"invalid concrete backend case for {operation}")
+            return
+        case_id = case.get("id")
+        expected = case.get("expected")
+        source = case.get(source_key) if source_key else None
+        if (
+            not isinstance(case_id, str)
+            or not exact_image_spec(expected)
+            or (
+                source_key is not None
+                and not exact_image_spec(source)
+            )
+        ):
+            errors.append(f"invalid concrete backend case: {operation}/{case_id}")
+            return
+        if source_key is not None and source["mode"] != expected["mode"]:
+            errors.append(f"backend case changes mode: {operation}/{case_id}")
+            return
+        if operation != "ImageDraw.bitmap" and operation != "ImageDraw.text":
+            backends = case.get("backends")
+            if not isinstance(backends, list) or not backends:
+                errors.append(f"backend case has no execution lane: {operation}/{case_id}")
+                return
+        input_path = case.get("input")
+        if input_path is not None and (
+            not isinstance(input_path, str)
+            or not (fixture_dir / input_path).is_file()
+        ):
+            errors.append(f"backend case input is missing: {operation}/{case_id}")
+            return
+        rows.append(
+            {
+                "operation": operation,
+                "mode": expected["mode"],
+                "case_id": case_id,
+                "expected": coverage_expected_image(expected),
+            }
+        )
+
+    for case in fixture.get("paste_cases", []):
+        if (
+            not isinstance(case, dict)
+            or not isinstance(case.get("source"), dict)
+        ):
+            errors.append(f"invalid concrete backend paste case: {case!r}")
+            continue
+        add_case("Image.paste", case, "destination")
+    for case in fixture.get("draw_cases", []):
+        operation = case.get("operation") if isinstance(case, dict) else None
+        if not isinstance(operation, str):
+            errors.append(f"invalid concrete backend draw case: {case!r}")
+            continue
+        add_case(f"ImageDraw.{operation}", case, "source")
+    for case in fixture.get("apply_transparency_cases", []):
+        add_case("Image.apply_transparency", case, None)
+    for case in fixture.get("indexed_immediate_draw_cases", []):
+        operation = case.get("operation") if isinstance(case, dict) else None
+        if operation not in {"bitmap", "text"}:
+            errors.append(f"invalid indexed draw case: {case!r}")
+            continue
+        add_case(f"ImageDraw.{operation}", case, None)
+    return rows, errors
+
+
+def backend_parity_coverage_errors(
+    fixture: dict,
+    fixture_dir: Path = BACKEND_FIXTURE_DIR,
+) -> list[str]:
+    """Reject missing, orphaned, duplicate, or mismatched coverage rows."""
+    expected_rows, errors = expected_backend_coverage_rows(fixture, fixture_dir)
+    actual_rows = fixture.get("coverage")
+    if not isinstance(actual_rows, list):
+        return [*errors, "missing backend coverage metadata"]
+
+    def keyed(rows: list[dict], kind: str) -> tuple[dict[tuple[str, str], dict], list[str]]:
+        keyed_rows = {}
+        row_errors = []
+        for row in rows:
+            if not isinstance(row, dict):
+                row_errors.append(f"invalid {kind} backend coverage row: {row!r}")
+                continue
+            key = (row.get("operation"), row.get("case_id"))
+            if not all(isinstance(value, str) for value in key):
+                row_errors.append(f"invalid {kind} backend coverage key: {row!r}")
+            elif key in keyed_rows:
+                row_errors.append(
+                    f"duplicate {kind} backend coverage row: {key[0]}/{key[1]}"
+                )
+            else:
+                keyed_rows[key] = row
+        return keyed_rows, row_errors
+
+    expected, expected_errors = keyed(expected_rows, "expected")
+    actual, actual_errors = keyed(actual_rows, "generated")
+    errors.extend(expected_errors)
+    errors.extend(actual_errors)
+    errors.extend(
+        f"missing backend coverage row: {operation}/{case_id}"
+        for operation, case_id in sorted(expected.keys() - actual.keys())
+    )
+    errors.extend(
+        f"orphan backend coverage row: {operation}/{case_id}"
+        for operation, case_id in sorted(actual.keys() - expected.keys())
+    )
+    errors.extend(
+        f"mismatched backend coverage row: {operation}/{case_id}"
+        for (operation, case_id) in sorted(expected.keys() & actual.keys())
+        if expected[(operation, case_id)] != actual[(operation, case_id)]
+    )
+    return errors
+
+
+def backend_parity_operation_modes() -> dict[str, set[str]]:
+    """Collect modes only from structurally validated generated coverage."""
+    if not BACKEND_PARITY_MANIFEST.is_file():
+        return {}
+    fixture = json.loads(BACKEND_PARITY_MANIFEST.read_text())
+    if backend_parity_coverage_errors(fixture):
+        return {}
+    covered: dict[str, set[str]] = {}
+    for row in fixture["coverage"]:
+        covered.setdefault(row["operation"], set()).add(row["mode"])
+    return covered
 
 
 def operation_name(operation: dict) -> str:
@@ -131,6 +294,8 @@ def fixture_operation_modes(
                             oracle_case.get("assert", {}),
                         )
                     )
+    for operation, modes in backend_parity_operation_modes().items():
+        fixture_modes.setdefault(operation, set()).update(modes)
     return fixture_modes
 
 
@@ -222,6 +387,14 @@ def main() -> None:
     """Run the dependency-light fixture coverage gate."""
     errors = fixture_pair_errors()
     errors.extend(fixture_usage_errors())
+    if BACKEND_PARITY_MANIFEST.is_file():
+        errors.extend(
+            backend_parity_coverage_errors(
+                json.loads(BACKEND_PARITY_MANIFEST.read_text())
+            )
+        )
+    else:
+        errors.append("missing backend parity manifest")
     errors.extend(
         f"unknown fixture operation: {operation}"
         for operation in unknown_fixture_operations()

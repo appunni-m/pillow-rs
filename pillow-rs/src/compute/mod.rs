@@ -180,6 +180,36 @@ pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
     Backend::Cpu // universal fallback
 }
 
+/// Validates that a compiled backend has native support for every operation.
+///
+/// Image pipelines call this before materializing their source so an explicit
+/// backend lock reports the first unsupported operation before any decode or
+/// nested-pipeline error. [`execute_batch`] repeats the validation for callers
+/// that already own a materialized image.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] for an unavailable backend or the first
+/// operation without a native implementation on the selected backend.
+pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
+    let pool = pools()
+        .iter()
+        .find(|pool| pool.name() == backend)
+        .ok_or_else(|| PilError::ValueError(format!("Backend {:?} not available", backend)))?;
+    if let Some(op) = ops.iter().find(|op| !pool.supports(op)) {
+        let name = match backend {
+            Backend::Cpu => "CPU",
+            Backend::Gpu => "GPU",
+            Backend::Simd => "SIMD",
+        };
+        return Err(PilError::ValueError(format!(
+            "{name}: no native impl for {}",
+            registry::variant_key(op)
+        )));
+    }
+    Ok(())
+}
+
 /// Executes `ops` on a specific backend.
 ///
 /// `mode` carries Pillow mode tags such as `"P"` or `"F"` when the
@@ -195,6 +225,7 @@ pub fn execute_batch(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    validate_backend_support(backend, ops)?;
     for pool in pools() {
         if pool.name() == backend {
             return pool.execute_batch(ops, img, mode);
