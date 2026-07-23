@@ -7,7 +7,7 @@
 //! 3. Reconstructs `DynamicImage` from the result
 
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
 use image_slash_star::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
@@ -173,7 +173,10 @@ pub fn simd_grayscale(
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::grayscale(&mut pixels, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    let luma = pixels.into_iter().map(|pixel| pixel as u8).collect();
+    Ok(DynamicImage::ImageLuma8(
+        GrayImage::from_raw(w, h, luma).expect("internal invariant"),
+    ))
 }
 
 pub fn simd_duplicate(
@@ -197,7 +200,7 @@ pub fn simd_invert_chops(
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::invert_chops(&mut pixels, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -689,13 +692,44 @@ pub fn simd_composite_module(
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::CompositeModule { other, mask } = op {
-        let other_pixels = pixels_from_arc(other)?;
-        let mask_pixels = pixels_from_arc(mask)?;
-        super::scalar::composite_module(&mut pixels, mode_code, &other_pixels, &mask_pixels);
+    let pixels = pixels_from_dynimg(img);
+    if let PipelineOp::CompositeModule {
+        other,
+        mask,
+        mask_alpha,
+    } = op
+    {
+        let other_img = if mode == Some("P") {
+            other.materialize_indices()?
+        } else {
+            other.materialize_for_ops()?
+        };
+        let mask_img = mask.materialize_for_ops()?;
+        let (other_w, other_h) = other_img.dimensions();
+        let (mask_w, mask_h) = mask_img.dimensions();
+        let other_pixels = pixels_from_dynimg(&other_img);
+        let mask_pixels = pixels_from_dynimg(&mask_img);
+        let result = super::scalar::composite_module(
+            &pixels,
+            w,
+            h,
+            mode_code,
+            &other_pixels,
+            other_w,
+            other_h,
+            &mask_pixels,
+            mask_w,
+            mask_h,
+            *mask_alpha,
+        );
+        return Ok(preserve_mode(
+            &other_img,
+            dynimg_from_rgba(result, other_w, other_h),
+        ));
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    Err(PilError::ValueError(
+        "expected CompositeModule op".to_owned(),
+    ))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1004,14 +1038,12 @@ pub fn simd_remap_palette(
     let mode_code = mode_to_u32(mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::RemapPalette { dest_map } = op {
-        let map: [u8; 768] = {
-            let mut arr = [0u8; 768];
-            let len = dest_map.len().min(768);
-            arr[..len].copy_from_slice(&dest_map[..len]);
-            arr
-        };
-        let result = super::scalar::remap_palette(&pixels, mode_code, &map);
-        Ok(dynimg_from_rgba(result, w, h))
+        let mut inverse = [0u8; 256];
+        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
+            inverse[usize::from(old_index)] = new_index as u8;
+        }
+        let result = super::scalar::remap_palette(&pixels, mode_code, &inverse);
+        Ok(preserve_mode(img, dynimg_from_rgba(result, w, h)))
     } else {
         Err(PilError::ValueError("expected RemapPalette op".into()))
     }
@@ -1031,6 +1063,7 @@ pub fn simd_transform(
         data,
         filter,
         fill,
+        palette_fill,
         ..
     } = op
     {
@@ -1041,13 +1074,14 @@ pub fn simd_transform(
             arr
         };
         let f = filter_to_u32(filter);
-        let fill_rgba = match fill {
-            Some(c) => pack_rgba(*c),
+        let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+        let fill_rgba = match resolved_fill {
+            Some(c) => pack_rgba(c),
             None => 0u32,
         };
         let (result, nw, nh) =
             super::scalar::transform(&pixels, w, h, mode_code, *dw, *dh, &matrix, f, fill_rgba);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)))
     } else {
         Err(PilError::ValueError("expected Transform op".into()))
     }

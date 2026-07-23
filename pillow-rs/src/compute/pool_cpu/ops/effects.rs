@@ -492,75 +492,84 @@ pub fn op_blend_module(
 
 // ── CompositeModule ──
 
+fn composite_mask(mask: &Arc<Image>, mask_alpha: bool) -> Result<GrayImage, PilError> {
+    let materialized = mask.materialize_for_ops()?;
+    if !mask_alpha {
+        return Ok(materialized.to_luma8());
+    }
+
+    let rgba = materialized.to_rgba8();
+    Ok(GrayImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+        image_slash_star::Luma([rgba.get_pixel(x, y)[3]])
+    }))
+}
+
+#[inline]
+fn composite_blend(source: u8, destination: u8, mask: u8) -> u8 {
+    let mask = u16::from(mask);
+    let inverse = 255u16 - mask;
+    // Pillow 12.2.0 Paste.c applies ImagingUtils.h's BLEND/DIV255 macro to
+    // every active destination band.
+    ((u16::from(source) * mask + u16::from(destination) * inverse + 127) / 255) as u8
+}
+
 pub fn op_composite_module(
     img: &DynamicImage,
     other: &Arc<Image>,
     mask: &Arc<Image>,
+    mask_alpha: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     // PIL composite: copy image2, then paste image1 onto it with mask at (0,0).
     // The output uses image2's size. Smaller images are pasted into the top-left.
-    let _other_img_pre = other.materialize_for_ops()?;
-    let _mask_img_pre = mask.materialize_for_ops()?;
+    // Paste.c uses the alpha byte for LA/RGBA/RGBa masks and the luma byte for
+    // 1/L masks. The choice is captured before backend dispatch.
+    let mask_gray = composite_mask(mask, mask_alpha)?;
+
     // P-mode: composite on palette indices (PIL operates on indices, not colors)
     if explicit_mode == Some("P") {
         let gray1 = img.to_luma8();
         let other_indices = other.materialize_indices()?;
         let gray2 = other_indices.to_luma8();
-        let mask_img = mask.materialize_for_ops()?;
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = gray2.dimensions();
-        let mut out = GrayImage::new(out_w, out_h);
-        // Copy image2 as base, then blend image1 in overlap region
-        for y in 0..out_h {
-            for x in 0..out_w {
-                let i2 = gray2.get_pixel(x, y)[0] as u16;
-                out.put_pixel(x, y, image_slash_star::Luma([i2 as u8]));
-            }
-        }
+        let mut out = gray2.clone();
         let overlap_w = gray1.width().min(gray2.width()).min(mask_gray.width());
         let overlap_h = gray1.height().min(gray2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
-                let i1 = gray1.get_pixel(x, y)[0] as u16;
-                let i2 = gray2.get_pixel(x, y)[0] as u16;
-                let m = mask_gray.get_pixel(x, y)[0] as u16;
-                // PIL: (i1 * m + i2 * (255 - m) + 127) / 255
-                let val = (i1 * m + i2 * (255 - m) + 127) / 255;
-                out.put_pixel(x, y, image_slash_star::Luma([val as u8]));
+                let value = composite_blend(
+                    gray1.get_pixel(x, y)[0],
+                    gray2.get_pixel(x, y)[0],
+                    mask_gray.get_pixel(x, y)[0],
+                );
+                out.put_pixel(x, y, image_slash_star::Luma([value]));
             }
         }
         return Ok(DynamicImage::ImageLuma8(out));
     }
+
     let other_img = other.materialize_for_ops()?;
-    let mask_img = mask.materialize_for_ops()?;
-    // CMYK mode: composite all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
-    if explicit_mode == Some("CMYK") {
+
+    // RGBA and four-byte compatibility modes (CMYK/I/F) blend every stored
+    // band. In particular, RGBA alpha is output data, not merely metadata.
+    if matches!(img.color(), image_slash_star::ColorType::Rgba8) {
         let rgba1 = img.to_rgba8();
         let rgba2 = other_img.to_rgba8();
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = rgba2.dimensions();
-        let mut out = RgbaImage::new(out_w, out_h);
-        for y in 0..out_h {
-            for x in 0..out_w {
-                out.put_pixel(x, y, *rgba2.get_pixel(x, y));
-            }
-        }
+        let mut out = rgba2.clone();
         let overlap_w = rgba1.width().min(rgba2.width()).min(mask_gray.width());
         let overlap_h = rgba1.height().min(rgba2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
                 let p1 = rgba1.get_pixel(x, y);
                 let p2 = rgba2.get_pixel(x, y);
-                let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                let m = mask_gray.get_pixel(x, y)[0];
                 out.put_pixel(
                     x,
                     y,
                     image_slash_star::Rgba([
-                        (p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round() as u8,
-                        (p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round() as u8,
-                        (p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round() as u8,
-                        (p1[3] as f64 * m + p2[3] as f64 * (1.0 - m)).round() as u8,
+                        composite_blend(p1[0], p2[0], m),
+                        composite_blend(p1[1], p2[1], m),
+                        composite_blend(p1[2], p2[2], m),
+                        composite_blend(p1[3], p2[3], m),
                     ]),
                 );
             }
@@ -571,27 +580,20 @@ pub fn op_composite_module(
     if matches!(img.color(), image_slash_star::ColorType::La8) {
         let la1 = img.to_luma_alpha8();
         let la2 = other_img.to_luma_alpha8();
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = la2.dimensions();
-        let mut out = GrayAlphaImage::new(out_w, out_h);
-        for y in 0..out_h {
-            for x in 0..out_w {
-                out.put_pixel(x, y, *la2.get_pixel(x, y));
-            }
-        }
+        let mut out = la2.clone();
         let overlap_w = la1.width().min(la2.width()).min(mask_gray.width());
         let overlap_h = la1.height().min(la2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
                 let p1 = la1.get_pixel(x, y);
                 let p2 = la2.get_pixel(x, y);
-                let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                let m = mask_gray.get_pixel(x, y)[0];
                 out.put_pixel(
                     x,
                     y,
                     image_slash_star::LumaA([
-                        ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
-                        ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
+                        composite_blend(p1[0], p2[0], m),
+                        composite_blend(p1[1], p2[1], m),
                     ]),
                 );
             }
@@ -600,28 +602,21 @@ pub fn op_composite_module(
     }
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
-    let mask_gray = mask_img.to_luma8();
-    let (out_w, out_h) = rgb2.dimensions();
-    let mut out = RgbImage::new(out_w, out_h);
-    for y in 0..out_h {
-        for x in 0..out_w {
-            out.put_pixel(x, y, *rgb2.get_pixel(x, y));
-        }
-    }
+    let mut out = rgb2.clone();
     let overlap_w = rgb1.width().min(rgb2.width()).min(mask_gray.width());
     let overlap_h = rgb1.height().min(rgb2.height()).min(mask_gray.height());
     for y in 0..overlap_h {
         for x in 0..overlap_w {
             let p1 = rgb1.get_pixel(x, y);
             let p2 = rgb2.get_pixel(x, y);
-            let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+            let m = mask_gray.get_pixel(x, y)[0];
             out.put_pixel(
                 x,
                 y,
                 image_slash_star::Rgb([
-                    ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
+                    composite_blend(p1[0], p2[0], m),
+                    composite_blend(p1[1], p2[1], m),
+                    composite_blend(p1[2], p2[2], m),
                 ]),
             );
         }

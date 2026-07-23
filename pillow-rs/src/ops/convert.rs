@@ -247,11 +247,22 @@ impl Image {
             use std::sync::Arc;
 
             let img = self.materialize()?;
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let rgb_raw = rgb.into_raw();
-            let dither = !matches!(dither_enum, Some(DitherMethod::None));
-            let (indices, palette_bytes) = web_palette_quantize(&rgb_raw, w, h, dither);
+            let (w, h) = (img.width(), img.height());
+            let (indices, palette_bytes) = if matches!(src_mode.as_str(), "1" | "L") {
+                // Pillow 12.2 Convert.c maps L/1 samples directly to P indices
+                // and installs the identity grayscale palette. Web quantization
+                // would change the indices before mixed-mode paste/composite.
+                let indices = img.to_luma8().into_raw();
+                let palette = (0u8..=u8::MAX)
+                    .flat_map(|value| [value, value, value])
+                    .collect();
+                (indices, palette)
+            } else {
+                let rgb = img.to_rgb8();
+                let rgb_raw = rgb.into_raw();
+                let dither = !matches!(dither_enum, Some(DitherMethod::None));
+                web_palette_quantize(&rgb_raw, w, h, dither)
+            };
             let mut out = image_slash_star::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate() {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);

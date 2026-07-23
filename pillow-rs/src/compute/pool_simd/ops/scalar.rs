@@ -2803,28 +2803,28 @@ pub fn rotate(
     (out, dw, dh)
 }
 
-/// Remap palette: convert P-mode image (palette index per pixel) to packed RGBA
-/// using a destination color map.
+/// Remap palette indices with Pillow's inverse destination map.
 ///
-/// Each source pixel's R byte is a palette index (0-255). The `dest_map` contains
-/// 256 RGB triples packed consecutively (768 bytes total). The pixel's index is
-/// used to look up the new R, G, B values from `dest_map`.
+/// Each source pixel's R byte is an old palette index. `inverse_map[old]`
+/// contains its new index; entries omitted from the destination map are zero.
 ///
 /// Returns a Vec<u32> of packed RGBA pixels (same length as input).
 /// Mode-aware: G/B set to looked-up values for RGB/RGBA (mode >= 2), mirrored
 /// from R for L/LA. Alpha forced to 0xFF for non-alpha modes.
 /// mode: 0=L (P-mode encoding), 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn remap_palette(pixels: &[u32], mode: u32, dest_map: &[u8; 768]) -> Vec<u32> {
+pub fn remap_palette(pixels: &[u32], mode: u32, inverse_map: &[u8; 256]) -> Vec<u32> {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
     let mut out = Vec::with_capacity(pixels.len());
 
     for &p in pixels.iter() {
-        let idx = (p & 0xFF) as usize; // palette index from R byte
-        let r = dest_map[idx * 3] as u32;
-        let g = dest_map[idx * 3 + 1] as u32;
-        let b = dest_map[idx * 3 + 2] as u32;
+        let old_r = (p & 0xFF) as usize;
+        let old_g = ((p >> 8) & 0xFF) as usize;
+        let old_b = ((p >> 16) & 0xFF) as usize;
+        let r = u32::from(inverse_map[old_r]);
+        let g = u32::from(inverse_map[old_g]);
+        let b = u32::from(inverse_map[old_b]);
 
         let out_g = if has_gb { g } else { r };
         let out_b = if has_gb { b } else { r };
@@ -3186,52 +3186,68 @@ pub fn put_alpha(pixels: &mut [u32], mode: u32, alpha: u8) {
     }
 }
 
-/// Composite two images using a per-channel mask.
+/// Composite two images using a single mask band.
 ///
 /// Formula: `out = (pixels * mask + other * (255 - mask)) / 255`
 /// Applied per byte (all 4 channels independently).
 ///
-/// Module-function variant (Image.composite): mask is applied per-channel
-/// like ImageChops.composite. Mask values are 0-255 per byte.
+/// Module-function variant (`Image.composite`): `1`/`L` masks use the low
+/// luma byte while `LA`/`RGBA`/`RGBa` masks use the alpha byte.
 ///
 /// Mode-aware: for L/LA modes (mode < 2), G and B mirror R.
 /// Alpha preserved for LA/RGBA, forced to 0xFF for L/RGB.
 ///
-/// Operates in-place on pixels slice, consuming `other` and `mask` element-wise.
+/// The result starts as image2 and image1 is blended into its top-left overlap,
+/// matching Pillow's `image2.copy(); image2.paste(image1, mask)` implementation.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn composite_module(pixels: &mut [u32], mode: u32, other: &[u32], mask: &[u32]) {
+#[allow(clippy::too_many_arguments)]
+pub fn composite_module(
+    pixels: &[u32],
+    width: u32,
+    height: u32,
+    mode: u32,
+    other: &[u32],
+    other_width: u32,
+    other_height: u32,
+    mask: &[u32],
+    mask_width: u32,
+    mask_height: u32,
+    mask_alpha: bool,
+) -> Vec<u32> {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
+    let mut out = other.to_vec();
+    let overlap_width = width.min(other_width).min(mask_width);
+    let overlap_height = height.min(other_height).min(mask_height);
 
-    for ((p, o), m) in pixels.iter_mut().zip(other.iter()).zip(mask.iter()) {
-        let pr = *p & 0xFF;
-        let pg = (*p >> 8) & 0xFF;
-        let pb = (*p >> 16) & 0xFF;
-        let pa = (*p >> 24) & 0xFF;
+    for y in 0..overlap_height {
+        for x in 0..overlap_width {
+            let source = pixels[(y * width + x) as usize];
+            let destination = other[(y * other_width + x) as usize];
+            let mask_pixel = mask[(y * mask_width + x) as usize];
+            let amount = if mask_alpha {
+                (mask_pixel >> 24) & 0xFF
+            } else {
+                mask_pixel & 0xFF
+            };
+            let inverse = 255 - amount;
+            let blend = |source: u32, destination: u32| {
+                (source * amount + destination * inverse + 127) / 255
+            };
 
-        let or = *o & 0xFF;
-        let og = (*o >> 8) & 0xFF;
-        let ob = (*o >> 16) & 0xFF;
-        let oa = (*o >> 24) & 0xFF;
+            let out_r = blend(source & 0xFF, destination & 0xFF);
+            let out_g_raw = blend((source >> 8) & 0xFF, (destination >> 8) & 0xFF);
+            let out_b_raw = blend((source >> 16) & 0xFF, (destination >> 16) & 0xFF);
+            let out_a_raw = blend((source >> 24) & 0xFF, (destination >> 24) & 0xFF);
+            let out_g = if has_gb { out_g_raw } else { out_r };
+            let out_b = if has_gb { out_b_raw } else { out_r };
+            let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
 
-        let mr = *m & 0xFF;
-        let mg = (*m >> 8) & 0xFF;
-        let mb = (*m >> 16) & 0xFF;
-        let ma = (*m >> 24) & 0xFF;
-
-        // out = (pixels * mask + other * (255 - mask)) / 255
-        let out_r = (pr * mr + or * (255 - mr)) / 255;
-        let out_g_raw = (pg * mg + og * (255 - mg)) / 255;
-        let out_b_raw = (pb * mb + ob * (255 - mb)) / 255;
-        let out_a_raw = (pa * ma + oa * (255 - ma)) / 255;
-
-        let out_g = if has_gb { out_g_raw } else { out_r };
-        let out_b = if has_gb { out_b_raw } else { out_r };
-        let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
+            out[(y * other_width + x) as usize] = out_r | (out_g << 8) | (out_b << 16) | out_a;
+        }
     }
+    out
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

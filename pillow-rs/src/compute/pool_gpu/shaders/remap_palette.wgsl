@@ -1,4 +1,4 @@
-// RemapPalette: remap palette indices via a 256-entry lookup table.
+// RemapPalette: remap palette indices via a 256-entry inverse lookup table.
 // For P-mode images (stored as Luma8 indices): output[px] = lut[input[px]]
 // For L-mode images: same — each luma value remapped through LUT
 // For RGB images: each channel remapped independently through LUT
@@ -39,7 +39,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let new_r = lut[min(r, 255u)] & 0xffu;
     let new_g = select(0u, lut[min(g, 255u)] & 0xffu, mode_has_g(params.mode));
     let new_b = select(0u, lut[min(b, 255u)] & 0xffu, mode_has_b(params.mode));
-    let new_a = select(255u, lut[min(a, 255u)] & 0xffu, mode_has_a(params.mode));
+    let new_a = select(255u, a, mode_has_a(params.mode));
 
     output[idx] = new_r | (new_g << 8u) | (new_b << 16u) | (new_a << 24u);
 }
