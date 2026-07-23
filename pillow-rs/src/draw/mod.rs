@@ -967,7 +967,11 @@ impl Draw {
         if w == 0 || h == 0 {
             return Ok(());
         }
-        let bbox = crate::font::imagingft::getbbox(font, text);
+        let bbox = if binary {
+            crate::font::imagingft::getbbox_binary(font, text)
+        } else {
+            crate::font::imagingft::getbbox(font, text)
+        };
         let draw_x = x.saturating_add(bbox.0);
         let draw_y = y.saturating_add(bbox.1);
 
