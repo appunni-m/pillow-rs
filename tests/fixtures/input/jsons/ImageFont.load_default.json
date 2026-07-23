@@ -7,38 +7,14 @@
   "cases": [
     {
       "id": "ImageFont_load_default_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     },
     {
       "id": "ImageFont_load_default_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     },
     {
       "id": "ImageFont_load_default_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     }
   ]

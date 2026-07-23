@@ -7,21 +7,18 @@
   "cases": [
     {
       "id": "non_variable_font_RGB",
-      "mode": "RGB",
       "params": {
         "name": "Bold"
       }
     },
     {
       "id": "non_variable_font_L",
-      "mode": "L",
       "params": {
         "name": "Bold"
       }
     },
     {
       "id": "non_variable_font_RGBA",
-      "mode": "RGBA",
       "params": {
         "name": "Bold"
       }

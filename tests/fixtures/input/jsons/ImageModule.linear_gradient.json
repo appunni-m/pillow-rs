@@ -7,7 +7,6 @@
   "cases": [
     {
       "id": "L",
-      "mode": "L",
       "input": null,
       "params": {
         "mode": "L"

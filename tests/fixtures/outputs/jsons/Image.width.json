@@ -1,0 +1,72 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "width"
+  },
+  "cases": [
+    {
+      "id": "width_1",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "width_L",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "width_LA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "width_P",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "width_RGB",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "width_RGBA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "int",
+          "value": 3
+        }
+      }
+    }
+  ]
+}

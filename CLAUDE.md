@@ -232,6 +232,7 @@ make test-wasm
 make test-all
 make image-backend-parity-test
 make fixtures
+make fixture-coverage-check
 make pillow-rs-fixtures-check
 make fmt
 make fmt-fix

@@ -142,7 +142,7 @@ def generate_one(input_path):
     """Run one input fixture through PIL, produce output JSON + reference files."""
     inp = json.loads(input_path.read_text())
     op = inp["operation"]
-    call_style = get_call_style(op["module"], op["target"])
+    call_style = get_call_style(op["module"], op["target"], op.get("class"))
 
     out = {
         "format_version": 2,
@@ -168,6 +168,8 @@ def generate_one(input_path):
                 )
             params["font"] = str(font_path)
         if op["module"] == "ImagePalette" and mode:
+            params["_fixture_mode"] = mode
+        if call_style == "file_open" and mode:
             params["_fixture_mode"] = mode
         # Decode/Encode: thread asset fields through params
         if op["module"] == "Decode":

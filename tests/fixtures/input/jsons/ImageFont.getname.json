@@ -12,29 +12,14 @@
     },
     {
       "id": "getname_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {}
     },
     {
       "id": "getname_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {}
     },
     {
       "id": "getname_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {}
     }
   ]

@@ -31,13 +31,54 @@ VALUE_TARGETS = {
     "close", "save", "mode", "size", "width", "height",
     "format", "info", "is_animated", "n_frames", "palette",
 }
+PROPERTY_TARGETS = {"format", "height", "info", "mode", "size", "width"}
 DRAW_VALUE_TARGETS = {"textlength", "textbbox", "multiline_textbbox", "getfont"}
 IMAGE_CLASSMETHOD_TARGETS = {"new"}
 FONT_METHOD_TARGETS = {"getbbox", "getlength", "getmask", "getmask2", "getmetrics", "getname",
                        "font_variant", "get_variation_axes", "get_variation_names",
                        "set_variation_by_axes", "set_variation_by_name"}
 
-def get_call_style(module, target):
+# Call styles that consume a case's ``input`` or ``input2`` image. A top-level
+# fixture mode is coverage only when the operation actually reads that image.
+IMAGE_INPUT_CALL_STYLES = frozenset({
+    "instance_method",
+    "instance_method_value",
+    "instance_property",
+    "instance_method_sequence",
+    "pixel_access",
+    "result_descriptor",
+    "terminal_image_method",
+    "seek",
+    "instance_method_mutate",
+    "instance_method_dual_mutate",
+    "frombytes_instance",
+    "draw",
+    "draw_value",
+    "draw_getfont",
+    "draw_bitmap",
+    "filter",
+    "enhance",
+    "module_function",
+    "single_chops",
+    "module_function_dual",
+    "module_function_triple",
+    "classmethod_dual",
+    "classmethod_triple",
+    "draw_shape",
+    "sequence_iterator",
+    "deform",
+    "eval",
+    "stat",
+    "file_save",
+})
+
+# These call styles intentionally use the case mode without an input image.
+CASE_MODE_CALL_STYLES = IMAGE_INPUT_CALL_STYLES | {
+    "file_open",
+    "palette_method",
+}
+
+def get_call_style(module, target, owner=None):
     """Return the call_style string for any (module, target) pair.
 
     Pure data lookup. Never needs new entries for new operations
@@ -57,6 +98,7 @@ def get_call_style(module, target):
         if target == "seek":                     return "seek"
         if target in DUAL_MUTATE_TARGETS:        return "instance_method_dual_mutate"
         if target in MUTATE_TARGETS:             return "instance_method_mutate"
+        if target in PROPERTY_TARGETS:           return "instance_property"
         if target in VALUE_TARGETS:              return "instance_method_value"
         return "instance_method"
     if module == "ImageOps":
@@ -86,6 +128,8 @@ def get_call_style(module, target):
         if target == "merge":              return "merge_mod"
         return "classmethod"
     if module == "ImageFont":
+        if owner == "ImageFont":                  return "font_base_method"
+        if owner == "TransposedFont":             return "transposed_font_method"
         if target in FONT_METHOD_TARGETS:          return "font_method"
         if target in ("truetype", "load", "load_path"):
             return "font_truetype"
@@ -357,6 +401,33 @@ def _font_base_descriptor(backend, img, target, params):
     return _font_descriptor(font)
 
 
+def _font_base_method(backend, img, target, params):
+    """Call one method on the concrete Pillow-compatible base ImageFont."""
+    font = backend.ImageFont.ImageFont()
+    result = getattr(font, target)(**params)
+    if target == "getmask":
+        return _mask_descriptor(result)
+    return result
+
+
+def _transposed_font_method(backend, img, target, params):
+    """Call a TransposedFont method on a version-pinned TrueType font."""
+    font_path = _resolve_font_path(params.pop("font"))
+    size = params.pop("size", 20)
+    orientation_name = params.pop("orientation", None)
+    font = backend.ImageFont.truetype(font_path, size)
+    orientation = (
+        getattr(backend.Image, orientation_name)
+        if orientation_name is not None
+        else None
+    )
+    transposed = backend.ImageFont.TransposedFont(font, orientation=orientation)
+    result = getattr(transposed, target)(**params)
+    if target == "getmask":
+        return _mask_descriptor(result)
+    return result
+
+
 def _draw_getfont(backend, img, target, params):
     """Get ImageDraw's font and describe its exact observable behavior."""
     draw = backend.ImageDraw.Draw(img)
@@ -398,8 +469,24 @@ def _frombytes_mod(backend, img, target, params):
     """Image.frombytes(mode, size, data=data_hex decoded)."""
     mode = params.pop("mode")
     size = tuple(params.pop("size"))
+    pattern = params.pop("data_pattern", None)
     data_hex = params.pop("data_hex", "")
-    data = bytes.fromhex(data_hex)
+    if pattern == "ramp":
+        if mode == "1":
+            byte_count = ((size[0] + 7) // 8) * size[1]
+        else:
+            channels = {
+                "L": 1,
+                "P": 1,
+                "LA": 2,
+                "RGB": 3,
+                "RGBA": 4,
+                "CMYK": 4,
+            }[mode]
+            byte_count = size[0] * size[1] * channels
+        data = bytes((index * 37 + 11) % 256 for index in range(byte_count))
+    else:
+        data = bytes.fromhex(data_hex)
     return _call_mod(backend, target)(mode, size, data, **params)
 
 def _frombuffer_mod(backend, img, target, params):
@@ -426,6 +513,14 @@ def _draw_shape(backend, img, target, params):
 def _merge_mod(backend, img, target, params):
     """Image.merge(mode, bands) - create bands from params."""
     mode = params.pop("mode")
+    band_values = params.pop("band_values", None)
+    if band_values is not None:
+        size = tuple(params.pop("size"))
+        bands = [
+            backend.Image.new("L", size, value)
+            for value in band_values
+        ]
+        return _call_mod(backend, target)(mode, tuple(bands), **params)
     bands_specs = params.pop("bands", [])
     # Create band images from specs
     bands = []
@@ -446,15 +541,49 @@ def _sequence_iterator(backend, img, target, params):
 
 import os, tempfile
 
+# Pillow 12.2.0-encoded 3x2 images. File-open fixtures use these identical
+# bytes for both implementations, so encoder behavior cannot mask decoder
+# differences. TIFF is used for modes PNG cannot represent.
+OPEN_FIXTURE_B64 = {
+    "1": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACAQAAAAC1D1u3AAAADElEQVR4nGNwYDgAAAGEAQEKf5BQAAAAAElFTkSuQmCC",
+    "L": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAAAAAC4HznGAAAAEElEQVR4nGNkcHBgOPBfEAAHHwJSXRpuggAAAABJRU5ErkJggg==",
+    "LA": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAQAAAA3fa6RAAAAFklEQVR4nGNk+O9w0OEAwwGH/wyCigAomQUz31OBlAAAAABJRU5ErkJggg==",
+    "P": "R0lGODdhAwACAIIAAAAA/wED/gIG/QMJ/AQM+wUP+gAAAAAAACwAAAAAAwACAAAICQABBBAwgECBgAA7",
+    "RGB": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAHElEQVR4nGNkZGJWN7CUk5NjSc4plZOTc3NzAwAaxANmrbycrQAAAABJRU5ErkJggg==",
+    "RGBA": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAAH0lEQVR4nGNkZGJmUTewdJKTk5NjSc4prQMx3Nzc3AAwdASsz35Y5AAAAABJRU5ErkJggg==",
+    "CMYK": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwAEAAAAhgAAAAMBAwABAAAAAQAAAAYBAwABAAAABQAAABEBBAABAAAAjgAAABUBAwABAAAABAAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAAAAAAAIAAgACAAIAAECAwQoMjxGRlBaZGRueIKCjJagyNLc5g==",
+    "I": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAFMBAwABAAAAAgAAAAAAAAAAAAAAAQAAAAABAAD/////AAABAACA//8=",
+    "F": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAFMBAwABAAAAAwAAAAAAAAAAAAAAAAAAPwAAoL8AAHBAAAB/QwAAAD4=",
+}
+OPEN_FIXTURE_SUFFIX = {
+    "CMYK": ".tif",
+    "F": ".tif",
+    "I": ".tif",
+    "P": ".gif",
+}
+
 
 def _file_open(backend, img, target, params):
-    """Open an image from a temp file. Creates a small test image if no data given.
-    The temp file is NOT deleted — RSPIL may lazily load image data."""
-    png_b64 = params.pop("png_b64", None)
-    suffix = params.pop("suffix", ".png")
-    if png_b64:
+    """Open identical encoded bytes through Pillow or pillow-rs.
+
+    ``file_b64`` keeps this an open/decode test rather than allowing each
+    backend's encoder to manufacture a different input file.
+    """
+    file_b64 = params.pop("file_b64", params.pop("png_b64", None))
+    fixture_mode = params.pop("_fixture_mode", None)
+    requested_suffix = params.pop("suffix", None)
+    if file_b64 is None and fixture_mode is not None:
+        file_b64 = OPEN_FIXTURE_B64.get(fixture_mode)
+        if file_b64 is None:
+            raise ValueError(f"no exact open fixture for mode {fixture_mode}")
+    suffix = (
+        OPEN_FIXTURE_SUFFIX.get(fixture_mode, ".png")
+        if fixture_mode is not None
+        else requested_suffix or ".png"
+    )
+    if file_b64:
         import base64 as _b64
-        data = _b64.b64decode(png_b64)
+        data = _b64.b64decode(file_b64)
         fd, tmp = tempfile.mkstemp(suffix=suffix)
         os.write(fd, data)
         os.close(fd)
@@ -577,9 +706,14 @@ def _fromarray(backend, img, target, params):
 
     mode = params.get("mode", "L")
     size = tuple(params.get("size", [100, 100]))
-    shape = size if mode == "L" else (size[0], size[1], 3)
+    channels = {"LA": 2, "RGB": 3, "RGBA": 4}.get(mode)
+    shape = (
+        (size[1], size[0])
+        if channels is None
+        else (size[1], size[0], channels)
+    )
     arr = FixtureArray(shape)
-    return backend.Image.fromarray(arr)
+    return backend.Image.fromarray(arr, mode=mode)
 
 
 def _instance_method_sequence(backend, img, img2, target, params):
@@ -658,6 +792,7 @@ def _seek(backend, img, img2, target, params):
 CALL_STYLE = {
     "instance_method":        lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
     "instance_method_value":  lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
+    "instance_property":      lambda b, img, img2, tgt, p: getattr(img, tgt),
     "instance_method_sequence": _instance_method_sequence,
     "pixel_access": _pixel_access,
     "result_descriptor": _result_descriptor,
@@ -675,6 +810,12 @@ CALL_STYLE = {
     "font_truetype":lambda b, img, img2, tgt, p: _font_truetype(b, img, tgt, p),
     "font_constructor": lambda b, img, img2, tgt, p: _font_constructor(b, img, tgt, p),
     "font_base_descriptor": lambda b, img, img2, tgt, p: _font_base_descriptor(
+        b, img, tgt, p
+    ),
+    "font_base_method": lambda b, img, img2, tgt, p: _font_base_method(
+        b, img, tgt, p
+    ),
+    "transposed_font_method": lambda b, img, img2, tgt, p: _transposed_font_method(
         b, img, tgt, p
     ),
     "palette_method":lambda b, img, img2, tgt, p: _palette_method(b, img, tgt, p),

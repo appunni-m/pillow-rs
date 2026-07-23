@@ -1,0 +1,72 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "mode"
+  },
+  "cases": [
+    {
+      "id": "mode_1",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "1"
+        }
+      }
+    },
+    {
+      "id": "mode_L",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "L"
+        }
+      }
+    },
+    {
+      "id": "mode_LA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "LA"
+        }
+      }
+    },
+    {
+      "id": "mode_P",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "P"
+        }
+      }
+    },
+    {
+      "id": "mode_RGB",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "RGB"
+        }
+      }
+    },
+    {
+      "id": "mode_RGBA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "str",
+          "value": "RGBA"
+        }
+      }
+    }
+  ]
+}

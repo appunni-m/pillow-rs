@@ -9,52 +9,65 @@
   },
   "cases": [
     {
-      "id": "ImageModule.frombytes_1_suite1",
+      "id": "frombytes_1_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_1_suite1.png"
+        "reference": "images/ImageModule.frombytes_frombytes_1_suite1.png"
       }
     },
     {
-      "id": "ImageModule.frombytes_CMYK_suite1",
+      "id": "frombytes_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_CMYK_suite1.png"
+        "reference": "raws/ImageModule.frombytes_frombytes_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          7,
+          5
+        ]
       }
     },
     {
-      "id": "ImageModule.frombytes_LA_suite1",
+      "id": "frombytes_L_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_LA_suite1.png"
+        "reference": "images/ImageModule.frombytes_frombytes_L_suite1.png"
       }
     },
     {
-      "id": "ImageModule.frombytes_P_suite1",
+      "id": "frombytes_LA_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_P_suite1.png"
+        "reference": "images/ImageModule.frombytes_frombytes_LA_suite1.png"
       }
     },
     {
-      "id": "ImageModule.frombytes_RGB_suite1",
+      "id": "frombytes_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_RGB_suite1.png"
+        "reference": "raws/ImageModule.frombytes_frombytes_P_suite1.bin",
+        "raw_kind": "image",
+        "mode": "P",
+        "size": [
+          7,
+          5
+        ],
+        "palette": []
       }
     },
     {
-      "id": "ImageModule.frombytes_RGBA_suite1",
+      "id": "frombytes_RGB_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_RGBA_suite1.png"
+        "reference": "images/ImageModule.frombytes_frombytes_RGB_suite1.png"
       }
     },
     {
-      "id": "L_16x16_suite1",
+      "id": "frombytes_RGBA_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.frombytes_L_16x16_suite1.png"
+        "reference": "images/ImageModule.frombytes_frombytes_RGBA_suite1.png"
       }
     }
   ]

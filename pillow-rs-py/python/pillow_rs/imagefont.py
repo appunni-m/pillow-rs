@@ -1,53 +1,53 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
 from . import _core
-from .image import Image
+
+
+class ImagingCore:
+    """Stable Python facade for Pillow's internal mask storage contract."""
+
+    __slots__ = ("_image",)
+
+    def __init__(self, image):
+        self._image = image
+
+    @property
+    def _rust_image(self):
+        return self._image._rust_image
+
+    @property
+    def mode(self):
+        return self._image.mode
+
+    @property
+    def size(self):
+        return self._image.size
+
+    def tobytes(self):
+        return self._image.tobytes()
+
+    def __bytes__(self):
+        return self.tobytes()
+
+    def transpose(self, method):
+        return ImagingCore(self._image.transpose(method))
 
 
 class ImageFont:
-    """Default bitmap font (fallback)."""
+    """Pillow-compatible base wrapper for a loaded bitmap font."""
 
     def getbbox(self, text, *args, **kwargs):
-        """Get bounding box for text using default bitmap font.
-
-        Returns (0, 0, width_in_pixels, height_in_pixels).
-        The default font uses ~6x11 px per character.
-        """
-        if isinstance(text, bytes):
-            text = text.decode("utf-8", errors="replace")
-        return _core.font_default_bbox(text)
+        """Return the bitmap font's bounding box."""
+        width, height = self.font.getsize(text)
+        return 0, 0, width, height
 
     def getlength(self, text, *args, **kwargs):
-        """Get text length in pixels using default bitmap font.
-
-        Each character is 6 pixels wide.
-        """
-        if isinstance(text, bytes):
-            text = text.decode("utf-8", errors="replace")
-        if isinstance(text, str):
-            return _core.font_default_length(text)
-        return _core.font_default_length(str(text))
+        """Return the bitmap font's horizontal advance."""
+        width, _height = self.font.getsize(text)
+        return width
 
     def getmask(self, text, mode="", *args, **kwargs):
-        """Create a bitmap for the text using the default bitmap font.
-
-        Since we don't have a real bitmap font, delegates to
-        :py:func:`load_default` (FreeTypeFont) if available, otherwise
-        returns a blank L-mode mask sized for the text.
-
-        :param text: Text to render.
-        :param mode: Ignored for the fallback implementation.
-        :return: An ``L``-mode mask.
-        """
-        # Try to use the default FreeTypeFont if available
-        try:
-            font = load_default()
-            if hasattr(font, 'getmask'):
-                return font.getmask(text, mode, *args, **kwargs)
-        except Exception:
-            pass
-        # Fallback: return a blank L mask sized for the text
-        w, h = _core.font_default_mask_size(text)
-        return Image.new("L", (w, h), 0)
+        """Return the loaded bitmap font's native mask object."""
+        return self.font.getmask(text, mode)
 
 
 class FreeTypeFont:
@@ -83,10 +83,10 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        """Return glyph mask as L-mode Image using pillow-rs-freetype."""
+        """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
-        return PILImage.frombytes("L", (w, h), bytes(alpha))
+        return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
@@ -112,7 +112,7 @@ class FreeTypeFont:
         """
         from .image import Image as PILImage
         w, h, alpha, offset = self._rust_font.getmask2_alpha(str(text))
-        mask = PILImage.frombytes("L", (w, h), bytes(alpha))
+        mask = ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
         if start is not None:
             offset = (
                 offset[0] + int(start[0]),

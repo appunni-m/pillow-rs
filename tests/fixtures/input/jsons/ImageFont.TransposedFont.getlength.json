@@ -1,0 +1,27 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "class": "TransposedFont",
+    "target": "getlength"
+  },
+  "cases": [
+    {
+      "id": "transposed_getlength_unrotated",
+      "params": {
+        "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "size": 20,
+        "text": "Parity"
+      }
+    },
+    {
+      "id": "transposed_getlength_rotate_90",
+      "params": {
+        "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "size": 20,
+        "orientation": "ROTATE_90",
+        "text": "Parity"
+      }
+    }
+  ]
+}

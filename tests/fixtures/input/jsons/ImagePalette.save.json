@@ -8,37 +8,16 @@
     {
       "id": "ImagePalette_save_L",
       "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     },
     {
       "id": "ImagePalette_save_P",
       "mode": "P",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     },
     {
       "id": "ImagePalette_save_RGB",
       "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {}
     }
   ]

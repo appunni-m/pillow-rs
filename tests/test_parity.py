@@ -22,13 +22,19 @@ except ImportError:
 
 from engine import (
     ASSERT,
+    CASE_MODE_CALL_STYLES,
     CALL_STYLE,
-    FONT_METHOD_TARGETS,
+    IMAGE_INPUT_CALL_STYLES,
     _pilify,
     create_input,
     get_call_style,
 )
 import engine as _engine
+from fixture_coverage import (
+    assertion_image_modes as _assertion_image_modes,
+    coverage_gaps,
+    operation_name as _operation_name,
+)
 
 FIXTURES_DIRS = {
     "fixtures": Path(__file__).parent / "fixtures",
@@ -69,35 +75,6 @@ def _assertion_nodes(assertion):
             yield from _assertion_nodes(item)
 
 
-def _operation_name(operation):
-    module = operation["module"]
-    target = operation["target"]
-    if module == "ImageFont" and target in FONT_METHOD_TARGETS:
-        return f"{module}.FreeTypeFont.{target}"
-    return f"{module}.{target}"
-
-
-def _assertion_image_modes(base_dir, assertion):
-    method = assertion.get("method")
-    if method == "image":
-        reference = assertion.get("reference", "")
-        if assertion.get("raw_kind") == "image":
-            mode = assertion.get("mode")
-            if mode:
-                yield mode
-        elif reference.endswith(".png"):
-            from PIL import Image as PILImage
-
-            with PILImage.open(base_dir / "outputs" / reference) as image:
-                yield image.mode
-    elif method == "image_list":
-        for item in assertion.get("items", []):
-            yield from _assertion_image_modes(base_dir, item)
-    elif method == "tuple":
-        for item in assertion.get("items", []):
-            yield from _assertion_image_modes(base_dir, item)
-
-
 def _fixture_pair_errors():
     """Return every fixture file or case that cannot participate in parity."""
     errors = []
@@ -135,6 +112,12 @@ def _fixture_pair_errors():
             if out.get("suite", 0) != inp.get("suite", 0):
                 errors.append(f"{base_name}/{name}: input/output suite differs")
 
+            operation = inp["operation"]
+            call_style = get_call_style(
+                operation["module"],
+                operation["target"],
+                operation.get("class"),
+            )
             input_ids = [case["id"] for case in inp.get("cases", [])]
             output_ids = [case["id"] for case in out.get("cases", [])]
             if len(input_ids) != len(set(input_ids)):
@@ -147,6 +130,24 @@ def _fixture_pair_errors():
                 errors.append(f"{base_name}/{name}: missing output cases {missing}")
             if orphaned:
                 errors.append(f"{base_name}/{name}: orphan output cases {orphaned}")
+
+            for case in inp.get("cases", []):
+                if call_style not in IMAGE_INPUT_CALL_STYLES and (
+                    case.get("input") is not None
+                    or case.get("input2") is not None
+                ):
+                    errors.append(
+                        f"{base_name}/{name}/{case.get('id')}: "
+                        f"{call_style} ignores fixture input images"
+                    )
+                if (
+                    case.get("mode")
+                    and call_style not in CASE_MODE_CALL_STYLES
+                ):
+                    errors.append(
+                        f"{base_name}/{name}/{case.get('id')}: "
+                        f"{call_style} ignores the top-level fixture mode"
+                    )
 
             for case in out.get("cases", []):
                 assertion = case.get("assert", {})
@@ -262,6 +263,11 @@ def _discover():
             out = json.loads((output_dir / fpath.name).read_text())
             op = inp["operation"]
             target = _operation_name(op)
+            call_style = get_call_style(
+                op["module"],
+                op["target"],
+                op.get("class"),
+            )
             out_cases = {c["id"]: c for c in out["cases"]}
 
             for case in inp["cases"]:
@@ -278,9 +284,12 @@ def _discover():
                 # Build @pytest.mark.covers marker for coverage tracking
                 marker_kwargs = {}
                 if mode and (
-                    op["module"] == "ImagePalette"
-                    or case.get("input") is not None
-                    or case.get("input2") is not None
+                    call_style in CASE_MODE_CALL_STYLES
+                    and (
+                        call_style in {"file_open", "palette_method"}
+                        or case.get("input") is not None
+                        or case.get("input2") is not None
+                    )
                 ):
                     marker_kwargs["mode"] = mode
                 else:
@@ -319,7 +328,7 @@ def test_parity(fixtures_base, fixture_file, case_id):
     inp = json.loads((input_dir / fixture_file).read_text())
     out = json.loads((output_dir / fixture_file).read_text())
     op = inp["operation"]
-    call_style = get_call_style(op["module"], op["target"])
+    call_style = get_call_style(op["module"], op["target"], op.get("class"))
 
     out_cases = {c["id"]: c for c in out["cases"]}
     case = next(c for c in inp["cases"] if c["id"] == case_id)
@@ -330,6 +339,8 @@ def test_parity(fixtures_base, fixture_file, case_id):
     img2 = create_input(rspil, mode, case.get("input2"))
     params = _pilify(dict(case.get("params", {})))
     if op["module"] == "ImagePalette" and mode:
+        params["_fixture_mode"] = mode
+    if call_style == "file_open" and mode:
         params["_fixture_mode"] = mode
 
     # Decode/Encode cases pass asset info via params (no input/mode fields)
@@ -398,98 +409,10 @@ def test_opaque_results_use_semantic_call_styles():
 def test_coverage_complete():
     """Every implemented operation must have a fixture, and every declared
     supported_mode must have at least one fixture case. Fails if any gaps exist."""
-    import yaml
-    manifest_path = Path(__file__).parent.parent / "manifest.yaml"
-    with open(manifest_path) as f:
-        manifest = yaml.safe_load(f)
-
-    # Build {operation_name: {set of supported_modes}} from manifest
-    op_modes = {}
-    for mod_name, mod_data in manifest.get("modules", {}).items():
-        for section in ["class_methods", "methods", "functions"]:
-            for entry in mod_data.get(section, []):
-                if entry.get("status") == "implemented":
-                    op = f"{mod_name}.{entry['name']}"
-                    op_modes[op] = set(entry.get("supported_modes", []))
-        for entry in mod_data.get("properties", []):
-            if isinstance(entry, dict):
-                op = f"{mod_name}.{entry['name']}"
-                op_modes[op] = set(entry.get("modes", []))
-
-        for cls in mod_data.get("classes", []):
-            if cls.get("status") == "implemented":
-                class_op = f"{mod_name}.{cls['name']}"
-                op_modes[class_op] = set(cls.get("supported_modes", []))
-                methods = cls.get("methods", [])
-                if methods:
-                    for entry in methods:
-                        entry_status = entry.get("status", "")
-                        if cls.get("status") == "implemented" and entry_status != "ignored":
-                            op = f"{mod_name}.{cls['name']}.{entry['name']}"
-                            op_modes[op] = set(entry.get("supported_modes",
-                                                cls.get("supported_modes", [])))
-
-    # Build {operation_name: {modes with fixture cases}} from ALL fixture directories
-    fixture_modes = {}
-    for base_name, base_dir in FIXTURES_DIRS.items():
-        input_dir = base_dir / "input" / "jsons"
-        output_dir = base_dir / "outputs" / "jsons"
-        if not input_dir.exists():
-            continue
-        for fpath in sorted(input_dir.glob("*.json")):
-            output_path = output_dir / fpath.name
-            if not output_path.is_file():
-                continue
-            fx = json.loads(fpath.read_text())
-            oracle = json.loads(output_path.read_text())
-            oracle_cases = {
-                case["id"]: case
-                for case in oracle.get("cases", [])
-            }
-            operation = _operation_name(fx["operation"])
-            if operation not in fixture_modes:
-                fixture_modes[operation] = set()
-            for case in fx.get("cases", []):
-                mode = case.get("mode", "")
-                if mode and (
-                    fx["operation"]["module"] == "ImagePalette"
-                    or case.get("input") is not None
-                    or case.get("input2") is not None
-                ):
-                    fixture_modes[operation].add(mode)
-                parameter_mode = case.get("params", {}).get("mode")
-                if isinstance(parameter_mode, str):
-                    fixture_modes[operation].add(parameter_mode)
-                oracle_case = oracle_cases.get(case["id"])
-                if oracle_case is not None:
-                    fixture_modes[operation].update(
-                        _assertion_image_modes(
-                            base_dir,
-                            oracle_case.get("assert", {}),
-                        )
-                    )
-
-    # Check gaps
-    missing_ops = []
-    missing_modes = []
-    for op, declared_modes in sorted(op_modes.items()):
-        if op not in fixture_modes:
-            missing_ops.append(op)
-            continue
-        fixture_m = fixture_modes[op]
-        gap = declared_modes - fixture_m
-        if gap:
-            for mode in sorted(gap):
-                missing_modes.append(f"  {op}: {mode}")
-
-    if missing_ops or missing_modes:
-        msg_parts = []
-        if missing_ops:
-            msg_parts.append(f"Missing fixtures for {len(missing_ops)} operations:\n  " +
-                             "\n  ".join(sorted(missing_ops)))
-        if missing_modes:
-            msg_parts.append(f"Missing mode cases ({len(missing_modes)} gaps):\n" +
-                             "\n".join(sorted(missing_modes)[:30]))
-            if len(missing_modes) > 30:
-                msg_parts.append(f"  ... and {len(missing_modes) - 30} more")
-        pytest.fail("\n\n".join(msg_parts))
+    missing_operations, missing_modes = coverage_gaps()
+    assert not missing_operations and not missing_modes, (
+        f"Missing fixtures for {len(missing_operations)} operations:\n  "
+        + "\n  ".join(missing_operations)
+        + f"\n\nMissing mode cases ({len(missing_modes)} gaps):\n  "
+        + "\n  ".join(missing_modes)
+    )

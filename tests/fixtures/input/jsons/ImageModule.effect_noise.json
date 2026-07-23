@@ -7,14 +7,6 @@
   "cases": [
     {
       "id": "ImageModule_effect_noise_1",
-      "mode": "1",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -25,14 +17,6 @@
     },
     {
       "id": "ImageModule_effect_noise_CMYK",
-      "mode": "CMYK",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -43,14 +27,6 @@
     },
     {
       "id": "ImageModule_effect_noise_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -61,14 +37,6 @@
     },
     {
       "id": "ImageModule_effect_noise_LA",
-      "mode": "LA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -79,14 +47,6 @@
     },
     {
       "id": "ImageModule_effect_noise_P",
-      "mode": "P",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -97,14 +57,6 @@
     },
     {
       "id": "ImageModule_effect_noise_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,
@@ -115,14 +67,6 @@
     },
     {
       "id": "ImageModule_effect_noise_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "size": [
           100,

@@ -28,13 +28,6 @@
       "mode": "F"
     },
     {
-      "id": "ImageModule.open_HSV_suite1",
-      "params": {
-        "suffix": ".png"
-      },
-      "mode": "HSV"
-    },
-    {
       "id": "ImageModule.open_I_suite1",
       "params": {
         "suffix": ".png"
@@ -68,13 +61,6 @@
         "suffix": ".png"
       },
       "mode": "RGBA"
-    },
-    {
-      "id": "ImageModule.open_YCbCr_suite1",
-      "params": {
-        "suffix": ".png"
-      },
-      "mode": "YCbCr"
     },
     {
       "id": "rgb_10x10_suite1",

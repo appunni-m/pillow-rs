@@ -12,8 +12,7 @@
         "axes": [
           0.5
         ]
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "non_variable_font_L_suite1",
@@ -21,8 +20,7 @@
         "axes": [
           0.5
         ]
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "non_variable_font_RGBA_suite1",
@@ -30,8 +28,7 @@
         "axes": [
           0.5
         ]
-      },
-      "mode": "RGBA"
+      }
     }
   ]
 }

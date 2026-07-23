@@ -11,24 +11,21 @@
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "ImageFont.truetype_RGBA_suite1",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "RGBA"
+      }
     },
     {
       "id": "liberation_serif_20_suite1",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "L"
+      }
     }
   ]
 }

@@ -1,0 +1,21 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "class": "ImageFont",
+    "target": "getmask"
+  },
+  "cases": [
+    {
+      "id": "base_getmask",
+      "assert": {
+        "method": "error",
+        "exception": "AttributeError",
+        "message": "'ImageFont' object has no attribute 'font'"
+      }
+    }
+  ]
+}

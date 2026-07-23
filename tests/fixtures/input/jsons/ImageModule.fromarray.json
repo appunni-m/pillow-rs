@@ -7,7 +7,6 @@
   "cases": [
     {
       "id": "ImageModule.fromarray_L",
-      "mode": "L",
       "params": {
         "mode": "L",
         "size": [
@@ -18,9 +17,8 @@
     },
     {
       "id": "ImageModule.fromarray_RGB",
-      "mode": "RGB",
       "params": {
-        "mode": "L",
+        "mode": "RGB",
         "size": [
           100,
           100
@@ -29,9 +27,8 @@
     },
     {
       "id": "ImageModule.fromarray_RGBA",
-      "mode": "RGBA",
       "params": {
-        "mode": "L",
+        "mode": "RGBA",
         "size": [
           100,
           100

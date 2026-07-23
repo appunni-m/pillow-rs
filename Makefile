@@ -75,6 +75,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
+	@printf "  $(CYAN)make fixture-coverage-check$(NC) Validate semantic fixture/manifest coverage\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-suite1$(NC) Generate suite1 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-clean$(NC) Remove fixture outputs\n"
@@ -331,7 +332,8 @@ freetype-ci: fontdone-ci
 freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures imagingft-fixtures image-backend-fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
+.PHONY: fixtures imagingft-fixtures image-backend-fixtures fixture-coverage-check
+.PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
 
@@ -340,6 +342,9 @@ imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
+
+fixture-coverage-check: fixtures ## Validate semantic fixture/manifest coverage
+	PYTHONPATH=tests $(IMAGE_ORACLE_PYTHON) tests/fixture_coverage.py
 
 fixtures-suite0: ## Generate suite0 fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0

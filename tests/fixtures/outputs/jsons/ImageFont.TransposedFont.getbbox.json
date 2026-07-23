@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "class": "TransposedFont",
+    "target": "getbbox"
+  },
+  "cases": [
+    {
+      "id": "transposed_getbbox_rotate_90",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 18
+            },
+            {
+              "type": "int",
+              "value": 72
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

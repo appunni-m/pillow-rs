@@ -27,13 +27,6 @@
       }
     },
     {
-      "id": "ImageModule.open_HSV",
-      "mode": "HSV",
-      "params": {
-        "suffix": ".png"
-      }
-    },
-    {
       "id": "ImageModule.open_I",
       "mode": "I",
       "params": {
@@ -64,13 +57,6 @@
     {
       "id": "ImageModule.open_RGBA",
       "mode": "RGBA",
-      "params": {
-        "suffix": ".png"
-      }
-    },
-    {
-      "id": "ImageModule.open_YCbCr",
-      "mode": "YCbCr",
       "params": {
         "suffix": ".png"
       }

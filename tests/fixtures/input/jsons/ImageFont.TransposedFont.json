@@ -7,7 +7,6 @@
   "cases": [
     {
       "id": "rotate_90_hello",
-      "mode": "RGB",
       "input": null,
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
@@ -18,7 +17,6 @@
     },
     {
       "id": "flip_left_right",
-      "mode": "RGB",
       "input": null,
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",

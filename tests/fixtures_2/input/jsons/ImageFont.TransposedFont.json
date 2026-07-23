@@ -13,8 +13,7 @@
         "size": 20,
         "orientation": "ROTATE_90",
         "text": "Hello"
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "flip_left_right_suite1",
@@ -23,8 +22,7 @@
         "size": 16,
         "orientation": "FLIP_LEFT_RIGHT",
         "text": "World"
-      },
-      "mode": "RGB"
+      }
     }
   ]
 }

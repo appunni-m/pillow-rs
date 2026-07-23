@@ -7,14 +7,6 @@
   "cases": [
     {
       "id": "ImageModule_new_1",
-      "mode": "1",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -26,14 +18,6 @@
     },
     {
       "id": "ImageModule_new_CMYK",
-      "mode": "CMYK",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -45,14 +29,6 @@
     },
     {
       "id": "ImageModule_new_F",
-      "mode": "F",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -64,14 +40,6 @@
     },
     {
       "id": "ImageModule_new_HSV",
-      "mode": "HSV",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -83,14 +51,6 @@
     },
     {
       "id": "ImageModule_new_I",
-      "mode": "I",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -102,14 +62,6 @@
     },
     {
       "id": "ImageModule_new_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -121,14 +73,6 @@
     },
     {
       "id": "ImageModule_new_LA",
-      "mode": "LA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -140,14 +84,6 @@
     },
     {
       "id": "ImageModule_new_P",
-      "mode": "P",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -159,14 +95,6 @@
     },
     {
       "id": "ImageModule_new_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -178,14 +106,6 @@
     },
     {
       "id": "ImageModule_new_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
@@ -197,14 +117,6 @@
     },
     {
       "id": "ImageModule_new_YCbCr",
-      "mode": "YCbCr",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "mode": "RGB",
         "size": [
