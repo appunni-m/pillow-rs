@@ -7,7 +7,7 @@ use pillow_rs::Image;
 use pillow_rs::compute::{self, Backend};
 use pillow_rs::draw::Draw;
 use pillow_rs::error::PilError;
-use pillow_rs::image::PaletteTransparency;
+use pillow_rs::image::{PaletteTransparency, PutDataValue};
 use pillow_rs::ops::{chops, imageops, module_fns, paste::PasteSource};
 use pillow_rs::pipeline::PipelineOp;
 use serde::Deserialize;
@@ -1105,6 +1105,76 @@ fn putalpha_and_core_sample_replacement_match_on_each_native_backend() {
             binary.tobytes().expect("packed mode 1 bytes"),
             vec![0x80],
             "mode 1 tobytes packs truthiness on {selected:?}"
+        );
+
+        let i_initial = [111i32, 222, 333]
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let mut integer = Image::frombytes("I", (3, 1), &i_initial).expect("I putdata input");
+        integer.putdata(&(-7i32).to_le_bytes()).expect("I putdata");
+        let integer = integer.use_backend(selected);
+        let i_expected = [-7i32, 222, 333]
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        assert_exact_samples(
+            &format!("putdata I [{backend_name}]"),
+            &integer,
+            "I",
+            &i_expected,
+        );
+
+        let f_initial = [1.25f32, 2.5, 3.75]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let mut float = Image::frombytes("F", (3, 1), &f_initial).expect("F putdata input");
+        float.putdata(&(-1.5f32).to_le_bytes()).expect("F putdata");
+        let float = float.use_backend(selected);
+        let f_expected = [-1.5f32, 2.5, 3.75]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
+        assert_exact_samples(
+            &format!("putdata F [{backend_name}]"),
+            &float,
+            "F",
+            &f_expected,
+        );
+
+        // These normalization assertions cover the bulk Rust-core API. Public
+        // host sequences use immediate CPU writes so each Python coercion
+        // callback can observe the prior pixel; manifest targets deliberately
+        // do not infer public SIMD/GPU support from this core-only contract.
+        let mut normalized_rgb =
+            Image::frombytes("RGB", (2, 1), &[11, 12, 13, 40, 41, 42]).expect("RGB value input");
+        normalized_rgb
+            .putdata_values(&[PutDataValue::Packed(0x010203)], 17.0, 23.0)
+            .expect("packed RGB putdata value");
+        let normalized_rgb = normalized_rgb.use_backend(selected);
+        assert_exact_samples(
+            &format!("normalized packed RGB putdata [{backend_name}]"),
+            &normalized_rgb,
+            "RGB",
+            &[3, 2, 1, 40, 41, 42],
+        );
+
+        let mut normalized_integer =
+            Image::frombytes("I", (2, 1), &[111, 0, 0, 0, 222, 0, 0, 0]).expect("I value input");
+        normalized_integer
+            .putdata_values(&[PutDataValue::Number(-2.2)], 2.0, 3.0)
+            .expect("scaled I putdata value");
+        let normalized_integer = normalized_integer.use_backend(selected);
+        let normalized_integer_expected = [-1i32, 222]
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        assert_exact_samples(
+            &format!("normalized scaled I putdata [{backend_name}]"),
+            &normalized_integer,
+            "I",
+            &normalized_integer_expected,
         );
     }
 }

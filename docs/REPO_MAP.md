@@ -584,6 +584,7 @@ generated reports, build outputs, and package installs.
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
 |   |-- generate_image_backend_operation_fixtures.py
+|   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
 |   |-- lint.sh
 |   `-- migrate_fixtures.py
@@ -592,6 +593,7 @@ generated reports, build outputs, and package installs.
     |-- engine.py
     |-- fixture_coverage.py
     |-- test_pa_mutations.py
-    `-- test_parity.py
+    |-- test_parity.py
+    `-- test_putdata_parity.py
 ```
 <!-- END GENERATED CODE TREE -->

@@ -730,9 +730,12 @@ modules:
       supported_modes:
       - '1'
       - CMYK
+      - F
+      - I
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       param_variants:
@@ -742,8 +745,6 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: putpixel
       signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
         -> None'

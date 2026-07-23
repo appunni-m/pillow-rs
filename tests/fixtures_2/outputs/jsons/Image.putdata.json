@@ -51,6 +51,54 @@
       }
     },
     {
+      "id": "Image_putdata_F_suite1",
+      "assert": {
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "raws/Image.putdata_Image_putdata_F_suite1_1.bin",
+            "raw_kind": "image",
+            "mode": "F",
+            "size": [
+              3,
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_I_suite1",
+      "assert": {
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "raws/Image.putdata_Image_putdata_I_suite1_1.bin",
+            "raw_kind": "image",
+            "mode": "I",
+            "size": [
+              3,
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
       "id": "Image_putdata_L_suite1",
       "assert": {
         "method": "tuple",
@@ -105,6 +153,31 @@
             "size": [
               10,
               10
+            ],
+            "palette": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_PA_suite1",
+      "assert": {
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "raws/Image.putdata_Image_putdata_PA_suite1_1.bin",
+            "raw_kind": "image",
+            "mode": "PA",
+            "size": [
+              3,
+              2
             ],
             "palette": []
           }

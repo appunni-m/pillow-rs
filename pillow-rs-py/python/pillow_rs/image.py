@@ -114,17 +114,10 @@ class Image:
         size: Tuple[int, int],
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
-        # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
-        nonstandard = {"I": "RGBA", "F": "RGBA"}
-        rust_mode = nonstandard.get(mode, mode)
         # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
         if isinstance(color, list):
             color = tuple(color)
-        rust_image = RustImage.new(rust_mode, size, color)
-        img = cls(rust_image)
-        if mode in nonstandard:
-            img._explicit_mode = mode
-        return img
+        return cls(RustImage.new(mode, size, color))
 
     @classmethod
     def blend(
@@ -375,12 +368,8 @@ class Image:
         return ImagingCore(values)
 
     def putdata(self, data, scale=1.0, offset=0.0):
-        """Replace pixel data from a sequence. Flattening done in Rust.
-
-        PIL semantics for int values in multi-band images:
-        first band = value, remaining bands = 0.
-        """
-        self._rust_image.putdata_formatted(data, len(self.getbands()))
+        """Replace pixels from scalar samples or multiband color tuples."""
+        self._rust_image.putdata_formatted(data, scale, offset)
 
     def getprojection(self):
         """Return horizontal and vertical projections."""

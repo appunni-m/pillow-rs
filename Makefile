@@ -46,6 +46,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite0$(NC)    Run suite0 only (core functions, fast)\n"
 	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
+	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
@@ -75,6 +76,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
+	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
 	@printf "  $(CYAN)make fixture-coverage-check$(NC) Validate semantic fixture/manifest coverage\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-suite1$(NC) Generate suite1 fixtures only\n"
@@ -144,7 +146,8 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-core test-wasm test-all
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata
+.PHONY: test-core test-wasm test-all
 
 test: fixtures ## Run all PIL parity tests
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
@@ -162,6 +165,10 @@ test-suite1: fixtures-suite1 ## Run suite1 only
 test-suite2: ## Run suite2 only
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
 		--json-report --json-report-file=$(REPORT) --strict-covers -k "suite2"
+
+test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
+	$(PYTHON) -m pytest tests/test_putdata_parity.py tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "putdata"
 
 test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
 	$(MAKE) -C $(CORE_SRC) test
@@ -332,7 +339,8 @@ freetype-ci: fontdone-ci
 freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures imagingft-fixtures image-backend-fixtures fixture-coverage-check
+.PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
+.PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
@@ -342,6 +350,11 @@ imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
+
+putdata-fixtures: ## Generate semantic Image.putdata inputs and exact Pillow oracles
+	$(PYTHON) scripts/generate_putdata_fixture_inputs.py
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.putdata
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.putdata
 
 fixture-coverage-check: fixtures ## Validate semantic fixture/manifest coverage
 	PYTHONPATH=tests $(IMAGE_ORACLE_PYTHON) tests/fixture_coverage.py
