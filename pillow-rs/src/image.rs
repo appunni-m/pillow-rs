@@ -2086,11 +2086,17 @@ impl Image {
             for &h in band_hist {
                 if h > 0 {
                     let p = h as f64 / total;
-                    entropy -= p * p.log2();
+                    // Pillow 12.2.0 `_entropy` accumulates
+                    // `p * log(p) * M_LOG2E` and negates once at return
+                    // (`src/_imaging.c:1401-1423`). Preserve that evaluation
+                    // order, including the fused multiply-add emitted by its
+                    // optimized C build, for bit-exact float and signed-zero
+                    // parity.
+                    entropy = (p * p.ln()).mul_add(std::f64::consts::LOG2_E, entropy);
                 }
             }
         }
-        Ok(entropy)
+        Ok(-entropy)
     }
 
     /// Returns horizontal and vertical non-zero pixel projections.
@@ -2493,4 +2499,30 @@ pub fn execute_op(
     _palette: Option<&[u8]>,
 ) -> Result<DynamicImage, PilError> {
     crate::compute::registry::execute_cpu(op, img, explicit_mode)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Image;
+
+    #[test]
+    fn entropy_matches_pillow_c_evaluation_order() {
+        let image = Image::frombytes("L", (7, 1), &[0, 0, 0, 0, 1, 1, 1])
+            .expect("test image must be valid");
+
+        assert_eq!(
+            image.entropy().expect("entropy must succeed").to_bits(),
+            0x3fef_86fd_27eb_b77f
+        );
+    }
+
+    #[test]
+    fn zero_entropy_preserves_pillow_negative_zero() {
+        let image = Image::new(1, 1, "L", (128, 0, 0, 0)).expect("test image must be valid");
+
+        assert_eq!(
+            image.entropy().expect("entropy must succeed").to_bits(),
+            (-0.0f64).to_bits()
+        );
+    }
 }
