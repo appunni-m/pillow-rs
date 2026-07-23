@@ -3,7 +3,7 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
-use pillow_rs_image::{DynamicImage, GenericImage, GenericImageView};
+use image_slash_star::{DynamicImage, GenericImage, GenericImageView};
 
 use crate::color::pil_grayscale;
 
@@ -89,7 +89,7 @@ pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     // lut[i] = floor(accumulator / step) where accumulator tracks step/2 + cumulative hist
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = pillow_rs_image::RgbImage::new(w, h);
+    let mut out = image_slash_star::RgbImage::new(w, h);
     for ch in 0..3 {
         let mut hist = [0u32; 256];
         for px in rgb.pixels() {
@@ -136,16 +136,16 @@ pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     }
     let result = match channels {
         1 => DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
+            image_slash_star::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
+            image_slash_star::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
         ),
         3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
+            image_slash_star::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
         ),
         _ => DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
+            image_slash_star::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
         ),
     };
     Ok(result)
@@ -203,7 +203,7 @@ pub fn op_colorize(
 ) -> Result<DynamicImage, PilError> {
     let gray = img.to_luma8();
     let (w, h) = gray.dimensions();
-    let mut out = pillow_rs_image::RgbImage::new(w, h);
+    let mut out = image_slash_star::RgbImage::new(w, h);
     let &(br, bg, bb) = black;
     let &(wr, wg, wb) = white;
     for y in 0..h {
@@ -212,7 +212,7 @@ pub fn op_colorize(
             let r = (br as f64 + g * (wr as f64 - br as f64)) as u8;
             let gv = (bg as f64 + g * (wg as f64 - bg as f64)) as u8;
             let b = (bb as f64 + g * (wb as f64 - bb as f64)) as u8;
-            out.put_pixel(x, y, pillow_rs_image::Rgb([r, gv, b]));
+            out.put_pixel(x, y, image_slash_star::Rgb([r, gv, b]));
         }
     }
     // Colorize always outputs RGB (PIL behavior)
@@ -337,7 +337,7 @@ pub fn op_pad(
     // RGBA/LA modes: transparent fill (alpha=0). L/RGB: opaque black.
     let has_alpha = matches!(
         img.color(),
-        pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8
+        image_slash_star::ColorType::Rgba8 | image_slash_star::ColorType::La8
     );
     let default_fill = if has_alpha {
         (0, 0, 0, 0)
@@ -369,7 +369,7 @@ pub fn op_pad(
             padded.put_pixel(
                 px,
                 py,
-                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
+                image_slash_star::Rgba([fill.0, fill.1, fill.2, fill.3]),
             );
         }
     }
@@ -397,7 +397,7 @@ pub fn op_pad(
                             / oa) as u8;
                         let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
                             / oa) as u8;
-                        padded.put_pixel(dx, py, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
+                        padded.put_pixel(dx, py, image_slash_star::Rgba([or, og, ob, oa as u8]));
                     }
                 }
             }
@@ -420,7 +420,7 @@ pub fn op_pad(
                             / oa) as u8;
                         let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
                             / oa) as u8;
-                        padded.put_pixel(px, dy, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
+                        padded.put_pixel(px, dy, image_slash_star::Rgba([or, og, ob, oa as u8]));
                     }
                 }
             }
@@ -471,7 +471,7 @@ pub fn op_expand(
             expanded.put_pixel(
                 px,
                 py,
-                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
+                image_slash_star::Rgba([fill.0, fill.1, fill.2, fill.3]),
             );
         }
     }
@@ -496,22 +496,22 @@ pub fn op_linear_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicIm
     let h = 256u32;
     match mode {
         ColorMode::L => {
-            let mut gray = pillow_rs_image::GrayImage::new(w, h);
+            let mut gray = image_slash_star::GrayImage::new(w, h);
             for y in 0..h {
                 let val = y as u8;
                 for x in 0..w {
-                    gray.put_pixel(x, y, pillow_rs_image::Luma([val]));
+                    gray.put_pixel(x, y, image_slash_star::Luma([val]));
                 }
             }
             Ok(DynamicImage::ImageLuma8(gray))
         }
         _ => {
             // Default to RGB
-            let mut rgb = pillow_rs_image::RgbImage::new(w, h);
+            let mut rgb = image_slash_star::RgbImage::new(w, h);
             for y in 0..h {
                 let val = y as u8;
                 for x in 0..w {
-                    rgb.put_pixel(x, y, pillow_rs_image::Rgb([val, val, val]));
+                    rgb.put_pixel(x, y, image_slash_star::Rgb([val, val, val]));
                 }
             }
             Ok(DynamicImage::ImageRgb8(rgb))
@@ -529,27 +529,27 @@ pub fn op_radial_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicIm
     let max_dist = (cx * cx + cy * cy).sqrt();
     match mode {
         ColorMode::L => {
-            let mut gray = pillow_rs_image::GrayImage::new(w, h);
+            let mut gray = image_slash_star::GrayImage::new(w, h);
             for y in 0..h {
                 for x in 0..w {
                     let dx = x as f64 - cx;
                     let dy = y as f64 - cy;
                     let dist = (dx * dx + dy * dy).sqrt();
                     let val = ((dist / max_dist * 255.0 + 0.5).min(255.0)) as u8;
-                    gray.put_pixel(x, y, pillow_rs_image::Luma([val]));
+                    gray.put_pixel(x, y, image_slash_star::Luma([val]));
                 }
             }
             Ok(DynamicImage::ImageLuma8(gray))
         }
         _ => {
-            let mut rgb = pillow_rs_image::RgbImage::new(w, h);
+            let mut rgb = image_slash_star::RgbImage::new(w, h);
             for y in 0..h {
                 for x in 0..w {
                     let dx = x as f64 - cx;
                     let dy = y as f64 - cy;
                     let dist = (dx * dx + dy * dy).sqrt();
                     let val = ((dist / max_dist * 255.0 + 0.5).min(255.0)) as u8;
-                    rgb.put_pixel(x, y, pillow_rs_image::Rgb([val, val, val]));
+                    rgb.put_pixel(x, y, image_slash_star::Rgb([val, val, val]));
                 }
             }
             Ok(DynamicImage::ImageRgb8(rgb))

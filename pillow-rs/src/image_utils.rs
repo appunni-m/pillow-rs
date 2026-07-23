@@ -11,11 +11,11 @@
 //   raw pixel data. It validates dimensions via CheckedDims before allocation.
 // ============================================================================
 
-use pillow_rs_image::DynamicImage;
-use pillow_rs_image::GrayAlphaImage;
-use pillow_rs_image::GrayImage;
-use pillow_rs_image::RgbImage;
-use pillow_rs_image::RgbaImage;
+use image_slash_star::DynamicImage;
+use image_slash_star::GrayAlphaImage;
+use image_slash_star::GrayImage;
+use image_slash_star::RgbImage;
+use image_slash_star::RgbaImage;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;

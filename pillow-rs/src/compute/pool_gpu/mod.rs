@@ -27,7 +27,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use pillow_rs_image::{DynamicImage, RgbaImage};
+use image_slash_star::{DynamicImage, RgbaImage};
 use std::collections::HashMap;
 
 // ─── BufferPool ────────────────────────────────────────────────────────────
@@ -1015,21 +1015,21 @@ impl BackendImpl for GpuPool {
         // Detect mode-changing ops that need output mode override.
         // Grayscale: always outputs L, regardless of input mode.
         // Convert: output matches target mode (handled by CPU fallback for now).
-        let out_mode: Option<pillow_rs_image::ColorType> =
+        let out_mode: Option<image_slash_star::ColorType> =
             if ops.iter().any(|op| matches!(op, PipelineOp::Grayscale)) {
-                Some(pillow_rs_image::ColorType::L8)
+                Some(image_slash_star::ColorType::L8)
             } else {
                 None
             };
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
             match ct {
-                pillow_rs_image::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
-                pillow_rs_image::ColorType::La8 => {
+                image_slash_star::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
+                image_slash_star::ColorType::La8 => {
                     Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8()))
                 }
-                pillow_rs_image::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
-                pillow_rs_image::ColorType::Rgba8 => {
+                image_slash_star::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
+                image_slash_star::ColorType::Rgba8 => {
                     Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
                 }
                 _ => Ok(crate::image::preserve_mode(img, result)),

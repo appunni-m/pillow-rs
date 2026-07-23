@@ -9,7 +9,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
-use pillow_rs_image::{DynamicImage, GenericImageView, RgbaImage};
+use image_slash_star::{DynamicImage, GenericImageView, RgbaImage};
 use std::sync::Arc;
 
 // ── Helper: mode string → encoding ─────────────────────────────────────

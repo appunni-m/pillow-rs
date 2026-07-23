@@ -13,7 +13,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 pub mod ops;
 

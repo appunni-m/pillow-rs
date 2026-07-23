@@ -10,7 +10,7 @@
 //!
 //! Core modules do not depend on Python or JavaScript runtime types. Public
 //! functions model Pillow behavior where practical, but their contracts are
-//! expressed in Rust terms: [`Image`] values, [`pillow_rs_image::DynamicImage`]
+//! expressed in Rust terms: [`Image`] values, [`image_slash_star::DynamicImage`]
 //! buffers, [`Font`] values, [`PixelFormat`] modes, and [`PilError`] failures.
 //!
 //! # Allocation Safety
@@ -32,7 +32,7 @@
 //! - `gpu` enables the wgpu/WebGPU backend where an operation has a shader.
 //! - `parallel` enables approved row and pixel parallelism.
 //! - `image-codecs-all` enables all codec features exposed through
-//!   `pillow-rs-image`; individual codec features can be selected instead.
+//!   `image-slash-star`; individual codec features can be selected instead.
 //!
 //! CPU execution remains the fallback path. Feature flags should not change the
 //! public Pillow-style contract of an operation.
@@ -129,8 +129,6 @@ pub mod error;
 pub mod font;
 /// Lightweight image format identifiers.
 pub mod format;
-/// Codec-facing image format handlers.
-pub mod formats;
 /// High-level image object and Pillow-style image methods.
 pub mod image;
 /// Shared helpers for converting between image buffers and modes.

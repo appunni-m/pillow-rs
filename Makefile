@@ -6,6 +6,7 @@
 # ── Variables ─────────────────────────────────────────────────────────────────
 MATURIN      := maturin
 PYTHON       := python3
+IMAGE_ORACLE_PYTHON ?= ../image-slash-star/.oracle-venv/bin/python
 NODE         := node
 CARGO        := cargo
 WASM_PACK    := wasm-pack
@@ -47,6 +48,8 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
+	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
+	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs imagingft + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
@@ -68,6 +71,7 @@ help: ## Show this help
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
+	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-clean$(NC) Remove fixture outputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
@@ -175,6 +179,7 @@ parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdon
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core pillow-rs-imagingft
+.PHONY: image-backend-test image-backend-feature-test
 .PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-clean
 .PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -185,6 +190,12 @@ pillow-rs-help: ## Show pillow-rs crate targets
 
 pillow-rs-test: ## Run all pillow-rs Rust tests
 	$(MAKE) -C $(CORE_SRC) test
+
+image-backend-test: ## Run all-feature image backend migration parity tests
+	$(CARGO) test -p pillow-rs --all-features --test image_backend_migration --locked
+
+image-backend-feature-test: ## Verify disabled image codec feature forwarding
+	$(CARGO) test -p pillow-rs --no-default-features --test image_feature_gates --locked
 
 pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
@@ -303,13 +314,16 @@ freetype-ci: fontdone-ci
 freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures imagingft-fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
+.PHONY: fixtures imagingft-fixtures image-backend-fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: ## Generate all test fixtures
 	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR)
 
 imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
 	$(PYTHON) pillow-rs/scripts/build_imagingft_fixtures.py
+
+image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
 
 fixtures-suite0: ## Generate suite0 fixtures
 	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0

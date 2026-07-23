@@ -4,7 +4,7 @@
 //! operations (Resize, Crop, Rotate, Transpose, Thumbnail, Reduce) that operate
 //! on DynamicImage and return new DynamicImage instances.
 
-use pillow_rs_image::{DynamicImage, GenericImageView};
+use image_slash_star::{DynamicImage, GenericImageView};
 use std::f64;
 
 use crate::checked_dims::CheckedDims;
@@ -98,19 +98,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, data)
+            image_slash_star::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, data)
+            image_slash_star::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, data)
+            image_slash_star::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, data)
+            image_slash_star::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
@@ -227,7 +227,7 @@ fn resize_f(
 
     // Re-pack each f32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
-    let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_f: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
@@ -285,7 +285,7 @@ fn resize_i(
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
         let out =
-            pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
+            image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
                 PilError::ValueError("resize_i: failed to create output buffer".into())
             })?;
         return Ok(DynamicImage::ImageRgba8(out));
@@ -341,12 +341,68 @@ fn resize_i(
 
     // Re-pack each i32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-    let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
 
 // ── Generic rotation & transform helpers (mode-aware) ──
+
+fn affine_nearest_fixed(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    channels: usize,
+    affine: [f64; 6],
+    fill: (u8, u8, u8, u8),
+    output: &mut [u8],
+) {
+    // Pillow's ImagingTransformAffine nearest path rounds the six affine
+    // coefficients to signed 16.16 values once, then advances those integers
+    // across each output row. Recomputing the same coordinates as f64 changes
+    // which source pixel wins at exact integer boundaries.
+    let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor()) as i64;
+    let [a, b, c, d, e, f] = affine;
+    let step_x_x = fixed(a);
+    let step_y_x = fixed(b);
+    let step_x_y = fixed(d);
+    let step_y_y = fixed(e);
+    let origin_x = fixed(c + a * 0.5 + b * 0.5);
+    let origin_y = fixed(f + d * 0.5 + e * 0.5);
+    let (source_width, source_height) = source_size;
+    let (destination_width, destination_height) = destination_size;
+
+    for y in 0..destination_height {
+        let mut source_x = origin_x + i64::from(y) * step_y_x;
+        let mut source_y = origin_y + i64::from(y) * step_y_y;
+        for x in 0..destination_width {
+            let input_x = source_x >> 16;
+            let input_y = source_y >> 16;
+            let output_index = (y * destination_width + x) as usize * channels;
+            if input_x >= 0
+                && input_x < i64::from(source_width)
+                && input_y >= 0
+                && input_y < i64::from(source_height)
+            {
+                let input_index =
+                    (input_y as u32 * source_width + input_x as u32) as usize * channels;
+                output[output_index..output_index + channels]
+                    .copy_from_slice(&source[input_index..input_index + channels]);
+            } else {
+                for channel in 0..channels.min(4) {
+                    output[output_index + channel] = match channel {
+                        0 => fill.0,
+                        1 => fill.1,
+                        2 => fill.2,
+                        _ => fill.3,
+                    };
+                }
+            }
+            source_x += step_x_x;
+            source_y += step_x_y;
+        }
+    }
+}
 
 /// Rotate an image by an arbitrary angle, working on the native number of channels.
 /// When `nearest` is true, uses nearest-neighbor sampling (required for P, 1, I, F modes).
@@ -361,63 +417,99 @@ fn rotate_arbitrary_generic(
     let (w, h) = img.dimensions();
     let sw = w as f64;
     let sh = h as f64;
-    let rad = angle.to_radians();
-    let (cos, sin) = (rad.cos(), rad.sin());
+    // Pillow builds the reverse affine transform (destination -> source),
+    // rounding the trigonometric coefficients to 15 decimal places before
+    // calculating the expanded canvas.
+    let rad = -angle.to_radians();
+    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
+    let aff_a = round_15(rad.cos());
+    let aff_b = round_15(rad.sin());
+    let aff_d = round_15(-rad.sin());
+    let aff_e = aff_a;
+    let center_x = sw / 2.0;
+    let center_y = sh / 2.0;
+    let mut aff_c = aff_a * -center_x + aff_b * -center_y + center_x;
+    let mut aff_f = aff_d * -center_x + aff_e * -center_y + center_y;
+    let transform =
+        |x: f64, y: f64, c: f64, f: f64| (aff_a * x + aff_b * y + c, aff_d * x + aff_e * y + f);
 
-    // Compute bounding box of rotated image
+    // Pillow rounds each outer edge independently. This differs from taking
+    // ceil(max - min) whenever the transformed minimum is fractional.
     let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for &(cx, cy) in &corners {
-        let rx = cx * cos - cy * sin;
-        let ry = cx * sin + cy * cos;
+        let (rx, ry) = transform(cx, cy, aff_c, aff_f);
         min_x = min_x.min(rx);
         max_x = max_x.max(rx);
         min_y = min_y.min(ry);
         max_y = max_y.max(ry);
     }
     let (dw, dh) = if expand {
-        ((max_x - min_x).ceil() as u32, (max_y - min_y).ceil() as u32)
+        (
+            (max_x.ceil() - min_x.floor()) as u32,
+            (max_y.ceil() - min_y.floor()) as u32,
+        )
     } else {
         (w, h)
     };
 
+    if expand {
+        let shift_x = -(dw as f64 - sw) / 2.0;
+        let shift_y = -(dh as f64 - sh) / 2.0;
+        (aff_c, aff_f) = transform(shift_x, shift_y, aff_c, aff_f);
+    }
+
     let raw = img.as_bytes();
     let fill_color = fill.unwrap_or((0, 0, 0, 0));
-
-    let (ox, oy) = if expand { (-min_x, -min_y) } else { (0.0, 0.0) };
-    let cx_src = sw / 2.0;
-    let cy_src = sh / 2.0;
-    let cx_dst = dw as f64 / 2.0;
-    let cy_dst = dh as f64 / 2.0;
 
     let mut out = match CheckedDims::new(dw, dh, channels as u8) {
         Ok(dims) => dims.alloc_buffer(),
         Err(_) => {
             return match channels {
-                1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dw, dh)),
-                2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dw, dh)),
-                3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dw, dh)),
-                _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dw, dh)),
+                1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::new(dw, dh)),
+                2 => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::new(dw, dh)),
+                3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::new(dw, dh)),
+                _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::new(dw, dh)),
             };
         }
     };
 
-    for dy in 0..dh {
-        for dx in 0..dw {
-            // Map destination pixel to source coordinate (inverse rotation)
-            let sx_rel = (dx as f64 + ox - cx_dst) * cos + (dy as f64 + oy - cy_dst) * sin + cx_src;
-            let sy_rel =
-                -(dx as f64 + ox - cx_dst) * sin + (dy as f64 + oy - cy_dst) * cos + cy_src;
+    if nearest {
+        affine_nearest_fixed(
+            raw,
+            (w, h),
+            (dw, dh),
+            channels,
+            [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
+            fill_color,
+            &mut out,
+        );
+    } else {
+        for dy in 0..dh {
+            for dx in 0..dw {
+                // Map destination pixel to source coordinate (inverse rotation)
+                let (sx_rel, sy_rel) = transform(dx as f64, dy as f64, aff_c, aff_f);
 
-            let out_idx = (dy * dw + dx) as usize * channels;
+                let out_idx = (dy * dw + dx) as usize * channels;
 
-            if nearest {
-                let ix = (sx_rel + 0.5).floor() as i64;
-                let iy = (sy_rel + 0.5).floor() as i64;
-                if ix >= 0 && ix < w as i64 && iy >= 0 && iy < h as i64 {
-                    let in_idx = (iy as u32 * w + ix as u32) as usize * channels;
-                    out[out_idx..out_idx + channels]
-                        .copy_from_slice(&raw[in_idx..in_idx + channels]);
+                if sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh {
+                    let sx = sx_rel.floor() as u32;
+                    let sy = sy_rel.floor() as u32;
+                    let fx = sx_rel - sx as f64;
+                    let fy = sy_rel - sy as f64;
+                    let sx1 = (sx + 1).min(w - 1);
+                    let sy1 = (sy + 1).min(h - 1);
+                    for c in 0..channels {
+                        let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
+                        let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
+                        let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
+                        let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
+                        let v = (1.0 - fx) * (1.0 - fy) * p00
+                            + fx * (1.0 - fy) * p10
+                            + (1.0 - fx) * fy * p01
+                            + fx * fy * p11;
+                        out[out_idx + c] = v.round() as u8;
+                    }
                 } else {
                     for c in 0..channels.min(4) {
                         out[out_idx + c] = match c {
@@ -428,52 +520,25 @@ fn rotate_arbitrary_generic(
                         };
                     }
                 }
-            } else if sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh {
-                let sx = sx_rel.floor() as u32;
-                let sy = sy_rel.floor() as u32;
-                let fx = sx_rel - sx as f64;
-                let fy = sy_rel - sy as f64;
-                let sx1 = (sx + 1).min(w - 1);
-                let sy1 = (sy + 1).min(h - 1);
-                for c in 0..channels {
-                    let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
-                    let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
-                    let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
-                    let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
-                    let v = (1.0 - fx) * (1.0 - fy) * p00
-                        + fx * (1.0 - fy) * p10
-                        + (1.0 - fx) * fy * p01
-                        + fx * fy * p11;
-                    out[out_idx + c] = v.round() as u8;
-                }
-            } else {
-                for c in 0..channels.min(4) {
-                    out[out_idx + c] = match c {
-                        0 => fill_color.0,
-                        1 => fill_color.1,
-                        2 => fill_color.2,
-                        _ => fill_color.3,
-                    };
-                }
             }
         }
     }
 
     match channels {
         1 => DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(dw, dh, out)
+            image_slash_star::GrayImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(dw, dh, out)
+            image_slash_star::GrayAlphaImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(dw, dh, out)
+            image_slash_star::RgbImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(dw, dh, out)
+            image_slash_star::RgbaImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         _ => unreachable!(),
@@ -505,10 +570,10 @@ fn transform_affine_generic(
         Ok(dims) => dims.alloc_buffer(),
         Err(_) => {
             return match channels {
-                1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dst_w, dst_h)),
-                2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dst_w, dst_h)),
-                3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dst_w, dst_h)),
-                _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dst_w, dst_h)),
+                1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::new(dst_w, dst_h)),
+                2 => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::new(dst_w, dst_h)),
+                3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::new(dst_w, dst_h)),
+                _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::new(dst_w, dst_h)),
             };
         }
     };
@@ -569,19 +634,19 @@ fn transform_affine_generic(
 
     match channels {
         1 => DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(dst_w, dst_h, out)
+            image_slash_star::GrayImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(dst_w, dst_h, out)
+            image_slash_star::GrayAlphaImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(dst_w, dst_h, out)
+            image_slash_star::RgbImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, out)
+            image_slash_star::RgbaImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         _ => unreachable!(),
@@ -621,7 +686,7 @@ pub fn execute_resize(
         // After resize, threshold back to binary {0, 255}: pixel >= 128 => 255 else 0
         let gray = result.to_luma8();
         let (rw, rh) = gray.dimensions();
-        let mut out = pillow_rs_image::GrayImage::new(rw, rh);
+        let mut out = image_slash_star::GrayImage::new(rw, rh);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             op[0] = if ip[0] >= 128 { 255 } else { 0 };
         }
@@ -728,12 +793,12 @@ fn rotate_90_non_expand(
 
     // Create output dynamic image
     match channels {
-        1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::from_raw(w, h, out).unwrap()),
-        2 => {
-            DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).unwrap())
-        }
-        3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::from_raw(w, h, out).unwrap()),
-        _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_raw(w, h, out).unwrap()),
+        1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_raw(w, h, out).unwrap()),
+        2 => DynamicImage::ImageLumaA8(
+            image_slash_star::GrayAlphaImage::from_raw(w, h, out).unwrap(),
+        ),
+        3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_raw(w, h, out).unwrap()),
+        _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_raw(w, h, out).unwrap()),
     }
 }
 
@@ -789,14 +854,28 @@ pub fn execute_transpose(
         TransposeMethod::Rotate90 => Ok(img.rotate270()),
         TransposeMethod::Rotate180 => Ok(img.rotate180()),
         TransposeMethod::Rotate270 => Ok(img.rotate90()),
-        // PIL TRANSPOSE = ROTATE_90 (CCW) then FLIP_LEFT_RIGHT
-        // With corrected ROTATE_90 = rotate270:
-        //   TRANSPOSE = rotate270().fliph()
-        // PIL TRANSVERSE = ROTATE_270 (CCW) then FLIP_LEFT_RIGHT
-        // With corrected ROTATE_270 = rotate90:
-        //   TRANSVERSE = rotate90().fliph()
-        TransposeMethod::Transpose => Ok(img.rotate270().fliph()),
-        TransposeMethod::Transverse => Ok(img.rotate90().fliph()),
+        TransposeMethod::Transpose | TransposeMethod::Transverse => {
+            let (width, height) = img.dimensions();
+            let channels = img.color().channel_count() as usize;
+            let source = img.as_bytes();
+            let mut output = CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+            for output_y in 0..width {
+                for output_x in 0..height {
+                    let (source_x, source_y) = match method {
+                        TransposeMethod::Transpose => (output_y, output_x),
+                        TransposeMethod::Transverse => {
+                            (width - 1 - output_y, height - 1 - output_x)
+                        }
+                        _ => unreachable!(),
+                    };
+                    let source_index = (source_y * width + source_x) as usize * channels;
+                    let output_index = (output_y * height + output_x) as usize * channels;
+                    output[output_index..output_index + channels]
+                        .copy_from_slice(&source[source_index..source_index + channels]);
+                }
+            }
+            raw_bytes_to_image(height, width, output, channels)
+        }
     }
 }
 
@@ -868,7 +947,7 @@ pub fn execute_thumbnail(
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest)
         && !matches!(
             img.color(),
-            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::Rgba8
+            image_slash_star::ColorType::La8 | image_slash_star::ColorType::Rgba8
         );
     let mut work_img = img.clone();
     if needs_reduce {
@@ -925,20 +1004,20 @@ pub fn execute_thumbnail(
 fn raw_to_dynimage(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| pillow_rs_image::GrayImage::new(w, h)),
+            image_slash_star::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image_slash_star::GrayImage::new(w, h)),
         ),
         2 => DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| pillow_rs_image::GrayAlphaImage::new(w, h)),
+            image_slash_star::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image_slash_star::GrayAlphaImage::new(w, h)),
         ),
         3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| pillow_rs_image::RgbImage::new(w, h)),
+            image_slash_star::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image_slash_star::RgbImage::new(w, h)),
         ),
         _ => DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| pillow_rs_image::RgbaImage::new(w, h)),
+            image_slash_star::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image_slash_star::RgbaImage::new(w, h)),
         ),
     }
 }
