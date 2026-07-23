@@ -1298,6 +1298,10 @@ impl PyFont {
         pillow_rs::font::imagingft::getmetrics(&self.inner)
     }
 
+    fn has_variations(&self) -> bool {
+        pillow_rs::font::imagingft::has_variations(&self.inner)
+    }
+
     fn get_name(&self) -> (String, String) {
         let (family, style) = pillow_rs::font::imagingft::getname(&self.inner);
         (family.to_owned(), style.to_owned())
