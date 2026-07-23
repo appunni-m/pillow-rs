@@ -113,6 +113,145 @@ pub struct LoadedData {
     pub info: Option<ImageInfo>,
 }
 
+/// One public `Image.putdata` pixel after host-language type extraction.
+///
+/// The variants retain the distinction Pillow makes between numeric samples,
+/// packed multiband integers, and component tuples. [`Image::putdata_values`]
+/// converts these values into the canonical logical-mode bytes consumed by all
+/// compute backends.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PutDataValue {
+    /// A numeric sample for `1`, `L`, `P`, `I`, or `F`.
+    Number(f64),
+    /// A signed integer whose low bytes encode one multiband pixel.
+    Packed(i64),
+    /// Tuple components. Pillow parses the first component as a signed 64-bit
+    /// integer and later components as signed 32-bit integers.
+    Components(Vec<i128>),
+}
+
+fn putdata_clip_u8(value: f64) -> u8 {
+    if value.is_nan() || value >= 255.0 {
+        255
+    } else if value <= 0.0 {
+        0
+    } else {
+        value as u8
+    }
+}
+
+fn putdata_clip_component(value: i128) -> u8 {
+    value.clamp(0, 255) as u8
+}
+
+fn putdata_bytes(
+    mode: crate::pipeline::PixelMode,
+    values: &[PutDataValue],
+    scale: f64,
+    offset: f64,
+) -> Result<Vec<u8>, PilError> {
+    let capacity = values
+        .len()
+        .checked_mul(mode.channels())
+        .ok_or_else(|| PilError::DimensionError("putdata byte count overflow".into()))?;
+    let mut data = Vec::with_capacity(capacity);
+
+    for value in values {
+        match (mode, value) {
+            (
+                crate::pipeline::PixelMode::Mode1
+                | crate::pipeline::PixelMode::L
+                | crate::pipeline::PixelMode::P,
+                PutDataValue::Number(number),
+            ) => data.push(putdata_clip_u8(number * scale + offset)),
+            (crate::pipeline::PixelMode::I, PutDataValue::Number(number)) => {
+                data.extend_from_slice(&((number * scale + offset) as i32).to_le_bytes());
+            }
+            (crate::pipeline::PixelMode::F, PutDataValue::Number(number)) => {
+                data.extend_from_slice(&((number * scale + offset) as f32).to_le_bytes());
+            }
+            (
+                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
+                PutDataValue::Packed(packed),
+            ) => {
+                let bytes = packed.to_le_bytes();
+                data.extend_from_slice(&[bytes[0], bytes[3]]);
+            }
+            (
+                crate::pipeline::PixelMode::RGB
+                | crate::pipeline::PixelMode::YCbCr
+                | crate::pipeline::PixelMode::HSV,
+                PutDataValue::Packed(packed),
+            ) => data.extend_from_slice(&packed.to_le_bytes()[..3]),
+            (
+                crate::pipeline::PixelMode::RGBA | crate::pipeline::PixelMode::CMYK,
+                PutDataValue::Packed(packed),
+            ) => data.extend_from_slice(&packed.to_le_bytes()[..4]),
+            (
+                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
+                PutDataValue::Components(components),
+            ) if components.len() == 2 => {
+                data.extend(components.iter().copied().map(putdata_clip_component));
+            }
+            (
+                crate::pipeline::PixelMode::RGB
+                | crate::pipeline::PixelMode::YCbCr
+                | crate::pipeline::PixelMode::HSV,
+                PutDataValue::Components(components),
+            ) if matches!(components.len(), 3 | 4) => {
+                data.extend(components[..3].iter().copied().map(putdata_clip_component));
+            }
+            (
+                crate::pipeline::PixelMode::RGBA | crate::pipeline::PixelMode::CMYK,
+                PutDataValue::Components(components),
+            ) if matches!(components.len(), 3 | 4) => {
+                data.extend(components[..3].iter().copied().map(putdata_clip_component));
+                data.push(
+                    components
+                        .get(3)
+                        .copied()
+                        .map_or(255, putdata_clip_component),
+                );
+            }
+            (
+                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
+                PutDataValue::Components(_),
+            ) => {
+                return Err(PilError::TypeError(
+                    "color must be int, or tuple of one or two elements".into(),
+                ));
+            }
+            (
+                crate::pipeline::PixelMode::RGB
+                | crate::pipeline::PixelMode::RGBA
+                | crate::pipeline::PixelMode::CMYK
+                | crate::pipeline::PixelMode::YCbCr
+                | crate::pipeline::PixelMode::HSV,
+                PutDataValue::Components(_),
+            ) => {
+                return Err(PilError::TypeError(
+                    "color must be int, or tuple of one, three or four elements".into(),
+                ));
+            }
+            (
+                crate::pipeline::PixelMode::Mode1
+                | crate::pipeline::PixelMode::L
+                | crate::pipeline::PixelMode::P
+                | crate::pipeline::PixelMode::I
+                | crate::pipeline::PixelMode::F,
+                _,
+            ) => {
+                return Err(PilError::TypeError("sequence must be flattened".into()));
+            }
+            _ => {
+                return Err(PilError::TypeError("color must be int or tuple".into()));
+            }
+        }
+    }
+
+    Ok(data)
+}
+
 /// Core image value used by Pillow-style operations.
 ///
 /// Values may hold decoded pixels, lazy input references, or a deferred
@@ -301,6 +440,11 @@ impl Image {
                 height,
                 image_slash_star::LumaA([color.0, color.3]),
             )),
+            "PA" => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::from_pixel(
+                width,
+                height,
+                image_slash_star::LumaA([color.0, color.3]),
+            )),
             "1" => DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_pixel(
                 width,
                 height,
@@ -338,16 +482,15 @@ impl Image {
                 height,
                 image_slash_star::Rgb([color.0, color.1, color.2]),
             )),
-            // I and F modes store 4 bytes per pixel (int32/float32 LE)
+            // I and F modes store all four resolved int32/float32 LE bytes.
             "I" | "F" => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_pixel(
                 width,
                 height,
-                // For I mode: store 4-byte int32 LE (color.0 as low byte, others 0)
-                image_slash_star::Rgba([color.0, 0, 0, 0]),
+                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
             )),
             _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
         };
-        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "1") {
+        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "PA" | "1") {
             Some(mode.to_string())
         } else {
             None
@@ -2142,6 +2285,138 @@ impl Image {
         Ok(())
     }
 
+    /// Normalizes one value per pixel and queues exact Pillow `putdata` bytes.
+    ///
+    /// Pillow 12.2's `_imaging.c:_putdata` applies `scale` and `offset` only to
+    /// single-band, signed-integer, and float images. Its multiband `getink`
+    /// path instead treats integers as little-endian packed pixels and ignores
+    /// scaling. Keeping that distinction here gives CPU, SIMD, and GPU the
+    /// same canonical byte payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::TypeError`] for incompatible value shapes or too
+    /// many pixels, and propagates image mode or dimension errors.
+    pub fn putdata_values(
+        &mut self,
+        values: &[PutDataValue],
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        let pixel_count = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| PilError::DimensionError("pixel count overflow".into()))?;
+        if values.len() > pixel_count {
+            return Err(PilError::TypeError("too many data entries".into()));
+        }
+
+        let mode_name = self.mode()?;
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        })?;
+        let data = putdata_bytes(mode, values, scale, offset)?;
+        self.putdata(&data)
+    }
+
+    /// Writes one normalized `putdata` value immediately at a pixel offset.
+    ///
+    /// Host-language bindings use this form while coercing values because
+    /// Pillow exposes each completed pixel to callbacks triggered by coercing
+    /// the following value. The same canonical byte normalization as
+    /// [`Image::putdata_values`] is retained, while the already materialized
+    /// storage is updated without building one deferred pipeline per pixel.
+    /// Bulk, callback-free replacement remains backend-dispatched through
+    /// [`Image::putdata_values`]. This immediate host-memory mutation is the
+    /// CPU path used by public bindings because observable callback order takes
+    /// precedence over deferred SIMD/GPU execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::TypeError`] when `value` is incompatible with the
+    /// image mode or `pixel_index` is outside the image.
+    pub fn putdata_value_at(
+        &mut self,
+        pixel_index: usize,
+        value: &PutDataValue,
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        let pixel_count = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| PilError::DimensionError("pixel count overflow".into()))?;
+        if pixel_index >= pixel_count {
+            return Err(PilError::TypeError("too many data entries".into()));
+        }
+
+        let mode_name = self.mode()?;
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        })?;
+        let bytes = putdata_bytes(mode, std::slice::from_ref(value), scale, offset)?;
+        let start = pixel_index
+            .checked_mul(mode.channels())
+            .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
+        let end = start
+            .checked_add(bytes.len())
+            .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
+
+        self.load()?;
+        match self {
+            Image::Paletted(data) if mode == crate::pipeline::PixelMode::P => {
+                data.indices.as_mut()[pixel_index] = bytes[0];
+                data.materialized = materialization_cache();
+            }
+            Image::Loaded(data) => {
+                let image = Arc::make_mut(&mut data.image);
+                let samples: &mut [u8] = match mode {
+                    crate::pipeline::PixelMode::Mode1
+                    | crate::pipeline::PixelMode::L
+                    | crate::pipeline::PixelMode::P => image
+                        .as_mut_luma8()
+                        .ok_or_else(|| {
+                            PilError::InternalError("putdata L storage mismatch".into())
+                        })?
+                        .as_mut(),
+                    crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA => image
+                        .as_mut_luma_alpha8()
+                        .ok_or_else(|| {
+                            PilError::InternalError("putdata LA storage mismatch".into())
+                        })?
+                        .as_mut(),
+                    crate::pipeline::PixelMode::RGB
+                    | crate::pipeline::PixelMode::YCbCr
+                    | crate::pipeline::PixelMode::HSV => image
+                        .as_mut_rgb8()
+                        .ok_or_else(|| {
+                            PilError::InternalError("putdata RGB storage mismatch".into())
+                        })?
+                        .as_mut(),
+                    crate::pipeline::PixelMode::RGBA
+                    | crate::pipeline::PixelMode::CMYK
+                    | crate::pipeline::PixelMode::I
+                    | crate::pipeline::PixelMode::F => image
+                        .as_mut_rgba8()
+                        .ok_or_else(|| {
+                            PilError::InternalError("putdata RGBA storage mismatch".into())
+                        })?
+                        .as_mut(),
+                };
+                let destination = samples.get_mut(start..end).ok_or_else(|| {
+                    PilError::InternalError("putdata storage offset out of bounds".into())
+                })?;
+                destination.copy_from_slice(&bytes);
+            }
+            _ => {
+                return Err(PilError::InternalError(
+                    "putdata did not materialize writable storage".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Extracts one channel as an `L` image.
     ///
     /// Negative indices count from the end, matching Pillow band indexing.
@@ -2936,6 +3211,43 @@ mod tests {
             ),
             (vec![0, 0], Some(vec![7, 8, 9]))
         );
+    }
+
+    #[test]
+    fn new_preserves_i_f_and_pa_sample_layouts() {
+        let int_bytes = (-7_i32).to_le_bytes();
+        let integer = Image::new(
+            2,
+            1,
+            "I",
+            (int_bytes[0], int_bytes[1], int_bytes[2], int_bytes[3]),
+        )
+        .expect("I image must be valid");
+        let float_bytes = 2.5_f32.to_le_bytes();
+        let float = Image::new(
+            2,
+            1,
+            "F",
+            (
+                float_bytes[0],
+                float_bytes[1],
+                float_bytes[2],
+                float_bytes[3],
+            ),
+        )
+        .expect("F image must be valid");
+        let palette_alpha = Image::new(2, 1, "PA", (7, 0, 0, 192)).expect("PA image must be valid");
+
+        assert_eq!(integer.mode().expect("I mode"), "I");
+        assert_eq!(integer.tobytes().expect("I bytes"), int_bytes.repeat(2));
+        assert_eq!(float.mode().expect("F mode"), "F");
+        assert_eq!(float.tobytes().expect("F bytes"), float_bytes.repeat(2));
+        assert_eq!(palette_alpha.mode().expect("PA mode"), "PA");
+        assert_eq!(
+            palette_alpha.getbands().expect("PA bands"),
+            ["P".to_owned(), "A".to_owned()]
+        );
+        assert_eq!(palette_alpha.tobytes().expect("PA bytes"), [7, 192, 7, 192]);
     }
 
     #[test]

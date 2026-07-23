@@ -8,7 +8,7 @@ Reference images are saved as PNGs in tests/fixtures/outputs/images/.
 Usage:
     python scripts/generate_fixtures.py                          # process default fixture directory
     python scripts/generate_fixtures.py --fixtures-dir tests/fixtures_2 --suite 1
-    python scripts/generate_fixtures.py --fixture ImageFont.load # process one fixture
+    python scripts/generate_fixtures.py --fixture Image.putdata  # process one fixture
 """
 
 import argparse
@@ -324,7 +324,7 @@ def main():
         default=[],
         metavar="STEM",
         help=(
-            "Generate only the named input stem, for example ImageFont.load. "
+            "Generate only the named input stem, for example Image.putdata. "
             "May be repeated."
         ),
     )

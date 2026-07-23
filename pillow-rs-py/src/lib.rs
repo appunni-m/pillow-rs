@@ -5,14 +5,81 @@
 #![allow(clippy::redundant_clone)]
 
 use pillow_rs::error::PilError;
-use pillow_rs::image::Image as RsImage;
-use pyo3::exceptions::{PyAttributeError, PyOverflowError, PyTypeError, PyValueError};
+use pillow_rs::image::{Image as RsImage, PutDataValue};
+use pyo3::exceptions::{
+    PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyInt, PyList, PyTuple, PyType};
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
     inner: RsImage,
+}
+
+#[allow(unsafe_code)]
+fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
+    // SAFETY: `Bound` guarantees a non-null, GIL-bound borrowed pointer for
+    // this call. `PySequence_Check` only inspects the object's type slots and
+    // neither steals a reference nor stores the pointer.
+    unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 }
+}
+
+fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<PutDataValue> {
+    if matches!(mode, "1" | "L" | "P" | "I" | "F") {
+        if python_is_sequence(value) {
+            return Err(PyTypeError::new_err("sequence must be flattened"));
+        }
+        // Pillow's numeric `_putdata` path deliberately clears conversion
+        // errors after writing the sentinel returned by PyFloat_AsDouble.
+        return Ok(PutDataValue::Number(value.extract::<f64>().unwrap_or(-1.0)));
+    }
+
+    if value.is_instance_of::<PyInt>() {
+        return value.extract::<i64>().map(PutDataValue::Packed);
+    }
+
+    let Ok(tuple) = value.downcast::<PyTuple>() else {
+        return Err(PyTypeError::new_err("color must be int or tuple"));
+    };
+    let tuple_len = tuple.len();
+    if tuple_len == 1 {
+        let packed = tuple.get_item(0)?;
+        if packed.is_instance_of::<PyInt>() {
+            return packed.extract::<i64>().map(PutDataValue::Packed);
+        }
+        if matches!(mode, "LA" | "PA") {
+            return Err(PySystemError::new_err(
+                "new style getargs format but argument is not a tuple",
+            ));
+        }
+        return Err(PyTypeError::new_err(
+            "color must be int, or tuple of one, three or four elements",
+        ));
+    }
+
+    let valid_arity = match mode {
+        "LA" | "PA" => tuple_len == 2,
+        "RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV" => {
+            matches!(tuple_len, 3 | 4)
+        }
+        _ => false,
+    };
+    if !valid_arity {
+        let message = if matches!(mode, "LA" | "PA") {
+            "color must be int, or tuple of one or two elements"
+        } else {
+            "color must be int, or tuple of one, three or four elements"
+        };
+        return Err(PyTypeError::new_err(message));
+    }
+
+    let mut components = Vec::with_capacity(tuple_len);
+    components.push(tuple.get_item(0)?.extract::<i64>()? as i128);
+    for index in 1..tuple_len {
+        components.push(tuple.get_item(index)?.extract::<i32>()? as i128);
+    }
+    Ok(PutDataValue::Components(components))
 }
 
 #[pymethods]
@@ -879,50 +946,100 @@ impl PyImage {
         })
     }
 
-    fn putdata(&mut self, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        // Flatten sequence in Rust — handles ints and tuples
-        let mut flat: Vec<u8> = Vec::new();
-        for item in data.iter()? {
-            let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
-            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2]);
-            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1]);
-            } else if let Ok(v) = obj.extract::<u8>() {
-                flat.push(v);
-            } else if let Ok(v) = obj.extract::<i64>() {
-                flat.push(v.clamp(0, 255) as u8);
-            }
-        }
-        self.inner.putdata(&flat).map_err(map_error)
+    fn putdata(slf: &Bound<'_, Self>, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::putdata_formatted(slf, data, 1.0, 0.0)
     }
 
-    /// putdata with band-aware int expansion: single ints become (v,0,...,0) for multi-band
-    fn putdata_formatted(&mut self, data: &Bound<'_, PyAny>, n_bands: usize) -> PyResult<()> {
-        let mut flat: Vec<u8> = Vec::new();
-        for item in data.iter()? {
-            let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
-            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2]);
-            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1]);
-            } else if let Ok(v) = obj.extract::<u8>() {
-                flat.push(v);
-                for _ in 1..n_bands {
-                    flat.push(0);
-                }
-            } else if let Ok(v) = obj.extract::<i64>() {
-                flat.push(v.clamp(0, 255) as u8);
-                for _ in 1..n_bands {
-                    flat.push(0);
-                }
+    #[pyo3(signature = (data, scale=1.0, offset=0.0))]
+    fn putdata_formatted(
+        slf: &Bound<'_, Self>,
+        data: &Bound<'_, PyAny>,
+        scale: f64,
+        offset: f64,
+    ) -> PyResult<()> {
+        if !python_is_sequence(data) {
+            return Err(PyTypeError::new_err("argument must be a sequence"));
+        }
+        let entry_count = data
+            .len()
+            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
+
+        let (width, height, mode) = {
+            let image = slf.try_borrow()?;
+            let (width, height) = image.inner.size().map_err(map_error)?;
+            let mode = image.inner.mode().map_err(map_error)?;
+            (width, height, mode)
+        };
+        let pixel_count = u64::from(width) * u64::from(height);
+        if entry_count as u128 > u128::from(pixel_count) {
+            return Err(PyTypeError::new_err("too many data entries"));
+        }
+
+        // Pillow's image8 fast path reads the underlying bytes directly, even
+        // for a bytes subclass that overrides Python iteration.
+        if matches!(mode.as_str(), "1" | "L" | "P") {
+            if let Ok(bytes) = data.downcast::<PyBytes>() {
+                let values = bytes
+                    .as_bytes()
+                    .iter()
+                    .copied()
+                    // Pillow reads the terminating NUL when a bytes subtype
+                    // reports one more item than its physical payload. Extend
+                    // that behavior safely for every missing item instead of
+                    // following its unchecked C pointer read out of bounds.
+                    .chain(std::iter::repeat(0))
+                    .take(entry_count)
+                    .map(|value| PutDataValue::Number(f64::from(value)))
+                    .collect::<Vec<_>>();
+                return slf
+                    .try_borrow_mut()?
+                    .inner
+                    .putdata_values(&values, scale, offset)
+                    .map_err(map_error);
             }
         }
-        self.inner.putdata(&flat).map_err(map_error)
+
+        let write_item = |pixel_index, item: Bound<'_, PyAny>| -> PyResult<()> {
+            // No PyImage borrow may span coercion: __index__ and __float__ can
+            // re-enter this same public image and must observe earlier writes.
+            let value = putdata_value_from_python(&item, &mode)?;
+            slf.try_borrow_mut()?
+                .inner
+                .putdata_value_at(pixel_index, &value, scale, offset)
+                .map_err(map_error)
+        };
+
+        // CPython's PySequence_Fast retains exact lists and tuples instead of
+        // copying them. Read each exact-list item only when its pixel is due so
+        // coercing an earlier item can replace a later one, as Pillow exposes.
+        if let Ok(list) = data.downcast_exact::<PyList>() {
+            for pixel_index in 0..entry_count {
+                write_item(pixel_index, list.get_item(pixel_index)?)?;
+            }
+            return Ok(());
+        }
+        if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
+            for pixel_index in 0..entry_count {
+                write_item(pixel_index, tuple.get_item(pixel_index)?)?;
+            }
+            return Ok(());
+        }
+
+        // Pillow calls PySequence_Fast before coercing any pixel. Materialize
+        // generic sequence items first, map iteration failures to its fixed
+        // error, then process only the count reported by the original sequence.
+        let iterator = data
+            .iter()
+            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
+        let mut items = Vec::new();
+        for item in iterator {
+            items.push(item.map_err(|_| PyTypeError::new_err("argument must be a sequence"))?);
+        }
+
+        for (pixel_index, item) in items.into_iter().take(entry_count).enumerate() {
+            write_item(pixel_index, item)?;
+        }
+        Ok(())
     }
 
     fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
