@@ -282,7 +282,7 @@ drawing-oracle: build-wasm-extra ## Run exact Pillow ImageDraw fixtures through 
 
 imagefont-getmask2-oracle: imagefont-getmask2-fixtures build-wasm-extra ## Run exact Pillow ImageFont.getmask2 fixtures through Rust/Python/WASM
 	$(MAKE) -C $(CORE_SRC) test-imagefont-getmask2-oracle
-	$(PYTHON) -m pytest tests/test_parity.py -q -k "ImageFont and getmask2"
+	$(PYTHON) -m pytest tests/test_parity.py tests/test_imagefont_oracle.py -q -k "ImageFont and getmask2 or default_font_name"
 	cd $(JS_SRC) && npm run test:imagefont-getmask2-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests

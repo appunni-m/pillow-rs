@@ -6,7 +6,14 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct Manifest {
     oracle: Oracle,
+    font: FontOracle,
     cases: Vec<Case>,
+}
+
+#[derive(Deserialize)]
+struct FontOracle {
+    kind: String,
+    expected_name: [String; 2],
 }
 
 #[derive(Deserialize)]
@@ -50,8 +57,18 @@ fn getmask2_matches_independent_pillow_oracle() {
     assert_eq!(manifest.oracle.implementation, "Pillow");
     assert_eq!(manifest.oracle.version, "12.2.0");
     assert_eq!(manifest.oracle.freetype_version, "2.14.3");
+    assert_eq!(manifest.font.kind, "load_default");
 
     let font = Font::load_default(10.0).expect("pinned Pillow default font");
+    let actual_name = imagingft::getname(&font);
+    assert_eq!(
+        [actual_name.0, actual_name.1],
+        [
+            manifest.font.expected_name[0].as_str(),
+            manifest.font.expected_name[1].as_str(),
+        ],
+        "exact default-font family and style"
+    );
     for case in manifest.cases {
         let start = case.start.map_or((0.0, 0.0), |value| (value[0], value[1]));
         let (width, height, pixels, offset) =

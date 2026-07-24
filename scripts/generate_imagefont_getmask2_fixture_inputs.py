@@ -48,6 +48,7 @@ write_suite("tests/fixtures", 0, suite0)
 write_suite("tests/fixtures_2", 1, suite1)
 
 font = ImageFont.load_default()
+font_name = font.getname()
 shared_cases = []
 for case in [*suite0, *suite1]:
     params = case["params"]
@@ -81,6 +82,10 @@ shared_path.write_text(
                 "implementation": "Pillow",
                 "version": pillow_version,
                 "freetype_version": ImageFont.core.freetype2_version,
+            },
+            "font": {
+                "kind": "load_default",
+                "expected_name": list(font_name),
             },
             "cases": shared_cases,
         },

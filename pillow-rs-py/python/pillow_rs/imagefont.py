@@ -142,13 +142,7 @@ class FreeTypeFont:
                  ``("Unknown", "Regular")`` when the Rust backend does
                  not expose names.
         """
-        try:
-            name = self._rust_font.get_name()
-            if name and len(name) == 2:
-                return tuple(name)
-        except Exception:
-            pass
-        return ("Unknown", "Regular")
+        return self._rust_font.get_name()
 
     def font_variant(self, font=None, size=None, index=None, encoding=None, layout_engine=None):
         """Create a copy of this FreeTypeFont object, using any specified

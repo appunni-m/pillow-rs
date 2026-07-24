@@ -27,6 +27,14 @@ const bindings = await import(pathToFileURL(join(packageDir, 'pillow_rs_js.js'))
 bindings.initSync({ module: new WebAssembly.Module(wasm) });
 
 const font = bindings.ImageFont.loadDefault();
+const actualName = font.getname();
+if (
+    actualName.length !== 2
+    || actualName[0] !== manifest.font.expected_name[0]
+    || actualName[1] !== manifest.font.expected_name[1]
+) {
+    throw new Error('load_default: exact ImageFont.getname family/style differ');
+}
 for (const testCase of manifest.cases) {
     const start = testCase.start ?? [undefined, undefined];
     const actual = font.getmask2(testCase.text, start[0], start[1]);
