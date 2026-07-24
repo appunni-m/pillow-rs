@@ -249,6 +249,18 @@ suite-1 variants and passes 14/14. WASM exposes a thin `toBytesEncoded` adapter
 that forwards the encoder name and arguments to the same Rust implementation;
 it contains no channel swapping or encoder logic.
 
+`Image.apply_transparency` is the fifth completed three-surface seed. The same
+three Pillow 12.2 fixture cases now execute through direct Rust, the installed
+Python ABI, and the built all-codec WASM ABI. They independently cover indexed
+single-index transparency, an indexed alpha table, and PA promotion before the
+metadata commit. Every consumer checks pending metadata before and after,
+palette mode, transparency presence, mode, dimensions, complete indexed/PA
+sample bytes, and the complete RGBA palette. The audit found that the legacy
+five-mode fixtures only exercised no-op images and that the generic Node
+backend returned `null` without calling WASM; the Node and browser adapters now
+call `applyTransparency` instead. Those legacy no-op inputs are not counted as
+compatibility evidence and remain a corpus-deduplication task.
+
 The strict runner exposed two core divergences that the prior tests hid:
 lazy encoded mode-`1` images used header metadata for `mode()` but not for
 `tobytes()`, returning unpacked samples; and lazy GIF images padded the public
@@ -627,6 +639,12 @@ not a stopping condition.
       122 / 17,293 lines, 9 / 3,028 branches, 14 / 1,142 functions, and
       179 / 30,261 regions. These narrow diagnostic totals are not trusted
       coverage evidence until Coverage MCP ingests the artifact.
+- [x] Add and locally validate `make coverage-apply-transparency-rust`. It runs
+      the three meaningful shared Pillow cases through direct Rust and writes
+      `target/coverage/pillow-apply-transparency-rust.json`. The local LLVM
+      report contains 1,041 / 17,315 lines, 55 / 3,030 branches, 82 / 1,143
+      functions, and 1,490 / 30,283 regions. These are diagnostic totals until
+      managed ingestion creates a snapshot.
 - [ ] Present the exact commands, cwd, shell, and artifacts for human approval.
 - [ ] Register the approved commands with Coverage MCP.
 - [ ] Run baseline suites through Coverage MCP and retain snapshot IDs.
@@ -661,6 +679,20 @@ coverage artifact:
   required: true
   coverage_format: llvm-json
   suite: pillow-image-open-rust
+```
+
+Pending exact Coverage MCP approval for indexed transparency:
+
+```text
+name: pillow-apply-transparency-rust
+command: make coverage-apply-transparency-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+coverage artifact:
+  path: target/coverage/pillow-apply-transparency-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-apply-transparency-rust
 ```
 
 ### Phase 1: Canonical oracle corpus
@@ -713,6 +745,9 @@ coverage artifact:
 - [x] Run the same eight independent suite-0 `Image.tobytes` case IDs through
       direct Rust, installed Python, and built WASM, including exact BGR/BGRA
       raw-encoder bytes. This completes the fourth three-surface seed.
+- [x] Replace the fabricated WASM `Image.apply_transparency` result with real
+      delegation and run the same three meaningful Pillow fixtures through
+      Rust, Python, and WASM. This completes the fifth three-surface seed.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
@@ -866,7 +901,7 @@ coverage artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, and 8 Image.tobytes cases; complete corpus not yet proven |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, and 3 Image.apply_transparency cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.
