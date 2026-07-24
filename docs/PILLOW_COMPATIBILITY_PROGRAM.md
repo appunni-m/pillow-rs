@@ -203,6 +203,30 @@ The useful mutation, coercion, error-ordering, registry-integrity, and
 anti-mocking contracts must be represented in the redesigned oracle corpus
 rather than trusted as unrelated unit tests.
 
+### The current JavaScript parity runner is not trusted
+
+`pillow-rs-js/tests/run_wasm_test.mjs` targets a superseded flat fixture
+layout. The canonical corpus currently contains 372 suite-0 and 348 suite-1
+input JSON files under `input/jsons/`, paired with outputs under
+`outputs/jsons/`; the runner only scans for JSON files at the fixture root and
+therefore cannot execute that corpus.
+
+Even if fed legacy flat fixtures, the runner violates the exact-oracle policy:
+
+- it permits per-byte and floating-point tolerance;
+- it substring-matches expected exception messages;
+- it accepts some image-like array values without comparing their bytes;
+- it turns unimplemented, unsupported, unreachable, and missing functions into
+  skips;
+- it silently skips unknown result types and missing operation definitions;
+- its backend contains host-side color/mode behavior and operation routing that
+  can substitute for missing Rust/WASM behavior.
+
+The existing Node runner, browser runner, and generated WASM coverage report
+must not be cited as Pillow compatibility evidence. They must be replaced by a
+strict consumer of the version-2 input/output fixture pairs, with no tolerance
+or unsupported skips, before a JavaScript Coverage MCP suite is registered.
+
 ### Codec integration is incomplete
 
 The adjacent codec implementation already separates JPEG, PNG, GIF, BMP,
@@ -389,6 +413,9 @@ coverage impact.
 - [ ] Build a Rust public-API runner for the canonical corpus.
 - [ ] Refactor the Python runner to call only the installed public ABI.
 - [ ] Refactor the Node/WASM runner to consume the complete canonical corpus.
+- [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
+      substring error matching, descriptor-only acceptance, unknown-result
+      skips, and unsupported-operation skips from the Node/WASM runner.
 - [ ] Add browser/WASM coverage for browser-specific loading and ABI behavior.
 - [ ] Produce a case-by-surface report with pass, fail, and unsupported counts.
 - [ ] Require every applicable case to execute on all three surfaces.
