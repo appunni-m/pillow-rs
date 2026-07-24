@@ -1280,6 +1280,19 @@ fn map_error(e: PilError) -> PyErr {
     }
 }
 
+#[pyfunction]
+fn transposed_font_bbox(
+    bbox: (i32, i32, i32, i32),
+    orientation: Option<&str>,
+) -> (i32, i32, i32, i32) {
+    pillow_rs::font::imagingft::transposed_bbox(bbox, orientation)
+}
+
+#[pyfunction]
+fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
+    pillow_rs::font::imagingft::validate_transposed_length(orientation).map_err(map_error)
+}
+
 /// Activate a compute backend. Returns true if the backend exists on this machine.
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
@@ -1428,6 +1441,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOutline>()?;
     m.add_class::<PyFont>()?;
     m.add_class::<PyPilFont>()?;
+    m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
