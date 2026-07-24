@@ -536,6 +536,7 @@ generated reports, build outputs, and package installs.
 |       |-- paste_oracle.mjs
 |       |-- run_wasm_test.mjs
 |       |-- tobytes_oracle.mjs
+|       |-- transposed_font_oracle.mjs
 |       `-- wasm_backend.mjs
 |-- pillow-rs-py/
 |   |-- Cargo.toml
@@ -600,6 +601,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- run_point_rust_coverage.sh
 |   |   |-- run_python_abi_rust_coverage.sh
 |   |   |-- run_python_wrapper_coverage.sh
+|   |   |-- run_transposed_font_rust_coverage.sh
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
 |   |-- generate_image_backend_operation_fixtures.py
@@ -608,6 +610,7 @@ generated reports, build outputs, and package installs.
 |   |-- generate_point_fixture_inputs.py
 |   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
+|   |-- generate_transposed_font_oracle.py
 |   |-- lint.sh
 |   `-- migrate_fixtures.py
 `-- tests/
@@ -622,6 +625,7 @@ generated reports, build outputs, and package installs.
     |-- test_pa_mutations.py
     |-- test_parity.py
     |-- test_paste_oracle.py
-    `-- test_putdata_parity.py
+    |-- test_putdata_parity.py
+    `-- test_transposed_font_oracle.py
 ```
 <!-- END GENERATED CODE TREE -->
