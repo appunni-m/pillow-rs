@@ -175,6 +175,10 @@ class BindingChecker(ast.NodeVisitor):
 
     # ── Function size check ──
     def visit_FunctionDef(self, node):
+        # This exact Python data-model shape is an ABI adapter:
+        # ``return len(self.<field>)``. Anything more complex is still audited.
+        if node.name == "__len__" and self._is_len_protocol_adapter(node):
+            return
         # AS PER DESIGN: Binding functions should be short delegations.
         # 15 lines is generous for { docstring, arg processing, delegate call, return }
         if len(node.body) > 15 and not node.name.startswith("_"):
@@ -196,6 +200,22 @@ class BindingChecker(ast.NodeVisitor):
             self.visit(stmt)
 
     visit_AsyncFunctionDef = visit_FunctionDef
+
+    @staticmethod
+    def _is_len_protocol_adapter(node) -> bool:
+        if len(node.body) != 1 or not isinstance(node.body[0], ast.Return):
+            return False
+        value = node.body[0].value
+        return (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "len"
+            and len(value.args) == 1
+            and isinstance(value.args[0], ast.Attribute)
+            and isinstance(value.args[0].value, ast.Name)
+            and value.args[0].value.id == "self"
+            and not value.keywords
+        )
 
     def visit_AnnAssign(self, node):
         """Inspect an annotated assignment's value but not its type."""
