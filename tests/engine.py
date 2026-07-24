@@ -721,7 +721,7 @@ def _instance_method_sequence(backend, img, img2, target, params):
     result = getattr(img, target)(**params)
     return {
         "type": type(result).__name__,
-        "values": [_typed_value(value) for value in result],
+        "values": list(result),
     }
 
 
@@ -921,6 +921,67 @@ def _typed_value(value):
     raise TypeError(f"unsupported exact fixture value: {type(value).__name__}")
 
 
+def _canonical_typed_bytes(value):
+    """Encode an exact Python value without expanding it into fixture JSON.
+
+    The format is intentionally small and language-neutral. Every node starts
+    with a one-byte type tag. Variable-width payloads use an unsigned
+    eight-byte big-endian length, and containers recursively encode members in
+    iteration order. Integer and float text uses Python's exact decimal and
+    hexadecimal representations.
+    """
+    encoded = bytearray(b"PTV1")
+
+    def write_length(length):
+        encoded.extend(length.to_bytes(8, "big", signed=False))
+
+    def write_payload(tag, payload):
+        encoded.extend(tag)
+        write_length(len(payload))
+        encoded.extend(payload)
+
+    def encode(item):
+        if item is None:
+            encoded.extend(b"N")
+        elif type(item) is bool:
+            encoded.extend(b"B1" if item else b"B0")
+        elif type(item) is int:
+            write_payload(b"I", str(item).encode("ascii"))
+        elif type(item) is float:
+            write_payload(b"F", item.hex().encode("ascii"))
+        elif type(item) is str:
+            write_payload(b"S", item.encode("utf-8"))
+        elif type(item) is bytes:
+            write_payload(b"Y", item)
+        elif type(item) is bytearray:
+            write_payload(b"A", bytes(item))
+        elif type(item) is memoryview:
+            write_payload(b"M", item.tobytes())
+        elif type(item) is tuple:
+            encoded.extend(b"T")
+            write_length(len(item))
+            for child in item:
+                encode(child)
+        elif type(item) is list:
+            encoded.extend(b"L")
+            write_length(len(item))
+            for child in item:
+                encode(child)
+        elif type(item) is dict:
+            encoded.extend(b"D")
+            write_length(len(item))
+            for key, child in item.items():
+                encode(key)
+                encode(child)
+        else:
+            raise TypeError(
+                f"unsupported exact fixture value: {type(item).__name__}"
+            )
+
+    encode(value)
+    return bytes(encoded)
+
+
 def _assert_image(case, result):
     reference = _load_reference(case["reference"])
     try:
@@ -1018,11 +1079,19 @@ def _assert_typed(case, result):
         return False
 
 
+def _assert_typed_binary(case, result):
+    try:
+        return _canonical_typed_bytes(result) == _load_reference(case["reference"])
+    except (OSError, TypeError, ValueError):
+        return False
+
+
 ASSERT = {
     "image": _assert_image,
     "image_list": _assert_image_list,
     "exact": _assert_exact,
     "typed": _assert_typed,
+    "typed_binary": _assert_typed_binary,
     "string": _assert_string,
     "float": _assert_float,
     "error": _assert_error,

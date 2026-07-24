@@ -525,6 +525,8 @@ generated reports, build outputs, and package installs.
 |       |   `-- wasm_browser.test.mjs
 |       |-- codec_feature_matrix.mjs
 |       |-- execution_engine.mjs
+|       |-- oracle_contract.mjs
+|       |-- oracle_corpus.mjs
 |       |-- run_wasm_test.mjs
 |       `-- wasm_backend.mjs
 |-- pillow-rs-py/

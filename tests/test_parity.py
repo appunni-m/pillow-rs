@@ -50,6 +50,7 @@ ASSERTION_METHODS = {
     "image",
     "image_list",
     "typed",
+    "typed_binary",
     "tuple",
 }
 HOST_CHECKOUT_PATH = re.compile(
@@ -65,7 +66,7 @@ _engine.EXTRA_REFERENCE_DIRS = [
 
 def _assertion_references(assertion):
     method = assertion.get("method")
-    if method == "image":
+    if method in {"image", "typed_binary"}:
         yield assertion.get("reference"), assertion
     elif method == "image_list":
         for item in assertion.get("items", []):
@@ -224,7 +225,11 @@ def _fixture_pair_errors():
                             f"{base_name}/{name}/{case.get('id')}: "
                             f"missing artifact {reference}"
                         )
-                    if relative.suffix == ".bin" and "raw_kind" not in image_assertion:
+                    if (
+                        image_assertion.get("method") == "image"
+                        and relative.suffix == ".bin"
+                        and "raw_kind" not in image_assertion
+                    ):
                         errors.append(
                             f"{base_name}/{name}/{case.get('id')}: "
                             "raw assertion lacks result-kind metadata"
