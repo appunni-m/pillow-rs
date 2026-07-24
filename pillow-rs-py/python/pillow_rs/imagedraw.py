@@ -42,55 +42,28 @@ class Draw:
         self._font = None  # current font for text
 
     def _sync(self):
-        """Sync drawing output back to the Python Image, preserving original mode."""
-        drawn = Image(self._draw.image)
-        # F/I modes store raw 32-bit LE values in the RGBA canvas — no conversion.
-        # Standard modes: the RGBA canvas must be converted back to native format.
-        _RAW_MODES = {"F", "I"}
-        if self._orig_mode not in _RAW_MODES and drawn.mode != self._orig_mode:
-            # Use no-dither conversion for binary modes to avoid Floyd-Steinberg
-            # dither artifacts in the background. PIL draws directly on the native
-            # canvas (no RGBA intermediate), so the conversion back must be lossless
-            # for unmodified pixels (0/255 -> 0/255).
-            dither_arg = "NONE" if self._orig_mode == "1" else None
-            drawn = drawn.convert(self._orig_mode, dither=dither_arg)
-        self._image._rust_image = drawn._rust_image
-
-    def _shape_inks(self, fill, outline):
-        # Pillow ImageDraw starts with ink=-1 and fill=0. When both optional
-        # colors are omitted, shape methods therefore draw an all-255 outline.
-        if fill is None and outline is None and self._orig_mode == "PA":
-            outline = (255, 255)
-        return fill, outline
+        """Install the native-mode image restored by Rust core."""
+        self._image._rust_image = self._draw.image
 
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
-        if fill is None and self._orig_mode != "PA":
-            fill = (0, 0, 0)
         self._draw.line(xy, fill, width if width > 0 else 1)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.rectangle((x0, y0, x1, y1), fill, outline, width)
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.ellipse((x0, y0, x1, y1), fill, outline, width)
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.polygon(xy, fill, outline, width)
         self._sync()
 
     def point(self, xy, fill=None):
-        if fill is None and self._orig_mode != "PA":
-            fill = (0, 0, 0)
-        if isinstance(xy[0], (int, float)):
-            xy = [xy]
         self._draw.point(xy, fill)
         self._sync()
 
@@ -101,31 +74,25 @@ class Draw:
 
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.chord((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
         self._sync()
 
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.pieslice((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
         self._sync()
 
     def circle(self, xy, radius, fill=None, outline=None, width=1):
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.circle((float(xy[0]), float(xy[1])), float(radius), fill, outline, width)
         self._sync()
 
     def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.rounded_rectangle((x0, y0, x1, y1), float(radius), fill, outline, width)
         self._sync()
 
     def bitmap(self, xy, bitmap, fill=None):
         """Draw a bitmap. Pixel iteration done in Rust."""
-        if fill is None:
-            fill = (0, 0, 0)
         self._draw.bitmap((float(xy[0]), float(xy[1])), bitmap._rust_image, fill)
         self._sync()
 

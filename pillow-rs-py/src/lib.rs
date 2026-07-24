@@ -1722,6 +1722,22 @@ pub struct PyDraw {
     draw: pillow_rs::draw::Draw,
 }
 
+fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
+    if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
+        return Ok(points);
+    }
+    let flat = xy.extract::<Vec<i32>>()?;
+    if flat.len() < 2 || flat.len() % 2 != 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "wrong number of coordinates",
+        ));
+    }
+    Ok(flat
+        .chunks_exact(2)
+        .map(|point| (point[0], point[1]))
+        .collect())
+}
+
 #[pymethods]
 impl PyDraw {
     #[new]
@@ -1739,19 +1755,7 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts = if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
-            points
-        } else {
-            let flat = xy.extract::<Vec<i32>>()?;
-            if flat.len() < 4 || flat.len() % 2 != 0 {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "wrong number of coordinates",
-                ));
-            }
-            flat.chunks_exact(2)
-                .map(|point| (point[0], point[1]))
-                .collect()
-        };
+        let pts = extract_draw_points(xy)?;
         let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
         self.draw.polyline(&pts, color, w).map_err(map_error)
     }
@@ -1925,18 +1929,9 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    fn point(&mut self, xy: Vec<Vec<i32>>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn point(&mut self, xy: &Bound<'_, PyAny>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| {
-                if v.len() >= 2 {
-                    (v[0], v[1])
-                } else {
-                    (v[0], v[0])
-                }
-            })
-            .collect();
+        let pts = extract_draw_points(xy)?;
         self.draw.point(&pts, color).map_err(map_error)
     }
 

@@ -54,6 +54,18 @@ impl Draw {
         self.orig_mode.as_deref()
     }
 
+    fn shape_inks(
+        &self,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+    ) -> (Option<(u8, u8, u8, u8)>, Option<(u8, u8, u8, u8)>) {
+        if fill.is_none() && outline.is_none() && self.orig_mode.as_deref() == Some("PA") {
+            (None, Some((255, 255, 255, 255)))
+        } else {
+            (fill, outline)
+        }
+    }
+
     /// Set the output image from a drawn RGBA canvas.
     /// image_clone() handles RGBA→native mode conversion for standard modes.
     /// Only F/I/CMYK need explicit_mode tagging (their RGBA data IS the final format).
@@ -145,6 +157,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawRectangle {
@@ -179,6 +192,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawEllipse {
@@ -210,6 +224,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         if points.len() < 3 {
             return Ok(());
         }
@@ -834,6 +849,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawChord {
@@ -869,6 +885,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawPieslice {
@@ -903,6 +920,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawCircle {
@@ -937,6 +955,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        let (fill, outline) = self.shape_inks(fill, outline);
         let r = radius.round() as i32;
         let d = r * 2;
         if d <= 0 || x1 <= x0 + 1 || y1 <= y0 + 1 {

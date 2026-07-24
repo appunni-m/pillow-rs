@@ -740,6 +740,12 @@ def backend_parity_manifest() -> dict[str, object]:
                 },
             ),
             draw_case(
+                "pa_rectangle_default_outline",
+                pa,
+                "rectangle",
+                {"xy": [1, 1, 3, 3], "width": 1},
+            ),
+            draw_case(
                 "pa_ellipse",
                 pa,
                 "ellipse",
