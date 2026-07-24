@@ -602,15 +602,18 @@ def _file_open(backend, img, target, params):
         fixture = OPEN_FIXTURES.get(fixture_mode)
         if fixture is None:
             raise ValueError(f"no exact open fixture for mode {fixture_mode}")
-        file_b64 = fixture["base64"]
+        file_b64 = bytes.fromhex(fixture["hex"])
     suffix = (
         f".{OPEN_FIXTURES[fixture_mode]['format'].lower()}"
         if fixture_mode is not None
         else requested_suffix or ".png"
     )
     if file_b64:
-        import base64 as _b64
-        data = _b64.b64decode(file_b64)
+        if isinstance(file_b64, str):
+            import base64 as _b64
+            data = _b64.b64decode(file_b64)
+        else:
+            data = file_b64
         if io_kind == "encoded_bytes_error":
             return _call_mod(backend, target)(data, **params)
         if io_kind == "filelike":

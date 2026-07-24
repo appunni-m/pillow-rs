@@ -233,8 +233,11 @@ Python engine. The all-codec WASM ABI decodes PNG `1`/`L`/`LA`/`RGB`/`RGBA`,
 GIF `P`, and TIFF `CMYK`/`I`/`F` inputs and compares exact public mode,
 dimensions, `tobytes()` bytes, and retained palette bytes with Pillow 12.2.
 All nine cases pass. This is Rust-through-WASM execution, but a direct Rust
-consumer of the same case IDs remains required before calling it a complete
-three-surface slice.
+consumer now executes the same nine case IDs with the same raw artifacts and
+exact assertions. Together with the installed Python ABI's 34-case image-I/O
+lane, `ImageModule.open` is the third completed Rust/Python/JS seed. The extra
+Python cases prove host transport behavior and are not duplicated in Rust or
+WASM, where filesystem paths and Python file objects do not exist.
 
 The strict runner exposed two core divergences that the prior tests hid:
 lazy encoded mode-`1` images used header metadata for `mode()` but not for
@@ -667,8 +670,8 @@ coverage artifact:
       and strict Node/WASM runner.
 - [x] Run nine independent PNG/GIF/TIFF Image.open mode paths through the
       all-codec WASM ABI with exact raw public bytes and palette assertions.
-- [ ] Add a direct Rust public-API Image.open consumer for those same nine case
-      IDs to complete the Rust/Python/JS slice.
+- [x] Add a direct Rust public-API Image.open consumer for those same nine case
+      IDs, completing the third Rust/Python/JS seed.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
@@ -819,7 +822,7 @@ coverage artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases and 14 Image.eval cases; complete corpus not yet proven |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, and 9 ImageModule.open cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.

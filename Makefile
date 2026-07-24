@@ -56,6 +56,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
 	@printf "  $(CYAN)make js-image-open-oracle$(NC) Run Image.open corpus through WASM\n"
+	@printf "  $(CYAN)make rust-image-open-oracle$(NC) Run Image.open corpus through Rust API\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
 	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
@@ -159,7 +160,7 @@ build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-compact-values
-.PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle js-oracle-contract js-color3dlut-oracle
+.PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: js-eval-oracle js-image-open-oracle
 .PHONY: backend-support-matrix
 
@@ -214,6 +215,9 @@ rust-color3dlut-oracle: color3dlut-fixtures ## Run Color3DLUT corpus through Rus
 
 rust-eval-oracle: eval-fixtures ## Run Image.eval corpus through Rust API
 	$(MAKE) -C $(CORE_SRC) test-eval-oracle
+
+rust-image-open-oracle: image-io-fixtures ## Run Image.open corpus through Rust API
+	$(MAKE) -C $(CORE_SRC) test-image-open-oracle
 
 backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 	$(MAKE) -C $(CORE_SRC) backend-support-matrix
