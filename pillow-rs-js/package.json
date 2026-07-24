@@ -32,6 +32,7 @@
     "test:image-open-oracle": "node tests/image_open_oracle.mjs",
     "test:apply-transparency-oracle": "node tests/apply_transparency_oracle.mjs",
     "test:paste-oracle": "node tests/paste_oracle.mjs",
+    "test:drawing-oracle": "node tests/drawing_oracle.mjs",
     "test:tobytes-oracle": "node tests/tobytes_oracle.mjs",
     "test:oracle-contract": "node tests/oracle_contract.mjs",
     "test:package": "node scripts/check_package.mjs",

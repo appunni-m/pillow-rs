@@ -60,6 +60,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make js-tobytes-oracle$(NC) Run Image.tobytes corpus through WASM\n"
 	@printf "  $(CYAN)make apply-transparency-oracle$(NC) Run exact Pillow Image.apply_transparency fixtures through all ABIs\n"
 	@printf "  $(CYAN)make paste-oracle$(NC) Run exact Pillow Image.paste fixtures through all ABIs\n"
+	@printf "  $(CYAN)make drawing-oracle$(NC) Run exact Pillow ImageDraw fixtures through all ABIs\n"
 	@printf "  $(CYAN)make rust-image-open-oracle$(NC) Run Image.open corpus through Rust API\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
@@ -107,6 +108,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make coverage-image-open-rust$(NC) Run Image.open Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-apply-transparency-rust$(NC) Run Image.apply_transparency Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-paste-rust$(NC) Run Image.paste Pillow parity with Rust LLVM coverage\n"
+	@printf "  $(CYAN)make coverage-drawing-rust$(NC) Run ImageDraw Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-python-wrapper$(NC) Run Pillow parity with Python wrapper branch coverage\n"
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
@@ -168,7 +170,7 @@ build-all: build build-wasm-release ## Build Python + WASM
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
-.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle
+.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle
 .PHONY: backend-support-matrix
 
 test: fixtures ## Run all PIL parity tests
@@ -264,6 +266,11 @@ paste-oracle: build-wasm-extra ## Run exact Pillow Image.paste fixtures through 
 	$(MAKE) -C $(CORE_SRC) test-paste-oracle
 	$(PYTHON) -m pytest tests/test_paste_oracle.py -q
 	cd $(JS_SRC) && npm run test:paste-oracle
+
+drawing-oracle: build-wasm-extra ## Run exact Pillow ImageDraw fixtures through Rust/Python/WASM
+	$(MAKE) -C $(CORE_SRC) test-drawing-oracle
+	$(PYTHON) -m pytest tests/test_drawing_oracle.py -q
+	cd $(JS_SRC) && npm run test:drawing-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
@@ -537,7 +544,7 @@ lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
-.PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust
+.PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -560,6 +567,9 @@ coverage-apply-transparency-rust: ## Run Image.apply_transparency parity and exp
 
 coverage-paste-rust: ## Run Image.paste parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_paste_rust_coverage.sh
+
+coverage-drawing-rust: ## Run ImageDraw parity and export Rust LLVM branch coverage
+	bash scripts/coverage/run_drawing_rust_coverage.sh
 
 coverage-image-backend-rust: ## Run exact backend parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_image_backend_rust_coverage.sh

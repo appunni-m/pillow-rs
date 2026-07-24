@@ -96,6 +96,36 @@ impl Draw {
         Ok(())
     }
 
+    /// Draws consecutive line segments through `points`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when fewer than two points are given.
+    /// Deferred pipeline execution reports materialization failures later.
+    pub fn polyline(
+        &mut self,
+        points: &[(i32, i32)],
+        fill: (u8, u8, u8, u8),
+        width: u32,
+    ) -> Result<(), PilError> {
+        if points.len() < 2 {
+            return Err(PilError::ValueError(
+                "wrong number of coordinates".to_owned(),
+            ));
+        }
+        for segment in points.windows(2) {
+            self.line(
+                segment[0].0,
+                segment[0].1,
+                segment[1].0,
+                segment[1].1,
+                fill,
+                width,
+            )?;
+        }
+        Ok(())
+    }
+
     /// Draws a rectangle bounded by `(x0, y0, x1, y1)`.
     ///
     /// `fill` paints the interior when present. `outline` paints the border

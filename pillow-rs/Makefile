@@ -69,6 +69,10 @@ test-paste-oracle:
 	$(CARGO) test --all-features --test backend_parity --locked paste_is_exact_on_portable_cpu_backend -- --exact --nocapture
 	$(CARGO) test --all-features --test backend_parity --locked paste_validation_matches_exact_pillow_errors -- --exact --nocapture
 
+.PHONY: test-drawing-oracle
+test-drawing-oracle:
+	$(CARGO) test --all-features --test backend_parity --locked drawing_is_exact_and_backend_capabilities_are_truthful -- --exact --nocapture
+
 .PHONY: test-color3dlut-oracle
 test-color3dlut-oracle:
 	$(CARGO) test --all-features --test color3dlut_oracle --locked -- --nocapture
