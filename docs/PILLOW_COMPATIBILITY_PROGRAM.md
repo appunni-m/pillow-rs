@@ -348,6 +348,14 @@ coverage impact.
       1,345 / 3,528 branches, 1,001 / 1,600 functions, and
       19,852 / 36,378 regions. These are local diagnostic totals until
       Coverage MCP ingests the report.
+- [x] Add `make coverage-python-wrapper` as a distinct Pillow-oracle-only
+      coverage lane for Python wrapper lines and branches. It deliberately
+      excludes Rust execution metrics, which remain owned by
+      `pillow-python-abi-rust`.
+- [x] Validate the Python-wrapper report from the 1,580-pass / 18-fail oracle
+      run: 981 / 1,237 executable statements and 119 / 276 branches across 14
+      wrapper files. These remain local diagnostic totals until Coverage MCP
+      ingests the report.
 - [ ] Present the exact commands, cwd, shell, and artifacts for human approval.
 - [ ] Register the approved commands with Coverage MCP.
 - [ ] Run baseline suites through Coverage MCP and retain snapshot IDs.
@@ -480,6 +488,7 @@ coverage impact.
 | Python thin-binding violations | **60 across 6 files** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
+| Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |
 | CPU registered operations | 86 |
 | SIMD-pool registered operations | 69 |
 | CPU operations without SIMD registration | 17 |

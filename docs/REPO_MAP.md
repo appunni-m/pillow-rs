@@ -581,6 +581,8 @@ generated reports, build outputs, and package installs.
 |   |   |-- generate_multi_backend_coverage.py
 |   |   |-- generate_wasm_coverage.py
 |   |   |-- ops_registry.py
+|   |   |-- run_python_abi_rust_coverage.sh
+|   |   |-- run_python_wrapper_coverage.sh
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
 |   |-- generate_image_backend_operation_fixtures.py
