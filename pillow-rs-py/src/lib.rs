@@ -2823,8 +2823,10 @@ fn palette_getcolor_validate(
 /// Save palette data to a text file.
 #[pyfunction]
 fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> {
-    pillow_rs::color::palette_save_to_file(&palette, mode, fp)
-        .map_err(pyo3::exceptions::PyOSError::new_err)
+    let text = pillow_rs::color::palette_to_text(&palette, mode);
+    std::fs::write(fp, text).map_err(|error| {
+        pyo3::exceptions::PyOSError::new_err(format!("Cannot write palette file: {error}"))
+    })
 }
 
 /// Compute default bitmap font bounding box (6x11 px per char).

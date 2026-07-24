@@ -1836,11 +1836,6 @@ pub fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
     color::palette_to_text(&palette, mode)
 }
 
-#[wasm_bindgen(js_name = "paletteSaveToFile")]
-pub fn palette_save_to_file(palette: Vec<u8>, mode: &str, path: &str) -> Result<(), JsValue> {
-    color::palette_save_to_file(&palette, mode, path).map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 // ImageStat — statistics
 // ══════════════════════════════════════════════════════════════════════════════
