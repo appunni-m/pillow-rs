@@ -34,6 +34,7 @@
     "test:paste-oracle": "node tests/paste_oracle.mjs",
     "test:drawing-oracle": "node tests/drawing_oracle.mjs",
     "test:imagefont-getmask2-oracle": "node tests/imagefont_getmask2_oracle.mjs",
+    "test:transposed-font-oracle": "node tests/transposed_font_oracle.mjs",
     "test:tobytes-oracle": "node tests/tobytes_oracle.mjs",
     "test:oracle-contract": "node tests/oracle_contract.mjs",
     "test:package": "node scripts/check_package.mjs",

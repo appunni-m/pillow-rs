@@ -6,6 +6,7 @@
 
 use super::{Font, TrueTypeFont};
 use crate::error::PilError;
+use crate::image::Image;
 use fontdone::ffi;
 
 pub(super) struct TrueTypeEngine {
@@ -93,6 +94,28 @@ pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilEr
 
 fn transposed_swaps_axes(orientation: Option<&str>) -> bool {
     matches!(orientation, Some("ROTATE_90" | "ROTATE_270"))
+}
+
+/// Render a font mask and apply Pillow's optional transpose operation.
+///
+/// # Errors
+///
+/// Returns [`PilError`] when the requested transpose is invalid or the mask
+/// pipeline cannot be materialized.
+pub fn get_transposed_mask(
+    font: &Font,
+    text: &str,
+    orientation: Option<&str>,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    let (width, height, pixels) = getmask(font, text);
+    let image = Image::from_luma_mask(width, height, pixels)?;
+    let transformed = if let Some(method) = orientation {
+        image.transpose(method)?
+    } else {
+        image
+    };
+    let (width, height) = transformed.size()?;
+    Ok((width, height, transformed.tobytes_unpacked()?))
 }
 
 pub fn getmetrics(font: &Font) -> (u32, u32) {

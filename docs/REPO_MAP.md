@@ -530,6 +530,7 @@ generated reports, build outputs, and package installs.
 |       |-- eval_oracle.mjs
 |       |-- execution_engine.mjs
 |       |-- image_open_oracle.mjs
+|       |-- imagefont_getmask2_oracle.mjs
 |       |-- oracle_contract.mjs
 |       |-- oracle_corpus.mjs
 |       |-- paste_oracle.mjs
@@ -594,6 +595,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- run_drawing_rust_coverage.sh
 |   |   |-- run_image_backend_rust_coverage.sh
 |   |   |-- run_image_open_rust_coverage.sh
+|   |   |-- run_imagefont_getmask2_rust_coverage.sh
 |   |   |-- run_paste_rust_coverage.sh
 |   |   |-- run_point_rust_coverage.sh
 |   |   |-- run_python_abi_rust_coverage.sh
@@ -616,6 +618,7 @@ generated reports, build outputs, and package installs.
     |   `-- image_open_inputs.json
     |-- test_apply_transparency_oracle.py
     |-- test_drawing_oracle.py
+    |-- test_imagefont_oracle.py
     |-- test_pa_mutations.py
     |-- test_parity.py
     |-- test_paste_oracle.py

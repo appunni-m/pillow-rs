@@ -239,6 +239,12 @@ class TransposedFont:
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
+        if isinstance(self.font, FreeTypeFont):
+            from .image import Image as PILImage
+            image = self.font._rust_font.get_transposed_mask_image(
+                str(text), self.orientation
+            )
+            return ImagingCore(PILImage(image))
         im = self.font.getmask(text, mode, *args, **kwargs)
         if self.orientation is not None:
             return im.transpose(self.orientation)

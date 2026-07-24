@@ -1582,6 +1582,18 @@ impl PyFont {
         Ok(pillow_rs::font::imagingft::getmask(&self.inner, text))
     }
 
+    fn get_transposed_mask_image(
+        &self,
+        text: &str,
+        orientation: Option<&str>,
+    ) -> PyResult<PyImage> {
+        let (width, height, pixels) =
+            pillow_rs::font::imagingft::get_transposed_mask(&self.inner, text, orientation)
+                .map_err(map_error)?;
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok(PyImage { inner })
+    }
+
     #[pyo3(signature = (text, start=None))]
     fn getmask2_image(
         &self,

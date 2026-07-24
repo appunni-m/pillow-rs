@@ -1075,6 +1075,47 @@ impl ImageFont {
         vec![family.to_owned(), style.to_owned()]
     }
 
+    #[wasm_bindgen(js_name = "getTransposedMask")]
+    pub fn get_transposed_mask(
+        &self,
+        text: &str,
+        orientation: Option<String>,
+    ) -> Result<ImageFontMask, JsValue> {
+        let (width, height, pixels) = pillow_rs::font::imagingft::get_transposed_mask(
+            &self.font,
+            text,
+            orientation.as_deref(),
+        )
+        .map_err(err)?;
+        Ok(ImageFontMask {
+            width,
+            height,
+            offset_x: 0,
+            offset_y: 0,
+            pixels,
+        })
+    }
+
+    #[wasm_bindgen(js_name = "getTransposedBbox")]
+    pub fn get_transposed_bbox(&self, text: &str, orientation: Option<String>) -> Vec<i32> {
+        let bbox = pillow_rs::font::imagingft::transposed_bbox(
+            pillow_rs::font::imagingft::getbbox(&self.font, text),
+            orientation.as_deref(),
+        );
+        vec![bbox.0, bbox.1, bbox.2, bbox.3]
+    }
+
+    #[wasm_bindgen(js_name = "getTransposedLength")]
+    pub fn get_transposed_length(
+        &self,
+        text: &str,
+        orientation: Option<String>,
+    ) -> Result<f32, JsValue> {
+        pillow_rs::font::imagingft::validate_transposed_length(orientation.as_deref())
+            .map_err(err)?;
+        Ok(pillow_rs::font::imagingft::getlength(&self.font, text))
+    }
+
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Vec<u32> {
         let (w, h) = self.font.text_bbox(text);
