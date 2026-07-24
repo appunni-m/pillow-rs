@@ -88,6 +88,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make lint$(NC)           fmt + clippy\n"
 	@printf "\n$(BOLD)Coverage$(NC)\n"
 	@printf "  $(CYAN)make coverage$(NC)       Run tests + compute coverage\n"
+	@printf "  $(CYAN)make coverage-python-abi-rust$(NC) Run Pillow parity through PyO3 with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
 	@printf "  $(CYAN)make coverage-wasm$(NC)  Generate WASM coverage report\n"
@@ -388,11 +389,15 @@ clippy-core: ## Run clippy on core only
 lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
-.PHONY: coverage coverage-validate coverage-report coverage-wasm
+.PHONY: coverage coverage-python-abi-rust coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
 	@[ -f "$(REPORT)" ] || { echo "No test report found. Run: make test"; exit 1; }
 	$(PYTHON) scripts/coverage/compute_coverage.py $(MANIFEST) $(REPORT)
+
+coverage-python-abi-rust: ## Run Pillow parity through PyO3 and export Rust LLVM coverage
+	PYTHON=$(PYTHON) MATURIN=$(MATURIN) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
+		bash scripts/coverage/run_python_abi_rust_coverage.sh
 
 coverage-validate: ## Validate coverage against manifest (exit 1 on gaps)
 	$(PYTHON) scripts/coverage/validate_coverage.py $(MANIFEST)

@@ -328,10 +328,23 @@ coverage impact.
 
 ### Phase 0: Establish trustworthy measurement
 
-- [ ] Define stable suite names for Rust oracle parity, Python ABI oracle
-      parity, Node/WASM ABI oracle parity, and browser/WASM oracle parity.
+- [x] Define stable suite names for Rust oracle parity, Python ABI oracle
+      parity, Node/WASM ABI oracle parity, and browser/WASM oracle parity:
+      `pillow-rust-api`, `pillow-python-abi-rust`,
+      `pillow-python-wrapper`, `pillow-node-wasm`, and
+      `pillow-browser-wasm`.
 - [ ] Add maintained `make` targets that emit supported line, branch,
       function, and region coverage artifacts.
+- [x] Add the first maintained target, `make coverage-python-abi-rust`, which
+      runs the Pillow corpus through the installed PyO3 extension and writes
+      nightly LLVM line, branch, function, and region JSON for Rust core plus
+      binding execution. It preserves the parity suite exit status even when
+      coverage export succeeds.
+- [x] Validate `make PYTHON=.venv/bin/python coverage-python-abi-rust`
+      end-to-end. The 2026-07-24 diagnostic run retained all 18 parity failures
+      and produced 11,834 / 20,856 lines, 1,345 / 3,528 branches,
+      1,001 / 1,600 functions, and 19,852 / 36,378 regions. These are local
+      diagnostic totals until Coverage MCP ingests the report.
 - [ ] Present the exact commands, cwd, shell, and artifacts for human approval.
 - [ ] Register the approved commands with Coverage MCP.
 - [ ] Run baseline suites through Coverage MCP and retain snapshot IDs.
@@ -463,6 +476,7 @@ coverage impact.
 | Ingested coverage snapshots | **0** |
 | Python thin-binding violations | **60 across 6 files** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
+| Python ABI Rust diagnostic coverage | 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | CPU registered operations | 86 |
 | SIMD-pool registered operations | 69 |
 | CPU operations without SIMD registration | 17 |
