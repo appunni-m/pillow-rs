@@ -5,6 +5,13 @@
     "version": "12.2.0",
     "freetype_version": "2.14.3"
   },
+  "font": {
+    "kind": "load_default",
+    "expected_name": [
+      "Aileron",
+      "Regular"
+    ]
+  },
   "cases": [
     {
       "id": "baseline",

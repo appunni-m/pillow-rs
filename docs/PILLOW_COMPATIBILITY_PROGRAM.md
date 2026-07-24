@@ -926,6 +926,16 @@ artifact:
       under LLVM branch instrumentation and emits
       `target/coverage/pillow-imagefont-getmask2-rust.json`. Managed Coverage
       MCP ingestion is still required before `ImageFont.getmask2` is trusted.
+- [x] Remove Python's redundant `ImageFont.getname` exception handling,
+      tuple-shape validation, and fabricated `("Unknown", "Regular")`
+      fallback. Rust already owns family/style resolution and returns the
+      fixed two-field ABI contract. Extend the pinned shared default-font
+      oracle with the exact Pillow family/style and require the direct Rust,
+      installed Python, and JavaScript/WASM consumers to agree before making
+      Python a one-line delegation. All three surfaces now match Pillow's exact
+      `("Aileron", "Regular")` result, while the five independent mask cases
+      remain exact; the executable Python checker falls from 34 to 33
+      violations.
 
 The locally validated lane passes the shared 5/5 exact oracle cases and records
 6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
@@ -1060,7 +1070,7 @@ coverage artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **34 actionable executable violations** |
+| Python thin-binding violations | **33 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

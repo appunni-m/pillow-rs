@@ -1069,6 +1069,12 @@ impl ImageFont {
         }
     }
 
+    #[wasm_bindgen(js_name = "getname")]
+    pub fn getname(&self) -> Vec<String> {
+        let (family, style) = pillow_rs::font::imagingft::getname(&self.font);
+        vec![family.to_owned(), style.to_owned()]
+    }
+
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Vec<u32> {
         let (w, h) = self.font.text_bbox(text);
