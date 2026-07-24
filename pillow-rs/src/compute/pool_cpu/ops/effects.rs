@@ -1056,23 +1056,54 @@ fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize 
     x + y * sx + z * sxy
 }
 
+fn color_lut_interpolate(a: i16, b: i16, shift: i32) -> i16 {
+    const SHIFT_BITS: i32 = 15;
+    let value =
+        (i64::from(a) * i64::from((1 << SHIFT_BITS) - shift) + i64::from(b) * i64::from(shift))
+            >> SHIFT_BITS;
+    value as i16
+}
+
 pub fn op_color3dlut(
     img: &DynamicImage,
     size: (u32, u32, u32),
     table: &[f64],
     channels: u32,
+    source_mode: PixelMode,
+    target_mode: PixelMode,
 ) -> Result<DynamicImage, PilError> {
     let (sx, sy, sz) = (size.0 as usize, size.1 as usize, size.2 as usize);
     let ch = channels as usize;
     let sxy = sx * sy;
 
     let (w, h) = img.dimensions();
-    let src_channels = img.color().channel_count() as usize;
-
-    // Precompute grid mapping: pixel value → fractional grid coordinate
-    let scale_x = (sx - 1) as f64 / 255.0;
-    let scale_y = (sy - 1) as f64 / 255.0;
-    let scale_z = (sz - 1) as f64 / 255.0;
+    const PRECISION_BITS: i32 = 4;
+    const SCALE_BITS: u32 = 18;
+    const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
+    const SHIFT_BITS: u32 = 15;
+    let scales = [
+        ((sx - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+        ((sy - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+        ((sz - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+    ];
+    // Pillow converts Python sequences to float32 before preparing signed
+    // 12.4 fixed-point entries in `_prepare_lut_table`.
+    let prepared: Vec<i16> = table
+        .iter()
+        .map(|value| {
+            let item = *value as f32;
+            let scaled = item * ((255 << PRECISION_BITS) as f32);
+            if scaled >= i16::MAX as f32 - 0.5 {
+                i16::MAX
+            } else if scaled <= i16::MIN as f32 + 0.5 {
+                i16::MIN
+            } else if item < 0.0 {
+                (scaled - 0.5) as i16
+            } else {
+                (scaled + 0.5) as i16
+            }
+        })
+        .collect();
 
     let mut out = vec![0u8; (w * h) as usize * 4];
 
@@ -1081,65 +1112,74 @@ pub fn op_color3dlut(
             let out_idx = ((y * w + x) as usize) * 4;
             let px = img.get_pixel(x, y).0;
 
-            let fx = px[0] as f64 * scale_x;
-            let fy = px[1] as f64 * scale_y;
-            let fz = px[2] as f64 * scale_z;
-
-            let x0 = (fx.floor() as usize).min(sx - 1);
-            let y0 = (fy.floor() as usize).min(sy - 1);
-            let z0 = (fz.floor() as usize).min(sz - 1);
-            let x1 = (x0 + 1).min(sx - 1);
-            let y1 = (y0 + 1).min(sy - 1);
-            let z1 = (z0 + 1).min(sz - 1);
-
-            let dx = fx - x0 as f64;
-            let dy = fy - y0 as f64;
-            let dz = fz - z0 as f64;
-
-            let w000 = (1.0 - dx) * (1.0 - dy) * (1.0 - dz);
-            let w100 = dx * (1.0 - dy) * (1.0 - dz);
-            let w010 = (1.0 - dx) * dy * (1.0 - dz);
-            let w110 = dx * dy * (1.0 - dz);
-            let w001 = (1.0 - dx) * (1.0 - dy) * dz;
-            let w101 = dx * (1.0 - dy) * dz;
-            let w011 = (1.0 - dx) * dy * dz;
-            let w111 = dx * dy * dz;
-
-            let base000 = table_index_3d(x0, y0, z0, sx, sxy) * ch;
-            let base100 = table_index_3d(x1, y0, z0, sx, sxy) * ch;
-            let base010 = table_index_3d(x0, y1, z0, sx, sxy) * ch;
-            let base110 = table_index_3d(x1, y1, z0, sx, sxy) * ch;
-            let base001 = table_index_3d(x0, y0, z1, sx, sxy) * ch;
-            let base101 = table_index_3d(x1, y0, z1, sx, sxy) * ch;
-            let base011 = table_index_3d(x0, y1, z1, sx, sxy) * ch;
-            let base111 = table_index_3d(x1, y1, z1, sx, sxy) * ch;
+            let indices = [
+                u32::from(px[0]) * scales[0],
+                u32::from(px[1]) * scales[1],
+                u32::from(px[2]) * scales[2],
+            ];
+            let shifts = indices.map(|index| {
+                ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32
+            });
+            let base = table_index_3d(
+                (indices[0] >> SCALE_BITS) as usize,
+                (indices[1] >> SCALE_BITS) as usize,
+                (indices[2] >> SCALE_BITS) as usize,
+                sx,
+                sxy,
+            ) * ch;
 
             for c in 0..ch {
-                let v = w000 * table[base000 + c]
-                    + w100 * table[base100 + c]
-                    + w010 * table[base010 + c]
-                    + w110 * table[base110 + c]
-                    + w001 * table[base001 + c]
-                    + w101 * table[base101 + c]
-                    + w011 * table[base011 + c]
-                    + w111 * table[base111 + c];
-                // PIL uses _prepare_lut_table which does item * 16320 + 0.5 (round to INT16),
-                // then clip8 does (result + 32) >> 6 = (result / 64) truncated with rounding.
-                // Equivalent to: round(v * 255.0) clamped to [0, 255]
-                let clipped = (v * 255.0 + 0.5).floor().max(0.0).min(255.0) as u8;
-                out[out_idx + c] = clipped;
+                let left_left = color_lut_interpolate(
+                    prepared[base + c],
+                    prepared[base + ch + c],
+                    shifts[0],
+                );
+                let left_right = color_lut_interpolate(
+                    prepared[base + sx * ch + c],
+                    prepared[base + sx * ch + ch + c],
+                    shifts[0],
+                );
+                let left = color_lut_interpolate(left_left, left_right, shifts[1]);
+                let right_left = color_lut_interpolate(
+                    prepared[base + sxy * ch + c],
+                    prepared[base + sxy * ch + ch + c],
+                    shifts[0],
+                );
+                let right_right = color_lut_interpolate(
+                    prepared[base + sxy * ch + sx * ch + c],
+                    prepared[base + sxy * ch + sx * ch + ch + c],
+                    shifts[0],
+                );
+                let right = color_lut_interpolate(right_left, right_right, shifts[1]);
+                let result = color_lut_interpolate(left, right, shifts[2]);
+                out[out_idx + c] =
+                    ((i32::from(result) + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)
+                        .clamp(0, 255) as u8;
             }
             if ch == 3 {
-                out[out_idx + 3] = if src_channels >= 4 { px[3] } else { 255 };
+                out[out_idx + 3] = if source_mode.channels() == 4 {
+                    px[3]
+                } else {
+                    255
+                };
             }
         }
     }
 
-    // Preserve input color type (RGB input → RGB output, RGBA → RGBA)
-    let result = DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(w, h, out).expect("color3dlut: buffer size mismatch"),
-    );
-    Ok(preserve_mode(img, result))
+    let rgba = RgbaImage::from_raw(w, h, out)
+        .ok_or_else(|| PilError::InternalError("color3dlut output size mismatch".into()))?;
+    match target_mode {
+        PixelMode::RGB => Ok(DynamicImage::ImageRgb8(
+            image_slash_star::RgbImage::from_fn(w, h, |x, y| {
+                let pixel = rgba.get_pixel(x, y);
+                image_slash_star::Rgb([pixel[0], pixel[1], pixel[2]])
+            }),
+        )),
+        PixelMode::RGBA | PixelMode::CMYK => Ok(DynamicImage::ImageRgba8(rgba)),
+        _ => Err(PilError::InternalError(
+            "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
+        )),
+    }
 }
 
 // ── MESH transform — piecewise bilinear quad mapping ──

@@ -296,6 +296,26 @@ def _make_filter(backend, target, params):
     filter_cls = getattr(backend.ImageFilter, target)
     BUILTINS = {"BLUR", "CONTOUR", "DETAIL", "EDGE_ENHANCE", "EDGE_ENHANCE_MORE",
                 "EMBOSS", "FIND_EDGES", "SHARPEN", "SMOOTH", "SMOOTH_MORE"}
+    if target == "Color3DLUT" and "_table_pattern" in params:
+        pattern = params.pop("_table_pattern")
+        raw_size = params["size"]
+        size = (raw_size, raw_size, raw_size) if isinstance(raw_size, int) else tuple(raw_size)
+        channels = params.get("channels", 3)
+        if pattern == "identity":
+            table = []
+            for z in range(size[2]):
+                for y in range(size[1]):
+                    for x in range(size[0]):
+                        values = [
+                            x / (size[0] - 1),
+                            y / (size[1] - 1),
+                            z / (size[2] - 1),
+                            (x + 2 * y + 3 * z) / (6 * (size[0] - 1)),
+                        ]
+                        table.extend(values[:channels])
+            params["table"] = table
+        else:
+            raise ValueError(f"unknown Color3DLUT table pattern: {pattern}")
     return filter_cls if target in BUILTINS else filter_cls(**params)
 
 def _stat_to_dict(stat):

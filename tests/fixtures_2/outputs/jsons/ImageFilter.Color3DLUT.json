@@ -9,10 +9,33 @@
   },
   "cases": [
     {
-      "id": "ImageFilter_Color3DLUT_RGB_suite1",
+      "id": "ImageFilter_Color3DLUT_L_rejects_input_mode",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message": "image has wrong mode"
+      }
+    },
+    {
+      "id": "ImageFilter_Color3DLUT_RGB_four_channel_requires_target",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message": "image has wrong mode"
+      }
+    },
+    {
+      "id": "ImageFilter_Color3DLUT_RGBA_three_channel_to_RGB",
       "assert": {
         "method": "image",
-        "reference": "images/ImageFilter.Color3DLUT_ImageFilter_Color3DLUT_RGB_suite1.png"
+        "reference": "images/ImageFilter.Color3DLUT_ImageFilter_Color3DLUT_RGBA_three_channel_to_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_Color3DLUT_CMYK_four_channel_to_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.Color3DLUT_ImageFilter_Color3DLUT_CMYK_four_channel_to_RGBA.png"
       }
     }
   ]

@@ -609,10 +609,11 @@ impl PyImage {
         size: (u32, u32, u32),
         table: Vec<f64>,
         channels: Option<u32>,
+        target_mode: Option<&str>,
     ) -> PyResult<PyImage> {
         let rs = self
             .inner
-            .color3dlut(size, table, channels.unwrap_or(3))
+            .color3dlut(size, table, channels.unwrap_or(3), target_mode)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1474,6 +1475,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_new, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
+    m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
@@ -3068,6 +3070,16 @@ fn color3dlut_transform(
         }
     }
     Ok(out_table)
+}
+
+#[pyfunction]
+fn color3dlut_repr(
+    table_type: &str,
+    size: (u32, u32, u32),
+    channels: u32,
+    target_mode: Option<&str>,
+) -> String {
+    pillow_rs::ops::param_filters::color3dlut_repr(table_type, size, channels, target_mode)
 }
 
 /// Prepare kernel parameters for image convolution.

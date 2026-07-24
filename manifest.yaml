@@ -1807,11 +1807,11 @@ modules:
         target_mode: str|None=None)'
       supported_modes:
       - RGB
+      - RGBA
+      - CMYK
       status: implemented
       supported_targets:
       - cpu
-      - gpu
-      - simd
   ImageEnhance:
     classes:
     - name: Brightness
