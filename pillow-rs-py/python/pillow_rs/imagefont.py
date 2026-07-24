@@ -236,11 +236,6 @@ class TransposedFont:
         """
         self.font = font
         self.orientation = orientation
-        # Normalise orientation to a comparable form
-        self._is_swap = False
-        if orientation is not None:
-            name = orientation.name if hasattr(orientation, 'name') else str(orientation)
-            self._is_swap = name.endswith('90') or name.endswith('270')
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
@@ -249,28 +244,14 @@ class TransposedFont:
             return im.transpose(self.orientation)
         return im
 
-    def getmask2(self, text, mode="", *args, **kwargs):
-        """Create a mask + offset for the text, optionally transposed."""
-        mask, offset = self.font.getmask2(text, mode, *args, **kwargs)
-        if self.orientation is not None:
-            mask = mask.transpose(self.orientation)
-        return mask, offset
-
     def getbbox(self, text, *args, **kwargs):
         """Get bounding box for text, adjusted for orientation.
 
         For rotated text (90/270 degrees), width and height are swapped.
         """
-        result = self.font.getbbox(text, *args, **kwargs)
-        if len(result) == 4:
-            left, top, right, bottom = result
-            width = right - left
-            height = bottom - top
-        else:
-            width, height = result
-        if self._is_swap:
-            return 0, 0, height, width
-        return 0, 0, width, height
+        return _core.transposed_font_bbox(
+            self.font.getbbox(text, *args, **kwargs), self.orientation
+        )
 
     def getlength(self, text, *args, **kwargs):
         """Get text length.
@@ -278,10 +259,7 @@ class TransposedFont:
         :raises ValueError: If text is rotated by 90 or 270 degrees,
             where length is undefined.
         """
-        if self._is_swap:
-            raise ValueError(
-                "text length is undefined for text rotated by 90 or 270 degrees"
-            )
+        _core.validate_transposed_font_length(self.orientation)
         return self.font.getlength(text, *args, **kwargs)
 
 

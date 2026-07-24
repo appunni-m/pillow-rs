@@ -951,6 +951,13 @@ artifact:
       geometry; Python may retain only object wrapping and enum/type
       conversion. Do not claim Rust/Python/JS ABI equivalence until a shared
       oracle has executable consumers on every surface that exposes this API.
+      The first ownership step is complete: pure Rust now owns bbox subtraction,
+      axis-swap classification, and the exact rotated-length `ValueError`;
+      Python delegates to those helpers and no longer exposes the non-Pillow
+      `getmask2`. All eight existing exact Pillow fixtures pass, and the
+      executable checker falls from 33 to 29 violations. This is not yet
+      complete because the duplicate fixtures still need replacement and the
+      shared Rust/JS consumers still need to be added.
 
 The locally validated lane passes the shared 5/5 exact oracle cases and records
 6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
@@ -1085,7 +1092,7 @@ coverage artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **33 actionable executable violations** |
+| Python thin-binding violations | **29 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

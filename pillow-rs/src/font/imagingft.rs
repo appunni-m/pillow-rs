@@ -59,6 +59,42 @@ pub fn getname(font: &Font) -> (&str, &str) {
     }
 }
 
+/// Normalize a wrapped font bounding box using Pillow's `TransposedFont` rules.
+///
+/// Pillow moves the top-left to the origin and swaps the extents only for
+/// `ROTATE_90` and `ROTATE_270`. Other transpose methods retain the extents.
+#[must_use]
+pub fn transposed_bbox(
+    (left, top, right, bottom): (i32, i32, i32, i32),
+    orientation: Option<&str>,
+) -> (i32, i32, i32, i32) {
+    let width = right - left;
+    let height = bottom - top;
+    if transposed_swaps_axes(orientation) {
+        (0, 0, height, width)
+    } else {
+        (0, 0, width, height)
+    }
+}
+
+/// Validate whether Pillow defines text length for a transposed font.
+///
+/// # Errors
+///
+/// Returns Pillow's exact [`PilError::ValueError`] for 90° and 270° rotation.
+pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilError> {
+    if transposed_swaps_axes(orientation) {
+        return Err(PilError::ValueError(
+            "text length is undefined for text rotated by 90 or 270 degrees".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn transposed_swaps_axes(orientation: Option<&str>) -> bool {
+    matches!(orientation, Some("ROTATE_90" | "ROTATE_270"))
+}
+
 pub fn getmetrics(font: &Font) -> (u32, u32) {
     match font {
         Font::TrueType(t) => (
