@@ -55,6 +55,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
+	@printf "  $(CYAN)make js-image-open-oracle$(NC) Run Image.open corpus through WASM\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
 	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
@@ -159,7 +160,7 @@ build-all: build build-wasm-release ## Build Python + WASM
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle js-oracle-contract js-color3dlut-oracle
-.PHONY: js-eval-oracle
+.PHONY: js-eval-oracle js-image-open-oracle
 .PHONY: backend-support-matrix
 
 test: fixtures ## Run all PIL parity tests
@@ -229,6 +230,9 @@ js-color3dlut-oracle: color3dlut-fixtures build-wasm-core ## Run Color3DLUT corp
 
 js-eval-oracle: eval-fixtures build-wasm-core ## Run Image.eval corpus through WASM
 	cd $(JS_SRC) && npm run test:eval-oracle
+
+js-image-open-oracle: image-io-fixtures build-wasm-extra ## Run Image.open corpus through WASM
+	cd $(JS_SRC) && npm run test:image-open-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 

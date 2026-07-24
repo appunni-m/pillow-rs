@@ -114,10 +114,10 @@ def _artifact_references(assertion):
 RAW_IMAGE_MODES = {"1", "P", "PA", "HSV", "YCbCr", "F", "I", "CMYK"}
 
 
-def _write_image_assertion(image, stem, case_id, suffix=""):
+def _write_image_assertion(image, stem, case_id, suffix="", force_raw=False):
     """Write one exact image oracle without converting its mode."""
     artifact_stem = f"{stem}_{case_id}{suffix}"
-    if image.mode in RAW_IMAGE_MODES:
+    if force_raw or image.mode in RAW_IMAGE_MODES:
         reference = f"raws/{artifact_stem}.bin"
         path = OUTPUT_RAWS_DIR / f"{artifact_stem}.bin"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -263,7 +263,13 @@ def generate_one(input_path):
                 continue
             out["cases"].append({
                 "id": cid,
-                "assert": _write_image_assertion(result, stem, cid),
+                "assert": _write_image_assertion(
+                    result,
+                    stem,
+                    cid,
+                    force_raw=op["module"] == "ImageModule"
+                    and op["target"] == "open",
+                ),
             })
 
         elif (isinstance(result, tuple)

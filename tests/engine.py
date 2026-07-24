@@ -7,6 +7,7 @@ This module is imported by:
 Adding a new operation requires ZERO changes to this file.
 """
 
+import json
 from pathlib import Path
 
 # ── Module → call_style lookup ──────────────────────────────────
@@ -583,26 +584,8 @@ def _sequence_iterator(backend, img, target, params):
 
 import os, tempfile
 
-# Pillow 12.2.0-encoded 3x2 images. File-open fixtures use these identical
-# bytes for both implementations, so encoder behavior cannot mask decoder
-# differences. TIFF is used for modes PNG cannot represent.
-OPEN_FIXTURE_B64 = {
-    "1": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACAQAAAAC1D1u3AAAADElEQVR4nGNwYDgAAAGEAQEKf5BQAAAAAElFTkSuQmCC",
-    "L": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAAAAAC4HznGAAAAEElEQVR4nGNkcHBgOPBfEAAHHwJSXRpuggAAAABJRU5ErkJggg==",
-    "LA": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAQAAAA3fa6RAAAAFklEQVR4nGNk+O9w0OEAwwGH/wyCigAomQUz31OBlAAAAABJRU5ErkJggg==",
-    "P": "R0lGODdhAwACAIIAAAAA/wED/gIG/QMJ/AQM+wUP+gAAAAAAACwAAAAAAwACAAAICQABBBAwgECBgAA7",
-    "RGB": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAHElEQVR4nGNkZGJWN7CUk5NjSc4plZOTc3NzAwAaxANmrbycrQAAAABJRU5ErkJggg==",
-    "RGBA": "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAAH0lEQVR4nGNkZGJmUTewdJKTk5NjSc4prQMx3Nzc3AAwdASsz35Y5AAAAABJRU5ErkJggg==",
-    "CMYK": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwAEAAAAhgAAAAMBAwABAAAAAQAAAAYBAwABAAAABQAAABEBBAABAAAAjgAAABUBAwABAAAABAAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAAAAAAAIAAgACAAIAAECAwQoMjxGRlBaZGRueIKCjJagyNLc5g==",
-    "I": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAFMBAwABAAAAAgAAAAAAAAAAAAAAAQAAAAABAAD/////AAABAACA//8=",
-    "F": "SUkqAAgAAAAKAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABYBBAABAAAAAgAAABcBBAABAAAAGAAAABwBAwABAAAAAQAAAFMBAwABAAAAAwAAAAAAAAAAAAAAAAAAPwAAoL8AAHBAAAB/QwAAAD4=",
-}
-OPEN_FIXTURE_SUFFIX = {
-    "CMYK": ".tif",
-    "F": ".tif",
-    "I": ".tif",
-    "P": ".gif",
-}
+_OPEN_INPUTS_PATH = Path(__file__).parent / "oracles" / "image_open_inputs.json"
+OPEN_FIXTURES = json.loads(_OPEN_INPUTS_PATH.read_text())["inputs"]
 
 
 def _file_open(backend, img, target, params):
@@ -616,11 +599,12 @@ def _file_open(backend, img, target, params):
     fixture_mode = params.pop("_fixture_mode", None)
     requested_suffix = params.pop("suffix", None)
     if file_b64 is None and fixture_mode is not None:
-        file_b64 = OPEN_FIXTURE_B64.get(fixture_mode)
-        if file_b64 is None:
+        fixture = OPEN_FIXTURES.get(fixture_mode)
+        if fixture is None:
             raise ValueError(f"no exact open fixture for mode {fixture_mode}")
+        file_b64 = fixture["base64"]
     suffix = (
-        OPEN_FIXTURE_SUFFIX.get(fixture_mode, ".png")
+        f".{OPEN_FIXTURES[fixture_mode]['format'].lower()}"
         if fixture_mode is not None
         else requested_suffix or ".png"
     )

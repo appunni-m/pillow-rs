@@ -1505,7 +1505,8 @@ impl Image {
     /// Returns [`PilError`] when materialization or mode-specific byte packing
     /// fails.
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
-        self.tobytes_formatted(self.explicit_mode().unwrap_or(""))
+        let mode = self.mode()?;
+        self.tobytes_formatted(&mode)
     }
 
     /// Returns one byte per logical image sample.
@@ -1685,7 +1686,7 @@ impl Image {
             Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
-                .map(|palette| padded_palette(&palette.rgb)),
+                .map(|palette| palette.rgb.clone()),
         }
     }
 
