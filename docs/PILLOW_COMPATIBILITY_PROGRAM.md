@@ -755,6 +755,23 @@ coverage artifact:
 - [x] Replace the fabricated WASM `Image.apply_transparency` result with real
       delegation and run the same three meaningful Pillow fixtures through
       Rust, Python, and WASM. This completes the fifth three-surface seed.
+- [ ] Make `Image.paste` the sixth three-surface seed from the existing
+      Pillow 12.2 backend manifest: execute all 21 successful cases and all
+      representable exact error cases through direct Rust, installed Python,
+      and built WASM. Compare mode, size, raw bytes, palette bytes, exception
+      type, and complete exception text exactly.
+- [ ] Keep the paste ABI typed and thin. WASM may expose separate overloads
+      for image, scalar, tuple, mask, point, and region forms, but clipping,
+      conversion, palette handling, mask blending, and validation remain in
+      `pillow-rs`. Any Pillow call shape that a typed ABI cannot represent must
+      be counted explicitly as unsupported rather than skipped or fabricated.
+- [ ] Prove each declared CPU/SIMD/GPU paste claim with the same Pillow oracle
+      case on a worker that provides the backend; keep adapter absence distinct
+      from a parity failure.
+- [ ] Add an operation-scoped paste LLVM JSON artifact and ingest it through an
+      exact human-approved Coverage MCP registration before treating paste as
+      coverage-trusted. Use uncovered branch evidence to add only independent
+      path inputs, not mode-multiplied duplicates.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
