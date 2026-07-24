@@ -422,6 +422,34 @@ The image API does not yet fully expose this capability:
 EXIF extraction belongs to the codec; applying EXIF orientation remains a
 generic image operation.
 
+`ImageOps.exif_transpose` currently proves this boundary is not connected:
+`Image::getexif()` unconditionally returns an empty byte vector, so Python
+always selects orientation 1. Its two existing fixtures differ only by L/RGB
+mode and both exercise the no-orientation copy path; neither tests EXIF
+parsing, any of orientations 2–8, in-place mutation, return type, orientation
+removal, or XMP cleanup. Python also owns the orientation-to-transpose map,
+mutation routing, and metadata-length heuristic.
+
+Do not “thin” this wrapper by moving only the map into Rust. The complete fix
+must:
+
+1. retain raw EXIF and XMP in the Rust image metadata model during codec
+   inspection/decode;
+2. expose typed orientation lookup and metadata mutation in core;
+3. implement out-of-place copy, out-of-place transpose, and in-place
+   transpose as Rust operations with exact Pillow return behavior;
+4. remove orientation from EXIF and both supported XMP representations on the
+   resulting image;
+5. replace the duplicate no-op fixtures with independent Pillow-oracle paths:
+   no tag/out-of-place, one mirrored orientation, one axis-swapping
+   orientation, and one in-place mutation, plus EXIF/XMP removal assertions;
+6. consume the same encoded inputs and exact pixels/metadata through Rust,
+   installed Python, and JavaScript/WASM before adding branch coverage.
+
+Until those codec prerequisites exist, the two ImageOps checker violations and
+the current passing no-op fixtures are explicitly untrusted rather than being
+papered over with another binding helper.
+
 ### CPU and SIMD coverage is incomplete
 
 The backend registry contains:
