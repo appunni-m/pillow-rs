@@ -288,6 +288,13 @@ The checker now recognizes only the exact
 conversion. This removes one false positive without exempting arbitrary dunder
 methods or complex length logic. The actionable count is therefore 47.
 
+Raw `Image.tobytes("raw", ...)` channel ordering no longer runs pixel loops in
+the PyO3 crate or selects BGR/BGRA behavior in Python. Core now owns raw encoder
+argument interpretation and channel swapping; the Python and PyO3 layers only
+pass ABI values. Independent RGB/BGR and RGBA/BGRA fixture paths were added without
+duplicating the six ordinary mode paths. All 14 current suite-0/suite-1 exact
+Pillow cases pass, and the actionable Python checker count is now 46.
+
 `pillow-rs/src/image.rs` also exposes path-based `open` and `save` behavior and
 performs filesystem I/O. This violates the core boundary. Binding layers must
 read/write bytes and delegate byte decoding/encoding to Rust.
@@ -714,6 +721,9 @@ coverage artifact:
 - [x] Remove Python's `Image.getdata` missing-band sentinel conversion and
       delegate `None` directly to the Rust ABI. The checker is now 48
       violations; all 18 compact exact Pillow-oracle cases pass.
+- [x] Move raw BGR/BGRA `Image.tobytes` encoder selection and pixel channel
+      swapping out of Python/PyO3 into core. The focused lane passes 14 exact
+      Pillow cases and the checker is now 46 violations.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
@@ -829,7 +839,7 @@ coverage artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **47 actionable executable violations** |
+| Python thin-binding violations | **46 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

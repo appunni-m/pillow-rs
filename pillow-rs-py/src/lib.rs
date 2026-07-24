@@ -409,23 +409,15 @@ impl PyImage {
     fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
         self.inner.tobytes_formatted(mode).map_err(map_error)
     }
-    /// Like tobytes_formatted but with optional channel swap (BGRA/BGR).
-    fn tobytes_formatted_swap(&self, mode: &str, fmt: &str) -> PyResult<Vec<u8>> {
-        let mut data = self.inner.tobytes_formatted(mode).map_err(map_error)?;
-        match fmt {
-            "BGRA" => {
-                for chunk in data.chunks_exact_mut(4) {
-                    chunk.swap(0, 2);
-                }
-            }
-            "BGR" => {
-                for chunk in data.chunks_exact_mut(3) {
-                    chunk.swap(0, 2);
-                }
-            }
-            _ => {}
-        }
-        Ok(data)
+    fn tobytes_encoded(
+        &self,
+        mode: &str,
+        encoder_name: &str,
+        args: Vec<String>,
+    ) -> PyResult<Vec<u8>> {
+        self.inner
+            .tobytes_encoded(mode, encoder_name, &args)
+            .map_err(map_error)
     }
 
     /// Return palette data (RGB triples) for P-mode quantized images.

@@ -332,6 +332,10 @@ def _stat_to_dict(stat):
         "extrema": stat.extrema,
     }
 
+def _instance_method_value(img, target, params):
+    positional = params.pop("_args", ())
+    return getattr(img, target)(*positional, **params)
+
 
 def _eval_image(backend, img, target, params):
     """Image.eval(image, function) — applies a named function."""
@@ -838,7 +842,7 @@ CALL_STYLE = {
         if tgt == "point"
         else getattr(img, tgt)(**p)
     ),
-    "instance_method_value":  lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
+    "instance_method_value":  lambda b, img, img2, tgt, p: _instance_method_value(img, tgt, p),
     "instance_property":      lambda b, img, img2, tgt, p: getattr(img, tgt),
     "instance_method_sequence": _instance_method_sequence,
     "pixel_access": _pixel_access,

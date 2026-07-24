@@ -1570,6 +1570,41 @@ impl Image {
         Ok(img.as_bytes().to_vec())
     }
 
+    /// Returns public image bytes using Pillow's raw encoder arguments.
+    ///
+    /// `BGR` and `BGRA` preserve channel width while exchanging red and blue.
+    /// Other encoder names or raw modes retain the ordinary mode byte layout.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization or mode-specific byte packing
+    /// fails.
+    pub fn tobytes_encoded(
+        &self,
+        mode: &str,
+        encoder_name: &str,
+        args: &[String],
+    ) -> Result<Vec<u8>, PilError> {
+        let mut data = self.tobytes_formatted(mode)?;
+        if encoder_name != "raw" {
+            return Ok(data);
+        }
+        match args.first().map(String::as_str) {
+            Some("BGRA") => {
+                for pixel in data.chunks_exact_mut(4) {
+                    pixel.swap(0, 2);
+                }
+            }
+            Some("BGR") => {
+                for pixel in data.chunks_exact_mut(3) {
+                    pixel.swap(0, 2);
+                }
+            }
+            _ => {}
+        }
+        Ok(data)
+    }
+
     /// Locks this image pipeline to one compute backend.
     ///
     /// The backend choice is applied when the image is materialized. Non-pipeline
