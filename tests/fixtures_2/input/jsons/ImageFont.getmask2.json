@@ -15,7 +15,7 @@
     {
       "id": "unicode_suite1",
       "params": {
-        "text": "H\u00e9"
+        "text": "\u00e9"
       }
     }
   ]
