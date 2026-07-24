@@ -281,10 +281,11 @@ struct GpuInner {
 }
 
 impl GpuInner {
-    fn new() -> Option<Self> {
+    fn new() -> Result<Self, PilError> {
         let instance = wgpu::Instance::default();
         let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))?;
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+                .ok_or_else(|| PilError::ValueError("GPU adapter not available".into()))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("pillow-rs-gpu"),
@@ -294,7 +295,9 @@ impl GpuInner {
             },
             None,
         ))
-        .ok()?;
+        .map_err(|error| {
+            PilError::ValueError(format!("GPU device initialization failed: {error}"))
+        })?;
 
         let capacity = 4096 * 4096;
         let buffers = BufferPool::new(&device, capacity);
@@ -315,7 +318,7 @@ impl GpuInner {
         }
         gpu_log!("[GPU] total compiled: {} pipelines", pipelines.len());
 
-        Some(GpuInner {
+        Ok(GpuInner {
             device,
             queue,
             buffers,
@@ -852,7 +855,7 @@ impl GpuInner {
     }
 }
 
-static GPU: std::sync::OnceLock<GpuInner> = std::sync::OnceLock::new();
+static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLock::new();
 static GPU_EXECUTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 // ─── Mode helpers ───────────────────────────────────────────────────────────
@@ -1079,11 +1082,10 @@ pub struct GpuPool;
 
 impl GpuPool {
     fn ensure_init() -> Result<&'static GpuInner, PilError> {
-        GPU.get_or_init(|| {
-            GpuInner::new().expect("Failed to initialize GPU: wgpu adapter or device unavailable")
-        });
-        GPU.get()
-            .ok_or_else(|| PilError::ValueError("GPU not available".into()))
+        match GPU.get_or_init(GpuInner::new) {
+            Ok(gpu) => Ok(gpu),
+            Err(error) => Err(error.clone()),
+        }
     }
 }
 
