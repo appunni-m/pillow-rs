@@ -554,7 +554,7 @@ command and artifact are approved and ingested by Coverage MCP on the
 GPU-capable worker.
 
 The drawing corpus now has equivalent direct-Rust, installed-Python, and
-built-WASM consumers for all 27 Pillow 12.2 cases. They compare exact logical
+built-WASM consumers for all 28 Pillow 12.2 cases. They compare exact logical
 mode, dimensions, native-format bytes, and palette bytes. The ABI exercise
 found and fixed two real binding defects: the Python extension rejected
 Pillow's flat four-coordinate line form and rejected two-band LA colors.
@@ -563,12 +563,22 @@ flat or paired Python coordinates and delegates. WASM now passes the logical
 mode into the same core drawing context, which is required for PA rather than
 inferring its LA storage representation.
 
-Drawing backend status remains deliberately truthful: all 27 fixtures execute
+The thin-client follow-up moved native-mode restoration, PA default shape ink,
+point-coordinate normalization, and polyline segment iteration out of Python.
+One new independent Pillow-generated PA rectangle case covers the otherwise
+unexecuted default-ink path with both `fill` and `outline` omitted. This reduces
+the executable Python thin-binding checker from 46 to 42 violations without
+weakening the oracle.
+
+Drawing backend status remains deliberately truthful: all 28 fixtures execute
 on CPU, while the Rust harness proves that every declared SIMD/GPU request is
 rejected before execution because no native implementation is registered.
 The local operation-scoped LLVM diagnostic passes and writes
 `target/coverage/pillow-drawing-rust.json`: 2,586 / 18,066 lines, 279 / 3,174
-branches, 169 / 1,204 functions, and 3,800 / 31,287 regions. It is not durable
+branches, 169 / 1,204 functions, and 3,800 / 31,287 regions. After adding the
+independent PA default-ink path, the refreshed diagnostic is 2,606 / 18,085
+lines, 284 / 3,180 branches, 170 / 1,205 functions, and 3,845 / 31,331
+regions. It is not durable
 coverage evidence until Coverage MCP ingests it.
 
 Pending exact Coverage MCP approval for drawing:
@@ -787,7 +797,7 @@ coverage artifact:
 - [x] Replace the fabricated WASM `Image.apply_transparency` result with real
       delegation and run the same three meaningful Pillow fixtures through
       Rust, Python, and WASM. This completes the fifth three-surface seed.
-- [x] Run all 27 Pillow-generated native-format drawing cases through direct
+- [x] Run all 28 Pillow-generated native-format drawing cases through direct
       Rust, installed Python, and WASM, including P/PA palette preservation.
       Keep CPU as the only supported backend until real SIMD/GPU
       implementations exist, and assert exact rejection for both unsupported
@@ -969,7 +979,7 @@ artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **46 actionable executable violations** |
+| Python thin-binding violations | **42 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |
@@ -983,7 +993,7 @@ artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, and 27 ImageDraw cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, and 28 ImageDraw cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.
