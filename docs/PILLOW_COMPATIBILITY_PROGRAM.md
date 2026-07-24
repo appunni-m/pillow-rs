@@ -526,6 +526,10 @@ coverage impact.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
+- [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
+      `Image::crop_box` implementation. The binding now passes only ABI values
+      and maps the Rust result/error; invalid edge ordering can no longer
+      underflow in the binding.
 - [ ] Remove filesystem access from `pillow-rs` core.
 - [ ] Make Python and JavaScript read/write files and pass bytes to Rust.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
@@ -550,7 +554,10 @@ coverage impact.
 
 ### Phase 5: Backend completeness
 
-- [ ] Generate the CPU/SIMD/GPU support matrix from the registry.
+- [x] Generate the CPU/SIMD/GPU support matrix from the registry with
+      `make backend-support-matrix`. The deterministic live inventory reports
+      86 CPU registrations, 69 SIMD-pool registrations, 72 GPU shaders, and
+      the exact 17 CPU operations without SIMD registration.
 - [ ] Require every backend claim to execute the same Pillow oracle case.
 - [ ] Add the 17 missing SIMD-pool operation registrations or explicitly
       classify operations that cannot benefit.

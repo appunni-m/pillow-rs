@@ -91,7 +91,7 @@ impl Image {
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(&self, l: u32, t: u32, r: u32, b: u32) -> Result<Image, JsValue> {
         self.inner
-            .crop((l, t, r - l, b - t))
+            .crop_box(l, t, r, b)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
