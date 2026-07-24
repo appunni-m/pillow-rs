@@ -62,6 +62,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make apply-transparency-oracle$(NC) Run exact Pillow Image.apply_transparency fixtures through all ABIs\n"
 	@printf "  $(CYAN)make paste-oracle$(NC) Run exact Pillow Image.paste fixtures through all ABIs\n"
 	@printf "  $(CYAN)make drawing-oracle$(NC) Run exact Pillow ImageDraw fixtures through all ABIs\n"
+	@printf "  $(CYAN)make imagefont-getmask2-oracle$(NC) Run exact Pillow ImageFont.getmask2 fixtures through all ABIs\n"
 	@printf "  $(CYAN)make rust-image-open-oracle$(NC) Run Image.open corpus through Rust API\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
@@ -172,7 +173,7 @@ build-all: build build-wasm-release ## Build Python + WASM
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-imagefont-getmask2 test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
-.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle
+.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle imagefont-getmask2-oracle
 .PHONY: backend-support-matrix
 
 test: fixtures ## Run all PIL parity tests
@@ -277,6 +278,11 @@ drawing-oracle: build-wasm-extra ## Run exact Pillow ImageDraw fixtures through 
 	$(MAKE) -C $(CORE_SRC) test-drawing-oracle
 	$(PYTHON) -m pytest tests/test_drawing_oracle.py -q
 	cd $(JS_SRC) && npm run test:drawing-oracle
+
+imagefont-getmask2-oracle: imagefont-getmask2-fixtures build-wasm-extra ## Run exact Pillow ImageFont.getmask2 fixtures through Rust/Python/WASM
+	$(MAKE) -C $(CORE_SRC) test-imagefont-getmask2-oracle
+	$(PYTHON) -m pytest tests/test_parity.py -q -k "ImageFont and getmask2"
+	cd $(JS_SRC) && npm run test:imagefont-getmask2-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
@@ -465,7 +471,7 @@ putdata-fixtures: ## Generate semantic Image.putdata inputs and exact Pillow ora
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.putdata
 
 imagefont-getmask2-fixtures: ## Generate independent ImageFont.getmask2 inputs and exact Pillow oracles
-	$(PYTHON) scripts/generate_imagefont_getmask2_fixture_inputs.py
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_imagefont_getmask2_fixture_inputs.py
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageFont.getmask2
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImageFont.getmask2
 

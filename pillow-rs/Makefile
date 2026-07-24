@@ -26,6 +26,7 @@ help:
 	@printf "  make test-image-open-oracle Run shared Pillow Image.open oracle through Rust\n"
 	@printf "  make test-apply-transparency-oracle Run Pillow Image.apply_transparency oracle through Rust\n"
 	@printf "  make test-tobytes-oracle Run shared Pillow Image.tobytes oracle through Rust\n"
+	@printf "  make test-imagefont-getmask2-oracle Run shared Pillow ImageFont.getmask2 oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
@@ -72,6 +73,10 @@ test-paste-oracle:
 .PHONY: test-drawing-oracle
 test-drawing-oracle:
 	$(CARGO) test --all-features --test backend_parity --locked drawing_is_exact_and_backend_capabilities_are_truthful -- --exact --nocapture
+
+.PHONY: test-imagefont-getmask2-oracle
+test-imagefont-getmask2-oracle:
+	$(CARGO) test --all-features --test imagefont_getmask2_oracle --locked -- --nocapture
 
 .PHONY: test-color3dlut-oracle
 test-color3dlut-oracle:
