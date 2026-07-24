@@ -274,8 +274,13 @@ def fixture_operation_modes(
             }
             for case in fixture.get("cases", []):
                 mode = case.get("mode", "")
+                oracle_case = oracle_cases.get(case["id"])
+                is_expected_error = (
+                    oracle_case is not None
+                    and oracle_case.get("assert", {}).get("method") == "error"
+                )
                 if mode and (
-                    call_style in CASE_MODE_CALL_STYLES
+                    not is_expected_error and call_style in CASE_MODE_CALL_STYLES
                     and (
                         call_style in {"file_open", "palette_method"}
                         or case.get("input") is not None
@@ -284,9 +289,8 @@ def fixture_operation_modes(
                 ):
                     modes.add(mode)
                 parameter_mode = case.get("params", {}).get("mode")
-                if isinstance(parameter_mode, str):
+                if isinstance(parameter_mode, str) and not is_expected_error:
                     modes.add(parameter_mode)
-                oracle_case = oracle_cases.get(case["id"])
                 if oracle_case is not None:
                     modes.update(
                         assertion_image_modes(

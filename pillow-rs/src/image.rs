@@ -1122,6 +1122,28 @@ impl Image {
         }
     }
 
+    /// Returns a lazy one-operation pipeline with an explicit output mode.
+    ///
+    /// A separate node is required for mode-changing operations: flattening
+    /// into an existing pipeline would pass the final mode tag to operations
+    /// that execute before the mode transition.
+    pub(crate) fn push_mode_changing_op(
+        source: &Image,
+        op: PipelineOp,
+        output_mode: &str,
+    ) -> Image {
+        Image::Pipeline {
+            source: Arc::new(source.clone()),
+            ops: vec![op],
+            format: source.source_format(),
+            explicit_mode: Some(output_mode.to_owned()),
+            backend: source.backend(),
+            palette: None,
+            palette_alpha: None,
+            materialized: materialization_cache(),
+        }
+    }
+
     // ── Immediate ops (force materialize) ──
 
     /// Returns one pixel as an RGBA tuple.

@@ -305,8 +305,11 @@ def _discover():
 
                 # Build @pytest.mark.covers marker for coverage tracking
                 marker_kwargs = {}
+                is_expected_error = (
+                    out_cases[cid].get("assert", {}).get("method") == "error"
+                )
                 if mode and (
-                    call_style in CASE_MODE_CALL_STYLES
+                    not is_expected_error and call_style in CASE_MODE_CALL_STYLES
                     and (
                         call_style in {"file_open", "palette_method"}
                         or case.get("input") is not None

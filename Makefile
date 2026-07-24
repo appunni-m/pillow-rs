@@ -353,7 +353,7 @@ freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
-.PHONY: compact-value-fixtures
+.PHONY: compact-value-fixtures color3dlut-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -377,6 +377,17 @@ compact-value-fixtures: ## Regenerate compact exact getdata/flattened-data oracl
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
 		--fixture Image.getdata --fixture Image.get_flattened_data
+
+color3dlut-fixtures: ## Regenerate independent-path Color3DLUT Pillow oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
+		--fixture ImageFilter.Color3DLUT
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
+		--fixture ImageFilter.Color3DLUT
+
+test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT
 
 fixture-coverage-check: fixtures ## Validate semantic fixture/manifest coverage
 	PYTHONPATH=tests $(IMAGE_ORACLE_PYTHON) tests/fixture_coverage.py

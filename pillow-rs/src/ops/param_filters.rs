@@ -6,7 +6,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, PixelMode};
 use image_slash_star::DynamicImage;
 
 /// Find the mode (most common value) and its count from a histogram.
@@ -22,6 +22,22 @@ fn find_mode_with_count(hist: &[u32; 256]) -> (u8, u32) {
         }
     }
     (mode, max_count)
+}
+
+/// Formats the Pillow-compatible representation of a Color3DLUT filter.
+pub fn color3dlut_repr(
+    table_type: &str,
+    size: (u32, u32, u32),
+    channels: u32,
+    target_mode: Option<&str>,
+) -> String {
+    let target = target_mode
+        .map(|mode| format!(" target_mode={mode}"))
+        .unwrap_or_default();
+    format!(
+        "<Color3DLUT from {table_type} size={}x{}x{} channels={channels}{target}>",
+        size.0, size.1, size.2
+    )
 }
 
 impl Image {
@@ -276,14 +292,57 @@ impl Image {
         size: (u32, u32, u32),
         table: Vec<f64>,
         channels: u32,
+        target_mode: Option<&str>,
     ) -> Result<Image, PilError> {
-        Ok(Image::push_op(
+        if channels != 3 && channels != 4 {
+            return Err(PilError::ValueError(
+                "Only 3 or 4 output channels are supported".into(),
+            ));
+        }
+        if !(2..=65).contains(&size.0)
+            || !(2..=65).contains(&size.1)
+            || !(2..=65).contains(&size.2)
+        {
+            return Err(PilError::ValueError(
+                "Table size in any dimension should be from 2 to 65".into(),
+            ));
+        }
+        let expected_len =
+            size.0 as usize * size.1 as usize * size.2 as usize * channels as usize;
+        if table.len() != expected_len {
+            return Err(PilError::ValueError(
+                "The table should have table_channels * size1D * size2D * size3D float items."
+                    .into(),
+            ));
+        }
+        let source_name = self.mode()?;
+        let source_mode = match source_name.as_str() {
+            "RGB" => PixelMode::RGB,
+            "RGBA" => PixelMode::RGBA,
+            "CMYK" => PixelMode::CMYK,
+            _ => return Err(PilError::ValueError("image has wrong mode".into())),
+        };
+        let target_name = target_mode.unwrap_or(source_name.as_str());
+        let target = match target_name {
+            "RGB" => PixelMode::RGB,
+            "RGBA" => PixelMode::RGBA,
+            "CMYK" => PixelMode::CMYK,
+            _ => return Err(PilError::ValueError("image has wrong mode".into())),
+        };
+        if target.channels() < channels as usize {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+
+        Ok(Image::push_mode_changing_op(
             self,
             PipelineOp::Color3DLut {
                 size,
                 table,
                 channels,
+                source_mode,
+                target_mode: target,
             },
+            target_name,
         ))
     }
 }

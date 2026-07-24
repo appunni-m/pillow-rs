@@ -2143,7 +2143,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Color3DLut",
-        gpu_entry!(
+        // The former WGSL shader was a pass-through and never uploaded or
+        // sampled the LUT. Do not advertise GPU support until that backend
+        // implements Pillow's signed fixed-point interpolation exactly.
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2152,14 +2155,15 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     size,
                     table,
                     channels,
+                    source_mode,
+                    target_mode,
                 } = op
                 {
-                    op_color3dlut(img, *size, table, *channels)
+                    op_color3dlut(img, *size, table, *channels, *source_mode, *target_mode)
                 } else {
                     Err(PilError::ValueError("expected Color3DLut op".into()))
                 }
             },
-            "color_3dlut.wgsl"
         ),
     );
     m.insert(

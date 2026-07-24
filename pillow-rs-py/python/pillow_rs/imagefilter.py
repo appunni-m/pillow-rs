@@ -184,43 +184,15 @@ class Color3DLUT:
 
     def _apply(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        img = Image(rust_image)
-        src_mode = img.mode
-
-        # Convert to RGB for processing if needed
-        if src_mode not in ("RGB", "RGBA"):
-            rgb_img = img.convert("RGB")
-            has_alpha = False
-        else:
-            rgb_img = img
-            has_alpha = src_mode == "RGBA"
-
-        # Use Rust implementation for trilinear interpolation
-        result = rgb_img._rust_image.color3dlut(
-            self.size, list(map(float, self.table)), self.channels
+        result = rust_image.color3dlut(
+            self.size, self.table, self.channels, self.mode
         )
-
-        # Determine output mode
-        if self.mode:
-            out_mode = self.mode
-        elif self.channels == 4:
-            out_mode = "RGBA"
-        elif has_alpha:
-            out_mode = "RGBA"
-        else:
-            out_mode = "RGB"
-
         return Image(result)
 
     def __repr__(self):
-        r = [
-            "Color3DLUT from %s" % self.table.__class__.__name__,
-            "size=%dx%dx%d" % self.size,
-            "channels=%d" % self.channels,
-        ]
-        if self.mode:
-            r.append("target_mode=%s" % self.mode)
-        return "<%s>" % " ".join(r)
+        return _core.color3dlut_repr(
+            self.table.__class__.__name__, self.size, self.channels, self.mode
+        )
 
 
 # PIL-compatible apply filter function

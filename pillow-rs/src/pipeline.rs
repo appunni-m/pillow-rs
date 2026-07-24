@@ -482,6 +482,10 @@ pub enum PipelineOp {
         table: Vec<f64>,
         /// Number of output channels.
         channels: u32,
+        /// Logical Pillow mode of the input samples.
+        source_mode: PixelMode,
+        /// Logical Pillow mode requested for the output samples.
+        target_mode: PixelMode,
     },
     /// Apply a geometric transform.
     Transform {
