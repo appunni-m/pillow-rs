@@ -19,7 +19,22 @@ use pillow_rs::ops::{chops, imageops, module_fns};
 use wasm_bindgen::prelude::*;
 
 fn err(e: pillow_rs::error::PilError) -> JsValue {
-    JsValue::from_str(&e.to_string())
+    let name = match &e {
+        pillow_rs::error::PilError::IOError(_)
+        | pillow_rs::error::PilError::OsError(_)
+        | pillow_rs::error::PilError::Io(_) => "OSError",
+        pillow_rs::error::PilError::AssertionError(_) => "AssertionError",
+        pillow_rs::error::PilError::IndexError(_) => "IndexError",
+        pillow_rs::error::PilError::ValueError(_) => "ValueError",
+        pillow_rs::error::PilError::TypeError(_) => "TypeError",
+        pillow_rs::error::PilError::SyntaxError(_) => "SyntaxError",
+        pillow_rs::error::PilError::NotImplementedError(_) => "NotImplementedError",
+        pillow_rs::error::PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
+        _ => "Error",
+    };
+    let error = js_sys::Error::new(&e.to_string());
+    error.set_name(name);
+    error.into()
 }
 
 #[wasm_bindgen]
@@ -358,6 +373,26 @@ impl Image {
     ) -> Result<Image, JsValue> {
         self.inner
             .kernel_filter(&kernel, scale, offset, size)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "color3DLUT")]
+    pub fn color3dlut(
+        &self,
+        size_x: u32,
+        size_y: u32,
+        size_z: u32,
+        table: Vec<f64>,
+        channels: u32,
+        target_mode: Option<String>,
+    ) -> Result<Image, JsValue> {
+        self.inner
+            .color3dlut(
+                (size_x, size_y, size_z),
+                table,
+                channels,
+                target_mode.as_deref(),
+            )
             .map(|i| Image { inner: i })
             .map_err(err)
     }
