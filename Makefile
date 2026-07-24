@@ -112,6 +112,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make coverage-apply-transparency-rust$(NC) Run Image.apply_transparency Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-paste-rust$(NC) Run Image.paste Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-drawing-rust$(NC) Run ImageDraw Pillow parity with Rust LLVM coverage\n"
+	@printf "  $(CYAN)make coverage-imagefont-getmask2-rust$(NC) Run ImageFont.getmask2 parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-python-wrapper$(NC) Run Pillow parity with Python wrapper branch coverage\n"
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
@@ -562,7 +563,7 @@ lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
-.PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust
+.PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -588,6 +589,9 @@ coverage-paste-rust: ## Run Image.paste parity and export Rust LLVM branch cover
 
 coverage-drawing-rust: ## Run ImageDraw parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_drawing_rust_coverage.sh
+
+coverage-imagefont-getmask2-rust: ## Run ImageFont.getmask2 parity and export Rust LLVM branch coverage
+	bash scripts/coverage/run_imagefont_getmask2_rust_coverage.sh
 
 coverage-image-backend-rust: ## Run exact backend parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_image_backend_rust_coverage.sh
