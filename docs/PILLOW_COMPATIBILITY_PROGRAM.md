@@ -870,6 +870,12 @@ artifact:
       Pillow cases and the checker is now 46 violations.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
+- [ ] Fix the first-divergence in core RGB/RGBA text compositing before
+      removing Python's `getmask2(mode="L")` plus bitmap route. Directly routing
+      those modes through `Draw::text` currently fails four exact
+      Pillow-oracle cases (`ImageDraw.text` and `ImageDraw.multiline_text` in
+      suite 0 and suite 1); the existing mask route passes. Do not weaken or
+      bypass those fixtures during the migration.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
