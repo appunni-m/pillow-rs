@@ -354,6 +354,30 @@ Routing also requires one backend to support the entire pipeline:
 The pipeline avoids repeated copyback for fully supported chains, but loses
 GPU acceleration for supported portions of mixed chains.
 
+The paste/drawing/transparency audit on 2026-07-24 found:
+
+- `Paste` has distinct CPU, SIMD-pool, and WGSL registrations plus
+  Pillow-generated exact fixtures for declared backend cases;
+- drawing operations are currently CPU-only, and the forced-backend harness
+  truthfully verifies that SIMD/GPU requests are rejected rather than silently
+  falling back;
+- `apply_transparency` is an immediate indexed-palette metadata operation, not
+  a pixel compute shader; P-mode cases are CPU metadata paths, while PA cases
+  also verify that preceding backend-selected `putalpha` materialization does
+  not corrupt indices or palette alpha;
+- this host exposes no wgpu adapter, so GPU oracle rows cannot be accepted as
+  passing evidence here;
+- GPU initialization previously panicked inside a global `OnceLock`, poisoning
+  the execution mutex and replacing every later error with `GPU execution lock
+  poisoned`. Initialization now caches and returns the original
+  `GPU adapter not available` error without panicking or poisoning shared
+  state.
+
+The full forced-backend run therefore remains intentionally red on this host:
+14 tests pass and eight GPU-dependent tests fail with the direct adapter error.
+Those GPU rows require a Coverage MCP worker with a real supported adapter;
+they must not be converted to skips or counted from CPU/SIMD execution.
+
 ### Existing documentation can be stale
 
 Historical documents contain superseded counts and completed-gap claims, such
@@ -577,6 +601,7 @@ coverage impact.
 | Explicit x86/ARM intrinsic implementations | effectively 0; scalar stubs |
 | GPU mixed-backend segmentation | absent |
 | GPU submission strategy | one submit and blocking wait per operation |
+| Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
