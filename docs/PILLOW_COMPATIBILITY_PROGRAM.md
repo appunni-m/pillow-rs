@@ -603,6 +603,13 @@ not a stopping condition.
       1,783 / 20,980 lines, 134 / 3,548 branches, 124 / 1,612 functions, and
       2,919 / 36,473 regions. These are diagnostic totals until managed
       ingestion creates a snapshot.
+- [x] Add and locally validate `make coverage-image-open-rust`. It regenerates
+      the shared Image.open oracle, runs the same nine direct Rust case IDs
+      under nightly LLVM branch coverage, and writes
+      `target/coverage/pillow-image-open-rust.json`. The local report contains
+      122 / 17,293 lines, 9 / 3,028 branches, 14 / 1,142 functions, and
+      179 / 30,261 regions. These narrow diagnostic totals are not trusted
+      coverage evidence until Coverage MCP ingests the artifact.
 - [ ] Present the exact commands, cwd, shell, and artifacts for human approval.
 - [ ] Register the approved commands with Coverage MCP.
 - [ ] Run baseline suites through Coverage MCP and retain snapshot IDs.
@@ -623,6 +630,20 @@ coverage artifact:
   required: true
   coverage_format: llvm-json
   suite: pillow-point-rust
+```
+
+Pending exact Coverage MCP approval for the codec-focused snapshot:
+
+```text
+name: pillow-image-open-rust
+command: make coverage-image-open-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+coverage artifact:
+  path: target/coverage/pillow-image-open-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-image-open-rust
 ```
 
 ### Phase 1: Canonical oracle corpus
