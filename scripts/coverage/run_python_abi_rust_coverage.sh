@@ -12,6 +12,25 @@ python_bin="${PYTHON:-$repo_dir/.venv/bin/python}"
 maturin_bin="${MATURIN:-$repo_dir/.venv/bin/maturin}"
 test_timeout="${TIMEOUT:-30}"
 pytest_report="${REPORT:-/tmp/report.json}"
+extension_dir="$repo_dir/pillow-rs-py/python/pillow_rs"
+extension_backup_dir="$(mktemp -d)"
+extension_had_backup=0
+
+restore_extension() {
+    if [[ "$extension_had_backup" -eq 1 ]]; then
+        cp -p "$extension_backup_dir"/_core*.so "$extension_dir"/
+        rm -f "$extension_backup_dir"/_core*.so
+    else
+        rm -f "$extension_dir"/_core*.so
+    fi
+    rmdir "$extension_backup_dir"
+}
+
+if compgen -G "$extension_dir/_core*.so" >/dev/null; then
+    cp -p "$extension_dir"/_core*.so "$extension_backup_dir"/
+    extension_had_backup=1
+fi
+trap restore_extension EXIT
 
 if command -v "$maturin_bin" >/dev/null 2>&1; then
     maturin_cmd=("$maturin_bin")

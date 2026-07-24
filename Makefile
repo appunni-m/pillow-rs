@@ -47,8 +47,10 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
+	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
+	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
@@ -77,6 +79,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
+	@printf "  $(CYAN)make compact-value-fixtures$(NC) Regenerate compact typed sequence oracles\n"
 	@printf "  $(CYAN)make fixture-coverage-check$(NC) Validate semantic fixture/manifest coverage\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-suite1$(NC) Generate suite1 fixtures only\n"
@@ -148,8 +151,8 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata
-.PHONY: test-core test-wasm test-all
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-compact-values
+.PHONY: test-core test-wasm test-all js-oracle-contract
 
 test: fixtures ## Run all PIL parity tests
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
@@ -172,12 +175,20 @@ test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
 	$(PYTHON) -m pytest tests/test_putdata_parity.py tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "putdata"
 
+test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
+		-k "getdata or get_flattened_data"
+
 test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
 	$(MAKE) -C $(CORE_SRC) test
 
 test-wasm: ## Run WASM/JS tests
 	cd $(JS_SRC) && npm run test:codecs
 	cd $(JS_SRC) && npm run test:package
+
+js-oracle-contract: fixtures ## Validate shared Pillow input/output pairs from Node
+	cd $(JS_SRC) && npm run test:oracle-contract
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
@@ -342,6 +353,7 @@ freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
+.PHONY: compact-value-fixtures
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -357,6 +369,14 @@ putdata-fixtures: ## Generate semantic Image.putdata inputs and exact Pillow ora
 	$(PYTHON) scripts/generate_putdata_fixture_inputs.py
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.putdata
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.putdata
+
+compact-value-fixtures: ## Regenerate compact exact getdata/flattened-data oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
+		--fixture Image.getdata --fixture Image.get_flattened_data
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
+		--fixture Image.getdata --fixture Image.get_flattened_data
 
 fixture-coverage-check: fixtures ## Validate semantic fixture/manifest coverage
 	PYTHONPATH=tests $(IMAGE_ORACLE_PYTHON) tests/fixture_coverage.py

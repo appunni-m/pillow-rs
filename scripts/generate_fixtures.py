@@ -43,6 +43,7 @@ except ImportError:
 
 from engine import (
     CALL_STYLE,
+    _canonical_typed_bytes,
     _resolve_font_path,
     _typed_value,
     create_input,
@@ -100,7 +101,7 @@ def _pilify(v):
 
 def _artifact_references(assertion):
     method = assertion.get("method")
-    if method == "image":
+    if method in {"image", "typed_binary"}:
         yield assertion["reference"]
     elif method == "image_list":
         for item in assertion["items"]:
@@ -137,6 +138,18 @@ def _write_image_assertion(image, stem, case_id, suffix=""):
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(str(path))
     return {"method": "image", "reference": reference}
+
+
+def _write_typed_binary_assertion(value, stem, case_id):
+    """Write one exact typed-value oracle as compact canonical bytes."""
+    reference = f"raws/{stem}_{case_id}.typed.bin"
+    path = OUTPUT_RAWS_DIR / f"{stem}_{case_id}.typed.bin"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_canonical_typed_bytes(value))
+    return {
+        "method": "typed_binary",
+        "reference": reference,
+    }
 
 
 def generate_one(input_path):
@@ -283,6 +296,18 @@ def generate_one(input_path):
                     "container_type": type(result).__name__,
                     "items": items,
                 },
+            })
+
+        elif (
+            call_style == "instance_method_sequence"
+            or (
+                op["module"] == "Image"
+                and op["target"] == "get_flattened_data"
+            )
+        ):
+            out["cases"].append({
+                "id": cid,
+                "assert": _write_typed_binary_assertion(result, stem, cid),
             })
 
         elif isinstance(result, (int, float, str, bool, list, tuple, dict, type(None))):

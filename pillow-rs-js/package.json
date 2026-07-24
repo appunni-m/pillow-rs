@@ -27,6 +27,7 @@
     "build:core:release": "wasm-pack build --target web --release --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
     "build:extra:release": "wasm-pack build --target web --release --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
     "test:codecs": "node tests/codec_feature_matrix.mjs core && node tests/codec_feature_matrix.mjs extra",
+    "test:oracle-contract": "node tests/oracle_contract.mjs",
     "test:package": "node scripts/check_package.mjs",
     "size": "node scripts/measure_wasm_sizes.mjs"
   },

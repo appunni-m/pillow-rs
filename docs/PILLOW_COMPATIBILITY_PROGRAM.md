@@ -146,6 +146,14 @@ hit the same lines while proving different public values, types, modes,
 overflow behavior, or error ordering. Those semantic distinctions must be
 retained and documented.
 
+Large exact values must be stored as canonical binary artifacts rather than
+recursively expanded JSON. On 2026-07-24, `Image.getdata` and
+`Image.get_flattened_data` exposed this failure mode: four generated JSON files
+occupied roughly 803 MB, including one 768 MB file. A deterministic typed
+binary encoding reduced those JSON files to about 16 KiB of metadata plus
+about 12 MiB of exact oracle payloads while preserving every scalar/container
+type and value. All 12 affected operation cases continued to pass.
+
 ### One oracle corpus, three consumers
 
 The same canonical oracle case must be consumable by:
@@ -206,10 +214,10 @@ rather than trusted as unrelated unit tests.
 ### The current JavaScript parity runner is not trusted
 
 `pillow-rs-js/tests/run_wasm_test.mjs` targets a superseded flat fixture
-layout. The canonical corpus currently contains 372 suite-0 and 348 suite-1
-input JSON files under `input/jsons/`, paired with outputs under
-`outputs/jsons/`; the runner only scans for JSON files at the fixture root and
-therefore cannot execute that corpus.
+layout. The canonical corpus currently contains 186 suite-0 and 174 suite-1
+operation fixture pairs (360 total), with inputs under `input/jsons/` and
+Pillow outputs under `outputs/jsons/`; the runner only scans for JSON files at
+the fixture root and therefore cannot execute that corpus.
 
 Even if fed legacy flat fixtures, the runner violates the exact-oracle policy:
 
@@ -402,6 +410,11 @@ coverage impact.
 - [ ] Use Coverage MCP gaps to add inputs for unexecuted branches/functions.
 - [ ] Identify same-path duplicates and remove them one at a time while
       comparing coverage snapshots.
+- [x] Replace recursively expanded `getdata` and `get_flattened_data` values
+      with reproducible canonical typed binary artifacts. The complete oracle
+      JSON corpus is now about 3.4 MiB, and the local full harness retained
+      1,659 passes / 18 failures while its test phase fell from roughly 55 to
+      20 seconds.
 - [ ] Preserve semantically distinct inputs even when line coverage is equal.
 - [ ] Resolve nondeterministic `effect_spread` with a principled Pillow public
       contract rather than a fixture-specific PRNG match.
@@ -413,6 +426,10 @@ coverage impact.
 - [ ] Build a Rust public-API runner for the canonical corpus.
 - [ ] Refactor the Python runner to call only the installed public ABI.
 - [ ] Refactor the Node/WASM runner to consume the complete canonical corpus.
+- [x] Add a reusable strict Node loader for all version-2 input/output fixture
+      pairs, pinned Pillow/FreeType versions, exact assertion fields, artifact
+      paths, and one-to-one case IDs. This is a corpus-integrity prerequisite,
+      not ABI parity evidence.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
