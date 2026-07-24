@@ -57,6 +57,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
 	@printf "  $(CYAN)make js-image-open-oracle$(NC) Run Image.open corpus through WASM\n"
+	@printf "  $(CYAN)make js-tobytes-oracle$(NC) Run Image.tobytes corpus through WASM\n"
 	@printf "  $(CYAN)make rust-image-open-oracle$(NC) Run Image.open corpus through Rust API\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
@@ -162,8 +163,8 @@ build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
-.PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle js-oracle-contract js-color3dlut-oracle
-.PHONY: js-eval-oracle js-image-open-oracle
+.PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
+.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle
 .PHONY: backend-support-matrix
 
 test: fixtures ## Run all PIL parity tests
@@ -225,6 +226,9 @@ rust-eval-oracle: eval-fixtures ## Run Image.eval corpus through Rust API
 rust-image-open-oracle: image-io-fixtures ## Run Image.open corpus through Rust API
 	$(MAKE) -C $(CORE_SRC) test-image-open-oracle
 
+rust-tobytes-oracle: tobytes-fixtures ## Run Image.tobytes corpus through Rust API
+	$(MAKE) -C $(CORE_SRC) test-tobytes-oracle
+
 backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 	$(MAKE) -C $(CORE_SRC) backend-support-matrix
 
@@ -243,6 +247,9 @@ js-eval-oracle: eval-fixtures build-wasm-core ## Run Image.eval corpus through W
 
 js-image-open-oracle: image-io-fixtures build-wasm-extra ## Run Image.open corpus through WASM
 	cd $(JS_SRC) && npm run test:image-open-oracle
+
+js-tobytes-oracle: tobytes-fixtures build-wasm-core ## Run Image.tobytes corpus through WASM
+	cd $(JS_SRC) && npm run test:tobytes-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 

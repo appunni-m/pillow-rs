@@ -480,6 +480,17 @@ impl Image {
     pub fn tobytes(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.tobytes().map_err(err)
     }
+    #[wasm_bindgen(js_name = "toBytesEncoded")]
+    pub fn tobytes_encoded(
+        &self,
+        encoder_name: &str,
+        args: Vec<String>,
+    ) -> Result<Vec<u8>, JsValue> {
+        let mode = self.inner.mode().map_err(err)?;
+        self.inner
+            .tobytes_encoded(&mode, encoder_name, &args)
+            .map_err(err)
+    }
     #[wasm_bindgen(js_name = "copy")]
     pub fn copy(&self) -> Image {
         Image {
