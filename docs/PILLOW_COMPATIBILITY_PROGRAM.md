@@ -297,6 +297,28 @@ distinguish:
 4. verified architecture-specific vectorization;
 5. exact Pillow parity for every backend.
 
+`Color3DLUT` is a concrete example of why registry claims cannot be trusted
+without oracle execution:
+
+- Python currently converts unsupported input modes to RGB, while Pillow
+  raises `ValueError("image has wrong mode")`;
+- Python computes `target_mode` but never passes it to Rust, so the requested
+  output layout is discarded;
+- Pillow accepts RGB, RGBA, and CMYK inputs, with valid output modes determined
+  jointly by the input mode, the LUT's three or four output channels, and
+  `target_mode`;
+- CPU implements trilinear interpolation but only preserves the input
+  `DynamicImage` layout;
+- SIMD has no `Color3DLUT` registration;
+- GPU is registered as supported, but its shader is explicitly a pass-through
+  and never uploads or samples the LUT.
+
+The current GPU registration is therefore a false support claim and must not
+count as parity. The fix must encode source and target sample layouts in the
+Rust pipeline operation, implement the same validation and output semantics in
+core, and require every claimed backend to match independent Pillow oracle
+cases exactly.
+
 ### GPU batches retain pixels but over-dispatch
 
 When every operation is GPU-supported, the current pipeline:
@@ -487,6 +509,8 @@ coverage impact.
 - [ ] Add architecture/backend coverage artifacts and Coverage MCP snapshots.
 - [ ] Prevent a registration-only test from being reported as SIMD execution
       coverage.
+- [ ] Replace the `Color3DLUT` GPU pass-through with real LUT upload and
+      trilinear sampling before restoring/retaining its GPU support claim.
 
 ### Phase 6: GPU pipeline execution
 
