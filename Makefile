@@ -50,12 +50,14 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-palette-save$(NC) Run ImagePalette.save Pillow-oracle parity\n"
+	@printf "  $(CYAN)make test-image-io$(NC)  Run Image open/save Pillow-oracle parity\n"
 	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
+	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs imagingft + fontdone unified parity\n"
@@ -155,7 +157,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: js-eval-oracle
 .PHONY: backend-support-matrix
@@ -192,6 +194,11 @@ test-eval: eval-fixtures ## Run exact Image.eval Pillow parity
 test-palette-save: palette-save-fixtures ## Run exact ImagePalette.save Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImagePalette.save"
+
+test-image-io: fixtures ## Run exact Image open/save Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
+		-k "ImageModule.open or Image.open or Image.save"
 
 test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 	$(PYTHON) -m pytest tests/test_parity.py \
@@ -242,7 +249,7 @@ parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdon
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core pillow-rs-imagingft
-.PHONY: image-backend-test image-backend-parity-test image-backend-feature-test
+.PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
 .PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-check
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -258,6 +265,10 @@ pillow-rs-test: ## Run all pillow-rs Rust tests
 image-backend-test: ## Run all image backend migration and forced-backend parity tests
 	$(CARGO) test -p pillow-rs --all-features \
 		--test image_backend_migration --test backend_parity --locked
+
+image-backend-migration-test: ## Run image codec/backend migration fixtures
+	$(CARGO) test -p pillow-rs --all-features \
+		--test image_backend_migration --locked
 
 image-backend-parity-test: ## Run Pillow-exact paste/drawing/transparency backend parity
 	$(CARGO) test -p pillow-rs --all-features --test backend_parity --locked -- --nocapture

@@ -1,21 +1,9 @@
 //! GPU worker pool — implements BackendImpl for GPU compute backend.
-//!
-//! Debug logging: set RSPIL_GPU_DEBUG=1 to write per-op logs to /tmp/gpu_debug.log
 
 macro_rules! gpu_log {
-    ($($arg:tt)*) => {{
-        let msg = format!($($arg)*);
-        log::debug!("{}", msg);
-        if std::env::var("RSPIL_GPU_DEBUG").is_ok() {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true).open("/tmp/gpu_debug.log")
-            {
-                let _ = writeln!(f, "{}", msg);
-                let _ = f.flush();
-            }
-        }
-    }};
+    ($($arg:tt)*) => {
+        log::debug!(target: "compute::gpu", $($arg)*)
+    };
 }
 
 // Uses wgpu for compute shader dispatch with packed u32 RGBA buffers
