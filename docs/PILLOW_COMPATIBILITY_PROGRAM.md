@@ -9,7 +9,7 @@ outside the FreeType-specific parity program.
 
 1. **Is Python thin and all logic in Rust?** Not yet. Pure Rust remains the
    non-negotiable destination, but the maintained binding audit currently
-   reports 46 actionable Python violations. Core also still performs image
+   reports 36 actionable Python violations. Core also still performs image
    path I/O in `Image::open` and `Image::save`. Neither gap may be waived.
 2. **Are parity tests fixture-only?** The trusted lane is fixture-only and
    Pillow-oracle-only. The last broad managed Python run was not: it combined
@@ -574,6 +574,28 @@ four existing Pillow-oracle `ImageDraw.shape` cases pass through the public
 Python surface. Moving shape validation and Pillow's outline-over-fill
 precedence into core reduces the count once more to 39.
 
+The next thin-client slice removed Python's RGB/RGBA `getmask2(mode="L")`
+plus bitmap workaround. The first divergence was isolated with the exact
+`ImageDraw_text_RGBA` fixture: both paths changed the same 92 pixels with
+bounds `(6, 7)-(29, 14)`, but at the first changed pixel `(6, 7)` Pillow
+produced `(189, 0, 0, 15)` while direct core produced `(200, 0, 0, 255)`.
+Glyph rasterization and placement were therefore already exact; core
+compositing had replaced the caller's scalar RGBA ink `(200, 0, 0, 0)` with
+the renderer's opaque alpha. `Draw::text` now retains the original ink and
+uses glyph alpha only as the `ImagingFill2/fill_mask_L` coverage mask,
+blending every destination channel with Pillow's exact rounded formula.
+All 46 exact Pillow `ImageDraw` text/multiline-text cases now pass through
+the direct Rust route, the independent 28-case drawing corpus remains exact
+through Rust, installed Python, and built WASM, and the thin-binding checker
+falls from 39 to 36 violations.
+
+The aggregate `make drawing-oracle` target is reproducible only when invoked
+with `PYTHON=.venv/bin/python` in this checkout. Its default `python3` selected
+the system interpreter without pytest and stopped after the Rust lane, before
+JavaScript. The three exact consumers were also run individually to distinguish
+that harness-environment defect from parity: Rust passed 28/28, Python passed
+28/28, and WASM passed 28/28.
+
 Drawing backend status remains deliberately truthful: all 28 fixtures execute
 on CPU, while the Rust harness proves that every declared SIMD/GPU request is
 rejected before execution because no native implementation is registered.
@@ -870,12 +892,11 @@ artifact:
       Pillow cases and the checker is now 46 violations.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
-- [ ] Fix the first-divergence in core RGB/RGBA text compositing before
-      removing Python's `getmask2(mode="L")` plus bitmap route. Directly routing
-      those modes through `Draw::text` currently fails four exact
-      Pillow-oracle cases (`ImageDraw.text` and `ImageDraw.multiline_text` in
-      suite 0 and suite 1); the existing mask route passes. Do not weaken or
-      bypass those fixtures during the migration.
+- [x] Fix the first divergence in core RGB/RGBA text compositing and remove
+      Python's `getmask2(mode="L")` plus bitmap workaround. Direct Rust now
+      preserves the original ink alpha and passes all 46 exact Pillow
+      `ImageDraw.text` and `ImageDraw.multiline_text` cases; the independent
+      28-case drawing corpus remains exact through Rust, Python, and WASM.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
@@ -989,7 +1010,7 @@ artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **39 actionable executable violations** |
+| Python thin-binding violations | **36 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

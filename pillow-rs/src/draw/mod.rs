@@ -1053,7 +1053,7 @@ impl Draw {
         let draw_y = y.saturating_add(bbox.1);
 
         match mode.as_str() {
-            "RGB" | "RGBA" => self.text_compose_rgba(draw_x, draw_y, w, h, &pixels),
+            "RGB" | "RGBA" => self.text_compose_rgba(draw_x, draw_y, w, h, &pixels, fill),
             _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
         }
     }
@@ -1071,13 +1071,12 @@ impl Draw {
         w: u32,
         h: u32,
         pixels: &[u8],
+        fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
         let (img_w, img_h) = (canvas.width(), canvas.height());
         let mode = self.effective_mode();
-        let blend_alpha = mode == "RGBA";
-
         for py in 0..h {
             for px in 0..w {
                 let off = ((py * w + px) * 4) as usize;
@@ -1088,35 +1087,27 @@ impl Draw {
                     }
                     let dx = (x as u32 + px).min(img_w - 1);
                     let dy = (y as u32 + py).min(img_h - 1);
-                    if sa == 255 {
-                        canvas.put_pixel(
-                            dx,
-                            dy,
-                            Rgba([pixels[off], pixels[off + 1], pixels[off + 2], 255u8]),
-                        );
+                    let dp = canvas.get_pixel(dx, dy);
+                    let inv = 255u16 - sa as u16;
+                    // Pillow's ImagingDrawBitmap delegates the glyph mask to
+                    // ImagingFill2/fill_mask_L: coverage blends every native
+                    // destination channel toward the caller's original ink.
+                    // The renderer's opaque alpha only carries mask coverage.
+                    let alpha = if mode == "RGBA" {
+                        blend_u8(fill.3, dp[3], sa, inv)
                     } else {
-                        let dp = canvas.get_pixel(dx, dy);
-                        let inv = 255u16 - sa as u16;
-                        let pixel = if blend_alpha {
-                            // PIL keeps straight RGB for RGBA text masks and
-                            // stores coverage in alpha; RGB is not
-                            // premultiplied by glyph coverage.
-                            Rgba([
-                                pixels[off],
-                                pixels[off + 1],
-                                pixels[off + 2],
-                                blend_u8(255u8, dp[3], sa, inv),
-                            ])
-                        } else {
-                            Rgba([
-                                blend_u8(pixels[off], dp[0], sa, inv),
-                                blend_u8(pixels[off + 1], dp[1], sa, inv),
-                                blend_u8(pixels[off + 2], dp[2], sa, inv),
-                                255u8,
-                            ])
-                        };
-                        canvas.put_pixel(dx, dy, pixel);
-                    }
+                        255
+                    };
+                    canvas.put_pixel(
+                        dx,
+                        dy,
+                        Rgba([
+                            blend_u8(fill.0, dp[0], sa, inv),
+                            blend_u8(fill.1, dp[1], sa, inv),
+                            blend_u8(fill.2, dp[2], sa, inv),
+                            alpha,
+                        ]),
+                    );
                 }
             }
         }
@@ -1345,7 +1336,7 @@ impl Draw {
             }
             _ => {
                 // Fallback: RGBA pipeline
-                self.text_compose_rgba(x, y, w, h, pixels)
+                self.text_compose_rgba(x, y, w, h, pixels, fill)
             }
         }
     }
