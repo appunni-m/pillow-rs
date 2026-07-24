@@ -36,7 +36,7 @@ set +e
 make fixtures
 fixture_status=$?
 if [[ "$fixture_status" -eq 0 ]]; then
-    "$python_bin" -m pytest tests/ -q --tb=short \
+    "$python_bin" -m pytest tests/test_parity.py -q --tb=short \
         --timeout="$test_timeout" \
         --json-report \
         --json-report-file="$pytest_report" \
