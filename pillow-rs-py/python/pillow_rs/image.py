@@ -642,13 +642,8 @@ class Image:
 
     @staticmethod
     def eval(image, *args):
-        """Apply function to each pixel via LUT."""
-        if args:
-            func = args[0]
-            n_bands = len(image.getbands())
-            lut = _core.make_lut(func, n_bands)
-            return Image(image._rust_image.point(lut))
-        raise ValueError("eval requires a function argument")
+        """Apply a function to each pixel through Image.point."""
+        return image.point(args[0])
 
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""

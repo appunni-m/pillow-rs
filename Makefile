@@ -511,6 +511,7 @@ point-fixtures: ## Regenerate Image.point Pillow oracles
 		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.point
 
 eval-fixtures: ## Regenerate Image.eval Pillow oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_eval_error_oracle.py
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageModule.eval
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
