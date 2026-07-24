@@ -21,6 +21,7 @@ help:
 	@printf "  make test             Run all Rust tests\n"
 	@printf "  make test-core        Run unit tests (src/)\n"
 	@printf "  make test-backend-parity Run forced-backend Pillow parity tests\n"
+	@printf "  make test-color3dlut-oracle Run shared Pillow Color3DLUT oracle through Rust\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
 	@printf "\nFixtures:\n"
@@ -57,6 +58,10 @@ test-core:
 .PHONY: test-backend-parity
 test-backend-parity:
 	$(CARGO) test --all-features --test backend_parity --locked -- --nocapture
+
+.PHONY: test-color3dlut-oracle
+test-color3dlut-oracle:
+	$(CARGO) test --all-features --test color3dlut_oracle --locked -- --nocapture
 
 .PHONY: test-imagingft
 test-imagingft: fixtures

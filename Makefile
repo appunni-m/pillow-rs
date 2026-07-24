@@ -152,7 +152,7 @@ build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-compact-values
-.PHONY: test-core test-wasm test-all js-oracle-contract
+.PHONY: test-core test-wasm test-all rust-color3dlut-oracle js-oracle-contract js-color3dlut-oracle
 
 test: fixtures ## Run all PIL parity tests
 	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
@@ -183,12 +183,18 @@ test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
 	$(MAKE) -C $(CORE_SRC) test
 
+rust-color3dlut-oracle: color3dlut-fixtures ## Run Color3DLUT corpus through Rust API
+	$(MAKE) -C $(CORE_SRC) test-color3dlut-oracle
+
 test-wasm: ## Run WASM/JS tests
 	cd $(JS_SRC) && npm run test:codecs
 	cd $(JS_SRC) && npm run test:package
 
 js-oracle-contract: fixtures ## Validate shared Pillow input/output pairs from Node
 	cd $(JS_SRC) && npm run test:oracle-contract
+
+js-color3dlut-oracle: color3dlut-fixtures build-wasm-core ## Run Color3DLUT corpus through WASM
+	cd $(JS_SRC) && npm run test:color3dlut-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 

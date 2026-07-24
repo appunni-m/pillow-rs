@@ -171,6 +171,14 @@ operation/behavior inventory.
 The harness must verify that all three surfaces agree with the Pillow oracle,
 not merely that Python and JavaScript agree with Rust.
 
+The first executable three-surface slice is `ImageFilter.Color3DLUT`. Its eight
+independent Pillow 12.2.0 cases execute through the Rust API, installed Python
+ABI, and built WASM ABI, comparing exact mode, dimensions, complete pixel
+bytes, exception category, and exception message. JavaScript errors are now
+real `Error` objects with Pillow-compatible names instead of untyped strings.
+This is a seed for the complete shared harness, not evidence that the remaining
+corpus is implemented across all three surfaces.
+
 ## Verified Findings
 
 ### Python is not yet a thin client
@@ -569,7 +577,7 @@ coverage impact.
 | Explicit x86/ARM intrinsic implementations | effectively 0; scalar stubs |
 | GPU mixed-backend segmentation | absent |
 | GPU submission strategy | one submit and blocking wait per operation |
-| Rust/Python/JS shared complete oracle corpus | not yet proven |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.
