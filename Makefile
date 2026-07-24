@@ -89,6 +89,7 @@ help: ## Show this help
 	@printf "\n$(BOLD)Coverage$(NC)\n"
 	@printf "  $(CYAN)make coverage$(NC)       Run tests + compute coverage\n"
 	@printf "  $(CYAN)make coverage-python-abi-rust$(NC) Run Pillow parity through PyO3 with Rust LLVM coverage\n"
+	@printf "  $(CYAN)make coverage-python-wrapper$(NC) Run Pillow parity with Python wrapper branch coverage\n"
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
 	@printf "  $(CYAN)make coverage-wasm$(NC)  Generate WASM coverage report\n"
@@ -119,10 +120,10 @@ setup: ## Install all dev dependencies
 	@command -v $(MATURIN) >/dev/null 2>&1 || { echo "Installing maturin..."; pip install maturin; }
 	@command -v $(WASM_PACK) >/dev/null 2>&1 || { echo "Installing wasm-pack..."; cargo install wasm-pack; }
 	@[ -n "$$VIRTUAL_ENV" ] || [ -n "$$CONDA_PREFIX" ] || echo "⚠️  No virtualenv detected — consider: python3 -m venv .venv && source .venv/bin/activate"
-	pip install maturin pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	pip install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 setup-ci: ## Install dev deps for CI
-	pip install maturin pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	pip install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 .PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
@@ -389,7 +390,8 @@ clippy-core: ## Run clippy on core only
 lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
-.PHONY: coverage coverage-python-abi-rust coverage-validate coverage-report coverage-wasm
+.PHONY: coverage coverage-python-abi-rust coverage-python-wrapper
+.PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
 	@[ -f "$(REPORT)" ] || { echo "No test report found. Run: make test"; exit 1; }
@@ -398,6 +400,10 @@ coverage: ## Run tests + compute coverage
 coverage-python-abi-rust: ## Run Pillow parity through PyO3 and export Rust LLVM coverage
 	PYTHON=$(PYTHON) MATURIN=$(MATURIN) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
 		bash scripts/coverage/run_python_abi_rust_coverage.sh
+
+coverage-python-wrapper: ## Run Pillow parity and export Python wrapper branch coverage
+	PYTHON=$(PYTHON) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
+		bash scripts/coverage/run_python_wrapper_coverage.sh
 
 coverage-validate: ## Validate coverage against manifest (exit 1 on gaps)
 	$(PYTHON) scripts/coverage/validate_coverage.py $(MANIFEST)
