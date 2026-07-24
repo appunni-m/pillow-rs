@@ -957,7 +957,14 @@ artifact:
       `getmask2`. All eight existing exact Pillow fixtures pass, and the
       executable checker falls from 33 to 29 violations. This is not yet
       complete because the duplicate fixtures still need replacement and the
-      shared Rust/JS consumers still need to be added.
+      shared Rust/JS consumers still need to be added. The shared-oracle half is
+      now complete: one generated Pillow 12.2.0 manifest contains exactly three
+      independent paths (untransposed, `ROTATE_90`, and
+      `FLIP_LEFT_RIGHT`). Direct Rust and installed Python assert exact bbox,
+      length or exact error, dimensions, and mask bytes; JavaScript/WASM
+      asserts the same contract through thin methods backed by the same Rust
+      helpers. The aggregate gate passes 3/3 cases on all three surfaces.
+      Removing the superseded generic suite duplicates remains open.
 
 The locally validated lane passes the shared 5/5 exact oracle cases and records
 6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
@@ -1106,7 +1113,7 @@ coverage artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, 28 ImageDraw cases, and 5 ImageFont.getmask2 cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, 28 ImageDraw cases, 5 ImageFont.getmask2 cases, and 3 independent TransposedFont paths; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.
