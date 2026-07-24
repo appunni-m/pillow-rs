@@ -905,9 +905,13 @@ artifact:
       expansion/26.6 origin rounding and the zero-sized internal mask
       representation. Baseline, both start cases, and empty text pass exactly,
       reducing the thin-binding checker from 36 to 34 violations. The Unicode
-      case remains visibly failing because coverage bytes differ despite equal
-      `(13, 8)` dimensions and `(0, 2)` offset; it is the next FreeType
-      first-divergence bucket. Direct Rust and WASM consumers plus managed
+      case remains visibly failing. Reducing it from `"Hé"` to the single
+      failing `"é"` glyph proves that Pillow and Rust agree on the missing
+      glyph's `(5, 7)` dimensions, `(0, 3)` offset, and box topology, while
+      grayscale coverage bytes differ. The font's unsupported format-0 record
+      maps `é` to glyph zero, so it is not the cause; this is a glyph-0
+      rasterizer coverage bucket rather than cmap, layout, metrics, or bitmap
+      placement. Direct Rust and WASM consumers plus managed
       Coverage MCP evidence are still required before this operation is
       trusted across all ABIs.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.

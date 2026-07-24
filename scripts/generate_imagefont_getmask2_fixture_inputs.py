@@ -39,6 +39,6 @@ write_suite(
     1,
     [
         {"id": "empty_suite1", "params": {"text": ""}},
-        {"id": "unicode_suite1", "params": {"text": "Hé"}},
+        {"id": "unicode_suite1", "params": {"text": "é"}},
     ],
 )
