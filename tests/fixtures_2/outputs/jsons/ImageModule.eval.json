@@ -12,7 +12,13 @@
       "id": "ImageModule.eval_1_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.eval_ImageModule.eval_1_suite1.png"
+        "reference": "raws/ImageModule.eval_ImageModule.eval_1_suite1.bin",
+        "raw_kind": "image",
+        "mode": "1",
+        "size": [
+          10,
+          10
+        ]
       }
     },
     {
