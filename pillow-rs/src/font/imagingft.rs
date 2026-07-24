@@ -117,7 +117,22 @@ pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
 pub fn getmask2(font: &Font, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
-    let (width, height, pixels) = getmask(font, text);
+    getmask2_with_start(font, text, (0.0, 0.0))
+}
+
+/// Render a Pillow-compatible mask with a fractional raster start.
+///
+/// Pillow applies `start` to the mask canvas and glyph origin while leaving
+/// the returned BASIC-layout offset unchanged.
+pub fn getmask2_with_start(
+    font: &Font,
+    text: &str,
+    start: (f64, f64),
+) -> (u32, u32, Vec<u8>, (i32, i32)) {
+    let (width, height, pixels) = match font {
+        Font::TrueType(t) => mask_from_run_with_start(t, text, TGT_NORM, start),
+        Font::Bitmap(b) => shift_bitmap_mask(b.getmask(text), start),
+    };
     let bbox = getbbox(font, text);
     (width, height, pixels, (bbox.0, bbox.1))
 }
@@ -341,6 +356,15 @@ fn mask_from_run_with_flags(
     text: &str,
     load_flags: i32,
 ) -> (u32, u32, Vec<u8>) {
+    mask_from_run_with_start(ttf, text, load_flags, (0.0, 0.0))
+}
+
+fn mask_from_run_with_start(
+    ttf: &TrueTypeFont,
+    text: &str,
+    load_flags: i32,
+    start: (f64, f64),
+) -> (u32, u32, Vec<u8>) {
     if text.is_empty() {
         return (0, 0, vec![]);
     }
@@ -349,8 +373,12 @@ fn mask_from_run_with_flags(
     // `fontmode="1"`. Thresholding the normal grayscale mask is not
     // equivalent: monochrome hinting changes advances and glyph geometry.
     let bbox = bbox_from_run_with_flags(ttf, text, load_flags);
-    let w = (bbox.2 - bbox.0).max(0) as u32;
-    let h = (bbox.3 - bbox.1).max(0) as u32;
+    // Pillow 12.2.0 `_imagingft.c::font_render_impl` expands the allocated
+    // mask by ceil(start), then rounds the shifted 26.6 pen origin.
+    let start_width = start.0.ceil() as i32;
+    let start_height = start.1.ceil() as i32;
+    let w = (bbox.2 - bbox.0).saturating_add(start_width).max(0) as u32;
+    let h = (bbox.3 - bbox.1).saturating_add(start_height).max(0) as u32;
     let wu = w as usize;
     let hu = h as usize;
     let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
@@ -403,8 +431,8 @@ fn mask_from_run_with_flags(
         prev = Some(g);
     }
 
-    let x_origin = -x_min * 64;
-    let y_origin = -y_max * 64;
+    let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
+    let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
 
     for (pen_before, bitmap_left, bitmap_top, bitmap) in &rendered {
         let Some(bm) = bitmap else {
@@ -448,6 +476,39 @@ fn mask_from_run_with_flags(
         }
     }
     (w, h, canvas)
+}
+
+fn shift_bitmap_mask(
+    (width, height, pixels): (u32, u32, Vec<u8>),
+    start: (f64, f64),
+) -> (u32, u32, Vec<u8>) {
+    let extra_x = start.0.ceil() as i64;
+    let extra_y = start.1.ceil() as i64;
+    let shifted_width = (i64::from(width) + extra_x).max(0) as u32;
+    let shifted_height = (i64::from(height) + extra_y).max(0) as u32;
+    let mut shifted = vec![0; (shifted_width as usize).saturating_mul(shifted_height as usize)];
+    let dx = start.0.round() as i64;
+    let dy = start.1.round() as i64;
+    for source_y in 0..height {
+        for source_x in 0..width {
+            let target_x = i64::from(source_x) + dx;
+            let target_y = i64::from(source_y) + dy;
+            if target_x < 0
+                || target_y < 0
+                || target_x >= i64::from(shifted_width)
+                || target_y >= i64::from(shifted_height)
+            {
+                continue;
+            }
+            let source = (source_y as usize) * (width as usize) + source_x as usize;
+            let target = (target_y as usize) * (shifted_width as usize) + target_x as usize;
+            if let (Some(value), Some(destination)) = (pixels.get(source), shifted.get_mut(target))
+            {
+                *destination = *value;
+            }
+        }
+    }
+    (shifted_width, shifted_height, shifted)
 }
 
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> Option<u8> {

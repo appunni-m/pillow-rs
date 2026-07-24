@@ -1567,8 +1567,19 @@ impl PyFont {
         Ok(pillow_rs::font::imagingft::getmask(&self.inner, text))
     }
 
-    fn getmask2_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>, (i32, i32))> {
-        Ok(pillow_rs::font::imagingft::getmask2(&self.inner, text))
+    #[pyo3(signature = (text, start=None))]
+    fn getmask2_image(
+        &self,
+        text: &str,
+        start: Option<(f64, f64)>,
+    ) -> PyResult<(PyImage, (i32, i32))> {
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.inner,
+            text,
+            start.unwrap_or((0.0, 0.0)),
+        );
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok((PyImage { inner }, offset))
     }
 
     fn getlength(&self, text: &str) -> f32 {

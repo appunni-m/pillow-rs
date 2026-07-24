@@ -47,6 +47,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
+	@printf "  $(CYAN)make test-imagefont-getmask2$(NC) Run independent ImageFont.getmask2 Pillow fixtures\n"
 	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-palette-save$(NC) Run ImagePalette.save Pillow-oracle parity\n"
@@ -91,6 +92,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
+	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
 	@printf "  $(CYAN)make compact-value-fixtures$(NC) Regenerate compact typed sequence oracles\n"
 	@printf "  $(CYAN)make fixture-coverage-check$(NC) Validate semantic fixture/manifest coverage\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
@@ -168,7 +170,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-imagefont-getmask2 test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle
 .PHONY: backend-support-matrix
@@ -193,6 +195,10 @@ test-suite2: ## Run suite2 only
 test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
 	$(PYTHON) -m pytest tests/test_putdata_parity.py tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "putdata"
+
+test-imagefont-getmask2: imagefont-getmask2-fixtures ## Run independent ImageFont.getmask2 Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImageFont and getmask2"
 
 test-point: point-fixtures ## Run exact Image.point Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
@@ -439,6 +445,7 @@ freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
+.PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
@@ -456,6 +463,11 @@ putdata-fixtures: ## Generate semantic Image.putdata inputs and exact Pillow ora
 	$(PYTHON) scripts/generate_putdata_fixture_inputs.py
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.putdata
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.putdata
+
+imagefont-getmask2-fixtures: ## Generate independent ImageFont.getmask2 inputs and exact Pillow oracles
+	$(PYTHON) scripts/generate_imagefont_getmask2_fixture_inputs.py
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageFont.getmask2
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImageFont.getmask2
 
 compact-value-fixtures: ## Regenerate compact exact getdata/flattened-data oracles
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
