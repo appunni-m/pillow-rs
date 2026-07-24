@@ -373,10 +373,15 @@ The paste/drawing/transparency audit on 2026-07-24 found:
   `GPU adapter not available` error without panicking or poisoning shared
   state.
 
-The full forced-backend run therefore remains intentionally red on this host:
-14 tests pass and eight GPU-dependent tests fail with the direct adapter error.
-Those GPU rows require a Coverage MCP worker with a real supported adapter;
-they must not be converted to skips or counted from CPU/SIMD execution.
+The full forced-backend run therefore remains intentionally red on the local
+adapter-less host: 14 tests pass and eight GPU-dependent tests fail with the
+direct adapter error. Coverage MCP run
+`749fd232-908f-4e8c-a025-21ccb4d136cf` executed the approved
+`image-backend-parity-test` registration at commit `d515552c6` on a worker with
+a usable adapter and passed all 22 tests. This is durable exact-oracle execution
+evidence for the declared paste/drawing/transparency backend cases. The
+registration declares no coverage artifact, however, so the run produced no
+coverage snapshot and is not branch-coverage evidence.
 
 ### Existing documentation can be stale
 
@@ -602,6 +607,7 @@ coverage impact.
 | GPU mixed-backend segmentation | absent |
 | GPU submission strategy | one submit and blocking wait per operation |
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
+| Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
