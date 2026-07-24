@@ -965,9 +965,23 @@ artifact:
       asserts the same contract through thin methods backed by the same Rust
       helpers. The aggregate gate passes 3/3 cases on all three surfaces.
       The maintained `make coverage-transposed-font-rust` lane emits
-      `target/coverage/pillow-transposed-font-rust.json`. Removing the
-      superseded generic suite duplicates and ingesting this report through
-      Coverage MCP remain open.
+      `target/coverage/pillow-transposed-font-rust.json`. Ingesting this report
+      through Coverage MCP remains open.
+
+The legacy fixture inventory requires one constructor fixture and one fixture
+per declared method to satisfy the manifest gate. Its minimal retained set is
+constructor/`FLIP_LEFT_RIGHT`, `getbbox`/`ROTATE_90`,
+`getmask`/`ROTATE_90`, and `getlength` with both untransposed success and
+rotated error. The suite-0 constructor/`ROTATE_90` case and both suite-1
+constructor cases repeat those control paths and are removed with their
+generated outputs.
+
+Coverage MCP run `40aeddba-40e5-4537-8271-524917dea048` regenerated and
+accepted the retained constructor plus all three method fixture files. The
+overall inventory command remains red because of 16 pre-existing mode gaps in
+other operations; its retained log contains four `OK ImageFont.TransposedFont`
+entries and no TransposedFont gap. The shared all-ABI oracle was rerun after
+deletion and remains 3/3 exact.
 
 The locally validated branch lane passes 3/3 and records 7,422 / 44,337 lines,
 1,241 / 9,662 branches, 492 / 2,991 functions, and 10,461 / 69,614 regions.
