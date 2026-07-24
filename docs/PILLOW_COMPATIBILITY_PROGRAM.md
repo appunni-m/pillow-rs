@@ -383,6 +383,15 @@ evidence for the declared paste/drawing/transparency backend cases. The
 registration declares no coverage artifact, however, so the run produced no
 coverage snapshot and is not branch-coverage evidence.
 
+The maintained `coverage-image-backend-rust` target now runs that same exact
+oracle harness under nightly `cargo llvm-cov --branch` and exports
+`target/coverage/pillow-image-backend-rust.json` even when a local
+adapter-dependent test fails. The first local diagnostic report contains
+5,807/18,061 lines, 666/3,170 branches, 434/1,208 functions, and 9,345/31,313
+regions. It remains a local diagnostic, not trusted evidence, until its exact
+command and artifact are approved and ingested by Coverage MCP on the
+GPU-capable worker.
+
 ### Existing documentation can be stale
 
 Historical documents contain superseded counts and completed-gap claims, such
@@ -608,6 +617,7 @@ coverage impact.
 | GPU submission strategy | one submit and blocking wait per operation |
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
+| Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
 | Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only

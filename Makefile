@@ -427,7 +427,7 @@ clippy-core: ## Run clippy on core only
 lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
-.PHONY: coverage coverage-python-abi-rust coverage-python-wrapper
+.PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -437,6 +437,9 @@ coverage: ## Run tests + compute coverage
 coverage-python-abi-rust: ## Run Pillow parity through PyO3 and export Rust LLVM coverage
 	PYTHON=$(PYTHON) MATURIN=$(MATURIN) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
 		bash scripts/coverage/run_python_abi_rust_coverage.sh
+
+coverage-image-backend-rust: ## Run exact backend parity and export Rust LLVM branch coverage
+	bash scripts/coverage/run_image_backend_rust_coverage.sh
 
 coverage-python-wrapper: ## Run Pillow parity and export Python wrapper branch coverage
 	PYTHON=$(PYTHON) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
