@@ -24,6 +24,7 @@ help:
 	@printf "  make test-color3dlut-oracle Run shared Pillow Color3DLUT oracle through Rust\n"
 	@printf "  make test-eval-oracle Run shared Pillow Image.eval oracle through Rust\n"
 	@printf "  make test-image-open-oracle Run shared Pillow Image.open oracle through Rust\n"
+	@printf "  make test-tobytes-oracle Run shared Pillow Image.tobytes oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
@@ -73,6 +74,10 @@ test-eval-oracle:
 .PHONY: test-image-open-oracle
 test-image-open-oracle:
 	$(CARGO) test --all-features --test image_open_oracle --locked -- --nocapture
+
+.PHONY: test-tobytes-oracle
+test-tobytes-oracle:
+	$(CARGO) test --all-features --test tobytes_oracle --locked -- --nocapture
 
 .PHONY: backend-support-matrix
 backend-support-matrix:
