@@ -9,7 +9,7 @@ outside the FreeType-specific parity program.
 
 1. **Is Python thin and all logic in Rust?** Not yet. Pure Rust remains the
    non-negotiable destination, but the maintained binding audit currently
-   reports 36 actionable Python violations. Core also still performs image
+   reports 34 actionable Python violations. Core also still performs image
    path I/O in `Image::open` and `Image::save`. Neither gap may be waived.
 2. **Are parity tests fixture-only?** The trusted lane is fixture-only and
    Pillow-oracle-only. The last broad managed Python run was not: it combined
@@ -897,6 +897,19 @@ artifact:
       preserves the original ink alpha and passes all 46 exact Pillow
       `ImageDraw.text` and `ImageDraw.multiline_text` cases; the independent
       28-case drawing corpus remains exact through Rust, Python, and WASM.
+- [x] Replace eight duplicate `ImageFont.getmask2("Hello")` inputs with five
+      documented independent paths: baseline, integer start, fractional start,
+      empty text, and Unicode. Pillow applies `start` during mask allocation
+      and raster placement while preserving the returned offset; Python
+      previously changed only the offset and was wrong. Rust now owns start
+      expansion/26.6 origin rounding and the zero-sized internal mask
+      representation. Baseline, both start cases, and empty text pass exactly,
+      reducing the thin-binding checker from 36 to 34 violations. The Unicode
+      case remains visibly failing because coverage bytes differ despite equal
+      `(13, 8)` dimensions and `(0, 2)` offset; it is the next FreeType
+      first-divergence bucket. Direct Rust and WASM consumers plus managed
+      Coverage MCP evidence are still required before this operation is
+      trusted across all ABIs.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
@@ -1010,7 +1023,7 @@ artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **36 actionable executable violations** |
+| Python thin-binding violations | **34 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

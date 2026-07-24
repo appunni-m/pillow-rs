@@ -6,28 +6,29 @@
   },
   "cases": [
     {
-      "id": "default",
-      "input": null,
+      "id": "baseline",
       "params": {
         "text": "Hello"
       }
     },
     {
-      "id": "getmask2_L",
+      "id": "integer_start",
       "params": {
-        "text": "Hello"
+        "text": "Hello",
+        "start": [
+          3,
+          4
+        ]
       }
     },
     {
-      "id": "getmask2_RGB",
+      "id": "fractional_start",
       "params": {
-        "text": "Hello"
-      }
-    },
-    {
-      "id": "getmask2_RGBA",
-      "params": {
-        "text": "Hello"
+        "text": "Hello",
+        "start": [
+          0.5,
+          0.75
+        ]
       }
     }
   ]

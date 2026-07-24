@@ -7,27 +7,15 @@
   },
   "cases": [
     {
-      "id": "default_suite1",
+      "id": "empty_suite1",
       "params": {
-        "text": "Hello"
+        "text": ""
       }
     },
     {
-      "id": "getmask2_L_suite1",
+      "id": "unicode_suite1",
       "params": {
-        "text": "Hello"
-      }
-    },
-    {
-      "id": "getmask2_RGB_suite1",
-      "params": {
-        "text": "Hello"
-      }
-    },
-    {
-      "id": "getmask2_RGBA_suite1",
-      "params": {
-        "text": "Hello"
+        "text": "H\u00e9"
       }
     }
   ]

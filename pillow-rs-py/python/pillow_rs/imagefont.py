@@ -127,13 +127,8 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        w, h, alpha, offset = self._rust_font.getmask2_alpha(str(text))
-        mask = ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
-        if start is not None:
-            offset = (
-                offset[0] + int(start[0]),
-                offset[1] + int(start[1]),
-            )
+        image, offset = self._rust_font.getmask2_image(str(text), start)
+        mask = ImagingCore(PILImage(image))
         return mask, offset
 
     def getmetrics(self):

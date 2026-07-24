@@ -390,6 +390,26 @@ impl Image {
         })
     }
 
+    /// Creates an internal L-mode mask, including Pillow's valid empty
+    /// `(0, 0)` glyph-mask representation.
+    ///
+    /// Unlike public [`Image::frombytes`], this constructor is intended for
+    /// algorithm-produced mask storage and therefore accepts zero dimensions.
+    pub fn from_luma_mask(width: u32, height: u32, pixels: Vec<u8>) -> Result<Self, PilError> {
+        let expected = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| PilError::ValueError("mask dimensions overflow".into()))?;
+        if pixels.len() != expected {
+            return Err(PilError::ValueError(format!(
+                "mask byte length mismatch: expected {expected}, got {}",
+                pixels.len()
+            )));
+        }
+        let image = image_slash_star::GrayImage::from_raw(width, height, pixels)
+            .ok_or_else(|| PilError::InternalError("failed to construct L mask".into()))?;
+        Ok(Self::from_dynamic(DynamicImage::ImageLuma8(image), None))
+    }
+
     // ── Constructors ──
 
     #[allow(clippy::too_many_arguments)]
