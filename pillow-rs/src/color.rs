@@ -828,13 +828,3 @@ pub fn palette_getcolor_validate(
     };
     palette_getcolor_append(palette, r, g, b, a, mode)
 }
-
-/// Saves palette data as Pillow-compatible text.
-///
-/// # Errors
-///
-/// Returns a string describing filesystem write failures.
-pub fn palette_save_to_file(palette: &[u8], mode: &str, path: &str) -> Result<(), String> {
-    let text = palette_to_text(palette, mode);
-    std::fs::write(path, &text).map_err(|e| format!("Cannot write palette file: {}", e))
-}

@@ -243,6 +243,14 @@ methods or complex length logic. The actionable count is therefore 47.
 performs filesystem I/O. This violates the core boundary. Binding layers must
 read/write bytes and delegate byte decoding/encoding to Rust.
 
+The first core filesystem operation removed is palette saving. Core now owns
+only deterministic `palette_to_text`; the PyO3 boundary writes that text to a
+host path, and WASM no longer exports a browser-inapplicable path-writing
+function. A maintained generator distinguishes file-like and path destinations
+without duplicating palette-mode semantics. All eight Pillow 12.2 oracle cases
+(four independent paths per suite) pass, and the rebuilt WASM package/codec
+checks pass.
+
 ### Current parity is not fixture-only
 
 The last inspected managed Python run contained 1,677 tests:
@@ -603,6 +611,9 @@ coverage artifact:
       underflow in the binding.
 - [ ] Remove filesystem access from `pillow-rs` core.
 - [ ] Make Python and JavaScript read/write files and pass bytes to Rust.
+- [x] Remove palette path writing from core. PyO3 owns the host write, WASM
+      exposes text bytes rather than a filesystem API, and all eight exact
+      file-like/path Pillow-oracle cases pass.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 

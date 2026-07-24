@@ -7,18 +7,25 @@
   "cases": [
     {
       "id": "ImagePalette_save_L",
-      "mode": "L",
-      "params": {}
+      "params": {},
+      "mode": "L"
     },
     {
       "id": "ImagePalette_save_P",
-      "mode": "P",
-      "params": {}
+      "params": {},
+      "mode": "P"
     },
     {
       "id": "ImagePalette_save_RGB",
-      "mode": "RGB",
-      "params": {}
+      "params": {},
+      "mode": "RGB"
+    },
+    {
+      "id": "ImagePalette_save_path_RGB",
+      "params": {
+        "destination": "path"
+      },
+      "mode": "RGB"
     }
   ]
 }

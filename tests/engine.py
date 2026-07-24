@@ -471,9 +471,18 @@ def _draw_getfont(backend, img, target, params):
 def _palette_method(backend, img, target, params):
     """Create default palette, then call method on it."""
     import io
+    import tempfile
     palette_mode = params.pop("_fixture_mode", "RGB")
     palette = backend.ImagePalette.ImagePalette(mode=palette_mode)
     if target == "save":
+        destination = params.pop("destination", "file_like")
+        if destination == "path":
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "palette.txt"
+                result = getattr(palette, target)(str(path), **params)
+                return result, path.read_bytes()
+        if destination != "file_like":
+            raise ValueError(f"unknown palette save destination: {destination}")
         buf = io.BytesIO()
         text_buf = io.TextIOWrapper(buf)
         result = getattr(palette, target)(text_buf, **params)
