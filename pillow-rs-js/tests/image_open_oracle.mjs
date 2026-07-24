@@ -52,7 +52,7 @@ for (const testCase of cases) {
         throw new Error(`${testCase.id}: Image.open oracle must be exact raw image bytes`);
     }
 
-    const actual = bindings.Image.open(Buffer.from(input.base64, 'base64'));
+    const actual = bindings.Image.open(Buffer.from(input.hex, 'hex'));
     if (actual.mode !== assertion.mode) {
         throw new Error(`${testCase.id}: mode ${actual.mode} != ${assertion.mode}`);
     }
