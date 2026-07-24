@@ -26,6 +26,14 @@ BACKEND_FIXTURE_DIR = (
 )
 BACKEND_PARITY_MANIFEST = BACKEND_FIXTURE_DIR / "backend_parity.json"
 
+# These modes execute the same operation branch and may share one exact oracle
+# input. This prevents the inventory gate from rewarding duplicate no-op cases.
+MODE_PATH_EQUIVALENCE = {
+    "Image.apply_transparency": (
+        frozenset({"L", "LA", "RGB", "RGBA"}),
+    ),
+}
+
 
 def exact_image_spec(value: object) -> bool:
     """Return whether a backend fixture contains concrete exact image bytes."""
@@ -300,6 +308,11 @@ def fixture_operation_modes(
                     )
     for operation, modes in backend_parity_operation_modes().items():
         fixture_modes.setdefault(operation, set()).update(modes)
+    for operation, groups in MODE_PATH_EQUIVALENCE.items():
+        modes = fixture_modes.get(operation, set())
+        for group in groups:
+            if modes & group:
+                modes.update(group)
     return fixture_modes
 
 
