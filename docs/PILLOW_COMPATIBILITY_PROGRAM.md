@@ -211,6 +211,11 @@ and selects the exact error. A maintained `point-fixtures` generator preserves
 the six existing mode/error paths and adds one independent RGB callable path
 per suite. All 14 Pillow 12.2 oracle cases pass.
 
+Removing Python's `-1` sentinel conversion from `Image.getdata` reduced the
+checker count from 49 to 48. The Python ABI already accepts `None`; optional
+band interpretation remains in Rust. All 18 compact exact `getdata` and
+`get_flattened_data` Pillow-oracle cases pass.
+
 `pillow-rs/src/image.rs` also exposes path-based `open` and `save` behavior and
 performs filesystem I/O. This violates the core boundary. Binding layers must
 read/write bytes and delegate byte decoding/encoding to Rust.
@@ -535,6 +540,9 @@ coverage impact.
       explicit-LUT validation into core. The checker is now 49 violations, and
       `make PYTHON=.venv/bin/python test-point` passes all 14 regenerated exact
       Pillow-oracle cases, including the new independent callable path.
+- [x] Remove Python's `Image.getdata` missing-band sentinel conversion and
+      delegate `None` directly to the Rust ABI. The checker is now 48
+      violations; all 18 compact exact Pillow-oracle cases pass.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.

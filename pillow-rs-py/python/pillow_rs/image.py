@@ -362,9 +362,7 @@ class Image:
 
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
-        values = self._rust_image.getdata_formatted(
-            band if band is not None else -1
-        )
+        values = self._rust_image.getdata_formatted(band)
         return ImagingCore(values)
 
     def putdata(self, data, scale=1.0, offset=0.0):
