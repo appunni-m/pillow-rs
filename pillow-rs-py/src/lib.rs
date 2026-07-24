@@ -728,9 +728,9 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// point() with band replication: takes 256-entry LUT, replicates to n_bands*256
-    fn point_replicated(&self, lut: Vec<u8>, n_bands: usize) -> PyResult<PyImage> {
-        pillow_rs::ops::module_fns::eval_replicated(&self.inner, &lut, n_bands)
+    /// point() with band replication derived from the Rust image mode.
+    fn point_replicated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
+        pillow_rs::ops::module_fns::eval_replicated_for_image(&self.inner, &lut)
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -738,14 +738,9 @@ impl PyImage {
     /// Validate pre-built LUT length before calling point.
     /// PIL: LUT must have exactly 256 * n_bands entries.
     fn point_validated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        let n_bands = self.inner.getbands().map_err(map_error)?.len();
-        let expected = 256 * n_bands;
-        if lut.len() != expected {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "wrong number of lut entries",
-            ));
-        }
-        self.point(lut)
+        pillow_rs::ops::module_fns::eval_validated(&self.inner, &lut)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {

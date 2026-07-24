@@ -343,6 +343,19 @@ def _eval_image(backend, img, target, params):
     return _call_mod(backend, target)(img, funcs[func_name])
 
 
+def _point_image(backend, img, target, params):
+    """Image.point with either a canonical LUT or a named callable."""
+    if "function" not in params:
+        return getattr(img, target)(**params)
+    func_name = params.pop("function")
+    funcs = {
+        "add_10": lambda x: min(255, x + 10),
+        "identity": lambda x: x,
+        "invert": lambda x: 255 - x,
+    }
+    return getattr(img, target)(funcs[func_name])
+
+
 def _font_method(backend, img, target, params):
     """Load default font, then call method on it.
     
@@ -810,7 +823,11 @@ def _seek(backend, img, img2, target, params):
 
 
 CALL_STYLE = {
-    "instance_method":        lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
+    "instance_method":        lambda b, img, img2, tgt, p: (
+        _point_image(b, img, tgt, p)
+        if tgt == "point"
+        else getattr(img, tgt)(**p)
+    ),
     "instance_method_value":  lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
     "instance_property":      lambda b, img, img2, tgt, p: getattr(img, tgt),
     "instance_method_sequence": _instance_method_sequence,

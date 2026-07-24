@@ -738,6 +738,13 @@
           255
         ]
       }
+    },
+    {
+      "id": "Image_point_callable_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_callable_RGB_suite1.png"
+      }
     }
   ]
 }

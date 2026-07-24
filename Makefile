@@ -47,6 +47,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
+	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
@@ -151,7 +152,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: backend-support-matrix
 
@@ -175,6 +176,10 @@ test-suite2: ## Run suite2 only
 test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
 	$(PYTHON) -m pytest tests/test_putdata_parity.py tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "putdata"
+
+test-point: point-fixtures ## Run exact Image.point Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "Image.point"
 
 test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 	$(PYTHON) -m pytest tests/test_parity.py \
@@ -363,7 +368,7 @@ freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
-.PHONY: compact-value-fixtures color3dlut-fixtures test-color3dlut
+.PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -395,6 +400,16 @@ color3dlut-fixtures: ## Regenerate independent-path Color3DLUT Pillow oracles
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
 		--fixture ImageFilter.Color3DLUT
+
+point-fixtures: ## Regenerate Image.point Pillow oracles
+	$(PYTHON) scripts/generate_point_fixture_inputs.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0
+	$(PYTHON) scripts/generate_point_fixture_inputs.py \
+		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.point
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.point
 
 test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT
