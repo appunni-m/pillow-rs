@@ -1376,7 +1376,7 @@ export class WasmBackend {
             return false;
         }
         if (target === "apply_transparency" || target === "applyTransparency") {
-            return null;
+            return img.applyTransparency();
         }
         if (target === "show") {
             return null;
