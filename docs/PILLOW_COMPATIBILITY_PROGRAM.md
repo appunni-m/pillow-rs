@@ -258,8 +258,12 @@ palette mode, transparency presence, mode, dimensions, complete indexed/PA
 sample bytes, and the complete RGBA palette. The audit found that the legacy
 five-mode fixtures only exercised no-op images and that the generic Node
 backend returned `null` without calling WASM; the Node and browser adapters now
-call `applyTransparency` instead. Those legacy no-op inputs are not counted as
-compatibility evidence and remain a corpus-deduplication task.
+call `applyTransparency` instead. The ten duplicated legacy no-op cases are now
+two path-based controls: one non-palette no-op and one P image without pending
+transparency. The fixture-coverage gate treats L/LA/RGB/RGBA as one documented
+non-palette branch for this operation instead of demanding four duplicate
+inputs. Together with the three strict commit cases, the retained corpus has
+five independent paths rather than thirteen overlapping cases.
 
 The strict runner exposed two core divergences that the prior tests hid:
 lazy encoded mode-`1` images used header metadata for `mode()` but not for
@@ -715,6 +719,9 @@ coverage artifact:
       1,659 passes / 18 failures while its test phase fell from roughly 55 to
       20 seconds.
 - [ ] Preserve semantically distinct inputs even when line coverage is equal.
+- [x] Deduplicate `Image.apply_transparency` from ten mode-multiplied no-op
+      inputs to two distinct no-op branches, while retaining the three
+      single-index, alpha-table, and PA-promotion commit paths.
 - [ ] Resolve nondeterministic `effect_spread` with a principled Pillow public
       contract rather than a fixture-specific PRNG match.
 - [ ] Define and implement a genuine compatible `getim` allocation/lifetime
