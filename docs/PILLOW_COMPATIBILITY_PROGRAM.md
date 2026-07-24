@@ -690,7 +690,13 @@ coverage artifact:
 - [x] Correct Python `bytes` to mean a bytes filesystem path exactly as Pillow
       does; add independent bytes-path and `BytesIO` image open cases plus a
       `BytesIO` save/reopen case.
-- [ ] Classify browser/Node byte loading separately for WASM.
+- [x] Classify browser/Node loading as encoded-byte input supplied by the host;
+      WASM exposes no filesystem-path API. The strict Color3DLUT and Image.eval
+      Node consumers and codec feature matrix already load host file bytes and
+      call `Image.open(bytes)`.
+- [ ] Add the canonical image-open corpus to the strict Node/WASM consumer so
+      byte loading is operation-scoped parity evidence rather than only a
+      prerequisite exercised by other operations.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 
