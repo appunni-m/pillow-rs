@@ -904,16 +904,22 @@ artifact:
       previously changed only the offset and was wrong. Rust now owns start
       expansion/26.6 origin rounding and the zero-sized internal mask
       representation. Baseline, both start cases, and empty text pass exactly,
-      reducing the thin-binding checker from 36 to 34 violations. The Unicode
-      case remains visibly failing. Reducing it from `"Hé"` to the single
-      failing `"é"` glyph proves that Pillow and Rust agree on the missing
-      glyph's `(5, 7)` dimensions, `(0, 3)` offset, and box topology, while
-      grayscale coverage bytes differ. The font's unsupported format-0 record
-      maps `é` to glyph zero, so it is not the cause; this is a glyph-0
-      rasterizer coverage bucket rather than cmap, layout, metrics, or bitmap
-      placement. Direct Rust and WASM consumers plus managed
-      Coverage MCP evidence are still required before this operation is
-      trusted across all ABIs.
+      reducing the thin-binding checker from 36 to 34 violations. Reducing the
+      Unicode case from `"Hé"` to the single failing `"é"` glyph showed that
+      Pillow and Rust agreed on glyph zero, `(5, 7)` dimensions, `(0, 3)`
+      offset, and outer box topology, while grayscale coverage bytes differed.
+      A C/Rust outline trace moved the first divergence before rasterization:
+      unhinted outlines matched all 16 points, but C default-autohinted point 4
+      to `(160, 242)` while Rust left it at the unhinted `(160, 253)`. The
+      default scaler excluded glyph zero from fallback auto-hint metrics even
+      though `FaceGlobals` already exposed the correct explicit fallback.
+      Routing glyph zero through that fallback makes all 16 hinted points and
+      final Pillow mask bytes exact. The five independent cases now pass 5/5;
+      the focused pinned-C `notdef` FreeType lane remains 15/15 through Rust,
+      C ABI, and WASM ABI, with the no-runtime-FFI, rustfmt, and clippy gates
+      clean. Direct pillow-rs Rust and JavaScript consumers plus managed
+      Coverage MCP evidence are still required before `ImageFont.getmask2` is
+      trusted across all image ABIs.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
