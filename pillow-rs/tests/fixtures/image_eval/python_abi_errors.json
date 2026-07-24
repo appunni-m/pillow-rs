@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "oracle": {
+    "implementation": "Pillow",
+    "version": "12.2.0"
+  },
+  "cases": [
+    {
+      "id": "missing_argument",
+      "argument": null,
+      "expected": {
+        "type": "IndexError",
+        "message": "tuple index out of range"
+      }
+    },
+    {
+      "id": "non_iterable_integer",
+      "argument": 3,
+      "expected": {
+        "type": "TypeError",
+        "message": "'int' object is not iterable"
+      }
+    }
+  ]
+}

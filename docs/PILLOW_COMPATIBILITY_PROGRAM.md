@@ -912,6 +912,19 @@ artifact:
       explicit-LUT validation into core. The checker is now 49 violations, and
       `make PYTHON=.venv/bin/python test-point` passes all 14 regenerated exact
       Pillow-oracle cases, including the new independent callable path.
+- [x] Make `ImageModule.eval` match Pillow's actual one-line delegation to
+      `image.point(args[0])`. The Python wrapper currently adds its own
+      callability policy and substitutes `NotImplementedError`; this is both
+      binding logic and observably different for missing/non-callable
+      arguments. Reuse the existing 14-case shared exact Rust/Python/WASM
+      `Image.eval` oracle and add exact invalid-argument behavior before
+      removing the wrapper branch. The public `Image.eval` wrapper now delegates
+      exactly to `image.point(args[0])`; the existing 14-case shared
+      Rust/Python/WASM oracle remains the success-path authority, and Python
+      additionally consumes a pinned generated Pillow fixture for the exact
+      missing-argument `IndexError` and non-iterable `TypeError`. Removing the
+      duplicate wrapper policy drops the executable checker from 29 to 26
+      violations.
 - [x] Remove Python's `Image.getdata` missing-band sentinel conversion and
       delegate `None` directly to the Rust ABI. The checker is now 48
       violations; all 18 compact exact Pillow-oracle cases pass.
@@ -1163,7 +1176,7 @@ coverage artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **29 actionable executable violations** |
+| Python thin-binding violations | **26 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |
