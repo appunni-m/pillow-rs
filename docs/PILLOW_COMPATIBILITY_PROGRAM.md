@@ -921,8 +921,32 @@ artifact:
       the same five cases pass 5/5 through direct pillow-rs Rust, installed
       Python, and built JavaScript/WASM. The WASM `ImageFontMask` is a typed
       result carrying dimensions, offset, and bytes while all raster semantics
-      remain in Rust. Managed Coverage MCP evidence is still required before
-      `ImageFont.getmask2` is trusted.
+      remain in Rust. The maintained `make
+      coverage-imagefont-getmask2-rust` lane executes the direct Rust consumer
+      under LLVM branch instrumentation and emits
+      `target/coverage/pillow-imagefont-getmask2-rust.json`. Managed Coverage
+      MCP ingestion is still required before `ImageFont.getmask2` is trusted.
+
+The locally validated lane passes the shared 5/5 exact oracle cases and records
+6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
+9,737 / 69,557 regions. These aggregate workspace totals are diagnostic, not a
+trust claim; the next test-design pass must query the ingested snapshot for
+`font/imagingft.rs` and the pure-Rust FreeType paths actually exercised by this
+corpus.
+
+Pending exact Coverage MCP approval for `ImageFont.getmask2`:
+
+```text
+name: pillow-imagefont-getmask2-rust
+command: make coverage-imagefont-getmask2-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+coverage artifact:
+  path: target/coverage/pillow-imagefont-getmask2-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-imagefont-getmask2-rust
+```
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
