@@ -283,11 +283,7 @@ class Image:
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        data = self._rust_image.tobytes_formatted(self.mode)
-        # Handle raw encoder formats: "BGRA" swaps B and R channels
-        if encoder_name == "raw" and args and args[0] in ("BGRA", "BGR"):
-            return self._rust_image.tobytes_formatted_swap(self.mode, args[0])
-        return data
+        return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
 
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""

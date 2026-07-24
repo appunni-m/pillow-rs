@@ -51,6 +51,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-palette-save$(NC) Run ImagePalette.save Pillow-oracle parity\n"
 	@printf "  $(CYAN)make test-image-io$(NC)  Run Image open/save Pillow-oracle parity\n"
+	@printf "  $(CYAN)make test-tobytes$(NC)   Run Image.tobytes Pillow-oracle parity\n"
 	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
@@ -160,7 +161,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: js-eval-oracle js-image-open-oracle
 .PHONY: backend-support-matrix
@@ -202,6 +203,10 @@ test-image-io: image-io-fixtures ## Run exact Image open/save Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
 		-k "ImageModule.open or Image.open or Image.save"
+
+test-tobytes: tobytes-fixtures ## Run exact Image.tobytes Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "Image.tobytes"
 
 test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 	$(PYTHON) -m pytest tests/test_parity.py \
@@ -407,7 +412,7 @@ freetype-clean: fontdone-clean
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
-.PHONY: palette-save-fixtures image-io-fixtures test-color3dlut
+.PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -470,6 +475,10 @@ image-io-fixtures: ## Regenerate independent suite0 Image open/save oracles
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
 		--fixture ImageModule.open --fixture Image.save
+
+tobytes-fixtures: ## Regenerate independent suite0 Image.tobytes oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.tobytes
 
 test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT
