@@ -450,6 +450,39 @@ Until those codec prerequisites exist, the two ImageOps checker violations and
 the current passing no-op fixtures are explicitly untrusted rather than being
 papered over with another binding helper.
 
+### `Image.fromarray` does not implement Pillow's descriptor contract
+
+The Python binding currently infers mode from shape length/channel count and
+copies `tobytes()` output directly. Pillow 12.2.0 instead keys inference on
+`((1, 1) + shape[2:], typestr)`, chooses a distinct raw mode, enforces
+mode-dependent dimensional limits, and uses `strides` to decide whether a
+contiguous buffer can be shared or must be serialized. Missing `typestr`,
+unsupported dtype/shape pairs, excessive dimensions, and a strided object
+without `tobytes()`/`tostring()` have exact public errors.
+
+The ten current fixtures are only five repeated zero-array constructions in
+two sizes. Every case supplies an explicit mode, `|u1`, and synthetic strides;
+none tests inferred dtype, raw mode, contiguity, buffer sharing, endian layout,
+or an error branch. They are not sufficient evidence for the current
+implementation or for the four remaining `operations.py` length violations.
+
+The replacement must keep host-object inspection in the Python ABI but pass a
+plain descriptor and bytes/buffer view into Rust. Rust must own:
+
+- the Pillow type-key table for `|b1`, `|u1`, signed/unsigned 16/32-bit,
+  32/64-bit float, and supported 2/3/4-channel shapes;
+- explicit-mode/raw-mode resolution and dimensional limits;
+- checked width, height, channel, stride, and byte-length validation;
+- endian/raw decoding into the core image model;
+- exact error category and message data.
+
+Use independent Pillow-generated paths for inferred L, RGB, RGBA, I, and F;
+one explicit color-mode reinterpretation; one non-contiguous/strided array;
+one one-dimensional array; and separate unsupported-typestr,
+too-many-dimensions, missing-typestr, and missing-stride-serializer errors.
+Python, direct Rust descriptor APIs, and JavaScript typed-array descriptors
+must consume the same serializable oracle before this surface is trusted.
+
 ### CPU and SIMD coverage is incomplete
 
 The backend registry contains:
