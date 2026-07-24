@@ -936,6 +936,21 @@ artifact:
       `("Aileron", "Regular")` result, while the five independent mask cases
       remain exact; the executable Python checker falls from 34 to 33
       violations.
+- [ ] Move `ImageFont.TransposedFont` orientation classification, bbox
+      normalization, and rotated-length rejection out of Python. Pillow 12.2.0
+      exposes only `getmask`, `getbbox`, and `getlength` on this wrapper;
+      pillow-rs currently adds a non-Pillow `getmask2` method and computes
+      orientation policy and bbox subtraction in Python. Replace the duplicated
+      suite-0/suite-1 fixtures with independent paths only:
+      (1) no-orientation delegation, (2) one axis-swapping rotation
+      (`ROTATE_90`; `ROTATE_270` shares the same control path), and (3) one
+      non-swapping transpose (`FLIP_LEFT_RIGHT`; flips and `ROTATE_180` share
+      the geometry path). Assert exact mask bytes and dimensions, exact
+      normalized bbox, exact unrotated length, and the exact Pillow `ValueError`
+      for the swapping-length path. Rust must own all classification and
+      geometry; Python may retain only object wrapping and enum/type
+      conversion. Do not claim Rust/Python/JS ABI equivalence until a shared
+      oracle has executable consumers on every surface that exposes this API.
 
 The locally validated lane passes the shared 5/5 exact oracle cases and records
 6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
