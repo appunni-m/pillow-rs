@@ -5,6 +5,35 @@ Created: 2026-07-24
 Authority: this document is the canonical plan for Pillow image API parity
 outside the FreeType-specific parity program.
 
+## Executive Answers To The Five Questions
+
+1. **Is Python thin and all logic in Rust?** Not yet. Pure Rust remains the
+   non-negotiable destination, but the maintained binding audit currently
+   reports 47 actionable Python violations. Core also still performs image
+   path I/O in `Image::open` and `Image::save`. Neither gap may be waived.
+2. **Are parity tests fixture-only?** The trusted lane is fixture-only and
+   Pillow-oracle-only. The last broad managed Python run was not: it combined
+   generated fixture cases with mutation, direct `putdata`, and integrity
+   tests. Those useful contracts must be converted to independent canonical
+   oracle paths; unit-test results do not count as compatibility evidence.
+3. **What belongs in image codecs?** Detection, parsing, compressed sample
+   decode/encode, format-required conversion, palette/transparency semantics,
+   metadata, animation/multiframe state, encoding options, and corrupt/truncated
+   input handling belong in the codec layer. Generic image operations do not.
+   The detailed per-format inventory is maintained under “Core and codec
+   boundary” and Phase 4 below.
+4. **How complete is CPU versus SIMD?** The live registry has 86 CPU
+   operations, 69 SIMD-pool registrations, and 17 CPU operations without SIMD
+   registration. Registration is not proof of vectorization: the present
+   x86/ARM implementations delegate to scalar code, so verified explicit
+   intrinsic coverage is effectively zero.
+5. **Is the GPU pipeline bulk-executed and bridged efficiently?** No. A fully
+   supported chain retains pixels on device, but currently submits and blocks
+   once per operation. A mixed chain falls back as a whole or errors; it is not
+   partitioned into GPU/CPU segments and has no cost-aware bridge. Phase 6
+   defines the required single-batch, device-resident, minimal-copy design and
+   its oracle/coverage proof.
+
 ## Goal
 
 Deliver exact Pillow compatibility from one pure-Rust implementation through
@@ -251,6 +280,19 @@ without duplicating palette-mode semantics. All eight Pillow 12.2 oracle cases
 (four independent paths per suite) pass, and the rebuilt WASM package/codec
 checks pass.
 
+The remaining filesystem inventory in core is:
+
+- `pillow-rs/src/image.rs`: path reading in `Image::open`;
+- `pillow-rs/src/image.rs`: path writing in `Image::save`;
+- `pillow-rs/src/compute/pool_gpu/mod.rs`: a `/tmp/gpu_debug.log` write that
+  must be removed or replaced by the repository's guarded logging policy.
+
+The image path APIs must become binding-owned read/write adapters around
+byte-oriented Rust decode/encode APIs. Existing Rust path tests must be
+converted to prove the byte APIs, while Python path and file-like oracle cases
+prove the host boundary. The GPU temporary-file write is debug behavior, not
+an image codec responsibility.
+
 ### Current parity is not fixture-only
 
 The last inspected managed Python run contained 1,677 tests:
@@ -481,6 +523,11 @@ Commits should be small, preserve visible failures, update this checklist and
 verified counts, and include the first divergence plus before/after case and
 coverage impact.
 
+The user-requested operating rule is: commit each coherent, verified
+checkpoint, update this document in that commit when knowledge or counts
+change, and then continue immediately to the next unchecked item. A commit is
+not a stopping condition.
+
 ### Phase 0: Establish trustworthy measurement
 
 - [x] Define stable suite names for Rust oracle parity, Python ABI oracle
@@ -614,6 +661,15 @@ coverage artifact:
 - [x] Remove palette path writing from core. PyO3 owns the host write, WASM
       exposes text bytes rather than a filesystem API, and all eight exact
       file-like/path Pillow-oracle cases pass.
+- [ ] Replace core `Image::open(path, ...)` with byte-oriented decode plus
+      optional format-hint APIs; keep path reads in host bindings.
+- [ ] Replace core `Image::save(path, ...)` with byte-oriented encode APIs;
+      keep extension inference and path writes in host bindings.
+- [ ] Remove the GPU backend's `/tmp/gpu_debug.log` side effect and use
+      guarded `log` tracing for any permanent diagnostics.
+- [ ] Convert Rust path-I/O tests to byte-API tests and add exact Pillow path
+      and file-like boundary cases for Python; classify browser/Node byte
+      loading separately for WASM.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 
@@ -697,9 +753,9 @@ coverage artifact:
 |---|---|
 | Coverage MCP schema | 7 |
 | Approved managed commands | 4 |
-| Managed runs | 40 |
+| Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **50 executable violations across 5 files** |
+| Python thin-binding violations | **47 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |
@@ -713,7 +769,7 @@ coverage artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases; complete corpus not yet proven |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT cases and 14 Image.eval cases; complete corpus not yet proven |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.
