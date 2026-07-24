@@ -216,6 +216,11 @@ checker count from 49 to 48. The Python ABI already accepts `None`; optional
 band interpretation remains in Rust. All 18 compact exact `getdata` and
 `get_flattened_data` Pillow-oracle cases pass.
 
+The checker now recognizes only the exact
+`__len__ -> len(self.<field>)` Python data-model adapter as permitted ABI
+conversion. This removes one false positive without exempting arbitrary dunder
+methods or complex length logic. The actionable count is therefore 47.
+
 `pillow-rs/src/image.rs` also exposes path-based `open` and `save` behavior and
 performs filesystem I/O. This violates the core boundary. Binding layers must
 read/write bytes and delegate byte decoding/encoding to Rust.
