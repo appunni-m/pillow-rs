@@ -67,6 +67,27 @@
         "suffix": ".png"
       },
       "mode": "RGB"
+    },
+    {
+      "id": "rgb_filelike",
+      "mode": "RGB",
+      "params": {
+        "io_kind": "filelike"
+      }
+    },
+    {
+      "id": "rgb_bytes_path",
+      "mode": "RGB",
+      "params": {
+        "io_kind": "bytes_path"
+      }
+    },
+    {
+      "id": "encoded_bytes_are_not_file_contents",
+      "mode": "RGB",
+      "params": {
+        "io_kind": "encoded_bytes_error"
+      }
     }
   ]
 }

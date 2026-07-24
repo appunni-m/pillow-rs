@@ -195,7 +195,7 @@ test-palette-save: palette-save-fixtures ## Run exact ImagePalette.save Pillow p
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImagePalette.save"
 
-test-image-io: fixtures ## Run exact Image open/save Pillow parity
+test-image-io: image-io-fixtures ## Run exact Image open/save Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
 		-k "ImageModule.open or Image.open or Image.save"
@@ -398,7 +398,7 @@ freetype-clean: fontdone-clean
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
-.PHONY: palette-save-fixtures test-color3dlut
+.PHONY: palette-save-fixtures image-io-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -456,6 +456,11 @@ palette-save-fixtures: ## Regenerate independent ImagePalette.save inputs and or
 		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImagePalette.save
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImagePalette.save
+
+image-io-fixtures: ## Regenerate independent suite0 Image open/save oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
+		--fixture ImageModule.open --fixture Image.save
 
 test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT

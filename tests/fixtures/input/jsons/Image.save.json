@@ -28,6 +28,19 @@
       "params": {
         "suffix": ".png"
       }
+    },
+    {
+      "id": "rgb_filelike_png",
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [3, 2],
+        "color": [17, 31, 47]
+      },
+      "params": {
+        "io_kind": "filelike",
+        "format": "PNG"
+      }
     }
   ]
 }

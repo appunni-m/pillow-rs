@@ -11,10 +11,35 @@ use pyo3::exceptions::{
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyInt, PyList, PyTuple, PyType};
+use std::path::PathBuf;
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
     inner: RsImage,
+}
+
+fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> {
+    if let Ok(path) = value.extract::<PathBuf>() {
+        return Ok(Some(path));
+    }
+    let Ok(bytes) = value.downcast::<PyBytes>() else {
+        return Ok(None);
+    };
+    if bytes.as_bytes().contains(&0) {
+        return Err(PyValueError::new_err("embedded null byte"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(Some(std::ffi::OsStr::from_bytes(bytes.as_bytes()).into()))
+    }
+    #[cfg(not(unix))]
+    {
+        String::from_utf8(bytes.as_bytes().to_vec())
+            .map(PathBuf::from)
+            .map(Some)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
 }
 
 #[allow(unsafe_code)]
@@ -154,37 +179,44 @@ impl PyImage {
 
     #[classmethod]
     fn open(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<Self> {
-        if let Ok(path) = fp.extract::<String>() {
+        if let Some(path) = host_path_from_python(fp)? {
             let bytes = std::fs::read(path).map_err(|error| map_error(error.into()))?;
             let img = RsImage::open_bytes(bytes).map_err(map_error)?;
             Ok(PyImage { inner: img })
-        } else if let Ok(bytes) = fp.extract::<Vec<u8>>() {
+        } else {
+            let bytes = fp.call_method0("read")?.extract::<Vec<u8>>()?;
             let img = RsImage::open_bytes(bytes).map_err(map_error)?;
             Ok(PyImage { inner: img })
-        } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                "Expected str or bytes",
-            ))
         }
     }
 
-    fn save(&mut self, fp: &str, format: Option<String>) -> PyResult<()> {
+    fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
         let inferred;
         let format = if let Some(format) = format.as_deref() {
             format
-        } else {
-            inferred = std::path::Path::new(fp)
+        } else if let Some(path) = host_path_from_python(fp)? {
+            inferred = path
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .ok_or_else(|| {
                     map_error(PilError::UnknownFormat(
                         "Cannot determine format from path".into(),
                     ))
-                })?;
-            inferred
+                })?
+                .to_owned();
+            &inferred
+        } else {
+            return Err(map_error(PilError::UnknownFormat(
+                "Cannot determine format from file object".into(),
+            )));
         };
         let encoded = self.inner.encode(format).map_err(map_error)?;
-        std::fs::write(fp, encoded).map_err(|error| map_error(error.into()))
+        if let Some(path) = host_path_from_python(fp)? {
+            std::fs::write(path, encoded).map_err(|error| map_error(error.into()))
+        } else {
+            fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
+            Ok(())
+        }
     }
 
     fn resize(&self, size: (u32, u32), resample: Option<String>) -> PyResult<PyImage> {

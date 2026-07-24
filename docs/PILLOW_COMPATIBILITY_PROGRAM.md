@@ -296,6 +296,20 @@ migration test now proves owned lazy bytes and format-hint validation, and the
 maintained `test-image-io` target passes 30 exact Pillow 12.2 open/save cases
 through the rebuilt Python ABI. Permanent GPU diagnostics use the `log` facade.
 
+The original 30 image-I/O cases were all string-path-backed despite the
+manifest claiming a bytes variant. Investigation established that Pillow
+interprets Python `bytes` as a filesystem path, not encoded image contents:
+passing PNG bytes raises `ValueError("embedded null byte")`. Pillow-rs had
+incorrectly decoded such bytes directly. PyO3 now treats `str`, `bytes`, and
+`PathLike` values as host paths and reserves file-object `read()` for encoded
+content. Independent bytes-path and `BytesIO` decode cases plus one `BytesIO`
+encode/reopen case exercise all three Python transports. A retained negative
+case proves that encoded PNG bytes produce Pillow's exact
+`ValueError("embedded null byte")` instead of being decoded. The
+operation-scoped generator regenerates only the affected suite-0 oracles, and
+`test-image-io` passes 34/34 exact Pillow 12.2 cases. The thin binding count
+remains 47; this ABI adaptation did not add a checker violation.
+
 ### Current parity is not fixture-only
 
 The last inspected managed Python run contained 1,677 tests:
@@ -673,8 +687,10 @@ coverage artifact:
       guarded `log` tracing for any permanent diagnostics.
 - [x] Convert the Rust path-I/O test to an owned byte-API and format-hint test;
       verify 30 existing exact Pillow path/open/save cases through PyO3.
-- [ ] Add independent Python file-like image open/save cases and classify
-      browser/Node byte loading separately for WASM.
+- [x] Correct Python `bytes` to mean a bytes filesystem path exactly as Pillow
+      does; add independent bytes-path and `BytesIO` image open cases plus a
+      `BytesIO` save/reopen case.
+- [ ] Classify browser/Node byte loading separately for WASM.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 

@@ -612,6 +612,7 @@ def _file_open(backend, img, target, params):
     backend's encoder to manufacture a different input file.
     """
     file_b64 = params.pop("file_b64", params.pop("png_b64", None))
+    io_kind = params.pop("io_kind", "path")
     fixture_mode = params.pop("_fixture_mode", None)
     requested_suffix = params.pop("suffix", None)
     if file_b64 is None and fixture_mode is not None:
@@ -626,6 +627,11 @@ def _file_open(backend, img, target, params):
     if file_b64:
         import base64 as _b64
         data = _b64.b64decode(file_b64)
+        if io_kind == "encoded_bytes_error":
+            return _call_mod(backend, target)(data, **params)
+        if io_kind == "filelike":
+            import io
+            return _call_mod(backend, target)(io.BytesIO(data), **params)
         fd, tmp = tempfile.mkstemp(suffix=suffix)
         os.write(fd, data)
         os.close(fd)
@@ -634,7 +640,8 @@ def _file_open(backend, img, target, params):
         fd, tmp = tempfile.mkstemp(suffix=suffix)
         os.close(fd)
         tmp_img.save(tmp)
-    return _call_mod(backend, target)(tmp, **params)
+    source = os.fsencode(tmp) if io_kind == "bytes_path" else tmp
+    return _call_mod(backend, target)(source, **params)
 
 
 def _file_save(backend, img, target, params):
@@ -642,6 +649,13 @@ def _file_save(backend, img, target, params):
     The temp file is NOT deleted — RSPIL may lazily load image data."""
     suffix = params.pop("suffix", ".png")
     fmt = params.pop("format", None)
+    io_kind = params.pop("io_kind", "path")
+    if io_kind == "filelike":
+        import io
+        output = io.BytesIO()
+        result = getattr(img, target)(output, format=fmt, **params)
+        output.seek(0)
+        return result, backend.Image.open(output)
     fd, tmp = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     result = getattr(img, target)(tmp, format=fmt, **params)
