@@ -1003,6 +1003,43 @@ pub struct ImageFont {
 }
 
 #[wasm_bindgen]
+pub struct ImageFontMask {
+    width: u32,
+    height: u32,
+    offset_x: i32,
+    offset_y: i32,
+    pixels: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl ImageFontMask {
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    #[wasm_bindgen(getter, js_name = "offsetX")]
+    pub fn offset_x(&self) -> i32 {
+        self.offset_x
+    }
+
+    #[wasm_bindgen(getter, js_name = "offsetY")]
+    pub fn offset_y(&self) -> i32 {
+        self.offset_y
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pixels(&self) -> Vec<u8> {
+        self.pixels.clone()
+    }
+}
+
+#[wasm_bindgen]
 impl ImageFont {
     #[wasm_bindgen(constructor)]
     pub fn new(data: Vec<u8>, size: f32) -> Result<ImageFont, JsValue> {
@@ -1010,6 +1047,28 @@ impl ImageFont {
             .map(|f| ImageFont { font: f })
             .map_err(err)
     }
+
+    #[wasm_bindgen(js_name = "getmask2")]
+    pub fn getmask2(
+        &self,
+        text: &str,
+        start_x: Option<f64>,
+        start_y: Option<f64>,
+    ) -> ImageFontMask {
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.font,
+            text,
+            (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
+        );
+        ImageFontMask {
+            width,
+            height,
+            offset_x: offset.0,
+            offset_y: offset.1,
+            pixels,
+        }
+    }
+
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Vec<u32> {
         let (w, h) = self.font.text_bbox(text);

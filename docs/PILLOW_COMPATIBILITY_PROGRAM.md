@@ -917,9 +917,12 @@ artifact:
       final Pillow mask bytes exact. The five independent cases now pass 5/5;
       the focused pinned-C `notdef` FreeType lane remains 15/15 through Rust,
       C ABI, and WASM ABI, with the no-runtime-FFI, rustfmt, and clippy gates
-      clean. Direct pillow-rs Rust and JavaScript consumers plus managed
-      Coverage MCP evidence are still required before `ImageFont.getmask2` is
-      trusted across all image ABIs.
+      clean. The pinned generator also emits one compact shared manifest, and
+      the same five cases pass 5/5 through direct pillow-rs Rust, installed
+      Python, and built JavaScript/WASM. The WASM `ImageFontMask` is a typed
+      result carrying dimensions, offset, and bytes while all raster semantics
+      remain in Rust. Managed Coverage MCP evidence is still required before
+      `ImageFont.getmask2` is trusted.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
 - [x] Move JavaScript/WASM `crop` box arithmetic into the existing pure-Rust
       `Image::crop_box` implementation. The binding now passes only ABI values
@@ -1047,7 +1050,7 @@ artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, and 28 ImageDraw cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, 28 ImageDraw cases, and 5 ImageFont.getmask2 cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.

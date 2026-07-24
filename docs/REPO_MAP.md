@@ -520,14 +520,21 @@ generated reports, build outputs, and package installs.
 |   |-- src/
 |   |   `-- lib.rs
 |   `-- tests/
+|       |-- apply_transparency_oracle.mjs
 |       |-- browser/
 |       |   |-- test.html
 |       |   `-- wasm_browser.test.mjs
 |       |-- codec_feature_matrix.mjs
+|       |-- color3dlut_oracle.mjs
+|       |-- drawing_oracle.mjs
+|       |-- eval_oracle.mjs
 |       |-- execution_engine.mjs
+|       |-- image_open_oracle.mjs
 |       |-- oracle_contract.mjs
 |       |-- oracle_corpus.mjs
+|       |-- paste_oracle.mjs
 |       |-- run_wasm_test.mjs
+|       |-- tobytes_oracle.mjs
 |       `-- wasm_backend.mjs
 |-- pillow-rs-py/
 |   |-- Cargo.toml
@@ -583,11 +590,20 @@ generated reports, build outputs, and package installs.
 |   |   |-- generate_multi_backend_coverage.py
 |   |   |-- generate_wasm_coverage.py
 |   |   |-- ops_registry.py
+|   |   |-- run_apply_transparency_rust_coverage.sh
+|   |   |-- run_drawing_rust_coverage.sh
+|   |   |-- run_image_backend_rust_coverage.sh
+|   |   |-- run_image_open_rust_coverage.sh
+|   |   |-- run_paste_rust_coverage.sh
+|   |   |-- run_point_rust_coverage.sh
 |   |   |-- run_python_abi_rust_coverage.sh
 |   |   |-- run_python_wrapper_coverage.sh
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
 |   |-- generate_image_backend_operation_fixtures.py
+|   |-- generate_imagefont_getmask2_fixture_inputs.py
+|   |-- generate_palette_save_fixture_inputs.py
+|   |-- generate_point_fixture_inputs.py
 |   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
 |   |-- lint.sh
@@ -596,8 +612,13 @@ generated reports, build outputs, and package installs.
     |-- conftest.py
     |-- engine.py
     |-- fixture_coverage.py
+    |-- oracles/
+    |   `-- image_open_inputs.json
+    |-- test_apply_transparency_oracle.py
+    |-- test_drawing_oracle.py
     |-- test_pa_mutations.py
     |-- test_parity.py
+    |-- test_paste_oracle.py
     `-- test_putdata_parity.py
 ```
 <!-- END GENERATED CODE TREE -->
