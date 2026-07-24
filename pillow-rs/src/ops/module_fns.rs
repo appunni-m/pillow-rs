@@ -184,6 +184,41 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
     eval(image, &replicated)
 }
 
+/// Applies a single-band lookup table to every band in `image`.
+///
+/// The image mode determines the band count. Bindings should use this entry
+/// point instead of deriving semantic image information in the host language.
+///
+/// # Errors
+///
+/// Returns an image/materialization error when the band count cannot be read,
+/// or [`PilError::ValueError`] when `lut` is not a valid single-band or
+/// already-expanded table.
+pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
+    let n_bands = image.getbands()?.len();
+    eval_replicated(image, lut, n_bands)
+}
+
+/// Validates and applies a pre-expanded Pillow lookup table.
+///
+/// Pillow requires exactly 256 entries per image band for a non-callable LUT.
+/// Keeping this validation in core ensures every ABI observes the same mode
+/// semantics and error ordering.
+///
+/// # Errors
+///
+/// Returns an image/materialization error when the band count cannot be read,
+/// or [`PilError::ValueError`] when the table length does not equal
+/// `256 * image_band_count`.
+pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
+    let n_bands = image.getbands()?.len();
+    let expected = 256 * n_bands;
+    if lut.len() != expected {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    eval(image, lut)
+}
+
 /// Generates Gaussian noise using the source image dimensions.
 ///
 /// # Errors

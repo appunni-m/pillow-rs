@@ -203,6 +203,14 @@ violations; it no longer prints a contradictory success message while the
 migration warning is present. Moving Color3DLUT application and representation
 behavior into Rust reduced the live count to 50.
 
+Moving `Image.point` band-count selection and explicit-LUT validation into
+`pillow-rs` reduced the live Python count again, from 50 to 49. Python now
+invokes a host callable only to obtain the ABI value table; Rust derives the
+image band count, expands a single-band table, validates explicit table length,
+and selects the exact error. A maintained `point-fixtures` generator preserves
+the six existing mode/error paths and adds one independent RGB callable path
+per suite. All 14 Pillow 12.2 oracle cases pass.
+
 `pillow-rs/src/image.rs` also exposes path-based `open` and `save` behavior and
 performs filesystem I/O. This violates the core boundary. Binding layers must
 read/write bytes and delegate byte decoding/encoding to Rust.
@@ -523,6 +531,10 @@ coverage impact.
 
 - [ ] Convert `scripts/check_bindings.py` violations from warnings to errors.
 - [ ] Eliminate all 60 current Python violations by moving behavior into Rust.
+- [x] Move `Image.point` band-count derivation, callable-table replication, and
+      explicit-LUT validation into core. The checker is now 49 violations, and
+      `make PYTHON=.venv/bin/python test-point` passes all 14 regenerated exact
+      Pillow-oracle cases, including the new independent callable path.
 - [ ] Audit PyO3 functions for algorithms hidden in the Rust binding crate and
       move core behavior into `pillow-rs`.
 - [ ] Create an equivalent thin-binding gate for JavaScript/WASM.
