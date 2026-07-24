@@ -433,7 +433,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "eval")]
     pub fn eval(&self, lut: Vec<u8>) -> Result<Image, JsValue> {
-        module_fns::eval(&self.inner, &lut)
+        module_fns::eval_replicated_for_image(&self.inner, &lut)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -1111,6 +1111,13 @@ pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Resu
         .map_err(err)
 }
 
+#[wasm_bindgen(js_name = "imageNewPaletteIndex")]
+pub fn image_new_palette_index(w: u32, h: u32, index: u8) -> Image {
+    Image {
+        inner: RsImage::new_palette_index(w, h, index),
+    }
+}
+
 // ── ImageChops ───────────────────────────────────────────────────
 #[wasm_bindgen]
 pub struct ImageChops {}
@@ -1718,8 +1725,8 @@ pub fn effect_spread(img: &Image, distance: u32) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "evalFn")]
-pub fn eval_fn(img: &Image, lut: Vec<u8>, n_bands: usize) -> Result<Image, JsValue> {
-    module_fns::eval_replicated(&img.inner, &lut, n_bands)
+pub fn eval_fn(img: &Image, lut: Vec<u8>, _n_bands: usize) -> Result<Image, JsValue> {
+    module_fns::eval_replicated_for_image(&img.inner, &lut)
         .map(|i| Image { inner: i })
         .map_err(err)
 }

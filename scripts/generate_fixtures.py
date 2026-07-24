@@ -111,7 +111,7 @@ def _artifact_references(assertion):
             yield from _artifact_references(item)
 
 
-RAW_IMAGE_MODES = {"P", "PA", "HSV", "YCbCr", "F", "I", "CMYK"}
+RAW_IMAGE_MODES = {"1", "P", "PA", "HSV", "YCbCr", "F", "I", "CMYK"}
 
 
 def _write_image_assertion(image, stem, case_id, suffix=""):

@@ -154,6 +154,13 @@ binary encoding reduced those JSON files to about 16 KiB of metadata plus
 about 12 MiB of exact oracle payloads while preserving every scalar/container
 type and value. All 12 affected operation cases continued to pass.
 
+Mode `1` image assertions must also use Pillow's raw `tobytes()` artifact.
+PNG is a valid encoded representation, but decoding it through another ABI can
+materialize one byte per sample while Pillow's public mode-`1` byte contract is
+packed one bit per pixel. The oracle generator now classifies mode `1` with the
+other raw-image modes; the strict consumer compares the oracle's 8,192 packed
+bytes for a 256x256 case without reimplementing packing in JavaScript.
+
 ### One oracle corpus, three consumers
 
 The same canonical oracle case must be consumable by:
@@ -178,6 +185,15 @@ bytes, exception category, and exception message. JavaScript errors are now
 real `Error` objects with Pillow-compatible names instead of untyped strings.
 This is a seed for the complete shared harness, not evidence that the remaining
 corpus is implemented across all three surfaces.
+
+The second strict shared slice is `Image.eval`. The same 14 Pillow 12.2 cases
+now pass through the installed Python ABI and built WASM ABI with exact mode,
+dimensions, complete public pixel bytes, and palette comparison. JavaScript no
+longer supplies the semantic band count: both its instance and module exports
+derive it from the Rust image. Scalar P construction has a distinct thin WASM
+entry point so it preserves an empty palette instead of silently allocating a
+tuple-color palette entry. A direct Rust public-API consumer for this slice is
+still required before it counts as three-surface proof.
 
 ## Verified Findings
 
@@ -549,6 +565,9 @@ coverage artifact:
       pairs, pinned Pillow/FreeType versions, exact assertion fields, artifact
       paths, and one-to-one case IDs. This is a corpus-integrity prerequisite,
       not ABI parity evidence.
+- [x] Run all 14 `Image.eval` cases through a strict Node/WASM consumer. It
+      compares exact Pillow mode, dimensions, public bytes, and P palette, and
+      rejects unknown input/callable forms rather than skipping them.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.

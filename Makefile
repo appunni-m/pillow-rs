@@ -48,6 +48,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
 	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
+	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
@@ -153,8 +154,9 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-point test-eval test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle js-oracle-contract js-color3dlut-oracle
+.PHONY: js-eval-oracle
 .PHONY: backend-support-matrix
 
 test: fixtures ## Run all PIL parity tests
@@ -182,6 +184,10 @@ test-point: point-fixtures ## Run exact Image.point Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "Image.point"
 
+test-eval: eval-fixtures ## Run exact Image.eval Pillow parity
+	$(PYTHON) -m pytest tests/test_parity.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImageModule.eval"
+
 test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
@@ -205,6 +211,9 @@ js-oracle-contract: fixtures ## Validate shared Pillow input/output pairs from N
 
 js-color3dlut-oracle: color3dlut-fixtures build-wasm-core ## Run Color3DLUT corpus through WASM
 	cd $(JS_SRC) && npm run test:color3dlut-oracle
+
+js-eval-oracle: eval-fixtures build-wasm-core ## Run Image.eval corpus through WASM
+	cd $(JS_SRC) && npm run test:eval-oracle
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
@@ -369,7 +378,7 @@ freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
-.PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures test-color3dlut
+.PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures test-color3dlut
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -411,6 +420,12 @@ point-fixtures: ## Regenerate Image.point Pillow oracles
 		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.point
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
 		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.point
+
+eval-fixtures: ## Regenerate Image.eval Pillow oracles
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageModule.eval
+	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
+		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImageModule.eval
 
 test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT
