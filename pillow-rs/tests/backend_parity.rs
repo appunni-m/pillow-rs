@@ -674,6 +674,41 @@ fn paste_is_exact_on_every_declared_native_backend() {
 }
 
 #[test]
+fn paste_is_exact_on_portable_cpu_backend() {
+    for case in manifest().paste_cases {
+        let mut destination = image_from_spec(&case.destination);
+        let destination_palette = destination.palette();
+        let destination_palette_alpha = destination.palette_alpha();
+        let mask = case.mask.as_ref().map(image_from_spec);
+        let source = paste_source(&case.source);
+        match case.box_coords.as_slice() {
+            [x, y] => destination
+                .paste_at(source, Some((*x, *y)), mask.as_ref())
+                .unwrap_or_else(|error| panic!("{} cpu: {error}", case.id)),
+            [left, top, right, bottom] => destination
+                .paste(source, Some((*left, *top, *right, *bottom)), mask.as_ref())
+                .unwrap_or_else(|error| panic!("{} cpu: {error}", case.id)),
+            _ => panic!("{} has invalid paste box", case.id),
+        }
+        assert_image(&format!("{} [cpu]", case.id), &destination, &case.expected);
+        if matches!(case.destination.mode.as_str(), "P" | "PA") {
+            assert_eq!(
+                destination.palette(),
+                destination_palette,
+                "{} [cpu]: destination palette",
+                case.id
+            );
+            assert_eq!(
+                destination.palette_alpha(),
+                destination_palette_alpha,
+                "{} [cpu]: destination palette alpha",
+                case.id
+            );
+        }
+    }
+}
+
+#[test]
 fn paste_validation_matches_exact_pillow_errors() {
     for case in manifest().paste_error_cases {
         let mut destination = image_from_spec(&case.destination);

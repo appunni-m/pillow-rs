@@ -755,16 +755,17 @@ coverage artifact:
 - [x] Replace the fabricated WASM `Image.apply_transparency` result with real
       delegation and run the same three meaningful Pillow fixtures through
       Rust, Python, and WASM. This completes the fifth three-surface seed.
-- [ ] Make `Image.paste` the sixth three-surface seed from the existing
+- [x] Make `Image.paste` the sixth three-surface seed from the existing
       Pillow 12.2 backend manifest: execute all 21 successful cases and all
       representable exact error cases through direct Rust, installed Python,
       and built WASM. Compare mode, size, raw bytes, palette bytes, exception
       type, and complete exception text exactly.
-- [ ] Keep the paste ABI typed and thin. WASM may expose separate overloads
+- [x] Keep the paste ABI typed and thin. WASM exposes separate overloads
       for image, scalar, tuple, mask, point, and region forms, but clipping,
       conversion, palette handling, mask blending, and validation remain in
-      `pillow-rs`. Any Pillow call shape that a typed ABI cannot represent must
-      be counted explicitly as unsupported rather than skipped or fabricated.
+      `pillow-rs`. The two invalid tuple-shape error fixtures that cannot be
+      expressed by the typed WASM ABI are counted explicitly; Rust and Python
+      execute all six exact error fixtures and WASM executes the other four.
 - [ ] Prove each declared CPU/SIMD/GPU paste claim with the same Pillow oracle
       case on a worker that provides the backend; keep adapter absence distinct
       from a parity failure.
@@ -772,6 +773,26 @@ coverage artifact:
       exact human-approved Coverage MCP registration before treating paste as
       coverage-trusted. Use uncovered branch evidence to add only independent
       path inputs, not mode-multiplied duplicates.
+
+The local paste coverage diagnostic passes the 21 successful and six error
+fixtures through direct Rust and writes
+`target/coverage/pillow-paste-rust.json`: 1,389 / 18,044 lines, 90 / 3,172
+branches, 98 / 1,203 functions, and 2,120 / 31,269 regions. These are not
+durable coverage claims until Coverage MCP ingests the artifact.
+
+Pending exact Coverage MCP approval for paste:
+
+```text
+name: pillow-paste-rust
+command: make coverage-paste-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+artifact:
+  path: target/coverage/pillow-paste-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-paste-rust
+```
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
@@ -925,7 +946,7 @@ coverage artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, and 3 Image.apply_transparency cases; complete corpus not yet proven |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, and 21 Image.paste success cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.

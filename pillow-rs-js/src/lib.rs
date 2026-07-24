@@ -129,10 +129,60 @@ impl Image {
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
+            .paste_at(PasteSource::Image(src.inner.clone()), Some((x, y)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageMasked")]
+    pub fn paste_image_masked(
+        &mut self,
+        src: &Image,
+        x: i32,
+        y: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
             .paste_at(
                 PasteSource::Image(src.inner.clone()),
                 Some((x, y)),
+                Some(&mask.inner),
+            )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageRegion")]
+    pub fn paste_image_region(
+        &mut self,
+        src: &Image,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(
+                PasteSource::Image(src.inner.clone()),
+                Some((l, t, r, b)),
                 None,
+            )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageRegionMasked")]
+    pub fn paste_image_region_masked(
+        &mut self,
+        src: &Image,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(
+                PasteSource::Image(src.inner.clone()),
+                Some((l, t, r, b)),
+                Some(&mask.inner),
             )
             .map_err(err)
     }
@@ -150,11 +200,62 @@ impl Image {
     ) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
+            .paste(PasteSource::Rgba(r, g, b, a), Some((l, t, rt, bt)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteScalarRegion")]
+    pub fn paste_scalar_region(
+        &mut self,
+        value: u8,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(PasteSource::Scalar(value), Some((l, t, r, b)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteScalarAt")]
+    pub fn paste_scalar_at(&mut self, value: u8, x: i32, y: i32) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste_at(PasteSource::Scalar(value), Some((x, y)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteLumaAlphaRegion")]
+    pub fn paste_luma_alpha_region(
+        &mut self,
+        luma: u8,
+        alpha: u8,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
             .paste(
-                PasteSource::Rgba(r, g, b, a),
-                Some((l, t, rt, bt)),
+                PasteSource::LumaAlpha(luma, alpha),
+                Some((l, t, r, b)),
                 None,
             )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteRgbAt")]
+    pub fn paste_rgb_at(
+        &mut self,
+        r: u8,
+        g: u8,
+        b: u8,
+        x: i32,
+        y: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste_at(PasteSource::Rgb(r, g, b), Some((x, y)), Some(&mask.inner))
             .map_err(err)
     }
 
@@ -509,8 +610,10 @@ impl Image {
             .ok_or_else(|| JsValue::from_str("no palette"))
     }
     #[wasm_bindgen(js_name = "putpalette")]
-    pub fn putpalette(&mut self, _data: Vec<u8>) {
-        // Core doesn't expose putpalette — no-op
+    pub fn putpalette(&mut self, data: Vec<u8>, rawmode: Option<String>) -> Result<(), JsValue> {
+        self.inner
+            .putpalette(&data, rawmode.as_deref().unwrap_or("RGB"))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "getexif")]
     pub fn getexif(&self) -> JsValue {
