@@ -175,7 +175,7 @@ not merely that Python and JavaScript agree with Rust.
 
 ### Python is not yet a thin client
 
-`scripts/check_bindings.py` currently reports 60 binding-layer violations
+`scripts/check_bindings.py` originally reported 60 binding-layer violations
 across:
 
 - `pillow-rs-py/python/pillow_rs/image.py`;
@@ -188,6 +188,11 @@ across:
 The checker emits warnings and still succeeds, so CI does not enforce the
 non-negotiable boundary. Loops, arithmetic, complex branching, and
 orchestration remain in Python.
+
+Two findings were annotation false positives (`str | None`) rather than
+runtime logic. The checker now excludes annotations and reports 58 executable
+violations; it no longer prints a contradictory success message while the
+migration warning is present.
 
 `pillow-rs/src/image.rs` also exposes path-based `open` and `save` behavior and
 performs filesystem I/O. This violates the core boundary. Binding layers must
@@ -529,7 +534,7 @@ coverage impact.
 | Approved managed commands | 4 |
 | Managed runs | 40 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **60 across 6 files** |
+| Python thin-binding violations | **58 executable violations across 6 files** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

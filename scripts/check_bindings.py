@@ -182,7 +182,26 @@ class BindingChecker(ast.NodeVisitor):
                       f"function '{node.name}' is {len(node.body)} lines — "
                       f"bindings should be thin delegations (~10 lines max). "
                       f"Move logic to pillow-rs/src/.")
-        self.generic_visit(node)
+        # Type annotations are declarations, not executable binding behavior.
+        # Visit defaults, decorators, and the body explicitly so PEP 604
+        # unions such as ``str | None`` are not reported as bitwise logic.
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for default in node.args.defaults:
+            self.visit(default)
+        for default in node.args.kw_defaults:
+            if default is not None:
+                self.visit(default)
+        for stmt in node.body:
+            self.visit(stmt)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_AnnAssign(self, node):
+        """Inspect an annotated assignment's value but not its type."""
+        self.visit(node.target)
+        if node.value is not None:
+            self.visit(node.value)
 
 
 def main():
@@ -211,9 +230,10 @@ def main():
         print("\n  All logic must live in pillow-rs/src/. Bindings should delegate ONLY.")
         print("  See CLAUDE.md lines 14-18 and SYSTEMIC_FIXES.md Fix 5.")
         print("  → This is a WARNING during migration. It will become an ERROR.")
+        print("⚠️  Thin-wrapper migration is incomplete.")
         # sys.exit(1)  ← uncomment when migration complete
-
-    print("✅ OK: All binding files comply with CLAUDE.md thin-wrapper rules.")
+    else:
+        print("✅ OK: All binding files comply with CLAUDE.md thin-wrapper rules.")
     sys.exit(0)
 
 
