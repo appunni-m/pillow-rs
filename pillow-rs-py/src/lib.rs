@@ -155,7 +155,8 @@ impl PyImage {
     #[classmethod]
     fn open(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(path) = fp.extract::<String>() {
-            let img = RsImage::open(&path, None).map_err(map_error)?;
+            let bytes = std::fs::read(path).map_err(|error| map_error(error.into()))?;
+            let img = RsImage::open_bytes(bytes).map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else if let Ok(bytes) = fp.extract::<Vec<u8>>() {
             let img = RsImage::open_bytes(bytes).map_err(map_error)?;
@@ -168,7 +169,22 @@ impl PyImage {
     }
 
     fn save(&mut self, fp: &str, format: Option<String>) -> PyResult<()> {
-        self.inner.save(fp, format.as_deref()).map_err(map_error)
+        let inferred;
+        let format = if let Some(format) = format.as_deref() {
+            format
+        } else {
+            inferred = std::path::Path::new(fp)
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .ok_or_else(|| {
+                    map_error(PilError::UnknownFormat(
+                        "Cannot determine format from path".into(),
+                    ))
+                })?;
+            inferred
+        };
+        let encoded = self.inner.encode(format).map_err(map_error)?;
+        std::fs::write(fp, encoded).map_err(|error| map_error(error.into()))
     }
 
     fn resize(&self, size: (u32, u32), resample: Option<String>) -> PyResult<PyImage> {

@@ -280,18 +280,21 @@ without duplicating palette-mode semantics. All eight Pillow 12.2 oracle cases
 (four independent paths per suite) pass, and the rebuilt WASM package/codec
 checks pass.
 
-The remaining filesystem inventory in core is:
+The filesystem inventory found in core was:
 
 - `pillow-rs/src/image.rs`: path reading in `Image::open`;
 - `pillow-rs/src/image.rs`: path writing in `Image::save`;
 - `pillow-rs/src/compute/pool_gpu/mod.rs`: a `/tmp/gpu_debug.log` write that
   must be removed or replaced by the repository's guarded logging policy.
 
-The image path APIs must become binding-owned read/write adapters around
-byte-oriented Rust decode/encode APIs. Existing Rust path tests must be
-converted to prove the byte APIs, while Python path and file-like oracle cases
-prove the host boundary. The GPU temporary-file write is debug behavior, not
-an image codec responsibility.
+This inventory is now closed. Core has no `std::fs`, `std::path`, or
+`/tmp/gpu_debug.log` reference. The public path variant and path-based
+`Image::open`/`Image::save` methods were replaced by
+`open_bytes_with_format` and `encode`. PyO3 owns path reads, extension
+inference, and writes; WASM continues to accept encoded bytes. The Rust
+migration test now proves owned lazy bytes and format-hint validation, and the
+maintained `test-image-io` target passes 30 exact Pillow 12.2 open/save cases
+through the rebuilt Python ABI. Permanent GPU diagnostics use the `log` facade.
 
 ### Current parity is not fixture-only
 
@@ -656,20 +659,22 @@ coverage artifact:
       `Image::crop_box` implementation. The binding now passes only ABI values
       and maps the Rust result/error; invalid edge ordering can no longer
       underflow in the binding.
-- [ ] Remove filesystem access from `pillow-rs` core.
-- [ ] Make Python and JavaScript read/write files and pass bytes to Rust.
+- [x] Remove filesystem access from `pillow-rs` core.
+- [x] Make Python own host path reads/writes and make JavaScript pass bytes to
+      Rust without exposing a filesystem API.
 - [x] Remove palette path writing from core. PyO3 owns the host write, WASM
       exposes text bytes rather than a filesystem API, and all eight exact
       file-like/path Pillow-oracle cases pass.
-- [ ] Replace core `Image::open(path, ...)` with byte-oriented decode plus
+- [x] Replace core `Image::open(path, ...)` with byte-oriented decode plus
       optional format-hint APIs; keep path reads in host bindings.
-- [ ] Replace core `Image::save(path, ...)` with byte-oriented encode APIs;
+- [x] Replace core `Image::save(path, ...)` with byte-oriented encode APIs;
       keep extension inference and path writes in host bindings.
-- [ ] Remove the GPU backend's `/tmp/gpu_debug.log` side effect and use
+- [x] Remove the GPU backend's `/tmp/gpu_debug.log` side effect and use
       guarded `log` tracing for any permanent diagnostics.
-- [ ] Convert Rust path-I/O tests to byte-API tests and add exact Pillow path
-      and file-like boundary cases for Python; classify browser/Node byte
-      loading separately for WASM.
+- [x] Convert the Rust path-I/O test to an owned byte-API and format-hint test;
+      verify 30 existing exact Pillow path/open/save cases through PyO3.
+- [ ] Add independent Python file-like image open/save cases and classify
+      browser/Node byte loading separately for WASM.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 

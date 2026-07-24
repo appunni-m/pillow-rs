@@ -1,6 +1,6 @@
 //! Core Pillow-style image object.
 //!
-//! [`Image`] stores loaded buffers, lazy path/byte inputs, paletted data, and
+//! [`Image`] stores loaded buffers, lazy encoded-byte inputs, paletted data, and
 //! deferred pipelines. Public methods expose Rust equivalents of common
 //! `PIL.Image.Image` behavior while keeping I/O and host-language object
 //! conversion outside this crate.
@@ -8,7 +8,7 @@
 //! # Representation
 //!
 //! `Image` is both a public handle and the crate's lazy representation. Methods
-//! such as [`Image::new`], [`Image::open`], and [`Image::open_bytes`] are the
+//! such as [`Image::new`] and [`Image::open_bytes`] are the
 //! stable construction surface. Enum variants are public because binding crates
 //! and integration tests need to inspect or carry lazy state, but downstream
 //! users should prefer methods over direct variant construction.
@@ -24,14 +24,13 @@
 //! # Lazy Execution
 //!
 //! Operations that can be represented as [`crate::pipeline::PipelineOp`] values
-//! may be deferred. Calling [`Image::materialize`], [`Image::save`], or
+//! may be deferred. Calling [`Image::materialize`], [`Image::encode`], or
 //! [`Image::tobytes`] forces decoding and pipeline execution.
 
 use image_slash_star::{
     Decoded, DecodedImage, DynamicImage, EncodedImage, GenericImageView, ImageFormat, ImageInfo,
     ImageMode, ImagePalette,
 };
-use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use crate::checked_dims::CheckedDims;
@@ -263,19 +262,6 @@ pub enum Image {
     Loaded(LoadedData),
     /// Fully decoded P-mode (palette) image: index bytes + 768-byte palette.
     Paletted(PalettedData),
-    /// Path not yet decoded — lazy.
-    Path {
-        /// Source file path.
-        path: PathBuf,
-        /// Canonical backend source sharing inspection and lazy decode state.
-        source: EncodedImage,
-        /// Optional decoded or caller-provided image format.
-        format: Option<ImageFormat>,
-        /// Cached header metadata.
-        info: Option<ImageInfo>,
-        /// Operation-ready pixels initialized by the first implicit or explicit load.
-        materialized: MaterializationCache,
-    },
     /// Byte buffer not yet decoded — lazy.
     Bytes {
         /// Canonical backend source sharing inspection and lazy decode state.
@@ -634,20 +620,18 @@ impl Image {
         Ok(Image::from_dynamic(img, explicit_mode))
     }
 
-    /// Creates a lazy image from a filesystem path.
-    ///
-    /// The image is decoded when pixel data is first needed. Header metadata,
-    /// including indexed palette state, is cached without decoding pixels.
+    /// Creates a lazy image from encoded image bytes with an optional format hint.
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] when the provided format string is unknown, the
-    /// source cannot be read, or its header cannot be inspected.
-    pub fn open(path: &str, format: Option<&str>) -> Result<Self, PilError> {
+    /// Returns [`PilError`] when the format string is unknown, the encoded
+    /// header is unknown or malformed, or the hint does not match the detected
+    /// format.
+    pub fn open_bytes_with_format(data: Vec<u8>, format: Option<&str>) -> Result<Self, PilError> {
         let requested = format.map(parse_format_str).transpose()?;
-        let data: Arc<[u8]> = std::fs::read(path).map_err(PilError::from)?.into();
-        let source =
-            EncodedImage::new(Arc::clone(&data)).map_err(|error| map_codec_error(error, path))?;
+        let data: Arc<[u8]> = data.into();
+        let source = EncodedImage::new(Arc::clone(&data))
+            .map_err(|error| map_codec_error(error, "memory"))?;
         let info = source.info().clone();
         if requested.is_some_and(|requested| requested != info.format) {
             return Err(PilError::ValueError(format!(
@@ -655,8 +639,7 @@ impl Image {
                 info.format
             )));
         }
-        Ok(Image::Path {
-            path: PathBuf::from(path),
+        Ok(Image::Bytes {
             source,
             format: Some(info.format),
             info: Some(info),
@@ -673,16 +656,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when the encoded header is unknown or malformed.
     pub fn open_bytes(data: Vec<u8>) -> Result<Self, PilError> {
-        let data: Arc<[u8]> = data.into();
-        let source = EncodedImage::new(Arc::clone(&data))
-            .map_err(|error| map_codec_error(error, "memory"))?;
-        let info = source.info().clone();
-        Ok(Image::Bytes {
-            source,
-            format: Some(info.format),
-            info: Some(info),
-            materialized: materialization_cache(),
-        })
+        Self::open_bytes_with_format(data, None)
     }
 
     // ── Materialize ──
@@ -779,10 +753,7 @@ impl Image {
     pub(crate) fn has_palette_mode(&self) -> bool {
         match self {
             Image::Paletted(_) => true,
-            Image::Path {
-                info: Some(info), ..
-            }
-            | Image::Bytes {
+            Image::Bytes {
                 info: Some(info), ..
             } => info.mode == ImageMode::P8,
             Image::Pipeline {
@@ -826,21 +797,6 @@ impl Image {
             Image::Paletted(data) => data
                 .materialized
                 .get_or_init(|| Ok(Arc::new(DynamicImage::ImageLuma8(data.indices.clone()))))
-                .clone(),
-            Image::Path {
-                path,
-                source,
-                materialized,
-                ..
-            } => materialized
-                .get_or_init(|| {
-                    decoded_to_dynamic(
-                        source
-                            .decode()
-                            .map_err(|error| map_codec_error(error, &path.display().to_string()))?,
-                    )
-                    .map(Arc::new)
-                })
                 .clone(),
             Image::Bytes {
                 source,
@@ -979,10 +935,6 @@ impl Image {
         match self {
             Image::Loaded(data) => Ok(data.image.as_ref().clone()),
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
-            Image::Path { path, source, .. } => decoded_to_dynamic(
-                &image_slash_star::decode(source.bytes())
-                    .map_err(|error| map_codec_error(error, &path.display().to_string()))?,
-            ),
             Image::Bytes { source, .. } => decoded_to_dynamic(
                 &image_slash_star::decode(source.bytes())
                     .map_err(|error| map_codec_error(error, "memory"))?,
@@ -1534,23 +1486,16 @@ impl Image {
         Ok(bands)
     }
 
-    /// Encodes and writes the image to a filesystem path.
+    /// Encodes the image using the requested Pillow format name.
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] when format detection, encoding, materialization, or
-    /// filesystem writing fails.
-    pub fn save(&self, path: &str, format: Option<&str>) -> Result<(), PilError> {
-        let save_format = if let Some(fmt) = format {
-            parse_format_str(fmt)?
-        } else {
-            ImageFormat::from_path(path)
-                .map_err(|_| PilError::UnknownFormat("Cannot determine format from path".into()))?
-        };
+    /// Returns [`PilError`] when the format is unsupported or image
+    /// materialization or encoding fails.
+    pub fn encode(&self, format: &str) -> Result<Vec<u8>, PilError> {
+        let save_format = parse_format_str(format)?;
         let decoded = self.decoded_for_encoding()?;
-        let encoded = image_slash_star::encode_default(&decoded, save_format)?;
-        std::fs::write(path, encoded).map_err(PilError::from)?;
-        Ok(())
+        Ok(image_slash_star::encode_default(&decoded, save_format)?)
     }
 
     /// Returns raw image bytes in the image's current Pillow mode.
@@ -1737,7 +1682,7 @@ impl Image {
             Image::Paletted(data) => Some(data.palette.clone()),
             Image::Loaded(data) => data.palette.clone(),
             Image::Pipeline { palette, .. } => palette.clone(),
-            Image::Path { info, .. } | Image::Bytes { info, .. } => info
+            Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| padded_palette(&palette.rgb)),
@@ -1750,7 +1695,7 @@ impl Image {
             Image::Paletted(data) => Some(data.palette_alpha.clone()),
             Image::Loaded(data) => data.palette_alpha.clone(),
             Image::Pipeline { palette_alpha, .. } => palette_alpha.clone(),
-            Image::Path { info, .. } | Image::Bytes { info, .. } => info
+            Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.alpha.clone()),
@@ -1765,7 +1710,7 @@ impl Image {
         match self {
             Image::Loaded(data) => data.info.clone(),
             Image::Paletted(data) => data.info.clone(),
-            Image::Path { info, .. } | Image::Bytes { info, .. } => info.clone(),
+            Image::Bytes { info, .. } => info.clone(),
             Image::Pipeline { source, .. } => source.image_info(),
         }
     }
@@ -1774,9 +1719,7 @@ impl Image {
         match self {
             Image::Loaded(data) => data.source_format,
             Image::Paletted(data) => data.source_format,
-            Image::Path { format, .. }
-            | Image::Bytes { format, .. }
-            | Image::Pipeline { format, .. } => *format,
+            Image::Bytes { format, .. } | Image::Pipeline { format, .. } => *format,
         }
     }
 
@@ -1997,7 +1940,7 @@ impl Image {
             Image::Paletted(data) => Some(operational_palette(data)),
             Image::Loaded(data) => data.palette.clone(),
             Image::Pipeline { palette, .. } => palette.clone(),
-            Image::Path { info, .. } | Image::Bytes { info, .. } => info
+            Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.rgb.clone()),
@@ -2097,10 +2040,7 @@ impl Image {
         match self {
             Image::Loaded(data) => return Ok(data.image.dimensions()),
             Image::Paletted(data) => return Ok(data.indices.dimensions()),
-            Image::Path {
-                info: Some(info), ..
-            }
-            | Image::Bytes {
+            Image::Bytes {
                 info: Some(info), ..
             } => return Ok((info.width, info.height)),
             Image::Pipeline { source, ops, .. }
@@ -2129,10 +2069,7 @@ impl Image {
                     .clone()
                     .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
             }
-            Image::Path {
-                info: Some(info), ..
-            }
-            | Image::Bytes {
+            Image::Bytes {
                 info: Some(info), ..
             } => return Ok(image_mode_name(info.mode).to_owned()),
             Image::Pipeline {
@@ -2150,9 +2087,9 @@ impl Image {
         match self {
             Image::Loaded(data) => data.source_format.map(|format| format.as_str().to_owned()),
             Image::Paletted(data) => data.source_format.map(|format| format.as_str().to_owned()),
-            Image::Path { format, .. }
-            | Image::Bytes { format, .. }
-            | Image::Pipeline { format, .. } => format.map(|format| format.as_str().to_owned()),
+            Image::Bytes { format, .. } | Image::Pipeline { format, .. } => {
+                format.map(|format| format.as_str().to_owned())
+            }
         }
     }
 
@@ -2164,7 +2101,7 @@ impl Image {
     pub fn load(&mut self) -> Result<(), PilError> {
         let loaded = match &*self {
             Image::Loaded(_) | Image::Paletted(_) => return Ok(()),
-            Image::Path { format, info, .. } | Image::Bytes { format, info, .. } => {
+            Image::Bytes { format, info, .. } => {
                 image_from_materialized(self.materialized_shared()?, *format, info.clone())?
             }
             Image::Pipeline {
@@ -2214,9 +2151,7 @@ impl Image {
     pub fn is_materialized(&self) -> bool {
         match self {
             Image::Loaded(_) | Image::Paletted(_) => true,
-            Image::Path { materialized, .. }
-            | Image::Bytes { materialized, .. }
-            | Image::Pipeline { materialized, .. } => {
+            Image::Bytes { materialized, .. } | Image::Pipeline { materialized, .. } => {
                 matches!(materialized.get(), Some(Ok(_)))
             }
         }
@@ -2229,9 +2164,6 @@ impl Image {
     /// Returns [`PilError`] when decoding or pipeline execution fails.
     pub fn verify(&self) -> Result<(), PilError> {
         match self {
-            Image::Path { path, source, .. } => source
-                .verify()
-                .map_err(|error| map_codec_error(error, &path.display().to_string()))?,
             Image::Bytes { source, .. } => source
                 .verify()
                 .map_err(|error| map_codec_error(error, "memory"))?,

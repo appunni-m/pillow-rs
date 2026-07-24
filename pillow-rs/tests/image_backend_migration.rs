@@ -477,44 +477,30 @@ fn manifest_open_bytes_auto_detects_and_preserves_state_across_load() {
 }
 
 #[test]
-fn manifest_path_open_uses_one_stable_snapshot_and_validates_hints() {
+fn manifest_byte_open_owns_one_stable_snapshot_and_validates_hints() {
     let manifest = manifest();
     let row = manifest
         .decode
         .iter()
         .find(|row| row.feature == "image-png")
         .expect("manifest must contain a PNG success fixture");
-    let replacement = manifest
-        .errors
-        .first()
-        .expect("manifest must contain an encoded error fixture");
-    let input = fs::read(fixture_root().join(&row.input)).expect("path input fixture");
-    let replacement =
-        fs::read(fixture_root().join(&replacement.input)).expect("path replacement fixture");
-    let expected_pixels = fs::read(fixture_root().join(&row.pixels)).expect("path pixel fixture");
-    let path = std::env::temp_dir().join(format!(
-        "pillow-rs-image-snapshot-{}-{}.png",
-        std::process::id(),
-        row.id
-    ));
-    fs::write(&path, &input).expect("write path snapshot fixture");
-    let path_text = path.to_str().expect("temporary path must be UTF-8");
+    let input = fs::read(fixture_root().join(&row.input)).expect("byte input fixture");
+    let expected_pixels = fs::read(fixture_root().join(&row.pixels)).expect("byte pixel fixture");
 
-    let image = Image::open(path_text, Some("png")).expect("open path fixture");
+    let image =
+        Image::open_bytes_with_format(input.clone(), Some("png")).expect("open byte fixture");
     assert!(!image.is_materialized());
-    fs::write(&path, replacement).expect("replace path after open");
     image
         .verify()
-        .expect("verification must use original snapshot");
+        .expect("verification must use owned byte snapshot");
     assert_eq!(
-        image.tobytes().expect("decode original path snapshot"),
+        image.tobytes().expect("decode original byte snapshot"),
         expected_pixels
     );
 
-    fs::write(&path, input).expect("restore path fixture for hint test");
-    let hint_error = Image::open(path_text, Some("jpeg")).expect_err("hint must be validated");
+    let hint_error =
+        Image::open_bytes_with_format(input, Some("jpeg")).expect_err("hint must be validated");
     assert!(matches!(hint_error, PilError::ValueError(_)));
-    fs::remove_file(path).expect("remove temporary path fixture");
 }
 
 #[test]
