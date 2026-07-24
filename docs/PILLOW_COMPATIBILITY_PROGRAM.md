@@ -192,8 +192,10 @@ dimensions, complete public pixel bytes, and palette comparison. JavaScript no
 longer supplies the semantic band count: both its instance and module exports
 derive it from the Rust image. Scalar P construction has a distinct thin WASM
 entry point so it preserves an empty palette instead of silently allocating a
-tuple-color palette entry. A direct Rust public-API consumer for this slice is
-still required before it counts as three-surface proof.
+tuple-color palette entry. The direct Rust public-API consumer reads encoded
+inputs as bytes, executes the same 14 case IDs, and compares exact mode,
+dimensions, bytes, and palette. `Image.eval` is therefore the second completed
+three-surface seed after Color3DLUT; it does not imply corpus-wide coverage.
 
 ## Verified Findings
 
@@ -559,6 +561,9 @@ coverage artifact:
 ### Phase 2: Three-surface compatibility harness
 
 - [ ] Build a Rust public-API runner for the canonical corpus.
+- [x] Add a strict direct Rust consumer for all 14 shared `Image.eval` cases,
+      using byte-oriented image loading and exact Pillow assertions. Together
+      with Python and WASM, this completes the second three-surface seed.
 - [ ] Refactor the Python runner to call only the installed public ABI.
 - [ ] Refactor the Node/WASM runner to consume the complete canonical corpus.
 - [x] Add a reusable strict Node loader for all version-2 input/output fixture
