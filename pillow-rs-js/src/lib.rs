@@ -698,10 +698,11 @@ pub struct ImageDraw {
 #[wasm_bindgen]
 impl ImageDraw {
     #[wasm_bindgen(constructor)]
-    pub fn new(img: &Image) -> ImageDraw {
-        ImageDraw {
-            draw: Draw::new(img.inner.clone(), None),
-        }
+    pub fn new(img: &Image) -> Result<ImageDraw, JsValue> {
+        let mode = img.inner.mode().map_err(err)?;
+        Ok(ImageDraw {
+            draw: Draw::new(img.inner.clone(), Some(mode)),
+        })
     }
 
     #[wasm_bindgen(js_name = "line")]

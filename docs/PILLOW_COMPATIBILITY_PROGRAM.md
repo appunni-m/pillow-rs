@@ -553,6 +553,38 @@ regions. It remains a local diagnostic, not trusted evidence, until its exact
 command and artifact are approved and ingested by Coverage MCP on the
 GPU-capable worker.
 
+The drawing corpus now has equivalent direct-Rust, installed-Python, and
+built-WASM consumers for all 27 Pillow 12.2 cases. They compare exact logical
+mode, dimensions, native-format bytes, and palette bytes. The ABI exercise
+found and fixed two real binding defects: the Python extension rejected
+Pillow's flat four-coordinate line form and rejected two-band LA colors.
+Polyline segment iteration now belongs to pure Rust core; PyO3 only converts
+flat or paired Python coordinates and delegates. WASM now passes the logical
+mode into the same core drawing context, which is required for PA rather than
+inferring its LA storage representation.
+
+Drawing backend status remains deliberately truthful: all 27 fixtures execute
+on CPU, while the Rust harness proves that every declared SIMD/GPU request is
+rejected before execution because no native implementation is registered.
+The local operation-scoped LLVM diagnostic passes and writes
+`target/coverage/pillow-drawing-rust.json`: 2,586 / 18,066 lines, 279 / 3,174
+branches, 169 / 1,204 functions, and 3,800 / 31,287 regions. It is not durable
+coverage evidence until Coverage MCP ingests it.
+
+Pending exact Coverage MCP approval for drawing:
+
+```text
+name: pillow-drawing-rust
+command: make coverage-drawing-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+artifact:
+  path: target/coverage/pillow-drawing-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-drawing-rust
+```
+
 ### Existing documentation can be stale
 
 Historical documents contain superseded counts and completed-gap claims, such
@@ -755,6 +787,11 @@ coverage artifact:
 - [x] Replace the fabricated WASM `Image.apply_transparency` result with real
       delegation and run the same three meaningful Pillow fixtures through
       Rust, Python, and WASM. This completes the fifth three-surface seed.
+- [x] Run all 27 Pillow-generated native-format drawing cases through direct
+      Rust, installed Python, and WASM, including P/PA palette preservation.
+      Keep CPU as the only supported backend until real SIMD/GPU
+      implementations exist, and assert exact rejection for both unsupported
+      backends rather than silently falling back.
 - [x] Make `Image.paste` the sixth three-surface seed from the existing
       Pillow 12.2 backend manifest: execute all 21 successful cases and all
       representable exact error cases through direct Rust, installed Python,
@@ -946,7 +983,7 @@ artifact:
 | Local forced-backend run without GPU | 14 passed; 8 GPU-dependent failures with direct adapter error |
 | Managed forced-backend run with GPU | 22 passed; run `749fd232-908f-4e8c-a025-21ccb4d136cf`; no coverage artifact |
 | Local backend LLVM diagnostic | 5,807 / 18,061 lines; 666 / 3,170 branches; 434 / 1,208 functions; 9,345 / 31,313 regions |
-| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, and 21 Image.paste success cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
+| Rust/Python/JS shared exact oracle execution | 8 Color3DLUT, 14 Image.eval, 9 ImageModule.open, 8 Image.tobytes, 3 Image.apply_transparency, 21 Image.paste success cases, and 27 ImageDraw cases; paste errors are Rust/Python 6 and WASM 4 with 2 typed-ABI-unrepresentable shapes |
 
 These values are a starting point, not completion claims. Update them only
 from source inspection or durable Coverage MCP evidence.

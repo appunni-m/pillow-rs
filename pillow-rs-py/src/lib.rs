@@ -1734,28 +1734,26 @@ impl PyDraw {
 
     fn line(
         &mut self,
-        xy: Vec<Vec<i32>>,
+        xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| {
-                if v.len() >= 2 {
-                    (v[0], v[1])
-                } else {
-                    (v[0], v[0])
-                }
-            })
-            .collect();
+        let pts = if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
+            points
+        } else {
+            let flat = xy.extract::<Vec<i32>>()?;
+            if flat.len() < 4 || flat.len() % 2 != 0 {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "wrong number of coordinates",
+                ));
+            }
+            flat.chunks_exact(2)
+                .map(|point| (point[0], point[1]))
+                .collect()
+        };
         let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
-        for i in 0..pts.len() - 1 {
-            self.draw
-                .line(pts[i].0, pts[i].1, pts[i + 1].0, pts[i + 1].1, color, w)
-                .map_err(map_error)?;
-        }
-        Ok(())
+        self.draw.polyline(&pts, color, w).map_err(map_error)
     }
 
     fn rectangle(
@@ -2253,6 +2251,17 @@ fn parse_draw_color(
         }
         return Err(pyo3::exceptions::PyTypeError::new_err(
             "color must be int, or tuple of one or two elements",
+        ));
+    }
+    if mode == Some("LA") {
+        if let Ok((luma, alpha)) = v.extract::<(u8, u8)>() {
+            return Ok((luma, luma, luma, alpha));
+        }
+        if let Ok(luma) = v.extract::<u8>() {
+            return Ok((luma, luma, luma, 0));
+        }
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "color must be int or tuple of one or two elements",
         ));
     }
     // Standard modes: extract as u8
