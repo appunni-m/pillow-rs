@@ -240,6 +240,23 @@ impl Draw {
         Ok(())
     }
 
+    /// Fills a closed outline using Pillow's `ImageDraw.shape` ink order.
+    ///
+    /// Pillow draws `fill` first and `outline` last, but its outline primitive
+    /// fills the complete path. Therefore `outline`, when present, is the
+    /// effective color for the whole shape.
+    pub fn shape(
+        &mut self,
+        points: &[(i32, i32)],
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+    ) -> Result<(), PilError> {
+        let Some(ink) = outline.or(fill) else {
+            return Ok(());
+        };
+        self.polygon(points, Some(ink), None, 1)
+    }
+
     /// Draws one or more individual points.
     ///
     /// # Errors

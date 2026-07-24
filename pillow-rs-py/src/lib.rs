@@ -1981,6 +1981,24 @@ impl PyDraw {
         self.draw.point(&pts, color).map_err(map_error)
     }
 
+    fn shape(
+        &mut self,
+        shape: &Bound<'_, PyAny>,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let points = if let Ok(mut rust_outline) = shape.extract::<PyRefMut<'_, PyOutline>>() {
+            rust_outline.close();
+            rust_outline.points.clone()
+        } else {
+            extract_draw_points(shape)
+                .map_err(|_| pyo3::exceptions::PyTypeError::new_err("Unsupported shape format"))?
+        };
+        let fill = fill.map(|_| self.color(fill)).transpose()?;
+        let outline = outline.map(|_| self.color(outline)).transpose()?;
+        self.draw.shape(&points, fill, outline).map_err(map_error)
+    }
+
     #[pyo3(signature = (xy, start, end, fill=None, width=1))]
     fn arc(
         &mut self,

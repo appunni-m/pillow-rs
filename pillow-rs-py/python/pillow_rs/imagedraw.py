@@ -107,33 +107,9 @@ class Draw:
         return self._draw.multiline_textbbox(xy, str(text), font, spacing, align)
 
     def shape(self, shape, fill=None, outline=None):
-        """Draw a shape defined by an Outline or sequence of coordinates.
-
-        PIL's ImagingDrawOutline always fills the polygon entirely (ignoring
-        the `fill` parameter). When both outline and fill are given, the
-        outline color overwrites the fill — matching PIL's double-pass:
-        draw_outline(shape, fill_ink, 1) then draw_outline(shape, ink, 0).
-        """
-        if isinstance(shape, Outline):
-            shape.close()
-            xy = shape._points
-            # PIL's draw_outline fills the entire polygon — it never draws
-            # a 1px border. The effective color is outline (if given) since
-            # it is always drawn last (overwriting fill).
-            if outline is not None:
-                self.polygon(xy, fill=outline, outline=None)
-            elif fill is not None:
-                self.polygon(xy, fill=fill, outline=None)
-        elif isinstance(shape, (list, tuple)):
-            if all(map(lambda p: isinstance(p, (list, tuple)) and len(p) == 2, shape)):
-                if outline is not None:
-                    self.polygon(shape, fill=outline, outline=None)
-                elif fill is not None:
-                    self.polygon(shape, fill=fill, outline=None)
-            else:
-                raise TypeError(f"Unsupported shape format")
-        else:
-            raise TypeError(f"unsupported shape type: {type(shape)}")
+        """Draw a shape using Rust's Pillow-compatible outline semantics."""
+        self._draw.shape(shape, fill, outline)
+        self._sync()
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
