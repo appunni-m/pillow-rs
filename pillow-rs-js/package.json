@@ -29,6 +29,7 @@
     "test:codecs": "node tests/codec_feature_matrix.mjs core && node tests/codec_feature_matrix.mjs extra",
     "test:color3dlut-oracle": "node tests/color3dlut_oracle.mjs",
     "test:eval-oracle": "node tests/eval_oracle.mjs",
+    "test:image-open-oracle": "node tests/image_open_oracle.mjs",
     "test:oracle-contract": "node tests/oracle_contract.mjs",
     "test:package": "node scripts/check_package.mjs",
     "size": "node scripts/measure_wasm_sizes.mjs"

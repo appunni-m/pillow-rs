@@ -226,6 +226,23 @@ inputs as bytes, executes the same 14 case IDs, and compares exact mode,
 dimensions, bytes, and palette. `Image.eval` is therefore the second completed
 three-surface seed after Color3DLUT; it does not imply corpus-wide coverage.
 
+`ImageModule.open` is the first codec-focused strict WASM slice. Its nine
+independent mode/format inputs now live in one shared, pinned manifest consumed
+by both the Pillow generator and Node runner rather than being hidden in the
+Python engine. The all-codec WASM ABI decodes PNG `1`/`L`/`LA`/`RGB`/`RGBA`,
+GIF `P`, and TIFF `CMYK`/`I`/`F` inputs and compares exact public mode,
+dimensions, `tobytes()` bytes, and retained palette bytes with Pillow 12.2.
+All nine cases pass. This is Rust-through-WASM execution, but a direct Rust
+consumer of the same case IDs remains required before calling it a complete
+three-surface slice.
+
+The strict runner exposed two core divergences that the prior tests hid:
+lazy encoded mode-`1` images used header metadata for `mode()` but not for
+`tobytes()`, returning unpacked samples; and lazy GIF images padded the public
+palette from 24 to 768 bytes. `Image::tobytes()` now derives the actual public
+mode before formatting, and the public palette accessor returns retained codec
+bytes while internal expansion continues to handle missing entries.
+
 ## Verified Findings
 
 ### Python is not yet a thin client
@@ -645,6 +662,13 @@ coverage artifact:
 - [x] Run all 14 `Image.eval` cases through a strict Node/WASM consumer. It
       compares exact Pillow mode, dimensions, public bytes, and P palette, and
       rejects unknown input/callable forms rather than skipping them.
+- [x] Move the nine canonical encoded Image.open inputs into one shared
+      Pillow-versioned manifest and consume it from both the Pillow generator
+      and strict Node/WASM runner.
+- [x] Run nine independent PNG/GIF/TIFF Image.open mode paths through the
+      all-codec WASM ABI with exact raw public bytes and palette assertions.
+- [ ] Add a direct Rust public-API Image.open consumer for those same nine case
+      IDs to complete the Rust/Python/JS slice.
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
@@ -694,9 +718,8 @@ coverage artifact:
       WASM exposes no filesystem-path API. The strict Color3DLUT and Image.eval
       Node consumers and codec feature matrix already load host file bytes and
       call `Image.open(bytes)`.
-- [ ] Add the canonical image-open corpus to the strict Node/WASM consumer so
-      byte loading is operation-scoped parity evidence rather than only a
-      prerequisite exercised by other operations.
+- [x] Add the canonical image-open corpus to the strict Node/WASM consumer;
+      all nine independent decoder paths pass exact Pillow 12.2 assertions.
 - [ ] Add oracle cases for host coercion, exact return types, mutation,
       exceptions, and object lifetime.
 
