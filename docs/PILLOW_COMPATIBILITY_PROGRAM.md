@@ -274,6 +274,11 @@ The backend registry contains:
 - 69 SIMD-pool-supported operations;
 - 17 CPU operations without SIMD registration.
 
+These counts are now emitted from the live registry by the maintained
+`backend-support-matrix` target. Its deterministic JSON reports all 86
+operation keys and separate `cpu`, `simd_pool`, and `gpu_shader` booleans, so
+documentation no longer has to infer support from source macros.
+
 The missing SIMD registrations are:
 
 - `Color3DLut`;
@@ -612,6 +617,7 @@ coverage impact.
 | CPU registered operations | 86 |
 | SIMD-pool registered operations | 69 |
 | CPU operations without SIMD registration | 17 |
+| GPU-shader registered operations | 72 |
 | Explicit x86/ARM intrinsic implementations | effectively 0; scalar stubs |
 | GPU mixed-backend segmentation | absent |
 | GPU submission strategy | one submit and blocking wait per operation |
