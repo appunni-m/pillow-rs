@@ -93,6 +93,7 @@ help: ## Show this help
 	@printf "\n$(BOLD)Coverage$(NC)\n"
 	@printf "  $(CYAN)make coverage$(NC)       Run tests + compute coverage\n"
 	@printf "  $(CYAN)make coverage-python-abi-rust$(NC) Run Pillow parity through PyO3 with Rust LLVM coverage\n"
+	@printf "  $(CYAN)make coverage-point-rust$(NC) Run Image.point Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-python-wrapper$(NC) Run Pillow parity with Python wrapper branch coverage\n"
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
@@ -447,6 +448,7 @@ lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
+.PHONY: coverage-point-rust
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -456,6 +458,10 @@ coverage: ## Run tests + compute coverage
 coverage-python-abi-rust: ## Run Pillow parity through PyO3 and export Rust LLVM coverage
 	PYTHON=$(PYTHON) MATURIN=$(MATURIN) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
 		bash scripts/coverage/run_python_abi_rust_coverage.sh
+
+coverage-point-rust: ## Run Image.point Pillow parity and export Rust LLVM branch coverage
+	PYTHON=$(PYTHON) TIMEOUT=$(TIMEOUT) \
+		bash scripts/coverage/run_point_rust_coverage.sh
 
 coverage-image-backend-rust: ## Run exact backend parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_image_backend_rust_coverage.sh

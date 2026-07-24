@@ -485,6 +485,14 @@ coverage impact.
       run: 981 / 1,237 executable statements and 119 / 276 branches across 14
       wrapper files. These remain local diagnostic totals until Coverage MCP
       ingests the report.
+- [x] Add and locally validate `make
+      PYTHON=.venv/bin/python coverage-point-rust`. It regenerates only the
+      maintained `Image.point` inputs and Pillow 12.2 oracles, passes all 14
+      exact cases through the installed Python ABI, and writes
+      `target/coverage/pillow-point-rust.json`. The local LLVM report contains
+      1,783 / 20,980 lines, 134 / 3,548 branches, 124 / 1,612 functions, and
+      2,919 / 36,473 regions. These are diagnostic totals until managed
+      ingestion creates a snapshot.
 - [ ] Present the exact commands, cwd, shell, and artifacts for human approval.
 - [ ] Register the approved commands with Coverage MCP.
 - [ ] Run baseline suites through Coverage MCP and retain snapshot IDs.
@@ -492,6 +500,20 @@ coverage impact.
 - [ ] Separate fixture-inventory coverage from executed-code coverage in names,
       documentation, and CI output.
 - [ ] Make missing/stale/unparsed coverage artifacts hard failures.
+
+Pending exact Coverage MCP approval for the first operation-scoped snapshot:
+
+```text
+name: pillow-point-rust
+command: make PYTHON=.venv/bin/python coverage-point-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+coverage artifact:
+  path: target/coverage/pillow-point-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-point-rust
+```
 
 ### Phase 1: Canonical oracle corpus
 
