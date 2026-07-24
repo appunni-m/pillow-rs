@@ -1,32 +1,7 @@
 """ImageDraw — drawing primitives. Pillow-compatible module."""
 from ._core import ImageDraw as RustDraw
-from ._core import outline_curve as _outline_curve
+from ._core import Outline
 from .image import Image
-
-
-class Outline:
-    """Experimental outline API for ImageDraw.shape().
-    Mirrors PIL's ImageDraw.Outline (C-level _Outline)."""
-
-    def __init__(self):
-        self._points = []
-
-    def move(self, x, y):
-        self._points = [(int(x), int(y))]
-
-    def line(self, x, y):
-        self._points.append((int(x), int(y)))
-
-    def curve(self, x1, y1, x2, y2, x3, y3):
-        # Cubic Bezier approximation: subdivide into line segments in Rust
-        x0, y0 = self._points[-1]
-        steps = 20
-        new_points = _outline_curve([float(x0), float(y0), float(x1), float(y1), float(x2), float(y2), float(x3), float(y3)], steps)
-        self._points.extend(map(tuple, new_points))
-
-    def close(self):
-        if len(self._points) > 2 and self._points[0] != self._points[-1]:
-            self._points.append(self._points[0])
 
 
 class Draw:
@@ -162,7 +137,6 @@ class Draw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
-        fill, outline = self._shape_inks(fill, outline)
         self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
         self._sync()
 

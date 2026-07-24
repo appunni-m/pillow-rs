@@ -568,7 +568,10 @@ point-coordinate normalization, and polyline segment iteration out of Python.
 One new independent Pillow-generated PA rectangle case covers the otherwise
 unexecuted default-ink path with both `fill` and `outline` omitted. This reduces
 the executable Python thin-binding checker from 46 to 42 violations without
-weakening the oracle.
+weakening the oracle. Moving `ImageDraw.Outline` point ownership, curve
+subdivision, and closure into the Rust extension reduces it again to 40; the
+four existing Pillow-oracle `ImageDraw.shape` cases pass through the public
+Python surface.
 
 Drawing backend status remains deliberately truthful: all 28 fixtures execute
 on CPU, while the Rust harness proves that every declared SIMD/GPU request is
@@ -979,7 +982,7 @@ artifact:
 | Approved managed commands | 4 |
 | Managed runs | 41 |
 | Ingested coverage snapshots | **0** |
-| Python thin-binding violations | **42 actionable executable violations** |
+| Python thin-binding violations | **40 actionable executable violations** |
 | Last Python managed parity result | 1,659 passed, 18 failed |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |

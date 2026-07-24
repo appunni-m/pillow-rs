@@ -1425,6 +1425,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyImage>()?;
     m.add_class::<PyDraw>()?;
+    m.add_class::<PyOutline>()?;
     m.add_class::<PyFont>()?;
     m.add_class::<PyPilFont>()?;
 
@@ -1716,6 +1717,51 @@ fn pilfont_load_path_catches(error: &PilError) -> bool {
 }
 
 // --- ImageDraw ---
+
+#[pyclass(name = "Outline")]
+pub struct PyOutline {
+    points: Vec<(i32, i32)>,
+}
+
+#[pymethods]
+impl PyOutline {
+    #[new]
+    fn new() -> Self {
+        Self { points: Vec::new() }
+    }
+
+    #[pyo3(name = "move")]
+    fn move_to(&mut self, x: i32, y: i32) {
+        self.points.clear();
+        self.points.push((x, y));
+    }
+
+    fn line(&mut self, x: i32, y: i32) {
+        self.points.push((x, y));
+    }
+
+    fn curve(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> PyResult<()> {
+        let (x0, y0) = self.points.last().copied().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("outline has no current point")
+        })?;
+        self.points.extend(pillow_rs::draw::outline_curve_points(
+            &[x0 as f64, y0 as f64, x1, y1, x2, y2, x3, y3],
+            20,
+        ));
+        Ok(())
+    }
+
+    fn close(&mut self) {
+        if self.points.len() > 2 && self.points.first() != self.points.last() {
+            self.points.push(self.points[0]);
+        }
+    }
+
+    #[getter]
+    fn _points(&self) -> Vec<(i32, i32)> {
+        self.points.clone()
+    }
+}
 
 #[pyclass(name = "ImageDraw")]
 pub struct PyDraw {
