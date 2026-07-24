@@ -964,7 +964,29 @@ artifact:
       length or exact error, dimensions, and mask bytes; JavaScript/WASM
       asserts the same contract through thin methods backed by the same Rust
       helpers. The aggregate gate passes 3/3 cases on all three surfaces.
-      Removing the superseded generic suite duplicates remains open.
+      The maintained `make coverage-transposed-font-rust` lane emits
+      `target/coverage/pillow-transposed-font-rust.json`. Removing the
+      superseded generic suite duplicates and ingesting this report through
+      Coverage MCP remain open.
+
+The locally validated branch lane passes 3/3 and records 7,422 / 44,337 lines,
+1,241 / 9,662 branches, 492 / 2,991 functions, and 10,461 / 69,614 regions.
+These workspace totals are diagnostic only until Coverage MCP ingests the
+fresh artifact and its file-level gaps are queried.
+
+Pending exact Coverage MCP approval for `TransposedFont`:
+
+```text
+name: pillow-transposed-font-rust
+command: make coverage-transposed-font-rust
+cwd: /Users/lazytrot/work/pillow-rs
+shell: /bin/zsh
+coverage artifact:
+  path: target/coverage/pillow-transposed-font-rust.json
+  required: true
+  coverage_format: llvm-json
+  suite: pillow-transposed-font-rust
+```
 
 The locally validated lane passes the shared 5/5 exact oracle cases and records
 6,909 / 44,300 lines, 1,346 / 9,656 branches, 435 / 2,986 functions, and
