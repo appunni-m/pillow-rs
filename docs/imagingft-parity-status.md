@@ -10,8 +10,8 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 ## Evidence captured
 - Test execution: `make -C pillow-rs imagingft-tests` (pass: 1 test, 0 failures)
 - Coverage command (Coverage MCP approved): `imagingft-tests-coverage-fixed`
-  - run id: `eb44bd83-075a-4cd0-b85d-9c2aa4bd1b73`
-  - snapshot id: `83ed2ee0-d2f9-440f-bec3-be1eba64915e`
+  - run id: `f2705e31-d5ea-4b5b-88c2-765e8bb76a80`
+  - snapshot id: `c3c528ee-096d-4884-a154-a225f1d6dc8e`
 
 ### Coverage metrics snapshot
 - `total_lines: 17924`, `covered_lines: 1715`
@@ -20,7 +20,7 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 - `total_regions: 31362`, `covered_regions: 2689`
 
 ### ImagingFT implementation surface
-- `coverage_query(view="file", snapshot_id="83ed2ee0-d2f9-440f-bec3-be1eba64915e", file_path="pillow-rs/src/font/imagingft.rs")`
+- `coverage_query(view="file", snapshot_id="c3c528ee-096d-4884-a154-a225f1d6dc8e", file_path="pillow-rs/src/font/imagingft.rs")`
   - `covered_lines: 668/815` (`line_rate 0.8196`)
   - `covered_functions: 70/80` (`function_rate 0.875`)
   - `covered_branches: 95/150` (`branch_rate 0.6333`)
@@ -61,7 +61,7 @@ Operation | Total | OK | Error | Result
 - `status` is asserted as `error`, and error category/message are compared per fixture contract.
 
 ### Coverage MCP trace
-- Snapshot metadata is read from `coverage_query(view="summary", snapshot_id="83ed2ee0-d2f9-440f-bec3-be1eba64915e")`.
+- Snapshot metadata is read from `coverage_query(view="summary", snapshot_id="c3c528ee-096d-4884-a154-a225f1d6dc8e")`.
 - File-level imagingft gaps are read from the file view above (`returned_range_count: 48`, no truncation).
 
 ## Explicit remaining gaps
