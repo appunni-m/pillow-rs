@@ -19,18 +19,18 @@ Date: 2026-07-25
   1. `project_context`
   2. `run_test` on command `imagingft-tests-coverage-fixed` (`258e7dec-226f-4b00-9336-04df6e8c67f2`)
   3. `get_run_data` (terminal)
-  4. `coverage_query` (summary/files/file/insights)
-- run id: `ff30da74-d872-490f-b5c4-4a2f25706c0f`
-- status: `passed`
+  4. `coverage_compare` (overview/files for imagingft suite)
+- run id: `9163d5bb-cfce-44de-9cbc-6de62d4274e6`
+- status: `passed` (`terminal` state, no failures)
 - counters: `passed=1`, `failed=0`
-- coverage snapshot: `743979ef-b216-40ea-ac53-7595e66a83ac`
-- suite/branch/commit: `imagingft` / `main` / `b6d72b0a4ccf7e91ba64928c3c2e625aae8457aa`
+- coverage snapshot: `94f7f3a0-21fa-43c6-a21d-a40d032c1592`
+- suite/branch/commit: `imagingft` / `main` / `67b86bd399c6cc36277c31cb97f367deb5674259`
 
 ### Snapshot metric deltas
 
-- current snapshot (`743979ef...`):
+- current snapshot (`94f7f3a0...`):
   - `line_rate=0.07997`, `branch_rate=0.02960`, `function_rate=0.09262`, `region_rate=0.06912`
-- previous ingested imagingft snapshot (`37f9a942...`) showed identical rates in this surface scope.
+- previous ingested imagingft snapshot (`743979ef...`) showed identical rates in this surface scope.
 - target-surface focused projection (`pillow-rs/src/font/imagingft.rs`):
   - `line_rate=0.84123`, `branch_rate=0.63514`, `function_rate=0.90244`
   - unresolved in this suite: `60` uncovered lines / `18` partial branch lines
@@ -61,32 +61,33 @@ Date: 2026-07-25
 
 - `imagingft.validate_transposed_length.rotate_90`
   - expected status: `error`
-  - expected type: `PilError::ValueError`
+  - expected type: `ValueError`
   - expected message: `text length is undefined for text rotated by 90 or 270 degrees`
 - `imagingft.unsupported_operation.unsupported_magic`
   - operation alias: `imagingft.unsupported_magic`
   - expected status: `error`
-  - expected type: `PilError::NotImplementedError`
+  - expected type: `NotImplementedError`
   - expected message: `unsupported imagingft operation: unsupported_magic`
 - `imagingft.layout_failure.imagingft_get_transposed_mask_invalid_orientation_error`
   - expected status: `error`
-  - expected type: `PilError::ValueError`
+  - expected type: `ValueError`
   - expected message fragment: `Unknown transpose method: UNSUPPORTED`
 - `imagingft.load_failure.missing_font_asset`
   - expected status: `error`
-  - expected type: `PilError::ValueError`
+  - expected type: `ValueError`
   - expected message: includes missing path + OS I/O text
 
 All expected-error cases are asserted through `Result`-driven matching in
-`pillow-rs/tests/imagingft_public_api.rs` and none are treated as success.
+`pillow-rs/tests/imagingft_public_api.rs` using fixture-provided `type` and `message`/`message_pattern` fields.
 
 ## 5) Remaining gaps (explicit)
 
-- `pillow-rs/src/font/imagingft.rs` has uncovered lines and partial-branch lines within the imagingft suite:
+- `pillow-rs/src/font/imagingft.rs` has unresolved defensive paths and branch edges in this suite:
   - `uncovered_line_count=60`
   - `partial_branch_line_count=18`
-- These arise from fallback/more defensive branches in:
-  - bitmap/font-mode branches that are currently not exercised by current public-api fixtures,
-  - some render/layout error/overflow control flow,
+- These arise from:
+  - bitmap/font-mode branches not exercised by current public-api fixtures,
+  - layout/error/overflow fallback logic,
   - optional-path guards in mask composition.
 - No unresolved public operation rows remain for the current non-deprecated public corpus. Parity itself is green for all **45 active fixture rows**; coverage completeness is the only known blocker to a full 100% claim.
+
