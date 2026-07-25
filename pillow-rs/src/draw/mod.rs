@@ -1061,9 +1061,9 @@ impl Draw {
     /// RGBA compositing for text (used for RGB and RGBA modes).
     ///
     /// Pixels from the font renderer have the glyph coverage in the alpha channel
-    /// and the fill color in the RGB channels. This function blends them onto the
-    /// destination canvas using PIL's BLEND formula for all four channels,
-    /// including proper alpha blending when the destination is RGBA.
+    /// and the fill color in the RGB channels. For RGB mode this follows BLEND.
+    /// For RGBA mode, PIL draws constant RGB channels and applies coverage through
+    /// alpha only, matching current `ImageDraw.text` oracle outputs.
     fn text_compose_rgba(
         &mut self,
         x: i32,
@@ -1089,25 +1089,21 @@ impl Draw {
                     let dy = (y as u32 + py).min(img_h - 1);
                     let dp = canvas.get_pixel(dx, dy);
                     let inv = 255u16 - sa as u16;
-                    // Pillow's ImagingDrawBitmap delegates the glyph mask to
-                    // ImagingFill2/fill_mask_L: coverage blends every native
-                    // destination channel toward the caller's original ink.
-                    // The renderer's opaque alpha only carries mask coverage.
                     let alpha = if mode == "RGBA" {
                         blend_u8(fill.3, dp[3], sa, inv)
                     } else {
                         255
                     };
-                    canvas.put_pixel(
-                        dx,
-                        dy,
-                        Rgba([
+                    let (r, g, b) = if mode == "RGBA" {
+                        (fill.0, fill.1, fill.2)
+                    } else {
+                        (
                             blend_u8(fill.0, dp[0], sa, inv),
                             blend_u8(fill.1, dp[1], sa, inv),
                             blend_u8(fill.2, dp[2], sa, inv),
-                            alpha,
-                        ]),
-                    );
+                        )
+                    };
+                    canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
                 }
             }
         }

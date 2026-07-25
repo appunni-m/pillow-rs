@@ -7452,7 +7452,6 @@ pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Opti
     Some(flags as FT_ULong)
 }
 
-#[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Renderer_Class(
     library: Option<&FT_Library>,
     format: FT_Glyph_Format,
