@@ -146,6 +146,22 @@ fn fixture_status(case: &Value) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
+const REQUIRED_PUBLIC_OPS: [&str; 13] = [
+    "getname",
+    "getmetrics",
+    "getlength",
+    "has_variations",
+    "getbbox",
+    "getbbox_binary",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "get_transposed_mask",
+    "transposed_bbox",
+    "validate_transposed_length",
+    "draw_text",
+];
+
 fn is_supported_operation(operation: &str) -> bool {
     matches!(
         operation,
@@ -610,4 +626,11 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         !observed_ops.is_empty(),
         "imagingft public-api fixture corpus must include at least one operation"
     );
+
+    for op in REQUIRED_PUBLIC_OPS {
+        assert!(
+            observed_ops.contains(op),
+            "required imagingft public surface '{op}' missing from public-api fixture corpus"
+        );
+    }
 }
