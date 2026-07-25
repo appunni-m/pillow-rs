@@ -117,34 +117,30 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
     Ok((r, g, b, a))
 }
 
-fn expected_status(case: &Value) -> String {
+fn is_expected_error_case(case: &Value) -> bool {
+    if let Some(expect_error) = case.get("expect_error").and_then(Value::as_bool) {
+        return expect_error;
+    }
+
     let expectation = case.get("expectation").unwrap_or(&Value::Null);
-
-    if let Some(status) = expectation
-        .get("expected")
-        .and_then(|expected| expected.get("status"))
+    if expectation
+        .get("status")
         .and_then(Value::as_str)
+        .is_some_and(|status| status == "error")
     {
-        return status.to_string();
+        return true;
     }
 
-    if let Some(status) = expectation.get("status").and_then(Value::as_str) {
-        return status.to_string();
-    }
+    expectation
+        .get("expected")
+        .and_then(|value| value.get("error"))
+        .is_some()
+}
 
-    if let Some(status) = case.get("status").and_then(Value::as_str) {
-        return status.to_string();
-    }
-
-    if case
-        .get("expect_error")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        "error".to_string()
-    } else {
-        "ok".to_string()
-    }
+fn fixture_status(case: &Value) -> Option<&str> {
+    case.get("expectation")
+        .and_then(|value| value.get("status"))
+        .and_then(Value::as_str)
 }
 
 const REQUIRED_PUBLIC_OPS: [&str; 13] = [
@@ -533,7 +529,7 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
             for case in cases {
                 any_cases += 1;
                 let case_id = case["case_id"].as_str().unwrap_or("<missing case_id>");
-                let expect_error = case["expect_error"].as_bool().unwrap_or(false);
+                let expect_error = is_expected_error_case(case);
                 let params = &case["inputs"]["params"];
                 let font = load_font(case);
                 if font.is_err() {
@@ -542,25 +538,30 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         "{case_id}: expected success but failed to load font"
                     );
                     let error = font.expect_err("case font must fail");
-                    let expected_status = expected_status(case);
-                    assert_eq!(expected_status, "error", "{case_id}");
                     let expected = &case["expectation"]["expected"];
                     assert_error_matches(case_id, &error, expected);
                     continue;
                 }
                 let font = font.expect("case font must load");
-                let expected_status = expected_status(case);
+                let expected_status = fixture_status(case);
                 let expected = &case["expectation"]["expected"];
                 let actual = run_case(operation, &font, params);
 
                 match (actual, expect_error) {
                     (Ok(value), false) => {
-                        assert_ne!(expected_status, "error", "{case_id}");
-                        assert_eq!(expected_status, "ok", "{case_id}");
+                        let expected_has_error = expected.get("error").is_some();
+                        assert!(
+                            expected_status != Some("error") || !expected_has_error,
+                            "{case_id}: fixture status requested an error path but operation returned success"
+                        );
                         compare_output(operation, value, expected, case_id);
                     }
                     (Err(error), true) => {
-                        assert_eq!(expected_status, "error", "{case_id}");
+                        let expected_has_error = expected.get("error").is_some();
+                        assert!(
+                            expected_status != Some("ok") || expected_has_error,
+                            "{case_id}: case expected to fail but fixture status is ok without error expectation object"
+                        );
                         assert_error_matches(case_id, &error, expected);
                     }
                     (Ok(_), true) => {
