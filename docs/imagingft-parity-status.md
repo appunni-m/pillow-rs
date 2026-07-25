@@ -12,16 +12,16 @@ Date: 2026-07-25
 ## Verification run
 
 - `make -C pillow-rs imagingft-tests` → pass (`1` passed, `0` failed)
-- Coverage MCP:
+Coverage MCP (fresh for current runner checks):
   1. `project_context`
-  2. `run_test` (`imagingft-tests-coverage-fixed`, idempotency `imagingft-tests-coverage-fixed-validate`)
+  2. `run_test` (`imagingft-tests-coverage-fixed`, idempotency `imagingft-tests-coverage-fixed-continue-run-2`)
   3. `get_run_data` (terminal)
   4. `coverage_query` (summary + files)
 
 Latest run/snapshot:
-- run id: `09e5dc94-c176-4f13-a8c2-7bb7df2d7ad1`
-- snapshot id: `0332cd5a-1d82-43ab-8448-636a0282e18d`
-- branch/commit: `main` / `b8317c8ca7e1e37753bbea1f4aea72453215d2e4`
+- run id: `5d366690-151d-440e-be94-b3d8c3981bac`
+- snapshot id: `883205f3-16bc-4757-bf46-db95692fd955`
+- branch/commit: `main` / `fab8f0d4ea6db38545c1c0284a695f772973cae1`
 
 ## Suite outcome
 
