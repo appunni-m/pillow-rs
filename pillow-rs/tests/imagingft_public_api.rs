@@ -116,14 +116,10 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
     Ok((r, g, b, a))
 }
 
-fn fixture_expected_status(case: &Value) -> String {
-    let value = case.get("expectation").unwrap_or(&Value::Null);
-    let expect_error = case.get("expect_error").and_then(Value::as_bool).unwrap_or(false);
-    if expect_error {
-        return "error".to_string();
-    }
+fn expected_status(case: &Value) -> String {
+    let expectation = case.get("expectation").unwrap_or(&Value::Null);
 
-    if let Some(status) = value
+    if let Some(status) = expectation
         .get("expected")
         .and_then(|expected| expected.get("status"))
         .and_then(Value::as_str)
@@ -131,11 +127,23 @@ fn fixture_expected_status(case: &Value) -> String {
         return status.to_string();
     }
 
-    if let Some(status) = value.get("status").and_then(Value::as_str) {
+    if let Some(status) = expectation.get("status").and_then(Value::as_str) {
         return status.to_string();
     }
 
-    "ok".to_string()
+    if let Some(status) = case.get("status").and_then(Value::as_str) {
+        return status.to_string();
+    }
+
+    if case
+        .get("expect_error")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        "error".to_string()
+    } else {
+        "ok".to_string()
+    }
 }
 
 fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
@@ -498,14 +506,14 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         "{case_id}: expected success but failed to load font"
                     );
                     let error = font.expect_err("case font must fail");
-                    let expected_status = fixture_expected_status(case);
+                    let expected_status = expected_status(case);
                     assert_eq!(expected_status, "error", "{case_id}");
                     let expected = &case["expectation"]["expected"];
                     assert_error_matches(case_id, &error, expected);
                     continue;
                 }
                 let font = font.expect("case font must load");
-                let expected_status = fixture_expected_status(case);
+                let expected_status = expected_status(case);
                 let expected = &case["expectation"]["expected"];
                 let actual = run_case(operation, &font, params);
 
