@@ -9,9 +9,9 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 
 ## Evidence captured
 - Test execution: `make -C pillow-rs imagingft-tests` (pass: 1 test, 0 failures)
-- Coverage command: `imagingft-tests-coverage-fixed`
-  - run id: `a8258543-665e-4383-9bad-2edf47191613`
-- Coverage snapshot: `1bd8dd73-92ae-4f6a-9928-70743022348b`
+- Coverage command (Coverage MCP approved): `imagingft-tests-coverage-fixed`
+  - run id: `eb44bd83-075a-4cd0-b85d-9c2aa4bd1b73`
+  - snapshot id: `83ed2ee0-d2f9-440f-bec3-be1eba64915e`
 
 ### Coverage metrics snapshot
 - `total_lines: 17924`, `covered_lines: 1715`
@@ -20,7 +20,7 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 - `total_regions: 31362`, `covered_regions: 2689`
 
 ### ImagingFT implementation surface
-- `coverage_query(view="file", file="pillow-rs/src/font/imagingft.rs")`
+- `coverage_query(view="file", snapshot_id="83ed2ee0-d2f9-440f-bec3-be1eba64915e", file_path="pillow-rs/src/font/imagingft.rs")`
   - `covered_lines: 668/815` (`line_rate 0.8196`)
   - `covered_functions: 70/80` (`function_rate 0.875`)
   - `covered_branches: 95/150` (`branch_rate 0.6333`)
@@ -59,6 +59,10 @@ Operation | Total | OK | Error | Result
 - Rows with `expect_error: true` are executed through fixture-driven `Result` failure handling.
 - Error matching is driven from fixture `expectation.expected.error` keys and `compare.paths`; tests do not hardcode Rust error forms.
 - `status` is asserted as `error`, and error category/message are compared per fixture contract.
+
+### Coverage MCP trace
+- Snapshot metadata is read from `coverage_query(view="summary", snapshot_id="83ed2ee0-d2f9-440f-bec3-be1eba64915e")`.
+- File-level imagingft gaps are read from the file view above (`returned_range_count: 48`, no truncation).
 
 ## Explicit remaining gaps
 - All non-deprecated fixture rows currently in corpus are passing.
