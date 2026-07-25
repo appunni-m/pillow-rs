@@ -261,11 +261,14 @@ fn validate_min_required_ops(observed_ops: &BTreeSet<String>) {
 }
 
 fn load_font_size(case: &Value) -> Result<f32, PilError> {
-    fixture_case_params(case)?
-        .get("size")
-        .and_then(Value::as_f64)
-        .map(|value| value as f32)
-    .ok_or(PilError::ValueError("size missing or invalid".into()))
+    let params = fixture_case_params(case)?;
+    match params.get("size") {
+        Some(size) => size
+            .as_f64()
+            .map(|value| value as f32)
+            .ok_or(PilError::ValueError("size missing or invalid".into())),
+        None => Ok(10.0),
+    }
 }
 
 fn load_font(case: &Value) -> Result<Font, PilError> {
@@ -277,7 +280,7 @@ fn load_font(case: &Value) -> Result<Font, PilError> {
         .get("kind")
         .and_then(Value::as_str)
         .ok_or(PilError::ValueError("font kind must be a string".into()))?;
-    let size = load_font_size(case).unwrap_or(10.0);
+    let size = load_font_size(case)?;
 
     match kind {
         "load_default" => Font::load_default(size),
@@ -369,10 +372,9 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         compare_output(operation.as_str(), value, expected, case_id);
                     }
                     (Err(error), true) => {
-                        let expected_has_error = expected.get("error").is_some();
                         assert!(
-                            expected_status == Some("error") || expected_has_error,
-                            "{case_id}: case expected to fail but fixture status was ok without expected.error"
+                            expected_status == Some("error"),
+                            "{case_id}: error case missing expectation status"
                         );
                         assert_error_matches(case_id, &error, expectation);
                     }
