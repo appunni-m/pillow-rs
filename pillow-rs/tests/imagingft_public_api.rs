@@ -499,17 +499,34 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
     }
 }
 
-fn expected_compare_paths(expectation: &Value) -> Vec<&str> {
-    let paths: Vec<&str> = expectation
+fn expected_compare_paths(expectation: &Value) -> Vec<String> {
+    let paths: Vec<String> = expectation
         .get("compare")
         .and_then(|value| value.get("paths"))
         .and_then(Value::as_array)
         .into_iter()
         .flat_map(|paths| paths.iter())
-        .filter_map(|value| value.as_str())
+        .filter_map(|value| value.as_str().map(ToString::to_string))
         .collect();
     if paths.is_empty() {
-        vec!["status", "error.type", "error.message"]
+        let mut generated = Vec::new();
+        if let Some(expected) = expectation.get("expected").and_then(Value::as_object) {
+            for key in expected.keys() {
+                if key == "error" {
+                    if let Some(error) = expected.get("error").and_then(Value::as_object) {
+                        for error_key in error.keys() {
+                            generated.push(format!("error.{error_key}"));
+                        }
+                    }
+                } else {
+                    generated.push(key.to_string());
+                }
+            }
+        }
+        if generated.is_empty() {
+            generated.push("status".to_string());
+        }
+        generated
     } else {
         paths
     }
@@ -535,23 +552,37 @@ fn error_category(error: &PilError) -> &'static str {
     }
 }
 
-fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
-    let expected = &expectation["expected"];
-    let paths = expected_compare_paths(expectation);
-    let compare_mode = expectation
+fn compare_mode(expectation: &Value) -> &str {
+    expectation
         .get("compare")
         .and_then(|value| value.get("mode"))
         .and_then(Value::as_str)
-        .unwrap_or("exact");
-    let message_pattern = expected
-        .get("error")
-        .and_then(|error| error.get("message_pattern"))
-        .and_then(Value::as_str)
-        .or_else(|| expected.get("message_pattern").and_then(Value::as_str));
+        .unwrap_or("exact")
+}
 
+fn expected_error_value(expectation: &Value, key: &str) -> Option<String> {
+    expectation
+        .get("expected")
+        .and_then(Value::as_object)
+        .and_then(|value| value.get("error"))
+        .and_then(Value::as_object)
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+}
+
+fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
+    let paths = expected_compare_paths(expectation);
+    let compare_mode = compare_mode(expectation);
+    let message_pattern_primary = expected_error_value(expectation, "message_pattern");
+    let message_pattern_fallback = expected_error_value(expectation, "message");
+    let message_pattern = message_pattern_primary
+        .as_deref()
+        .or_else(|| message_pattern_fallback.as_deref());
     let actual_error_message = error.to_string();
+
     for path in &paths {
-        if *path == "status" {
+        if path == "status" {
             assert_eq!(
                 expectation["status"]
                     .as_str()
@@ -562,8 +593,12 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
             continue;
         }
 
-        if *path == "error" {
-            let Some(expected_error) = expected.get("error").and_then(Value::as_object) else {
+        if path == "error" {
+            let Some(expected_error) = expectation
+                .get("expected")
+                .and_then(|value| value.get("error"))
+                .and_then(Value::as_object)
+            else {
                 panic!("{case_id}: fixture compare path '{path}' requires expected.error object");
             };
             for (key, expected_value) in expected_error {
@@ -589,8 +624,10 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
         }
 
         if let Some(field) = path.strip_prefix("error.") {
-            let expected_error = expected
-                .get("error")
+            let expected_error = expectation
+                .get("expected")
+                .and_then(Value::as_object)
+                .and_then(|value| value.get("error"))
                 .and_then(Value::as_object)
                 .unwrap_or_else(|| {
                     panic!(
@@ -627,10 +664,15 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
             continue;
         }
 
-        if *path == "length" {
+        if path == "length" {
+            let expected_has_length = expectation
+                .get("expected")
+                .and_then(Value::as_object)
+                .and_then(|value| value.get("length"))
+                .is_some();
             assert!(
-                expected.get("length").is_none(),
-                "{case_id}: expected 'length' for error path but no runtime value exists"
+                !expected_has_length,
+                "{case_id}: expected 'length' for error path but no runtime length exists"
             );
             continue;
         }
