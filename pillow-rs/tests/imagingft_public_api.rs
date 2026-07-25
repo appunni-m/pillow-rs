@@ -288,7 +288,9 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
                 .and_then(Value::as_str)
                 .ok_or(PilError::ValueError("mode must be a string".into()))?;
             let mut image = Image::new(expected_width, expected_height, mode, (0, 0, 0, 0))
-                .expect("draw_text canvas");
+                .map_err(|error| {
+                    PilError::ValueError(format!("draw_text canvas allocation failed: {error}"))
+                })?;
             let mut draw = Draw::new(image.clone(), Some(mode.to_string()));
             draw.text(x, y, text, font, fill)?;
             image = draw.image_clone();
@@ -508,7 +510,7 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         expect_error,
                         "{case_id}: expected success but failed to load font"
                     );
-                    let error = font.expect_err("load_error");
+                    let error = font.expect_err("case font must fail");
                     let expected = &case["expectation"]["expected"];
                     assert_error_matches(case_id, &error, expected);
                     continue;
@@ -526,8 +528,18 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                     (Err(error), true) => {
                         assert_error_matches(case_id, &error, expected);
                     }
-                    (Ok(_), true) => panic!("{case_id}: expected error but got success"),
-                    (Err(error), false) => panic!("{case_id}: unexpected error {error}"),
+                    (Ok(_), true) => {
+                        assert!(
+                            false,
+                            "{case_id}: expected error but got success"
+                        )
+                    }
+                    (Err(error), false) => {
+                        assert!(
+                            false,
+                            "{case_id}: unexpected error {error}"
+                        )
+                    }
                 }
             }
         }
