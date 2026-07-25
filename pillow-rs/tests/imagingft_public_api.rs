@@ -513,6 +513,72 @@ fn expected_compare_paths(expectation: &Value) -> Vec<String> {
     }
 }
 
+fn expected_string(expectation: &Value, path: &str) -> Option<String> {
+    expectation
+        .get("expected")
+        .and_then(Value::as_object)
+        .and_then(|value| value.get("error"))
+        .and_then(Value::as_object)
+        .and_then(|value| value.get(path))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+}
+
+fn error_expected_field_value(error: &PilError, path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    if path == "type" || path == "class" || path == "category" {
+        Some(error_category(error).to_string())
+    } else if path == "message" {
+        Some(error.to_string())
+    } else if path == "message_pattern" {
+        Some(error.to_string())
+    } else {
+        None
+    }
+}
+
+fn assert_single_error_path(
+    case_id: &str,
+    path: &str,
+    error: &PilError,
+    expectation: &Value,
+    compare_mode: &str,
+) {
+    let expected = expected_string(expectation, &path.replace("error.", ""));
+    let actual = error_expected_field_value(error, &path.replace("error.", ""));
+
+    if path == "error.message" || path == "error.message_pattern" {
+        if compare_mode == "contains" {
+            let pattern = expected
+                .as_deref()
+                .or_else(|| {
+                    expectation
+                        .get("expected")
+                        .and_then(Value::as_object)
+                        .and_then(|value| value.get("error"))
+                        .and_then(Value::as_object)
+                        .and_then(|value| value.get("message"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or("");
+            let actual_message = error.to_string();
+            assert!(
+                actual_message.contains(pattern),
+                "{case_id}: expected message to contain '{pattern}', got '{actual_message}'"
+            );
+            return;
+        }
+    }
+
+    assert_eq!(
+        expected.expect(&format!("{case_id}: fixture missing compare target '{path}' value")),
+        actual.expect(&format!("{case_id}: fixture compare target '{path}' not representable from runtime error")),
+        "{case_id}: expected '{path}' value mismatch"
+    );
+}
+
 fn error_category(error: &PilError) -> &'static str {
     match error {
         PilError::ValueError(_) => "ValueError",
@@ -541,26 +607,9 @@ fn compare_mode(expectation: &Value) -> &str {
         .unwrap_or("exact")
 }
 
-fn expected_error_value(expectation: &Value, key: &str) -> Option<String> {
-    expectation
-        .get("expected")
-        .and_then(Value::as_object)
-        .and_then(|value| value.get("error"))
-        .and_then(Value::as_object)
-        .and_then(|value| value.get(key))
-        .and_then(Value::as_str)
-        .map(ToString::to_string)
-}
-
 fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
     let paths = expected_compare_paths(expectation);
     let compare_mode = compare_mode(expectation);
-    let message_pattern_primary = expected_error_value(expectation, "message_pattern");
-    let message_pattern_fallback = expected_error_value(expectation, "message");
-    let message_pattern = message_pattern_primary
-        .as_deref()
-        .or_else(|| message_pattern_fallback.as_deref());
-    let actual_error_message = error.to_string();
 
     for path in &paths {
         if path == "status" {
@@ -583,65 +632,21 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
                 panic!("{case_id}: fixture compare path '{path}' requires expected.error object");
             };
             for (key, expected_value) in expected_error {
-                let actual_value = match key.as_str() {
-                    "type" | "class" | "category" => error_category(error).to_string(),
-                    "message" => actual_error_message.clone(),
-                    "message_pattern" => message_pattern.unwrap_or("").to_string(),
-                    other => {
-                        panic!(
-                            "{case_id}: unsupported expected error field '{other}' in compare target 'error'"
-                        )
-                    }
-                };
-                let expected_value = expected_value.as_str().unwrap_or_else(|| {
+                let mut key_path = String::new();
+                key_path.push_str("error.");
+                key_path.push_str(key);
+
+                expected_value.as_str().unwrap_or_else(|| {
                     panic!("{case_id}: compare target 'error.{key}' must be string")
                 });
-                assert_eq!(
-                    expected_value, actual_value,
-                    "{case_id}: expected 'error.{key}' value mismatch (expected {expected_value:?}, actual {actual_value})"
-                );
+
+                assert_single_error_path(case_id, &key_path, error, expectation, compare_mode);
             }
             continue;
         }
 
-        if let Some(field) = path.strip_prefix("error.") {
-            let expected_error = expectation
-                .get("expected")
-                .and_then(Value::as_object)
-                .and_then(|value| value.get("error"))
-                .and_then(Value::as_object)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{case_id}: fixture compare path '{path}' requires expected.error object"
-                    )
-                });
-            let expected_value = expected_error
-                .get(field)
-                .unwrap_or_else(|| {
-                    panic!("{case_id}: fixture missing compare target '{path}' in expected payload")
-                })
-                .as_str()
-                .unwrap_or_else(|| {
-                    panic!("{case_id}: compare target '{path}' must be string");
-                });
-            let actual_value = match field {
-                "type" | "class" | "category" => error_category(error).to_string(),
-                "message" => actual_error_message.clone(),
-                "message_pattern" => message_pattern.unwrap_or("").to_string(),
-                other => panic!("{case_id}: unsupported compare target 'error.{other}'"),
-            };
-            if field == "message" && compare_mode == "contains" && message_pattern.is_some() {
-                let pattern = message_pattern.unwrap_or("message-pattern");
-                assert!(
-                    actual_value.contains(pattern),
-                    "{case_id}: expected message to contain '{pattern}', got '{actual_value}'"
-                );
-                continue;
-            }
-            assert_eq!(
-                expected_value, actual_value,
-                "{case_id}: expected '{path}' value mismatch (expected {expected_value:?}, actual {actual_value})"
-            );
+        if path.starts_with("error.") {
+            assert_single_error_path(case_id, path, error, expectation, compare_mode);
             continue;
         }
 
@@ -661,14 +666,12 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
         panic!("{case_id}: unsupported compare path '{path}' for error case");
     }
 
-    if compare_mode == "contains" && !paths.iter().any(|path| *path == "error.message") {
-        let Some(pattern) = message_pattern else {
-            return;
-        };
-        assert!(
-            actual_error_message.contains(pattern),
-            "{case_id}: expected error message to contain '{pattern}', got '{actual_error_message}'"
-        );
+    if compare_mode == "contains"
+        && !paths.iter().any(|path| path.as_str() == "error.message")
+        && !paths.iter().any(|path| path.as_str() == "error.message_pattern")
+        && !paths.iter().any(|path| path.as_str() == "error")
+    {
+        assert_single_error_path(case_id, "error.message", error, expectation, compare_mode);
     }
 }
 
