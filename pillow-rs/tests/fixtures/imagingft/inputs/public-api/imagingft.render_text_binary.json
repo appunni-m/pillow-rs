@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "subject": "imagingft.render_text_binary",
+  "operation": "render_text_binary",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [],
+  "cases": [],
+  "notes": [
+    "source:not-implemented"
+  ]
+}

@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "subject": "imagingft.render_text",
+  "operation": "draw_text",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "dejavusans20_hello_draw_text_rgba",
+    "dejavusans20_av_draw_text_rgba",
+    "dejavusans20_jq_draw_text_rgba"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.render_text.dejavusans20_hello_draw_text_rgba",
+      "subject": "imagingft.render_text",
+      "case": "dejavusans20_hello_draw_text_rgba",
+      "operation": "draw_text",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            96,
+            64
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_hello_draw_text_rgba.bin",
+          "sha256": "ec30b52ad1f14550b6f90b73c4e460814e54fbc543b92c23ca8215104679fb67"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.render_text.dejavusans20_av_draw_text_rgba",
+      "subject": "imagingft.render_text",
+      "case": "dejavusans20_av_draw_text_rgba",
+      "operation": "draw_text",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            96,
+            64
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_av_draw_text_rgba.bin",
+          "sha256": "7e8a706428666960c80fdb9178a34142c9e3c0c9c438121bbf11bee1ec54286c"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.render_text.dejavusans20_jq_draw_text_rgba",
+      "subject": "imagingft.render_text",
+      "case": "dejavusans20_jq_draw_text_rgba",
+      "operation": "draw_text",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            96,
+            64
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_jq_draw_text_rgba.bin",
+          "sha256": "e3ab1e9cc485c24d658e7d69815092f450d469e234c9ecbac614705c7b198618"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:imagingft_matrix.json"
+  ]
+}

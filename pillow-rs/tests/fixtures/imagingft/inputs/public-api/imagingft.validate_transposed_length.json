@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "subject": "imagingft.validate_transposed_length",
+  "operation": "validate_transposed_length",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "untransposed",
+    "rotate_90",
+    "flip_left_right"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.validate_transposed_length.untransposed",
+      "subject": "imagingft.validate_transposed_length",
+      "case": "untransposed",
+      "operation": "validate_transposed_length",
+      "schema": "api_error_or_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "orientation": null
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "str"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "length"
+          ]
+        },
+        "oracle": "Pillow 12.2.0",
+        "expected": {
+          "status": "ok",
+          "length": 26.0
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.validate_transposed_length.rotate_90",
+      "subject": "imagingft.validate_transposed_length",
+      "case": "rotate_90",
+      "operation": "validate_transposed_length",
+      "schema": "api_error_or_value",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "orientation": "ROTATE_90"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "str"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "length"
+          ]
+        },
+        "oracle": "Pillow 12.2.0",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "text length is undefined for text rotated by 90 or 270 degrees"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.validate_transposed_length.flip_left_right",
+      "subject": "imagingft.validate_transposed_length",
+      "case": "flip_left_right",
+      "operation": "validate_transposed_length",
+      "schema": "api_error_or_value",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "status": "str"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "length"
+          ]
+        },
+        "oracle": "Pillow 12.2.0",
+        "expected": {
+          "status": "ok",
+          "length": 26.0
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:transposed_font.json"
+  ]
+}

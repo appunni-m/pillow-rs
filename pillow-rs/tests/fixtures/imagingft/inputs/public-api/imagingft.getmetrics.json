@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "subject": "imagingft.getmetrics",
+  "operation": "getmetrics",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "dejavusans20_getmetrics"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.getmetrics.dejavusans20_getmetrics",
+      "subject": "imagingft.getmetrics",
+      "case": "dejavusans20_getmetrics",
+      "operation": "getmetrics",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "metrics": "[u32;2]"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "metrics"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "metrics": [
+            19,
+            5
+          ]
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:imagingft_matrix.json"
+  ]
+}

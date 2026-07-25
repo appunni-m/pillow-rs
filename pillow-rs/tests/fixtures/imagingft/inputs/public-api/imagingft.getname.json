@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "subject": "imagingft.getname",
+  "operation": "getname",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "dejavusans20_getname"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.getname.dejavusans20_getname",
+      "subject": "imagingft.getname",
+      "case": "dejavusans20_getname",
+      "operation": "getname",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "name": "[str;2]"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "name"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "name": [
+            "DejaVu Sans",
+            "Book"
+          ]
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:imagingft_matrix.json"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "subject": "imagingft.has_variations",
+  "operation": "has_variations",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [],
+  "cases": [],
+  "notes": [
+    "source:not-implemented"
+  ]
+}

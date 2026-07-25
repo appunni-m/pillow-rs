@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "subject": "imagingft.getlength",
+  "operation": "getlength",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "dejavusans20_hello_getlength",
+    "dejavusans20_av_getlength",
+    "dejavusans20_jq_getlength"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.getlength.dejavusans20_hello_getlength",
+      "subject": "imagingft.getlength",
+      "case": "dejavusans20_hello_getlength",
+      "operation": "getlength",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "length": "f32"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "length"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "length": 63.0
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getlength.dejavusans20_av_getlength",
+      "subject": "imagingft.getlength",
+      "case": "dejavusans20_av_getlength",
+      "operation": "getlength",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "length": "f32"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "length"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "length": 28.0
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getlength.dejavusans20_jq_getlength",
+      "subject": "imagingft.getlength",
+      "case": "dejavusans20_jq_getlength",
+      "operation": "getlength",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ"
+        }
+      },
+      "classifiers": [
+        "surface:imagingft",
+        "coverage:public-endpoint",
+        "coverage:legacy-row-parity"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "length": "f32"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "length"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "length": 18.0
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:imagingft_matrix.json"
+  ]
+}
