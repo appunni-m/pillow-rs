@@ -76,7 +76,7 @@
         "coverage:public-endpoint"
       ],
       "expectation": {
-        "status": "ok",
+        "status": "error",
         "output_shape": {
           "status": "str"
         },
@@ -90,7 +90,6 @@
         },
         "oracle": "Pillow 12.2.0",
         "expected": {
-          "status": "error",
           "error": {
             "type": "ValueError",
             "message": "text length is undefined for text rotated by 90 or 270 degrees"

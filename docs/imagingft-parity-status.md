@@ -19,16 +19,16 @@ Date: 2026-07-25
   4. `coverage_query` (summary + files)
 
 Latest run/snapshot:
-- run id: `53ec321a-e95d-401f-b455-570fd71e092a`
-- snapshot id: `4ddb64b0-d2bd-47b9-9b42-5e716cbf9247`
-- branch/commit: `main` / `c5133a0933d636c8f8841e8de0534f5affb1d56e`
+- run id: `09e5dc94-c176-4f13-a8c2-7bb7df2d7ad1`
+- snapshot id: `0332cd5a-1d82-43ab-8448-636a0282e18d`
+- branch/commit: `main` / `b8317c8ca7e1e37753bbea1f4aea72453215d2e4`
 
 ## Suite outcome
 
 - Fixture rows covered by test corpus: **45**
 - Fixture rows executed: **45/45**
-- Success rows: **42**
-- Error rows: **3**
+- Success rows: **41**
+- Error rows: **4**
 
 ## Per-operation parity matrix (public-api corpus)
 
@@ -62,18 +62,18 @@ All expected-error rows are validated through fixture-driven `expect_error=true`
 ## Coverage summary (latest snapshot)
 
 - suite: `imagingft`
-- snapshot: `4ddb64b0-d2bd-47b9-9b42-5e716cbf9247`
+- snapshot: `0332cd5a-1d82-43ab-8448-636a0282e18d`
 - `line_rate=0.07997`
 - `branch_rate=0.02960`
 - `function_rate=0.09262`
 
-Compared with previous suite snapshot (`6ab373c0-ca5f-4a51-b6fa-1bcc921d4ef9`): no suite-wide deltas.
+Compared with previous suite snapshot (`4ddb64b0-d2bd-47b9-9b42-5e716cbf9247`): no suite-wide deltas.
 
 Targeted core surface (`pillow-rs/src/font/imagingft.rs`):
 - `line_rate=0.84123`, `branch_rate=0.63514`, `function_rate=0.90244`
 - unresolved lines: `60`
-- partial branches: `18`
-- explicit unresolved windows: lines `35`, `36`, `59`, `127..129`, `138`, `145`, `152..154`, `163..166`, `173`, `193`, `215`, `220`, `373`, `374`, `444`, `461..463`, `471..472`, `474..475`, `497`, `498`, `502`, `503`, `509`, `510`, `514`, `515`, `520`, `521`, `524`, `526`, `527`, `534`, `540`, `544..554`, `555..558`, `560..563`, `564`, `565`, `567`, `570..571`, `576`, `577`, `585`, `592`.
+- partial branches: `27`
+- explicit unresolved windows: `35`, `36`, `59`, `127..129`, `138`, `145`, `152..154`, `163..166`, `173`, `193`, `215`, `220`, `221`, `228`, `373`, `374`, `444`, `461..462`, `471..472`, `474..475`, `497`, `498`, `502`, `503`, `509`, `510`, `514`, `515`, `520`, `521`, `524`, `526`, `527`, `534`, `540`, `544..554`, `555..563`, `564`, `565`, `567`, `570..571`, `576`, `577`, `585`, `592`.
 
 ## Completion status against objective
 
