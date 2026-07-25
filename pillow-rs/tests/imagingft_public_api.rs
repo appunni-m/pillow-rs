@@ -499,38 +499,154 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
     }
 }
 
-fn error_category(error: &PilError) -> String {
-    let debug = format!("{error:?}");
-    let end = debug.find(|c| c == '(' || c == ' ').unwrap_or(debug.len());
-    debug[..end].to_string()
+fn expected_compare_paths(expectation: &Value) -> Vec<&str> {
+    let paths: Vec<&str> = expectation
+        .get("compare")
+        .and_then(|value| value.get("paths"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flat_map(|paths| paths.iter())
+        .filter_map(|value| value.as_str())
+        .collect();
+    if paths.is_empty() {
+        vec!["status", "error.type", "error.message"]
+    } else {
+        paths
+    }
 }
 
-fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
-    let expected_error = &expected["error"];
-    if let Some(expected_type) = expected_error.get("type").and_then(Value::as_str) {
-        let category = error_category(error);
-        assert!(
-            expected_type == category,
-            "{case_id}: expected error category '{expected_type}', got '{category}'"
-        );
+fn error_category(error: &PilError) -> &'static str {
+    match error {
+        PilError::ValueError(_) => "ValueError",
+        PilError::TypeError(_) => "TypeError",
+        PilError::IOError(_) => "IOError",
+        PilError::OsError(_) => "OsError",
+        PilError::AssertionError(_) => "AssertionError",
+        PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
+        PilError::SyntaxError(_) => "SyntaxError",
+        PilError::IndexError(_) => "IndexError",
+        PilError::ImageError(_) => "ImageError",
+        PilError::NotImplementedError(_) => "NotImplementedError",
+        PilError::UnknownFormat(_) => "UnknownFormat",
+        PilError::Io(_) => "Io",
+        PilError::PaletteError(_) => "PaletteError",
+        PilError::InternalError(_) => "InternalError",
+        PilError::DimensionError(_) => "DimensionError",
     }
+}
 
-    let actual_message = error.to_string();
-    if let Some(pattern) = expected_error
-        .get("message_pattern")
+fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
+    let expected = &expectation["expected"];
+    let paths = expected_compare_paths(expectation);
+    let compare_mode = expectation
+        .get("compare")
+        .and_then(|value| value.get("mode"))
         .and_then(Value::as_str)
-    {
-        assert!(
-            actual_message.contains(pattern),
-            "{case_id}: expected message to contain '{pattern}', got '{actual_message}'"
-        );
-        return;
+        .unwrap_or("exact");
+    let message_pattern = expected
+        .get("error")
+        .and_then(|error| error.get("message_pattern"))
+        .and_then(Value::as_str)
+        .or_else(|| expected.get("message_pattern").and_then(Value::as_str));
+
+    let actual_error_message = error.to_string();
+    for path in &paths {
+        if *path == "status" {
+            assert_eq!(
+                expectation["status"]
+                    .as_str()
+                    .expect("fixture status must be set"),
+                "error",
+                "{case_id}: expected status mismatch (expected error)"
+            );
+            continue;
+        }
+
+        if *path == "error" {
+            let Some(expected_error) = expected.get("error").and_then(Value::as_object) else {
+                panic!("{case_id}: fixture compare path '{path}' requires expected.error object");
+            };
+            for (key, expected_value) in expected_error {
+                let actual_value = match key.as_str() {
+                    "type" | "class" | "category" => error_category(error).to_string(),
+                    "message" => actual_error_message.clone(),
+                    "message_pattern" => message_pattern.unwrap_or("").to_string(),
+                    other => {
+                        panic!(
+                            "{case_id}: unsupported expected error field '{other}' in compare target 'error'"
+                        )
+                    }
+                };
+                let expected_value = expected_value.as_str().unwrap_or_else(|| {
+                    panic!("{case_id}: compare target 'error.{key}' must be string")
+                });
+                assert_eq!(
+                    expected_value, actual_value,
+                    "{case_id}: expected 'error.{key}' value mismatch (expected {expected_value:?}, actual {actual_value})"
+                );
+            }
+            continue;
+        }
+
+        if let Some(field) = path.strip_prefix("error.") {
+            let expected_error = expected
+                .get("error")
+                .and_then(Value::as_object)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{case_id}: fixture compare path '{path}' requires expected.error object"
+                    )
+                });
+            let expected_value = expected_error
+                .get(field)
+                .unwrap_or_else(|| {
+                    panic!("{case_id}: fixture missing compare target '{path}' in expected payload")
+                })
+                .as_str()
+                .unwrap_or_else(|| {
+                    panic!("{case_id}: compare target '{path}' must be string");
+                });
+            let actual_value = match field {
+                "type" | "class" | "category" => error_category(error).to_string(),
+                "message" => actual_error_message.clone(),
+                "message_pattern" => message_pattern.unwrap_or("").to_string(),
+                other => panic!("{case_id}: unsupported compare target 'error.{other}'"),
+            };
+            if field == "message" && compare_mode == "contains" && message_pattern.is_some() {
+                let pattern = message_pattern.unwrap_or("message-pattern");
+                assert!(
+                    actual_value.contains(pattern),
+                    "{case_id}: expected message to contain '{pattern}', got '{actual_value}'"
+                );
+                continue;
+            }
+            assert_eq!(
+                expected_value, actual_value,
+                "{case_id}: expected '{path}' value mismatch (expected {expected_value:?}, actual {actual_value})"
+            );
+            continue;
+        }
+
+        if *path == "length" {
+            assert!(
+                expected.get("length").is_none(),
+                "{case_id}: expected 'length' for error path but no runtime value exists"
+            );
+            continue;
+        }
+
+        panic!("{case_id}: unsupported compare path '{path}' for error case");
     }
 
-    let expected_message = expected_error["message"]
-        .as_str()
-        .expect("expected error message");
-    assert_eq!(expected_message, actual_message, "{case_id}");
+    if compare_mode == "contains" && !paths.iter().any(|path| *path == "error.message") {
+        let Some(pattern) = message_pattern else {
+            return;
+        };
+        assert!(
+            actual_error_message.contains(pattern),
+            "{case_id}: expected error message to contain '{pattern}', got '{actual_error_message}'"
+        );
+    }
 }
 
 #[test]
@@ -580,13 +696,14 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         "{case_id}: expected success but failed to load font"
                     );
                     let error = font.expect_err("case font must fail");
-                    let expected = &case["expectation"]["expected"];
-                    assert_error_matches(case_id, &error, expected);
+                    let expectation = &case["expectation"];
+                    assert_error_matches(case_id, &error, expectation);
                     continue;
                 }
                 let font = font.expect("case font must load");
                 let expected_status = fixture_status(case);
-                let expected = &case["expectation"]["expected"];
+                let expectation = &case["expectation"];
+                let expected = &expectation["expected"];
                 let actual = run_case(operation, &font, params);
 
                 match (actual, expect_error) {
@@ -604,7 +721,7 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                             expected_status == Some("error") || expected_has_error,
                             "{case_id}: case expected to fail but fixture status was ok without expected.error"
                         );
-                        assert_error_matches(case_id, &error, expected);
+                        assert_error_matches(case_id, &error, expectation);
                     }
                     (Ok(_), true) => {
                         assert!(false, "{case_id}: expected error but got success")
