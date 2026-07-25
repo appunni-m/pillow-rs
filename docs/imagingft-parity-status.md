@@ -7,11 +7,14 @@ Date: 2026-07-25
 - Fixture corpus used: `pillow-rs/tests/fixtures/imagingft/inputs/public-api`
 - Active fixture rows: all non-empty rows across the non-deprecated public-api manifests
   (`45` total cases), excluding deprecated test files.
-- Required public surface asserted in test:
-  `getname`, `getmetrics`, `getlength`, `has_variations`, `getbbox`, `getbbox_binary`,
-  `getmask`, `getmask2`, `getmask2_with_start`, `get_transposed_mask`,
-  `get_transposed_mask` error-path probes, `transposed_bbox`,
-  `validate_transposed_length`, `draw_text`, `render_text_binary`.
+Current manifest-surface scope is derived from fixtures under
+`pillow-rs/tests/fixtures/imagingft/inputs/public-api` and includes:
+`getname`, `getmetrics`, `getlength`, `has_variations`, `getbbox`,
+`getbbox_binary`, `getmask`, `getmask2`, `getmask2_with_start`,
+`get_transposed_mask`, `transposed_bbox`, `validate_transposed_length`,
+`draw_text`, `render_text_binary`, plus explicit error-throwing entries for
+`imagingft.unsupported_magic` and layout/loading failures (treated as
+`imagingft`-prefixed operation aliases in fixtures).
 
 ## 2) Current parity matrix
 
@@ -41,32 +44,33 @@ Date: 2026-07-25
     `PilError::ValueError("Unknown transpose method: UNSUPPORTED. Use FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM, ROTATE_90, ROTATE_180, ROTATE_270, TRANSPOSE, or TRANSVERSE.")`
   - `imagingft.load_failure` (`getname`, missing font asset) →
     `PilError::ValueError("font bytes read failed (input/fonts/no_such_font.ttf): ...")`
-  - `imagingft.unsupported_operation.unsupported_magic` →
+- `imagingft.unsupported_operation.unsupported_magic` (`operation=imagingft.unsupported_magic`) →
     `PilError::NotImplementedError("unsupported imagingft operation: unsupported_magic")`
 
 ## 4) Coverage notes
 
 - Test command: `make -C pillow-rs imagingft-tests`
-- Coverage command: `make -C pillow-rs imagingft-tests` (fixture parity harness)
-- Coverage MCP command: `imagingft-tests-coverage`/`imagingft-tests-coverage-fixed` (name `imagingft-tests-coverage-fixed`, id `258e7dec-226f-4b00-9336-04df6e8c67f2`)
-- Latest coverage run: `cc2f37cf-e5d7-4f51-927c-aa1ddb432bbf` (status `passed`)
+- Coverage command: `imagingft-tests-coverage-fixed` (approved command id
+  `258e7dec-226f-4b00-9336-04df6e8c67f2`)
+- Latest coverage run: `9c083569-4e02-4681-8e95-d52d7b9b4a68` (status `passed`)
   - `counters`: `passed=1`, `failed=0`
   - `coverage status`: ingested
-  - `snapshot id`: `48b925c4-6171-4801-bf82-37e73ca57588`
+  - `snapshot id`: `37f9a942-cbcc-466e-9008-e13fca0fabdf`
   - `branch`: `main`
   - `line_rate=0.07997`
   - `branch_rate=0.02960`
   - `function_rate=0.09262`
   - `region_rate=0.06912`
   - `active public-api rows`: 45 cases
-- ImagingFT implementation coverage (from this suite):
+- ImagingFT implementation coverage (from this suite, file-scoped):
   - `pillow-rs/src/font/imagingft.rs`: `line_rate=0.8412`, `branch_rate=0.6351`, `function_rate=0.9024`.
-- Coverage status of `pillow-rs/src/font/imagingft.rs` still shows uncovered lines/branches:
+- Coverage status of `pillow-rs/src/font/imagingft.rs` from latest suite still shows uncovered lines/branches:
   - `uncovered lines`: `60`
   - `uncovered/partial branch lines`: `18`
 
 ## 5) Remaining gap
 
 - No unresolved public-op parity rows remain in the active public-api corpus.
-- Remaining work is coverage completeness for other suite paths and unexercised branches in `imagingft.rs`:
-  - gaps are expected to be addressed by dedicated fixture expansions and/or targeted parser-path probes.
+- Suite is green (`imagingft-public parity 45/45`), but branch/line coverage is incomplete for
+  internal `imagingft.rs` paths not yet exercised by the current corpus:
+  `60` uncovered lines and `18` partial-branch lines, including fallback and clip/overflow branches in mask rendering.
