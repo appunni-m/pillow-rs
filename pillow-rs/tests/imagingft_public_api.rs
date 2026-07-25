@@ -193,24 +193,91 @@ fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
     ))
 }
 
-fn load_font(case: &Value) -> Result<Font, PilError> {
-    let inputs = case
-        .get("inputs")
-        .ok_or(PilError::ValueError("case inputs missing".into()))?;
-    let font = inputs
+fn fixture_case_inputs(case: &Value) -> Result<&Value, PilError> {
+    case.get("inputs")
+        .ok_or(PilError::ValueError("case.inputs missing".into()))
+}
+
+fn fixture_case_params(case: &Value) -> Result<&Value, PilError> {
+    fixture_case_inputs(case)?
+        .get("params")
+        .ok_or(PilError::ValueError("case.inputs.params missing".into()))
+}
+
+fn fixture_case_assets(case: &Value) -> Result<&Value, PilError> {
+    fixture_case_inputs(case)?
         .get("assets")
-        .and_then(|v| v.get("font"))
+        .ok_or(PilError::ValueError("case.inputs.assets missing".into()))
+}
+
+fn fixture_operation_from_case(value: &Value) -> Result<String, PilError> {
+    let case_operation = required_field(value, "operation")?
+        .as_str()
+        .ok_or(PilError::ValueError("case operation must be a string".into()))?;
+    Ok(case_operation
+        .strip_prefix("imagingft.")
+        .unwrap_or(case_operation)
+        .to_string())
+}
+
+fn required_operation_set(fixture_path: &str) -> BTreeSet<String> {
+    let mut operations = BTreeSet::new();
+    let manifest = serde_json::from_str::<Value>(
+        &fs::read_to_string(fixture_path).expect("imagingft fixture JSON must be readable"),
+    )
+    .expect("imagingft fixture JSON must parse");
+
+    for case in manifest.get("cases").and_then(Value::as_array).into_iter().flatten() {
+        if let Ok(op) = fixture_operation_from_case(case) {
+            operations.insert(op);
+        }
+    }
+
+    let manifest_operation = manifest
+        .get("operation")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !manifest_operation.is_empty() {
+        operations.insert(
+            manifest_operation
+                .strip_prefix("imagingft.")
+                .unwrap_or(manifest_operation)
+                .to_string(),
+        );
+    }
+    operations
+}
+
+fn validate_min_required_ops(observed_ops: &BTreeSet<String>) {
+    let missing: Vec<String> = required_public_ops()
+        .into_iter()
+        .filter(|op| !observed_ops.contains(*op))
+        .map(ToString::to_string)
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "required imagingft public surface operations missing: {missing:?}"
+    );
+}
+
+fn load_font_size(case: &Value) -> Result<f32, PilError> {
+    fixture_case_params(case)?
+        .get("size")
+        .and_then(Value::as_f64)
+        .map(|value| value as f32)
+    .ok_or(PilError::ValueError("size missing or invalid".into()))
+}
+
+fn load_font(case: &Value) -> Result<Font, PilError> {
+    let font = fixture_case_assets(case)?
+        .get("font")
         .and_then(Value::as_object)
         .ok_or(PilError::ValueError("font asset must be an object".into()))?;
     let kind = font
         .get("kind")
         .and_then(Value::as_str)
         .ok_or(PilError::ValueError("font kind must be a string".into()))?;
-    let size = inputs
-        .get("params")
-        .and_then(|p| p.get("size"))
-        .and_then(Value::as_f64)
-        .unwrap_or(10.0) as f32;
+    let size = load_font_size(case).unwrap_or(10.0);
 
     match kind {
         "load_default" => Font::load_default(size),
@@ -218,9 +285,7 @@ fn load_font(case: &Value) -> Result<Font, PilError> {
             let id = font
                 .get("id")
                 .and_then(Value::as_str)
-                .ok_or(PilError::ValueError(
-                    "font ref requires an id string".into(),
-                ))?;
+                .ok_or(PilError::ValueError("font ref requires an id string".into()))?;
             let data = fs::read(crate_fixture_dir().join(id))
                 .map_err(|e| PilError::ValueError(e.to_string()))?;
             Font::from_bytes(data, size)
@@ -229,6 +294,109 @@ fn load_font(case: &Value) -> Result<Font, PilError> {
             "unsupported imagingft fixture font kind: {other}"
         ))),
     }
+}
+
+#[test]
+fn imagingft_public_api_parity_matches_fixture_oracles() {
+    let fixture_dir = crate_fixture_dir().join("inputs/public-api");
+    let mut any_cases = 0usize;
+    let mut observed_ops = BTreeSet::new();
+
+    for entry in
+        fs::read_dir(&fixture_dir).expect("public-api imagingft directory must be readable")
+    {
+        let entry = entry.expect("fixture entry must be readable");
+        let path = entry.path();
+        let Some(stem) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if !stem.starts_with("imagingft.") || !stem.ends_with(".json") {
+            continue;
+        }
+
+        let manifest = serde_json::from_str::<Value>(
+            &fs::read_to_string(&path).expect("imagingft fixture JSON must be readable"),
+        )
+        .expect("imagingft fixture JSON must parse");
+        let manifest_operation = manifest
+            .get("operation")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .strip_prefix("imagingft.")
+            .unwrap_or("");
+        observed_ops.extend(required_operation_set(path.to_str().expect("utf-8 path")));
+        if let Some(cases) = manifest["cases"].as_array() {
+            for case in cases {
+                any_cases += 1;
+                let case_id = case["case_id"].as_str().unwrap_or("<missing case_id>");
+                let operation = fixture_operation_from_case(case)
+                    .unwrap_or_else(|_| manifest_operation.to_string());
+                let expect_error = fixture_expects_error(case);
+                let params = match fixture_case_params(case) {
+                    Ok(params) => params,
+                    Err(error) => {
+                        assert!(
+                            expect_error,
+                            "{case_id}: expected success but case inputs.params missing: {error}"
+                        );
+                        let expectation = &case["expectation"];
+                        assert_error_matches(case_id, &error, expectation);
+                        continue;
+                    }
+                };
+                let font = load_font(case);
+                let font = match font {
+                    Ok(font) => font,
+                    Err(error) => {
+                        assert!(expect_error, "{case_id}: expected success but failed to load font: {error}");
+                        let expectation = &case["expectation"];
+                        assert_error_matches(case_id, &error, expectation);
+                        continue;
+                    }
+                };
+                let expected_status = fixture_status(case);
+                let expectation = &case["expectation"];
+                let expected = &expectation["expected"];
+                let actual = run_case(&operation, &font, params);
+
+                match (actual, expect_error) {
+                    (Ok(value), false) => {
+                        let expected_has_error = expected.get("error").is_some();
+                        assert!(
+                            !expected_has_error,
+                            "{case_id}: fixture status/error requested an error path but operation returned success"
+                        );
+                        compare_output(operation.as_str(), value, expected, case_id);
+                    }
+                    (Err(error), true) => {
+                        let expected_has_error = expected.get("error").is_some();
+                        assert!(
+                            expected_status == Some("error") || expected_has_error,
+                            "{case_id}: case expected to fail but fixture status was ok without expected.error"
+                        );
+                        assert_error_matches(case_id, &error, expectation);
+                    }
+                    (Ok(_), true) => {
+                        assert!(false, "{case_id}: expected error but got success")
+                    }
+                    (Err(error), false) => {
+                        assert!(false, "{case_id}: unexpected error {error}")
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        any_cases > 0,
+        "imagingft public-api fixture corpus must contain cases"
+    );
+
+    assert!(
+        !observed_ops.is_empty(),
+        "imagingft public-api fixture corpus must include at least one operation"
+    );
+    validate_min_required_ops(&observed_ops);
 }
 
 fn parse_spacing(value: &Value) -> Result<f32, PilError> {
@@ -678,105 +846,5 @@ fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
         && !paths.iter().any(|path| path.as_str() == "error")
     {
         assert_single_error_path(case_id, "error.message", error, expectation, compare_mode);
-    }
-}
-
-#[test]
-fn imagingft_public_api_parity_matches_fixture_oracles() {
-    let fixture_dir = crate_fixture_dir().join("inputs/public-api");
-    let mut any_cases = 0usize;
-    let mut observed_ops = BTreeSet::new();
-
-    for entry in
-        fs::read_dir(&fixture_dir).expect("public-api imagingft directory must be readable")
-    {
-        let entry = entry.expect("fixture entry must be readable");
-        let path = entry.path();
-        let Some(stem) = path.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        if !stem.starts_with("imagingft.") || !stem.ends_with(".json") {
-            continue;
-        }
-
-        let manifest = serde_json::from_str::<Value>(
-            &fs::read_to_string(&path).expect("imagingft fixture JSON must be readable"),
-        )
-        .expect("imagingft fixture JSON must parse");
-        let manifest_operation = manifest["operation"]
-            .as_str()
-            .expect("fixture must define operation");
-        let operation = manifest_operation
-            .strip_prefix("imagingft.")
-            .unwrap_or(manifest_operation);
-        observed_ops.insert(operation.to_string());
-
-        if let Some(cases) = manifest["cases"].as_array() {
-            for case in cases {
-                any_cases += 1;
-                let case_id = case["case_id"].as_str().unwrap_or("<missing case_id>");
-                let expect_error = fixture_expects_error(case);
-                let params = &case["inputs"]["params"];
-                let font = load_font(case);
-                if font.is_err() {
-                    assert!(
-                        expect_error,
-                        "{case_id}: expected success but failed to load font"
-                    );
-                    let error = font.expect_err("case font must fail");
-                    let expectation = &case["expectation"];
-                    assert_error_matches(case_id, &error, expectation);
-                    continue;
-                }
-                let font = font.expect("case font must load");
-                let expected_status = fixture_status(case);
-                let expectation = &case["expectation"];
-                let expected = &expectation["expected"];
-                let actual = run_case(operation, &font, params);
-
-                match (actual, expect_error) {
-                    (Ok(value), false) => {
-                        let expected_has_error = expected.get("error").is_some();
-                        assert!(
-                            !expected_has_error,
-                            "{case_id}: fixture status/error requested an error path but operation returned success"
-                        );
-                        compare_output(operation, value, expected, case_id);
-                    }
-                    (Err(error), true) => {
-                        let expected_has_error = expected.get("error").is_some();
-                        assert!(
-                            expected_status == Some("error") || expected_has_error,
-                            "{case_id}: case expected to fail but fixture status was ok without expected.error"
-                        );
-                        assert_error_matches(case_id, &error, expectation);
-                    }
-                    (Ok(_), true) => {
-                        assert!(false, "{case_id}: expected error but got success")
-                    }
-                    (Err(error), false) => {
-                        assert!(false, "{case_id}: unexpected error {error}")
-                    }
-                }
-            }
-        }
-    }
-
-    assert!(
-        any_cases > 0,
-        "imagingft public-api fixture corpus must contain cases"
-    );
-
-    assert!(
-        !observed_ops.is_empty(),
-        "imagingft public-api fixture corpus must include at least one operation"
-    );
-
-    let required_ops = required_public_ops();
-    for op in required_ops {
-        assert!(
-            observed_ops.contains(op),
-            "required imagingft public surface '{op}' missing from fixture corpus"
-        );
     }
 }
