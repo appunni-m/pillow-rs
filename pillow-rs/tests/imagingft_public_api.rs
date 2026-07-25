@@ -31,7 +31,10 @@ enum ApiValue {
         pixels: Vec<u8>,
         offset: (i32, i32),
     },
-    Unit,
+    Status {
+        status: String,
+        length: Option<f32>,
+    },
 }
 
 fn artifact_path(raw_path: &str) -> PathBuf {
@@ -158,6 +161,8 @@ const REQUIRED_PUBLIC_OPS: [&str; 13] = [
     "validate_transposed_length",
     "draw_text",
 ];
+
+const OPTIONAL_PUBLIC_OPS: [&str; 2] = ["render_text_binary", "unsupported_magic"];
 
 fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
     let coords = value.as_array().ok_or(PilError::ValueError(
@@ -298,7 +303,11 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
         "validate_transposed_length" => {
             let orientation = parse_orientation(&params["orientation"]);
             imagingft::validate_transposed_length(orientation)?;
-            Ok(ApiValue::Unit)
+            let text = params.get("text").and_then(Value::as_str).unwrap_or("Hello");
+            Ok(ApiValue::Status {
+                status: "ok".to_string(),
+                length: Some(imagingft::getlength(font, text)),
+            })
         }
         "draw_text" => {
             let text = parse_text(&params["text"])?;
@@ -446,17 +455,47 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
             }
             compare_image_payload(&pixels, expected, case_id);
         }
-        ApiValue::Unit => {}
+        ApiValue::Status { status, length } => {
+            assert_eq!(status, expected["status"].as_str().expect("expected status"), "{case_id}");
+            if let Some(expected_length) = expected.get("length").and_then(Value::as_f64) {
+                assert_eq!(
+                    length.expect("status length should be present"),
+                    expected_length as f32,
+                    "{case_id}"
+                );
+            } else {
+                assert!(
+                    length.is_none(),
+                    "{case_id}: expected no status length but got one"
+                );
+            }
+        }
     }
 }
 
 fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
     let expected_error = &expected["error"];
     if let Some(expected_type) = expected_error.get("type").and_then(Value::as_str) {
-        let debug = format!("{error:?}");
+        let category = match error {
+            PilError::ValueError(_) => "ValueError",
+            PilError::TypeError(_) => "TypeError",
+            PilError::IOError(_) => "IOError",
+            PilError::OsError(_) => "OSError",
+            PilError::AssertionError(_) => "AssertionError",
+            PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
+            PilError::SyntaxError(_) => "SyntaxError",
+            PilError::NotImplementedError(_) => "NotImplementedError",
+            PilError::UnknownFormat(_) => "UnknownFormat",
+            PilError::Io(_) => "IoError",
+            PilError::PaletteError(_) => "PaletteError",
+            PilError::InternalError(_) => "InternalError",
+            PilError::DimensionError(_) => "DimensionError",
+            PilError::IndexError(_) => "IndexError",
+            PilError::ImageError(_) => "ImageError",
+        };
         assert!(
-            debug.contains(expected_type),
-            "{case_id}: expected error type '{expected_type}', got '{debug}'"
+            expected_type == category,
+            "{case_id}: expected error category '{expected_type}', got '{category}'"
         );
     }
 
@@ -506,6 +545,12 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         let operation = manifest_operation
             .strip_prefix("imagingft.")
             .unwrap_or(manifest_operation);
+        let mut supported_ops: BTreeSet<&str> = REQUIRED_PUBLIC_OPS.iter().copied().collect();
+        supported_ops.extend(OPTIONAL_PUBLIC_OPS.iter().copied());
+        assert!(
+            supported_ops.contains(&operation),
+            "imagingft fixture operation '{operation}' not implemented in runner"
+        );
         if matches!(
             operation,
             "getname"
