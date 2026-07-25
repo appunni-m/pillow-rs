@@ -117,19 +117,19 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
 }
 
 fn fixture_expected_status(case: &Value) -> String {
-    if case["expect_error"].as_bool().unwrap_or(false) {
-        return "error".to_string();
-    }
-    if let Some(status) = case["expectation"]["status"].as_str() {
+    if let Some(status) = case["expectation"]["expected"]["status"].as_str() {
         return status.to_string();
     }
-    if let Some(status) = case["expectation"]["expected"]["status"].as_str() {
+    if let Some(status) = case["expectation"]["status"].as_str() {
         return status.to_string();
     }
     if case["expectation"]["expected"]
         .get("error")
         .is_some()
     {
+        return "error".to_string();
+    }
+    if case["expect_error"].as_bool().unwrap_or(false) {
         return "error".to_string();
     }
     "ok".to_string()
