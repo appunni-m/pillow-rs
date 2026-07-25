@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageModule",
@@ -7,31 +9,31 @@
   },
   "cases": [
     {
-      "id": "ImageModule.merge_L_suite1",
+      "id": "merge_L_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.merge_ImageModule.merge_L_suite1.png"
+        "reference": "images/ImageModule.merge_merge_L_suite1.png"
       }
     },
     {
-      "id": "ImageModule.merge_LA_suite1",
+      "id": "merge_LA_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.merge_ImageModule.merge_LA_suite1.png"
+        "reference": "images/ImageModule.merge_merge_LA_suite1.png"
       }
     },
     {
-      "id": "ImageModule.merge_RGBA_suite1",
+      "id": "merge_RGB_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.merge_ImageModule.merge_RGBA_suite1.png"
+        "reference": "images/ImageModule.merge_merge_RGB_suite1.png"
       }
     },
     {
-      "id": "RGB_from_bands_suite1",
+      "id": "merge_RGBA_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.merge_RGB_from_bands_suite1.png"
+        "reference": "images/ImageModule.merge_merge_RGBA_suite1.png"
       }
     }
   ]

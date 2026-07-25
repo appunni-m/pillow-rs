@@ -10,22 +10,19 @@
       "id": "non_variable_font_RGB_suite1",
       "params": {
         "name": "Bold"
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "non_variable_font_L_suite1",
       "params": {
         "name": "Bold"
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "non_variable_font_RGBA_suite1",
       "params": {
         "name": "Bold"
-      },
-      "mode": "RGBA"
+      }
     }
   ]
 }

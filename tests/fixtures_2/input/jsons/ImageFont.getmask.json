@@ -16,22 +16,19 @@
       "id": "getmask_L_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "getmask_RGB_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "getmask_RGBA_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "RGBA"
+      }
     }
   ]
 }

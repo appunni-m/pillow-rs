@@ -1,0 +1,15 @@
+Aileron Regular
+Author: Sora Sagano (dot colon)
+Official source: https://dotcolon.net/fonts/aileron/
+
+Upstream license statement:
+
+Aileron is No Rights Reserved.
+
+The official source additionally states:
+
+ドットコロンのフォントはWebサイトや印刷物、ロゴタイプなどへの使用はもちろん、
+改変・再配布等も自由に行って頂いてかまいません。商標登録が必要なものに関しても
+同様です。ただし、ドットコロンのフォントは無保証です。インストールや使用方法に
+関するご質問はお受けできません。また、ドットコロンのフォントを使用したことにより
+何らかのトラブルが発生しても、ドットコロンは一切責任を負いません。

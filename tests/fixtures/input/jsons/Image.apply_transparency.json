@@ -6,50 +6,32 @@
   },
   "cases": [
     {
-      "id": "Image_apply_transparency_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
-      "params": {}
-    },
-    {
-      "id": "Image_apply_transparency_LA",
-      "mode": "LA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
-      "params": {}
-    },
-    {
-      "id": "Image_apply_transparency_RGB",
+      "id": "Image_apply_transparency_non_palette_noop",
       "mode": "RGB",
       "input": {
-        "source": "reference_rgb",
+        "source": "constant",
         "size": [
-          256,
-          256
+          3,
+          2
+        ],
+        "color": [
+          10,
+          20,
+          30
         ]
       },
       "params": {}
     },
     {
-      "id": "Image_apply_transparency_RGBA",
-      "mode": "RGBA",
+      "id": "Image_apply_transparency_palette_without_pending_noop",
+      "mode": "P",
       "input": {
-        "source": "reference_rgb",
+        "source": "constant",
         "size": [
-          256,
-          256
-        ]
+          3,
+          2
+        ],
+        "color": 2
       },
       "params": {}
     }

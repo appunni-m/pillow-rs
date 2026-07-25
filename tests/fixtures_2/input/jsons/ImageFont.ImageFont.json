@@ -8,18 +8,15 @@
   "cases": [
     {
       "id": "ImageFont_ImageFont_L_suite1",
-      "params": {},
-      "mode": "L"
+      "params": {}
     },
     {
       "id": "ImageFont_ImageFont_RGB_suite1",
-      "params": {},
-      "mode": "RGB"
+      "params": {}
     },
     {
       "id": "ImageFont_ImageFont_RGBA_suite1",
-      "params": {},
-      "mode": "RGBA"
+      "params": {}
     }
   ]
 }

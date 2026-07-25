@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -11,7 +13,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     },
     {
@@ -19,7 +21,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     },
     {
@@ -27,7 +29,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     },
     {
@@ -35,7 +37,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     },
     {
@@ -43,7 +45,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     },
     {
@@ -51,7 +53,7 @@
       "assert": {
         "method": "error",
         "exception": "IndexError",
-        "message_contains": "image index out of range"
+        "message": "image index out of range"
       }
     }
   ]

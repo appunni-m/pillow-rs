@@ -9,16 +9,26 @@ description = "wasm-bindgen bindings for pillow-rs — Pillow in the browser"
 crate-type = ["cdylib"]
 
 [dependencies]
-pillow-rs = { path = "../pillow-rs", default-features = false, features = ["image-png"] }
-log = "0.4"
+pillow-rs = { path = "../pillow-rs", default-features = false }
+log = { version = "0.4", optional = true }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 console_error_panic_hook = { version = "0.1", optional = true }
 console_log = { version = "1.0", optional = true }
 
 [features]
-default = []
-debug-hooks = ["console_error_panic_hook", "console_log"]
+default = ["wasm-core"]
+wasm-core = ["pillow-rs/image-png", "pillow-rs/wasm-wide-font-internals"]
+wasm-extra = [
+    "wasm-core",
+    "pillow-rs/image-jpeg",
+    "pillow-rs/image-gif",
+    "pillow-rs/image-bmp",
+    "pillow-rs/image-tiff",
+    "pillow-rs/image-webp",
+    "pillow-rs/image-ico",
+]
+debug-hooks = ["dep:log", "console_error_panic_hook", "console_log"]
 
 [lints]
 workspace = true

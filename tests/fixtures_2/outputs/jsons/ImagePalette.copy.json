@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImagePalette",
@@ -9,22 +11,124 @@
     {
       "id": "ImagePalette_copy_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/ImagePalette.copy_ImagePalette_copy_L_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImagePalette"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "mode"
+              },
+              {
+                "type": "str",
+                "value": "L"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "palette"
+              },
+              {
+                "type": "bytearray",
+                "hex": ""
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImagePalette_copy_P_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/ImagePalette.copy_ImagePalette_copy_P_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImagePalette"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "mode"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "palette"
+              },
+              {
+                "type": "bytearray",
+                "hex": ""
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImagePalette_copy_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/ImagePalette.copy_ImagePalette_copy_RGB_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImagePalette"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "mode"
+              },
+              {
+                "type": "str",
+                "value": "RGB"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "palette"
+              },
+              {
+                "type": "bytearray",
+                "hex": ""
+              }
+            ]
+          ]
+        }
       }
     }
   ]

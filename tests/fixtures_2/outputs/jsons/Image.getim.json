@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,15 +11,63 @@
     {
       "id": "Image_getim_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getim_Image_getim_L_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PyCapsule"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "repr"
+              },
+              {
+                "type": "str",
+                "value": "<capsule object \"Pillow Imaging\">"
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_getim_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getim_Image_getim_RGB_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PyCapsule"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "repr"
+              },
+              {
+                "type": "str",
+                "value": "<capsule object \"Pillow Imaging\">"
+              }
+            ]
+          ]
+        }
       }
     }
   ]

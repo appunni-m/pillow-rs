@@ -11,16 +11,14 @@
       "params": {
         "color": "red",
         "mode": "RGB"
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "ImageColor_getcolor_RGB_suite1",
       "params": {
         "color": "red",
         "mode": "RGB"
-      },
-      "mode": "RGB"
+      }
     }
   ]
 }

@@ -14,33 +14,18 @@
     },
     {
       "id": "getmask_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {
         "text": "Hello"
       }
     },
     {
       "id": "getmask_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {
         "text": "Hello"
       }
     },
     {
       "id": "getmask_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {
         "text": "Hello"
       }

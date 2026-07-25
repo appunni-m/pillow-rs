@@ -1,9 +1,9 @@
-//! Bitmap font renderer for Pillow's default font.
+//! Legacy pre-rendered Aileron bitmap atlas.
 //!
-//! This module embeds all 95 ASCII printable characters pre-rendered using
-//! PIL's default font (Aileron, size 10) via FreeType. By using the exact
-//! same pixel data as PIL, we achieve pixel-for-pixel parity in text rendering
-//! without needing to link FreeType or deal with font rasterization differences.
+//! `Font::load_default` does not use this atlas: it opens Pillow's embedded
+//! Aileron TrueType subset through the pure-Rust `fontdone` path. The atlas
+//! remains public for compatibility and is not Pillow's separate legacy
+//! `courB08` `load_default_imagefont` implementation.
 
 mod data;
 use data::BITMAP_GLYPH_DATA;
@@ -11,7 +11,7 @@ use data::BITMAP_GLYPH_DATA_BINARY;
 
 use crate::checked_dims::CheckedDims;
 
-/// Pre-rendered bitmap font matching Pillow `ImageFont.load_default`.
+/// Legacy pre-rendered Aileron bitmap font.
 #[derive(Debug, Clone)]
 pub struct BitmapFont {
     size: f32,

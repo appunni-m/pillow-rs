@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImagePalette",
@@ -9,22 +11,58 @@
     {
       "id": "ImagePalette_getdata_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "('RGB', b'')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "L"
+            },
+            {
+              "type": "bytes",
+              "hex": ""
+            }
+          ]
+        }
       }
     },
     {
       "id": "ImagePalette_getdata_P_suite1",
       "assert": {
-        "method": "string",
-        "value": "('RGB', b'')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "P"
+            },
+            {
+              "type": "bytes",
+              "hex": ""
+            }
+          ]
+        }
       }
     },
     {
       "id": "ImagePalette_getdata_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "('RGB', b'')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "RGB"
+            },
+            {
+              "type": "bytes",
+              "hex": ""
+            }
+          ]
+        }
       }
     }
   ]

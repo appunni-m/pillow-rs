@@ -46,6 +46,46 @@
       }
     },
     {
+      "id": "Image_putdata_F_suite1",
+      "mode": "F",
+      "input": {
+        "source": "constant",
+        "size": [
+          3,
+          2
+        ],
+        "color": 2.5
+      },
+      "params": {
+        "data": [
+          0.25,
+          -4.0,
+          64.5
+        ],
+        "scale": 0.5,
+        "offset": 1.0
+      }
+    },
+    {
+      "id": "Image_putdata_I_suite1",
+      "mode": "I",
+      "input": {
+        "source": "constant",
+        "size": [
+          3,
+          2
+        ],
+        "color": -7
+      },
+      "params": {
+        "data": [
+          -2147483648,
+          0,
+          2147483647
+        ]
+      }
+    },
+    {
       "id": "Image_putdata_L_suite1",
       "params": {
         "data": [
@@ -94,6 +134,37 @@
           10
         ],
         "color": 0
+      }
+    },
+    {
+      "id": "Image_putdata_PA_suite1",
+      "mode": "PA",
+      "input": {
+        "source": "constant",
+        "size": [
+          3,
+          2
+        ],
+        "color": [
+          7,
+          192
+        ]
+      },
+      "params": {
+        "data": [
+          [
+            0,
+            255
+          ],
+          [
+            127,
+            64
+          ],
+          [
+            255,
+            1
+          ]
+        ]
       }
     },
     {

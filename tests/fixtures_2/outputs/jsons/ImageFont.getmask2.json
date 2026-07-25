@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -7,79 +9,203 @@
   },
   "cases": [
     {
-      "id": "default_suite1",
+      "id": "empty_suite1",
       "assert": {
-        "method": "tuple",
-        "items": [
-          {
-            "method": "image",
-            "reference": "images/ImageFont.getmask2_default_suite1_0.png"
-          },
-          {
-            "method": "json",
-            "value": [
-              0,
-              2
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "tuple"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "mask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ImagingCore"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "mode"
+                    },
+                    {
+                      "type": "str",
+                      "value": "L"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "size"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "int",
+                          "value": 0
+                        },
+                        {
+                          "type": "int",
+                          "value": 0
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "pixels_hex"
+                    },
+                    {
+                      "type": "str",
+                      "value": ""
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "offset"
+              },
+              {
+                "type": "tuple",
+                "items": [
+                  {
+                    "type": "int",
+                    "value": 0
+                  },
+                  {
+                    "type": "int",
+                    "value": 0
+                  }
+                ]
+              }
             ]
-          }
-        ]
+          ]
+        }
       }
     },
     {
-      "id": "getmask2_L_suite1",
+      "id": "unicode_suite1",
       "assert": {
-        "method": "tuple",
-        "items": [
-          {
-            "method": "image",
-            "reference": "images/ImageFont.getmask2_getmask2_L_suite1_0.png"
-          },
-          {
-            "method": "json",
-            "value": [
-              0,
-              2
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "tuple"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "mask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ImagingCore"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "mode"
+                    },
+                    {
+                      "type": "str",
+                      "value": "L"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "size"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "int",
+                          "value": 5
+                        },
+                        {
+                          "type": "int",
+                          "value": 7
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "pixels_hex"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ffb0acb1ffc9670063c7ac603848acac04b100acac65514dacc96e006ac7ffb1acb1ff"
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "offset"
+              },
+              {
+                "type": "tuple",
+                "items": [
+                  {
+                    "type": "int",
+                    "value": 0
+                  },
+                  {
+                    "type": "int",
+                    "value": 3
+                  }
+                ]
+              }
             ]
-          }
-        ]
-      }
-    },
-    {
-      "id": "getmask2_RGB_suite1",
-      "assert": {
-        "method": "tuple",
-        "items": [
-          {
-            "method": "image",
-            "reference": "images/ImageFont.getmask2_getmask2_RGB_suite1_0.png"
-          },
-          {
-            "method": "json",
-            "value": [
-              0,
-              2
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "id": "getmask2_RGBA_suite1",
-      "assert": {
-        "method": "tuple",
-        "items": [
-          {
-            "method": "image",
-            "reference": "images/ImageFont.getmask2_getmask2_RGBA_suite1_0.png"
-          },
-          {
-            "method": "json",
-            "value": [
-              0,
-              2
-            ]
-          }
-        ]
+          ]
+        }
       }
     }
   ]

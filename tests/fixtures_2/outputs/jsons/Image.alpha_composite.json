@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,15 +11,37 @@
     {
       "id": "Image.alpha_composite_LA_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.alpha_composite_Image.alpha_composite_LA_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "RGBA_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.alpha_composite_RGBA_suite1_1.png"
+          }
+        ]
       }
     }
   ]

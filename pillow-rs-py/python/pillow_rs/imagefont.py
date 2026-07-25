@@ -1,53 +1,69 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
 from . import _core
-from .image import Image
+
+
+class ImagingCore:
+    """Stable Python facade for Pillow's internal mask storage contract."""
+
+    __slots__ = ("_image",)
+
+    def __init__(self, image):
+        self._image = image
+
+    @property
+    def _rust_image(self):
+        return self._image._rust_image
+
+    @property
+    def mode(self):
+        return self._image.mode
+
+    @property
+    def size(self):
+        return self._image.size
+
+    def tobytes(self):
+        return self._rust_image.tobytes_unpacked()
+
+    def __bytes__(self):
+        return self.tobytes()
+
+    def transpose(self, method):
+        return ImagingCore(self._image.transpose(method))
 
 
 class ImageFont:
-    """Default bitmap font (fallback)."""
+    """Pillow-compatible base wrapper for a loaded bitmap font."""
 
     def getbbox(self, text, *args, **kwargs):
-        """Get bounding box for text using default bitmap font.
-
-        Returns (0, 0, width_in_pixels, height_in_pixels).
-        The default font uses ~6x11 px per character.
-        """
-        if isinstance(text, bytes):
-            text = text.decode("utf-8", errors="replace")
-        return _core.font_default_bbox(text)
+        """Return the bitmap font's bounding box."""
+        width, height = self.font.getsize(_pilfont_text(text))
+        return 0, 0, width, height
 
     def getlength(self, text, *args, **kwargs):
-        """Get text length in pixels using default bitmap font.
-
-        Each character is 6 pixels wide.
-        """
-        if isinstance(text, bytes):
-            text = text.decode("utf-8", errors="replace")
-        if isinstance(text, str):
-            return _core.font_default_length(text)
-        return _core.font_default_length(str(text))
+        """Return the bitmap font's horizontal advance."""
+        width, _height = self.font.getsize(_pilfont_text(text))
+        return width
 
     def getmask(self, text, mode="", *args, **kwargs):
-        """Create a bitmap for the text using the default bitmap font.
+        """Return the loaded bitmap font's native mask object."""
+        from .image import Image as PILImage
+        return ImagingCore(PILImage(self.font.getmask(_pilfont_text(text), mode)))
 
-        Since we don't have a real bitmap font, delegates to
-        :py:func:`load_default` (FreeTypeFont) if available, otherwise
-        returns a blank L-mode mask sized for the text.
 
-        :param text: Text to render.
-        :param mode: Ignored for the fallback implementation.
-        :return: An ``L``-mode mask.
-        """
-        # Try to use the default FreeTypeFont if available
-        try:
-            font = load_default()
-            if hasattr(font, 'getmask'):
-                return font.getmask(text, mode, *args, **kwargs)
-        except Exception:
-            pass
-        # Fallback: return a blank L mask sized for the text
-        w, h = _core.font_default_mask_size(text)
-        return Image.new("L", (w, h), 0)
+def _pilfont_text(text):
+    if isinstance(text, str):
+        return text.encode("latin-1")
+    return text
+
+
+def _wrap_pilfont(font):
+    wrapped = ImageFont()
+    wrapped.font = font
+    wrapped.info = font.info
+    if font.file is not None:
+        wrapped.file = font.file
+    return wrapped
 
 
 class FreeTypeFont:
@@ -83,10 +99,10 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        """Return glyph mask as L-mode Image using pillow-rs-freetype."""
+        """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
-        return PILImage.frombytes("L", (w, h), bytes(alpha))
+        return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
@@ -111,12 +127,8 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        w, h, alpha = self._rust_font.getmask_alpha(str(text))
-        mask = PILImage.frombytes("L", (w, h), bytes(alpha))
-        if start is not None:
-            offset = (int(start[0]), int(start[1]))
-        else:
-            offset = (0, 0)
+        image, offset = self._rust_font.getmask2_image(str(text), start)
+        mask = ImagingCore(PILImage(image))
         return mask, offset
 
     def getmetrics(self):
@@ -130,13 +142,7 @@ class FreeTypeFont:
                  ``("Unknown", "Regular")`` when the Rust backend does
                  not expose names.
         """
-        try:
-            name = self._rust_font.get_name()
-            if name and len(name) == 2:
-                return tuple(name)
-        except Exception:
-            pass
-        return ("Unknown", "Regular")
+        return self._rust_font.get_name()
 
     def font_variant(self, font=None, size=None, index=None, encoding=None, layout_engine=None):
         """Create a copy of this FreeTypeFont object, using any specified
@@ -177,11 +183,10 @@ class FreeTypeFont:
     def get_variation_names(self):
         """Get list of named styles in a variation font.
 
-        :return: A list of named styles (bytes). Empty list for
-                 non-variable fonts.
+        :return: A list of named styles (bytes).
         :raises OSError: If the font is not a variation font.
         """
-        return []
+        self._require_variation_font()
 
     def set_variation_by_name(self, name):
         """Set variation by name.
@@ -189,15 +194,15 @@ class FreeTypeFont:
         :param name: The name of the style.
         :raises OSError: If the font is not a variation font.
         """
-        raise OSError("set_variation_by_name: font is not a variation font")
+        self._require_variation_font()
 
     def get_variation_axes(self):
         """Get variation axes.
 
-        :return: A list of axis dictionaries. Empty list for non-variable fonts.
+        :return: A list of axis dictionaries.
         :raises OSError: If the font is not a variation font.
         """
-        return []
+        self._require_variation_font()
 
     def set_variation_by_axes(self, axes):
         """Set variation by axes values.
@@ -205,7 +210,14 @@ class FreeTypeFont:
         :param axes: A list of values for each axis.
         :raises OSError: If the font is not a variation font.
         """
-        raise OSError("set_variation_by_axes: font is not a variation font")
+        self._require_variation_font()
+
+    def _require_variation_font(self):
+        if not self._rust_font.has_variations():
+            raise OSError("invalid argument")
+        raise NotImplementedError(
+            "variable-font metadata and mutation are not implemented"
+        )
 
 
 class TransposedFont:
@@ -224,41 +236,28 @@ class TransposedFont:
         """
         self.font = font
         self.orientation = orientation
-        # Normalise orientation to a comparable form
-        self._is_swap = False
-        if orientation is not None:
-            name = orientation.name if hasattr(orientation, 'name') else str(orientation)
-            self._is_swap = name.endswith('90') or name.endswith('270')
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
+        if isinstance(self.font, FreeTypeFont):
+            from .image import Image as PILImage
+            image = self.font._rust_font.get_transposed_mask_image(
+                str(text), self.orientation
+            )
+            return ImagingCore(PILImage(image))
         im = self.font.getmask(text, mode, *args, **kwargs)
         if self.orientation is not None:
             return im.transpose(self.orientation)
         return im
-
-    def getmask2(self, text, mode="", *args, **kwargs):
-        """Create a mask + offset for the text, optionally transposed."""
-        mask, offset = self.font.getmask2(text, mode, *args, **kwargs)
-        if self.orientation is not None:
-            mask = mask.transpose(self.orientation)
-        return mask, offset
 
     def getbbox(self, text, *args, **kwargs):
         """Get bounding box for text, adjusted for orientation.
 
         For rotated text (90/270 degrees), width and height are swapped.
         """
-        result = self.font.getbbox(text, *args, **kwargs)
-        if len(result) == 4:
-            left, top, right, bottom = result
-            width = right - left
-            height = bottom - top
-        else:
-            width, height = result
-        if self._is_swap:
-            return 0, 0, height, width
-        return 0, 0, width, height
+        return _core.transposed_font_bbox(
+            self.font.getbbox(text, *args, **kwargs), self.orientation
+        )
 
     def getlength(self, text, *args, **kwargs):
         """Get text length.
@@ -266,20 +265,24 @@ class TransposedFont:
         :raises ValueError: If text is rotated by 90 or 270 degrees,
             where length is undefined.
         """
-        if self._is_swap:
-            raise ValueError(
-                "text length is undefined for text rotated by 90 or 270 degrees"
-            )
+        _core.validate_transposed_font_length(self.orientation)
         return self.font.getlength(text, *args, **kwargs)
 
 
 def load(filename):
-    """Load a font file. Delegates to truetype()."""
-    return truetype(str(filename))
+    """Load a PILfont metrics file and its sibling glyph bitmap."""
+    return _wrap_pilfont(_core.PilFont.load(str(filename)))
+
+
+def load_path(filename):
+    """Load a PILfont by searching for it along ``sys.path``."""
+    if not isinstance(filename, str):
+        filename = filename.decode("utf-8")
+    return _wrap_pilfont(_core.PilFont.load_path(filename))
 
 
 def load_default(size=None):
-    """Load default font. Uses pre-rendered bitmap font matching PIL's default."""
+    """Load Pillow's embedded Aileron Regular subset with BASIC layout."""
     if size is None:
         size = 10
     font = object.__new__(FreeTypeFont)
@@ -290,13 +293,9 @@ def load_default(size=None):
     return font
 
 
-def load_default_imagefont(size=None):
-    """Load default font — alias for compatibility with fixture naming.
-
-    :param size: Font size in pixels (default 10).
-    :return: A FreeTypeFont instance backed by the default bitmap font.
-    """
-    return load_default(size)
+def load_default_imagefont():
+    """Load Pillow's embedded courB08 legacy PILfont."""
+    return _wrap_pilfont(_core.PilFont.load_default())
 
 
 def truetype(font, size=10, index=0, encoding="", layout_engine=None):

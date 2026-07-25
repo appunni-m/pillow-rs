@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -10,7 +12,13 @@
       "id": "Image_reduce_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.reduce_Image_reduce_CMYK_suite1.bin"
+        "reference": "raws/Image.reduce_Image_reduce_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          128,
+          128
+        ]
       }
     },
     {

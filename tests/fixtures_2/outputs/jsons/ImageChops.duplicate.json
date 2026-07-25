@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageChops",
@@ -17,7 +19,14 @@
       "id": "ImageChops_duplicate_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/ImageChops.duplicate_ImageChops_duplicate_P_suite1.bin"
+        "reference": "raws/ImageChops.duplicate_ImageChops_duplicate_P_suite1.bin",
+        "raw_kind": "image",
+        "mode": "P",
+        "size": [
+          10,
+          10
+        ],
+        "palette": []
       }
     },
     {

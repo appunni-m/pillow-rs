@@ -1,0 +1,72 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "info"
+  },
+  "cases": [
+    {
+      "id": "info_1",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    },
+    {
+      "id": "info_L",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    },
+    {
+      "id": "info_LA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    },
+    {
+      "id": "info_P",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    },
+    {
+      "id": "info_RGB",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    },
+    {
+      "id": "info_RGBA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": []
+        }
+      }
+    }
+  ]
+}

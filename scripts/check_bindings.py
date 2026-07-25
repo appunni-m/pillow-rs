@@ -175,6 +175,10 @@ class BindingChecker(ast.NodeVisitor):
 
     # ── Function size check ──
     def visit_FunctionDef(self, node):
+        # This exact Python data-model shape is an ABI adapter:
+        # ``return len(self.<field>)``. Anything more complex is still audited.
+        if node.name == "__len__" and self._is_len_protocol_adapter(node):
+            return
         # AS PER DESIGN: Binding functions should be short delegations.
         # 15 lines is generous for { docstring, arg processing, delegate call, return }
         if len(node.body) > 15 and not node.name.startswith("_"):
@@ -182,7 +186,42 @@ class BindingChecker(ast.NodeVisitor):
                       f"function '{node.name}' is {len(node.body)} lines — "
                       f"bindings should be thin delegations (~10 lines max). "
                       f"Move logic to pillow-rs/src/.")
-        self.generic_visit(node)
+        # Type annotations are declarations, not executable binding behavior.
+        # Visit defaults, decorators, and the body explicitly so PEP 604
+        # unions such as ``str | None`` are not reported as bitwise logic.
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for default in node.args.defaults:
+            self.visit(default)
+        for default in node.args.kw_defaults:
+            if default is not None:
+                self.visit(default)
+        for stmt in node.body:
+            self.visit(stmt)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    @staticmethod
+    def _is_len_protocol_adapter(node) -> bool:
+        if len(node.body) != 1 or not isinstance(node.body[0], ast.Return):
+            return False
+        value = node.body[0].value
+        return (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "len"
+            and len(value.args) == 1
+            and isinstance(value.args[0], ast.Attribute)
+            and isinstance(value.args[0].value, ast.Name)
+            and value.args[0].value.id == "self"
+            and not value.keywords
+        )
+
+    def visit_AnnAssign(self, node):
+        """Inspect an annotated assignment's value but not its type."""
+        self.visit(node.target)
+        if node.value is not None:
+            self.visit(node.value)
 
 
 def main():
@@ -211,9 +250,10 @@ def main():
         print("\n  All logic must live in pillow-rs/src/. Bindings should delegate ONLY.")
         print("  See CLAUDE.md lines 14-18 and SYSTEMIC_FIXES.md Fix 5.")
         print("  → This is a WARNING during migration. It will become an ERROR.")
+        print("⚠️  Thin-wrapper migration is incomplete.")
         # sys.exit(1)  ← uncomment when migration complete
-
-    print("✅ OK: All binding files comply with CLAUDE.md thin-wrapper rules.")
+    else:
+        print("✅ OK: All binding files comply with CLAUDE.md thin-wrapper rules.")
     sys.exit(0)
 
 

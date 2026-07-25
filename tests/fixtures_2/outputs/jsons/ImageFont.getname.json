@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,29 +11,77 @@
     {
       "id": "default_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Aileron', 'Regular')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "Aileron"
+            },
+            {
+              "type": "str",
+              "value": "Regular"
+            }
+          ]
+        }
       }
     },
     {
       "id": "getname_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Aileron', 'Regular')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "Aileron"
+            },
+            {
+              "type": "str",
+              "value": "Regular"
+            }
+          ]
+        }
       }
     },
     {
       "id": "getname_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Aileron', 'Regular')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "Aileron"
+            },
+            {
+              "type": "str",
+              "value": "Regular"
+            }
+          ]
+        }
       }
     },
     {
       "id": "getname_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Aileron', 'Regular')"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "str",
+              "value": "Aileron"
+            },
+            {
+              "type": "str",
+              "value": "Regular"
+            }
+          ]
+        }
       }
     }
   ]

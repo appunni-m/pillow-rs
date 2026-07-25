@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,22 +11,244 @@
     {
       "id": "ImageFont_load_default_imagefont_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_L_suite1.png"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ImagingCore"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "mode"
+                    },
+                    {
+                      "type": "str",
+                      "value": "1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "size"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "int",
+                          "value": 6
+                        },
+                        {
+                          "type": "int",
+                          "value": 11
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "pixels_hex"
+                    },
+                    {
+                      "type": "str",
+                      "value": "000000000000000000000000000000000000ffffffff000000ffffff000000ff00ff0000ffffffffff00ffff00ffff00ffff00ffffff000000000000000000000000"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImageFont_load_default_imagefont_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_RGB_suite1.png"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ImagingCore"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "mode"
+                    },
+                    {
+                      "type": "str",
+                      "value": "1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "size"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "int",
+                          "value": 6
+                        },
+                        {
+                          "type": "int",
+                          "value": 11
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "pixels_hex"
+                    },
+                    {
+                      "type": "str",
+                      "value": "000000000000000000000000000000000000ffffffff000000ffffff000000ff00ff0000ffffffffff00ffff00ffff00ffff00ffffff000000000000000000000000"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "ImageFont_load_default_imagefont_RGBA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_RGBA_suite1.png"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "ImageFont"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "getmask"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "ImagingCore"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "mode"
+                    },
+                    {
+                      "type": "str",
+                      "value": "1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "size"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "int",
+                          "value": 6
+                        },
+                        {
+                          "type": "int",
+                          "value": 11
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "pixels_hex"
+                    },
+                    {
+                      "type": "str",
+                      "value": "000000000000000000000000000000000000ffffffff000000ffffff000000ff00ff0000ffffffffff00ffff00ffff00ffff00ffffff000000000000000000000000"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     }
   ]

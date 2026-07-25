@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageColor",
@@ -9,15 +11,47 @@
     {
       "id": "ImageColor_getrgb_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "(255, 0, 0)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 255
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            }
+          ]
+        }
       }
     },
     {
       "id": "ImageColor_getrgb_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "(255, 0, 0)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 255
+            },
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 0
+            }
+          ]
+        }
       }
     }
   ]

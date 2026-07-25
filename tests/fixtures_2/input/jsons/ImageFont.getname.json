@@ -12,18 +12,15 @@
     },
     {
       "id": "getname_L_suite1",
-      "params": {},
-      "mode": "L"
+      "params": {}
     },
     {
       "id": "getname_RGB_suite1",
-      "params": {},
-      "mode": "RGB"
+      "params": {}
     },
     {
       "id": "getname_RGBA_suite1",
-      "params": {},
-      "mode": "RGBA"
+      "params": {}
     }
   ]
 }

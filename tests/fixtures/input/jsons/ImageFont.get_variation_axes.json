@@ -7,25 +7,14 @@
   "cases": [
     {
       "id": "non_variable_font",
-      "mode": "RGB",
       "params": {}
     },
     {
       "id": "get_variation_axes_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {}
     },
     {
       "id": "get_variation_axes_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
       "params": {}
     }
   ]

@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,85 +11,184 @@
     {
       "id": "Image_getcolors_1_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            100,
-            1
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 100
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     },
     {
       "id": "Image_getcolors_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            100,
-            128
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 100
+                },
+                {
+                  "type": "int",
+                  "value": 128
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     },
     {
       "id": "Image_getcolors_LA_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            100,
-            [
-              128,
-              0
-            ]
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 100
+                },
+                {
+                  "type": "tuple",
+                  "items": [
+                    {
+                      "type": "int",
+                      "value": 128
+                    },
+                    {
+                      "type": "int",
+                      "value": 0
+                    }
+                  ]
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     },
     {
       "id": "Image_getcolors_P_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            100,
-            0
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 100
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     },
     {
       "id": "Image_getcolors_RGB_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            1024,
-            [
-              100,
-              150,
-              200
-            ]
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1024
+                },
+                {
+                  "type": "tuple",
+                  "items": [
+                    {
+                      "type": "int",
+                      "value": 100
+                    },
+                    {
+                      "type": "int",
+                      "value": 150
+                    },
+                    {
+                      "type": "int",
+                      "value": 200
+                    }
+                  ]
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     },
     {
       "id": "Image_getcolors_RGBA_suite1",
       "assert": {
-        "method": "exact",
-        "value": [
-          [
-            100,
-            [
-              100,
-              150,
-              200,
-              200
-            ]
+        "method": "typed",
+        "value": {
+          "type": "list",
+          "items": [
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 100
+                },
+                {
+                  "type": "tuple",
+                  "items": [
+                    {
+                      "type": "int",
+                      "value": 100
+                    },
+                    {
+                      "type": "int",
+                      "value": 150
+                    },
+                    {
+                      "type": "int",
+                      "value": 200
+                    },
+                    {
+                      "type": "int",
+                      "value": 200
+                    }
+                  ]
+                }
+              ]
+            }
           ]
-        ]
+        }
       }
     }
   ]

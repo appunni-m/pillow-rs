@@ -1,21 +1,9 @@
 //! GPU worker pool — implements BackendImpl for GPU compute backend.
-//!
-//! Debug logging: set RSPIL_GPU_DEBUG=1 to write per-op logs to /tmp/gpu_debug.log
 
 macro_rules! gpu_log {
-    ($($arg:tt)*) => {{
-        let msg = format!($($arg)*);
-        log::debug!("{}", msg);
-        if std::env::var("RSPIL_GPU_DEBUG").is_ok() {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true).open("/tmp/gpu_debug.log")
-            {
-                let _ = writeln!(f, "{}", msg);
-                let _ = f.flush();
-            }
-        }
-    }};
+    ($($arg:tt)*) => {
+        log::debug!(target: "compute::gpu", $($arg)*)
+    };
 }
 
 // Uses wgpu for compute shader dispatch with packed u32 RGBA buffers
@@ -26,8 +14,8 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
-use crate::pipeline::PipelineOp;
-use pillow_rs_image::{DynamicImage, RgbaImage};
+use crate::pipeline::{PipelineOp, PixelMode};
+use image_slash_star::{DynamicImage, RgbaImage};
 use std::collections::HashMap;
 
 // ─── BufferPool ────────────────────────────────────────────────────────────
@@ -120,9 +108,15 @@ impl BufferPool {
     }
 
     /// Upload a second image to buf_img2 for dual-input shader ops.
-    fn upload_second(&self, queue: &wgpu::Queue, rgba: &RgbaImage) {
+    fn upload_second(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
         let (w, h) = rgba.dimensions();
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        if n > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "BufferPool capacity {} < second image size {}",
+                self.capacity, n
+            )));
+        }
         let mut packed: Vec<u32> = Vec::with_capacity(n);
         for px in rgba.pixels() {
             packed.push(
@@ -133,12 +127,19 @@ impl BufferPool {
             );
         }
         queue.write_buffer(&self.buf_img2, 0, bytemuck::cast_slice(&packed));
+        Ok(())
     }
 
     /// Upload a third image to buf_img3 for 3-input shader ops (Composite mask).
-    fn upload_third(&self, queue: &wgpu::Queue, rgba: &RgbaImage) {
+    fn upload_third(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
         let (w, h) = rgba.dimensions();
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        if n > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "BufferPool capacity {} < third image size {}",
+                self.capacity, n
+            )));
+        }
         let mut packed: Vec<u32> = Vec::with_capacity(n);
         for px in rgba.pixels() {
             packed.push(
@@ -149,11 +150,54 @@ impl BufferPool {
             );
         }
         queue.write_buffer(&self.buf_img3, 0, bytemuck::cast_slice(&packed));
+        Ok(())
     }
 
     /// Upload LUT data to the storage buffer for Eval/PointOp shaders.
     fn upload_lut(&self, queue: &wgpu::Queue, lut: &[u32; 256]) {
         queue.write_buffer(&self.lut_buf, 0, bytemuck::cast_slice(&lut[..]));
+    }
+
+    /// Pack logical `putdata` samples into the auxiliary storage buffer.
+    ///
+    /// LA/PA place alpha in packed byte 3, matching the GPU's RGBA transport;
+    /// all other modes retain their raw channel order. The shader uses the
+    /// original byte length to preserve every untouched or partial pixel.
+    fn upload_put_data(&self, queue: &wgpu::Queue, data: &[u8], mode: PixelMode) {
+        let channels = mode.channels();
+        let pixel_count = data.len().div_ceil(channels).min(self.capacity as usize);
+        let mut packed = Vec::with_capacity(pixel_count);
+        for pixel_index in 0..pixel_count {
+            let start = pixel_index * channels;
+            let samples = &data[start..data.len().min(start + channels)];
+            let pixel = match mode {
+                PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
+                    samples.first().copied().unwrap_or(0) as u32
+                }
+                PixelMode::LA | PixelMode::PA => {
+                    let luma = samples.first().copied().unwrap_or(0) as u32;
+                    let alpha = samples.get(1).copied().unwrap_or(0) as u32;
+                    luma | (alpha << 24)
+                }
+                PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
+                    let r = samples.first().copied().unwrap_or(0) as u32;
+                    let g = samples.get(1).copied().unwrap_or(0) as u32;
+                    let b = samples.get(2).copied().unwrap_or(0) as u32;
+                    r | (g << 8) | (b << 16)
+                }
+                PixelMode::RGBA | PixelMode::CMYK | PixelMode::I | PixelMode::F => {
+                    let first = samples.first().copied().unwrap_or(0) as u32;
+                    let second = samples.get(1).copied().unwrap_or(0) as u32;
+                    let third = samples.get(2).copied().unwrap_or(0) as u32;
+                    let fourth = samples.get(3).copied().unwrap_or(0) as u32;
+                    first | (second << 8) | (third << 16) | (fourth << 24)
+                }
+            };
+            packed.push(pixel);
+        }
+        if !packed.is_empty() {
+            queue.write_buffer(&self.buf_img2, 0, bytemuck::cast_slice(&packed));
+        }
     }
 
     fn upload_params(&self, queue: &wgpu::Queue, params: &[u32], w: u32, h: u32, mode: u32) {
@@ -225,10 +269,11 @@ struct GpuInner {
 }
 
 impl GpuInner {
-    fn new() -> Option<Self> {
+    fn new() -> Result<Self, PilError> {
         let instance = wgpu::Instance::default();
         let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))?;
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+                .ok_or_else(|| PilError::ValueError("GPU adapter not available".into()))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("pillow-rs-gpu"),
@@ -238,7 +283,9 @@ impl GpuInner {
             },
             None,
         ))
-        .ok()?;
+        .map_err(|error| {
+            PilError::ValueError(format!("GPU device initialization failed: {error}"))
+        })?;
 
         let capacity = 4096 * 4096;
         let buffers = BufferPool::new(&device, capacity);
@@ -259,7 +306,7 @@ impl GpuInner {
         }
         gpu_log!("[GPU] total compiled: {} pipelines", pipelines.len());
 
-        Some(GpuInner {
+        Ok(GpuInner {
             device,
             queue,
             buffers,
@@ -505,12 +552,16 @@ impl GpuInner {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
                 });
-                let second = img2_buf.unwrap_or(output_buf);
+                // Storage read and read_write bindings may not alias within one
+                // compute dispatch. Keep absent optional inputs on their
+                // dedicated auxiliary buffers; shaders guard those reads with
+                // their corresponding presence parameter.
+                let second = img2_buf.unwrap_or(&self.buffers.buf_img2);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 1,
                     resource: second.as_entire_binding(),
                 });
-                let third = img3_buf.unwrap_or(output_buf);
+                let third = img3_buf.unwrap_or(&self.buffers.buf_img3);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 2,
                     resource: third.as_entire_binding(),
@@ -549,7 +600,7 @@ impl GpuInner {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
                 });
-                let second = img2_buf.unwrap_or(output_buf);
+                let second = img2_buf.unwrap_or(&self.buffers.buf_img2);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 1,
                     resource: second.as_entire_binding(),
@@ -700,19 +751,11 @@ impl GpuInner {
     fn execute_batch_impl(
         &self,
         ops: &[PipelineOp],
+        auxiliary_images: &[AuxiliaryImages],
         w: u32,
         h: u32,
         mode: u32,
     ) -> Result<(bool, u32, u32), PilError> {
-        // Pre-materialize second images to avoid interleaved CPU decode during GPU dispatch.
-        // Each dual-input op gets its second image materialized upfront; upload to buf_img2
-        // happens right before dispatch (CPU→GPU, not a round trip).
-        let second_images: Vec<Option<DynamicImage>> =
-            ops.iter().map(extract_second_image).collect();
-
-        // Pre-materialize third images for 3-input ops (Composite/Paste mask).
-        let third_images: Vec<Option<DynamicImage>> = ops.iter().map(extract_third_image).collect();
-
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
@@ -757,18 +800,22 @@ impl GpuInner {
             };
 
             // Upload pre-materialized second image to buf_img2 if this is a dual-input op.
-            let img2_buf: Option<&wgpu::Buffer> = if let Some(ref second) = second_images[i] {
+            let img2_buf: Option<&wgpu::Buffer> = if let PipelineOp::PutData { data, mode } = op {
+                self.buffers.upload_put_data(&self.queue, data, *mode);
+                Some(&self.buffers.buf_img2)
+            } else if let Some(ref second) = auxiliary_images[i].second {
                 let second_rgba = second.to_rgba8();
-                self.buffers.upload_second(&self.queue, &second_rgba);
+                self.buffers.upload_second(&self.queue, &second_rgba)?;
                 Some(&self.buffers.buf_img2)
             } else {
                 None
             };
 
             // Upload pre-materialized third image to buf_img3 for 3-input ops.
-            let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = third_images[i] {
+            let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = auxiliary_images[i].third
+            {
                 let third_rgba = third.to_rgba8();
-                self.buffers.upload_third(&self.queue, &third_rgba);
+                self.buffers.upload_third(&self.queue, &third_rgba)?;
                 Some(&self.buffers.buf_img3)
             } else {
                 None
@@ -796,7 +843,8 @@ impl GpuInner {
     }
 }
 
-static GPU: std::sync::OnceLock<GpuInner> = std::sync::OnceLock::new();
+static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLock::new();
+static GPU_EXECUTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 // ─── Mode helpers ───────────────────────────────────────────────────────────
 
@@ -812,9 +860,48 @@ fn mode_code(img: &DynamicImage) -> u32 {
     }
 }
 
+fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> DynamicImage {
+    if matches!(
+        mode,
+        PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA
+    ) {
+        let rgba = result.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let samples = rgba
+            .pixels()
+            .flat_map(|pixel| [pixel[0], pixel[3]])
+            .collect();
+        DynamicImage::ImageLumaA8(
+            image_slash_star::GrayAlphaImage::from_raw(w, h, samples)
+                .expect("GPU putalpha dimensions already validated"),
+        )
+    } else {
+        DynamicImage::ImageRgba8(result.to_rgba8())
+    }
+}
+
 /// Extract the second (right-hand) image from a dual-input PipelineOp, if present.
 /// Returns the materialized DynamicImage ready for GPU upload.
-fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
+fn extract_second_image(op: &PipelineOp) -> Result<Option<DynamicImage>, PilError> {
+    if let PipelineOp::Paste { source, .. } = op {
+        // Paste has already converted its source to the destination mode. Keep
+        // P-mode sources as their one-byte indices here: expanding them through
+        // the palette before packing the GPU upload would make the GPU lane
+        // disagree with the CPU and SIMD paste implementations.
+        return if source.mode()? == "P" {
+            source.materialize_indices().map(Some)
+        } else {
+            source.materialize().map(Some)
+        };
+    }
+    if let PipelineOp::CompositeModule { other, .. } = op {
+        if other.mode()? == "P" {
+            // Image.composite blends P indices and gives the result image2's
+            // palette. Upload image2's indices, not its visible RGB expansion.
+            return other.materialize_indices().map(Some);
+        }
+    }
+
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
         PipelineOp::Add { other, .. }
         | PipelineOp::Subtract { other, .. }
@@ -835,31 +922,59 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
         | PipelineOp::Composite { other, .. }
         | PipelineOp::BlendModule { other, .. }
         | PipelineOp::CompositeModule { other, .. } => Some(other),
-        PipelineOp::Paste { source, .. } | PipelineOp::AlphaComposite { source, .. } => {
-            Some(source)
-        }
+        PipelineOp::AlphaComposite { source, .. } => Some(source),
         _ => None,
     };
-    arc_img.and_then(|img| img.materialize().ok())
+    arc_img
+        .map(|image| image.materialize().map(Some))
+        .unwrap_or(Ok(None))
 }
 
 /// Extract the third image (mask) from a 3-input PipelineOp, if present.
 /// Returns the materialized DynamicImage ready for GPU upload.
-fn extract_third_image(op: &PipelineOp) -> Option<DynamicImage> {
+fn extract_third_image(op: &PipelineOp) -> Result<Option<DynamicImage>, PilError> {
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
         PipelineOp::Composite { mask, .. } | PipelineOp::CompositeModule { mask, .. } => Some(mask),
         PipelineOp::Paste { mask, .. } => mask.as_ref(),
         _ => None,
     };
-    arc_img.and_then(|img| img.materialize().ok())
+    arc_img
+        .map(|image| image.materialize().map(Some))
+        .unwrap_or(Ok(None))
+}
+
+struct AuxiliaryImages {
+    second: Option<DynamicImage>,
+    third: Option<DynamicImage>,
+}
+
+fn extract_auxiliary_images(op: &PipelineOp) -> Result<AuxiliaryImages, PilError> {
+    // Pillow resolves each operation's source before its mask, then advances
+    // to the next operation. Preserve that observable error order instead of
+    // collecting one auxiliary slot across the whole batch at a time.
+    Ok(AuxiliaryImages {
+        second: extract_second_image(op)?,
+        third: extract_third_image(op)?,
+    })
 }
 
 /// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
 /// Each u32 packs RGBA channels for one LUT entry (R in byte 0, G byte 1, B byte 2, A byte 3).
 fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
+    if let PipelineOp::RemapPalette { dest_map } = op {
+        let mut inverse = [0u8; 256];
+        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
+            inverse[usize::from(old_index)] = new_index as u8;
+        }
+        let mut packed = [0u32; 256];
+        for (entry, &value) in packed.iter_mut().zip(inverse.iter()) {
+            let value = u32::from(value);
+            *entry = value | (value << 8) | (value << 16) | (value << 24);
+        }
+        return Some(packed);
+    }
     let lut_bytes: &[u8] = match op {
         PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => lut.as_slice(),
-        PipelineOp::RemapPalette { dest_map } => dest_map.as_slice(),
         _ => return None,
     };
     let mut packed = [0u32; 256];
@@ -939,6 +1054,8 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
             let new_h = (cur_h as f64 * factor).round().max(1.0) as u32;
             Some((new_w, new_h))
         }
+        PipelineOp::Transform { w, h, .. } => Some(((*w).max(1), (*h).max(1))),
+        PipelineOp::CompositeModule { other, .. } => other.size().ok(),
         _ => None,
     }
 }
@@ -953,11 +1070,10 @@ pub struct GpuPool;
 
 impl GpuPool {
     fn ensure_init() -> Result<&'static GpuInner, PilError> {
-        GPU.get_or_init(|| {
-            GpuInner::new().expect("Failed to initialize GPU: wgpu adapter or device unavailable")
-        });
-        GPU.get()
-            .ok_or_else(|| PilError::ValueError("GPU not available".into()))
+        match GPU.get_or_init(GpuInner::new) {
+            Ok(gpu) => Ok(gpu),
+            Err(error) => Err(error.clone()),
+        }
     }
 }
 
@@ -982,6 +1098,21 @@ impl BackendImpl for GpuPool {
         img: &DynamicImage,
         _mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
+        // Resolve every nested image before taking the global GPU lock. A
+        // nested explicitly locked pipeline may itself need the GPU pool, and
+        // Pillow surfaces that materialization failure instead of dispatching
+        // the outer shader with an empty auxiliary buffer.
+        let auxiliary_images = ops
+            .iter()
+            .map(extract_auxiliary_images)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // The global pool reuses its upload, auxiliary, output, and readback
+        // buffers. Serialize complete batches so concurrent callers cannot
+        // overwrite one another between upload and dispatch.
+        let _execution = GPU_EXECUTION
+            .lock()
+            .map_err(|_| PilError::InternalError("GPU execution lock poisoned".into()))?;
         let gpu = Self::ensure_init()?;
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();
@@ -999,7 +1130,8 @@ impl BackendImpl for GpuPool {
         gpu.buffers.upload_rgba(&gpu.queue, &rgba)?;
         gpu_log!("[GPU] step=upload_rgba done");
         gpu_log!("[GPU] step=execute_batch_impl start");
-        let (final_is_a, final_w, final_h) = gpu.execute_batch_impl(ops, w, h, mcode)?;
+        let (final_is_a, final_w, final_h) =
+            gpu.execute_batch_impl(ops, &auxiliary_images, w, h, mcode)?;
         gpu_log!(
             "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
             final_w,
@@ -1012,24 +1144,35 @@ impl BackendImpl for GpuPool {
         gpu_log!("[GPU] step=poll done, readback start");
         let result = gpu.readback_to_image(final_w, final_h, final_is_a)?;
         gpu_log!("[GPU] step=readback done");
-        // Detect mode-changing ops that need output mode override.
-        // Grayscale: always outputs L, regardless of input mode.
-        // Convert: output matches target mode (handled by CPU fallback for now).
-        let out_mode: Option<pillow_rs_image::ColorType> =
-            if ops.iter().any(|op| matches!(op, PipelineOp::Grayscale)) {
-                Some(pillow_rs_image::ColorType::L8)
-            } else {
-                None
-            };
+        // Track the last mode-changing operation. Geometry and other
+        // mode-preserving operations after it do not undo the promotion.
+        let mut put_alpha_mode = None;
+        let mut out_mode = None;
+        for op in ops {
+            match op {
+                PipelineOp::Grayscale => {
+                    put_alpha_mode = None;
+                    out_mode = Some(image_slash_star::ColorType::L8);
+                }
+                PipelineOp::PutAlpha { mode, .. } => {
+                    put_alpha_mode = Some(*mode);
+                    out_mode = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(mode) = put_alpha_mode {
+            return Ok(put_alpha_output(result, mode));
+        }
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
             match ct {
-                pillow_rs_image::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
-                pillow_rs_image::ColorType::La8 => {
+                image_slash_star::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
+                image_slash_star::ColorType::La8 => {
                     Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8()))
                 }
-                pillow_rs_image::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
-                pillow_rs_image::ColorType::Rgba8 => {
+                image_slash_star::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
+                image_slash_star::ColorType::Rgba8 => {
                     Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
                 }
                 _ => Ok(crate::image::preserve_mode(img, result)),

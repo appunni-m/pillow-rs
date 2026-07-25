@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -17,28 +19,52 @@
       "id": "Image_convert_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.convert_Image_convert_CMYK_suite1.bin"
+        "reference": "raws/Image.convert_Image_convert_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          128,
+          128
+        ]
       }
     },
     {
       "id": "Image_convert_F_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.convert_Image_convert_F_suite1.bin"
+        "reference": "raws/Image.convert_Image_convert_F_suite1.bin",
+        "raw_kind": "image",
+        "mode": "F",
+        "size": [
+          64,
+          128
+        ]
       }
     },
     {
       "id": "Image_convert_HSV_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.convert_Image_convert_HSV_suite1.bin"
+        "reference": "raws/Image.convert_Image_convert_HSV_suite1.bin",
+        "raw_kind": "image",
+        "mode": "HSV",
+        "size": [
+          128,
+          64
+        ]
       }
     },
     {
       "id": "Image_convert_I_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.convert_Image_convert_I_suite1.bin"
+        "reference": "raws/Image.convert_Image_convert_I_suite1.bin",
+        "raw_kind": "image",
+        "mode": "I",
+        "size": [
+          100,
+          100
+        ]
       }
     },
     {
@@ -80,7 +106,13 @@
       "id": "Image_convert_YCbCr_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/Image.convert_Image_convert_YCbCr_suite1.bin"
+        "reference": "raws/Image.convert_Image_convert_YCbCr_suite1.bin",
+        "raw_kind": "image",
+        "mode": "YCbCr",
+        "size": [
+          64,
+          64
+        ]
       }
     }
   ]

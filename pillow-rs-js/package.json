@@ -2,16 +2,44 @@
   "name": "pillow-rs",
   "version": "0.1.0",
   "description": "Pillow drop-in replacement for the browser, powered by Rust/WASM",
-  "main": "pkg/pillow_rs_js.js",
-  "module": "pkg/pillow_rs_js.js",
-  "types": "pkg/pillow_rs_js.d.ts",
+  "main": "pkg/core/pillow_rs_js.js",
+  "module": "pkg/core/pillow_rs_js.js",
+  "types": "pkg/core/pillow_rs_js.d.ts",
+  "exports": {
+    ".": {
+      "types": "./pkg/core/pillow_rs_js.d.ts",
+      "import": "./pkg/core/pillow_rs_js.js"
+    },
+    "./extra": {
+      "types": "./pkg/extra/pillow_rs_js.d.ts",
+      "import": "./pkg/extra/pillow_rs_js.js"
+    }
+  },
   "files": [
     "pkg/"
   ],
   "type": "module",
   "scripts": {
-    "build": "wasm-pack build --target web",
-    "build:release": "wasm-pack build --target web --release"
+    "build": "npm run build:core",
+    "build:core": "wasm-pack build --target web --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
+    "build:extra": "wasm-pack build --target web --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "build:release": "npm run build:core:release && npm run build:extra:release",
+    "build:core:release": "wasm-pack build --target web --release --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
+    "build:extra:release": "wasm-pack build --target web --release --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "test:codecs": "node tests/codec_feature_matrix.mjs core && node tests/codec_feature_matrix.mjs extra",
+    "test:color3dlut-oracle": "node tests/color3dlut_oracle.mjs",
+    "test:eval-oracle": "node tests/eval_oracle.mjs",
+    "test:fromarray-descriptor-oracle": "node tests/fromarray_descriptor_oracle.mjs",
+    "test:image-open-oracle": "node tests/image_open_oracle.mjs",
+    "test:apply-transparency-oracle": "node tests/apply_transparency_oracle.mjs",
+    "test:paste-oracle": "node tests/paste_oracle.mjs",
+    "test:drawing-oracle": "node tests/drawing_oracle.mjs",
+    "test:imagefont-getmask2-oracle": "node tests/imagefont_getmask2_oracle.mjs",
+    "test:transposed-font-oracle": "node tests/transposed_font_oracle.mjs",
+    "test:tobytes-oracle": "node tests/tobytes_oracle.mjs",
+    "test:oracle-contract": "node tests/oracle_contract.mjs",
+    "test:package": "node scripts/check_package.mjs",
+    "size": "node scripts/measure_wasm_sizes.mjs"
   },
   "keywords": [
     "image",

@@ -2,8 +2,8 @@
 
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
-use pillow_rs_image::{
+use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
+use image_slash_star::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
 use std::sync::Arc;
@@ -53,10 +53,38 @@ impl GlibcRand {
     }
 }
 
+// ── Darwin-compatible PRNG ───────────────────────────────────────────────
+//
+// Pillow delegates effect_noise randomness to libc rand(). The pinned
+// macOS/Darwin Pillow 12.2.0 oracle uses the Park-Miller sequence, whose
+// process-default state is the same as srand(1). Keep the generator itself
+// independent of libc so native and WASM builds reproduce the oracle without
+// runtime FFI.
+
+struct DarwinRand {
+    state: u32,
+}
+
+impl Default for DarwinRand {
+    fn default() -> Self {
+        Self { state: 1 }
+    }
+}
+
+impl DarwinRand {
+    fn next(&mut self) -> u32 {
+        const MULTIPLIER: u64 = 16_807;
+        const MODULUS: u64 = 2_147_483_647;
+
+        self.state = ((u64::from(self.state) * MULTIPLIER) % MODULUS) as u32;
+        self.state
+    }
+}
+
 // ── EffectSpread ──
 
 pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImage, PilError> {
-    // PIL's ImagingEffectSpread:
+    // Pillow 12.2.0 libImaging/Effects.c:117-159:
     // For image8 (L, P, 1): 1 byte per pixel, SPREAD(UINT8, image8)
     // For image32 (RGB, RGBA, etc): 4 bytes per pixel, SPREAD(INT32, image32)
     // Creates a new output image. For each pixel (x,y) in the input:
@@ -68,6 +96,10 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     //     output[y][x] = input[y][x]
     // Input is NEVER modified; output is a new image.
     // Multiple pixels CAN map to the same (xx,yy); last write wins.
+    // The C function consumes process-global rand() state. The existing
+    // isolated generator below is not claimed as stochastic pixel parity;
+    // only seed-independent contracts are exact until a principled oracle
+    // replaces the historical fixture-selected seed.
     if distance == 0 {
         return Ok(img.clone());
     }
@@ -76,17 +108,17 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // Determine pixel stride based on color type (PIL uses image8 for L/LA/P with pixelsize,
     // image32 for RGB/RGBA/CMYK with 4-byte stride)
     let (pixels, w, h, stride) = match img.color() {
-        pillow_rs_image::ColorType::L8 => {
+        image_slash_star::ColorType::L8 => {
             let luma = img.to_luma8();
             let (w, h) = luma.dimensions();
             (luma.into_raw(), w as i32, h as i32, 1usize)
         }
-        pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => {
+        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => {
             let la = img.to_luma_alpha8();
             let (w, h) = la.dimensions();
             (la.into_raw(), w as i32, h as i32, 2usize)
         }
-        pillow_rs_image::ColorType::Rgb8 => {
+        image_slash_star::ColorType::Rgb8 => {
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             (rgb.into_raw(), w as i32, h as i32, 3usize)
@@ -101,7 +133,8 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     let input_pixels = pixels;
     let mut out_pixels = input_pixels.clone();
 
-    // Use glibc-compatible PRNG (works on ALL platforms including WASM)
+    // Preserve the existing deterministic sequence without treating it as
+    // Pillow's process-global rand() contract.
     let mut rng = GlibcRand::new(42);
     for y in 0..h {
         for x in 0..w {
@@ -154,69 +187,103 @@ pub fn op_paste(
     x: i64,
     y: i64,
     mask: &Option<Arc<Image>>,
+    mask_alpha: bool,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = source.materialize_for_ops()?;
-    let (src_w, src_h) = (src_img.width(), src_img.height());
-    let paste_x = x;
-    let paste_y = y;
-
-    if let Some(mask_img_ref) = mask {
-        let mask_img = mask_img_ref.materialize_for_ops()?;
-        let mask_gray = mask_img.to_luma8();
-        let mut dest_clone = img.to_rgba8();
-
-        for py in 0..src_h.min(dest_clone.height()) {
-            for px in 0..src_w.min(dest_clone.width()) {
-                let mask_val = if px < mask_gray.width() && py < mask_gray.height() {
-                    mask_gray.get_pixel(px, py)[0]
-                } else {
-                    0
-                };
-                if mask_val == 0 {
-                    continue;
-                }
-                let sp = src_img.get_pixel(px, py);
-                let dx = (paste_x + px as i64) as u32;
-                let dy = (paste_y + py as i64) as u32;
-                if dx >= dest_clone.width() || dy >= dest_clone.height() {
-                    continue;
-                }
-                if mask_val == 255 {
-                    dest_clone.put_pixel(dx, dy, sp);
-                } else {
-                    let inv_alpha = 255u16 - mask_val as u16;
-                    let dp = dest_clone.get_pixel(dx, dy);
-                    let a = sp.0.get(3).copied().unwrap_or(255) as u16;
-                    let da = dp.0.get(3).copied().unwrap_or(255) as u16;
-                    let blended = pillow_rs_image::Rgba([
-                        ((sp[0] as u16 * mask_val as u16 + dp[0] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((sp[1] as u16 * mask_val as u16 + dp[1] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((sp[2] as u16 * mask_val as u16 + dp[2] as u16 * inv_alpha + 127) / 255)
-                            as u8,
-                        ((a * mask_val as u16 + da * inv_alpha + 127) / 255) as u8,
-                    ]);
-                    dest_clone.put_pixel(dx, dy, blended);
-                }
-            }
-        }
-        Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+    let src_img = if matches!(mode, Some("P" | "PA")) {
+        source.materialize_indices()?
     } else {
-        let mut dest_clone = img.to_rgba8();
-        let src_rgba = src_img.to_rgba8();
-        let (sw, sh) = (src_rgba.width(), src_rgba.height());
-        for py in 0..sh.min(dest_clone.height()) {
-            for px in 0..sw.min(dest_clone.width()) {
-                let dx = (paste_x + px as i64) as u32;
-                let dy = (paste_y + py as i64) as u32;
-                if dx < dest_clone.width() && dy < dest_clone.height() {
-                    dest_clone.put_pixel(dx, dy, *src_rgba.get_pixel(px, py));
-                }
+        source.materialize_for_ops()?
+    };
+    let (src_w, src_h) = (src_img.width(), src_img.height());
+    let (dest_w, dest_h) = img.dimensions();
+    let source_left = (-x).max(0).min(i64::from(src_w)) as u32;
+    let source_top = (-y).max(0).min(i64::from(src_h)) as u32;
+    let dest_left = x.max(0).min(i64::from(dest_w)) as u32;
+    let dest_top = y.max(0).min(i64::from(dest_h)) as u32;
+    let copy_width = src_w
+        .saturating_sub(source_left)
+        .min(dest_w.saturating_sub(dest_left));
+    let copy_height = src_h
+        .saturating_sub(source_top)
+        .min(dest_h.saturating_sub(dest_top));
+    if copy_width == 0 || copy_height == 0 {
+        return Ok(img.clone());
+    }
+
+    let source_rgba = src_img.to_rgba8();
+    let mut destination = img.to_rgba8();
+    enum PasteMask {
+        Luma(image_slash_star::GrayImage),
+        Alpha(image_slash_star::RgbaImage),
+    }
+    let mask_pixels = match mask {
+        Some(mask_image) => {
+            let materialized = mask_image.materialize()?;
+            if mask_alpha {
+                Some(PasteMask::Alpha(materialized.to_rgba8()))
+            } else {
+                Some(PasteMask::Luma(materialized.to_luma8()))
             }
         }
-        Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+        None => None,
+    };
+
+    for offset_y in 0..copy_height {
+        let source_y = source_top + offset_y;
+        let dest_y = dest_top + offset_y;
+        for offset_x in 0..copy_width {
+            let source_x = source_left + offset_x;
+            let dest_x = dest_left + offset_x;
+            let source_pixel = *source_rgba.get_pixel(source_x, source_y);
+            let Some(mask_image) = mask_pixels.as_ref() else {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            };
+            let mask_value = match mask_image {
+                PasteMask::Luma(pixels)
+                    if source_x < pixels.width() && source_y < pixels.height() =>
+                {
+                    pixels.get_pixel(source_x, source_y)[0]
+                }
+                PasteMask::Alpha(pixels)
+                    if source_x < pixels.width() && source_y < pixels.height() =>
+                {
+                    pixels.get_pixel(source_x, source_y)[3]
+                }
+                _ => 0,
+            };
+            if mask_value == 0 {
+                continue;
+            }
+            if mask_value == 255 {
+                destination.put_pixel(dest_x, dest_y, source_pixel);
+                continue;
+            }
+
+            // Pillow libImaging uses BLEND/DIV255 for every active band:
+            // DIV255(src * mask + dst * (255 - mask)). Its integer macro is
+            // equivalent to round-to-nearest for this 8-bit input range.
+            let destination_pixel = *destination.get_pixel(dest_x, dest_y);
+            let mask = u16::from(mask_value);
+            let inverse = 255u16 - mask;
+            let blend = |src: u8, dst: u8| -> u8 {
+                ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
+            };
+            destination.put_pixel(
+                dest_x,
+                dest_y,
+                image_slash_star::Rgba([
+                    blend(source_pixel[0], destination_pixel[0]),
+                    blend(source_pixel[1], destination_pixel[1]),
+                    blend(source_pixel[2], destination_pixel[2]),
+                    blend(source_pixel[3], destination_pixel[3]),
+                ]),
+            );
+        }
     }
+
+    Ok(preserve_mode(img, DynamicImage::ImageRgba8(destination)))
 }
 
 // ── AlphaComposite ──
@@ -231,7 +298,7 @@ pub fn op_alpha_composite(
     }
 
     // LA mode: composite on native LA canvas, return LA (PIL behavior)
-    if matches!(img.color(), pillow_rs_image::ColorType::La8) {
+    if matches!(img.color(), image_slash_star::ColorType::La8) {
         let mut dest_la = img.to_luma_alpha8();
         let src_la = src_img.to_luma_alpha8();
         let (sw, sh) = src_la.dimensions();
@@ -249,7 +316,7 @@ pub fn op_alpha_composite(
                     .round()
                     .clamp(0.0, 255.0) as u8;
                 let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-                dest_la.put_pixel(px, py, pillow_rs_image::LumaA([l, a]));
+                dest_la.put_pixel(px, py, image_slash_star::LumaA([l, a]));
             }
         }
         return Ok(DynamicImage::ImageLumaA8(dest_la));
@@ -278,7 +345,7 @@ pub fn op_alpha_composite(
                 .round()
                 .clamp(0.0, 255.0) as u8;
             let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-            dest_rgba.put_pixel(px, py, pillow_rs_image::Rgba([r, g, b, a]));
+            dest_rgba.put_pixel(px, py, image_slash_star::Rgba([r, g, b, a]));
         }
     }
     Ok(DynamicImage::ImageRgba8(dest_rgba))
@@ -387,7 +454,7 @@ pub fn op_blend_module(
                 out.put_pixel(
                     x,
                     y,
-                    pillow_rs_image::Rgba([
+                    image_slash_star::Rgba([
                         (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                         (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                         (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -412,7 +479,7 @@ pub fn op_blend_module(
             out.put_pixel(
                 x,
                 y,
-                pillow_rs_image::Rgb([
+                image_slash_star::Rgb([
                     (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                     (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                     (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -425,75 +492,84 @@ pub fn op_blend_module(
 
 // ── CompositeModule ──
 
+fn composite_mask(mask: &Arc<Image>, mask_alpha: bool) -> Result<GrayImage, PilError> {
+    let materialized = mask.materialize_for_ops()?;
+    if !mask_alpha {
+        return Ok(materialized.to_luma8());
+    }
+
+    let rgba = materialized.to_rgba8();
+    Ok(GrayImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+        image_slash_star::Luma([rgba.get_pixel(x, y)[3]])
+    }))
+}
+
+#[inline]
+fn composite_blend(source: u8, destination: u8, mask: u8) -> u8 {
+    let mask = u16::from(mask);
+    let inverse = 255u16 - mask;
+    // Pillow 12.2.0 Paste.c applies ImagingUtils.h's BLEND/DIV255 macro to
+    // every active destination band.
+    ((u16::from(source) * mask + u16::from(destination) * inverse + 127) / 255) as u8
+}
+
 pub fn op_composite_module(
     img: &DynamicImage,
     other: &Arc<Image>,
     mask: &Arc<Image>,
+    mask_alpha: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     // PIL composite: copy image2, then paste image1 onto it with mask at (0,0).
     // The output uses image2's size. Smaller images are pasted into the top-left.
-    let _other_img_pre = other.materialize_for_ops()?;
-    let _mask_img_pre = mask.materialize_for_ops()?;
+    // Paste.c uses the alpha byte for LA/RGBA/RGBa masks and the luma byte for
+    // 1/L masks. The choice is captured before backend dispatch.
+    let mask_gray = composite_mask(mask, mask_alpha)?;
+
     // P-mode: composite on palette indices (PIL operates on indices, not colors)
     if explicit_mode == Some("P") {
         let gray1 = img.to_luma8();
         let other_indices = other.materialize_indices()?;
         let gray2 = other_indices.to_luma8();
-        let mask_img = mask.materialize_for_ops()?;
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = gray2.dimensions();
-        let mut out = GrayImage::new(out_w, out_h);
-        // Copy image2 as base, then blend image1 in overlap region
-        for y in 0..out_h {
-            for x in 0..out_w {
-                let i2 = gray2.get_pixel(x, y)[0] as u16;
-                out.put_pixel(x, y, pillow_rs_image::Luma([i2 as u8]));
-            }
-        }
+        let mut out = gray2.clone();
         let overlap_w = gray1.width().min(gray2.width()).min(mask_gray.width());
         let overlap_h = gray1.height().min(gray2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
-                let i1 = gray1.get_pixel(x, y)[0] as u16;
-                let i2 = gray2.get_pixel(x, y)[0] as u16;
-                let m = mask_gray.get_pixel(x, y)[0] as u16;
-                // PIL: (i1 * m + i2 * (255 - m) + 127) / 255
-                let val = (i1 * m + i2 * (255 - m) + 127) / 255;
-                out.put_pixel(x, y, pillow_rs_image::Luma([val as u8]));
+                let value = composite_blend(
+                    gray1.get_pixel(x, y)[0],
+                    gray2.get_pixel(x, y)[0],
+                    mask_gray.get_pixel(x, y)[0],
+                );
+                out.put_pixel(x, y, image_slash_star::Luma([value]));
             }
         }
         return Ok(DynamicImage::ImageLuma8(out));
     }
+
     let other_img = other.materialize_for_ops()?;
-    let mask_img = mask.materialize_for_ops()?;
-    // CMYK mode: composite all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
-    if explicit_mode == Some("CMYK") {
+
+    // RGBA and four-byte compatibility modes (CMYK/I/F) blend every stored
+    // band. In particular, RGBA alpha is output data, not merely metadata.
+    if matches!(img.color(), image_slash_star::ColorType::Rgba8) {
         let rgba1 = img.to_rgba8();
         let rgba2 = other_img.to_rgba8();
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = rgba2.dimensions();
-        let mut out = RgbaImage::new(out_w, out_h);
-        for y in 0..out_h {
-            for x in 0..out_w {
-                out.put_pixel(x, y, *rgba2.get_pixel(x, y));
-            }
-        }
+        let mut out = rgba2.clone();
         let overlap_w = rgba1.width().min(rgba2.width()).min(mask_gray.width());
         let overlap_h = rgba1.height().min(rgba2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
                 let p1 = rgba1.get_pixel(x, y);
                 let p2 = rgba2.get_pixel(x, y);
-                let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                let m = mask_gray.get_pixel(x, y)[0];
                 out.put_pixel(
                     x,
                     y,
-                    pillow_rs_image::Rgba([
-                        (p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round() as u8,
-                        (p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round() as u8,
-                        (p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round() as u8,
-                        (p1[3] as f64 * m + p2[3] as f64 * (1.0 - m)).round() as u8,
+                    image_slash_star::Rgba([
+                        composite_blend(p1[0], p2[0], m),
+                        composite_blend(p1[1], p2[1], m),
+                        composite_blend(p1[2], p2[2], m),
+                        composite_blend(p1[3], p2[3], m),
                     ]),
                 );
             }
@@ -501,30 +577,23 @@ pub fn op_composite_module(
         return Ok(DynamicImage::ImageRgba8(out));
     }
     // LA mode: composite both L and A channels natively
-    if matches!(img.color(), pillow_rs_image::ColorType::La8) {
+    if matches!(img.color(), image_slash_star::ColorType::La8) {
         let la1 = img.to_luma_alpha8();
         let la2 = other_img.to_luma_alpha8();
-        let mask_gray = mask_img.to_luma8();
-        let (out_w, out_h) = la2.dimensions();
-        let mut out = GrayAlphaImage::new(out_w, out_h);
-        for y in 0..out_h {
-            for x in 0..out_w {
-                out.put_pixel(x, y, *la2.get_pixel(x, y));
-            }
-        }
+        let mut out = la2.clone();
         let overlap_w = la1.width().min(la2.width()).min(mask_gray.width());
         let overlap_h = la1.height().min(la2.height()).min(mask_gray.height());
         for y in 0..overlap_h {
             for x in 0..overlap_w {
                 let p1 = la1.get_pixel(x, y);
                 let p2 = la2.get_pixel(x, y);
-                let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                let m = mask_gray.get_pixel(x, y)[0];
                 out.put_pixel(
                     x,
                     y,
-                    pillow_rs_image::LumaA([
-                        ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
-                        ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
+                    image_slash_star::LumaA([
+                        composite_blend(p1[0], p2[0], m),
+                        composite_blend(p1[1], p2[1], m),
                     ]),
                 );
             }
@@ -533,28 +602,21 @@ pub fn op_composite_module(
     }
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
-    let mask_gray = mask_img.to_luma8();
-    let (out_w, out_h) = rgb2.dimensions();
-    let mut out = RgbImage::new(out_w, out_h);
-    for y in 0..out_h {
-        for x in 0..out_w {
-            out.put_pixel(x, y, *rgb2.get_pixel(x, y));
-        }
-    }
+    let mut out = rgb2.clone();
     let overlap_w = rgb1.width().min(rgb2.width()).min(mask_gray.width());
     let overlap_h = rgb1.height().min(rgb2.height()).min(mask_gray.height());
     for y in 0..overlap_h {
         for x in 0..overlap_w {
             let p1 = rgb1.get_pixel(x, y);
             let p2 = rgb2.get_pixel(x, y);
-            let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+            let m = mask_gray.get_pixel(x, y)[0];
             out.put_pixel(
                 x,
                 y,
-                pillow_rs_image::Rgb([
-                    ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
+                image_slash_star::Rgb([
+                    composite_blend(p1[0], p2[0], m),
+                    composite_blend(p1[1], p2[1], m),
+                    composite_blend(p1[2], p2[2], m),
                 ]),
             );
         }
@@ -566,9 +628,9 @@ pub fn op_composite_module(
 
 pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
-        pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
-        pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
-        pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
+        image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
+        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
+        image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
         _ => 4,
     };
     // PIL requires EXACTLY 256 * n_bands lut entries
@@ -605,20 +667,16 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
 // ── EffectNoise ──
 
 pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, PilError> {
-    // PIL's ImagingEffectNoise: Box-Muller polar transform (gaussian noise).
-    // Always produces L mode output. Uses libc rand().
-    // This must exactly match PIL's C implementation to produce
-    // bit-identical output with the same rand seed.
-    //
-    // NOTE: The installed PIL 12.2.0 binary does NOT use the Box-Muller
-    // caching optimization shown in the GitHub source. It calls rand()
-    // twice for EVERY pixel (one Box-Muller pair per pixel, discarding
-    // the second value from the pair).
+    // Pillow 12.2.0 `src/libImaging/Effects.c:75-114` uses a polar
+    // Box-Muller transform and always returns L mode. Its `nextok` flag is
+    // never set, so every accepted pixel consumes one pair and discards the
+    // second deviate.
     let (w, h) = (img.width(), img.height());
     let mut out = GrayImage::new(w, h);
-    // Use glibc-compatible PRNG with seed 1 (PIL's default rand() seed)
-    let mut rng = GlibcRand::new(1);
-    // RAND_MAX on glibc
+    let mut rng = DarwinRand::default();
+    // `_effect_noise` parses sigma with PyArg's `f` conversion before passing
+    // it to ImagingEffectNoise, so round it to FLOAT32 once at the boundary.
+    let sigma = f64::from(sigma as f32);
     const RAND_MAX_F64: f64 = 2147483647.0;
     for pixel in out.pixels_mut() {
         let (v1, radius) = loop {
@@ -629,13 +687,6 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
             let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
             let radius = v1 * v1 + v2 * v2;
             if radius < 1.0 {
-                // Guard: if radius is too close to zero the Box-Muller division
-                // produces Inf/NaN. PIL never hits this with its rand() range
-                // (radius >= 2.0/RAND_MAX^2 ~ 4e-19), but attacker-controlled
-                // noise seeds could in principle produce pathological radii.
-                if radius < 1e-10 {
-                    continue;
-                }
                 break (v1, radius);
             }
         };
@@ -661,9 +712,9 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
 
 pub fn op_point(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
-        pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
-        pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
-        pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
+        image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
+        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
+        image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
         _ => 4,
     };
     // PIL requires EXACTLY 256 * n_bands lut entries
@@ -860,22 +911,22 @@ pub fn op_put_pixel(
     }
     match img.clone() {
         DynamicImage::ImageLuma8(mut l) => {
-            l.put_pixel(x, y, pillow_rs_image::Luma([color.0]));
+            l.put_pixel(x, y, image_slash_star::Luma([color.0]));
             Ok(DynamicImage::ImageLuma8(l))
         }
         DynamicImage::ImageLumaA8(mut la) => {
-            la.put_pixel(x, y, pillow_rs_image::LumaA([color.0, color.3]));
+            la.put_pixel(x, y, image_slash_star::LumaA([color.0, color.3]));
             Ok(DynamicImage::ImageLumaA8(la))
         }
         DynamicImage::ImageRgb8(mut rgb) => {
-            rgb.put_pixel(x, y, pillow_rs_image::Rgb([color.0, color.1, color.2]));
+            rgb.put_pixel(x, y, image_slash_star::Rgb([color.0, color.1, color.2]));
             Ok(DynamicImage::ImageRgb8(rgb))
         }
         DynamicImage::ImageRgba8(mut rgba) => {
             rgba.put_pixel(
                 x,
                 y,
-                pillow_rs_image::Rgba([color.0, color.1, color.2, color.3]),
+                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
             );
             Ok(DynamicImage::ImageRgba8(rgba))
         }
@@ -890,41 +941,31 @@ pub fn op_put_pixel(
 pub fn op_put_data(
     img: &DynamicImage,
     data: &[u8],
-    explicit_mode: Option<&str>,
+    mode: PixelMode,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width() as usize, img.height() as usize);
-    let expected = match img.color() {
-        pillow_rs_image::ColorType::L8 => w * h,
-        pillow_rs_image::ColorType::La8 => w * h * 2,
-        pillow_rs_image::ColorType::Rgb8 => w * h * 3,
-        _ => w * h * 4,
-    };
+    let expected = w * h * mode.channels();
     // PIL: putdata accepts data shorter than the image — only the first
     // data.len() bytes are replaced; remaining pixels stay unchanged.
     let n_copy = data.len().min(expected);
-    let clip = explicit_mode == Some("1");
-    match img.color() {
-        pillow_rs_image::ColorType::Rgb8 => {
+    match mode {
+        PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
             let orig = img.to_rgb8();
             let mut pixels = orig.into_raw();
-            for (i, &v) in data[..n_copy].iter().enumerate() {
-                pixels[i] = if clip && v != 0 { 255 } else { v };
-            }
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
             let rgb = RgbImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgb8(rgb))
         }
-        pillow_rs_image::ColorType::L8 => {
+        PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
             let orig = img.to_luma8();
             let mut pixels = orig.into_raw();
-            for (i, &v) in data[..n_copy].iter().enumerate() {
-                pixels[i] = if clip && v != 0 { 255 } else { v };
-            }
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
             let gray = GrayImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(gray))
         }
-        pillow_rs_image::ColorType::La8 => {
+        PixelMode::LA | PixelMode::PA => {
             let orig = img.to_luma_alpha8();
             let mut pixels = orig.into_raw();
             pixels[..n_copy].copy_from_slice(&data[..n_copy]);
@@ -945,45 +986,31 @@ pub fn op_put_data(
 
 // ── PutAlpha ──
 
-pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) -> DynamicImage {
-    // Handle explicit PIL modes that need special treatment
-    if let Some(mode) = explicit_mode {
-        match mode {
-            "CMYK" => {
-                // PIL putalpha on CMYK converts to RGBA (proper color space),
-                // sets alpha, and returns RGBA.
-                // CMYK→RGB: R = 255*(1-C/255)*(1-K/255), etc.
-                let raw = img.as_bytes();
-                let (w, h) = img.dimensions();
-                let mut rgba = RgbaImage::new(w, h);
-                for (i, p) in rgba.pixels_mut().enumerate() {
-                    let c = raw[i * 4] as f64 / 255.0;
-                    let m = raw[i * 4 + 1] as f64 / 255.0;
-                    let y = raw[i * 4 + 2] as f64 / 255.0;
-                    let k = raw[i * 4 + 3] as f64 / 255.0;
-                    p[0] = (255.0 * (1.0 - c) * (1.0 - k) + 0.5) as u8;
-                    p[1] = (255.0 * (1.0 - m) * (1.0 - k) + 0.5) as u8;
-                    p[2] = (255.0 * (1.0 - y) * (1.0 - k) + 0.5) as u8;
-                    p[3] = alpha;
-                }
-                return DynamicImage::ImageRgba8(rgba);
-            }
-            "P" => {
-                // PIL putalpha on P converts to PA (palette index + alpha).
-                // Stored as Luma8, convert to LumaA8 with alpha.
-                let luma = img.to_luma8();
-                let mut la = GrayAlphaImage::new(luma.width(), luma.height());
-                for (o, i) in la.pixels_mut().zip(luma.pixels()) {
-                    o[0] = i[0];
-                    o[1] = alpha;
-                }
-                return DynamicImage::ImageLumaA8(la);
-            }
-            _ => {}
+pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicImage {
+    if mode == PixelMode::CMYK {
+        // Pillow Image.putalpha falls back from ImagingCore.setmode to
+        // Convert.c:cmyk2rgb. That path uses MULDIV255 integer rounding before
+        // Bands.c:ImagingFillBand replaces the promoted RGBA alpha channel.
+        let rgb = crate::color::cmyk_to_rgb(img).to_rgb8();
+        let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
+        for (output, input) in rgba.pixels_mut().zip(rgb.pixels()) {
+            *output = image_slash_star::Rgba([input[0], input[1], input[2], alpha]);
         }
+        return DynamicImage::ImageRgba8(rgba);
+    }
+    if matches!(mode, PixelMode::P | PixelMode::PA) {
+        // Convert.c:p2pa retains the palette index byte and adds one alpha byte
+        // per pixel; the palette itself remains attached at the Image layer.
+        let luma = img.to_luma8();
+        let mut la = GrayAlphaImage::new(luma.width(), luma.height());
+        for (output, input) in la.pixels_mut().zip(luma.pixels()) {
+            output[0] = input[0];
+            output[1] = alpha;
+        }
+        return DynamicImage::ImageLumaA8(la);
     }
     let out = match img.color() {
-        pillow_rs_image::ColorType::L8 => {
+        image_slash_star::ColorType::L8 => {
             let luma = img.to_luma8();
             let mut la = GrayAlphaImage::new(luma.width(), luma.height());
             for (o, i) in la.pixels_mut().zip(luma.pixels()) {
@@ -992,7 +1019,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) 
             }
             DynamicImage::ImageLumaA8(la)
         }
-        pillow_rs_image::ColorType::La8 => {
+        image_slash_star::ColorType::La8 => {
             let rgba = img.to_rgba8();
             let mut la = GrayAlphaImage::new(rgba.width(), rgba.height());
             for (o, i) in la.pixels_mut().zip(rgba.pixels()) {
@@ -1001,7 +1028,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) 
             }
             DynamicImage::ImageLumaA8(la)
         }
-        pillow_rs_image::ColorType::Rgb8 => {
+        image_slash_star::ColorType::Rgb8 => {
             let rgb = img.to_rgb8();
             let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
             for (o, i) in rgba.pixels_mut().zip(rgb.pixels()) {
@@ -1029,23 +1056,54 @@ fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize 
     x + y * sx + z * sxy
 }
 
+fn color_lut_interpolate(a: i16, b: i16, shift: i32) -> i16 {
+    const SHIFT_BITS: i32 = 15;
+    let value = (i64::from(a) * i64::from((1 << SHIFT_BITS) - shift)
+        + i64::from(b) * i64::from(shift))
+        >> SHIFT_BITS;
+    value as i16
+}
+
 pub fn op_color3dlut(
     img: &DynamicImage,
     size: (u32, u32, u32),
     table: &[f64],
     channels: u32,
+    source_mode: PixelMode,
+    target_mode: PixelMode,
 ) -> Result<DynamicImage, PilError> {
     let (sx, sy, sz) = (size.0 as usize, size.1 as usize, size.2 as usize);
     let ch = channels as usize;
     let sxy = sx * sy;
 
     let (w, h) = img.dimensions();
-    let src_channels = img.color().channel_count() as usize;
-
-    // Precompute grid mapping: pixel value → fractional grid coordinate
-    let scale_x = (sx - 1) as f64 / 255.0;
-    let scale_y = (sy - 1) as f64 / 255.0;
-    let scale_z = (sz - 1) as f64 / 255.0;
+    const PRECISION_BITS: i32 = 4;
+    const SCALE_BITS: u32 = 18;
+    const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
+    const SHIFT_BITS: u32 = 15;
+    let scales = [
+        ((sx - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+        ((sy - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+        ((sz - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
+    ];
+    // Pillow converts Python sequences to float32 before preparing signed
+    // 12.4 fixed-point entries in `_prepare_lut_table`.
+    let prepared: Vec<i16> = table
+        .iter()
+        .map(|value| {
+            let item = *value as f32;
+            let scaled = item * ((255 << PRECISION_BITS) as f32);
+            if scaled >= i16::MAX as f32 - 0.5 {
+                i16::MAX
+            } else if scaled <= i16::MIN as f32 + 0.5 {
+                i16::MIN
+            } else if item < 0.0 {
+                (scaled - 0.5) as i16
+            } else {
+                (scaled + 0.5) as i16
+            }
+        })
+        .collect();
 
     let mut out = vec![0u8; (w * h) as usize * 4];
 
@@ -1054,65 +1112,70 @@ pub fn op_color3dlut(
             let out_idx = ((y * w + x) as usize) * 4;
             let px = img.get_pixel(x, y).0;
 
-            let fx = px[0] as f64 * scale_x;
-            let fy = px[1] as f64 * scale_y;
-            let fz = px[2] as f64 * scale_z;
-
-            let x0 = (fx.floor() as usize).min(sx - 1);
-            let y0 = (fy.floor() as usize).min(sy - 1);
-            let z0 = (fz.floor() as usize).min(sz - 1);
-            let x1 = (x0 + 1).min(sx - 1);
-            let y1 = (y0 + 1).min(sy - 1);
-            let z1 = (z0 + 1).min(sz - 1);
-
-            let dx = fx - x0 as f64;
-            let dy = fy - y0 as f64;
-            let dz = fz - z0 as f64;
-
-            let w000 = (1.0 - dx) * (1.0 - dy) * (1.0 - dz);
-            let w100 = dx * (1.0 - dy) * (1.0 - dz);
-            let w010 = (1.0 - dx) * dy * (1.0 - dz);
-            let w110 = dx * dy * (1.0 - dz);
-            let w001 = (1.0 - dx) * (1.0 - dy) * dz;
-            let w101 = dx * (1.0 - dy) * dz;
-            let w011 = (1.0 - dx) * dy * dz;
-            let w111 = dx * dy * dz;
-
-            let base000 = table_index_3d(x0, y0, z0, sx, sxy) * ch;
-            let base100 = table_index_3d(x1, y0, z0, sx, sxy) * ch;
-            let base010 = table_index_3d(x0, y1, z0, sx, sxy) * ch;
-            let base110 = table_index_3d(x1, y1, z0, sx, sxy) * ch;
-            let base001 = table_index_3d(x0, y0, z1, sx, sxy) * ch;
-            let base101 = table_index_3d(x1, y0, z1, sx, sxy) * ch;
-            let base011 = table_index_3d(x0, y1, z1, sx, sxy) * ch;
-            let base111 = table_index_3d(x1, y1, z1, sx, sxy) * ch;
+            let indices = [
+                u32::from(px[0]) * scales[0],
+                u32::from(px[1]) * scales[1],
+                u32::from(px[2]) * scales[2],
+            ];
+            let shifts =
+                indices.map(|index| ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32);
+            let base = table_index_3d(
+                (indices[0] >> SCALE_BITS) as usize,
+                (indices[1] >> SCALE_BITS) as usize,
+                (indices[2] >> SCALE_BITS) as usize,
+                sx,
+                sxy,
+            ) * ch;
 
             for c in 0..ch {
-                let v = w000 * table[base000 + c]
-                    + w100 * table[base100 + c]
-                    + w010 * table[base010 + c]
-                    + w110 * table[base110 + c]
-                    + w001 * table[base001 + c]
-                    + w101 * table[base101 + c]
-                    + w011 * table[base011 + c]
-                    + w111 * table[base111 + c];
-                // PIL uses _prepare_lut_table which does item * 16320 + 0.5 (round to INT16),
-                // then clip8 does (result + 32) >> 6 = (result / 64) truncated with rounding.
-                // Equivalent to: round(v * 255.0) clamped to [0, 255]
-                let clipped = (v * 255.0 + 0.5).floor().max(0.0).min(255.0) as u8;
-                out[out_idx + c] = clipped;
+                let left_left =
+                    color_lut_interpolate(prepared[base + c], prepared[base + ch + c], shifts[0]);
+                let left_right = color_lut_interpolate(
+                    prepared[base + sx * ch + c],
+                    prepared[base + sx * ch + ch + c],
+                    shifts[0],
+                );
+                let left = color_lut_interpolate(left_left, left_right, shifts[1]);
+                let right_left = color_lut_interpolate(
+                    prepared[base + sxy * ch + c],
+                    prepared[base + sxy * ch + ch + c],
+                    shifts[0],
+                );
+                let right_right = color_lut_interpolate(
+                    prepared[base + sxy * ch + sx * ch + c],
+                    prepared[base + sxy * ch + sx * ch + ch + c],
+                    shifts[0],
+                );
+                let right = color_lut_interpolate(right_left, right_right, shifts[1]);
+                let result = color_lut_interpolate(left, right, shifts[2]);
+                out[out_idx + c] = ((i32::from(result) + (1 << (PRECISION_BITS - 1)))
+                    >> PRECISION_BITS)
+                    .clamp(0, 255) as u8;
             }
             if ch == 3 {
-                out[out_idx + 3] = if src_channels >= 4 { px[3] } else { 255 };
+                out[out_idx + 3] = if source_mode.channels() == 4 {
+                    px[3]
+                } else {
+                    255
+                };
             }
         }
     }
 
-    // Preserve input color type (RGB input → RGB output, RGBA → RGBA)
-    let result = DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(w, h, out).expect("color3dlut: buffer size mismatch"),
-    );
-    Ok(preserve_mode(img, result))
+    let rgba = RgbaImage::from_raw(w, h, out)
+        .ok_or_else(|| PilError::InternalError("color3dlut output size mismatch".into()))?;
+    match target_mode {
+        PixelMode::RGB => Ok(DynamicImage::ImageRgb8(
+            image_slash_star::RgbImage::from_fn(w, h, |x, y| {
+                let pixel = rgba.get_pixel(x, y);
+                image_slash_star::Rgb([pixel[0], pixel[1], pixel[2]])
+            }),
+        )),
+        PixelMode::RGBA | PixelMode::CMYK => Ok(DynamicImage::ImageRgba8(rgba)),
+        _ => Err(PilError::InternalError(
+            "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
+        )),
+    }
 }
 
 // ── MESH transform — piecewise bilinear quad mapping ──
@@ -1219,7 +1282,7 @@ pub fn op_effect_mandelbrot(
     y1: f64,
     quality: u32,
 ) -> Result<DynamicImage, PilError> {
-    let mut gray = pillow_rs_image::GrayImage::new(w, h);
+    let mut gray = image_slash_star::GrayImage::new(w, h);
     let dx = (x1 - x0) / w as f64;
     let dy = (y1 - y0) / h as f64;
     for py in 0..h {
@@ -1239,8 +1302,46 @@ pub fn op_effect_mandelbrot(
                 iter += 1;
             }
             let val = (iter * 255 / quality.max(1)) as u8;
-            gray.put_pixel(px, py, pillow_rs_image::Luma([val]));
+            gray.put_pixel(px, py, image_slash_star::Luma([val]));
         }
     }
     Ok(DynamicImage::ImageLuma8(gray))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DarwinRand, op_effect_noise};
+    use image_slash_star::{DynamicImage, GrayImage};
+
+    #[test]
+    fn darwin_rand_matches_pillow_oracle_sequence() {
+        let mut rng = DarwinRand::default();
+
+        assert_eq!(
+            [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()],
+            [
+                16_807,
+                282_475_249,
+                1_622_650_073,
+                984_943_658,
+                1_144_108_930
+            ]
+        );
+    }
+
+    #[test]
+    fn effect_noise_matches_pillow_pair_consumption_and_l_mode() {
+        let input = DynamicImage::ImageLuma8(GrayImage::new(16, 1));
+
+        let output = op_effect_noise(&input, 10.0).expect("noise generation must succeed");
+
+        assert!(matches!(&output, DynamicImage::ImageLuma8(_)));
+        assert_eq!(
+            output.as_bytes(),
+            &[
+                0x90, 0x81, 0x7c, 0x81, 0x68, 0x79, 0x7e, 0x78, 0x81, 0x8c, 0x79, 0x78, 0x82, 0x8b,
+                0x86, 0x88,
+            ]
+        );
+    }
 }

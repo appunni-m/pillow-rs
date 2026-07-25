@@ -1,7 +1,8 @@
 //! SIMD worker pool — implements BackendImpl for SIMD-accelerated CPU compute.
 //!
 //! Uses the `wide` crate for portable SIMD (SSE, AVX, NEON) to process pixels
-//! in vectorized chunks. Falls back to scalar CPU for unsupported ops.
+//! in vectorized chunks. Unsupported operations are routed to another backend
+//! before execution; an explicitly locked SIMD pipeline reports an error.
 //!
 //! ## Architecture
 //! - Same mode encoding as GPU: 0=L, 1=LA, 2=RGB, 3=RGBA
@@ -13,7 +14,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 pub mod ops;
 
@@ -21,9 +22,35 @@ pub mod ops;
 
 /// SIMD compute pool — CPU-accelerated via portable SIMD vectors.
 ///
-/// Falls back to scalar CPU when SIMD instructions aren't available
-/// or for ops that don't benefit from vectorization (Paste, Transform, etc.).
+/// Executes only operations with a registered SIMD implementation.
 pub struct SimdPool;
+
+fn normalize_palette_result(result: DynamicImage, mode: Option<&str>) -> DynamicImage {
+    match mode {
+        Some("P") => {
+            let rgba = result.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            let indices = rgba.pixels().map(|pixel| pixel[0]).collect();
+            DynamicImage::ImageLuma8(
+                image_slash_star::GrayImage::from_raw(width, height, indices)
+                    .expect("SIMD P-mode dimensions already validated"),
+            )
+        }
+        Some("PA") => {
+            let rgba = result.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            let samples = rgba
+                .pixels()
+                .flat_map(|pixel| [pixel[0], pixel[3]])
+                .collect();
+            DynamicImage::ImageLumaA8(
+                image_slash_star::GrayAlphaImage::from_raw(width, height, samples)
+                    .expect("SIMD PA-mode dimensions already validated"),
+            )
+        }
+        _ => result,
+    }
+}
 
 impl BackendImpl for SimdPool {
     fn name(&self) -> Backend {
@@ -35,10 +62,7 @@ impl BackendImpl for SimdPool {
     }
 
     fn supports(&self, op: &PipelineOp) -> bool {
-        // SIMD accelerates anything the CPU can do. As SIMD-specific functions
-        // are added via simd_entry!, those become the preferred path.
-        // For now, delegate to CPU functions with auto-vectorization doing the work.
-        registry::cpu_supports(op)
+        registry::simd_supports(op)
     }
 
     fn execute_batch(
@@ -56,20 +80,17 @@ impl BackendImpl for SimdPool {
             op_keys
         );
 
-        // Use SIMD-accelerated functions when available, CPU fallback otherwise.
         let mut current = img.clone();
         for op in ops {
             let key = registry::variant_key(op);
             let entry = registry::registry()
                 .get(key)
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: unknown op {}", key)))?;
-            // Prefer SIMD fn, fall back to CPU fn
             let f = entry
                 .simd_fn
-                .or(entry.cpu_fn)
-                .ok_or_else(|| PilError::ValueError(format!("SIMD: no impl for {}", key)))?;
+                .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
             current = f(&current, op, mode)?;
         }
-        Ok(current)
+        Ok(normalize_palette_result(current, mode))
     }
 }

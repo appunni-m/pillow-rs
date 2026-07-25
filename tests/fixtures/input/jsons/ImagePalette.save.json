@@ -7,39 +7,25 @@
   "cases": [
     {
       "id": "ImagePalette_save_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
-      "params": {}
+      "params": {},
+      "mode": "L"
     },
     {
       "id": "ImagePalette_save_P",
-      "mode": "P",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
-      "params": {}
+      "params": {},
+      "mode": "P"
     },
     {
       "id": "ImagePalette_save_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
+      "params": {},
+      "mode": "RGB"
+    },
+    {
+      "id": "ImagePalette_save_path_RGB",
+      "params": {
+        "destination": "path"
       },
-      "params": {}
+      "mode": "RGB"
     }
   ]
 }

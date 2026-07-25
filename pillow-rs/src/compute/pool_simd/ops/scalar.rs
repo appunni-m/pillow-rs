@@ -1324,65 +1324,6 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
     }
 }
 
-/// Effect spread: randomly scatter pixels within a given distance.
-///
-/// For each pixel at (x, y), computes a random offset (dx, dy) in
-/// [-distance/2, distance/2] and swaps the pixel values — matching PIL's
-/// ImagingEffectSpread. Uses a deterministic LCG seeded by pixel position
-/// for reproducible results across platforms.
-///
-/// Border pixels are handled by clamping the random offset to image bounds.
-/// When the random offset lands out of bounds, the pixel stays at its
-/// original position. Multiple pixels mapping to the same destination
-/// follow PIL's last-write-wins semantics.
-///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn effect_spread(pixels: &mut [u32], w: u32, h: u32, mode: u32, distance: u32) {
-    if distance == 0 {
-        return;
-    }
-    let d = distance as i32;
-    let half_d = d / 2;
-    let has_a = mode == 1 || mode == 3;
-    let src = pixels.to_vec();
-    let w_i = w as i32;
-    let h_i = h as i32;
-
-    for y in 0..h_i {
-        for x in 0..w_i {
-            // Deterministic LCG: glibc-style rand() seeded by pixel position.
-            // Two iterations give two independent random values for dx and dy.
-            let mut rng = (y * w_i + x) as u64;
-            rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-            let rand1 = (rng >> 16) as i32 & 0x7FFF;
-            rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-            let rand2 = (rng >> 16) as i32 & 0x7FFF;
-
-            let xx = x + (rand1 % d) - half_d;
-            let yy = y + (rand2 % d) - half_d;
-
-            if xx >= 0 && xx < w_i && yy >= 0 && yy < h_i {
-                let src_idx = (y * w_i + x) as usize;
-                let dst_idx = (yy * w_i + xx) as usize;
-                // Swap: current pixel goes to random offset, random pixel
-                // comes to current position (PIL ImagingEffectSpread behavior).
-                let cur = src[src_idx];
-                pixels[dst_idx] = cur;
-                pixels[src_idx] = src[dst_idx];
-            }
-            // Out of bounds: pixel stays at original position (no write needed)
-        }
-    }
-
-    // Clamp alpha for non-alpha modes (swapped pixels may carry garbage alpha)
-    if !has_a {
-        for p in pixels.iter_mut() {
-            *p |= 0xFF00_0000;
-        }
-    }
-}
-
 // ── Spatial operations (mirror, transpose, box_blur, gaussian_blur) ──────────
 
 /// Mirror: horizontal coordinate remap. output[y][x] = input[y][W-1-x]
@@ -2862,28 +2803,28 @@ pub fn rotate(
     (out, dw, dh)
 }
 
-/// Remap palette: convert P-mode image (palette index per pixel) to packed RGBA
-/// using a destination color map.
+/// Remap palette indices with Pillow's inverse destination map.
 ///
-/// Each source pixel's R byte is a palette index (0-255). The `dest_map` contains
-/// 256 RGB triples packed consecutively (768 bytes total). The pixel's index is
-/// used to look up the new R, G, B values from `dest_map`.
+/// Each source pixel's R byte is an old palette index. `inverse_map[old]`
+/// contains its new index; entries omitted from the destination map are zero.
 ///
 /// Returns a Vec<u32> of packed RGBA pixels (same length as input).
 /// Mode-aware: G/B set to looked-up values for RGB/RGBA (mode >= 2), mirrored
 /// from R for L/LA. Alpha forced to 0xFF for non-alpha modes.
 /// mode: 0=L (P-mode encoding), 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn remap_palette(pixels: &[u32], mode: u32, dest_map: &[u8; 768]) -> Vec<u32> {
+pub fn remap_palette(pixels: &[u32], mode: u32, inverse_map: &[u8; 256]) -> Vec<u32> {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
     let mut out = Vec::with_capacity(pixels.len());
 
     for &p in pixels.iter() {
-        let idx = (p & 0xFF) as usize; // palette index from R byte
-        let r = dest_map[idx * 3] as u32;
-        let g = dest_map[idx * 3 + 1] as u32;
-        let b = dest_map[idx * 3 + 2] as u32;
+        let old_r = (p & 0xFF) as usize;
+        let old_g = ((p >> 8) & 0xFF) as usize;
+        let old_b = ((p >> 16) & 0xFF) as usize;
+        let r = u32::from(inverse_map[old_r]);
+        let g = u32::from(inverse_map[old_g]);
+        let b = u32::from(inverse_map[old_b]);
 
         let out_g = if has_gb { g } else { r };
         let out_b = if has_gb { b } else { r };
@@ -3168,105 +3109,150 @@ pub fn put_pixel(pixels: &mut [u32], w: u32, mode: u32, x: u32, y: u32, color_rg
     pixels[idx] = r | (out_g << 8) | (out_b << 16) | out_a;
 }
 
-/// Replace pixel data with raw bytes.
-///
-/// Data must be RGBA byte sequences, `data.len()` must match `pixels.len() * 4`.
-/// Each group of 4 bytes [R, G, B, A] is packed into one u32 pixel.
-/// Mode-aware alpha clamp applied at the end.
+/// Replace pixel data with logical Pillow-mode sample bytes.
 ///
 /// Operates in-place on pixels slice.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// Mode codes are defined by `pipeline::PixelMode`.
 #[inline]
 pub fn put_data(pixels: &mut [u32], mode: u32, data: &[u8]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let n = pixels.len();
+    let channels = match mode {
+        0 | 4 | 7 => 1,
+        1 | 5 => 2,
+        2 | 8 | 9 => 3,
+        _ => 4,
+    };
+    let n_copy = data.len().min(pixels.len() * channels);
 
-    for i in 0..n {
-        let base = i * 4;
-        let r = data[base] as u32;
-        let g = data[base + 1] as u32;
-        let b = data[base + 2] as u32;
-        let a = data[base + 3] as u32;
-
-        let out_g = if has_gb { g } else { r };
-        let out_b = if has_gb { b } else { r };
-        let out_a = if has_a { a << 24 } else { 0xFF00_0000 };
-
-        pixels[i] = r | (out_g << 8) | (out_b << 16) | out_a;
+    for (sample_index, &sample) in data[..n_copy].iter().enumerate() {
+        let pixel_index = sample_index / channels;
+        let channel = sample_index % channels;
+        let pixel = &mut pixels[pixel_index];
+        let value = sample as u32;
+        match mode {
+            // L, P, and 1 use the R byte as their packed scalar sample.
+            0 | 4 | 7 => {
+                *pixel = value | (value << 8) | (value << 16) | 0xFF00_0000;
+            }
+            // Packed LA/PA stores luma in R and alpha in A.
+            1 | 5 => {
+                if channel == 0 {
+                    *pixel = (*pixel & 0xFF00_0000) | value | (value << 8) | (value << 16);
+                } else {
+                    *pixel = (*pixel & 0x00FF_FFFF) | (value << 24);
+                }
+            }
+            // RGB-family raw samples occupy the low three packed bytes.
+            2 | 8 | 9 => {
+                let shift = (channel * 8) as u32;
+                *pixel = (*pixel & !(0xFF << shift)) | (value << shift);
+                *pixel |= 0xFF00_0000;
+            }
+            // RGBA, CMYK, I, and F are all four raw bytes in order.
+            _ => {
+                let shift = (channel * 8) as u32;
+                *pixel = (*pixel & !(0xFF << shift)) | (value << shift);
+            }
+        }
     }
 }
 
 /// Set alpha channel of all pixels to `alpha` (0-255).
 ///
-/// For non-alpha modes (L, RGB): no-op (alpha is already 0xFF).
-/// For LA, RGBA: set A byte to alpha value.
-///
 /// Operates in-place on pixels slice.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// Mode codes are defined by `pipeline::PixelMode`.
 #[inline]
 pub fn put_alpha(pixels: &mut [u32], mode: u32, alpha: u8) {
-    let has_a = mode == 1 || mode == 3;
-    if !has_a {
-        return; // no-op for L, RGB
-    }
     let a_packed = (alpha as u32) << 24;
     for p in pixels.iter_mut() {
-        *p = (*p & 0x00FF_FFFF) | a_packed;
+        if mode == 6 {
+            // Pillow Convert.c:cmyk2rgb uses MULDIV255:
+            // t = channel * (255-K) + 128; ((t >> 8) + t) >> 8.
+            let c = *p & 0xFF;
+            let m = (*p >> 8) & 0xFF;
+            let y = (*p >> 16) & 0xFF;
+            let k = (*p >> 24) & 0xFF;
+            let nk = 255 - k;
+            let convert = |channel: u32| {
+                let t = channel * nk + 128;
+                nk.saturating_sub(((t >> 8) + t) >> 8)
+            };
+            let r = convert(c);
+            let g = convert(m);
+            let b = convert(y);
+            *p = r | (g << 8) | (b << 16) | a_packed;
+        } else {
+            *p = (*p & 0x00FF_FFFF) | a_packed;
+        }
     }
 }
 
-/// Composite two images using a per-channel mask.
+/// Composite two images using a single mask band.
 ///
 /// Formula: `out = (pixels * mask + other * (255 - mask)) / 255`
 /// Applied per byte (all 4 channels independently).
 ///
-/// Module-function variant (Image.composite): mask is applied per-channel
-/// like ImageChops.composite. Mask values are 0-255 per byte.
+/// Module-function variant (`Image.composite`): `1`/`L` masks use the low
+/// luma byte while `LA`/`RGBA`/`RGBa` masks use the alpha byte.
 ///
 /// Mode-aware: for L/LA modes (mode < 2), G and B mirror R.
 /// Alpha preserved for LA/RGBA, forced to 0xFF for L/RGB.
 ///
-/// Operates in-place on pixels slice, consuming `other` and `mask` element-wise.
+/// The result starts as image2 and image1 is blended into its top-left overlap,
+/// matching Pillow's `image2.copy(); image2.paste(image1, mask)` implementation.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn composite_module(pixels: &mut [u32], mode: u32, other: &[u32], mask: &[u32]) {
+#[allow(clippy::too_many_arguments)]
+pub fn composite_module(
+    pixels: &[u32],
+    width: u32,
+    height: u32,
+    mode: u32,
+    other: &[u32],
+    other_width: u32,
+    other_height: u32,
+    mask: &[u32],
+    mask_width: u32,
+    mask_height: u32,
+    mask_alpha: bool,
+) -> Vec<u32> {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
+    let mut out = other.to_vec();
+    let overlap_width = width.min(other_width).min(mask_width);
+    let overlap_height = height.min(other_height).min(mask_height);
 
-    for ((p, o), m) in pixels.iter_mut().zip(other.iter()).zip(mask.iter()) {
-        let pr = *p & 0xFF;
-        let pg = (*p >> 8) & 0xFF;
-        let pb = (*p >> 16) & 0xFF;
-        let pa = (*p >> 24) & 0xFF;
+    for y in 0..overlap_height {
+        for x in 0..overlap_width {
+            let source = pixels[(y * width + x) as usize];
+            let destination = other[(y * other_width + x) as usize];
+            let mask_pixel = mask[(y * mask_width + x) as usize];
+            let amount = if mask_alpha {
+                (mask_pixel >> 24) & 0xFF
+            } else {
+                mask_pixel & 0xFF
+            };
+            let inverse = 255 - amount;
+            let blend = |source: u32, destination: u32| {
+                (source * amount + destination * inverse + 127) / 255
+            };
 
-        let or = *o & 0xFF;
-        let og = (*o >> 8) & 0xFF;
-        let ob = (*o >> 16) & 0xFF;
-        let oa = (*o >> 24) & 0xFF;
+            let out_r = blend(source & 0xFF, destination & 0xFF);
+            let out_g_raw = blend((source >> 8) & 0xFF, (destination >> 8) & 0xFF);
+            let out_b_raw = blend((source >> 16) & 0xFF, (destination >> 16) & 0xFF);
+            let out_a_raw = blend((source >> 24) & 0xFF, (destination >> 24) & 0xFF);
+            let out_g = if has_gb { out_g_raw } else { out_r };
+            let out_b = if has_gb { out_b_raw } else { out_r };
+            let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
 
-        let mr = *m & 0xFF;
-        let mg = (*m >> 8) & 0xFF;
-        let mb = (*m >> 16) & 0xFF;
-        let ma = (*m >> 24) & 0xFF;
-
-        // out = (pixels * mask + other * (255 - mask)) / 255
-        let out_r = (pr * mr + or * (255 - mr)) / 255;
-        let out_g_raw = (pg * mg + og * (255 - mg)) / 255;
-        let out_b_raw = (pb * mb + ob * (255 - mb)) / 255;
-        let out_a_raw = (pa * ma + oa * (255 - ma)) / 255;
-
-        let out_g = if has_gb { out_g_raw } else { out_r };
-        let out_b = if has_gb { out_b_raw } else { out_r };
-        let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
+            out[(y * other_width + x) as usize] = out_r | (out_g << 8) | (out_b << 16) | out_a;
+        }
     }
+    out
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Effects + Lookup operations
-//  (paste, alpha_composite, eval, effect_noise, point_op)
+//  (paste, alpha_composite, eval, point_op)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Paste: copy source image pixels onto destination at (paste_x, paste_y).
@@ -3288,6 +3274,7 @@ pub fn paste(
     paste_x: i32,
     paste_y: i32,
     mask: Option<&[u32]>,
+    mask_alpha: bool,
 ) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
@@ -3295,10 +3282,29 @@ pub fn paste(
     // Compute paste region clamped to destination bounds.
     // x_start/y_start = first source pixel visible in dest (0 if paste_x >= 0).
     // x_end/y_end     = last source pixel visible in dest (src_w if paste fits).
-    let x_start = (-paste_x) as u32;
-    let y_start = (-paste_y) as u32;
-    let x_end = src_w.min(w.saturating_sub(paste_x.max(0) as u32));
-    let y_end = src_h.min(h.saturating_sub(paste_y.max(0) as u32));
+    let x_start = if paste_x < 0 {
+        paste_x.unsigned_abs()
+    } else {
+        0
+    };
+    let y_start = if paste_y < 0 {
+        paste_y.unsigned_abs()
+    } else {
+        0
+    };
+    // libImaging/Paste.c clips the destination rectangle and advances the
+    // source origin by the clipped leading edge. For a negative placement the
+    // visible source end therefore extends by that same source offset.
+    let x_end = if paste_x < 0 {
+        src_w.min(w.saturating_add(x_start))
+    } else {
+        src_w.min(w.saturating_sub(paste_x as u32))
+    };
+    let y_end = if paste_y < 0 {
+        src_h.min(h.saturating_add(y_start))
+    } else {
+        src_h.min(h.saturating_sub(paste_y as u32))
+    };
 
     if x_start >= x_end || y_start >= y_end {
         return;
@@ -3319,7 +3325,11 @@ pub fn paste(
 
                 let sp = source[src_idx];
                 let dp = pixels[dst_idx];
-                let mv = mask_pixels[src_idx] & 0xFF;
+                let mv = if mask_alpha {
+                    (mask_pixels[src_idx] >> 24) & 0xFF
+                } else {
+                    mask_pixels[src_idx] & 0xFF
+                };
 
                 if mv == 0 {
                     continue;
@@ -3540,94 +3550,6 @@ pub fn eval(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
                 0xFF00_0000
             };
             *p = out_r | (out_r << 8) | (out_r << 16) | out_a;
-        }
-    }
-}
-
-/// Add Gaussian noise to active channels.
-///
-/// Uses Box-Muller transform with deterministic LCG (glibc-style) seeded by
-/// pixel position. Each active channel gets independent noise.
-///
-/// Output per channel = PIL CLIP8(128 + sigma * noise):
-///   CLIP8(v) = v <= 0 ? 0 : v >= 255 ? 255 : (UINT8)(v)
-///   (truncation toward zero, no rounding -- matching PIL's C implementation)
-///
-/// Mode-aware: only noises channels present in the mode.
-/// For L/LA modes: G = B = R (luma carried in R).
-///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn effect_noise(pixels: &mut [u32], w: u32, h: u32, mode: u32, sigma: f64) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let w_u = w as usize;
-
-    // PIL CLIP8: truncation toward zero, matching Imaging.h
-    let clip8 = |v: f64| -> u32 {
-        if v <= 0.0 {
-            0
-        } else if v >= 255.0 {
-            255
-        } else {
-            v as u32
-        }
-    };
-
-    for y in 0..(h as usize) {
-        for x in 0..w_u {
-            let idx = y * w_u + x;
-            let seed = (y * w_u + x) as u64;
-
-            let n_active = match mode {
-                0 => 1, // L
-                1 => 2, // LA
-                2 => 3, // RGB
-                _ => 4, // RGBA
-            };
-
-            // Generate independent gaussian samples via Box-Muller.
-            // Each channel uses a unique seed offset so the noise is uncorrelated.
-            let mut samples = [0.0f64; 4];
-            for ch in 0..n_active {
-                let mut rng = seed.wrapping_add((ch as u64).wrapping_mul(1234567));
-                samples[ch] = loop {
-                    rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-                    let r1 = ((rng >> 16) as i32 & 0x7FFF) as f64;
-                    rng = rng.wrapping_mul(1103515245).wrapping_add(12345);
-                    let r2 = ((rng >> 16) as i32 & 0x7FFF) as f64;
-                    // Box-Muller polar transform
-                    let v1 = 2.0 * r1 / 2147483647.0 - 1.0;
-                    let v2 = 2.0 * r2 / 2147483647.0 - 1.0;
-                    let radius = v1 * v1 + v2 * v2;
-                    if radius < 1.0 && radius > 0.0 {
-                        let factor = (-2.0 * radius.ln() / radius).sqrt();
-                        break factor * v1;
-                    }
-                };
-            }
-
-            if has_gb {
-                // RGB/RGBA: R, G, B independent
-                let out_r = clip8(128.0 + sigma * samples[0]);
-                let out_g = clip8(128.0 + sigma * samples[1]);
-                let out_b = clip8(128.0 + sigma * samples[2]);
-                let out_a = if has_a {
-                    clip8(128.0 + sigma * samples[3]) << 24
-                } else {
-                    0xFF00_0000
-                };
-                pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
-            } else {
-                // L/LA: R carries luma, G = B = R
-                let out_r = clip8(128.0 + sigma * samples[0]);
-                let out_a = if has_a {
-                    clip8(128.0 + sigma * samples[1]) << 24
-                } else {
-                    0xFF00_0000
-                };
-                pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
-            }
         }
     }
 }

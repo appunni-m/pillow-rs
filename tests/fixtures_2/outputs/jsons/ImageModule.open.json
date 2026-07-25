@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageModule",
@@ -17,28 +19,39 @@
       "id": "ImageModule.open_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_CMYK_suite1.png"
+        "reference": "raws/ImageModule.open_ImageModule.open_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          3,
+          2
+        ]
       }
     },
     {
       "id": "ImageModule.open_F_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_F_suite1.png"
-      }
-    },
-    {
-      "id": "ImageModule.open_HSV_suite1",
-      "assert": {
-        "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_HSV_suite1.png"
+        "reference": "raws/ImageModule.open_ImageModule.open_F_suite1.bin",
+        "raw_kind": "image",
+        "mode": "F",
+        "size": [
+          3,
+          2
+        ]
       }
     },
     {
       "id": "ImageModule.open_I_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_I_suite1.png"
+        "reference": "raws/ImageModule.open_ImageModule.open_I_suite1.bin",
+        "raw_kind": "image",
+        "mode": "I",
+        "size": [
+          3,
+          2
+        ]
       }
     },
     {
@@ -59,7 +72,39 @@
       "id": "ImageModule.open_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_P_suite1.png"
+        "reference": "raws/ImageModule.open_ImageModule.open_P_suite1.bin",
+        "raw_kind": "image",
+        "mode": "P",
+        "size": [
+          3,
+          2
+        ],
+        "palette": [
+          0,
+          0,
+          255,
+          1,
+          3,
+          254,
+          2,
+          6,
+          253,
+          3,
+          9,
+          252,
+          4,
+          12,
+          251,
+          5,
+          15,
+          250,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
       }
     },
     {
@@ -67,13 +112,6 @@
       "assert": {
         "method": "image",
         "reference": "images/ImageModule.open_ImageModule.open_RGBA_suite1.png"
-      }
-    },
-    {
-      "id": "ImageModule.open_YCbCr_suite1",
-      "assert": {
-        "method": "image",
-        "reference": "images/ImageModule.open_ImageModule.open_YCbCr_suite1.png"
       }
     },
     {

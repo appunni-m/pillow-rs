@@ -1,0 +1,145 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "new"
+  },
+  "cases": [
+    {
+      "id": "rgb_100x100_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          128,
+          64,
+          200
+        ]
+      }
+    },
+    {
+      "id": "l_50x50_gray_suite1",
+      "params": {
+        "mode": "L",
+        "size": [
+          50,
+          50
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "rgba_100x100_red_suite1",
+      "params": {
+        "mode": "RGBA",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          255,
+          0,
+          0,
+          128
+        ]
+      }
+    },
+    {
+      "id": "1bit_50x50_suite1",
+      "params": {
+        "mode": "1",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      }
+    },
+    {
+      "id": "cmyk_50x50_suite1",
+      "params": {
+        "mode": "CMYK",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "float_50x50_suite1",
+      "params": {
+        "mode": "F",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0.0
+      }
+    },
+    {
+      "id": "hsv_50x50_suite1",
+      "params": {
+        "mode": "HSV",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "int32_50x50_suite1",
+      "params": {
+        "mode": "I",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      }
+    },
+    {
+      "id": "la_50x50_suite1",
+      "params": {
+        "mode": "LA",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          0,
+          255
+        ]
+      }
+    },
+    {
+      "id": "ycbcr_50x50_suite1",
+      "params": {
+        "mode": "YCbCr",
+        "size": [
+          50,
+          50
+        ],
+        "color": [
+          0,
+          128,
+          128
+        ]
+      }
+    }
+  ]
+}

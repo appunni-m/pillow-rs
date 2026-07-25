@@ -3,11 +3,11 @@ members = [
     "pillow-rs",
     "pillow-rs-py",
     "pillow-rs-js",
-    "pillow-rs-image",
     "pillow-rs-freetype",
     "pillow-rs-freetype/ffi-c",
     "pillow-rs-freetype/ffi-wasm",
 ]
+exclude = ["pillow-rs-image"]
 resolver = "2"
 
 [workspace.package]

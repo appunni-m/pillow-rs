@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,29 +11,109 @@
     {
       "id": "default_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 2
+            },
+            {
+              "type": "int",
+              "value": 25
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     },
     {
       "id": "getbbox_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 2
+            },
+            {
+              "type": "int",
+              "value": 25
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     },
     {
       "id": "getbbox_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 2
+            },
+            {
+              "type": "int",
+              "value": 25
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     },
     {
       "id": "getbbox_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 0
+            },
+            {
+              "type": "int",
+              "value": 2
+            },
+            {
+              "type": "int",
+              "value": 25
+            },
+            {
+              "type": "int",
+              "value": 10
+            }
+          ]
+        }
       }
     }
   ]

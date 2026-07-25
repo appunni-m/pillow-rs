@@ -14,30 +14,27 @@
           50,
           50
         ]
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "ImageModule.fromarray_RGB_suite1",
       "params": {
-        "mode": "L",
+        "mode": "RGB",
         "size": [
           50,
           50
         ]
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "ImageModule.fromarray_RGBA_suite1",
       "params": {
-        "mode": "L",
+        "mode": "RGBA",
         "size": [
           50,
           50
         ]
-      },
-      "mode": "RGBA"
+      }
     },
     {
       "id": "L_suite1",

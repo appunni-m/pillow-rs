@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,29 +11,117 @@
     {
       "id": "Image_verify_L_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "NoneType"
+            },
+            {
+              "type": "dict",
+              "items": [
+                [
+                  {
+                    "type": "str",
+                    "value": "accessible"
+                  },
+                  {
+                    "type": "bool",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_verify_LA_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "NoneType"
+            },
+            {
+              "type": "dict",
+              "items": [
+                [
+                  {
+                    "type": "str",
+                    "value": "accessible"
+                  },
+                  {
+                    "type": "bool",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_verify_RGB_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "NoneType"
+            },
+            {
+              "type": "dict",
+              "items": [
+                [
+                  {
+                    "type": "str",
+                    "value": "accessible"
+                  },
+                  {
+                    "type": "bool",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_verify_RGBA_suite1",
       "assert": {
-        "method": "exact",
-        "value": null
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "NoneType"
+            },
+            {
+              "type": "dict",
+              "items": [
+                [
+                  {
+                    "type": "str",
+                    "value": "accessible"
+                  },
+                  {
+                    "type": "bool",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          ]
+        }
       }
     }
   ]

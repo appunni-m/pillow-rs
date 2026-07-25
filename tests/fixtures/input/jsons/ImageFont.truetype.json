@@ -7,7 +7,6 @@
   "cases": [
     {
       "id": "ImageFont.truetype_RGB",
-      "mode": "RGB",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
@@ -15,7 +14,6 @@
     },
     {
       "id": "ImageFont.truetype_RGBA",
-      "mode": "RGBA",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
@@ -23,7 +21,6 @@
     },
     {
       "id": "liberation_serif_20",
-      "mode": "L",
       "input": null,
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",

@@ -8,13 +8,6 @@
     {
       "id": "ImagePalette_getcolor_L",
       "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "color": [
           255,
@@ -26,13 +19,6 @@
     {
       "id": "ImagePalette_getcolor_P",
       "mode": "P",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "color": [
           255,
@@ -44,13 +30,6 @@
     {
       "id": "ImagePalette_getcolor_RGB",
       "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "color": [
           255,

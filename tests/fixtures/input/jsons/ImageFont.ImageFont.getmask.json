@@ -1,0 +1,14 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "class": "ImageFont",
+    "target": "getmask"
+  },
+  "cases": [
+    {
+      "id": "base_getmask",
+      "params": {"text": "Parity", "mode": "L"}
+    }
+  ]
+}

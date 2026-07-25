@@ -7,29 +7,13 @@
   "cases": [
     {
       "id": "ImageColor_getcolor_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "color": "red",
-        "mode": "RGB"
+        "mode": "L"
       }
     },
     {
       "id": "ImageColor_getcolor_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [
-          256,
-          256
-        ]
-      },
       "params": {
         "color": "red",
         "mode": "RGB"

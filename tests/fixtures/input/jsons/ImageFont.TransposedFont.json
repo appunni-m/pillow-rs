@@ -6,19 +6,7 @@
   },
   "cases": [
     {
-      "id": "rotate_90_hello",
-      "mode": "RGB",
-      "input": null,
-      "params": {
-        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-        "size": 20,
-        "orientation": "ROTATE_90",
-        "text": "Hello"
-      }
-    },
-    {
       "id": "flip_left_right",
-      "mode": "RGB",
       "input": null,
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",

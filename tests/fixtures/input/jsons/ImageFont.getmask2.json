@@ -6,43 +6,29 @@
   },
   "cases": [
     {
-      "id": "default",
-      "input": null,
+      "id": "baseline",
       "params": {
         "text": "Hello"
       }
     },
     {
-      "id": "getmask2_L",
-      "mode": "L",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
+      "id": "integer_start",
       "params": {
-        "text": "Hello"
+        "text": "Hello",
+        "start": [
+          3,
+          4
+        ]
       }
     },
     {
-      "id": "getmask2_RGB",
-      "mode": "RGB",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
+      "id": "fractional_start",
       "params": {
-        "text": "Hello"
-      }
-    },
-    {
-      "id": "getmask2_RGBA",
-      "mode": "RGBA",
-      "input": {
-        "source": "reference_rgb",
-        "size": [256, 256]
-      },
-      "params": {
-        "text": "Hello"
+        "text": "Hello",
+        "start": [
+          0.5,
+          0.75
+        ]
       }
     }
   ]

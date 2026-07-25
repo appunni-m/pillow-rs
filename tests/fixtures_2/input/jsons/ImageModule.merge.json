@@ -7,172 +7,36 @@
   },
   "cases": [
     {
-      "id": "ImageModule.merge_L_suite1",
+      "id": "merge_L_suite1",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
-      },
-      "mode": "L"
+        "mode": "L",
+        "size": [3, 7],
+        "band_values": [231]
+      }
     },
     {
-      "id": "ImageModule.merge_LA_suite1",
+      "id": "merge_LA_suite1",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
-      },
-      "mode": "LA"
+        "mode": "LA",
+        "size": [3, 7],
+        "band_values": [231, 37]
+      }
     },
     {
-      "id": "ImageModule.merge_RGBA_suite1",
+      "id": "merge_RGB_suite1",
       "params": {
         "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
-      },
-      "mode": "RGBA"
+        "size": [3, 7],
+        "band_values": [231, 37, 119]
+      }
     },
     {
-      "id": "RGB_from_bands_suite1",
+      "id": "merge_RGBA_suite1",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
-      },
-      "mode": "RGB"
+        "mode": "RGBA",
+        "size": [3, 7],
+        "band_values": [231, 37, 119, 73]
+      }
     }
   ]
 }

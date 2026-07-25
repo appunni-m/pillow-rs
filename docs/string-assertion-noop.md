@@ -3,6 +3,31 @@
 **Date:** 2026-06-21
 **Severity:** HIGH — 201 tests pass without validating any output
 
+## 2026-07-23 Follow-up
+
+The prefix fallback described below is no longer an accepted fix. Fixture
+values now preserve scalar and container types, error types and messages are
+exact, images compare mode/size/palette/pixels, and fixture integrity rejects
+prefix, tolerance, substring-error, stale, missing, and orphaned assertions.
+
+The audit also found that the earlier `instance_method_bytes` workaround did
+not test `Image.getdata`, `Image.load`, or `Image.getim`; it compared the source
+image bytes instead. Those operations now exercise the returned sequence,
+pixel-access object, or opaque-result type directly. Font exceptions are no
+longer normalized to `[]` or `None`. Mutating calls now compare both their
+return values and the resulting pixels instead of accepting `None` alone.
+Pillow `ImagingCore` font masks are no longer converted into `Image` objects:
+font fixtures record the concrete return type, mode, size, and bytes so a
+wrapper-type mismatch remains a visible parity failure.
+
+Strict fixture coverage initially exposed 12 operations with no fixture and 32
+declared-mode gaps. The coverage gate now rejects input images and top-level
+mode labels that the selected call style does not consume. Exact property,
+base-font, and transposed-font fixtures were added; `open`, `frombytes`,
+`fromarray`, and `merge` now exercise their real modes. Unsupported or
+mode-independent declarations were removed from the manifest instead of being
+papered over with relabeled cases.
+
 ## Root Cause
 
 `tests/engine.py:508-510`:

@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -11,7 +13,7 @@
       "assert": {
         "method": "error",
         "exception": "ValueError",
-        "message_contains": "not enough image data"
+        "message": "not enough image data"
       }
     },
     {
@@ -19,7 +21,7 @@
       "assert": {
         "method": "error",
         "exception": "ValueError",
-        "message_contains": "not enough image data"
+        "message": "not enough image data"
       }
     },
     {
@@ -27,7 +29,7 @@
       "assert": {
         "method": "error",
         "exception": "ValueError",
-        "message_contains": "not enough image data"
+        "message": "not enough image data"
       }
     },
     {
@@ -35,7 +37,7 @@
       "assert": {
         "method": "error",
         "exception": "ValueError",
-        "message_contains": "not enough image data"
+        "message": "not enough image data"
       }
     }
   ]

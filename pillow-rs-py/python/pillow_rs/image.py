@@ -9,6 +9,7 @@ from .enums import Palette, Resampling, Transpose
 _BAND_NAMES = {
     "L": ("L",),
     "LA": ("L", "A"),
+    "PA": ("P", "A"),
     "RGB": ("R", "G", "B"),
     "RGBA": ("R", "G", "B", "A"),
     "CMYK": ("C", "M", "Y", "K"),
@@ -19,6 +20,34 @@ _BAND_NAMES = {
     "1": ("1",),
     "P": ("P",),
 }
+
+
+class ImagingCore:
+    """Sequence view matching Pillow's internal ``ImagingCore`` contract."""
+
+    __slots__ = ("_values",)
+
+    def __init__(self, values):
+        self._values = values
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+
+class _ClosedImage:
+    """Released image storage that preserves Pillow's closed-image error."""
+
+    def close(self):
+        return None
+
+    def __getattr__(self, _name):
+        raise ValueError("Operation on closed image")
 
 
 class Image:
@@ -85,17 +114,10 @@ class Image:
         size: Tuple[int, int],
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
-        # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
-        nonstandard = {"I": "RGBA", "F": "RGBA"}
-        rust_mode = nonstandard.get(mode, mode)
         # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
         if isinstance(color, list):
             color = tuple(color)
-        rust_image = RustImage.new(rust_mode, size, color)
-        img = cls(rust_image)
-        if mode in nonstandard:
-            img._explicit_mode = mode
-        return img
+        return cls(RustImage.new(mode, size, color))
 
     @classmethod
     def blend(
@@ -180,7 +202,15 @@ class Image:
         colors: int = 256,
     ) -> "Image":
         if mode is None:
-            mode = self.mode
+            if self.mode == "P":
+                image_palette = self.palette
+                mode = image_palette.mode if image_palette is not None else "RGB"
+                if mode == "RGB" and self.has_transparency_data:
+                    mode = "RGBA"
+            else:
+                return self.copy()
+        elif mode == self.mode and matrix is None:
+            return self.copy()
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
@@ -204,10 +234,9 @@ class Image:
             rust_im = im
         if isinstance(box, Image):
             rust_box = box._rust_image
-            rust_mask = None
         else:
             rust_box = box
-            rust_mask = mask._rust_image if mask is not None else None
+        rust_mask = mask._rust_image if isinstance(mask, Image) else mask
         self._rust_image.paste(rust_im, rust_box, rust_mask)
 
     def split(self) -> Tuple["Image", ...]:
@@ -254,11 +283,7 @@ class Image:
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        data = self._rust_image.tobytes_formatted(self.mode)
-        # Handle raw encoder formats: "BGRA" swaps B and R channels
-        if encoder_name == "raw" and args and args[0] in ("BGRA", "BGR"):
-            return self._rust_image.tobytes_formatted_swap(self.mode, args[0])
-        return data
+        return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
 
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""
@@ -312,15 +337,16 @@ class Image:
             self._rust_image.putalpha(alpha)
         else:
             self._rust_image.putalpha(int(alpha))
+        self._explicit_mode = self._rust_image.explicit_mode()
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor."""
         return Image(self._rust_image.reduce(factor))
 
     def load(self):
-        """Load pixel data. Returns PixelAccess stub matching PIL's format."""
+        """Load pixel data and return a mutable Pillow-style pixel view."""
         self._rust_image.load()
-        return _PixelAccessStub(self)
+        return PixelAccess(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self. Returns None (mutates in-place)."""
@@ -331,16 +357,13 @@ class Image:
         return self._rust_image.getcolors_formatted(maxcolors)
 
     def getdata(self, band=None):
-        """Return pixel data as sequence of tuples (matching PIL)."""
-        return self._rust_image.getdata_formatted(band if band is not None else -1)
+        """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
+        values = self._rust_image.getdata_formatted(band)
+        return ImagingCore(values)
 
     def putdata(self, data, scale=1.0, offset=0.0):
-        """Replace pixel data from a sequence. Flattening done in Rust.
-
-        PIL semantics for int values in multi-band images:
-        first band = value, remaining bands = 0.
-        """
-        self._rust_image.putdata_formatted(data, len(self.getbands()))
+        """Replace pixels from scalar samples or multiband color tuples."""
+        self._rust_image.putdata_formatted(data, scale, offset)
 
     def getprojection(self):
         """Return horizontal and vertical projections."""
@@ -360,14 +383,16 @@ class Image:
 
     def close(self):
         """Close the image file and release resources."""
+        if isinstance(self._rust_image, _ClosedImage):
+            return None
         self._rust_image.close()
+        self._rust_image = _ClosedImage()
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        n_bands = len(self.getbands())
         if callable(lut):
             lut = _core.make_lut(lut, 1)
-            return Image(self._rust_image.point_replicated(lut, n_bands))
+            return Image(self._rust_image.point_replicated(lut))
         # LUT validation (PIL requires 256 * n_bands entries) handled in Rust
         return Image(self._rust_image.point_validated(list(lut)))
 
@@ -376,22 +401,11 @@ class Image:
         return Image(self._rust_image.effect_spread(distance))
 
     def apply_transparency(self):
-        """Apply transparency mask to image.
-
-        PIL: For P-mode images with palette transparency, converts the palette
-        from RGB to RGBA format, setting alpha=0 for transparent entries.
-        Our implementation converts P-mode to RGBA, making transparency explicit.
-        """
-        if self._explicit_mode == "P":
-            # P-mode stored as L in Rust (Python-level explicit_mode).
-            # Convert to RGBA to apply transparency.
-            rgb = self._rust_image.convert("RGBA", None, None, None, None)
-            self._rust_image = rgb
-            self._explicit_mode = None
-        else:
-            # Handle Paletted variant at Rust level (loaded P-mode images).
-            # For RGBA/LA/RGB images, this is a no-op.
-            return self._rust_image.apply_transparency()
+        """Commit P-mode transparency to its palette without changing pixels."""
+        result = self._rust_image.apply_transparency()
+        self.__dict__.pop("_palette", None)
+        self.__dict__.pop("_palette_object", None)
+        return result
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""
@@ -415,10 +429,15 @@ class Image:
     def getpalette(self, rawmode="RGB"):
         """Return palette data.
 
-        PIL behavior: returns the palette as a flat list of RGB values,
-        trimmed to the last non-zero triple. WEB palette has 226 colors
-        (678 bytes). Full custom palette has 256 colors (768 bytes).
+        PIL behavior: returns the exact retained flat RGB palette. WEB palette
+        has 226 colors (678 bytes), while an encoded or explicitly attached
+        palette may retain trailing black entries.
         """
+        if rawmode is None:
+            rawmode = self._rust_image.palette_mode()
+        if rawmode == "RGBA":
+            p = self._rust_image.getpalette_rgba()
+            return list(p) if p is not None else None
         if hasattr(self, '_palette'):
             return self._palette
         try:
@@ -429,7 +448,7 @@ class Image:
         except Exception:
             pass
         # PIL: P-mode image with no palette returns empty list, not None
-        if self.mode == "P":
+        if self.mode in ("P", "PA"):
             return []
         return None
 
@@ -439,7 +458,11 @@ class Image:
 
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
-        self._palette = list(data) if data else []
+        result = self._rust_image.putpalette(data, rawmode)
+        self._explicit_mode = self._rust_image.explicit_mode()
+        self.__dict__.pop("_palette", None)
+        self.__dict__.pop("_palette_object", None)
+        return result
 
     def show(self, title=None):
         """Display image. Not applicable in headless/test environments."""
@@ -564,7 +587,7 @@ class Image:
             mode = self.mode
             size = self.size
             self._rust_image = RustImage.frombytes(mode, size, bytes(data))
-            return self
+            return None
 
         # Class method: Image.frombytes(mode, size, data, ...)
         mode = self if isinstance(self, str) else data
@@ -619,13 +642,8 @@ class Image:
 
     @staticmethod
     def eval(image, *args):
-        """Apply function to each pixel via LUT."""
-        if args:
-            func = args[0]
-            n_bands = len(image.getbands())
-            lut = _core.make_lut(func, n_bands)
-            return Image(image._rust_image.point(lut))
-        raise ValueError("eval requires a function argument")
+        """Apply a function to each pixel through Image.point."""
+        return image.point(args[0])
 
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
@@ -633,7 +651,9 @@ class Image:
 
     def remap_palette(self, dest_map, source_palette=None):
         """Remap image palette using destination map."""
-        return Image(self._rust_image.remap_palette(list(dest_map)))
+        return Image(
+            self._rust_image.remap_palette(list(dest_map), source_palette)
+        )
 
     def draft(self, mode, size):
         """Configure decoder for draft mode. Returns None matching PIL."""
@@ -672,12 +692,21 @@ class Image:
     @property
     def has_transparency_data(self) -> bool:
         """Whether the image has transparency data."""
-        return False
+        return self._rust_image.has_transparency_data()
 
     @property
     def palette(self):
         """Image palette, if any."""
-        return None
+        if self.mode not in ("P", "PA"):
+            return None
+        if hasattr(self, "_palette_object"):
+            return self._palette_object
+        from .imagepalette import ImagePalette
+        mode = self._rust_image.palette_mode() or "RGB"
+        palette = ImagePalette(mode)
+        palette.palette = self.getpalette(mode) or []
+        self._palette_object = palette
+        return palette
 
     @property
     def mode(self) -> str:
@@ -691,6 +720,12 @@ class Image:
 
     @property
     def info(self) -> dict:
+        index = self._rust_image.pending_transparency_index()
+        if index is not None:
+            return {"transparency": index}
+        table = self._rust_image.pending_transparency_table()
+        if table is not None:
+            return {"transparency": bytes(table)}
         return {}
 
     def __repr__(self) -> str:
@@ -706,11 +741,22 @@ class Image:
         )
 
 
-class _PixelAccessStub:
-    """Stub that mimics PIL's PixelAccess for pytest comparisons."""
+class PixelAccess:
+    """Mutable pixel view matching Pillow's ``PixelAccess`` behavior."""
+
+    __slots__ = ("_image",)
+
     def __init__(self, image):
         self._image = image
+
+    def __getitem__(self, xy):
+        return self._image.getpixel(xy)
+
+    def __setitem__(self, xy, value):
+        self._image.putpixel(xy, value)
+
     def __str__(self):
         return f'<PixelAccess object at 0x{id(self):x}>'
+
     def __repr__(self):
         return str(self)

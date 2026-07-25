@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,43 +11,783 @@
     {
       "id": "Image_getprojection_1_suite1",
       "assert": {
-        "method": "string",
-        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getprojection_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getprojection_LA_suite1",
       "assert": {
-        "method": "string",
-        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getprojection_P_suite1",
       "assert": {
-        "method": "string",
-        "value": "([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                },
+                {
+                  "type": "int",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getprojection_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
       "id": "Image_getprojection_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "items": [
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                },
+                {
+                  "type": "int",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
       }
     }
   ]

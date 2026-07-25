@@ -6,172 +6,35 @@
   },
   "cases": [
     {
-      "id": "ImageModule.merge_L",
-      "mode": "L",
+      "id": "merge_L",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
+        "mode": "L",
+        "size": [5, 4],
+        "band_values": [17]
       }
     },
     {
-      "id": "ImageModule.merge_LA",
-      "mode": "LA",
+      "id": "merge_LA",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
+        "mode": "LA",
+        "size": [5, 4],
+        "band_values": [17, 223]
       }
     },
     {
-      "id": "ImageModule.merge_RGBA",
-      "mode": "RGBA",
+      "id": "merge_RGB",
       "params": {
         "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
+        "size": [5, 4],
+        "band_values": [17, 91, 203]
       }
     },
     {
-      "id": "RGB_from_bands",
-      "mode": "RGB",
-      "input": null,
+      "id": "merge_RGBA",
       "params": {
-        "mode": "RGB",
-        "bands": [
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 255
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 128
-            }
-          },
-          {
-            "band_mode": "L",
-            "input": {
-              "source": "constant",
-              "size": [
-                50,
-                50
-              ],
-              "color": 0
-            }
-          }
-        ]
+        "mode": "RGBA",
+        "size": [5, 4],
+        "band_values": [17, 91, 203, 149]
       }
     }
   ]

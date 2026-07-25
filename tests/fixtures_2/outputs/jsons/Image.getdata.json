@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,29 +11,29 @@
     {
       "id": "Image_getdata_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getdata_Image_getdata_L_suite1.bin"
+        "method": "typed_binary",
+        "reference": "raws/Image.getdata_Image_getdata_L_suite1.typed.bin"
       }
     },
     {
       "id": "Image_getdata_LA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getdata_Image_getdata_LA_suite1.bin"
+        "method": "typed_binary",
+        "reference": "raws/Image.getdata_Image_getdata_LA_suite1.typed.bin"
       }
     },
     {
       "id": "Image_getdata_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getdata_Image_getdata_RGB_suite1.bin"
+        "method": "typed_binary",
+        "reference": "raws/Image.getdata_Image_getdata_RGB_suite1.typed.bin"
       }
     },
     {
       "id": "Image_getdata_RGBA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.getdata_Image_getdata_RGBA_suite1.bin"
+        "method": "typed_binary",
+        "reference": "raws/Image.getdata_Image_getdata_RGBA_suite1.typed.bin"
       }
     }
   ]

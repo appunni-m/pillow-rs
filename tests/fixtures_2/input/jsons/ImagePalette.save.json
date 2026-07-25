@@ -20,6 +20,13 @@
       "id": "ImagePalette_save_RGB_suite1",
       "params": {},
       "mode": "RGB"
+    },
+    {
+      "id": "ImagePalette_save_path_RGB_suite1",
+      "params": {
+        "destination": "path"
+      },
+      "mode": "RGB"
     }
   ]
 }

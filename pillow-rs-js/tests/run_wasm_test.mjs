@@ -5,7 +5,7 @@
  * WasmBackend, executes operations via the execution engine, and compares
  * results against the expected reference (hash, value, or error).
  *
- * Usage: node pillow-rs-js/tests/run_wasm_test.mjs
+ * Usage: PILLOW_RS_WASM_VARIANT=core node pillow-rs-js/tests/run_wasm_test.mjs
  */
 
 import { readFileSync, readdirSync } from 'fs';
@@ -17,7 +17,11 @@ import { WasmBackend } from './wasm_backend.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '..', '..', 'tests', 'fixtures');
-const PKG = join(__dirname, '..', 'pkg');
+const VARIANT = process.env.PILLOW_RS_WASM_VARIANT ?? 'core';
+if (!['core', 'extra'].includes(VARIANT)) {
+    throw new Error(`unknown PILLOW_RS_WASM_VARIANT: ${VARIANT}`);
+}
+const PKG = join(__dirname, '..', 'pkg', VARIANT);
 
 // ── WASM bootstrap ─────────────────────────────────────────────────
 
@@ -25,7 +29,7 @@ const wasmBinary = readFileSync(join(PKG, 'pillow_rs_js_bg.wasm'));
 const wasmModule = new WebAssembly.Module(wasmBinary);
 
 const jsGlue = await import(join(PKG, 'pillow_rs_js.js'));
-jsGlue.initSync(wasmModule);
+jsGlue.initSync({ module: wasmModule });
 
 const backend = new WasmBackend(jsGlue);
 
@@ -258,6 +262,12 @@ function getResultBytes(result) {
 }
 
 const files = readdirSync(FIXTURES).filter(f => f.endsWith('.json') && f !== 'index.json');
+if (files.length === 0) {
+    throw new Error(
+        `no legacy flat WASM fixtures found in ${FIXTURES}; ` +
+        'use npm run test:codecs for the committed image-backend manifest',
+    );
+}
 
 let passed = 0, failed = 0, skipped = 0;
 const failures = [];

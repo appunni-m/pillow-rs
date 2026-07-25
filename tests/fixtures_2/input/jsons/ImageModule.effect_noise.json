@@ -14,15 +14,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "1",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": 1
       }
     },
     {
@@ -33,20 +24,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "CMYK",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": [
-          50,
-          100,
-          150,
-          200
-        ]
       }
     },
     {
@@ -57,15 +34,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "L",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": 128
       }
     },
     {
@@ -76,15 +44,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "LA",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": 128
       }
     },
     {
@@ -95,15 +54,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "P",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": 0
       }
     },
     {
@@ -114,19 +64,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "RGB",
-      "input": {
-        "source": "constant",
-        "size": [
-          32,
-          32
-        ],
-        "color": [
-          100,
-          150,
-          200
-        ]
       }
     },
     {
@@ -137,20 +74,6 @@
           50
         ],
         "sigma": 10.0
-      },
-      "mode": "RGBA",
-      "input": {
-        "source": "constant",
-        "size": [
-          10,
-          10
-        ],
-        "color": [
-          100,
-          150,
-          200,
-          200
-        ]
       }
     }
   ]

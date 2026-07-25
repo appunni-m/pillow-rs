@@ -16,22 +16,19 @@
       "id": "getbbox_L_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "getbbox_RGB_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "getbbox_RGBA_suite1",
       "params": {
         "text": "Hello"
-      },
-      "mode": "RGBA"
+      }
     }
   ]
 }

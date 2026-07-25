@@ -6100,6 +6100,7 @@ pub extern "C" fn fontdone_wasm_size_metrics(
     rust_ffi::FT_Err_Ok
 }
 
+#[cfg(feature = "abi-test-support")]
 fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
     rust_ffi::FT_FaceRecPublic {
         num_faces: face.num_faces,

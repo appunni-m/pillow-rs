@@ -76,6 +76,30 @@
         ]
       },
       "params": {}
+    },
+    {
+      "id": "Image_tobytes_RGB_BGR",
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [2, 1],
+        "color": [10, 20, 30]
+      },
+      "params": {
+        "_args": ["raw", "BGR"]
+      }
+    },
+    {
+      "id": "Image_tobytes_RGBA_BGRA",
+      "mode": "RGBA",
+      "input": {
+        "source": "constant",
+        "size": [2, 1],
+        "color": [10, 20, 30, 40]
+      },
+      "params": {
+        "_args": ["raw", "BGRA"]
+      }
     }
   ]
 }

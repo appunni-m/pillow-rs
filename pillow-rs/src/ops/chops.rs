@@ -222,9 +222,28 @@ pub fn duplicate(image: &Image) -> Image {
 ///
 /// # Errors
 ///
-/// Returns errors from [`crate::ops::imageops::invert`].
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another error while determining the image mode.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
-    crate::ops::imageops::invert(image)
+    let mode = image.mode()?;
+    if matches!(mode.as_str(), "LA" | "RGBA") {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
+
+    let mut result = Image::push_op(image, PipelineOp::InvertChops);
+    if mode == "P"
+        && let Image::Pipeline {
+            palette,
+            palette_alpha,
+            ..
+        } = &mut result
+    {
+        // Pillow's ImagingChopInvert allocates a fresh P core without copying
+        // Image.palette. The bytes are inverted indices and getpalette() is [].
+        *palette = Some(Vec::new());
+        *palette_alpha = None;
+    }
+    Ok(result)
 }
 
 /// Offsets image contents by wrapping pixels around both axes.

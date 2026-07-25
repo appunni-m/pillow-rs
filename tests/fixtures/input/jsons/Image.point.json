@@ -1630,6 +1630,20 @@
           255
         ]
       }
+    },
+    {
+      "id": "Image_point_callable_RGB",
+      "params": {
+        "function": "invert"
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
     }
   ]
 }

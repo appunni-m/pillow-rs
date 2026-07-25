@@ -311,6 +311,7 @@ modules:
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       - CMYK
@@ -730,9 +731,12 @@ modules:
       supported_modes:
       - '1'
       - CMYK
+      - F
+      - I
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       param_variants:
@@ -742,8 +746,6 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: putpixel
       signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
         -> None'
@@ -887,8 +889,6 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: entropy
       signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
         -> float'
@@ -960,11 +960,13 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes: &id002
+      supported_modes:
       - L
       - LA
       - RGB
       - RGBA
+      - P
+      - PA
     - name: get_child_images
       signature: get_child_images(*args, **kwargs)
       status: implemented
@@ -1067,7 +1069,11 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes: *id002
+      supported_modes: &id002
+      - L
+      - LA
+      - RGB
+      - RGBA
     properties:
     - name: size
       type: tuple[int,int]
@@ -1076,7 +1082,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: width
       type: int
@@ -1085,7 +1091,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: height
       type: int
@@ -1094,7 +1100,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: mode
       type: str
@@ -1103,7 +1109,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: format
       type: str|None
@@ -1112,7 +1118,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
     - name: info
       type: dict
@@ -1121,7 +1127,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
   ImageModule:
     functions:
@@ -1235,13 +1241,7 @@ modules:
     - name: effect_noise
       signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
       supported_modes:
-      - '1'
-      - CMYK
       - L
-      - LA
-      - P
-      - RGB
-      - RGBA
       param_variants:
       - size:
         - 100
@@ -1343,8 +1343,6 @@ modules:
       - RGB
       - RGBA
       - CMYK
-      - YCbCr
-      - HSV
       - I
       - F
   ImageDraw:
@@ -1352,11 +1350,12 @@ modules:
     - name: arc
       signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width:
         int=1) -> None'
-      supported_modes: &id003
+      supported_modes: &id004
       - '1'
       - L
       - LA
       - P
+      - PA
       - RGB
       - RGBA
       - CMYK
@@ -1369,12 +1368,10 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: line
       signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: line
       - xy: line
@@ -1384,12 +1381,10 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: rectangle
       signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
       - xy: box
@@ -1400,12 +1395,10 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: ellipse
       signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
       edge_cases: []
@@ -1413,12 +1406,10 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: polygon
       signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1)
         -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: polygon
       edge_cases: []
@@ -1426,14 +1417,19 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: text
       signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None,
         anchor: str|None=None, spacing: float=4, align: str=''left'', direction: str|None=None,
         features: list|None=None, language: str|None=None, stroke_width: float=0,
         stroke_fill=None, embedded_color: bool=False) -> None'
-      supported_modes: *id003
+      supported_modes: &id003
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
+      - CMYK
       param_variants:
       - xy:
         - 0
@@ -1444,8 +1440,6 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: multiline_text
       signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None,
         font=None, anchor=None, spacing: float=4, align: str=''left'', direction=None,
@@ -1464,12 +1458,10 @@ modules:
       pillow_since: '4.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: circle
       signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
         width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy:
         - 50
@@ -1480,12 +1472,10 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: rounded_rectangle
       signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
         outline=None, width: int=1, *, corners: tuple|None=None) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         radius: 10
@@ -1494,8 +1484,6 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: regular_polygon
       signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
         fill=None, outline=None, width: int=1) -> None'
@@ -1506,12 +1494,10 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: chord
       signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
         width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         start: 0
@@ -1521,12 +1507,10 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: pieslice
       signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
         outline=None, width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy: box
         start: 0
@@ -1536,8 +1520,6 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: bitmap
       signature: 'bitmap(self, xy: Sequence[int], bitmap: Image, fill=None) -> None'
       supported_modes: *id003
@@ -1548,11 +1530,9 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: point
       signature: 'point(self, xy: Coords, fill=None) -> None'
-      supported_modes: *id003
+      supported_modes: *id004
       param_variants:
       - xy:
         - 10
@@ -1562,8 +1542,6 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: textbbox
       signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
         direction=None, features=None, language=None, stroke_width=0, embedded_color=False,
@@ -1579,8 +1557,6 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: multiline_textbbox
       signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4,
         align='left', direction=None, features=None, language=None, stroke_width=0,
@@ -1596,8 +1572,6 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: textlength
       signature: textlength(self, text, font=None, direction=None, features=None,
         language=None, embedded_color=False, *, font_size=None) -> float
@@ -1612,8 +1586,6 @@ modules:
       pillow_since: '8.0'
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: getfont
       signature: getfont(*args, **kwargs)
       status: implemented
@@ -1622,8 +1594,6 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      - gpu
-      - simd
     - name: shape
       signature: shape(*args, **kwargs)
       status: implemented
@@ -1837,11 +1807,11 @@ modules:
         target_mode: str|None=None)'
       supported_modes:
       - RGB
+      - RGBA
+      - CMYK
       status: implemented
       supported_targets:
       - cpu
-      - gpu
-      - simd
   ImageEnhance:
     classes:
     - name: Brightness
@@ -2296,9 +2266,6 @@ modules:
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
     - name: getcolor
       signature: 'getcolor(color: str, mode: str) -> int|tuple[int,...]'
       status: implemented
@@ -2362,29 +2329,17 @@ modules:
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_default
       signature: 'load_default(size: float|None=None) -> FreeTypeFont|ImageFont'
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: truetype
       signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
         encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
       status: implemented
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_default_imagefont
       signature: load_default_imagefont(*args, **kwargs)
       status: implemented
@@ -2393,10 +2348,6 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     - name: load_path
       signature: load_path(*args, **kwargs)
       status: implemented
@@ -2405,10 +2356,6 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes:
-      - L
-      - RGB
-      - RGBA
     classes:
     - name: FreeTypeFont
       methods:

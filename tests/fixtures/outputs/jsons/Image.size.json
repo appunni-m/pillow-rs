@@ -1,0 +1,126 @@
+{
+  "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "size"
+  },
+  "cases": [
+    {
+      "id": "size_1",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "size_L",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "size_LA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "size_P",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "size_RGB",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "size_RGBA",
+      "assert": {
+        "method": "typed",
+        "value": {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": 3
+            },
+            {
+              "type": "int",
+              "value": 2
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFont",
@@ -9,29 +11,33 @@
     {
       "id": "ImageFont.load_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "method": "error",
+        "exception": "OSError",
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     },
     {
       "id": "ImageFont.load_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "method": "error",
+        "exception": "OSError",
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     },
     {
       "id": "dejavu_sans_16_suite1",
       "assert": {
-        "method": "string",
-        "value": "('DejaVu Sans', 'Book')"
+        "method": "error",
+        "exception": "OSError",
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.{gif|pbm|png}"
       }
     },
     {
       "id": "liberation_serif_20_suite1",
       "assert": {
-        "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "method": "error",
+        "exception": "OSError",
+        "message": "cannot find glyph data file pillow-rs-freetype/tests/fixtures/input/fonts/LiberationSerif-Regular.{gif|pbm|png}"
       }
     }
   ]

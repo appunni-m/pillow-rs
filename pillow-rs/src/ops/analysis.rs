@@ -28,11 +28,11 @@ impl Image {
 
         let has_alpha = matches!(
             img.color(),
-            pillow_rs_image::ColorType::La8
-                | pillow_rs_image::ColorType::La16
-                | pillow_rs_image::ColorType::Rgba8
-                | pillow_rs_image::ColorType::Rgba16
-                | pillow_rs_image::ColorType::Rgba32F
+            image_slash_star::ColorType::La8
+                | image_slash_star::ColorType::La16
+                | image_slash_star::ColorType::Rgba8
+                | image_slash_star::ColorType::Rgba16
+                | image_slash_star::ColorType::Rgba32F
         );
         let rgba = img.to_rgba8();
         for y in 0..img_h {
@@ -70,23 +70,23 @@ impl Image {
         let img = self.materialize()?;
 
         let bands = match img.color() {
-            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
-            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
-            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
+            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
+            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
+            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
             _ => 4,
         };
 
         let mut extrema = vec![(255u8, 0u8); bands];
         // Use the appropriate pixel reader based on color type
         match img.color() {
-            pillow_rs_image::ColorType::L8 => {
+            image_slash_star::ColorType::L8 => {
                 let luma = img.to_luma8();
                 for px in luma.pixels() {
                     extrema[0].0 = extrema[0].0.min(px[0]);
                     extrema[0].1 = extrema[0].1.max(px[0]);
                 }
             }
-            pillow_rs_image::ColorType::La8 => {
+            image_slash_star::ColorType::La8 => {
                 let la = img.to_luma_alpha8();
                 for px in la.pixels() {
                     extrema[0].0 = extrema[0].0.min(px[0]);
@@ -119,28 +119,28 @@ impl Image {
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
         let img = self.materialize()?;
         let n_bands = match img.color() {
-            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
-            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
-            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
+            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
+            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
+            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
             _ => 4,
         };
         let mut hist = vec![0u32; 256 * n_bands];
         // Use mode-aware pixel reading to avoid to_rgba8() remapping channels
         match img.color() {
-            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => {
+            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
                 for px in la.pixels() {
                     hist[px[0] as usize] += 1;
                     hist[256 + px[1] as usize] += 1;
                 }
             }
-            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
+            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for px in luma.pixels() {
                     hist[px[0] as usize] += 1;
                 }
             }
-            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => {
+            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => {
                 let rgb = img.to_rgb8();
                 for px in rgb.pixels() {
                     hist[px[0] as usize] += 1;

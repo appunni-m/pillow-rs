@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,43 +11,1369 @@
     {
       "id": "Image_load_1_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_1_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 1
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 1
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 1
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_load_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_L_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 128
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 128
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 128
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_load_LA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_LA_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 128
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 0
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 128
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 0
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 128
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 0
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_load_P_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_P_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 0
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 0
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "int"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "value"
+                    },
+                    {
+                      "type": "int",
+                      "value": 0
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_load_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_RGB_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     },
     {
       "id": "Image_load_RGBA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.load_Image_load_RGBA_suite1.bin"
+        "method": "typed",
+        "value": {
+          "type": "dict",
+          "items": [
+            [
+              {
+                "type": "str",
+                "value": "type"
+              },
+              {
+                "type": "str",
+                "value": "PixelAccess"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "last"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "write_roundtrip"
+              },
+              {
+                "type": "dict",
+                "items": [
+                  [
+                    {
+                      "type": "str",
+                      "value": "type"
+                    },
+                    {
+                      "type": "str",
+                      "value": "tuple"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "str",
+                      "value": "items"
+                    },
+                    {
+                      "type": "list",
+                      "items": [
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 100
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 150
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "type": "dict",
+                          "items": [
+                            [
+                              {
+                                "type": "str",
+                                "value": "type"
+                              },
+                              {
+                                "type": "str",
+                                "value": "int"
+                              }
+                            ],
+                            [
+                              {
+                                "type": "str",
+                                "value": "value"
+                              },
+                              {
+                                "type": "int",
+                                "value": 200
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
       }
     }
   ]

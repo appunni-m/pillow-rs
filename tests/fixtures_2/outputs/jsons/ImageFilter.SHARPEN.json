@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "ImageFilter",
@@ -10,14 +12,26 @@
       "id": "ImageFilter.SHARPEN_HSV_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_HSV_suite1.bin"
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_HSV_suite1.bin",
+        "raw_kind": "image",
+        "mode": "HSV",
+        "size": [
+          256,
+          256
+        ]
       }
     },
     {
       "id": "ImageFilter.SHARPEN_YCbCr_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_YCbCr_suite1.bin"
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_YCbCr_suite1.bin",
+        "raw_kind": "image",
+        "mode": "YCbCr",
+        "size": [
+          32,
+          32
+        ]
       }
     },
     {
@@ -31,14 +45,26 @@
       "id": "ImageFilter_SHARPEN_CMYK_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_CMYK_suite1.bin"
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_CMYK_suite1.bin",
+        "raw_kind": "image",
+        "mode": "CMYK",
+        "size": [
+          64,
+          64
+        ]
       }
     },
     {
       "id": "ImageFilter_SHARPEN_I_suite1",
       "assert": {
         "method": "image",
-        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_I_suite1.bin"
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_I_suite1.bin",
+        "raw_kind": "image",
+        "mode": "I",
+        "size": [
+          128,
+          128
+        ]
       }
     },
     {

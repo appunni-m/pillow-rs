@@ -12,18 +12,15 @@
     },
     {
       "id": "getmetrics_L_suite1",
-      "params": {},
-      "mode": "L"
+      "params": {}
     },
     {
       "id": "getmetrics_RGB_suite1",
-      "params": {},
-      "mode": "RGB"
+      "params": {}
     },
     {
       "id": "getmetrics_RGBA_suite1",
-      "params": {},
-      "mode": "RGBA"
+      "params": {}
     }
   ]
 }

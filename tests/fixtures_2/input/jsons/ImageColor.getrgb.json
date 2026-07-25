@@ -10,15 +10,13 @@
       "id": "ImageColor_getrgb_L_suite1",
       "params": {
         "color": "red"
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "ImageColor_getrgb_RGB_suite1",
       "params": {
         "color": "red"
-      },
-      "mode": "RGB"
+      }
     }
   ]
 }

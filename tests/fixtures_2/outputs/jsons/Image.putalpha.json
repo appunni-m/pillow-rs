@@ -1,5 +1,7 @@
 {
   "format_version": 2,
+  "pillow_version": "12.2.0",
+  "freetype_version": "2.14.3",
   "suite": 1,
   "operation": {
     "module": "Image",
@@ -9,43 +11,116 @@
     {
       "id": "Image_putalpha_CMYK_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.putalpha_Image_putalpha_CMYK_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.putalpha_Image_putalpha_CMYK_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "Image_putalpha_L_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.putalpha_Image_putalpha_L_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.putalpha_Image_putalpha_L_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "Image_putalpha_LA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.putalpha_Image_putalpha_LA_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.putalpha_Image_putalpha_LA_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "Image_putalpha_P_suite1",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.putalpha_Image_putalpha_P_suite1.bin"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "raws/Image.putalpha_Image_putalpha_P_suite1_1.bin",
+            "raw_kind": "image",
+            "mode": "PA",
+            "size": [
+              10,
+              10
+            ],
+            "palette": []
+          }
+        ]
       }
     },
     {
       "id": "Image_putalpha_RGB_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.putalpha_Image_putalpha_RGB_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.putalpha_Image_putalpha_RGB_suite1_1.png"
+          }
+        ]
       }
     },
     {
       "id": "Image_putalpha_RGBA_suite1",
       "assert": {
-        "method": "image",
-        "reference": "images/Image.putalpha_Image_putalpha_RGBA_suite1.png"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "typed",
+            "value": {
+              "type": "NoneType"
+            }
+          },
+          {
+            "method": "image",
+            "reference": "images/Image.putalpha_Image_putalpha_RGBA_suite1_1.png"
+          }
+        ]
       }
     }
   ]

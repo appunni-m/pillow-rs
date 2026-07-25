@@ -11,32 +11,28 @@
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "dejavu_sans_16_suite1",
       "params": {
         "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "size": 16
-      },
-      "mode": "RGB"
+      }
     },
     {
       "id": "FreeTypeFont_L_suite1",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "L"
+      }
     },
     {
       "id": "FreeTypeFont_RGBA_suite1",
       "params": {
         "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
         "size": 20
-      },
-      "mode": "RGBA"
+      }
     }
   ]
 }
