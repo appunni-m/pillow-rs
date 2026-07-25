@@ -6,23 +6,22 @@ Date: 2026-07-25
 
 - Active corpus: `pillow-rs/tests/fixtures/imagingft/inputs/public-api/*`
 - Deprecated corpus excluded: `deprecated/imagingft/*`
-- Public operations represented: `getname`, `getmetrics`, `getlength`, `has_variations`, `getbbox`, `getbbox_binary`, `getmask`, `getmask2`, `getmask2_with_start`, `get_transposed_mask`, `transposed_bbox`, `validate_transposed_length`, `draw_text`.
-- Additional error-only fixtures: `unsupported_magic`, `layout_failure` and `load_failure` (kept by fixture surface).
-- Runner model: manifest-driven (`imagingft-public_api`), one pass over JSONs under `inputs/public-api`, operation canonicalization via `strip_prefix("imagingft.")`.
+- Public operations represented: `getname`, `getmetrics`, `getlength`, `has_variations`, `getbbox`, `getbbox_binary`, `getmask`, `getmask2`, `getmask2_with_start`, `get_transposed_mask`, `transposed_bbox`, `validate_transposed_length`, `draw_text`, plus `render_text_binary` and `unsupported_magic` as public fixture-surface cases.
+- Runner model: manifest-driven (`imagingft_public_api`), one pass over JSONs under `inputs/public-api`, operation canonicalization via `strip_prefix("imagingft.")`.
 
 ## Verification run
 
 - `make -C pillow-rs imagingft-tests` → pass (`1` passed, `0` failed)
 - Coverage MCP:
   1. `project_context`
-  2. `run_test` (`imagingft-tests-coverage-fixed`, idempotency `imagingft-tests-coverage-fixed-required-ops-check`)
+  2. `run_test` (`imagingft-tests-coverage-fixed`, idempotency `imagingft-tests-coverage-fixed-validate`)
   3. `get_run_data` (terminal)
-  4. `coverage_query` (summary + file)
+  4. `coverage_query` (summary + files)
 
 Latest run/snapshot:
-- run id: `79bc27fb-ce75-443d-b71e-18d7633315bb`
-- snapshot id: `6ab373c0-ca5f-4a51-b6fa-1bcc921d4ef9`
-- branch/commit: `main` / `3951915e64613af9193004805da924f26e46d556`
+- run id: `53ec321a-e95d-401f-b455-570fd71e092a`
+- snapshot id: `4ddb64b0-d2bd-47b9-9b42-5e716cbf9247`
+- branch/commit: `main` / `c5133a0933d636c8f8841e8de0534f5affb1d56e`
 
 ## Suite outcome
 
@@ -35,43 +34,46 @@ Latest run/snapshot:
 
 | op | cases | ok | error | result |
 |---|---:|---:|---:|---|
-| `getname` | 2 | 1 | 1 | pass |
-| `getmetrics` | 1 | 1 | 0 | pass |
-| `getlength` | 3 | 3 | 0 | pass |
-| `has_variations` | 1 | 1 | 0 | pass |
+| `draw_text` | 3 | 3 | 0 | pass |
 | `getbbox` | 3 | 3 | 0 | pass |
 | `getbbox_binary` | 3 | 3 | 0 | pass |
+| `getlength` | 3 | 3 | 0 | pass |
 | `getmask` | 5 | 5 | 0 | pass |
 | `getmask2` | 5 | 5 | 0 | pass |
 | `getmask2_with_start` | 5 | 5 | 0 | pass |
+| `getmetrics` | 1 | 1 | 0 | pass |
+| `getname` | 2 | 1 | 1 | pass |
+| `has_variations` | 1 | 1 | 0 | pass |
 | `get_transposed_mask` | 4 | 3 | 1 | pass |
+| `render_text_binary` | 3 | 3 | 0 | pass |
 | `transposed_bbox` | 3 | 3 | 0 | pass |
+| `unsupported_magic` | 1 | 0 | 1 | pass |
 | `validate_transposed_length` | 3 | 2 | 1 | pass |
-| `draw_text` | 3 | 3 | 0 | pass |
 
 ## Error matrix
 
 All expected-error rows are validated through fixture-driven `expect_error=true` + `expectation.expected.error` and Rust `Result` error path:
 
 - `imagingft.unsupported_operation.unsupported_magic` → `NotImplementedError`
-- `imagingft.get_transposed_mask.invalid_orientation_error` → `ValueError` + message contains `Unknown transpose method: UNSUPPORTED`
+- `imagingft.get_transposed_mask.invalid_orientation_error` → `ValueError` (`Unknown transpose method: UNSUPPORTED...`)
 - `imagingft.validate_transposed_length.rotate_90` → `ValueError` (`text length is undefined for text rotated by 90 or 270 degrees`)
 - `imagingft.load_failure.missing_font_asset` → `ValueError` (`font bytes read failed (...)`)
 
 ## Coverage summary (latest snapshot)
 
 - suite: `imagingft`
-- snapshot: `6ab373c0-ca5f-4a51-b6fa-1bcc921d4ef9`
+- snapshot: `4ddb64b0-d2bd-47b9-9b42-5e716cbf9247`
 - `line_rate=0.07997`
 - `branch_rate=0.02960`
 - `function_rate=0.09262`
 
-Compared with previous suite snapshot (`ec7dbed7-bf33-481d-ab0f-9e2384669533`): no suite-wide deltas.
+Compared with previous suite snapshot (`6ab373c0-ca5f-4a51-b6fa-1bcc921d4ef9`): no suite-wide deltas.
 
 Targeted core surface (`pillow-rs/src/font/imagingft.rs`):
 - `line_rate=0.84123`, `branch_rate=0.63514`, `function_rate=0.90244`
 - unresolved lines: `60`
 - partial branches: `18`
+- explicit unresolved windows: lines `35`, `36`, `59`, `127..129`, `138`, `145`, `152..154`, `163..166`, `173`, `193`, `215`, `220`, `373`, `374`, `444`, `461..463`, `471..472`, `474..475`, `497`, `498`, `502`, `503`, `509`, `510`, `514`, `515`, `520`, `521`, `524`, `526`, `527`, `534`, `540`, `544..554`, `555..558`, `560..563`, `564`, `565`, `567`, `570..571`, `576`, `577`, `585`, `592`.
 
 ## Completion status against objective
 
@@ -79,4 +81,5 @@ Targeted core surface (`pillow-rs/src/font/imagingft.rs`):
 - Output shape/hash/raw checks retained: **implemented**
 - Required public surfaces present in corpus: **implemented**
 - Error-path parity rows represented (load/layout/unsupported): **implemented**
-- Full 100% coverage across target suite/surface: **not reached** (remaining imagingft.rs coverage gaps are explicit above)
+- Single source manifest surface coverage (no deprecated fixture dependency): **implemented**
+- Full 100% coverage across target suite/surface: **not reached** (remaining explicit imagingft.rs coverage gaps listed above)

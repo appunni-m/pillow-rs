@@ -24,6 +24,7 @@
           }
         },
         "params": {
+          "text": "Parity",
           "orientation": null
         }
       },
@@ -66,6 +67,7 @@
           }
         },
         "params": {
+          "text": "Parity",
           "orientation": "ROTATE_90"
         }
       },
@@ -111,6 +113,7 @@
           }
         },
         "params": {
+          "text": "Parity",
           "orientation": "FLIP_LEFT_RIGHT"
         }
       },
