@@ -29,14 +29,128 @@
         "status": "error",
         "compare": {
           "mode": "exact",
-          "paths": ["error.type", "error.message"]
+          "paths": [
+            "error.type",
+            "error.message"
+          ]
         },
         "oracle": "rust-load-error",
         "expected": {
           "status": "error",
           "error": {
             "type": "ValueError",
-            "message": "font bytes read failed (input/fonts/no_such_font.ttf): No such file or directory (os error 2)"
+            "message": "No such file or directory (os error 2)"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_zero",
+      "subject": "imagingft.getname",
+      "case": "imagingft_invalid_size_zero",
+      "operation": "getname",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 0
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error.type",
+            "error.message"
+          ]
+        },
+        "oracle": "pillow-size-error",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "font size must be greater than 0, not 0"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_negative_one",
+      "subject": "imagingft.getname",
+      "case": "imagingft_invalid_size_negative_one",
+      "operation": "getname",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": -1
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error.type",
+            "error.message"
+          ]
+        },
+        "oracle": "pillow-size-error",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "font size must be greater than 0, not -1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_negative_fraction",
+      "subject": "imagingft.getname",
+      "case": "imagingft_invalid_size_negative_fraction",
+      "operation": "getname",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": -5.5
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error.type",
+            "error.message"
+          ]
+        },
+        "oracle": "pillow-size-error",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "font size must be greater than 0, not -5.5"
           }
         }
       }
