@@ -48,22 +48,25 @@ Date: 2026-07-25
 
 - Test command: `make -C pillow-rs imagingft-tests`
 - Coverage command: `make -C pillow-rs imagingft-tests` (fixture parity harness)
-- Coverage MCP command: `imagingft-tests-coverage-fixed` (id `258e7dec-226f-4b00-9336-04df6e8c67f2`)
-- Latest coverage run: `80a2fd83-ae2f-4832-8875-b110f85add11` (status `passed`)
+- Coverage MCP command: `imagingft-tests-coverage`/`imagingft-tests-coverage-fixed` (name `imagingft-tests-coverage-fixed`, id `258e7dec-226f-4b00-9336-04df6e8c67f2`)
+- Latest coverage run: `cc2f37cf-e5d7-4f51-927c-aa1ddb432bbf` (status `passed`)
   - `counters`: `passed=1`, `failed=0`
   - `coverage status`: ingested
-  - `snapshot id`: `f0ccd639-918d-43b9-a7a4-7f8865732652`
+  - `snapshot id`: `48b925c4-6171-4801-bf82-37e73ca57588`
   - `branch`: `main`
-- Focused suite metrics (imagingft target):
   - `line_rate=0.07997`
   - `branch_rate=0.02960`
   - `function_rate=0.09262`
   - `region_rate=0.06912`
+  - `active public-api rows`: 45 cases
 - ImagingFT implementation coverage (from this suite):
   - `pillow-rs/src/font/imagingft.rs`: `line_rate=0.8412`, `branch_rate=0.6351`, `function_rate=0.9024`.
+- Coverage status of `pillow-rs/src/font/imagingft.rs` still shows uncovered lines/branches:
+  - `uncovered lines`: `60`
+  - `uncovered/partial branch lines`: `18`
 
 ## 5) Remaining gap
 
 - No unresolved public-op parity rows remain in the active public-api corpus.
-- Remaining work is suite-scope and not public-surface:
-  - other crate files and backends (CPU/GPU/ops paths) are not exercised by this suite and remain below full-project coverage.
+- Remaining work is coverage completeness for other suite paths and unexercised branches in `imagingft.rs`:
+  - gaps are expected to be addressed by dedicated fixture expansions and/or targeted parser-path probes.

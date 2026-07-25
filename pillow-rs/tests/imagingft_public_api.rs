@@ -116,6 +116,25 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
     Ok((r, g, b, a))
 }
 
+fn fixture_expected_status(case: &Value) -> String {
+    if case["expect_error"].as_bool().unwrap_or(false) {
+        return "error".to_string();
+    }
+    if let Some(status) = case["expectation"]["status"].as_str() {
+        return status.to_string();
+    }
+    if let Some(status) = case["expectation"]["expected"]["status"].as_str() {
+        return status.to_string();
+    }
+    if case["expectation"]["expected"]
+        .get("error")
+        .is_some()
+    {
+        return "error".to_string();
+    }
+    "ok".to_string()
+}
+
 fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
     let coords = value.as_array().ok_or(PilError::ValueError(
         "draw_text xy must be an array of two integers".into(),
@@ -511,21 +530,25 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         "{case_id}: expected success but failed to load font"
                     );
                     let error = font.expect_err("case font must fail");
+                    let expected_status = fixture_expected_status(case);
+                    assert_eq!(expected_status, "error", "{case_id}");
                     let expected = &case["expectation"]["expected"];
                     assert_error_matches(case_id, &error, expected);
                     continue;
                 }
                 let font = font.expect("case font must load");
-                let expected_status = case["expectation"]["status"].as_str().unwrap_or("ok");
+                let expected_status = fixture_expected_status(case);
                 let expected = &case["expectation"]["expected"];
                 let actual = run_case(operation, &font, params);
 
                 match (actual, expect_error) {
                     (Ok(value), false) => {
                         assert_ne!(expected_status, "error", "{case_id}");
+                        assert_eq!(expected_status, "ok", "{case_id}");
                         compare_output(operation, value, expected, case_id);
                     }
                     (Err(error), true) => {
+                        assert_eq!(expected_status, "error", "{case_id}");
                         assert_error_matches(case_id, &error, expected);
                     }
                     (Ok(_), true) => {
