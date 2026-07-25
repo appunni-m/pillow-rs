@@ -20,10 +20,21 @@ help:
 	@printf "\nTest:\n"
 	@printf "  make test             Run all Rust tests\n"
 	@printf "  make test-core        Run unit tests (src/)\n"
+	@printf "  make test-backend-parity Run forced-backend Pillow parity tests\n"
+	@printf "  make test-color3dlut-oracle Run shared Pillow Color3DLUT oracle through Rust\n"
+	@printf "  make test-eval-oracle Run shared Pillow Image.eval oracle through Rust\n"
+	@printf "  make test-image-open-oracle Run shared Pillow Image.open oracle through Rust\n"
+	@printf "  make test-apply-transparency-oracle Run Pillow Image.apply_transparency oracle through Rust\n"
+	@printf "  make test-tobytes-oracle Run shared Pillow Image.tobytes oracle through Rust\n"
+	@printf "  make test-imagefont-getmask2-oracle Run shared Pillow ImageFont.getmask2 oracle through Rust\n"
+	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
+	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
+	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
 	@printf "\nFixtures:\n"
 	@printf "  make fixtures         Regenerate imagingft fixture matrix\n"
+	@printf "  make fixtures-check   Verify current fixtures reproduce byte-for-byte\n"
 	@printf "  make fixtures-clean   Remove generated fixture outputs\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
@@ -52,17 +63,72 @@ test: test-core test-imagingft
 test-core:
 	$(CARGO) test --lib --locked
 
+.PHONY: test-backend-parity
+test-backend-parity:
+	$(CARGO) test --all-features --test backend_parity --locked -- --nocapture
+
+.PHONY: test-paste-oracle
+test-paste-oracle:
+	$(CARGO) test --all-features --test backend_parity --locked paste_is_exact_on_portable_cpu_backend -- --exact --nocapture
+	$(CARGO) test --all-features --test backend_parity --locked paste_validation_matches_exact_pillow_errors -- --exact --nocapture
+
+.PHONY: test-drawing-oracle
+test-drawing-oracle:
+	$(CARGO) test --all-features --test backend_parity --locked drawing_is_exact_and_backend_capabilities_are_truthful -- --exact --nocapture
+
+.PHONY: test-imagefont-getmask2-oracle
+test-imagefont-getmask2-oracle:
+	$(CARGO) test --all-features --test imagefont_getmask2_oracle --locked -- --nocapture
+
+.PHONY: test-transposed-font-oracle
+test-transposed-font-oracle:
+	$(CARGO) test --all-features --test transposed_font_oracle --locked -- --nocapture
+
+.PHONY: test-fromarray-descriptor-oracle
+test-fromarray-descriptor-oracle:
+	$(CARGO) test --all-features --test fromarray_descriptor_oracle --locked -- --nocapture
+
+.PHONY: test-color3dlut-oracle
+test-color3dlut-oracle:
+	$(CARGO) test --all-features --test color3dlut_oracle --locked -- --nocapture
+
+.PHONY: test-eval-oracle
+test-eval-oracle:
+	$(CARGO) test --all-features --test eval_oracle --locked -- --nocapture
+
+.PHONY: test-image-open-oracle
+test-image-open-oracle:
+	$(CARGO) test --all-features --test image_open_oracle --locked -- --nocapture
+
+.PHONY: test-tobytes-oracle
+test-tobytes-oracle:
+	$(CARGO) test --all-features --test tobytes_oracle --locked -- --nocapture
+
+.PHONY: test-apply-transparency-oracle
+test-apply-transparency-oracle:
+	$(CARGO) test --all-features --test apply_transparency_oracle --locked -- --nocapture
+
+.PHONY: backend-support-matrix
+backend-support-matrix:
+	$(CARGO) run --quiet --all-features --example backend_support_matrix --locked
+
 .PHONY: test-imagingft
-test-imagingft:
+test-imagingft: fixtures
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 	$(CARGO) test --test imagingft_matrix_tests --locked -- --nocapture
 
 .PHONY: test-imagingft-release
-test-imagingft-release:
+test-imagingft-release: fixtures
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 	$(CARGO) test --release --test imagingft_matrix_tests --locked -- --nocapture
 
 .PHONY: fixtures
 fixtures:
 	$(PYTHON) scripts/build_imagingft_fixtures.py
+
+.PHONY: fixtures-check
+fixtures-check:
+	$(PYTHON) scripts/build_imagingft_fixtures.py --check
 
 .PHONY: fixtures-clean
 fixtures-clean:

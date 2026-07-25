@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
 use std::ffi::c_void;
-use std::os::raw::{c_char, c_int, c_long, c_schar, c_short, c_uchar, c_uint, c_ulong, c_ushort};
+use std::os::raw::{c_char, c_int, c_long, c_schar, c_short, c_uchar, c_uint, c_ushort};
 
 pub type FT_Error = c_int;
 pub type FT_Int = c_int;
@@ -12,12 +12,18 @@ pub type FT_Byte = c_uchar;
 pub type FT_Bool = c_uchar;
 pub type FT_Char = c_schar;
 pub type FT_Short = c_short;
+#[cfg(all(target_arch = "wasm32", feature = "wasm-wide-internals"))]
+pub type FT_Long = i64;
+#[cfg(not(all(target_arch = "wasm32", feature = "wasm-wide-internals")))]
 pub type FT_Long = c_long;
-pub type FT_ULong = c_ulong;
-pub type FT_Pos = c_long;
-pub type FT_Fixed = c_long;
+#[cfg(all(target_arch = "wasm32", feature = "wasm-wide-internals"))]
+pub type FT_ULong = u64;
+#[cfg(not(all(target_arch = "wasm32", feature = "wasm-wide-internals")))]
+pub type FT_ULong = std::os::raw::c_ulong;
+pub type FT_Pos = FT_Long;
+pub type FT_Fixed = FT_Long;
 pub type FT_Angle = FT_Fixed;
-pub type FT_F26Dot6 = c_long;
+pub type FT_F26Dot6 = FT_Long;
 pub type FT_UShort = c_ushort;
 pub type FT_FWord = c_short;
 pub type FT_UFWord = c_ushort;

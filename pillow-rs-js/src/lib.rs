@@ -19,12 +19,88 @@ use pillow_rs::ops::{chops, imageops, module_fns};
 use wasm_bindgen::prelude::*;
 
 fn err(e: pillow_rs::error::PilError) -> JsValue {
-    JsValue::from_str(&e.to_string())
+    let name = match &e {
+        pillow_rs::error::PilError::IOError(_)
+        | pillow_rs::error::PilError::OsError(_)
+        | pillow_rs::error::PilError::Io(_) => "OSError",
+        pillow_rs::error::PilError::AssertionError(_) => "AssertionError",
+        pillow_rs::error::PilError::IndexError(_) => "IndexError",
+        pillow_rs::error::PilError::ValueError(_) => "ValueError",
+        pillow_rs::error::PilError::TypeError(_) => "TypeError",
+        pillow_rs::error::PilError::SyntaxError(_) => "SyntaxError",
+        pillow_rs::error::PilError::NotImplementedError(_) => "NotImplementedError",
+        pillow_rs::error::PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
+        _ => "Error",
+    };
+    let error = js_sys::Error::new(&e.to_string());
+    error.set_name(name);
+    error.into()
 }
 
 #[wasm_bindgen]
 pub struct Image {
     inner: RsImage,
+}
+
+#[wasm_bindgen]
+pub struct ArrayDescriptorLayout {
+    mode: String,
+    raw_mode: String,
+    width: usize,
+    height: usize,
+    dimensions: usize,
+    mode_reinterprets_dtype: bool,
+}
+
+#[wasm_bindgen]
+impl ArrayDescriptorLayout {
+    #[wasm_bindgen(getter)]
+    pub fn mode(&self) -> String {
+        self.mode.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = "rawMode")]
+    pub fn raw_mode(&self) -> String {
+        self.raw_mode.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    #[wasm_bindgen(getter, js_name = "modeReinterpretsDtype")]
+    pub fn mode_reinterprets_dtype(&self) -> bool {
+        self.mode_reinterprets_dtype
+    }
+}
+
+#[wasm_bindgen(js_name = "resolveArrayLayout")]
+pub fn resolve_array_layout(
+    shape: Vec<usize>,
+    typestr: &str,
+    mode: Option<String>,
+) -> Result<ArrayDescriptorLayout, JsValue> {
+    let layout = pillow_rs::ops::array::resolve_array_layout(&shape, typestr, mode.as_deref())
+        .map_err(err)?;
+    Ok(ArrayDescriptorLayout {
+        mode: layout.mode,
+        raw_mode: layout.raw_mode,
+        width: layout.width,
+        height: layout.height,
+        dimensions: layout.dimensions,
+        mode_reinterprets_dtype: layout.mode_reinterprets_dtype,
+    })
 }
 
 #[wasm_bindgen]
@@ -76,7 +152,7 @@ impl Image {
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(&self, l: u32, t: u32, r: u32, b: u32) -> Result<Image, JsValue> {
         self.inner
-            .crop((l, t, r - l, b - t))
+            .crop_box(l, t, r, b)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -114,10 +190,60 @@ impl Image {
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
+            .paste_at(PasteSource::Image(src.inner.clone()), Some((x, y)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageMasked")]
+    pub fn paste_image_masked(
+        &mut self,
+        src: &Image,
+        x: i32,
+        y: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste_at(
+                PasteSource::Image(src.inner.clone()),
+                Some((x, y)),
+                Some(&mask.inner),
+            )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageRegion")]
+    pub fn paste_image_region(
+        &mut self,
+        src: &Image,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
             .paste(
                 PasteSource::Image(src.inner.clone()),
-                Some((x, y, x, y)),
+                Some((l, t, r, b)),
                 None,
+            )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteImageRegionMasked")]
+    pub fn paste_image_region_masked(
+        &mut self,
+        src: &Image,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(
+                PasteSource::Image(src.inner.clone()),
+                Some((l, t, r, b)),
+                Some(&mask.inner),
             )
             .map_err(err)
     }
@@ -135,7 +261,62 @@ impl Image {
     ) -> Result<(), JsValue> {
         use pillow_rs::ops::paste::PasteSource;
         self.inner
-            .paste(PasteSource::Color((r, g, b, a)), Some((l, t, rt, bt)), None)
+            .paste(PasteSource::Rgba(r, g, b, a), Some((l, t, rt, bt)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteScalarRegion")]
+    pub fn paste_scalar_region(
+        &mut self,
+        value: u8,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(PasteSource::Scalar(value), Some((l, t, r, b)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteScalarAt")]
+    pub fn paste_scalar_at(&mut self, value: u8, x: i32, y: i32) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste_at(PasteSource::Scalar(value), Some((x, y)), None)
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteLumaAlphaRegion")]
+    pub fn paste_luma_alpha_region(
+        &mut self,
+        luma: u8,
+        alpha: u8,
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste(
+                PasteSource::LumaAlpha(luma, alpha),
+                Some((l, t, r, b)),
+                None,
+            )
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pasteRgbAt")]
+    pub fn paste_rgb_at(
+        &mut self,
+        r: u8,
+        g: u8,
+        b: u8,
+        x: i32,
+        y: i32,
+        mask: &Image,
+    ) -> Result<(), JsValue> {
+        use pillow_rs::ops::paste::PasteSource;
+        self.inner
+            .paste_at(PasteSource::Rgb(r, g, b), Some((x, y)), Some(&mask.inner))
             .map_err(err)
     }
 
@@ -357,6 +538,26 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    #[wasm_bindgen(js_name = "color3DLUT")]
+    pub fn color3dlut(
+        &self,
+        size_x: u32,
+        size_y: u32,
+        size_z: u32,
+        table: Vec<f64>,
+        channels: u32,
+        target_mode: Option<String>,
+    ) -> Result<Image, JsValue> {
+        self.inner
+            .color3dlut(
+                (size_x, size_y, size_z),
+                table,
+                channels,
+                target_mode.as_deref(),
+            )
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
 
     // Quantize/Reduce
     #[wasm_bindgen(js_name = "quantize")]
@@ -394,7 +595,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "eval")]
     pub fn eval(&self, lut: Vec<u8>) -> Result<Image, JsValue> {
-        module_fns::eval(&self.inner, &lut)
+        module_fns::eval_replicated_for_image(&self.inner, &lut)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -418,7 +619,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "verify")]
     pub fn verify(&self) -> Result<(), JsValue> {
-        self.inner.materialize().map(|_| ()).map_err(err)
+        self.inner.verify().map_err(err)
     }
     #[wasm_bindgen(js_name = "fromBytes")]
     pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> {
@@ -441,6 +642,17 @@ impl Image {
     pub fn tobytes(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.tobytes().map_err(err)
     }
+    #[wasm_bindgen(js_name = "toBytesEncoded")]
+    pub fn tobytes_encoded(
+        &self,
+        encoder_name: &str,
+        args: Vec<String>,
+    ) -> Result<Vec<u8>, JsValue> {
+        let mode = self.inner.mode().map_err(err)?;
+        self.inner
+            .tobytes_encoded(&mode, encoder_name, &args)
+            .map_err(err)
+    }
     #[wasm_bindgen(js_name = "copy")]
     pub fn copy(&self) -> Image {
         Image {
@@ -459,8 +671,10 @@ impl Image {
             .ok_or_else(|| JsValue::from_str("no palette"))
     }
     #[wasm_bindgen(js_name = "putpalette")]
-    pub fn putpalette(&mut self, _data: Vec<u8>) {
-        // Core doesn't expose putpalette — no-op
+    pub fn putpalette(&mut self, data: Vec<u8>, rawmode: Option<String>) -> Result<(), JsValue> {
+        self.inner
+            .putpalette(&data, rawmode.as_deref().unwrap_or("RGB"))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "getexif")]
     pub fn getexif(&self) -> JsValue {
@@ -479,7 +693,35 @@ impl Image {
         self.inner.tobytes().map_err(err)
     }
     #[wasm_bindgen(js_name = "applyTransparency")]
-    pub fn apply_transparency(&self) {}
+    pub fn apply_transparency(&mut self) -> Result<(), JsValue> {
+        self.inner.apply_transparency().map_err(err)
+    }
+    #[wasm_bindgen(js_name = "paletteMode")]
+    pub fn palette_mode(&self) -> Option<String> {
+        self.inner.palette_mode().map(str::to_owned)
+    }
+    #[wasm_bindgen(js_name = "paletteRgba")]
+    pub fn palette_rgba(&self) -> Option<Vec<u8>> {
+        self.inner.getpalette_rgba()
+    }
+    #[wasm_bindgen(js_name = "pendingTransparencyIndex")]
+    pub fn pending_transparency_index(&self) -> Option<u8> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Index(index)) => Some(index),
+            _ => None,
+        }
+    }
+    #[wasm_bindgen(js_name = "pendingTransparencyTable")]
+    pub fn pending_transparency_table(&self) -> Option<Vec<u8>> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Table(alpha)) => Some(alpha),
+            _ => None,
+        }
+    }
+    #[wasm_bindgen(js_name = "hasTransparencyData")]
+    pub fn has_transparency_data(&self) -> bool {
+        self.inner.has_transparency_data()
+    }
     #[wasm_bindgen(js_name = "draft")]
     pub fn draft(&self) -> Image {
         Image {
@@ -517,10 +759,11 @@ pub struct ImageDraw {
 #[wasm_bindgen]
 impl ImageDraw {
     #[wasm_bindgen(constructor)]
-    pub fn new(img: &Image) -> ImageDraw {
-        ImageDraw {
-            draw: Draw::new(img.inner.clone(), None),
-        }
+    pub fn new(img: &Image) -> Result<ImageDraw, JsValue> {
+        let mode = img.inner.mode().map_err(err)?;
+        Ok(ImageDraw {
+            draw: Draw::new(img.inner.clone(), Some(mode)),
+        })
     }
 
     #[wasm_bindgen(js_name = "line")]
@@ -534,8 +777,11 @@ impl ImageDraw {
         g: u8,
         b: u8,
         a: u8,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
-        self.draw.line(x0, y0, x1, y1, (r, g, b, a), 1).map_err(err)
+        self.draw
+            .line(x0, y0, x1, y1, (r, g, b, a), width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "rectangle")]
     pub fn rect(
@@ -552,11 +798,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .rectangle(x0, y0, x1, y1, fill, out, 1)
+            .rectangle(x0, y0, x1, y1, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "ellipse")]
@@ -574,10 +821,13 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
-        self.draw.ellipse(x0, y0, x1, y1, fill, out, 1).map_err(err)
+        self.draw
+            .ellipse(x0, y0, x1, y1, fill, out, width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "polygon")]
     pub fn polygon(
@@ -591,11 +841,14 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let pts: Vec<(i32, i32)> = points.chunks(2).map(|c| (c[0], c[1])).collect();
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
-        self.draw.polygon(&pts, fill, out, 1).map_err(err)
+        self.draw
+            .polygon(&pts, fill, out, width.unwrap_or(1))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "point")]
     pub fn point(&mut self, pts: Vec<i32>, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
@@ -615,9 +868,10 @@ impl ImageDraw {
         g: u8,
         b: u8,
         a: u8,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         self.draw
-            .arc(x0, y0, x1, y1, start, end, (r, g, b, a), 1)
+            .arc(x0, y0, x1, y1, start, end, (r, g, b, a), width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "chord")]
@@ -637,11 +891,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .chord(x0, y0, x1, y1, start, end, fill, out, 1)
+            .chord(x0, y0, x1, y1, start, end, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pieslice")]
@@ -661,11 +916,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .pieslice(x0, y0, x1, y1, start, end, fill, out, 1)
+            .pieslice(x0, y0, x1, y1, start, end, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circle")]
@@ -682,11 +938,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .circle(cx as i32, cy as i32, radius, fill, out, 1)
+            .circle(cx as i32, cy as i32, radius, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "roundedRectangle")]
@@ -705,11 +962,12 @@ impl ImageDraw {
         og: Option<u8>,
         ob: Option<u8>,
         oa: Option<u8>,
+        width: Option<u32>,
     ) -> Result<(), JsValue> {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .rounded_rectangle(x0, y0, x1, y1, radius, fill, out, 1)
+            .rounded_rectangle(x0, y0, x1, y1, radius, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]
@@ -761,6 +1019,43 @@ pub struct ImageFont {
 }
 
 #[wasm_bindgen]
+pub struct ImageFontMask {
+    width: u32,
+    height: u32,
+    offset_x: i32,
+    offset_y: i32,
+    pixels: Vec<u8>,
+}
+
+#[wasm_bindgen]
+impl ImageFontMask {
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    #[wasm_bindgen(getter, js_name = "offsetX")]
+    pub fn offset_x(&self) -> i32 {
+        self.offset_x
+    }
+
+    #[wasm_bindgen(getter, js_name = "offsetY")]
+    pub fn offset_y(&self) -> i32 {
+        self.offset_y
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pixels(&self) -> Vec<u8> {
+        self.pixels.clone()
+    }
+}
+
+#[wasm_bindgen]
 impl ImageFont {
     #[wasm_bindgen(constructor)]
     pub fn new(data: Vec<u8>, size: f32) -> Result<ImageFont, JsValue> {
@@ -768,6 +1063,75 @@ impl ImageFont {
             .map(|f| ImageFont { font: f })
             .map_err(err)
     }
+
+    #[wasm_bindgen(js_name = "getmask2")]
+    pub fn getmask2(
+        &self,
+        text: &str,
+        start_x: Option<f64>,
+        start_y: Option<f64>,
+    ) -> ImageFontMask {
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.font,
+            text,
+            (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
+        );
+        ImageFontMask {
+            width,
+            height,
+            offset_x: offset.0,
+            offset_y: offset.1,
+            pixels,
+        }
+    }
+
+    #[wasm_bindgen(js_name = "getname")]
+    pub fn getname(&self) -> Vec<String> {
+        let (family, style) = pillow_rs::font::imagingft::getname(&self.font);
+        vec![family.to_owned(), style.to_owned()]
+    }
+
+    #[wasm_bindgen(js_name = "getTransposedMask")]
+    pub fn get_transposed_mask(
+        &self,
+        text: &str,
+        orientation: Option<String>,
+    ) -> Result<ImageFontMask, JsValue> {
+        let (width, height, pixels) = pillow_rs::font::imagingft::get_transposed_mask(
+            &self.font,
+            text,
+            orientation.as_deref(),
+        )
+        .map_err(err)?;
+        Ok(ImageFontMask {
+            width,
+            height,
+            offset_x: 0,
+            offset_y: 0,
+            pixels,
+        })
+    }
+
+    #[wasm_bindgen(js_name = "getTransposedBbox")]
+    pub fn get_transposed_bbox(&self, text: &str, orientation: Option<String>) -> Vec<i32> {
+        let bbox = pillow_rs::font::imagingft::transposed_bbox(
+            pillow_rs::font::imagingft::getbbox(&self.font, text),
+            orientation.as_deref(),
+        );
+        vec![bbox.0, bbox.1, bbox.2, bbox.3]
+    }
+
+    #[wasm_bindgen(js_name = "getTransposedLength")]
+    pub fn get_transposed_length(
+        &self,
+        text: &str,
+        orientation: Option<String>,
+    ) -> Result<f32, JsValue> {
+        pillow_rs::font::imagingft::validate_transposed_length(orientation.as_deref())
+            .map_err(err)?;
+        Ok(pillow_rs::font::imagingft::getlength(&self.font, text))
+    }
+
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Vec<u32> {
         let (w, h) = self.font.text_bbox(text);
@@ -966,9 +1330,9 @@ impl ImageFont {
     }
     #[wasm_bindgen(js_name = "loadDefault")]
     pub fn load_default() -> Result<ImageFont, JsValue> {
-        Ok(ImageFont {
-            font: Font::load_default(10.0),
-        })
+        Font::load_default(10.0)
+            .map(|font| ImageFont { font })
+            .map_err(err)
     }
 }
 #[wasm_bindgen(js_name = "imageOpen")]
@@ -982,6 +1346,13 @@ pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Resu
     RsImage::new(w, h, mode, (r, g, b, a))
         .map(|i| Image { inner: i })
         .map_err(err)
+}
+
+#[wasm_bindgen(js_name = "imageNewPaletteIndex")]
+pub fn image_new_palette_index(w: u32, h: u32, index: u8) -> Image {
+    Image {
+        inner: RsImage::new_palette_index(w, h, index),
+    }
 }
 
 // ── ImageChops ───────────────────────────────────────────────────
@@ -1081,8 +1452,7 @@ impl ImageChops {
     }
     #[wasm_bindgen(js_name = "composite")]
     pub fn comp(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
-        let mode = a.inner.explicit_mode();
-        module_fns::composite(&a.inner, &b.inner, &m.inner, mode)
+        module_fns::composite(&a.inner, &b.inner, &m.inner)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -1258,7 +1628,7 @@ pub fn blend(a: &Image, b: &Image, alpha: f64) -> Result<Image, JsValue> {
 }
 #[wasm_bindgen(js_name = "composite")]
 pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
-    module_fns::composite(&a.inner, &b.inner, &m.inner, None)
+    module_fns::composite(&a.inner, &b.inner, &m.inner)
         .map(|i| Image { inner: i })
         .map_err(err)
 }
@@ -1592,8 +1962,8 @@ pub fn effect_spread(img: &Image, distance: u32) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "evalFn")]
-pub fn eval_fn(img: &Image, lut: Vec<u8>, n_bands: usize) -> Result<Image, JsValue> {
-    module_fns::eval_replicated(&img.inner, &lut, n_bands)
+pub fn eval_fn(img: &Image, lut: Vec<u8>, _n_bands: usize) -> Result<Image, JsValue> {
+    module_fns::eval_replicated_for_image(&img.inner, &lut)
         .map(|i| Image { inner: i })
         .map_err(err)
 }
@@ -1701,11 +2071,6 @@ pub fn palette_getcolor_validate(
 #[wasm_bindgen(js_name = "paletteToText")]
 pub fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
     color::palette_to_text(&palette, mode)
-}
-
-#[wasm_bindgen(js_name = "paletteSaveToFile")]
-pub fn palette_save_to_file(palette: Vec<u8>, mode: &str, path: &str) -> Result<(), JsValue> {
-    color::palette_save_to_file(&palette, mode, path).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

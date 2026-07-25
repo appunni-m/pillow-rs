@@ -88,9 +88,13 @@ pub use handles::{
     FT_Library_Module_Count, FT_Library_Module_Flags, FT_Library_Renderer_Class,
     FT_Library_Set_Renderer_By_Format, FT_Library_Synthetic_Module_Info,
     FT_Module_Requester_Service_Available, FT_New_Library_Without_Default_Modules,
-    FT_Outline_GlyphSlot_With_Advance, FT_Palette_Active_Entries_Copy, FT_Palette_Data_Copy,
+    FT_Palette_Active_Entries_Copy, FT_Palette_Data_Copy,
     FT_Palette_Data_Snapshot, FT_Palette_Select_Copy, FT_Palette_Select_Snapshot,
     FT_Palette_Set_Active_Entry_For_Test, FT_Unsupported_GlyphSlot,
 };
+#[cfg(feature = "abi-test-support")]
+pub use handles::FT_Outline_GlyphSlot_With_Advance;
+#[cfg(any(test, feature = "abi-test-support"))]
+pub use handles::FT_Empty_GlyphSlot;
 pub use handles::{FT_Done_Library, FT_Library_Memory, FT_Library_Refcount, FT_New_Library};
 pub use types::*;

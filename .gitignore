@@ -12,6 +12,7 @@ dist/
 /pkg/
 /node_modules/
 coverage/report.json
+.coverage-mcp/
 .report.json
 .python-version
 .codex-subagents/

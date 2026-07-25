@@ -1,8 +1,7 @@
 //! PIL 12.2.0 `_imagingft.c` connector fixture tests.
 //!
-//! Every fixture row is an exact parity gate. Historical `incomplete` rows stay
-//! in the fixture so older debt is visible, but the expected failure count is
-//! now zero.
+//! Every fixture row is an exact parity gate. Incomplete or unrecognized rows
+//! are rejected so no known parity debt can be counted as a pass.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -12,11 +11,9 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(unused_crate_dependencies)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-use std::sync::OnceLock;
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -105,58 +102,9 @@ fn fixture_dir() -> PathBuf {
 
 fn read_matrix() -> Matrix {
     let path = fixture_dir().join("imagingft_matrix.json");
-    ensure_imagingft_matrix(&path);
     let data = fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("failed to read fixture matrix {path:?}: {err}"));
     serde_json::from_str(&data).expect("imagingft fixture matrix is valid JSON")
-}
-
-fn ensure_imagingft_matrix(path: &std::path::Path) {
-    static MATRIX_READY: OnceLock<()> = OnceLock::new();
-    MATRIX_READY.get_or_init(|| {
-        if matrix_needs_generation(path) {
-            generate_imagingft_matrix(path);
-        }
-    });
-}
-
-fn matrix_needs_generation(path: &std::path::Path) -> bool {
-    let Ok(data) = fs::read_to_string(path) else {
-        return true;
-    };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&data) else {
-        return true;
-    };
-    value
-        .get("fixture_family")
-        .and_then(serde_json::Value::as_str)
-        != Some("pillow-rs-imagingft")
-}
-
-fn generate_imagingft_matrix(path: &std::path::Path) {
-    let manifest = manifest_dir();
-    let script = manifest.join("scripts").join("build_imagingft_fixtures.py");
-    let repo_root = manifest
-        .parent()
-        .expect("pillow-rs crate has a repository parent");
-    let output = Command::new("python3")
-        .arg(&script)
-        .current_dir(repo_root)
-        .output()
-        .unwrap_or_else(|err| {
-            panic!("failed to run imagingft fixture generator {script:?}: {err}")
-        });
-    assert!(
-        output.status.success(),
-        "imagingft fixture generator failed with status {}\nstdout:\n{}\nstderr:\n{}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        path.is_file(),
-        "imagingft fixture generator completed but did not create {path:?}"
-    );
 }
 
 fn load_font(row: &Row) -> Font {
@@ -180,6 +128,10 @@ fn read_expected_raw(row: &Row) -> Vec<u8> {
 }
 
 fn assert_matrix_provenance(matrix: &Matrix) {
+    const EXPECTED_TOTAL_ROWS: usize = 7_649;
+    const EXPECTED_PARITY_ROWS: usize = 17;
+    const EXPECTED_PIXEL_ROWS: usize = 7_632;
+
     assert_eq!(matrix.fixture_family, "pillow-rs-imagingft");
     assert_eq!(
         matrix.generator,
@@ -192,6 +144,45 @@ fn assert_matrix_provenance(matrix: &Matrix) {
         "oracle description must name the PIL connector source"
     );
     assert!(!matrix.rows.is_empty(), "matrix must contain fixture rows");
+
+    assert_eq!(
+        matrix.rows.len(),
+        EXPECTED_TOTAL_ROWS,
+        "imagingft matrix row coverage changed"
+    );
+    assert_eq!(
+        matrix
+            .rows
+            .iter()
+            .filter(|row| row.status == "parity")
+            .count(),
+        EXPECTED_PARITY_ROWS,
+        "imagingft scalar/raw parity row coverage changed"
+    );
+    assert_eq!(
+        matrix
+            .rows
+            .iter()
+            .filter(|row| row.status == "pixel_matrix")
+            .count(),
+        EXPECTED_PIXEL_ROWS,
+        "imagingft pixel row coverage changed"
+    );
+
+    let mut ids = HashSet::with_capacity(matrix.rows.len());
+    for row in &matrix.rows {
+        assert!(
+            ids.insert(row.id.as_str()),
+            "duplicate imagingft fixture row id: {}",
+            row.id
+        );
+        assert!(
+            matches!(row.status.as_str(), "parity" | "pixel_matrix"),
+            "unsupported or incomplete imagingft fixture status for {}: {}",
+            row.id,
+            row.status
+        );
+    }
 }
 
 fn assert_raw_file_matches_hash(row: &Row) {
@@ -274,9 +265,8 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             (vec![width, height], Vec::new(), pixels)
         }
         "getmask2" => {
-            let (width, height, pixels) = imagingft::getmask(font, &row.text);
-            let bbox = imagingft::getbbox(font, &row.text);
-            (vec![width, height], vec![bbox.0, bbox.1], pixels)
+            let (width, height, pixels, offset) = imagingft::getmask2(font, &row.text);
+            (vec![width, height], vec![offset.0, offset.1], pixels)
         }
         "draw_text" => {
             let image = Image::new(96, 64, row.mode.as_str(), (0, 0, 0, 0)).map_err(|err| {
@@ -291,11 +281,16 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
                     id: row.id.clone(),
                     reason: format!("draw failed: {err}"),
                 })?;
-            let pixels = draw.image_clone().tobytes().map_err(|err| PixelFailure {
+            let actual = draw.image_clone();
+            let size = actual.size().map_err(|err| PixelFailure {
+                id: row.id.clone(),
+                reason: format!("size failed: {err}"),
+            })?;
+            let pixels = actual.tobytes().map_err(|err| PixelFailure {
                 id: row.id.clone(),
                 reason: format!("tobytes failed: {err}"),
             })?;
-            (row.expected_size.clone(), Vec::new(), pixels)
+            (vec![size.0, size.1], Vec::new(), pixels)
         }
         other => {
             return Err(PixelFailure {
@@ -381,6 +376,8 @@ fn assert_required_rows_exist(matrix: &Matrix) {
         "dejavusans20_jq_getmask_l",
         "dejavusans20_jq_getmask2_l",
         "dejavusans20_jq_draw_text_rgba",
+        "dejavusans20_getmetrics",
+        "dejavusans20_getname",
     ];
     for id in REQUIRED_IDS {
         assert!(
@@ -416,36 +413,18 @@ fn imagingft_scalar_rows_match_pil_12_2_0() {
 }
 
 #[test]
-fn imagingft_historical_incomplete_rows_have_zero_failures() {
+fn imagingft_fixture_contains_no_incomplete_rows() {
     let matrix = read_matrix();
-    let rows: Vec<&Row> = matrix
+    let rows: Vec<&str> = matrix
         .rows
         .iter()
         .filter(|row| row.status == "incomplete")
+        .map(|row| row.id.as_str())
         .collect();
     assert!(
-        !rows.is_empty() || true,
-        "incomplete parity rows must stay visible"
-    ); // allow zero rows
-
-    let mut fonts = FontCache::default();
-    let failures: Vec<PixelFailure> = rows
-        .iter()
-        .filter_map(|row| {
-            let font = fonts.font_for(row);
-            compare_row(font, row).err()
-        })
-        .collect();
-
-    let expected_failures = rows.len(); // fontdone::ffi uses different rasterizer defaults
-    assert_eq!(
-        failures.len(),
-        expected_failures,
-        "PIL 12.2.0 imagingft pixel incomplete baseline changed: {failures:#?}"
+        rows.is_empty(),
+        "incomplete imagingft fixture rows are forbidden: {rows:#?}"
     );
-    for failure in failures {
-        eprintln!("imagingft incomplete: {}: {}", failure.id, failure.reason);
-    }
 }
 
 #[test]
@@ -491,9 +470,6 @@ fn imagingft_all_fixture_rows_match_pil_12_2_0() {
     let mut fonts = FontCache::default();
     let mut failures = Vec::new();
     for row in &matrix.rows {
-        if row.status == "incomplete" {
-            continue;
-        }
         let font = fonts.font_for(row);
         if let Err(failure) = compare_row(font, row) {
             failures.push(failure);

@@ -211,7 +211,6 @@ generated reports, build outputs, and package installs.
 |       |   |       |-- duplicate.wgsl
 |       |   |       |-- effect_mandelbrot.wgsl
 |       |   |       |-- effect_noise.wgsl
-|       |   |       |-- effect_spread.wgsl
 |       |   |       |-- equalize.wgsl
 |       |   |       |-- equalize_cdf.wgsl
 |       |   |       |-- equalize_histogram.wgsl
@@ -280,12 +279,15 @@ generated reports, build outputs, and package installs.
 |       |   `-- mod.rs
 |       |-- error.rs
 |       |-- font/
+|       |   |-- courb08.pil.b64
+|       |   |-- courb08.png.b64
+|       |   |-- default_aileron.LICENSE.txt
+|       |   |-- default_aileron.b64
+|       |   |-- default_aileron.rs
 |       |   |-- imagingft.rs
-|       |   `-- mod.rs
+|       |   |-- mod.rs
+|       |   `-- pilfont.rs
 |       |-- format.rs
-|       |-- formats/
-|       |   |-- handler.rs
-|       |   `-- mod.rs
 |       |-- image.rs
 |       |-- image_utils.rs
 |       |-- infallible.rs
@@ -520,11 +522,23 @@ generated reports, build outputs, and package installs.
 |   |-- src/
 |   |   `-- lib.rs
 |   `-- tests/
+|       |-- apply_transparency_oracle.mjs
 |       |-- browser/
 |       |   |-- test.html
 |       |   `-- wasm_browser.test.mjs
+|       |-- codec_feature_matrix.mjs
+|       |-- color3dlut_oracle.mjs
+|       |-- drawing_oracle.mjs
+|       |-- eval_oracle.mjs
 |       |-- execution_engine.mjs
+|       |-- image_open_oracle.mjs
+|       |-- imagefont_getmask2_oracle.mjs
+|       |-- oracle_contract.mjs
+|       |-- oracle_corpus.mjs
+|       |-- paste_oracle.mjs
 |       |-- run_wasm_test.mjs
+|       |-- tobytes_oracle.mjs
+|       |-- transposed_font_oracle.mjs
 |       `-- wasm_backend.mjs
 |-- pillow-rs-py/
 |   |-- Cargo.toml
@@ -580,14 +594,40 @@ generated reports, build outputs, and package installs.
 |   |   |-- generate_multi_backend_coverage.py
 |   |   |-- generate_wasm_coverage.py
 |   |   |-- ops_registry.py
+|   |   |-- run_apply_transparency_rust_coverage.sh
+|   |   |-- run_drawing_rust_coverage.sh
+|   |   |-- run_image_backend_rust_coverage.sh
+|   |   |-- run_image_open_rust_coverage.sh
+|   |   |-- run_imagefont_getmask2_rust_coverage.sh
+|   |   |-- run_paste_rust_coverage.sh
+|   |   |-- run_point_rust_coverage.sh
+|   |   |-- run_python_abi_rust_coverage.sh
+|   |   |-- run_python_wrapper_coverage.sh
+|   |   |-- run_transposed_font_rust_coverage.sh
 |   |   `-- validate_coverage.py
 |   |-- generate_fixtures.py
+|   |-- generate_image_backend_operation_fixtures.py
+|   |-- generate_imagefont_getmask2_fixture_inputs.py
+|   |-- generate_palette_save_fixture_inputs.py
+|   |-- generate_point_fixture_inputs.py
+|   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
+|   |-- generate_transposed_font_oracle.py
 |   |-- lint.sh
 |   `-- migrate_fixtures.py
 `-- tests/
     |-- conftest.py
     |-- engine.py
-    `-- test_parity.py
+    |-- fixture_coverage.py
+    |-- oracles/
+    |   `-- image_open_inputs.json
+    |-- test_apply_transparency_oracle.py
+    |-- test_drawing_oracle.py
+    |-- test_imagefont_oracle.py
+    |-- test_pa_mutations.py
+    |-- test_parity.py
+    |-- test_paste_oracle.py
+    |-- test_putdata_parity.py
+    `-- test_transposed_font_oracle.py
 ```
 <!-- END GENERATED CODE TREE -->

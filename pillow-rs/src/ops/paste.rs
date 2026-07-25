@@ -2,15 +2,25 @@
 
 use std::sync::Arc;
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 /// Source pixels for [`Image::paste`].
+#[derive(Debug, Clone)]
 pub enum PasteSource {
     /// Paste pixels from another image.
     Image(Image),
-    /// Paste a solid RGBA color.
+    /// Paste a scalar pixel value.
+    Scalar(u8),
+    /// Paste a two-band luma/alpha pixel value.
+    LumaAlpha(u8, u8),
+    /// Paste a three-band pixel value.
+    Rgb(u8, u8, u8),
+    /// Paste a four-band pixel value.
+    Rgba(u8, u8, u8, u8),
+    /// Backwards-compatible spelling for a solid RGBA color.
     Color((u8, u8, u8, u8)),
 }
 
@@ -23,9 +33,50 @@ impl PasteSource {
         if let Some(img) = image {
             PasteSource::Image(img)
         } else {
-            PasteSource::Color((r, g, b, a))
+            PasteSource::Rgba(r, g, b, a)
         }
     }
+
+    fn solid_color(&self, mode: &str) -> Result<(u8, u8, u8, u8), PilError> {
+        let bad_single =
+            || PilError::TypeError("color must be int or single-element tuple".to_owned());
+        let bad_la =
+            || PilError::TypeError("color must be int, or tuple of one or two elements".to_owned());
+        let bad_multi = || {
+            PilError::TypeError(
+                "color must be int, or tuple of one, three or four elements".to_owned(),
+            )
+        };
+
+        match (mode, self) {
+            ("1" | "L" | "P", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 255)),
+            ("1" | "L" | "P", _) => Err(bad_single()),
+            ("LA" | "PA", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 0)),
+            ("LA" | "PA", PasteSource::LumaAlpha(luma, alpha)) => Ok((*luma, *luma, *luma, *alpha)),
+            ("LA" | "PA", _) => Err(bad_la()),
+            ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
+                Ok((*value, 0, 0, 0))
+            }
+            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
+            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgba(r, g, b, _))
+            | ("RGB" | "YCbCr" | "HSV", PasteSource::Color((r, g, b, _))) => Ok((*r, *g, *b, 255)),
+            ("RGBA" | "CMYK", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
+            ("RGBA" | "CMYK", PasteSource::Rgba(r, g, b, a))
+            | ("RGBA" | "CMYK", PasteSource::Color((r, g, b, a))) => Ok((*r, *g, *b, *a)),
+            ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
+            ("I" | "F", PasteSource::Scalar(value)) => Ok((*value, 0, 0, 0)),
+            ("I" | "F", _) => Err(bad_single()),
+            (_, _) => Err(PilError::ValueError(format!(
+                "unsupported paste destination mode {mode}"
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PastePlacement {
+    Position(i32, i32),
+    Region(i32, i32, i32, i32),
 }
 
 impl Image {
@@ -47,42 +98,135 @@ impl Image {
         box_coords: Option<(i32, i32, i32, i32)>,
         mask: Option<&Image>,
     ) -> Result<(), PilError> {
-        let (src_img, x, y, w, h) = match source {
-            PasteSource::Image(ref img) => {
-                let size = img.size()?;
-                match box_coords {
-                    None => {
-                        let (sw, sh) = size;
-                        (img.clone(), 0i32, 0i32, sw as i32, sh as i32)
-                    }
-                    Some((x1, y1, x2, y2)) => (img.clone(), x1, y1, x2 - x1, y2 - y1),
-                }
+        let placement = box_coords.map_or(PastePlacement::Position(0, 0), |coords| {
+            PastePlacement::Region(coords.0, coords.1, coords.2, coords.3)
+        });
+        self.paste_impl(source, placement, mask)
+    }
+
+    /// Queues a paste using Pillow's two-coordinate upper-left form.
+    ///
+    /// Image sources derive the region size from the source image. Solid values
+    /// derive it from `mask`, when supplied; without either size source Pillow
+    /// reports that a four-item box is required.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Image::paste`].
+    pub fn paste_at(
+        &mut self,
+        source: PasteSource,
+        position: Option<(i32, i32)>,
+        mask: Option<&Image>,
+    ) -> Result<(), PilError> {
+        let (x, y) = position.unwrap_or((0, 0));
+        self.paste_impl(source, PastePlacement::Position(x, y), mask)
+    }
+
+    fn paste_impl(
+        &mut self,
+        source: PasteSource,
+        placement: PastePlacement,
+        mask: Option<&Image>,
+    ) -> Result<(), PilError> {
+        let destination_mode = self.mode()?;
+        let source_size = match &source {
+            PasteSource::Image(image) => Some(image.size()?),
+            _ => None,
+        };
+        let mask_size = mask.map(Image::size).transpose()?;
+        let (x, y, width, height) = match placement {
+            PastePlacement::Position(x, y) => {
+                let (width, height) = source_size.or(mask_size).ok_or_else(|| {
+                    PilError::ValueError("cannot determine region size; use 4-item box".to_owned())
+                })?;
+                (x, y, width, height)
             }
-            PasteSource::Color(rgba) => {
-                let (bx, by, bw, bh) = match box_coords {
-                    Some((x1, y1, x2, y2)) if x2 > x1 && y2 > y1 => (x1, y1, x2 - x1, y2 - y1),
-                    _ => {
-                        return Err(PilError::ValueError(
-                            "color paste requires a 4-tuple box to define the region".into(),
-                        ));
-                    }
-                };
-                let (r, g, b, a) = rgba;
-                let color_img = Image::new(bw as u32, bh as u32, "RGBA", (r, g, b, a))?;
-                (color_img, bx, by, bw, bh)
+            PastePlacement::Region(left, top, right, bottom) => {
+                let width = right
+                    .checked_sub(left)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .filter(|value| *value != 0)
+                    .ok_or_else(|| PilError::ValueError("images do not match".to_owned()))?;
+                let height = bottom
+                    .checked_sub(top)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .filter(|value| *value != 0)
+                    .ok_or_else(|| PilError::ValueError("images do not match".to_owned()))?;
+                (left, top, width, height)
             }
         };
 
-        let mask_arc = mask.map(|m| Arc::new(m.clone()));
+        if source_size.is_some_and(|size| size != (width, height))
+            || mask_size.is_some_and(|size| size != (width, height))
+        {
+            return Err(PilError::ValueError("images do not match".to_owned()));
+        }
+
+        let mask_alpha = if let Some(mask_image) = mask {
+            match mask_image.mode()?.as_str() {
+                "1" | "L" => false,
+                "LA" | "RGBA" | "RGBa" => true,
+                _ => {
+                    return Err(PilError::ValueError("bad transparency mask".to_owned()));
+                }
+            }
+        } else {
+            false
+        };
+
+        let source_image = match source {
+            PasteSource::Image(image) => {
+                let source_mode = image.mode()?;
+                if source_mode == destination_mode
+                    || (destination_mode == "RGB"
+                        && matches!(source_mode.as_str(), "LA" | "RGBA" | "RGBa"))
+                {
+                    image
+                } else if destination_mode == "PA" && source_mode == "P" {
+                    // Pillow promotes a P source to opaque PA samples before
+                    // pasting, retaining the source index byte verbatim.
+                    let mut promoted = image;
+                    promoted.putalpha(255)?;
+                    promoted
+                } else {
+                    // Pillow Image.py converts a mismatched source before entering
+                    // libImaging/Paste.c. Keep that conversion shared by every
+                    // backend so CPU, GPU, and SIMD receive identical bytes.
+                    image.convert(&destination_mode, None, None, None, None)?
+                }
+            }
+            solid => {
+                let color = solid.solid_color(&destination_mode)?;
+                if destination_mode == "P" {
+                    let dims = CheckedDims::new(width, height, 1)?;
+                    let mut indices = dims.alloc_buffer();
+                    indices.fill(color.0);
+                    Image::frombytes("P", (width, height), &indices)?
+                } else if destination_mode == "PA" {
+                    // PA's two raw bands use the same physical layout as LA;
+                    // the destination retains the palette and PA mode tag.
+                    Image::new(width, height, "LA", color)?
+                } else {
+                    Image::new(width, height, &destination_mode, color)?
+                }
+            }
+        };
+
+        let w = i32::try_from(width)
+            .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
+        let h = i32::try_from(height)
+            .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
         let new_self = Image::push_op(
             self,
             PipelineOp::Paste {
-                source: Arc::new(src_img),
+                source: Arc::new(source_image),
                 x,
                 y,
                 w,
                 h,
-                mask: mask_arc,
+                mask: mask.map(|image| Arc::new(image.clone())),
+                mask_alpha,
             },
         );
         *self = new_self;

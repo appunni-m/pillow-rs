@@ -105,5 +105,5 @@ def exif_transpose(image: Image, *, in_place=False):
 
 def deform(image: Image, deformer, resample=None):
     mesh = deformer.getmesh(image)
-    result = image.transform(image.size, "MESH", mesh[0] if mesh else [])
+    result = image.transform(image.size, "MESH", mesh)
     return result

@@ -12,17 +12,29 @@ name = "pillow_rs"
 default = ["gpu", "image-codecs-all", "parallel"]
 gpu = ["wgpu", "pollster", "bytemuck"]
 parallel = ["rayon"]
-image-codecs-all = ["image-gif", "image-png", "image-tiff", "image-webp"]
-image-gif = ["pillow-rs-image/gif"]
-image-png = ["pillow-rs-image/png"]
-image-tiff = ["pillow-rs-image/tiff"]
-image-webp = ["pillow-rs-image/webp"]
+image-codecs-all = [
+    "image-jpeg",
+    "image-png",
+    "image-gif",
+    "image-bmp",
+    "image-tiff",
+    "image-webp",
+    "image-ico",
+]
+image-jpeg = ["image-slash-star/jpeg"]
+image-gif = ["image-slash-star/gif"]
+image-png = ["image-slash-star/png"]
+image-bmp = ["image-slash-star/bmp"]
+image-tiff = ["image-slash-star/tiff"]
+image-webp = ["image-slash-star/webp"]
+image-ico = ["image-slash-star/ico"]
+image-avif = ["image-slash-star/avif"]
+wasm-wide-font-internals = ["fontdone/wasm-wide-internals"]
 
 [dependencies]
-pillow-rs-image = { path = "../pillow-rs-image", default-features = false }
+image-slash-star = { path = "../../image-slash-star", default-features = false }
 fontdone = { path = "../pillow-rs-freetype" }
 log = "0.4"
-png = "0.18"
 thiserror = "2"
 csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }

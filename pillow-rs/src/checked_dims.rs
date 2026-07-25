@@ -92,6 +92,15 @@ impl CheckedDims {
     /// pixel count overflows, if the pixel count exceeds
     /// [`CheckedDims::max_pixels`], or if the byte count overflows.
     pub fn new(width: u32, height: u32, channels: u8) -> Result<Self, PilError> {
+        Self::new_with_limit(width, height, channels, MAX_PIXELS.load(Ordering::Relaxed))
+    }
+
+    fn new_with_limit(
+        width: u32,
+        height: u32,
+        channels: u8,
+        max_pixels: u64,
+    ) -> Result<Self, PilError> {
         // AS PER DESIGN: Zero-dimension check (separate from overflow for
         // clearer error messages)
         if width == 0 || height == 0 {
@@ -118,12 +127,11 @@ impl CheckedDims {
 
         // AS PER DESIGN: Allocation DoS prevention. Users can relax this
         // via `set_max_pixels(None)` — matching PIL behavior.
-        let max = MAX_PIXELS.load(Ordering::Relaxed);
-        if total_pixels > max {
+        if total_pixels > max_pixels {
             return Err(PilError::DimensionError(format!(
                 "image size {} exceeds MAX_PIXELS ({}) — \
                  increase limit with CheckedDims::set_max_pixels()",
-                total_pixels, max
+                total_pixels, max_pixels
             )));
         }
 
@@ -240,15 +248,12 @@ mod tests {
 
     #[test]
     fn exceeds_max_pixels() {
-        let d = CheckedDims::new(100, 100, 1).unwrap();
+        let d = CheckedDims::new_with_limit(100, 100, 1, DEFAULT_MAX_PIXELS).unwrap();
         assert_eq!(d.total_pixels(), 10_000);
 
-        // Lower the cap to test rejection
-        CheckedDims::set_max_pixels(Some(5_000));
-        assert!(CheckedDims::new(100, 100, 1).is_err());
-
-        // Restore default
-        CheckedDims::set_max_pixels(Some(DEFAULT_MAX_PIXELS));
+        // Exercise the same validator without racing the process-wide limit
+        // against other unit tests running in parallel.
+        assert!(CheckedDims::new_with_limit(100, 100, 1, 5_000).is_err());
     }
 
     #[test]

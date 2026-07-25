@@ -5,14 +5,106 @@
 #![allow(clippy::redundant_clone)]
 
 use pillow_rs::error::PilError;
-use pillow_rs::image::Image as RsImage;
-use pyo3::exceptions::PyValueError;
+use pillow_rs::image::{Image as RsImage, PutDataValue};
+use pyo3::exceptions::{
+    PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
+};
 use pyo3::prelude::*;
-use pyo3::types::{PyTuple, PyType};
+use pyo3::types::{PyBytes, PyInt, PyList, PyTuple, PyType};
+use std::path::PathBuf;
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
     inner: RsImage,
+}
+
+fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> {
+    if let Ok(path) = value.extract::<PathBuf>() {
+        return Ok(Some(path));
+    }
+    let Ok(bytes) = value.downcast::<PyBytes>() else {
+        return Ok(None);
+    };
+    if bytes.as_bytes().contains(&0) {
+        return Err(PyValueError::new_err("embedded null byte"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(Some(std::ffi::OsStr::from_bytes(bytes.as_bytes()).into()))
+    }
+    #[cfg(not(unix))]
+    {
+        String::from_utf8(bytes.as_bytes().to_vec())
+            .map(PathBuf::from)
+            .map(Some)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+}
+
+#[allow(unsafe_code)]
+fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
+    // SAFETY: `Bound` guarantees a non-null, GIL-bound borrowed pointer for
+    // this call. `PySequence_Check` only inspects the object's type slots and
+    // neither steals a reference nor stores the pointer.
+    unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 }
+}
+
+fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<PutDataValue> {
+    if matches!(mode, "1" | "L" | "P" | "I" | "F") {
+        if python_is_sequence(value) {
+            return Err(PyTypeError::new_err("sequence must be flattened"));
+        }
+        // Pillow's numeric `_putdata` path deliberately clears conversion
+        // errors after writing the sentinel returned by PyFloat_AsDouble.
+        return Ok(PutDataValue::Number(value.extract::<f64>().unwrap_or(-1.0)));
+    }
+
+    if value.is_instance_of::<PyInt>() {
+        return value.extract::<i64>().map(PutDataValue::Packed);
+    }
+
+    let Ok(tuple) = value.downcast::<PyTuple>() else {
+        return Err(PyTypeError::new_err("color must be int or tuple"));
+    };
+    let tuple_len = tuple.len();
+    if tuple_len == 1 {
+        let packed = tuple.get_item(0)?;
+        if packed.is_instance_of::<PyInt>() {
+            return packed.extract::<i64>().map(PutDataValue::Packed);
+        }
+        if matches!(mode, "LA" | "PA") {
+            return Err(PySystemError::new_err(
+                "new style getargs format but argument is not a tuple",
+            ));
+        }
+        return Err(PyTypeError::new_err(
+            "color must be int, or tuple of one, three or four elements",
+        ));
+    }
+
+    let valid_arity = match mode {
+        "LA" | "PA" => tuple_len == 2,
+        "RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV" => {
+            matches!(tuple_len, 3 | 4)
+        }
+        _ => false,
+    };
+    if !valid_arity {
+        let message = if matches!(mode, "LA" | "PA") {
+            "color must be int, or tuple of one or two elements"
+        } else {
+            "color must be int, or tuple of one, three or four elements"
+        };
+        return Err(PyTypeError::new_err(message));
+    }
+
+    let mut components = Vec::with_capacity(tuple_len);
+    components.push(tuple.get_item(0)?.extract::<i64>()? as i128);
+    for index in 1..tuple_len {
+        components.push(tuple.get_item(index)?.extract::<i32>()? as i128);
+    }
+    Ok(PutDataValue::Components(components))
 }
 
 #[pymethods]
@@ -58,27 +150,73 @@ impl PyImage {
             float_val,
         )
         .map_err(map_error)?;
-        let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
+        let img = if mode == "P" {
+            if let Some(index) = single {
+                RsImage::new_palette_index(size.0, size.1, index)
+            } else if color.is_none() {
+                RsImage::new_palette_index(size.0, size.1, 0)
+            } else {
+                // Preserve tuple provenance: Image::new owns tuple-color
+                // palette allocation, while the resolver normalizes modes
+                // that do not distinguish tuples from scalar samples.
+                let tuple_color = if let Some((r, g, b, a)) = rgba {
+                    if a != 255 {
+                        return Err(PyValueError::new_err(
+                            "cannot add non-opaque RGBA color to RGB palette",
+                        ));
+                    }
+                    (r, g, b, a)
+                } else {
+                    rgb.map(|(r, g, b)| (r, g, b, 255)).unwrap_or(c)
+                };
+                RsImage::new(size.0, size.1, mode, tuple_color).map_err(map_error)?
+            }
+        } else {
+            RsImage::new(size.0, size.1, mode, c).map_err(map_error)?
+        };
         Ok(PyImage { inner: img })
     }
 
     #[classmethod]
     fn open(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<Self> {
-        if let Ok(path) = fp.extract::<String>() {
-            let img = RsImage::open(&path, None).map_err(map_error)?;
-            Ok(PyImage { inner: img })
-        } else if let Ok(bytes) = fp.extract::<Vec<u8>>() {
+        if let Some(path) = host_path_from_python(fp)? {
+            let bytes = std::fs::read(path).map_err(|error| map_error(error.into()))?;
             let img = RsImage::open_bytes(bytes).map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                "Expected str or bytes",
-            ))
+            let bytes = fp.call_method0("read")?.extract::<Vec<u8>>()?;
+            let img = RsImage::open_bytes(bytes).map_err(map_error)?;
+            Ok(PyImage { inner: img })
         }
     }
 
-    fn save(&mut self, fp: &str, format: Option<String>) -> PyResult<()> {
-        self.inner.save(fp, format.as_deref()).map_err(map_error)
+    fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
+        let inferred;
+        let format = if let Some(format) = format.as_deref() {
+            format
+        } else if let Some(path) = host_path_from_python(fp)? {
+            inferred = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .ok_or_else(|| {
+                    map_error(PilError::UnknownFormat(
+                        "Cannot determine format from path".into(),
+                    ))
+                })?
+                .to_owned();
+            &inferred
+        } else {
+            return Err(map_error(PilError::UnknownFormat(
+                "Cannot determine format from file object".into(),
+            )));
+        };
+        let encoded = self.inner.encode(format).map_err(map_error)?;
+        if let Some(path) = host_path_from_python(fp)? {
+            std::fs::write(path, encoded).map_err(|error| map_error(error.into()))
+        } else {
+            fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
+            Ok(())
+        }
     }
 
     fn resize(&self, size: (u32, u32), resample: Option<String>) -> PyResult<PyImage> {
@@ -149,46 +287,82 @@ impl PyImage {
         use pillow_rs::ops::paste::PasteSource;
         // Thin binding: extract Python types, core handles all logic
         let is_abbreviated = box_coords.is_some_and(|b| b.downcast::<PyImage>().is_ok());
+        if is_abbreviated && mask.is_some() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "If using second argument as mask, third argument must be None",
+            ));
+        }
         let effective_mask = if is_abbreviated { box_coords } else { mask };
 
         let src_image = im
             .downcast::<PyImage>()
             .ok()
             .map(|p| p.borrow().inner.clone());
+        let src_single = im
+            .extract::<(u8,)>()
+            .ok()
+            .map(|value| value.0)
+            .or_else(|| im.extract::<u8>().ok());
+        let src_la = im.extract::<(u8, u8)>().ok();
         let src_rgb = im.extract::<(u8, u8, u8)>().ok();
         let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
-        let src_int = im.extract::<u8>().ok();
         let source = if let Some(img) = src_image {
             PasteSource::Image(img)
         } else if let Some((r, g, b, a)) = src_rgba {
-            PasteSource::Color((r, g, b, a))
+            PasteSource::Rgba(r, g, b, a)
         } else if let Some((r, g, b)) = src_rgb {
-            PasteSource::Color((r, g, b, 255))
-        } else if let Some(v) = src_int {
-            PasteSource::Color((v, v, v, 255))
+            PasteSource::Rgb(r, g, b)
+        } else if let Some((l, a)) = src_la {
+            PasteSource::LumaAlpha(l, a)
+        } else if let Some(value) = src_single {
+            PasteSource::Scalar(value)
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
                 "im must be Image or color",
             ));
         };
 
-        let parsed_box = if is_abbreviated {
-            None
+        let (parsed_region, parsed_position) = if is_abbreviated {
+            (None, None)
         } else {
-            box_coords.and_then(|b| {
-                b.extract::<(i32, i32, i32, i32)>()
-                    .ok()
-                    .or_else(|| b.extract::<(i32, i32)>().ok().map(|(x, y)| (x, y, x, y)))
-            })
+            (
+                box_coords.and_then(|b| b.extract::<(i32, i32, i32, i32)>().ok()),
+                box_coords.and_then(|b| b.extract::<(i32, i32)>().ok()),
+            )
+        };
+        if !is_abbreviated
+            && box_coords.is_some()
+            && parsed_region.is_none()
+            && parsed_position.is_none()
+        {
+            let length = box_coords.expect("checked above").len()?;
+            return Err(PyTypeError::new_err(format!(
+                "argument 2 must be sequence of length 4, not {length}"
+            )));
+        }
+
+        let parsed_mask = match effective_mask {
+            Some(value) => match value.downcast::<PyImage>() {
+                Ok(image) => Some(image.borrow().inner.clone()),
+                Err(_) => {
+                    let type_name = value.get_type().name()?;
+                    return Err(PyAttributeError::new_err(format!(
+                        "'{type_name}' object has no attribute 'load'"
+                    )));
+                }
+            },
+            None => None,
         };
 
-        let parsed_mask = effective_mask
-            .and_then(|m| m.downcast::<PyImage>().ok())
-            .map(|p| p.borrow().inner.clone());
-
-        self.inner
-            .paste(source, parsed_box, parsed_mask.as_ref())
-            .map_err(map_error)
+        if let Some(region) = parsed_region {
+            self.inner
+                .paste(source, Some(region), parsed_mask.as_ref())
+                .map_err(map_error)
+        } else {
+            self.inner
+                .paste_at(source, parsed_position, parsed_mask.as_ref())
+                .map_err(map_error)
+        }
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {
@@ -228,26 +402,22 @@ impl PyImage {
         self.inner.tobytes().map_err(map_error)
     }
 
+    fn tobytes_unpacked(&self) -> PyResult<Vec<u8>> {
+        self.inner.tobytes_unpacked().map_err(map_error)
+    }
+
     fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
         self.inner.tobytes_formatted(mode).map_err(map_error)
     }
-    /// Like tobytes_formatted but with optional channel swap (BGRA/BGR).
-    fn tobytes_formatted_swap(&self, mode: &str, fmt: &str) -> PyResult<Vec<u8>> {
-        let mut data = self.inner.tobytes_formatted(mode).map_err(map_error)?;
-        match fmt {
-            "BGRA" => {
-                for chunk in data.chunks_exact_mut(4) {
-                    chunk.swap(0, 2);
-                }
-            }
-            "BGR" => {
-                for chunk in data.chunks_exact_mut(3) {
-                    chunk.swap(0, 2);
-                }
-            }
-            _ => {}
-        }
-        Ok(data)
+    fn tobytes_encoded(
+        &self,
+        mode: &str,
+        encoder_name: &str,
+        args: Vec<String>,
+    ) -> PyResult<Vec<u8>> {
+        self.inner
+            .tobytes_encoded(mode, encoder_name, &args)
+            .map_err(map_error)
     }
 
     /// Return palette data (RGB triples) for P-mode quantized images.
@@ -259,8 +429,39 @@ impl PyImage {
         self.inner.getpalette_trimmed()
     }
 
+    fn getpalette_rgba(&self) -> Option<Vec<u8>> {
+        self.inner.getpalette_rgba()
+    }
+
+    fn palette_mode(&self) -> Option<String> {
+        self.inner.palette_mode().map(str::to_owned)
+    }
+
+    fn pending_transparency_index(&self) -> Option<u8> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Index(index)) => Some(index),
+            _ => None,
+        }
+    }
+
+    fn pending_transparency_table(&self) -> Option<Vec<u8>> {
+        match self.inner.pending_palette_transparency() {
+            Some(pillow_rs::image::PaletteTransparency::Table(alpha)) => Some(alpha),
+            _ => None,
+        }
+    }
+
+    fn has_transparency_data(&self) -> bool {
+        self.inner.has_transparency_data()
+    }
+
     fn apply_transparency(&mut self) -> PyResult<()> {
         self.inner.apply_transparency().map_err(map_error)
+    }
+
+    #[pyo3(signature = (data, rawmode="RGB"))]
+    fn putpalette(&mut self, data: Vec<u8>, rawmode: &str) -> PyResult<()> {
+        self.inner.putpalette(&data, rawmode).map_err(map_error)
     }
 
     fn get_child_images(&self) -> Vec<PyImage> {
@@ -279,14 +480,14 @@ impl PyImage {
         self.inner.getxmp()
     }
 
-    fn getim(&self) -> String {
-        // PIL returns a CPython PyCapsule wrapping a C pointer.
-        // Rust has no C pointer to wrap — return a compatible placeholder string.
-        // The test framework accepts any string starting with "<capsule object".
-        format!(
-            "<capsule object \"Pillow Imaging\" at 0x{:x}>",
-            self as *const PyImage as usize
-        )
+    fn getim(&self) -> PyResult<String> {
+        // Pillow exposes an `Imaging` pointer in a named PyCapsule. A pointer to
+        // this Rust wrapper is not ABI-compatible with `Imaging` and could make
+        // capsule consumers dereference an invalid layout, so keep this endpoint
+        // visibly unsupported until a genuine compatibility layer exists.
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "getim requires a Pillow Imaging-compatible capsule",
+        ))
     }
 
     fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
@@ -296,10 +497,14 @@ impl PyImage {
         self.inner.thumbnail(size, filter).map_err(map_error)
     }
 
-    fn quantize(&self, colors: Option<u32>, dither: Option<bool>) -> PyResult<PyImage> {
+    fn quantize(&self, colors: Option<i32>, dither: Option<bool>) -> PyResult<PyImage> {
+        let colors = colors.unwrap_or(256);
+        if !(1..=256).contains(&colors) {
+            return Err(PyValueError::new_err("bad number of colors"));
+        }
         let rs = self
             .inner
-            .quantize(colors.unwrap_or(256), 0, None, dither.unwrap_or(true))
+            .quantize(colors as u32, 0, None, dither.unwrap_or(true))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -320,8 +525,9 @@ impl PyImage {
             if raw.len() == 1 {
                 Ok((raw[0].0, raw[0].1).to_object(py))
             } else {
-                let tuples: Vec<(u8, u8)> = raw.iter().map(|&(a, b)| (a, b)).collect();
-                Ok(tuples.to_object(py))
+                let tuples: Vec<PyObject> =
+                    raw.iter().map(|&(a, b)| (a, b).to_object(py)).collect();
+                Ok(PyTuple::new(py, tuples)?.to_object(py))
             }
         })
     }
@@ -443,10 +649,11 @@ impl PyImage {
         size: (u32, u32, u32),
         table: Vec<f64>,
         channels: Option<u32>,
+        target_mode: Option<&str>,
     ) -> PyResult<PyImage> {
         let rs = self
             .inner
-            .color3dlut(size, table, channels.unwrap_or(3))
+            .color3dlut(size, table, channels.unwrap_or(3), target_mode)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -493,20 +700,18 @@ impl PyImage {
             Some(results) => {
                 let n_bands = match mode.as_str() {
                     "L" | "1" | "P" | "I" | "F" => 1,
-                    "LA" => 2,
+                    "LA" | "PA" => 2,
                     "RGB" | "YCbCr" | "HSV" => 3,
                     _ => 4,
                 };
                 let out = pyo3::types::PyList::empty(py);
                 for (count, color) in results {
-                    let entry_list = [count.to_object(py)];
-                    let entry = pyo3::types::PyList::new(py, &entry_list)?;
-                    if n_bands == 1 {
-                        entry.append(color[0].to_object(py))?;
+                    let color_value = if n_bands == 1 {
+                        color[0].to_object(py)
                     } else {
-                        let clist: Vec<u8> = color.iter().take(n_bands).copied().collect();
-                        entry.append(clist.to_object(py))?;
-                    }
+                        PyTuple::new(py, color.iter().take(n_bands).copied())?.to_object(py)
+                    };
+                    let entry = PyTuple::new(py, [count.to_object(py), color_value])?;
                     out.append(entry)?;
                 }
                 Ok(Some(out.to_object(py)))
@@ -524,7 +729,7 @@ impl PyImage {
         Python::with_gil(|py| {
             let n_bands = match mode.as_str() {
                 "L" | "1" | "P" | "I" | "F" => 1,
-                "LA" => 2,
+                "LA" | "PA" => 2,
                 "RGB" | "YCbCr" | "HSV" => 3,
                 _ => 4,
             };
@@ -533,7 +738,7 @@ impl PyImage {
             } else {
                 let out = pyo3::types::PyList::empty(py);
                 for chunk in raw.chunks_exact(n_bands) {
-                    out.append(chunk.to_object(py))?;
+                    out.append(PyTuple::new(py, chunk.iter().copied())?)?;
                 }
                 Ok(out.to_object(py))
             }
@@ -563,9 +768,9 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// point() with band replication: takes 256-entry LUT, replicates to n_bands*256
-    fn point_replicated(&self, lut: Vec<u8>, n_bands: usize) -> PyResult<PyImage> {
-        pillow_rs::ops::module_fns::eval_replicated(&self.inner, &lut, n_bands)
+    /// point() with band replication derived from the Rust image mode.
+    fn point_replicated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
+        pillow_rs::ops::module_fns::eval_replicated_for_image(&self.inner, &lut)
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -573,16 +778,9 @@ impl PyImage {
     /// Validate pre-built LUT length before calling point.
     /// PIL: LUT must have exactly 256 * n_bands entries.
     fn point_validated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        let n_bands = self.inner.getbands().map_err(map_error)?.len();
-        let expected = 256 * n_bands;
-        if lut.len() != expected {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "wrong number of lut entries: expected {} got {}",
-                expected,
-                lut.len()
-            )));
-        }
-        self.point(lut)
+        pillow_rs::ops::module_fns::eval_validated(&self.inner, &lut)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
@@ -629,10 +827,17 @@ impl PyImage {
                 let matrix = data.ok_or_else(|| {
                     pyo3::exceptions::PyValueError::new_err("AFFINE requires data")
                 })?;
-                self.inner
-                    .transform_affine(size, &matrix, fill)
-                    .map(|i| PyImage { inner: i })
-                    .map_err(map_error)
+                let transformed = if mode == "P" {
+                    if let Some(index) = parse_palette_transform_fill(fillcolor)? {
+                        self.inner
+                            .transform_affine_palette_index(size, &matrix, index)
+                    } else {
+                        self.inner.transform_affine(size, &matrix, fill)
+                    }
+                } else {
+                    self.inner.transform_affine(size, &matrix, fill)
+                };
+                transformed.map(|i| PyImage { inner: i }).map_err(map_error)
             }
             "MESH" => {
                 let mesh_data = data
@@ -656,9 +861,14 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn remap_palette(&mut self, dest_map: Vec<u8>) -> PyResult<PyImage> {
+    #[pyo3(signature = (dest_map, source_palette=None))]
+    fn remap_palette(
+        &mut self,
+        dest_map: Vec<u8>,
+        source_palette: Option<Vec<u8>>,
+    ) -> PyResult<PyImage> {
         self.inner
-            .remap_palette(&dest_map)
+            .remap_palette_with_source(&dest_map, source_palette.as_deref())
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -697,8 +907,7 @@ impl PyImage {
         let im1 = image1.borrow();
         let im2 = image2.borrow();
         let m = mask.borrow();
-        let mode = im1.inner.explicit_mode();
-        pillow_rs::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner, mode)
+        pillow_rs::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -724,9 +933,7 @@ impl PyImage {
     }
 
     fn verify(&self) -> PyResult<()> {
-        // Verify image data integrity
-        self.inner.materialize().map_err(map_error)?;
-        Ok(())
+        self.inner.verify().map_err(map_error)
     }
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
@@ -766,7 +973,7 @@ impl PyImage {
         Python::with_gil(|py| {
             Ok(match mode {
                 "L" | "1" => r.to_object(py),
-                "LA" => (r, a).to_object(py),
+                "LA" | "PA" => (r, a).to_object(py),
                 "RGB" => (r, g, b).to_object(py),
                 "RGBA" => (r, g, b, a).to_object(py),
                 "P" => r.to_object(py), // P mode stored as RGB; r is the palette index proxy
@@ -775,50 +982,100 @@ impl PyImage {
         })
     }
 
-    fn putdata(&mut self, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        // Flatten sequence in Rust — handles ints and tuples
-        let mut flat: Vec<u8> = Vec::new();
-        for item in data.iter()? {
-            let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
-            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2]);
-            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1]);
-            } else if let Ok(v) = obj.extract::<u8>() {
-                flat.push(v);
-            } else if let Ok(v) = obj.extract::<i64>() {
-                flat.push(v.clamp(0, 255) as u8);
-            }
-        }
-        self.inner.putdata(&flat).map_err(map_error)
+    fn putdata(slf: &Bound<'_, Self>, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::putdata_formatted(slf, data, 1.0, 0.0)
     }
 
-    /// putdata with band-aware int expansion: single ints become (v,0,...,0) for multi-band
-    fn putdata_formatted(&mut self, data: &Bound<'_, PyAny>, n_bands: usize) -> PyResult<()> {
-        let mut flat: Vec<u8> = Vec::new();
-        for item in data.iter()? {
-            let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
-            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2]);
-            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1]);
-            } else if let Ok(v) = obj.extract::<u8>() {
-                flat.push(v);
-                for _ in 1..n_bands {
-                    flat.push(0);
-                }
-            } else if let Ok(v) = obj.extract::<i64>() {
-                flat.push(v.clamp(0, 255) as u8);
-                for _ in 1..n_bands {
-                    flat.push(0);
-                }
+    #[pyo3(signature = (data, scale=1.0, offset=0.0))]
+    fn putdata_formatted(
+        slf: &Bound<'_, Self>,
+        data: &Bound<'_, PyAny>,
+        scale: f64,
+        offset: f64,
+    ) -> PyResult<()> {
+        if !python_is_sequence(data) {
+            return Err(PyTypeError::new_err("argument must be a sequence"));
+        }
+        let entry_count = data
+            .len()
+            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
+
+        let (width, height, mode) = {
+            let image = slf.try_borrow()?;
+            let (width, height) = image.inner.size().map_err(map_error)?;
+            let mode = image.inner.mode().map_err(map_error)?;
+            (width, height, mode)
+        };
+        let pixel_count = u64::from(width) * u64::from(height);
+        if entry_count as u128 > u128::from(pixel_count) {
+            return Err(PyTypeError::new_err("too many data entries"));
+        }
+
+        // Pillow's image8 fast path reads the underlying bytes directly, even
+        // for a bytes subclass that overrides Python iteration.
+        if matches!(mode.as_str(), "1" | "L" | "P") {
+            if let Ok(bytes) = data.downcast::<PyBytes>() {
+                let values = bytes
+                    .as_bytes()
+                    .iter()
+                    .copied()
+                    // Pillow reads the terminating NUL when a bytes subtype
+                    // reports one more item than its physical payload. Extend
+                    // that behavior safely for every missing item instead of
+                    // following its unchecked C pointer read out of bounds.
+                    .chain(std::iter::repeat(0))
+                    .take(entry_count)
+                    .map(|value| PutDataValue::Number(f64::from(value)))
+                    .collect::<Vec<_>>();
+                return slf
+                    .try_borrow_mut()?
+                    .inner
+                    .putdata_values(&values, scale, offset)
+                    .map_err(map_error);
             }
         }
-        self.inner.putdata(&flat).map_err(map_error)
+
+        let write_item = |pixel_index, item: Bound<'_, PyAny>| -> PyResult<()> {
+            // No PyImage borrow may span coercion: __index__ and __float__ can
+            // re-enter this same public image and must observe earlier writes.
+            let value = putdata_value_from_python(&item, &mode)?;
+            slf.try_borrow_mut()?
+                .inner
+                .putdata_value_at(pixel_index, &value, scale, offset)
+                .map_err(map_error)
+        };
+
+        // CPython's PySequence_Fast retains exact lists and tuples instead of
+        // copying them. Read each exact-list item only when its pixel is due so
+        // coercing an earlier item can replace a later one, as Pillow exposes.
+        if let Ok(list) = data.downcast_exact::<PyList>() {
+            for pixel_index in 0..entry_count {
+                write_item(pixel_index, list.get_item(pixel_index)?)?;
+            }
+            return Ok(());
+        }
+        if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
+            for pixel_index in 0..entry_count {
+                write_item(pixel_index, tuple.get_item(pixel_index)?)?;
+            }
+            return Ok(());
+        }
+
+        // Pillow calls PySequence_Fast before coercing any pixel. Materialize
+        // generic sequence items first, map iteration failures to its fixed
+        // error, then process only the count reported by the original sequence.
+        let iterator = data
+            .iter()
+            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
+        let mut items = Vec::new();
+        for item in iterator {
+            items.push(item.map_err(|_| PyTypeError::new_err("argument must be a sequence"))?);
+        }
+
+        for (pixel_index, item) in items.into_iter().take(entry_count).enumerate() {
+            write_item(pixel_index, item)?;
+        }
+        Ok(())
     }
 
     fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -922,6 +1179,86 @@ impl PyImage {
     }
 }
 
+fn palette_transform_fill_type_error() -> PyErr {
+    PyTypeError::new_err("color must be int or single-element tuple")
+}
+
+fn clamp_palette_transform_index(value: &Bound<'_, PyAny>) -> PyResult<u8> {
+    let value = value.extract::<i64>().map_err(|error| {
+        if error.is_instance_of::<PyOverflowError>(value.py()) {
+            PyOverflowError::new_err("int too big to convert")
+        } else {
+            error
+        }
+    })?;
+    Ok(value.clamp(0, i64::from(u8::MAX)) as u8)
+}
+
+fn validate_palette_transform_color<'py>(
+    values: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    len: usize,
+    allow_single: bool,
+) -> PyResult<Option<u8>> {
+    let values: Vec<_> = values.into_iter().collect();
+    if allow_single && len == 1 {
+        let value = &values[0];
+        if value.is_instance_of::<PyInt>() {
+            return clamp_palette_transform_index(value).map(Some);
+        }
+        return Err(palette_transform_fill_type_error());
+    }
+    if !matches!(len, 3 | 4) || values.iter().any(|value| !value.is_instance_of::<PyInt>()) {
+        return Err(palette_transform_fill_type_error());
+    }
+
+    // Pillow 12.2 ImagePalette.getcolor rejects non-opaque RGBA before
+    // converting RGB components to bytes.
+    if len == 4 {
+        let alpha = values[3].extract::<i64>().ok();
+        if alpha != Some(i64::from(u8::MAX)) {
+            return Err(PyValueError::new_err(
+                "cannot add non-opaque RGBA color to RGB palette",
+            ));
+        }
+    }
+    for value in &values[..3] {
+        let component = value
+            .extract::<i64>()
+            .map_err(|_| PyValueError::new_err("bytes must be in range(0, 256)"))?;
+        if !(0..=i64::from(u8::MAX)).contains(&component) {
+            return Err(PyValueError::new_err("bytes must be in range(0, 256)"));
+        }
+    }
+    // Image.transform replaces the temporary color palette with the source
+    // palette, so a valid RGB/RGBA fill remains raw palette index zero.
+    Ok(None)
+}
+
+fn parse_palette_transform_fill(fillcolor: Option<&Bound<'_, PyAny>>) -> PyResult<Option<u8>> {
+    let Some(fillcolor) = fillcolor else {
+        return Ok(None);
+    };
+    if fillcolor.is_instance_of::<PyInt>() {
+        return clamp_palette_transform_index(fillcolor).map(Some);
+    }
+    if let Ok(color) = fillcolor.extract::<String>() {
+        pillow_rs::color::parse_color_str(&color).map_err(|_| {
+            let repr = fillcolor
+                .repr()
+                .map_or_else(|_| format!("{color:?}"), |repr| repr.to_string());
+            PyValueError::new_err(format!("unknown color specifier: {repr}"))
+        })?;
+        return Ok(None);
+    }
+    if let Ok(values) = fillcolor.downcast::<PyTuple>() {
+        return validate_palette_transform_color(values.iter(), values.len(), true);
+    }
+    if let Ok(values) = fillcolor.downcast::<PyList>() {
+        return validate_palette_transform_color(values.iter(), values.len(), false);
+    }
+    Err(palette_transform_fill_type_error())
+}
+
 fn map_error(e: PilError) -> PyErr {
     match e {
         PilError::IOError(msg) => pyo3::exceptions::PyOSError::new_err(msg),
@@ -930,6 +1267,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
         PilError::ImageError(err) => pyo3::exceptions::PyException::new_err(err.to_string()),
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
@@ -940,6 +1278,37 @@ fn map_error(e: PilError) -> PyErr {
         PilError::InternalError(msg) => pyo3::exceptions::PyException::new_err(msg),
         PilError::DimensionError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
     }
+}
+
+#[pyfunction]
+fn transposed_font_bbox(
+    bbox: (i32, i32, i32, i32),
+    orientation: Option<&str>,
+) -> (i32, i32, i32, i32) {
+    pillow_rs::font::imagingft::transposed_bbox(bbox, orientation)
+}
+
+#[pyfunction]
+fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
+    pillow_rs::font::imagingft::validate_transposed_length(orientation).map_err(map_error)
+}
+
+#[pyfunction]
+fn resolve_array_layout(
+    shape: Vec<usize>,
+    typestr: &str,
+    mode: Option<&str>,
+) -> PyResult<(String, String, usize, usize, usize, bool)> {
+    let layout =
+        pillow_rs::ops::array::resolve_array_layout(&shape, typestr, mode).map_err(map_error)?;
+    Ok((
+        layout.mode,
+        layout.raw_mode,
+        layout.width,
+        layout.height,
+        layout.dimensions,
+        layout.mode_reinterprets_dtype,
+    ))
 }
 
 /// Activate a compute backend. Returns true if the backend exists on this machine.
@@ -1087,7 +1456,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyImage>()?;
     m.add_class::<PyDraw>()?;
+    m.add_class::<PyOutline>()?;
     m.add_class::<PyFont>()?;
+    m.add_class::<PyPilFont>()?;
+    m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_array_layout, m)?)?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
@@ -1171,6 +1545,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_new, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
+    m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
     m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
@@ -1214,7 +1589,7 @@ impl PyFont {
     #[pyo3(signature = (size=None))]
     fn load_default(size: Option<f32>) -> PyResult<Self> {
         let sz = size.unwrap_or(10.0);
-        let font = pillow_rs::font::Font::load_default(sz);
+        let font = pillow_rs::font::Font::load_default(sz).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
@@ -1226,12 +1601,43 @@ impl PyFont {
         Ok(pillow_rs::font::imagingft::getmask(&self.inner, text))
     }
 
+    fn get_transposed_mask_image(
+        &self,
+        text: &str,
+        orientation: Option<&str>,
+    ) -> PyResult<PyImage> {
+        let (width, height, pixels) =
+            pillow_rs::font::imagingft::get_transposed_mask(&self.inner, text, orientation)
+                .map_err(map_error)?;
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok(PyImage { inner })
+    }
+
+    #[pyo3(signature = (text, start=None))]
+    fn getmask2_image(
+        &self,
+        text: &str,
+        start: Option<(f64, f64)>,
+    ) -> PyResult<(PyImage, (i32, i32))> {
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.inner,
+            text,
+            start.unwrap_or((0.0, 0.0)),
+        );
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok((PyImage { inner }, offset))
+    }
+
     fn getlength(&self, text: &str) -> f32 {
         pillow_rs::font::imagingft::getlength(&self.inner, text)
     }
 
     fn getmetrics(&self) -> (u32, u32) {
         pillow_rs::font::imagingft::getmetrics(&self.inner)
+    }
+
+    fn has_variations(&self) -> bool {
+        pillow_rs::font::imagingft::has_variations(&self.inner)
     }
 
     fn get_name(&self) -> (String, String) {
@@ -1244,11 +1650,195 @@ impl PyFont {
     }
 }
 
+#[pyclass(name = "PilFont", unsendable)]
+pub struct PyPilFont {
+    inner: pillow_rs::font::pilfont::PilFont,
+    file: Option<String>,
+}
+
+#[pymethods]
+impl PyPilFont {
+    #[staticmethod]
+    fn load(filename: &str) -> PyResult<Self> {
+        let (inner, file) =
+            load_pilfont_from_path(std::path::Path::new(filename)).map_err(map_error)?;
+        Ok(Self {
+            inner,
+            file: Some(file),
+        })
+    }
+
+    #[staticmethod]
+    fn load_path(py: Python<'_>, filename: &str) -> PyResult<Self> {
+        let directories = py
+            .import("sys")?
+            .getattr("path")?
+            .extract::<Vec<String>>()?;
+        for directory in directories {
+            let path = std::path::Path::new(&directory).join(filename);
+            match load_pilfont_from_path(&path) {
+                Ok((inner, file)) => {
+                    return Ok(Self {
+                        inner,
+                        file: Some(file),
+                    });
+                }
+                Err(error) if pilfont_load_path_catches(&error) => {}
+                Err(error) => return Err(map_error(error)),
+            }
+        }
+
+        let mut message = format!("cannot find font file \"{filename}\" in sys.path");
+        if std::path::Path::new(filename).exists() {
+            message.push_str(&format!(
+                ", did you mean ImageFont.load(\"{filename}\") instead?"
+            ));
+        }
+        Err(pyo3::exceptions::PyOSError::new_err(message))
+    }
+
+    #[staticmethod]
+    fn load_default() -> PyResult<Self> {
+        let inner = pillow_rs::font::pilfont::PilFont::load_default().map_err(map_error)?;
+        Ok(Self { inner, file: None })
+    }
+
+    #[getter]
+    fn file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+
+    #[getter]
+    fn info(&self, py: Python<'_>) -> Vec<Py<PyBytes>> {
+        self.inner
+            .info()
+            .iter()
+            .map(|line| PyBytes::new(py, line).unbind())
+            .collect()
+    }
+
+    fn getsize(&self, text: Vec<u8>) -> PyResult<(i32, i32)> {
+        self.inner.getsize(&text).map_err(map_error)
+    }
+
+    #[pyo3(signature = (text, mode=""))]
+    fn getmask(&self, text: Vec<u8>, mode: &str) -> PyResult<PyImage> {
+        let _ = mode;
+        let image = self
+            .inner
+            .getmask(&text)
+            .and_then(|mask| mask.to_image())
+            .map_err(map_error)?;
+        Ok(PyImage { inner: image })
+    }
+}
+
+fn load_pilfont_from_path(
+    path: &std::path::Path,
+) -> Result<(pillow_rs::font::pilfont::PilFont, String), PilError> {
+    let metrics = std::fs::read(path).map_err(PilError::from)?;
+    let root = path.with_extension("");
+
+    for extension in [".png", ".gif", ".pbm"] {
+        let mut candidate_name = root.as_os_str().to_os_string();
+        candidate_name.push(extension);
+        let candidate = std::path::PathBuf::from(candidate_name);
+        let Ok(bitmap) = std::fs::read(&candidate) else {
+            continue;
+        };
+        let Ok(image) = pillow_rs::font::pilfont::PilFont::open_glyph_image(bitmap) else {
+            continue;
+        };
+        match pillow_rs::font::pilfont::PilFont::from_pilfont_data(&metrics, image) {
+            Ok(font) => return Ok((font, candidate.to_string_lossy().into_owned())),
+            Err(PilError::TypeError(message)) if message == "invalid font image mode" => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(PilError::OsError(format!(
+        "cannot find glyph data file {}.{{gif|pbm|png}}",
+        root.display()
+    )))
+}
+
+fn pilfont_load_path_catches(error: &PilError) -> bool {
+    matches!(
+        error,
+        PilError::IOError(_)
+            | PilError::OsError(_)
+            | PilError::UnidentifiedImageError(_)
+            | PilError::ImageError(_)
+            | PilError::Io(_)
+    )
+}
+
 // --- ImageDraw ---
+
+#[pyclass(name = "Outline")]
+pub struct PyOutline {
+    points: Vec<(i32, i32)>,
+}
+
+#[pymethods]
+impl PyOutline {
+    #[new]
+    fn new() -> Self {
+        Self { points: Vec::new() }
+    }
+
+    #[pyo3(name = "move")]
+    fn move_to(&mut self, x: i32, y: i32) {
+        self.points.clear();
+        self.points.push((x, y));
+    }
+
+    fn line(&mut self, x: i32, y: i32) {
+        self.points.push((x, y));
+    }
+
+    fn curve(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> PyResult<()> {
+        let (x0, y0) = self.points.last().copied().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("outline has no current point")
+        })?;
+        self.points.extend(pillow_rs::draw::outline_curve_points(
+            &[x0 as f64, y0 as f64, x1, y1, x2, y2, x3, y3],
+            20,
+        ));
+        Ok(())
+    }
+
+    fn close(&mut self) {
+        if self.points.len() > 2 && self.points.first() != self.points.last() {
+            self.points.push(self.points[0]);
+        }
+    }
+
+    #[getter]
+    fn _points(&self) -> Vec<(i32, i32)> {
+        self.points.clone()
+    }
+}
 
 #[pyclass(name = "ImageDraw")]
 pub struct PyDraw {
     draw: pillow_rs::draw::Draw,
+}
+
+fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
+    if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
+        return Ok(points);
+    }
+    let flat = xy.extract::<Vec<i32>>()?;
+    if flat.len() < 2 || flat.len() % 2 != 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "wrong number of coordinates",
+        ));
+    }
+    Ok(flat
+        .chunks_exact(2)
+        .map(|point| (point[0], point[1]))
+        .collect())
 }
 
 #[pymethods]
@@ -1263,28 +1853,14 @@ impl PyDraw {
 
     fn line(
         &mut self,
-        xy: Vec<Vec<i32>>,
+        xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| {
-                if v.len() >= 2 {
-                    (v[0], v[1])
-                } else {
-                    (v[0], v[0])
-                }
-            })
-            .collect();
+        let pts = extract_draw_points(xy)?;
         let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
-        for i in 0..pts.len() - 1 {
-            self.draw
-                .line(pts[i].0, pts[i].1, pts[i + 1].0, pts[i + 1].1, color, w)
-                .map_err(map_error)?;
-        }
-        Ok(())
+        self.draw.polyline(&pts, color, w).map_err(map_error)
     }
 
     fn rectangle(
@@ -1456,19 +2032,28 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    fn point(&mut self, xy: Vec<Vec<i32>>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn point(&mut self, xy: &Bound<'_, PyAny>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| {
-                if v.len() >= 2 {
-                    (v[0], v[1])
-                } else {
-                    (v[0], v[0])
-                }
-            })
-            .collect();
+        let pts = extract_draw_points(xy)?;
         self.draw.point(&pts, color).map_err(map_error)
+    }
+
+    fn shape(
+        &mut self,
+        shape: &Bound<'_, PyAny>,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let points = if let Ok(mut rust_outline) = shape.extract::<PyRefMut<'_, PyOutline>>() {
+            rust_outline.close();
+            rust_outline.points.clone()
+        } else {
+            extract_draw_points(shape)
+                .map_err(|_| pyo3::exceptions::PyTypeError::new_err("Unsupported shape format"))?
+        };
+        let fill = fill.map(|_| self.color(fill)).transpose()?;
+        let outline = outline.map(|_| self.color(outline)).transpose()?;
+        self.draw.shape(&points, fill, outline).map_err(map_error)
     }
 
     #[pyo3(signature = (xy, start, end, fill=None, width=1))]
@@ -1645,7 +2230,7 @@ impl PyDraw {
         let bbox = match font {
             Some(f) => pillow_rs::font::imagingft::getbbox(&f.borrow().inner, text),
             None => {
-                let font = pillow_rs::font::Font::load_default(10.0);
+                let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getbbox(&font, text)
             }
         };
@@ -1658,7 +2243,7 @@ impl PyDraw {
         let w = match font {
             Some(f) => pillow_rs::font::imagingft::getlength(&f.borrow().inner, text),
             None => {
-                let font = pillow_rs::font::Font::load_default(10.0);
+                let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getlength(&font, text)
             }
         };
@@ -1679,7 +2264,7 @@ impl PyDraw {
         let f: &pillow_rs::font::Font = if let Some(f) = font {
             &f.borrow().inner
         } else {
-            default_font = pillow_rs::font::Font::load_default(10.0);
+            default_font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
             &default_font
         };
         let lines: Vec<&str> = text.split('\n').collect();
@@ -1687,13 +2272,18 @@ impl PyDraw {
             return Ok((xy.0, xy.1, xy.0, xy.1));
         }
         if lines.len() == 1 {
-            let (w, h) = f.text_bbox(text);
-            return Ok((xy.0, xy.1, xy.0 + w as i32, xy.1 + h as i32));
+            let bbox = pillow_rs::font::imagingft::getbbox(f, text);
+            return Ok((xy.0 + bbox.0, xy.1 + bbox.1, xy.0 + bbox.2, xy.1 + bbox.3));
         }
-        let (_, lh) = f.text_bbox("A");
-        let line_height = spacing as u32 + lh;
-        let widths: Vec<u32> = lines.iter().map(|l| f.text_bbox(l).0).collect();
-        let max_width = *widths.iter().max().unwrap_or(&0);
+        // Pillow ImageText.Text::_split advances by the bottom of "A"'s
+        // FreeType bbox, then unions each line's full bbox. Using only mask
+        // width/height here loses the ascender bearing (and italic overhang).
+        let line_height = spacing + pillow_rs::font::imagingft::getbbox(f, "A").3;
+        let widths: Vec<f32> = lines
+            .iter()
+            .map(|line| pillow_rs::font::imagingft::getlength(f, line))
+            .collect();
+        let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
         let x0 = xy.0 as f64;
         let y0 = xy.1 as f64;
         let mut left = f64::MAX;
@@ -1707,11 +2297,11 @@ impl PyDraw {
                 "right" => x0 + max_width as f64 - widths[i] as f64,
                 _ => x0,
             };
-            let (w, h) = f.text_bbox(line);
-            left = left.min(line_x);
-            top = top.min(line_y);
-            right = right.max(line_x + w as f64);
-            bottom = bottom.max(line_y + h as f64);
+            let bbox = pillow_rs::font::imagingft::getbbox(f, line);
+            left = left.min(line_x + bbox.0 as f64);
+            top = top.min(line_y + bbox.1 as f64);
+            right = right.max(line_x + bbox.2 as f64);
+            bottom = bottom.max(line_y + bbox.3 as f64);
         }
         Ok((left as i32, top as i32, right as i32, bottom as i32))
     }
@@ -1742,7 +2332,11 @@ fn parse_draw_color(
 ) -> PyResult<(u8, u8, u8, u8)> {
     let v = match val {
         Some(v) => v,
-        None => return Ok((0, 0, 0, 255)), // default black
+        // Pillow's ImageDraw context starts with ink=-1, which is an all-255
+        // `(index, alpha)` sample in PA. Other modes retain the wrapper's
+        // existing black default.
+        None if mode == Some("PA") => return Ok((255, 255, 255, 255)),
+        None => return Ok((0, 0, 0, 255)),
     };
     // F mode (float32): convert color to f32 LE bytes
     if mode == Some("F") {
@@ -1758,6 +2352,33 @@ fn parse_draw_color(
             let bytes = i.to_le_bytes();
             return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
         }
+    }
+    // PA uses a palette index plus a per-pixel alpha byte. Pillow accepts
+    // scalar/one-item ink as (index, 0) and a two-item tuple verbatim.
+    if mode == Some("PA") {
+        if let Ok((index, alpha)) = v.extract::<(u8, u8)>() {
+            return Ok((index, index, index, alpha));
+        }
+        if let Ok((index,)) = v.extract::<(u8,)>() {
+            return Ok((index, index, index, 0));
+        }
+        if let Ok(index) = v.extract::<u8>() {
+            return Ok((index, index, index, 0));
+        }
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "color must be int, or tuple of one or two elements",
+        ));
+    }
+    if mode == Some("LA") {
+        if let Ok((luma, alpha)) = v.extract::<(u8, u8)>() {
+            return Ok((luma, luma, luma, alpha));
+        }
+        if let Ok(luma) = v.extract::<u8>() {
+            return Ok((luma, luma, luma, 0));
+        }
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "color must be int or tuple of one or two elements",
+        ));
     }
     // Standard modes: extract as u8
     if let Ok(s) = v.extract::<String>() {
@@ -2267,8 +2888,7 @@ fn image_composite(
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
-    let mode = b1.inner.explicit_mode();
-    let rs = pillow_rs::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner, mode)
+    let rs = pillow_rs::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner)
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -2368,8 +2988,10 @@ fn palette_getcolor_validate(
 /// Save palette data to a text file.
 #[pyfunction]
 fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> {
-    pillow_rs::color::palette_save_to_file(&palette, mode, fp)
-        .map_err(pyo3::exceptions::PyOSError::new_err)
+    let text = pillow_rs::color::palette_to_text(&palette, mode);
+    std::fs::write(fp, text).map_err(|error| {
+        pyo3::exceptions::PyOSError::new_err(format!("Cannot write palette file: {error}"))
+    })
 }
 
 /// Compute default bitmap font bounding box (6x11 px per char).
@@ -2610,6 +3232,16 @@ fn color3dlut_transform(
         }
     }
     Ok(out_table)
+}
+
+#[pyfunction]
+fn color3dlut_repr(
+    table_type: &str,
+    size: (u32, u32, u32),
+    channels: u32,
+    target_mode: Option<&str>,
+) -> String {
+    pillow_rs::ops::param_filters::color3dlut_repr(table_type, size, channels, target_mode)
 }
 
 /// Prepare kernel parameters for image convolution.

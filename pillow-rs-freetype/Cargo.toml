@@ -28,6 +28,10 @@ fontdone-ffi-wasm = { path = "ffi-wasm", features = ["abi-test-support"] }
 
 [features]
 abi-test-support = []
+# Preserve Pillow's LP64 FreeType arithmetic for wasm consumers. Both the
+# browser binding and `ffi-wasm` opt in; native targets continue to use their
+# platform C aliases.
+wasm-wide-internals = []
 
 [lints.rust]
 future-incompatible = { level = "deny", priority = -1 }

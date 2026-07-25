@@ -4536,11 +4536,16 @@ impl Font {
             // route through the TrueType driver.
             if scaler::should_use_default_autohint(&self.data) {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
-                scaler::scale_glyph_for_metrics_with_autohint(
+                // FreeType `FT_Load_Glyph` carries the requested load target
+                // into its default auto-hinter fallback (`ftobjs.c`).
+                // In particular, `FT_LOAD_TARGET_MONO` snaps advances and
+                // stems differently from the normal grayscale target.
+                scaler::scale_glyph_for_metrics_with_autohint_and_mode(
                     &self.data,
                     glyph,
                     metrics_cache.as_deref(),
                     self.is_italic,
+                    native_hint_mode,
                 )
             } else {
                 scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)

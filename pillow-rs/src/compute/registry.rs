@@ -28,7 +28,7 @@
 use crate::compute::pool_simd::ops::adapters;
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -181,8 +181,6 @@ pub enum OpId {
     Paste,
     /// Dispatch key for the shader that performs alpha compositing.
     AlphaComposite,
-    /// Dispatch key for the shader that randomly spreads nearby pixels.
-    EffectSpread,
     /// Dispatch key for the shader that applies a 3x3 convolution kernel.
     Filter3x3,
     /// Dispatch key for the shader that applies a 5x5 convolution kernel.
@@ -207,8 +205,6 @@ pub enum OpId {
     Convert,
     /// Dispatch key for the shader that quantizes pixel colors.
     Quantize,
-    /// Dispatch key for the shader that generates noise.
-    EffectNoise,
     /// Dispatch key for the shader that replaces or sets alpha.
     PutAlpha,
     /// Dispatch key for the shader that writes a single pixel.
@@ -518,7 +514,6 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::Contrast { .. } => Some(OpId::Contrast),
         PipelineOp::ColorSaturation { .. } => Some(OpId::ColorSaturation),
         PipelineOp::Sharpness { .. } => Some(OpId::Sharpen),
-        PipelineOp::EffectSpread { .. } => Some(OpId::EffectSpread),
         PipelineOp::Paste { .. } => Some(OpId::Paste),
         PipelineOp::AlphaComposite { .. } => Some(OpId::AlphaComposite),
         PipelineOp::BlendModule { .. } => Some(OpId::BlendModule),
@@ -533,7 +528,6 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::Contain { .. } => Some(OpId::Contain),
         PipelineOp::Cover { .. } => Some(OpId::Cover),
         PipelineOp::Fit { .. } => Some(OpId::Fit),
-        PipelineOp::EffectNoise { .. } => Some(OpId::EffectNoise),
         PipelineOp::Transform { .. } => Some(OpId::Transform),
         PipelineOp::PutPixel { .. } => Some(OpId::PutPixel),
         PipelineOp::PutData { .. } => Some(OpId::PutData),
@@ -598,8 +592,10 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         | PipelineOp::Overlay { .. }
         | PipelineOp::HardLight { .. }
         | PipelineOp::SoftLight { .. }
-        | PipelineOp::Composite { .. }
-        | PipelineOp::CompositeModule { .. } => vec![],
+        | PipelineOp::Composite { .. } => vec![],
+
+        // ── CompositeModule: mask_alpha ──
+        PipelineOp::CompositeModule { mask_alpha, .. } => vec![*mask_alpha as u32],
 
         // ── Solarize: threshold ──
         PipelineOp::Solarize { threshold } => vec![*threshold as u32],
@@ -656,9 +652,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── RankFilter: size, rank ──
         PipelineOp::RankFilter { size, rank } => vec![*size, *rank],
-
-        // ── EffectSpread: distance ──
-        PipelineOp::EffectSpread { distance } => vec![*distance],
 
         // ── Filter3x3: kernel [9] f32 bits + offset bits ──
         PipelineOp::Filter3x3 {
@@ -735,16 +728,11 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![c, levels, 256]
         }
 
-        // ── EffectNoise: sigma bits, seed ──
-        PipelineOp::EffectNoise { sigma } => {
-            vec![(*sigma as f32).to_bits(), 0]
-        }
-
         // ── PutAlpha: alpha as u32 ──
-        PipelineOp::PutAlpha { alpha } => vec![*alpha as u32],
+        PipelineOp::PutAlpha { alpha, mode } => vec![*alpha as u32, mode.code()],
 
         // ── PutPixel: x, y, color packed as RGBA u32 ──
-        PipelineOp::PutPixel { x, y, color } => {
+        PipelineOp::PutPixel { x, y, color, .. } => {
             let (r, g, b, a) = *color;
             let packed = (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24);
             vec![*x, *y, packed]
@@ -775,16 +763,23 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── Fit: new_w, new_h, crop_x, crop_y ──
         PipelineOp::Fit { w, h, .. } => vec![*w, *h, 0, 0],
 
-        // ── Paste: src_w, src_h, paste_x, paste_y, has_mask ──
+        // ── Paste: src_w, src_h, paste_x, paste_y, has_mask, mask_alpha ──
         PipelineOp::Paste {
-            w, h, x, y, mask, ..
+            w,
+            h,
+            x,
+            y,
+            mask,
+            mask_alpha,
+            ..
         } => {
             vec![
                 (*w).max(0) as u32,
                 (*h).max(0) as u32,
-                (*x).max(0) as u32,
-                (*y).max(0) as u32,
+                *x as u32,
+                *y as u32,
                 mask.is_some() as u32,
+                *mask_alpha as u32,
             ]
         }
 
@@ -795,6 +790,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             data,
             filter,
             fill,
+            palette_fill,
             ..
         } => {
             let a = (data.first().copied().unwrap_or(0.0) as f32).to_bits();
@@ -803,9 +799,10 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             let d = (data.get(3).copied().unwrap_or(0.0) as f32).to_bits();
             let e = (data.get(4).copied().unwrap_or(0.0) as f32).to_bits();
             let f = (data.get(5).copied().unwrap_or(0.0) as f32).to_bits();
-            let fill_color = match fill {
+            let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+            let fill_color = match resolved_fill {
                 Some((r, g, b, a)) => {
-                    (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24)
+                    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
                 }
                 None => 0,
             };
@@ -821,7 +818,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── PutData: data length ──
-        PipelineOp::PutData { data } => vec![data.len() as u32],
+        PipelineOp::PutData { data, mode } => vec![data.len() as u32, mode.code()],
 
         // ── CropBorder: border ──
         PipelineOp::CropBorder { border } => vec![*border],
@@ -1917,9 +1914,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
 
     // ── Effects ──
+    // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
+    // rand() sequentially and performs collision-prone scatter writes. The
+    // former per-pixel SIMD LCG and GPU hash/gather paths were different
+    // algorithms, so EffectSpread is deliberately registered on CPU only.
     m.insert(
         "EffectSpread",
-        gpu_entry!(
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -1930,7 +1931,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected EffectSpread op".into()))
                 }
             },
-            "effect_spread.wgsl"
         ),
     );
     m.insert(
@@ -1944,9 +1944,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     w: _,
                     h: _,
                     mask,
+                    mask_alpha,
                 } = op
                 {
-                    op_paste(img, source, *x as i64, *y as i64, mask)
+                    op_paste(img, source, *x as i64, *y as i64, mask, *mask_alpha, _mode)
                 } else {
                     Err(PilError::ValueError("expected Paste op".into()))
                 }
@@ -2009,8 +2010,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         "CompositeModule",
         gpu_entry!(
             |img, op, mode| {
-                if let PipelineOp::CompositeModule { other, mask } = op {
-                    op_composite_module(img, other, mask, mode)
+                if let PipelineOp::CompositeModule {
+                    other,
+                    mask,
+                    mask_alpha,
+                } = op
+                {
+                    op_composite_module(img, other, mask, *mask_alpha, mode)
                 } else {
                     Err(PilError::ValueError("expected CompositeModule op".into()))
                 }
@@ -2036,7 +2042,11 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "EffectNoise",
-        gpu_entry!(
+        // Pillow's effect consumes one sequential libc RNG stream with a
+        // rejection loop and returns a new L image. The per-pixel GPU/SIMD
+        // implementations used independent hashes and preserved the input
+        // mode, so advertising those paths returned non-Pillow results.
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2047,7 +2057,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected EffectNoise op".into()))
                 }
             },
-            "effect_noise.wgsl"
         ),
     );
 
@@ -2082,9 +2091,11 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     data,
                     filter,
                     fill,
+                    palette_fill,
                 } = op
                 {
-                    op_transform(img, *w, *h, method, data, filter, *fill, mode)
+                    let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+                    op_transform(img, *w, *h, method, data, filter, resolved_fill, mode)
                 } else {
                     Err(PilError::ValueError("expected Transform op".into()))
                 }
@@ -2101,7 +2112,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
              op: &PipelineOp,
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutPixel { x, y, color } = op {
+                if let PipelineOp::PutPixel { x, y, color, .. } = op {
                     op_put_pixel(img, *x, *y, *color)
                 } else {
                     Err(PilError::ValueError("expected PutPixel op".into()))
@@ -2115,10 +2126,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             mode: Option<&str>|
+             _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutData { data } = op {
-                    op_put_data(img, data, mode)
+                if let PipelineOp::PutData {
+                    data,
+                    mode: data_mode,
+                } = op
+                {
+                    op_put_data(img, data, *data_mode)
                 } else {
                     Err(PilError::ValueError("expected PutData op".into()))
                 }
@@ -2128,7 +2143,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Color3DLut",
-        gpu_entry!(
+        // The former WGSL shader was a pass-through and never uploaded or
+        // sampled the LUT. Do not advertise GPU support until that backend
+        // implements Pillow's signed fixed-point interpolation exactly.
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2137,14 +2155,15 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     size,
                     table,
                     channels,
+                    source_mode,
+                    target_mode,
                 } = op
                 {
-                    op_color3dlut(img, *size, table, *channels)
+                    op_color3dlut(img, *size, table, *channels, *source_mode, *target_mode)
                 } else {
                     Err(PilError::ValueError("expected Color3DLut op".into()))
                 }
             },
-            "color_3dlut.wgsl"
         ),
     );
     m.insert(
@@ -2152,10 +2171,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             mode: Option<&str>|
+             _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutAlpha { alpha } = op {
-                    Ok(op_put_alpha(img, *alpha, mode))
+                if let PipelineOp::PutAlpha {
+                    alpha,
+                    mode: alpha_mode,
+                } = op
+                {
+                    Ok(op_put_alpha(img, *alpha, *alpha_mode))
                 } else {
                     Err(PilError::ValueError("expected PutAlpha op".into()))
                 }
@@ -2507,12 +2530,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             .expect("SIMD key not registered: Autocontrast"),
         adapters::simd_autocontrast,
     );
-    simd_set(
-        m.get_mut("EffectSpread")
-            .expect("SIMD key not registered: EffectSpread"),
-        adapters::simd_effect_spread,
-    );
-
     // Section D: Filter/window ops
     simd_set(
         m.get_mut("MedianFilter")
@@ -2753,11 +2770,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         adapters::simd_eval,
     );
     simd_set(
-        m.get_mut("EffectNoise")
-            .expect("SIMD key not registered: EffectNoise"),
-        adapters::simd_effect_noise,
-    );
-    simd_set(
         m.get_mut("PointOp")
             .expect("SIMD key not registered: PointOp"),
         adapters::simd_point_op,
@@ -2795,16 +2807,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         m.get_mut("ColorSaturation")
             .expect("SIMD key not registered: ColorSaturation"),
         adapters::simd_color_saturation,
-    );
-    simd_set(
-        m.get_mut("EffectNoise")
-            .expect("SIMD key not registered: EffectNoise"),
-        adapters::simd_effect_noise,
-    );
-    simd_set(
-        m.get_mut("EffectSpread")
-            .expect("SIMD key not registered: EffectSpread"),
-        adapters::simd_effect_spread,
     );
     simd_set(
         m.get_mut("GaussianBlur")

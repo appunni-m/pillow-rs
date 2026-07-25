@@ -9,10 +9,12 @@
 //   - Every error variant serves a specific PIL-compatible error category.
 //   - New errors MUST be added as PilError variants, never as String or ad-hoc types.
 //   - The `#[from]` impls ensure `?` propagation works seamlessly from
-//     pillow_rs_image::ImageError and std::io::Error.
+//     image_slash_star::ImageError and std::io::Error.
 //   - CI enforces: no `Result<_, String>` anywhere in production code
 //     (see scripts/lint.sh and scripts/check_error_types.sh).
 // ============================================================================
+
+use std::sync::Arc;
 
 use thiserror::Error;
 
@@ -21,7 +23,7 @@ use thiserror::Error;
 /// Variants intentionally mirror common Pillow/Python exception categories
 /// where the Rust core needs to preserve user-visible behavior through
 /// bindings.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum PilError {
     /// Pillow-style I/O error message.
     #[error("{0}")]
@@ -48,13 +50,17 @@ pub enum PilError {
     #[error("{0}")]
     ValueError(String),
 
+    /// Input bytes do not follow the syntax required by a legacy Pillow format.
+    #[error("{0}")]
+    SyntaxError(String),
+
     /// Input type or mode is incompatible with the requested Pillow operation.
     #[error("{0}")]
     TypeError(String),
 
     /// Error propagated from the underlying image buffer or codec crate.
     #[error("image processing error: {0}")]
-    ImageError(#[from] pillow_rs_image::ImageError),
+    ImageError(#[from] image_slash_star::ImageError),
 
     /// Pillow-compatible placeholder for APIs that are intentionally incomplete.
     #[error("{0}")]
@@ -66,7 +72,7 @@ pub enum PilError {
 
     /// Standard library I/O error propagated through core format helpers.
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(Arc<std::io::Error>),
 
     // ============================================================================
     // AS PER DESIGN — DO NOT REMOVE:
@@ -87,4 +93,10 @@ pub enum PilError {
     /// Always use CheckedDims::new() to produce these — never construct directly.
     #[error("invalid dimensions: {0}")]
     DimensionError(String),
+}
+
+impl From<std::io::Error> for PilError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(Arc::new(error))
+    }
 }

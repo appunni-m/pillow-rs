@@ -80,19 +80,11 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
 
 /// Composites `image1` over `image2` using `mask`.
 ///
-/// `mode` is an optional Pillow mode override, for example `"P"` when
-/// composite is called on palette images through a binding.
-///
 /// # Errors
 ///
 /// Returns [`PilError::ValueError`] when `image1` and `mask` dimensions differ,
 /// or another [`PilError`] when size lookup fails.
-pub fn composite(
-    image1: &Image,
-    image2: &Image,
-    mask: &Image,
-    mode: Option<&str>,
-) -> Result<Image, PilError> {
+pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, PilError> {
     // PIL.composite = image2.copy() followed by image2.paste(image1, None, mask)
     // The output matches image2's size; smaller images are pasted at (0,0).
     // PIL requires image1 and mask to have the same size (via paste).
@@ -102,22 +94,43 @@ pub fn composite(
     if (w1, h1) != (wm, hm) {
         return Err(PilError::ValueError("images do not match".into()));
     }
+    let mask_alpha = match mask.mode()?.as_str() {
+        "1" | "L" => false,
+        "LA" | "RGBA" | "RGBa" => true,
+        _ => return Err(PilError::ValueError("bad transparency mask".into())),
+    };
+    let output_mode = image2.mode()?;
+    let source = if image1.mode()? == output_mode {
+        image1.clone()
+    } else {
+        // Pillow 12.2 PIL.Image.composite starts from image2.copy(), then
+        // Image.paste converts image1 to the destination mode before blending.
+        image1.convert(&output_mode, None, None, None, None)?
+    };
     let mut result = Image::push_op(
-        image1,
+        &source,
         PipelineOp::CompositeModule {
             other: Arc::new(image2.clone()),
             mask: Arc::new(mask.clone()),
+            mask_alpha,
         },
     );
-    // Override explicit_mode if provided (e.g., for P-mode images where the
-    // Python wrapper stores the mode externally on the Python Image object).
-    if let Some(m) = mode {
-        if let Image::Pipeline {
-            ref mut explicit_mode,
-            ..
-        } = result
-        {
-            *explicit_mode = Some(m.to_string());
+    if let Image::Pipeline {
+        ref mut explicit_mode,
+        ref mut palette,
+        ref mut palette_alpha,
+        ..
+    } = result
+    {
+        *explicit_mode = image2.explicit_mode().map(str::to_owned);
+        if output_mode == "P" {
+            // The output begins as image2.copy(), so palette ownership follows
+            // image2 even when image1 was converted to P for the paste.
+            *palette = Some(image2.extract_palette().unwrap_or_default());
+            *palette_alpha = image2.palette_alpha();
+        } else {
+            *palette = None;
+            *palette_alpha = None;
         }
     }
     Ok(result)
@@ -169,6 +182,41 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
         replicated.extend_from_slice(lut);
     }
     eval(image, &replicated)
+}
+
+/// Applies a single-band lookup table to every band in `image`.
+///
+/// The image mode determines the band count. Bindings should use this entry
+/// point instead of deriving semantic image information in the host language.
+///
+/// # Errors
+///
+/// Returns an image/materialization error when the band count cannot be read,
+/// or [`PilError::ValueError`] when `lut` is not a valid single-band or
+/// already-expanded table.
+pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
+    let n_bands = image.getbands()?.len();
+    eval_replicated(image, lut, n_bands)
+}
+
+/// Validates and applies a pre-expanded Pillow lookup table.
+///
+/// Pillow requires exactly 256 entries per image band for a non-callable LUT.
+/// Keeping this validation in core ensures every ABI observes the same mode
+/// semantics and error ordering.
+///
+/// # Errors
+///
+/// Returns an image/materialization error when the band count cannot be read,
+/// or [`PilError::ValueError`] when the table length does not equal
+/// `256 * image_band_count`.
+pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
+    let n_bands = image.getbands()?.len();
+    let expected = 256 * n_bands;
+    if lut.len() != expected {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    eval(image, lut)
 }
 
 /// Generates Gaussian noise using the source image dimensions.

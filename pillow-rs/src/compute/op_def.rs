@@ -40,7 +40,7 @@
 //   macro. (see scripts/check_op_registration.sh).
 // ============================================================================
 
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 /// Registered backend functions for one operation key.
 ///

@@ -8,7 +8,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use pillow_rs_image::DynamicImage;
+use image_slash_star::DynamicImage;
 
 // ─── Clip helper ──
 
@@ -24,6 +24,33 @@ fn clip8_filter(v: f32) -> u8 {
     }
 }
 
+/// Evaluate Pillow's three-tap row expression with the contraction order used
+/// by the pinned arm64 Pillow 12.2.0 oracle.
+///
+/// `src/libImaging/Filter.c` spells `KERNEL1x3` as a left-associated sum. The
+/// oracle binary starts with the middle product, then emits fused
+/// multiply-adds for the left and right products. Keeping that order explicit
+/// avoids one-byte differences when a result lies just below an integer.
+#[inline]
+fn pillow_kernel_row_3(pixels: [f32; 3], kernel: &[f32]) -> f32 {
+    let sum = pixels[1] * kernel[1];
+    let sum = pixels[0].mul_add(kernel[0], sum);
+    pixels[2].mul_add(kernel[2], sum)
+}
+
+/// Five-tap counterpart of [`pillow_kernel_row_3`].
+///
+/// The pinned oracle starts with tap 1, fuses tap 0, and then fuses taps 2
+/// through 4 in source order.
+#[inline]
+fn pillow_kernel_row_5(pixels: [f32; 5], kernel: &[f32]) -> f32 {
+    let sum = pixels[1] * kernel[1];
+    let sum = pixels[0].mul_add(kernel[0], sum);
+    let sum = pixels[2].mul_add(kernel[2], sum);
+    let sum = pixels[3].mul_add(kernel[3], sum);
+    pixels[4].mul_add(kernel[4], sum)
+}
+
 // ── Raw bytes to image ──
 
 /// Convert raw flat bytes back to a DynamicImage based on channel count.
@@ -35,19 +62,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, data)
+            image_slash_star::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, data)
+            image_slash_star::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, data)
+            image_slash_star::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, data)
+            image_slash_star::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
@@ -105,15 +132,30 @@ fn filter_3x3_i32(
             };
 
             // PIL reverses Y-axis: k[0] on bottom row, k[8] on top row
-            let bot_row = read_pixel(-1, 1) as f32 * kd[0]
-                + read_pixel(0, 1) as f32 * kd[1]
-                + read_pixel(1, 1) as f32 * kd[2];
-            let mid_row = read_pixel(-1, 0) as f32 * kd[3]
-                + read_pixel(0, 0) as f32 * kd[4]
-                + read_pixel(1, 0) as f32 * kd[5];
-            let top_row = read_pixel(-1, -1) as f32 * kd[6]
-                + read_pixel(0, -1) as f32 * kd[7]
-                + read_pixel(1, -1) as f32 * kd[8];
+            let bot_row = pillow_kernel_row_3(
+                [
+                    read_pixel(-1, 1) as f32,
+                    read_pixel(0, 1) as f32,
+                    read_pixel(1, 1) as f32,
+                ],
+                &kd[0..3],
+            );
+            let mid_row = pillow_kernel_row_3(
+                [
+                    read_pixel(-1, 0) as f32,
+                    read_pixel(0, 0) as f32,
+                    read_pixel(1, 0) as f32,
+                ],
+                &kd[3..6],
+            );
+            let top_row = pillow_kernel_row_3(
+                [
+                    read_pixel(-1, -1) as f32,
+                    read_pixel(0, -1) as f32,
+                    read_pixel(1, -1) as f32,
+                ],
+                &kd[6..9],
+            );
 
             // PIL I-mode: with +0.5 rounding bias
             let mut ss = offset as f32 + 0.5;
@@ -133,7 +175,7 @@ fn filter_3x3_i32(
     }
 
     Ok(DynamicImage::ImageRgba8(
-        pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+        image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
             .ok_or_else(|| PilError::ValueError("filter_3x3_i32: buffer error".into()))?,
     ))
 }
@@ -168,31 +210,56 @@ fn filter_5x5_i32(
             };
 
             // Reversed Y-axis: k[0..4] on bottom row (y+2), k[20..24] on top row (y-2)
-            let bot_row0 = read_pixel(-2, 2) as f32 * kd[0]
-                + read_pixel(-1, 2) as f32 * kd[1]
-                + read_pixel(0, 2) as f32 * kd[2]
-                + read_pixel(1, 2) as f32 * kd[3]
-                + read_pixel(2, 2) as f32 * kd[4];
-            let bot_row1 = read_pixel(-2, 1) as f32 * kd[5]
-                + read_pixel(-1, 1) as f32 * kd[6]
-                + read_pixel(0, 1) as f32 * kd[7]
-                + read_pixel(1, 1) as f32 * kd[8]
-                + read_pixel(2, 1) as f32 * kd[9];
-            let mid_row = read_pixel(-2, 0) as f32 * kd[10]
-                + read_pixel(-1, 0) as f32 * kd[11]
-                + read_pixel(0, 0) as f32 * kd[12]
-                + read_pixel(1, 0) as f32 * kd[13]
-                + read_pixel(2, 0) as f32 * kd[14];
-            let top_row1 = read_pixel(-2, -1) as f32 * kd[15]
-                + read_pixel(-1, -1) as f32 * kd[16]
-                + read_pixel(0, -1) as f32 * kd[17]
-                + read_pixel(1, -1) as f32 * kd[18]
-                + read_pixel(2, -1) as f32 * kd[19];
-            let top_row0 = read_pixel(-2, -2) as f32 * kd[20]
-                + read_pixel(-1, -2) as f32 * kd[21]
-                + read_pixel(0, -2) as f32 * kd[22]
-                + read_pixel(1, -2) as f32 * kd[23]
-                + read_pixel(2, -2) as f32 * kd[24];
+            let bot_row0 = pillow_kernel_row_5(
+                [
+                    read_pixel(-2, 2) as f32,
+                    read_pixel(-1, 2) as f32,
+                    read_pixel(0, 2) as f32,
+                    read_pixel(1, 2) as f32,
+                    read_pixel(2, 2) as f32,
+                ],
+                &kd[0..5],
+            );
+            let bot_row1 = pillow_kernel_row_5(
+                [
+                    read_pixel(-2, 1) as f32,
+                    read_pixel(-1, 1) as f32,
+                    read_pixel(0, 1) as f32,
+                    read_pixel(1, 1) as f32,
+                    read_pixel(2, 1) as f32,
+                ],
+                &kd[5..10],
+            );
+            let mid_row = pillow_kernel_row_5(
+                [
+                    read_pixel(-2, 0) as f32,
+                    read_pixel(-1, 0) as f32,
+                    read_pixel(0, 0) as f32,
+                    read_pixel(1, 0) as f32,
+                    read_pixel(2, 0) as f32,
+                ],
+                &kd[10..15],
+            );
+            let top_row1 = pillow_kernel_row_5(
+                [
+                    read_pixel(-2, -1) as f32,
+                    read_pixel(-1, -1) as f32,
+                    read_pixel(0, -1) as f32,
+                    read_pixel(1, -1) as f32,
+                    read_pixel(2, -1) as f32,
+                ],
+                &kd[15..20],
+            );
+            let top_row0 = pillow_kernel_row_5(
+                [
+                    read_pixel(-2, -2) as f32,
+                    read_pixel(-1, -2) as f32,
+                    read_pixel(0, -2) as f32,
+                    read_pixel(1, -2) as f32,
+                    read_pixel(2, -2) as f32,
+                ],
+                &kd[20..25],
+            );
 
             // PIL I-mode: with +0.5 rounding bias
             let mut ss = offset as f32 + 0.5;
@@ -214,7 +281,7 @@ fn filter_5x5_i32(
     }
 
     Ok(DynamicImage::ImageRgba8(
-        pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+        image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
             .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
     ))
 }
@@ -355,7 +422,7 @@ fn rank_filter_impl(
             }
         }
         let result = DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w_u32, h_u32, out)
+            image_slash_star::RgbaImage::from_raw(w_u32, h_u32, out)
                 .ok_or_else(|| PilError::ValueError("rank_filter_impl(F): buffer error".into()))?,
         );
         return Ok(preserve_mode(img, result));
@@ -423,15 +490,30 @@ pub fn execute_filter3x3(
             let base =
                 |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
             for c in 0..channels {
-                let row_b = raw[base(-1, 1) + c] as f32 * k0
-                    + raw[base(0, 1) + c] as f32 * k1
-                    + raw[base(1, 1) + c] as f32 * k2;
-                let row_c = raw[base(-1, 0) + c] as f32 * k3
-                    + raw[base(0, 0) + c] as f32 * k4
-                    + raw[base(1, 0) + c] as f32 * k5;
-                let row_t = raw[base(-1, -1) + c] as f32 * k6
-                    + raw[base(0, -1) + c] as f32 * k7
-                    + raw[base(1, -1) + c] as f32 * k8;
+                let row_b = pillow_kernel_row_3(
+                    [
+                        raw[base(-1, 1) + c] as f32,
+                        raw[base(0, 1) + c] as f32,
+                        raw[base(1, 1) + c] as f32,
+                    ],
+                    &[k0, k1, k2],
+                );
+                let row_c = pillow_kernel_row_3(
+                    [
+                        raw[base(-1, 0) + c] as f32,
+                        raw[base(0, 0) + c] as f32,
+                        raw[base(1, 0) + c] as f32,
+                    ],
+                    &[k3, k4, k5],
+                );
+                let row_t = pillow_kernel_row_3(
+                    [
+                        raw[base(-1, -1) + c] as f32,
+                        raw[base(0, -1) + c] as f32,
+                        raw[base(1, -1) + c] as f32,
+                    ],
+                    &[k6, k7, k8],
+                );
                 let mut ss = rounding_bias;
                 ss += row_b;
                 ss += row_c;
@@ -493,36 +575,61 @@ pub fn execute_filter5x5(
             let base =
                 |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
             for c in 0..channels {
-                let row0 = raw[base(-2, 2) + c] as f32 * k00
-                    + raw[base(-1, 2) + c] as f32 * k01
-                    + raw[base(0, 2) + c] as f32 * k02
-                    + raw[base(1, 2) + c] as f32 * k03
-                    + raw[base(2, 2) + c] as f32 * k04;
+                let row0 = pillow_kernel_row_5(
+                    [
+                        raw[base(-2, 2) + c] as f32,
+                        raw[base(-1, 2) + c] as f32,
+                        raw[base(0, 2) + c] as f32,
+                        raw[base(1, 2) + c] as f32,
+                        raw[base(2, 2) + c] as f32,
+                    ],
+                    &[k00, k01, k02, k03, k04],
+                );
                 let mut ss = rounding_bias;
                 ss += row0;
-                let row1 = raw[base(-2, 1) + c] as f32 * k10
-                    + raw[base(-1, 1) + c] as f32 * k11
-                    + raw[base(0, 1) + c] as f32 * k12
-                    + raw[base(1, 1) + c] as f32 * k13
-                    + raw[base(2, 1) + c] as f32 * k14;
+                let row1 = pillow_kernel_row_5(
+                    [
+                        raw[base(-2, 1) + c] as f32,
+                        raw[base(-1, 1) + c] as f32,
+                        raw[base(0, 1) + c] as f32,
+                        raw[base(1, 1) + c] as f32,
+                        raw[base(2, 1) + c] as f32,
+                    ],
+                    &[k10, k11, k12, k13, k14],
+                );
                 ss += row1;
-                let row2 = raw[base(-2, 0) + c] as f32 * k20
-                    + raw[base(-1, 0) + c] as f32 * k21
-                    + raw[base(0, 0) + c] as f32 * k22
-                    + raw[base(1, 0) + c] as f32 * k23
-                    + raw[base(2, 0) + c] as f32 * k24;
+                let row2 = pillow_kernel_row_5(
+                    [
+                        raw[base(-2, 0) + c] as f32,
+                        raw[base(-1, 0) + c] as f32,
+                        raw[base(0, 0) + c] as f32,
+                        raw[base(1, 0) + c] as f32,
+                        raw[base(2, 0) + c] as f32,
+                    ],
+                    &[k20, k21, k22, k23, k24],
+                );
                 ss += row2;
-                let row3 = raw[base(-2, -1) + c] as f32 * k30
-                    + raw[base(-1, -1) + c] as f32 * k31
-                    + raw[base(0, -1) + c] as f32 * k32
-                    + raw[base(1, -1) + c] as f32 * k33
-                    + raw[base(2, -1) + c] as f32 * k34;
+                let row3 = pillow_kernel_row_5(
+                    [
+                        raw[base(-2, -1) + c] as f32,
+                        raw[base(-1, -1) + c] as f32,
+                        raw[base(0, -1) + c] as f32,
+                        raw[base(1, -1) + c] as f32,
+                        raw[base(2, -1) + c] as f32,
+                    ],
+                    &[k30, k31, k32, k33, k34],
+                );
                 ss += row3;
-                let row4 = raw[base(-2, -2) + c] as f32 * k40
-                    + raw[base(-1, -2) + c] as f32 * k41
-                    + raw[base(0, -2) + c] as f32 * k42
-                    + raw[base(1, -2) + c] as f32 * k43
-                    + raw[base(2, -2) + c] as f32 * k44;
+                let row4 = pillow_kernel_row_5(
+                    [
+                        raw[base(-2, -2) + c] as f32,
+                        raw[base(-1, -2) + c] as f32,
+                        raw[base(0, -2) + c] as f32,
+                        raw[base(1, -2) + c] as f32,
+                        raw[base(2, -2) + c] as f32,
+                    ],
+                    &[k40, k41, k42, k43, k44],
+                );
                 ss += row4;
                 out[(y * w + x) as usize * channels + c] = clip8_filter(ss);
             }
@@ -639,4 +746,48 @@ pub fn execute_rank_filter_with_mode(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, rank, mode)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{execute_filter3x3, execute_filter5x5};
+    use image_slash_star::{DynamicImage, GrayImage};
+
+    #[test]
+    fn detail_uses_pillow_fused_row_evaluation() {
+        // Pillow 12.2.0 returns 90 for this exact first-divergence
+        // neighborhood; separately rounded products return 89.
+        let pixels = vec![95, 95, 96, 96, 96, 106, 126, 126, 137];
+        let image = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(3, 3, pixels).expect("3x3 fixture dimensions must match"),
+        );
+        let kernel = [0.0, -1.0, 0.0, -1.0, 10.0, -1.0, 0.0, -1.0, 0.0];
+
+        let filtered =
+            execute_filter3x3(&image, &kernel, 6.0, 0, None).expect("filter must succeed");
+
+        assert_eq!(filtered.to_luma8().get_pixel(1, 1)[0], 90);
+    }
+
+    #[test]
+    fn smooth_more_uses_pillow_fused_row_evaluation() {
+        // Pillow 12.2.0 returns 93 for this exact first-divergence
+        // neighborhood; separately rounded products return 94.
+        let pixels = vec![
+            91, 92, 92, 92, 93, 92, 92, 93, 93, 93, 93, 93, 93, 94, 94, 93, 94, 94, 94, 95, 94, 94,
+            95, 105, 115,
+        ];
+        let image = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(5, 5, pixels).expect("5x5 fixture dimensions must match"),
+        );
+        let kernel = [
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 1.0, 1.0, 5.0, 44.0, 5.0, 1.0, 1.0, 5.0,
+            5.0, 5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+        ];
+
+        let filtered =
+            execute_filter5x5(&image, &kernel, 100.0, 0, None).expect("filter must succeed");
+
+        assert_eq!(filtered.to_luma8().get_pixel(2, 2)[0], 93);
+    }
 }

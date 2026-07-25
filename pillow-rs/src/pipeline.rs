@@ -419,6 +419,8 @@ pub enum PipelineOp {
         h: i32,
         /// Optional mask image.
         mask: Option<Arc<Image>>,
+        /// Whether the mask value comes from its alpha band instead of luma.
+        mask_alpha: bool,
     },
     /// Alpha-composite one image over another.
     AlphaComposite {
@@ -451,6 +453,8 @@ pub enum PipelineOp {
         other: Arc<Image>,
         /// Mask image.
         mask: Arc<Image>,
+        /// Whether the mask value comes from its alpha band.
+        mask_alpha: bool,
     },
     /// Apply a lookup table to every pixel value.
     Eval {
@@ -478,6 +482,10 @@ pub enum PipelineOp {
         table: Vec<f64>,
         /// Number of output channels.
         channels: u32,
+        /// Logical Pillow mode of the input samples.
+        source_mode: PixelMode,
+        /// Logical Pillow mode requested for the output samples.
+        target_mode: PixelMode,
     },
     /// Apply a geometric transform.
     Transform {
@@ -493,6 +501,11 @@ pub enum PipelineOp {
         filter: ResampleFilter,
         /// Optional fill color.
         fill: Option<(u8, u8, u8, u8)>,
+        /// Raw palette index used to fill out-of-bounds `P` samples.
+        ///
+        /// Pillow distinguishes scalar palette indices from tuple/string
+        /// colors, which resolve to index zero for affine transforms.
+        palette_fill: Option<u8>,
     },
 
     // ── Mutating ops (pipelined — replace self with Pipeline) ──
@@ -504,16 +517,22 @@ pub enum PipelineOp {
         y: u32,
         /// Pixel color.
         color: (u8, u8, u8, u8),
+        /// Whether the scalar value is proven to be a palette index.
+        palette_index: bool,
     },
     /// Replace image data from raw bytes.
     PutData {
         /// Raw pixel data.
         data: Vec<u8>,
+        /// Logical Pillow mode whose sample layout `data` follows.
+        mode: PixelMode,
     },
     /// Replace or set alpha channel.
     PutAlpha {
         /// Constant alpha value.
         alpha: u8,
+        /// Logical Pillow mode of the image before alpha promotion.
+        mode: PixelMode,
     },
 
     // ── Channel extraction ──
@@ -798,6 +817,77 @@ pub enum ColorMode {
     P,
     /// Pillow mode `"1"` binary pixels.
     Mode1,
+}
+
+/// Logical Pillow sample layout for mutating pixel operations.
+///
+/// `DynamicImage` cannot distinguish raw `P`, `CMYK`, `I`, or `F` samples
+/// from the standard buffers used to store them. Mutating operations carry
+/// this mode alongside their bytes so every compute backend interprets the
+/// same samples without relying on output-mode metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PixelMode {
+    /// 8-bit luma.
+    L = 0,
+    /// 8-bit luma plus alpha.
+    LA = 1,
+    /// 8-bit red, green, and blue.
+    RGB = 2,
+    /// 8-bit red, green, blue, and alpha.
+    RGBA = 3,
+    /// Palette indices.
+    P = 4,
+    /// Palette indices plus per-pixel alpha.
+    PA = 5,
+    /// Cyan, magenta, yellow, and key/black.
+    CMYK = 6,
+    /// Pillow mode `"1"` binary pixels.
+    Mode1 = 7,
+    /// Luma and chroma channels.
+    YCbCr = 8,
+    /// Hue, saturation, and value.
+    HSV = 9,
+    /// 32-bit signed integer pixels.
+    I = 10,
+    /// 32-bit floating-point pixels.
+    F = 11,
+}
+
+impl PixelMode {
+    /// Parses a Pillow mode name used by the core image API.
+    pub(crate) fn from_name(mode: &str) -> Option<Self> {
+        match mode {
+            "1" => Some(Self::Mode1),
+            "L" => Some(Self::L),
+            "LA" => Some(Self::LA),
+            "P" => Some(Self::P),
+            "PA" => Some(Self::PA),
+            "RGB" => Some(Self::RGB),
+            "RGBA" => Some(Self::RGBA),
+            "CMYK" => Some(Self::CMYK),
+            "YCbCr" => Some(Self::YCbCr),
+            "HSV" => Some(Self::HSV),
+            "I" => Some(Self::I),
+            "F" => Some(Self::F),
+            _ => None,
+        }
+    }
+
+    /// Number of raw bytes per pixel used by `putdata`.
+    pub(crate) const fn channels(self) -> usize {
+        match self {
+            Self::L | Self::P | Self::Mode1 => 1,
+            Self::LA | Self::PA => 2,
+            Self::RGB | Self::YCbCr | Self::HSV => 3,
+            Self::RGBA | Self::CMYK | Self::I | Self::F => 4,
+        }
+    }
+
+    /// Stable code shared with scalar and WGSL kernels.
+    pub(crate) const fn code(self) -> u32 {
+        self as u32
+    }
 }
 
 /// Dither algorithm used by conversion or quantization operations.

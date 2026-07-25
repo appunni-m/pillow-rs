@@ -8,8 +8,11 @@ can be diagnosed without lossy hashes.
 
 from __future__ import annotations
 
+import argparse
+import difflib
 import hashlib
 import json
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -27,6 +30,8 @@ FONT_REF = "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf"
 FREETYPE_FIXTURE_DIR = ROOT / "pillow-rs-freetype" / "tests" / "fixtures"
 LARGE_PIXEL_ROW_LIMIT = 3_816
 COMPACT_PIXEL_SIZES = [7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32, 40]
+PILLOW_VERSION = "12.2.0"
+FREETYPE_VERSION = "2.14.3"
 
 
 def codepoints(text: str) -> list[int]:
@@ -229,6 +234,16 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def load_oracle_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
+    # Pin BASIC explicitly: Pillow otherwise selects RAQM when it was compiled
+    # in, which changes layout advances and makes fixtures host-dependent.
+    return ImageFont.truetype(
+        str(path),
+        size,
+        layout_engine=ImageFont.Layout.BASIC,
+    )
+
+
 def write_raw(row_id: str, data: bytes) -> str:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     path = RAW_DIR / f"{row_id}.bin"
@@ -338,7 +353,7 @@ def add_large_pixel_matrix(rows: list[dict]) -> None:
         font_key = (font_path, size_pt)
         font = font_cache.get(font_key)
         if font is None:
-            font = ImageFont.truetype(str(font_path), size_pt)
+            font = load_oracle_font(font_path, size_pt)
             font_cache[font_key] = font
         mask = font.getmask(row["char"], mode="L")
         mask_bytes = bytes(mask)
@@ -374,11 +389,22 @@ def add_large_pixel_matrix(rows: list[dict]) -> None:
         )
 
 
-def main() -> None:
-    if PIL.__version__ != "12.2.0":
-        raise SystemExit(f"expected Pillow 12.2.0, got {PIL.__version__}")
+def generate(fixture_dir: Path) -> None:
+    global FIXTURE_DIR, RAW_DIR, MATRIX_PATH
 
-    font = ImageFont.truetype(str(FONT_PATH), 20)
+    FIXTURE_DIR = fixture_dir
+    RAW_DIR = FIXTURE_DIR / "outputs" / "imagingft" / "raws"
+    MATRIX_PATH = FIXTURE_DIR / "imagingft_matrix.json"
+
+    if PIL.__version__ != PILLOW_VERSION:
+        raise SystemExit(f"expected Pillow {PILLOW_VERSION}, got {PIL.__version__}")
+    if ImageFont.core.freetype2_version != FREETYPE_VERSION:
+        raise SystemExit(
+            f"expected FreeType {FREETYPE_VERSION}, "
+            f"got {ImageFont.core.freetype2_version}"
+        )
+
+    font = load_oracle_font(FONT_PATH, 20)
     rows: list[dict] = []
 
     for text in ("Hello", "AV", "jQ"):
@@ -434,6 +460,74 @@ def main() -> None:
     tmp_path = MATRIX_PATH.with_suffix(".json.tmp")
     tmp_path.write_text(json.dumps(matrix, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp_path.replace(MATRIX_PATH)
+
+
+def check_reproducible() -> None:
+    current_dir = CRATE / "tests" / "fixtures"
+    with tempfile.TemporaryDirectory(prefix="pillow-rs-imagingft-") as temp:
+        generated_dir = Path(temp)
+        generate(generated_dir)
+
+        current_files = {
+            path.relative_to(current_dir): path
+            for path in current_dir.glob("imagingft_matrix.json")
+        }
+        current_files.update(
+            {
+                path.relative_to(current_dir): path
+                for path in (current_dir / "outputs" / "imagingft" / "raws").glob("*.bin")
+            }
+        )
+        generated_files = {
+            path.relative_to(generated_dir): path
+            for path in generated_dir.rglob("*")
+            if path.is_file()
+        }
+
+        if current_files.keys() != generated_files.keys():
+            missing = sorted(str(path) for path in generated_files.keys() - current_files.keys())
+            orphaned = sorted(str(path) for path in current_files.keys() - generated_files.keys())
+            raise SystemExit(
+                "imagingft fixture file set is not reproducible\n"
+                f"missing current files: {missing}\n"
+                f"orphaned current files: {orphaned}"
+            )
+
+        for relative, generated_path in generated_files.items():
+            current_path = current_files[relative]
+            generated_bytes = generated_path.read_bytes()
+            current_bytes = current_path.read_bytes()
+            if generated_bytes == current_bytes:
+                continue
+            if relative.suffix == ".json":
+                diff = "".join(
+                    difflib.unified_diff(
+                        current_bytes.decode().splitlines(keepends=True),
+                        generated_bytes.decode().splitlines(keepends=True),
+                        fromfile=f"current/{relative}",
+                        tofile=f"generated/{relative}",
+                    )
+                )
+                raise SystemExit(f"imagingft fixture JSON is stale:\n{diff}")
+            raise SystemExit(f"imagingft raw oracle differs: {relative}")
+
+    print("imagingft fixtures reproduce exactly")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Build or validate Pillow 12.2.0 imagingft fixtures"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="regenerate in a temporary directory and compare every byte",
+    )
+    args = parser.parse_args()
+    if args.check:
+        check_reproducible()
+    else:
+        generate(CRATE / "tests" / "fixtures")
 
 
 if __name__ == "__main__":

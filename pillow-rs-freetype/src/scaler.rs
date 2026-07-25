@@ -834,7 +834,6 @@ fn scale_glyph_impl_with_scale(
     }
 
     let fallback_metrics = if latin_metrics.is_none()
-        && glyph_index != 0
         && allow_bytecode
         && !round_component_offsets
         && should_use_default_autohint(data)
@@ -847,7 +846,15 @@ fn scale_glyph_impl_with_scale(
             std::sync::Arc::new(data.clone())
         });
         let globals = crate::autohint::globals::FaceGlobals::new(arc, style.is_italic);
-        globals.get_metrics(glyph_index)
+        if glyph_index == 0 {
+            // FreeType `af_face_globals_get_metrics` resolves an unassigned
+            // `.notdef` through the configured fallback style. C default load
+            // therefore auto-hints glyph zero even though cmap coverage
+            // deliberately skips assigning it a script.
+            globals.get_fallback_metrics()
+        } else {
+            globals.get_metrics(glyph_index)
+        }
     } else {
         None
     };

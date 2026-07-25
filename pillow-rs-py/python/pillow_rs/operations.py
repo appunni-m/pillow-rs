@@ -150,9 +150,7 @@ def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw"
 
 def eval(image: Image, *args):
     """Apply a function to each pixel. The first arg is a callable."""
-    if args and callable(args[0]):
-        return image.point(args[0])
-    raise NotImplementedError("eval: requires a callable")
+    return image.point(args[0])
 
 
 def thumbnail(
