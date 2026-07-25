@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::{fs, path::PathBuf};
 
 use pillow_rs::{
@@ -145,6 +146,22 @@ fn expected_status(case: &Value) -> String {
         "ok".to_string()
     }
 }
+
+const REQUIRED_PUBLIC_OPS: [&str; 13] = [
+    "getname",
+    "getmetrics",
+    "getlength",
+    "has_variations",
+    "getbbox",
+    "getbbox_binary",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "get_transposed_mask",
+    "transposed_bbox",
+    "validate_transposed_length",
+    "draw_text",
+];
 
 fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
     let coords = value.as_array().ok_or(PilError::ValueError(
@@ -469,6 +486,7 @@ fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
 fn imagingft_public_api_parity_matches_fixture_oracles() {
     let fixture_dir = crate_fixture_dir().join("inputs/public-api");
     let mut any_cases = 0usize;
+    let mut implemented_ops = BTreeSet::new();
 
     for entry in
         fs::read_dir(&fixture_dir).expect("public-api imagingft directory must be readable")
@@ -492,6 +510,24 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         let operation = manifest_operation
             .strip_prefix("imagingft.")
             .unwrap_or(manifest_operation);
+        if matches!(
+            operation,
+            "getname"
+                | "getmetrics"
+                | "getlength"
+                | "has_variations"
+                | "getbbox"
+                | "getbbox_binary"
+                | "getmask"
+                | "getmask2"
+                | "getmask2_with_start"
+                | "get_transposed_mask"
+                | "transposed_bbox"
+                | "validate_transposed_length"
+                | "draw_text"
+        ) {
+            implemented_ops.insert(operation.to_string());
+        }
 
         if let Some(cases) = manifest["cases"].as_array() {
             for case in cases {
@@ -528,16 +564,10 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                         assert_error_matches(case_id, &error, expected);
                     }
                     (Ok(_), true) => {
-                        assert!(
-                            false,
-                            "{case_id}: expected error but got success"
-                        )
+                        assert!(false, "{case_id}: expected error but got success")
                     }
                     (Err(error), false) => {
-                        assert!(
-                            false,
-                            "{case_id}: unexpected error {error}"
-                        )
+                        assert!(false, "{case_id}: unexpected error {error}")
                     }
                 }
             }
@@ -548,4 +578,11 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         any_cases > 0,
         "imagingft public-api fixture corpus must contain cases"
     );
+
+    for op in REQUIRED_PUBLIC_OPS {
+        assert!(
+            implemented_ops.contains(op),
+            "required imagingft public surface '{op}' not represented in fixture inputs"
+        );
+    }
 }
