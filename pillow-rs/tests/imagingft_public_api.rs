@@ -473,26 +473,16 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
     }
 }
 
+fn error_category(error: &PilError) -> String {
+    let debug = format!("{error:?}");
+    let end = debug.find(|c| c == '(' || c == ' ').unwrap_or(debug.len());
+    debug[..end].to_string()
+}
+
 fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
     let expected_error = &expected["error"];
     if let Some(expected_type) = expected_error.get("type").and_then(Value::as_str) {
-        let category = match error {
-            PilError::ValueError(_) => "ValueError",
-            PilError::TypeError(_) => "TypeError",
-            PilError::IOError(_) => "IOError",
-            PilError::OsError(_) => "OSError",
-            PilError::AssertionError(_) => "AssertionError",
-            PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
-            PilError::SyntaxError(_) => "SyntaxError",
-            PilError::NotImplementedError(_) => "NotImplementedError",
-            PilError::UnknownFormat(_) => "UnknownFormat",
-            PilError::Io(_) => "IoError",
-            PilError::PaletteError(_) => "PaletteError",
-            PilError::InternalError(_) => "InternalError",
-            PilError::DimensionError(_) => "DimensionError",
-            PilError::IndexError(_) => "IndexError",
-            PilError::ImageError(_) => "ImageError",
-        };
+        let category = error_category(error);
         assert!(
             expected_type == category,
             "{case_id}: expected error category '{expected_type}', got '{category}'"
