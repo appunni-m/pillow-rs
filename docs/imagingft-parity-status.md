@@ -11,12 +11,19 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 - Test execution: `make -C pillow-rs imagingft-tests` (pass: 1 test, 0 failures)
 - Coverage command attempts:
   - `imagingft-tests-coverage` run id `5a4c51fb-b08f-46d0-a41b-082014cbc860` (artifact ingest failed because command registered with absolute artifact path `/target/...`)
+- `imagingft-tests-coverage` run id `e1fa0be0-ea3f-4c56-8d30-753c803cc60b` (previously registered variant, no longer used in current suite)
   - `imagingft-tests-coverage-fixed` run id `393d8e0d-3c07-4334-97b7-fbf113398f1b` (passed, terminal)
-- Coverage snapshot ingested: `23943940-275a-454d-b3a6-65c63320e42b`
-- Previous comparison snapshot in immediate history: `9160bb50-6ce2-4e66-85c5-f056bc452798`
+  - `imagingft-tests-coverage-fixed` run id `64f4f94b-81c0-49ad-af88-b0e93598d936` (fresh, terminal)
+- Coverage snapshots:
+  - Previous: `23943940-275a-454d-b3a6-65c63320e42b`
+  - Latest: `0950457b-f6fb-4df4-b06f-328813bdd6ac`
+
+### Coverage delta (latest - previous)
+- `coverage_compare(view="overview", baseline=23943940-275a-454d-b3a6-65c63320e42b, current=0950457b-f6fb-4df4-b06f-328813bdd6ac)`
+  - No aggregate metric delta (all deltas 0).
 
 ## Test corpus coverage
-- Fixture files used: 16 files under `inputs/public-api`
+- Fixture files used: 17 files under `inputs/public-api`
 - Total cases: 45
 - Success rows: 41
 - Error rows: 4
@@ -63,8 +70,12 @@ Operation | Total | OK | Error | Result
   - `covered_lines 355/422`
   - `covered_functions 37/41`
   - `covered_branches 47/74`
-  - uncovered lines present at ranges: 35,36-36,59,127-129,138,145,152,163-165,173,193,215,220,221,228,373,374,444-445,461-462,471-472,474-475,497-498,502,503,509-510,514-515,520-521,524,526-527,534,540,544-545,555-558,560-565,567,570-571,576,577,585,592, etc. (`coverage_query file` shows this explicitly)
+  - `coverage_query(view="file", snapshot=0950457b-f6fb-4df4-b06f-328813bdd6ac, file=pillow-rs/src/font/imagingft.rs)`
+    - uncovered lines: 60
+    - partial-branch lines: 18
+    - total relevant line gaps: 73
+    - gap ranges: 35, 36, 59, 127-129, 138, 145, 152-154, 163-165, 173, 193, 215, 220-221, 228, 373-374, 444-445, 461-462, 471-472, 474-475, 497-498, 502-503, 509-510, 514-515, 520-521, 524, 526-527, 534, 540, 544-554, 555-558, 560-563, 564, 565-567, 570-571, 576-577, 585, 592.
 
 ## Remaining explicit gaps
 - Imagingft public corpus is parity-green by row for the current fixture set, but imagingft implementation is not fully covered by this suite (`pillow-rs/src/font/imagingft.rs` still has uncovered lines/branches listed above).
-- Coverage parity requirement in this environment is therefore limited to fixture-parity outcomes, not full function-branch exhaustiveness.
+- Targeted next gap to close: branch+line coverage for private helpers in `pillow-rs/src/font/imagingft.rs` (e.g., `Font::Bitmap` surfaces, size/load failure branches, and render-edge branches in the mask pipeline). These are not yet represented by fixture rows.
