@@ -9,26 +9,38 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 
 ## Evidence captured
 - Test execution: `make -C pillow-rs imagingft-tests` (pass: 1 test, 0 failures)
-- Coverage command run:
-  - `imagingft-tests-coverage-fixed` run id `69d78ee4-3839-4fe7-b579-1444d494ca10` (terminal pass, ingested)
-- Coverage snapshot: `2518f088-d630-431c-bab6-5e26342e24b0`
+- Coverage command: `imagingft-tests-coverage-fixed`
+  - run id: `a8258543-665e-4383-9bad-2edf47191613`
+- Coverage snapshot: `1bd8dd73-92ae-4f6a-9928-70743022348b`
 
-### Coverage delta (baseline-internal)
-- Reference: `57e99c8a-92d2-41a9-8015-a76e00d79423`
-- Current: `2518f088-d630-431c-bab6-5e26342e24b0`
-- Net delta: `+0` covered lines, `+0` covered branches, `+0` covered functions
+### Coverage metrics snapshot
+- `total_lines: 17924`, `covered_lines: 1715`
+- `total_branches: 3150`, `covered_branches: 139`
+- `total_functions: 1205`, `covered_functions: 141`
+- `total_regions: 31362`, `covered_regions: 2689`
 
-## Test corpus coverage
-- Fixture files used: 17 files under `inputs/public-api`
-- Total cases: 48
+### ImagingFT implementation surface
+- `coverage_query(view="file", file="pillow-rs/src/font/imagingft.rs")`
+  - `covered_lines: 668/815` (`line_rate 0.8196`)
+  - `covered_functions: 70/80` (`function_rate 0.875`)
+  - `covered_branches: 95/150` (`branch_rate 0.6333`)
+  - `uncovered_line_count: 57`
+  - `partial_branch_line_count: 34`
+  - Remaining gap ranges are available in coverage artifact at the above snapshot.
+
+## Test corpus state
+- Fixture files: 17 under `inputs/public-api`
+- Rows: 48
 - Success rows: 41
 - Error rows: 7
-- Required surfaces asserted present: getname, getmetrics, getlength, has_variations, getbbox, getbbox_binary, getmask, getmask2, getmask2_with_start, get_transposed_mask, transposed_bbox, validate_transposed_length, draw_text
-- Status coverage across all rows: all passed in runner (no false positives/false negatives)
+- Required public operations from runner set are present:
+  - getname, getmetrics, getlength, has_variations, getbbox, getbbox_binary, getmask, getmask2, getmask2_with_start, get_transposed_mask, transposed_bbox, validate_transposed_length, draw_text
 
 ### Per-operation status matrix
 Operation | Total | OK | Error | Result
 ---|---:|---:|---:|---
+`draw_text` | 3 | 3 | 0 | pass
+`get_transposed_mask` | 4 | 3 | 1 | pass
 `getbbox` | 3 | 3 | 0 | pass
 `getbbox_binary` | 3 | 3 | 0 | pass
 `getlength` | 3 | 3 | 0 | pass
@@ -36,47 +48,19 @@ Operation | Total | OK | Error | Result
 `getmask2` | 5 | 5 | 0 | pass
 `getmask2_with_start` | 5 | 5 | 0 | pass
 `getmetrics` | 1 | 1 | 0 | pass
-`getname` | 5 | 1 | 4 | pass (4 load-failure variants)
+`getname` | 5 | 1 | 4 | pass
 `has_variations` | 1 | 1 | 0 | pass
-`transposed_bbox` | 3 | 3 | 0 | pass
-`get_transposed_mask` | 4 | 3 | 1 | pass (1 layout-orientation error variant)
-`validate_transposed_length` | 3 | 2 | 1 | pass
-`draw_text` | 3 | 3 | 0 | pass
 `render_text_binary` | 3 | 3 | 0 | pass
-`unsupported_magic` | 1 | 0 | 1 | pass
+`transposed_bbox` | 3 | 3 | 0 | pass
+`unsupported_magic` | 1 | 0 | 1 | pass (runner-path coverage)
+`validate_transposed_length` | 3 | 2 | 1 | pass
 
-### Error matrix
-Operation | Category | Pattern match
----|---|---
-`imagingft.getname` | `ValueError` | load failures
-`imagingft.unsupported_magic` | `NotImplementedError` | unsupported op
-`imagingft.layout_failure` | `ValueError` | invalid layout/orientation path
-`validate_transposed_length` | `ValueError` | orientation validation failure
+## Error matching contract
+- Rows with `expect_error: true` are executed through fixture-driven `Result` failure handling.
+- Error matching is driven from fixture `expectation.expected.error` keys and `compare.paths`; tests do not hardcode Rust error forms.
+- `status` is asserted as `error`, and error category/message are compared per fixture contract.
 
-## Result-contract behavior
-- Every row is compared via fixture-driven `expectation` paths.
-- Success path compares shape/size/mode/pixels (and raw/hex/hash when available).
-- Error path enforces fixture-expected `status`/`expected.error` and matches type/category/message (or message-pattern when requested).
-- No test-side hardcoded success/error verdicts except required-surface assertion.
-
-## Coverage MCP evidence
-- Suite: `imagingft`
-- Current snapshot (`2518f088-d630-431c-bab6-5e26342e24b0`):
-  - `total_lines: 17924`, `covered_lines: 1715` (`line_rate 0.09568`)
-  - `total_branches: 3150`, `covered_branches: 139` (`branch_rate 0.04413`)
-  - `total_functions: 1205`, `covered_functions: 141` (`function_rate 0.11701`)
-  - `total_regions: 31362`, `covered_regions: 2689` (`region_rate 0.08574`)
-- `coverage_query(view="file", file=pillow-rs/src/font/imagingft.rs)`:
-  - `covered_lines 668/815`
-  - `covered_functions 70/80`
-  - `covered_branches 95/150`
-  - uncovered lines: 57
-  - partial-branch lines: 34
-  - total relevant line gaps: 82
-
-## Remaining explicit gaps
-- All fixture rows in the non-deprecated public corpus are passing for parity checks.
-- Imagingft implementation surface coverage is not 100% yet for `pillow-rs/src/font/imagingft.rs`:
-  - `uncovered lines 57`
-  - `partial-branch lines 34`
-  - exact uncovered line ranges remain those reported in `coverage_query(view="file", snapshot=2518f088-d630-431c-bab6-5e26342e24b0)`.
+## Explicit remaining gaps
+- All non-deprecated fixture rows currently in corpus are passing.
+- Coverage requirement for 100% ImagingFT parity remains incomplete because `pillow-rs/src/font/imagingft.rs` still has remaining gaps (`uncovered_line_count: 57`, `partial_branch_line_count: 34`) under the imagingft suite snapshot.
+- Until those gaps are closed, we cannot claim full branch/line parity coverage.
