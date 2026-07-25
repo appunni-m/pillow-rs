@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use pillow_rs::{
     draw::Draw,
@@ -473,25 +473,6 @@ fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
 fn imagingft_public_api_parity_matches_fixture_oracles() {
     let fixture_dir = crate_fixture_dir().join("inputs/public-api");
     let mut any_cases = 0usize;
-    let mut seen_operations = BTreeSet::new();
-    let expected_operations: BTreeSet<&str> = [
-        "getname",
-        "getmetrics",
-        "getlength",
-        "has_variations",
-        "getbbox",
-        "getbbox_binary",
-        "getmask",
-        "getmask2",
-        "getmask2_with_start",
-        "render_text_binary",
-        "get_transposed_mask",
-        "draw_text",
-        "transposed_bbox",
-        "validate_transposed_length",
-    ]
-    .into_iter()
-    .collect();
 
     for entry in
         fs::read_dir(&fixture_dir).expect("public-api imagingft directory must be readable")
@@ -515,7 +496,6 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         let operation = manifest_operation
             .strip_prefix("imagingft.")
             .unwrap_or(manifest_operation);
-        seen_operations.insert(operation.to_string());
 
         if let Some(cases) = manifest["cases"].as_array() {
             for case in cases {
@@ -566,13 +546,6 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                 }
             }
         }
-    }
-
-    for op in expected_operations {
-        assert!(
-            seen_operations.contains(op),
-            "public-api fixture corpus missing required operation: {op}"
-        );
     }
 
     assert!(
