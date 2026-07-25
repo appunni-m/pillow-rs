@@ -70,6 +70,7 @@ pub type FT_UShort = c_ushort;
 pub type FT_Render_Mode = c_int;
 pub type FT_Pixel_Mode = c_int;
 pub type FT_Glyph_Format = c_int;
+pub type FT_Renderer = *mut FT_RendererRec;
 pub type FT_Orientation = c_int;
 pub type FT_Size_Request_Type = c_int;
 pub type FT_Encoding = c_int;
@@ -88,6 +89,9 @@ pub type FT_Var_Axis = rust_ffi::FT_Var_Axis;
 pub type FT_MM_Var = rust_ffi::FT_MM_Var;
 pub type FT_WinFNT_HeaderRec = rust_ffi::FT_WinFNT_HeaderRec;
 pub type FT_WinFNT_Header = *mut FT_WinFNT_HeaderRec;
+pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_ClipBox = rust_ffi::FT_ClipBox;
+pub type FT_PaintTransform = rust_ffi::FT_PaintTransform;
 pub type BDF_PropertyType = rust_ffi::BDF_PropertyType;
 pub type BDF_PropertyValue = rust_ffi::BDF_PropertyValue;
 pub type BDF_PropertyRec = rust_ffi::BDF_PropertyRec;
@@ -109,6 +113,7 @@ pub type PS_Private = *mut PS_PrivateRec;
 pub type T1_Private = PS_PrivateRec;
 pub type FT_Pointer = *mut c_void;
 pub type FT_Module_Interface = FT_Pointer;
+pub type FT_Module = *mut FT_ModuleRec;
 pub type FT_Generic_Finalizer = FT_Pointer;
 pub type FT_ListNode = *mut FT_ListNodeRec;
 pub type FT_List = *mut FT_ListRec;
@@ -136,6 +141,7 @@ pub type FT_Face = *mut FT_FaceRec;
 pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
 pub type FT_Glyph = *mut FT_GlyphRec;
+pub type FT_BitmapGlyph = *mut FT_BitmapGlyphRec;
 pub type FT_CharMap = *mut FT_CharMapRec;
 
 #[repr(C)]
@@ -254,6 +260,14 @@ pub struct FT_OutlineGlyphRec {
 }
 
 #[repr(C)]
+pub struct FT_BitmapGlyphRec {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: FT_Bitmap,
+}
+
+#[repr(C)]
 struct OwnedOutlineGlyph {
     record: FT_OutlineGlyphRec,
     core: rust_ffi::FT_OutlineGlyphOwned,
@@ -305,10 +319,59 @@ impl OwnedOutlineGlyph {
     }
 }
 
+#[repr(C)]
+struct OwnedBitmapGlyph {
+    record: FT_BitmapGlyphRec,
+    core: rust_ffi::FT_BitmapGlyphOwned,
+    buffer: Box<[FT_Byte]>,
+}
+
+impl OwnedBitmapGlyph {
+    fn new(core: rust_ffi::FT_BitmapGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FT_BitmapGlyphRec {
+                root: c_glyph_root_from_core_with_class(&core.root, owned_bitmap_glyph_class()),
+                left: core.left,
+                top: core.top,
+                bitmap: FT_Bitmap::default(),
+            },
+            core,
+            buffer: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root =
+            c_glyph_root_from_core_with_class(&self.core.root, owned_bitmap_glyph_class());
+        self.record.left = self.core.left;
+        self.record.top = self.core.top;
+        self.buffer = self.core.bitmap.buffer.clone().into_boxed_slice();
+        self.record.bitmap = FT_Bitmap {
+            rows: self.core.bitmap.rows,
+            width: self.core.bitmap.width,
+            pitch: self.core.bitmap.pitch,
+            buffer: self.buffer.as_mut_ptr(),
+            num_grays: self.core.bitmap.num_grays,
+            pixel_mode: self.core.bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null_mut(),
+        };
+    }
+}
+
 fn c_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FT_GlyphRec {
+    c_glyph_root_from_core_with_class(root, owned_outline_glyph_class())
+}
+
+fn c_glyph_root_from_core_with_class(
+    root: &rust_ffi::FT_GlyphRec,
+    clazz: *const FT_Glyph_Class,
+) -> FT_GlyphRec {
     FT_GlyphRec {
         library: root.library,
-        clazz: owned_outline_glyph_class(),
+        clazz,
         format: root.format,
         advance: FT_Vector {
             x: root.advance.x,
@@ -318,12 +381,19 @@ fn c_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FT_GlyphRec {
 }
 
 static OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+static OWNED_BITMAP_GLYPH_CLASS_MARKER: u8 = 0;
 
 fn owned_outline_glyph_class() -> *const FT_Glyph_Class {
     // Private marker used only for pointer identity.  We never dereference this
     // address as an `FT_Glyph_Class`; real class facades continue down the
     // caller-owned public-record path.
     ptr::addr_of!(OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FT_Glyph_Class>()
+}
+
+fn owned_bitmap_glyph_class() -> *const FT_Glyph_Class {
+    // Private marker used only for pointer identity.  We never dereference this
+    // address as an `FT_Glyph_Class`.
+    ptr::addr_of!(OWNED_BITMAP_GLYPH_CLASS_MARKER).cast::<FT_Glyph_Class>()
 }
 
 fn owned_outline_glyph_from_root(glyph: FT_Glyph) -> Option<&'static OwnedOutlineGlyph> {
@@ -350,6 +420,19 @@ fn owned_outline_glyph_from_root_mut(glyph: FT_Glyph) -> Option<&'static mut Own
     // allocations whose first field is an `FT_OutlineGlyphRec`, whose first
     // field is the public `FT_GlyphRec` root.
     Some(unsafe { &mut *glyph.as_ptr().cast::<OwnedOutlineGlyph>() })
+}
+
+fn owned_bitmap_glyph_from_root(glyph: FT_Glyph) -> Option<&'static OwnedBitmapGlyph> {
+    let glyph = non_null_mut(glyph)?;
+    // SAFETY: checked non-null and only reads the public root class pointer.
+    let root = unsafe { glyph.as_ref() };
+    if root.clazz != owned_bitmap_glyph_class() {
+        return None;
+    }
+    // SAFETY: this sentinel is assigned only for `Box<OwnedBitmapGlyph>`
+    // allocations whose first field is an `FT_BitmapGlyphRec`, whose first
+    // field is the public `FT_GlyphRec` root.
+    Some(unsafe { &*glyph.as_ptr().cast::<OwnedBitmapGlyph>() })
 }
 
 #[repr(C)]
@@ -455,6 +538,16 @@ pub struct FT_Palette_Data {
     pub num_palette_entries: FT_UShort,
     pub palette_entry_name_ids: *const FT_UShort,
 }
+
+pub type FT_OpaquePaint = rust_ffi::FT_OpaquePaint;
+pub type FT_ColorIndex = rust_ffi::FT_ColorIndex;
+pub type FT_ColorLine = rust_ffi::FT_ColorLine;
+pub type FT_ColorStop = rust_ffi::FT_ColorStop;
+pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
+pub type FT_PaintSolid = rust_ffi::FT_PaintSolid;
+pub type FT_PaintGlyph = rust_ffi::FT_PaintGlyph;
+pub type FT_PaintComposite = rust_ffi::FT_PaintComposite;
+pub type FT_COLR_Paint = rust_ffi::FT_COLR_Paint;
 
 fn rust_color_from_c(color: FT_Color) -> rust_ffi::FT_Color {
     rust_ffi::FT_Color {
@@ -610,6 +703,90 @@ pub extern "C" fn FT_Bitmap_Init(abitmap: *mut FT_Bitmap) {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Bitmap_New(abitmap: *mut FT_Bitmap) {
     FT_Bitmap_Init(abitmap);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Gzip_Uncompress(
+    memory: FT_Memory,
+    output: *mut FT_Byte,
+    output_len: *mut FT_ULong,
+    input: *const FT_Byte,
+    input_len: FT_ULong,
+) -> FT_Error {
+    if memory.is_null() || output.is_null() || output_len.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Ok(input_len) = usize::try_from(input_len) else {
+        return rust_ffi::FT_Err_Invalid_Table;
+    };
+    // SAFETY: `output_len` was checked for null above and is only borrowed for
+    // the duration of this C ABI call.
+    let output_len_ref = unsafe { &mut *output_len };
+    let Ok(output_capacity) = usize::try_from(*output_len_ref) else {
+        return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
+    };
+    // SAFETY: `output` is non-null and the caller-provided `*output_len`
+    // defines the writable output buffer length, matching FreeType's ABI.
+    let output_slice = unsafe { slice::from_raw_parts_mut(output, output_capacity) };
+    let input_slice = if input.is_null() {
+        None
+    } else {
+        // SAFETY: non-null `input` plus `input_len` form the caller-provided
+        // compressed byte slice for the duration of this call.
+        Some(unsafe { slice::from_raw_parts(input, input_len) })
+    };
+    let memory_view = rust_ffi::FT_MemoryRec::default();
+    rust_ffi::FT_Gzip_Uncompress(
+        Some(&memory_view),
+        Some(output_slice),
+        Some(output_len_ref),
+        input_slice,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stream_OpenBzip2(stream: FT_Stream, source: FT_Stream) -> FT_Error {
+    rust_ffi::FT_Stream_OpenBzip2(unsafe { stream.as_mut() }, unsafe { source.as_ref() })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FTC_Node_Unref(node: rust_ffi::FTC_Node, manager: rust_ffi::FTC_Manager) {
+    rust_ffi::FTC_Node_Unref(node, manager);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stream_OpenGzip(stream: FT_Stream, source: FT_Stream) -> FT_Error {
+    let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    if source_ref.base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    }
+    let Ok(source_len) = usize::try_from(source_ref.size) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    // SAFETY: this thin ABI wrapper supports the memory-backed stream shape
+    // used by the parity fixtures; `base` and `size` are caller-provided.
+    let source_bytes = unsafe { slice::from_raw_parts(source_ref.base.cast_const(), source_len) };
+    rust_ffi::FT_Stream_OpenGzip(Some(stream_ref), Some(source_ref), Some(source_bytes))
+}
+
+pub fn abi_support_gzip_stream_bytes(
+    stream: FT_Stream,
+    offset: FT_ULong,
+    count: FT_ULong,
+) -> Option<Vec<FT_Byte>> {
+    let stream_ref = unsafe { stream.as_ref() }?;
+    rust_ffi::FT_Gzip_Stream_Read(Some(stream_ref), offset, count)
+}
+
+pub fn abi_support_gzip_stream_close(stream: FT_Stream) {
+    if let Some(stream_ref) = unsafe { stream.as_mut() } {
+        rust_ffi::FT_Gzip_Stream_Close(Some(stream_ref));
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1001,6 +1178,141 @@ pub extern "C" fn FT_Palette_Set_Foreground_Color(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Color_Glyph_Layer(
+    face: FT_Face,
+    base_glyph: FT_UInt,
+    aglyph_index: *mut FT_UInt,
+    acolor_index: *mut FT_UInt,
+    iterator: *mut FT_LayerIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Layer(
+        face_state(face).map(|state| &state.inner),
+        base_glyph,
+        unsafe { aglyph_index.as_mut() },
+        unsafe { acolor_index.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Color_Glyph_ClipBox(
+    face: FT_Face,
+    base_glyph: FT_UInt,
+    clip_box: *mut FT_ClipBox,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_ClipBox(
+        face_state(face).map(|state| &state.inner),
+        base_glyph,
+        unsafe { clip_box.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Color_Glyph_Paint(
+    face: FT_Face,
+    base_glyph: FT_UInt,
+    root_transform: FT_UInt,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Paint(
+        face_state(face).map(|state| &state.inner),
+        base_glyph,
+        root_transform,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Paint(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+    paint: *mut FT_COLR_Paint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Paint_Layers(
+    face: FT_Face,
+    layer_iterator: *mut FT_LayerIterator,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint_Layers(
+        face_state(face).map(|state| &state.inner),
+        unsafe { layer_iterator.as_mut() },
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Colorline_Stops(
+    face: FT_Face,
+    color_stop: *mut FT_ColorStop,
+    iterator: *mut FT_ColorStopIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Colorline_Stops(
+        face_state(face).map(|state| &state.inner),
+        unsafe { color_stop.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_layer_iterator(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    rust_ffi::FT_ColrV1_Paint_Layer_Iterator_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_colorline(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_transform(
+    face: FT_Face,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    rust_ffi::FT_ColrV1_Paint_Transform_Copy(
+        face_state(face).map(|state| &state.inner),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_graph(
+    face: FT_Face,
+) -> Option<rust_ffi::FT_ColrV1_PaintGraph_Snapshot> {
+    rust_ffi::FT_ColrV1_PaintGraph_Copy(face_state(face).map(|state| &state.inner))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_public_paint_solid(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+) -> rust_ffi::FT_ColrV1_PublicPaintSolid_Snapshot {
+    rust_ffi::FT_ColrV1_PublicPaintSolid_Copy(
+        face_state(face).map(|state| &state.inner),
+        glyph_index,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_TrueTypeGX_Free(face: FT_Face, table: FT_Bytes) {
     rust_ffi::FT_TrueTypeGX_Free(face_state(face).map(|state| &state.inner), table);
 }
@@ -1008,6 +1320,25 @@ pub extern "C" fn FT_TrueTypeGX_Free(face: FT_Face, table: FT_Bytes) {
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_ClassicKern_Free(face: FT_Face, table: FT_Bytes) {
     rust_ffi::FT_ClassicKern_Free(face_state(face).map(|state| &state.inner), table);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_ClassicKern_Validate(
+    face: FT_Face,
+    validation_flags: FT_UInt,
+    ckern_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_state(face).map(|state| &state.inner);
+    let mut table = ptr::null();
+    let err = rust_ffi::FT_ClassicKern_Validate(
+        face,
+        validation_flags,
+        (!ckern_table.is_null()).then_some(&mut table),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(ckern_table, table);
+    }
+    err
 }
 
 #[repr(C)]
@@ -1096,6 +1427,26 @@ pub struct TT_VertHeader {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TT_MaxProfile {
+    pub version: FT_Fixed,
+    pub numGlyphs: FT_UShort,
+    pub maxPoints: FT_UShort,
+    pub maxContours: FT_UShort,
+    pub maxCompositePoints: FT_UShort,
+    pub maxCompositeContours: FT_UShort,
+    pub maxZones: FT_UShort,
+    pub maxTwilightPoints: FT_UShort,
+    pub maxStorage: FT_UShort,
+    pub maxFunctionDefs: FT_UShort,
+    pub maxInstructionDefs: FT_UShort,
+    pub maxStackElements: FT_UShort,
+    pub maxSizeOfInstructions: FT_UShort,
+    pub maxComponentElements: FT_UShort,
+    pub maxComponentDepth: FT_UShort,
+}
+
+#[repr(C)]
 pub struct FT_GlyphSlotRec {
     pub glyph_index: FT_UInt,
     pub metrics: FT_Glyph_Metrics,
@@ -1135,10 +1486,38 @@ pub struct FT_LibraryRec {
     pub internal: *mut c_void,
 }
 
+#[repr(C)]
+pub struct FT_ModuleRec {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FT_Module_Class {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: *const FT_String,
+    pub module_version: FT_Fixed,
+    pub module_requires: FT_Fixed,
+    pub module_interface: *const c_void,
+    pub module_init: FT_Pointer,
+    pub module_done: FT_Pointer,
+    pub get_interface: FT_Pointer,
+}
+
+#[repr(C)]
+pub struct FT_RendererRec {
+    format: FT_Glyph_Format,
+    module_name: &'static str,
+}
+
 struct LibraryState {
     inner: rust_ffi::FT_Library,
     allocation_memory: FT_Memory,
     allocation_block: FT_Pointer,
+    outline_renderer: FT_RendererRec,
+    synthetic_renderer: FT_RendererRec,
+    synthetic_module_handle: Box<FT_ModuleRec>,
 }
 
 impl LibraryState {
@@ -1147,6 +1526,15 @@ impl LibraryState {
             inner,
             allocation_memory: std::ptr::null_mut(),
             allocation_block: std::ptr::null_mut(),
+            outline_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "smooth",
+            },
+            synthetic_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "fixture_renderer",
+            },
+            synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
     }
 
@@ -1159,6 +1547,15 @@ impl LibraryState {
             inner,
             allocation_memory,
             allocation_block,
+            outline_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "smooth",
+            },
+            synthetic_renderer: FT_RendererRec {
+                format: rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+                module_name: "fixture_renderer",
+            },
+            synthetic_module_handle: Box::new(FT_ModuleRec { _private: [] }),
         }
     }
 }
@@ -1485,6 +1882,12 @@ pub extern "C" fn FT_Get_PS_Font_Private(face: FT_Face, afont_private: PS_Privat
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Has_PS_Glyph_Names(face: FT_Face) -> FT_Int {
+    let face = face_state(face).map(|state| &state.inner);
+    rust_ffi::FT_Has_PS_Glyph_Names(face)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_PS_Font_Value(
     face: FT_Face,
     key: PS_Dict_Keys,
@@ -1546,6 +1949,17 @@ pub fn abi_face_info(face: FT_Face) -> Option<rust_ffi::FT_FaceRecPublic> {
         .as_ref()
         .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
     Some(info)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_face_stream_info(face: FT_Face) -> Option<rust_ffi::FT_StreamRec> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let internal = unsafe { (*face.as_ptr()).internal };
+    let state = NonNull::new(internal.cast::<FaceState>())?;
+    // SAFETY: `state` is owned by the live face for the duration of this scalar copy.
+    let state = unsafe { state.as_ref() };
+    Some(state.inner.memory_stream_record())
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1692,6 +2106,15 @@ pub struct AbiOutlineGlyphSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiBitmapGlyphSnapshot {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: AbiBitmapSnapshot,
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_get_outline_glyph_from_face(face: FT_Face) -> Result<FT_Glyph, FT_Error> {
     let Some(slot) = abi_glyph_slot(face) else {
         return Err(rust_ffi::FT_Err_Invalid_Slot_Handle as FT_Error);
@@ -1714,6 +2137,27 @@ pub fn abi_outline_glyph_snapshot(glyph: FT_Glyph) -> Option<AbiOutlineGlyphSnap
         advance: owned.record.root.advance,
         outline: owned.core.outline.clone(),
         cbox,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_bitmap_glyph_snapshot(glyph: FT_Glyph) -> Option<AbiBitmapGlyphSnapshot> {
+    let owned = owned_bitmap_glyph_from_root(glyph)?;
+    Some(AbiBitmapGlyphSnapshot {
+        root: owned.record.root,
+        left: owned.record.left,
+        top: owned.record.top,
+        bitmap: AbiBitmapSnapshot {
+            rows: owned.record.bitmap.rows,
+            width: owned.record.bitmap.width,
+            pitch: owned.record.bitmap.pitch,
+            num_grays: owned.record.bitmap.num_grays,
+            pixel_mode: owned.record.bitmap.pixel_mode,
+            left: owned.record.left,
+            top: owned.record.top,
+            owns_bitmap: true,
+            buffer: owned.buffer.to_vec(),
+        },
     })
 }
 
@@ -2019,10 +2463,40 @@ pub fn abi_sfnt_vhea(face: FT_Face) -> Option<TT_VertHeader> {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_sfnt_maxp(face: FT_Face) -> Option<TT_MaxProfile> {
+    let table = FT_Get_Sfnt_Table(face, rust_ffi::FT_SFNT_MAXP as FT_Sfnt_Tag);
+    let table = NonNull::new(table.cast::<rust_ffi::TT_MaxProfile>())?;
+    // SAFETY: `FT_Get_Sfnt_Table` returned a live face-owned `TT_MaxProfile` pointer.
+    let maxp = unsafe { table.as_ref() };
+    Some(TT_MaxProfile {
+        version: maxp.version,
+        numGlyphs: maxp.numGlyphs,
+        maxPoints: maxp.maxPoints,
+        maxContours: maxp.maxContours,
+        maxCompositePoints: maxp.maxCompositePoints,
+        maxCompositeContours: maxp.maxCompositeContours,
+        maxZones: maxp.maxZones,
+        maxTwilightPoints: maxp.maxTwilightPoints,
+        maxStorage: maxp.maxStorage,
+        maxFunctionDefs: maxp.maxFunctionDefs,
+        maxInstructionDefs: maxp.maxInstructionDefs,
+        maxStackElements: maxp.maxStackElements,
+        maxSizeOfInstructions: maxp.maxSizeOfInstructions,
+        maxComponentElements: maxp.maxComponentElements,
+        maxComponentDepth: maxp.maxComponentDepth,
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
 fn abi_glyph_slot(face: FT_Face) -> Option<NonNull<FT_GlyphSlotRec>> {
     let face = NonNull::new(face)?;
     // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
     NonNull::new(unsafe { (*face.as_ptr()).glyph })
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_glyph_slot_pointer(face: FT_Face) -> Option<FT_GlyphSlot> {
+    abi_glyph_slot(face).map(NonNull::as_ptr)
 }
 
 #[unsafe(no_mangle)]
@@ -2505,6 +2979,77 @@ pub extern "C" fn FT_Add_Default_Modules(library: FT_Library) {
     rust_ffi::FT_Add_Default_Modules(library_mut(library));
 }
 
+fn module_name_from_abi(module_name: *const FT_String) -> Option<&'static str> {
+    if module_name.is_null() {
+        return None;
+    }
+    // SAFETY: `module_name` is a FreeType ABI C string pointer supplied by the
+    // caller.  The wrapper converts only recognized synthetic test names into
+    // safe static identifiers before delegating to the pure-Rust core.
+    let bytes = unsafe { CStr::from_ptr(module_name).to_bytes() };
+    match bytes {
+        b"fixture_minimal" => Some("fixture_minimal"),
+        b"fixture_renderer" => Some("fixture_renderer"),
+        b"fixture_styler" => Some("fixture_styler"),
+        b"fixture_upgrade" => Some("fixture_upgrade"),
+        b"fixture_future" => Some("fixture_future"),
+        _ => None,
+    }
+}
+
+fn module_class_info_from_abi(
+    clazz: *const FT_Module_Class,
+) -> Option<rust_ffi::FT_Module_Class_Info> {
+    let clazz = non_null(clazz.cast_mut())?;
+    // SAFETY: `clazz` is non-null and points to a readable FreeType module
+    // class record for the duration of this ABI call.
+    let clazz = unsafe { clazz.as_ref() };
+    Some(rust_ffi::FT_Module_Class_Info {
+        module_flags: clazz.module_flags,
+        module_size: clazz.module_size,
+        module_name: module_name_from_abi(clazz.module_name),
+        module_version: clazz.module_version,
+        module_requires: clazz.module_requires,
+        module_interface_present: !clazz.module_interface.is_null(),
+        module_init: if clazz.module_init.is_null() {
+            rust_ffi::FT_Module_Callback_Behavior::None
+        } else {
+            rust_ffi::FT_Module_Callback_Behavior::RecordThenOk
+        },
+        module_done: if clazz.module_done.is_null() {
+            rust_ffi::FT_Module_Callback_Behavior::None
+        } else {
+            rust_ffi::FT_Module_Callback_Behavior::RecordThenOk
+        },
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Add_Module(library: FT_Library, clazz: *const FT_Module_Class) -> FT_Error {
+    let info = module_class_info_from_abi(clazz);
+    rust_ffi::FT_Add_Module(library_mut(library), info.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Module(library: FT_Library, module_name: *const FT_String) -> FT_Module {
+    let Some(name) = module_name_from_abi(module_name) else {
+        return ptr::null_mut();
+    };
+    let Some(state) = library_state_mut(library) else {
+        return ptr::null_mut();
+    };
+    if rust_ffi::FT_Library_Has_Module(Some(&state.inner), name) {
+        if rust_ffi::FT_Library_Module_Flags(Some(&state.inner), name)
+            .is_some_and(|flags| flags & rust_ffi::FT_MODULE_RENDERER as FT_ULong != 0)
+        {
+            return (&mut state.synthetic_renderer as *mut FT_RendererRec).cast::<FT_ModuleRec>();
+        }
+        (&mut *state.synthetic_module_handle) as *mut FT_ModuleRec
+    } else {
+        ptr::null_mut()
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Set_Debug_Hook(
     library: FT_Library,
@@ -2540,11 +3085,83 @@ pub fn abi_support_library_module_flags(library: FT_Library, name: &str) -> Opti
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_library_module_count(library: FT_Library) -> usize {
+    rust_ffi::FT_Library_Module_Count(library_ref(library))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_synthetic_module_info(
+    library: FT_Library,
+    name: &str,
+) -> Option<rust_ffi::FT_Installed_Module_Info> {
+    rust_ffi::FT_Library_Synthetic_Module_Info(library_ref(library), name)
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_library_renderer_class(
     library: FT_Library,
     format: FT_Glyph_Format,
 ) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
     rust_ffi::FT_Library_Renderer_Class(library_ref(library), format)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Renderer(library: FT_Library, format: FT_Glyph_Format) -> FT_Renderer {
+    let Some(state) = library_state_mut(library) else {
+        return ptr::null_mut();
+    };
+    let Some((module_name, glyph_format, _, _)) =
+        rust_ffi::FT_Library_Renderer_Class(Some(&state.inner), format)
+    else {
+        return ptr::null_mut();
+    };
+    if glyph_format == state.outline_renderer.format
+        && module_name == state.outline_renderer.module_name
+    {
+        &mut state.outline_renderer
+    } else if glyph_format == state.synthetic_renderer.format
+        && module_name == state.synthetic_renderer.module_name
+    {
+        &mut state.synthetic_renderer
+    } else {
+        ptr::null_mut()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Renderer(
+    library: FT_Library,
+    renderer: FT_Renderer,
+    num_params: FT_UInt,
+    parameters: *mut FT_Parameter,
+) -> FT_Error {
+    let Some(state) = library_state_mut(library) else {
+        return rust_ffi::FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(renderer) = non_null_mut(renderer) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    if num_params != 0 && parameters.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let owned_renderer = &mut state.outline_renderer as *mut FT_RendererRec;
+    let synthetic_renderer = &mut state.synthetic_renderer as *mut FT_RendererRec;
+    let renderer_name = if renderer.as_ptr() == owned_renderer {
+        state.outline_renderer.module_name
+    } else if renderer.as_ptr() == synthetic_renderer {
+        state.synthetic_renderer.module_name
+    } else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` performs raw list
+    // membership validation in the ABI layer, then updates the library's
+    // current outline renderer.  Parameter callbacks are not used by the
+    // default smooth renderer for this no-parameter parity route.
+    rust_ffi::FT_Library_Set_Renderer_By_Format(
+        Some(&mut state.inner),
+        rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+        renderer_name,
+    )
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -2889,6 +3506,33 @@ pub extern "C" fn FT_Open_Face(
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Attach_Stream(face: FT_Face, parameters: *const FT_Open_Args) -> FT_Error {
+    let Some(state) = face_state_mut(face) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(parameters) = non_null(parameters) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `parameters` is non-null and read-only for this call.
+    let parameters = unsafe { parameters.as_ref() };
+    let source_flags = parameters.flags
+        & ((rust_ffi::FT_OPEN_MEMORY | rust_ffi::FT_OPEN_STREAM | rust_ffi::FT_OPEN_PATHNAME)
+            as FT_UInt);
+    if source_flags != rust_ffi::FT_OPEN_MEMORY as FT_UInt {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    if parameters.memory_base.is_null() || parameters.memory_size < 0 {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Ok(len) = usize::try_from(parameters.memory_size) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `memory_base` is non-null and `memory_size` bytes are readable.
+    let data = unsafe { slice::from_raw_parts(parameters.memory_base, len) };
+    rust_ffi::FT_Attach_Stream(Some(&mut state.inner), Some(data))
+}
+
 fn open_face_name_options(args: &FT_Open_Args) -> rust_ffi::FT_Open_Face_Name_Options {
     let mut options = rust_ffi::FT_Open_Face_Name_Options::default();
     if args.num_params <= 0 || args.params.is_null() {
@@ -3181,6 +3825,23 @@ fn c_glyph_cbox_snapshot(glyph: FT_Glyph) -> Option<rust_ffi::FT_GlyphCBoxSnapsh
             cbox: Some(cbox),
         });
     }
+    if root.clazz == owned_bitmap_glyph_class() {
+        let owned = owned_bitmap_glyph_from_root(glyph.as_ptr())?;
+        let x_min = i64::from(owned.record.left).saturating_mul(64);
+        let y_max = i64::from(owned.record.top).saturating_mul(64);
+        let x_max = x_min.saturating_add(i64::from(owned.record.bitmap.width).saturating_mul(64));
+        let y_min = y_max.saturating_sub(i64::from(owned.record.bitmap.rows).saturating_mul(64));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(rust_ffi::FT_BBox {
+                xMin: x_min,
+                yMin: y_min,
+                xMax: x_max,
+                yMax: y_max,
+            }),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  The wrapper reads the public-sized
     // class facade to observe whether `glyph_bbox` is present, then delegates
     // the zero/no-bbox behavior to safe Rust.
@@ -3226,10 +3887,15 @@ pub extern "C" fn FT_Get_Glyph(slot: FT_GlyphSlot, aglyph: *mut FT_Glyph) -> FT_
     // SAFETY: `slot` is a live slot allocated by this wrapper.  Successful
     // glyph creation copies the private Rust slot payload into an owned glyph.
     let slot = unsafe { slot.as_ref() };
-    match rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot)) {
-        Ok(core) => {
-            let glyph = Box::new(OwnedOutlineGlyph::new(core));
-            let glyph = Box::into_raw(glyph).cast::<FT_GlyphRec>();
+    let glyph_result = if slot.rust_slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP {
+        rust_ffi::FT_Get_Bitmap_Glyph(Some(&slot.rust_slot))
+            .map(|core| Box::into_raw(Box::new(OwnedBitmapGlyph::new(core))).cast::<FT_GlyphRec>())
+    } else {
+        rust_ffi::FT_Get_Outline_Glyph(Some(&slot.rust_slot))
+            .map(|core| Box::into_raw(Box::new(OwnedOutlineGlyph::new(core))).cast::<FT_GlyphRec>())
+    };
+    match glyph_result {
+        Ok(glyph) => {
             // SAFETY: `out` is non-null and points to caller-provided output storage.
             unsafe { *out.as_ptr() = glyph };
             rust_ffi::FT_Err_Ok
@@ -3252,6 +3918,30 @@ pub extern "C" fn FT_Glyph_Copy(source: FT_Glyph, target: *mut FT_Glyph) -> FT_E
         unsafe { !(*source).clazz.is_null() }
     };
     let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = owned_outline_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Outline_Glyph_Copy(&source.core);
+        let copy = Box::into_raw(Box::new(OwnedOutlineGlyph::new(copy))).cast::<FT_GlyphRec>();
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = copy;
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = owned_bitmap_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Bitmap_Glyph_Copy(&source.core);
+        let copy = Box::into_raw(Box::new(OwnedBitmapGlyph::new(copy))).cast::<FT_GlyphRec>();
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = copy;
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
     if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
         // SAFETY: `target` is non-null and points to caller-provided output storage.
         unsafe {
@@ -3267,6 +3957,12 @@ pub extern "C" fn FT_Done_Glyph(glyph: FT_Glyph) {
         // SAFETY: the class sentinel proves this pointer came from
         // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
         unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+        return;
+    }
+    if owned_bitmap_glyph_from_root(glyph).is_some() {
+        // SAFETY: the class sentinel proves this pointer came from
+        // `Box<OwnedBitmapGlyph>` in `FT_Get_Glyph`.
+        unsafe { drop(Box::from_raw(glyph.cast::<OwnedBitmapGlyph>())) };
         return;
     }
     rust_ffi::FT_Done_Glyph(!glyph.is_null());
@@ -3321,10 +4017,42 @@ pub extern "C" fn FT_Glyph_Transform(
 #[unsafe(no_mangle)]
 pub extern "C" fn FT_Glyph_To_Bitmap(
     the_glyph: *mut FT_Glyph,
-    _render_mode: FT_Render_Mode,
-    _origin: *const FT_Vector,
-    _destroy: FT_Bool,
+    render_mode: FT_Render_Mode,
+    origin: *const FT_Vector,
+    destroy: FT_Bool,
 ) -> FT_Error {
+    if !the_glyph.is_null() {
+        // SAFETY: `the_glyph` is non-null and points to caller-owned handle
+        // storage.  We only copy the handle value before validating the glyph.
+        let glyph = unsafe { *the_glyph };
+        if owned_bitmap_glyph_from_root(glyph).is_some() {
+            // FreeType `src/base/ftglyph.c:794-795` returns success without
+            // replacing or freeing an already-bitmap glyph.
+            return rust_ffi::FT_Err_Ok;
+        }
+        if let Some(owned) = owned_outline_glyph_from_root(glyph) {
+            if !origin.is_null() {
+                return rust_ffi::FT_Err_Unimplemented_Feature;
+            }
+            let bitmap = match rust_ffi::FT_Outline_Glyph_To_Bitmap(&owned.core, render_mode) {
+                Ok(bitmap) => bitmap,
+                Err(error) => return error,
+            };
+            let bitmap =
+                Box::into_raw(Box::new(OwnedBitmapGlyph::new(bitmap))).cast::<FT_GlyphRec>();
+            if destroy != 0 {
+                // SAFETY: the class sentinel proves this pointer came from
+                // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
+                unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+            }
+            // SAFETY: `the_glyph` is non-null and points to caller-provided
+            // handle storage.  C FreeType replaces it after successful render.
+            unsafe {
+                *the_glyph = bitmap;
+            }
+            return rust_ffi::FT_Err_Ok;
+        }
+    }
     let (glyph_present, library_present, class_present, prepare_hook_present) =
         if the_glyph.is_null() {
             (false, false, false, false)
@@ -3686,6 +4414,22 @@ pub extern "C" fn FT_Outline_GetOutsideBorder(outline: *const FT_Outline) -> FT_
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_New(library: FT_Library, astroker: *mut FT_Stroker) -> FT_Error {
+    let Some(out) = non_null_mut(astroker) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let mut stroker = ptr::null_mut();
+    let err = rust_ffi::FT_Stroker_New(library_ref(library), Some(&mut stroker));
+    if err == rust_ffi::FT_Err_Ok {
+        // SAFETY: `out` is non-null and points to caller-provided output storage.
+        unsafe {
+            *out.as_ptr() = stroker;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Set(
     stroker: FT_Stroker,
     radius: FT_Fixed,
@@ -3702,8 +4446,175 @@ pub extern "C" fn FT_Stroker_Rewind(stroker: FT_Stroker) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_BeginSubPath(
+    stroker: FT_Stroker,
+    to: *const FT_Vector,
+    open: FT_Bool,
+) -> FT_Error {
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_BeginSubPath(stroker, rust_to.as_ref(), open)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ParseOutline(
+    stroker: FT_Stroker,
+    outline: *const FT_Outline,
+    opened: FT_Bool,
+) -> FT_Error {
+    let snapshot = outline_snapshot_from_c(outline);
+    rust_ffi::FT_Stroker_ParseOutline(stroker, snapshot.as_ref(), opened)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_LineTo(stroker: FT_Stroker, to: *const FT_Vector) -> FT_Error {
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_LineTo(stroker, rust_to.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ConicTo(
+    stroker: FT_Stroker,
+    control: *const FT_Vector,
+    to: *const FT_Vector,
+) -> FT_Error {
+    let rust_control = if control.is_null() {
+        None
+    } else {
+        // SAFETY: `control` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control = unsafe { &*control };
+        Some(rust_ffi::FT_Vector {
+            x: control.x,
+            y: control.y,
+        })
+    };
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_ConicTo(stroker, rust_control.as_ref(), rust_to.as_ref())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_CubicTo(
+    stroker: FT_Stroker,
+    control1: *const FT_Vector,
+    control2: *const FT_Vector,
+    to: *const FT_Vector,
+) -> FT_Error {
+    let rust_control1 = if control1.is_null() {
+        None
+    } else {
+        // SAFETY: `control1` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control1 = unsafe { &*control1 };
+        Some(rust_ffi::FT_Vector {
+            x: control1.x,
+            y: control1.y,
+        })
+    };
+    let rust_control2 = if control2.is_null() {
+        None
+    } else {
+        // SAFETY: `control2` is non-null and points to a C ABI `FT_Vector` for
+        // the duration of this thin forwarding call.
+        let control2 = unsafe { &*control2 };
+        Some(rust_ffi::FT_Vector {
+            x: control2.x,
+            y: control2.y,
+        })
+    };
+    let rust_to = if to.is_null() {
+        None
+    } else {
+        // SAFETY: `to` is non-null and points to a C ABI `FT_Vector` for the
+        // duration of this thin forwarding call.
+        let to = unsafe { &*to };
+        Some(rust_ffi::FT_Vector { x: to.x, y: to.y })
+    };
+    rust_ffi::FT_Stroker_CubicTo(
+        stroker,
+        rust_control1.as_ref(),
+        rust_control2.as_ref(),
+        rust_to.as_ref(),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
+    rust_ffi::FT_Stroker_EndSubPath(stroker)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_GetBorderCounts(
+    stroker: FT_Stroker,
+    border: FT_StrokerBorder,
+    anum_points: *mut FT_UInt,
+    anum_contours: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: The optional output pointers, when non-null, are caller-owned
+    // `FT_UInt` records valid for the duration of this C ABI call.
+    let points = unsafe { anum_points.as_mut() };
+    let contours = unsafe { anum_contours.as_mut() };
+    rust_ffi::FT_Stroker_GetBorderCounts(stroker, border, points, contours)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_GetCounts(
+    stroker: FT_Stroker,
+    anum_points: *mut FT_UInt,
+    anum_contours: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: The optional output pointers, when non-null, are caller-owned
+    // `FT_UInt` records valid for the duration of this C ABI call.
+    let points = unsafe { anum_points.as_mut() };
+    let contours = unsafe { anum_contours.as_mut() };
+    rust_ffi::FT_Stroker_GetCounts(stroker, points, contours)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Stroker_Done(stroker: FT_Stroker) {
     rust_ffi::FT_Stroker_Done(stroker);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_ExportBorder(
+    stroker: FT_Stroker,
+    border: FT_StrokerBorder,
+    outline: *mut FT_Outline,
+) {
+    let mut snapshot = outline_snapshot_from_c(outline).unwrap_or_default();
+    rust_ffi::FT_Stroker_ExportBorder(
+        stroker,
+        border,
+        (!outline.is_null()).then_some(&mut snapshot),
+    );
+    copy_outline_snapshot_to_c(outline, &snapshot, true);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Stroker_Export(stroker: FT_Stroker, outline: *mut FT_Outline) {
+    let mut snapshot = outline_snapshot_from_c(outline).unwrap_or_default();
+    rust_ffi::FT_Stroker_Export(stroker, (!outline.is_null()).then_some(&mut snapshot));
+    copy_outline_snapshot_to_c(outline, &snapshot, true);
 }
 
 #[unsafe(no_mangle)]
@@ -3887,6 +4798,44 @@ pub extern "C" fn FT_Set_Pixel_Sizes(
         update_size_metrics(face, &state.inner);
     }
     error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Set_Transform(
+    face: FT_Face,
+    matrix: *const FT_Matrix,
+    delta: *const FT_Vector,
+) {
+    let Some(state) = face_state_mut(face) else {
+        return;
+    };
+    let rust_matrix = if matrix.is_null() {
+        None
+    } else {
+        // SAFETY: `matrix` is non-null and points to a C ABI `FT_Matrix`.
+        let matrix = unsafe { *matrix };
+        Some(rust_ffi::FT_Matrix {
+            xx: matrix.xx,
+            xy: matrix.xy,
+            yx: matrix.yx,
+            yy: matrix.yy,
+        })
+    };
+    let rust_delta = if delta.is_null() {
+        None
+    } else {
+        // SAFETY: `delta` is non-null and points to a C ABI `FT_Vector`.
+        let delta = unsafe { *delta };
+        Some(rust_ffi::FT_Vector {
+            x: delta.x,
+            y: delta.y,
+        })
+    };
+    rust_ffi::FT_Set_Transform(
+        Some(&mut state.inner),
+        rust_matrix.as_ref(),
+        rust_delta.as_ref(),
+    );
 }
 
 #[unsafe(no_mangle)]
@@ -4571,6 +5520,55 @@ pub extern "C" fn FT_Get_BDF_Charset_ID(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_Is_Internally_CID_Keyed(
+    face: FT_Face,
+    is_cid: *mut FT_Bool,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the output pointer or
+    // null, matching FreeType's nullable output contract.
+    let is_cid = unsafe { is_cid.as_mut() };
+    rust_ffi::FT_Get_CID_Is_Internally_CID_Keyed(face_state(face).map(|state| &state.inner), is_cid)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_From_Glyph_Index(
+    face: FT_Face,
+    glyph_index: FT_UInt,
+    cid: *mut FT_UInt,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for the output pointer or
+    // null, matching FreeType's nullable output contract.
+    let cid = unsafe { cid.as_mut() };
+    rust_ffi::FT_Get_CID_From_Glyph_Index(
+        face_state(face).map(|state| &state.inner),
+        glyph_index,
+        cid,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_CID_Registry_Ordering_Supplement(
+    face: FT_Face,
+    registry: *mut *const c_char,
+    ordering: *mut *const c_char,
+    supplement: *mut FT_Int,
+) -> FT_Error {
+    // SAFETY: the caller provides writable storage for each output pointer or
+    // null, matching FreeType's nullable output contract.
+    let registry = unsafe { registry.as_mut() };
+    // SAFETY: same as above for ordering.
+    let ordering = unsafe { ordering.as_mut() };
+    // SAFETY: same as above for supplement.
+    let supplement = unsafe { supplement.as_mut() };
+    rust_ffi::FT_Get_CID_Registry_Ordering_Supplement(
+        face_state(face).map(|state| &state.inner),
+        registry,
+        ordering,
+        supplement,
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Get_Sfnt_Name_Count(face: FT_Face) -> FT_UInt {
     rust_ffi::FT_Get_Sfnt_Name_Count(face_state(face).map(|state| &state.inner))
 }
@@ -4601,6 +5599,30 @@ pub extern "C" fn FT_Get_Sfnt_Name(
                 string: name.string,
                 string_len: name.string_len,
             };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn FT_Get_Track_Kerning(
+    face: FT_Face,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: *mut FT_Fixed,
+) -> FT_Error {
+    let mut kerning = 0;
+    let output = non_null_mut(akerning);
+    let error = rust_ffi::FT_Get_Track_Kerning(
+        face_state(face).map(|state| &state.inner),
+        point_size,
+        degree,
+        output.map(|_| &mut kerning),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        if let Some(output) = output {
+            // SAFETY: `akerning` was checked for null and points to writable caller storage.
+            unsafe { *output.as_ptr() = kerning };
         }
     }
     error
@@ -5050,6 +6072,7 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..rust_ffi::FT_FaceRecPublic::default()
     }
 }
@@ -5186,10 +6209,14 @@ fn copy_outline_snapshot_to_c(
     // SAFETY: `outline` is non-null and still refers to the caller-owned
     // descriptor used to create `snapshot`.
     let outline = unsafe { outline.as_mut() };
+    let snapshot_points = snapshot.points.len();
+    let snapshot_contours = snapshot.contours.len();
     if !outline.points.is_null() {
-        // SAFETY: the public descriptor promises `n_points` writable vectors.
-        let points =
-            unsafe { slice::from_raw_parts_mut(outline.points, usize::from(outline.n_points)) };
+        // SAFETY: the public descriptor is caller-owned and FreeType export
+        // APIs require enough capacity for the counts returned by
+        // FT_Stroker_GetCounts/FT_Stroker_GetBorderCounts.  Thin C ABI code
+        // only copies core output into that caller-provided storage.
+        let points = unsafe { slice::from_raw_parts_mut(outline.points, snapshot_points) };
         for (target, source) in points.iter_mut().zip(&snapshot.points) {
             target.x = source.x;
             target.y = source.y;
@@ -5197,13 +6224,22 @@ fn copy_outline_snapshot_to_c(
     }
     if copy_tags_and_flags {
         if !outline.tags.is_null() {
-            // SAFETY: the public descriptor promises `n_points` writable tag bytes.
-            let tags =
-                unsafe { slice::from_raw_parts_mut(outline.tags, usize::from(outline.n_points)) };
+            // SAFETY: see the points copy above.
+            let tags = unsafe { slice::from_raw_parts_mut(outline.tags, snapshot_points) };
             for (target, source) in tags.iter_mut().zip(&snapshot.tags) {
                 *target = *source;
             }
         }
+        if !outline.contours.is_null() {
+            // SAFETY: see the points copy above.
+            let contours =
+                unsafe { slice::from_raw_parts_mut(outline.contours, snapshot_contours) };
+            for (target, source) in contours.iter_mut().zip(&snapshot.contours) {
+                *target = *source;
+            }
+        }
+        outline.n_points = u16::try_from(snapshot_points).unwrap_or(u16::MAX);
+        outline.n_contours = u16::try_from(snapshot_contours).unwrap_or(u16::MAX);
         outline.flags = snapshot.flags;
     }
 }
@@ -5299,6 +6335,15 @@ fn library_ref(library: FT_Library) -> Option<&'static rust_ffi::FT_Library> {
         // SAFETY: `internal` points to a `LibraryState` allocated by this crate.
         Some(unsafe { &(*internal.cast::<LibraryState>()).inner })
     }
+}
+
+fn library_state_mut(library: FT_Library) -> Option<&'static mut LibraryState> {
+    let library = non_null_mut(library)?;
+    // SAFETY: `library` is non-null and must have been allocated by `FT_Init_FreeType`.
+    let internal = unsafe { (*library.as_ptr()).internal };
+    let mut state = NonNull::new(internal.cast::<LibraryState>())?;
+    // SAFETY: `internal` points to a uniquely borrowed `LibraryState`.
+    Some(unsafe { state.as_mut() })
 }
 
 fn library_mut(library: FT_Library) -> Option<&'static mut rust_ffi::FT_Library> {

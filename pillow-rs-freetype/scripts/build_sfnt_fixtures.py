@@ -160,6 +160,21 @@ def write_missing_hmtx() -> None:
     save_generated_font("missing-hmtx.ttf", font)
 
 
+def write_malformed_maxp() -> None:
+    # These files back `tttables.TT_MaxProfile.malformed_table_error_source`.
+    # The previous fixture paths were DejaVuSans symlinks, which made the row a
+    # green placeholder.  Keep both as complete SFNT wrappers with deliberately
+    # malformed `maxp` payloads so pinned C FreeType and Rust observe the same
+    # malformed table input before route promotion is considered.
+    truncated = base_font()
+    truncated["maxp"] = raw_table("maxp", b"\x00\x01\x00\x00")
+    save_font("truncated-maxp.ttf", truncated)
+
+    invalid = base_font()
+    invalid["maxp"] = raw_table("maxp", b"\x00\x01\x00\x00\x00\x02\x00\x01")
+    save_font("invalid-maxp.ttf", invalid)
+
+
 def write_recognized_broken_sfnt() -> None:
     # FreeType's SFNT driver recognizes the 0x00010000 scaler type before it
     # validates the table directory.  A directory declaring zero tables reaches
@@ -190,6 +205,7 @@ def main() -> None:
     write_vertical_present()
     write_no_os2()
     write_missing_hmtx()
+    write_malformed_maxp()
     write_recognized_broken_sfnt()
     write_ttc_count_overflow()
 

@@ -29,6 +29,14 @@ pub type FT_Short = i16;
 pub type FT_UShort = u16;
 pub type FT_Byte = u8;
 pub type FT_Bytes = *const FT_Byte;
+pub type FT_LayerIterator = rust_ffi::FT_LayerIterator;
+pub type FT_ClipBox = rust_ffi::FT_ClipBox;
+pub type FT_ColorLine = rust_ffi::FT_ColorLine;
+pub type FT_ColorStop = rust_ffi::FT_ColorStop;
+pub type FT_ColorStopIterator = rust_ffi::FT_ColorStopIterator;
+pub type FT_Matrix = rust_ffi::FT_Matrix;
+pub type FT_PaintTransform = rust_ffi::FT_PaintTransform;
+pub type FT_Vector = rust_ffi::FT_Vector;
 pub type FT_Size_Request_Type = i32;
 pub type FT_Encoding = i32;
 pub type FT_LcdFilter = i32;
@@ -304,6 +312,16 @@ pub struct FontdoneWasmBdfCharset {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmCidRos {
+    pub registry: *const FT_Byte,
+    pub registry_len: FT_UInt,
+    pub ordering: *const FT_Byte,
+    pub ordering_len: FT_UInt,
+    pub supplement: FT_Int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct FontdoneWasmOutline {
     pub n_contours: FT_UShort,
     pub n_points: FT_UShort,
@@ -332,6 +350,15 @@ pub struct FontdoneWasmGlyph {
 pub struct FontdoneWasmOutlineGlyph {
     pub root: FontdoneWasmGlyph,
     pub outline: FontdoneWasmOutline,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmBitmapGlyph {
+    pub root: FontdoneWasmGlyph,
+    pub left: i32,
+    pub top: i32,
+    pub bitmap: FontdoneWasmBitmap,
 }
 
 #[repr(C)]
@@ -386,9 +413,62 @@ impl WasmOwnedOutlineGlyph {
     }
 }
 
+#[repr(C)]
+struct WasmOwnedBitmapGlyph {
+    record: FontdoneWasmBitmapGlyph,
+    core: rust_ffi::FT_BitmapGlyphOwned,
+    buffer: Box<[FT_Byte]>,
+}
+
+impl WasmOwnedBitmapGlyph {
+    fn new(core: rust_ffi::FT_BitmapGlyphOwned) -> Self {
+        let mut glyph = Self {
+            record: FontdoneWasmBitmapGlyph {
+                root: wasm_glyph_root_from_core_with_class(
+                    &core.root,
+                    wasm_owned_bitmap_glyph_class(),
+                ),
+                left: core.left,
+                top: core.top,
+                bitmap: FontdoneWasmBitmap::default(),
+            },
+            core,
+            buffer: Box::new([]),
+        };
+        glyph.refresh_record();
+        glyph
+    }
+
+    fn refresh_record(&mut self) {
+        self.record.root =
+            wasm_glyph_root_from_core_with_class(&self.core.root, wasm_owned_bitmap_glyph_class());
+        self.record.left = self.core.left;
+        self.record.top = self.core.top;
+        self.buffer = self.core.bitmap.buffer.clone().into_boxed_slice();
+        self.record.bitmap = FontdoneWasmBitmap {
+            rows: self.core.bitmap.rows,
+            width: self.core.bitmap.width,
+            pitch: self.core.bitmap.pitch,
+            buffer: self.buffer.as_ptr(),
+            buffer_len: self.buffer.len(),
+            num_grays: self.core.bitmap.num_grays,
+            pixel_mode: self.core.bitmap.pixel_mode,
+            palette_mode: 0,
+            palette: ptr::null(),
+        };
+    }
+}
+
 fn wasm_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FontdoneWasmGlyph {
+    wasm_glyph_root_from_core_with_class(root, wasm_owned_outline_glyph_class())
+}
+
+fn wasm_glyph_root_from_core_with_class(
+    root: &rust_ffi::FT_GlyphRec,
+    clazz: *const FontdoneWasmGlyphClass,
+) -> FontdoneWasmGlyph {
     FontdoneWasmGlyph {
-        clazz: wasm_owned_outline_glyph_class(),
+        clazz,
         format: root.format,
         advance: FontdoneWasmVector {
             x: root.advance.x,
@@ -398,12 +478,19 @@ fn wasm_glyph_root_from_core(root: &rust_ffi::FT_GlyphRec) -> FontdoneWasmGlyph 
 }
 
 static WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER: u8 = 0;
+static WASM_OWNED_BITMAP_GLYPH_CLASS_MARKER: u8 = 0;
 
 fn wasm_owned_outline_glyph_class() -> *const FontdoneWasmGlyphClass {
     // Private marker used only for pointer identity.  It is never dereferenced
     // as `FontdoneWasmGlyphClass`; caller-owned facades still use the public
     // class-record path.
     ptr::addr_of!(WASM_OWNED_OUTLINE_GLYPH_CLASS_MARKER).cast::<FontdoneWasmGlyphClass>()
+}
+
+fn wasm_owned_bitmap_glyph_class() -> *const FontdoneWasmGlyphClass {
+    // Private marker used only for pointer identity.  It is never dereferenced
+    // as `FontdoneWasmGlyphClass`.
+    ptr::addr_of!(WASM_OWNED_BITMAP_GLYPH_CLASS_MARKER).cast::<FontdoneWasmGlyphClass>()
 }
 
 fn wasm_owned_outline_glyph_from_root(
@@ -430,6 +517,19 @@ fn wasm_owned_outline_glyph_from_root_mut(
     // `Box<WasmOwnedOutlineGlyph>` records, whose first field starts with the
     // public `FontdoneWasmGlyph` root.
     Some(unsafe { &mut *glyph.cast::<WasmOwnedOutlineGlyph>() })
+}
+
+fn wasm_owned_bitmap_glyph_from_root(
+    glyph: *const FontdoneWasmGlyph,
+) -> Option<&'static WasmOwnedBitmapGlyph> {
+    let glyph = unsafe { glyph.as_ref() }?;
+    if glyph.clazz != wasm_owned_bitmap_glyph_class() {
+        return None;
+    }
+    // SAFETY: this private class marker is assigned only to
+    // `Box<WasmOwnedBitmapGlyph>` records, whose first field starts with the
+    // public `FontdoneWasmGlyph` root.
+    Some(unsafe { &*ptr::from_ref(glyph).cast::<WasmOwnedBitmapGlyph>() })
 }
 
 #[repr(C)]
@@ -498,6 +598,13 @@ pub struct FontdoneWasmPaletteData {
     pub num_palette_entries: FT_UShort,
     pub palette_entry_name_ids: *const FT_UShort,
 }
+
+pub type FT_OpaquePaint = rust_ffi::FT_OpaquePaint;
+pub type FT_ColorIndex = rust_ffi::FT_ColorIndex;
+pub type FT_PaintSolid = rust_ffi::FT_PaintSolid;
+pub type FT_PaintGlyph = rust_ffi::FT_PaintGlyph;
+pub type FT_PaintComposite = rust_ffi::FT_PaintComposite;
+pub type FT_COLR_Paint = rust_ffi::FT_COLR_Paint;
 
 fn wasm_color_to_rust(color: FontdoneWasmColor) -> rust_ffi::FT_Color {
     rust_ffi::FT_Color {
@@ -1059,6 +1166,132 @@ pub extern "C" fn fontdone_wasm_palette_set_foreground_color(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_layer(
+    handle: usize,
+    base_glyph: FT_UInt,
+    aglyph_index: *mut FT_UInt,
+    acolor_index: *mut FT_UInt,
+    iterator: *mut FT_LayerIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Layer(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        unsafe { aglyph_index.as_mut() },
+        unsafe { acolor_index.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_clipbox(
+    handle: usize,
+    base_glyph: FT_UInt,
+    clip_box: *mut FT_ClipBox,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_ClipBox(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        unsafe { clip_box.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_color_glyph_paint(
+    handle: usize,
+    base_glyph: FT_UInt,
+    root_transform: FT_UInt,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Color_Glyph_Paint(
+        face_ref(handle).map(|face| &face.face),
+        base_glyph,
+        root_transform,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_paint(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+    paint: *mut FT_COLR_Paint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint(
+        face_ref(handle).map(|face| &face.face),
+        opaque_paint,
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_paint_layers(
+    handle: usize,
+    layer_iterator: *mut FT_LayerIterator,
+    paint: *mut FT_OpaquePaint,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Paint_Layers(
+        face_ref(handle).map(|face| &face.face),
+        unsafe { layer_iterator.as_mut() },
+        unsafe { paint.as_mut() },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_colorline_stops(
+    handle: usize,
+    color_stop: *mut FT_ColorStop,
+    iterator: *mut FT_ColorStopIterator,
+) -> FT_Bool {
+    rust_ffi::FT_Get_Colorline_Stops(
+        face_ref(handle).map(|face| &face.face),
+        unsafe { color_stop.as_mut() },
+        unsafe { iterator.as_mut() },
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_layer_iterator(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    rust_ffi::FT_ColrV1_Paint_Layer_Iterator_Copy(
+        face_ref(handle).map(|face| &face.face),
+        opaque_paint,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_colorline(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    rust_ffi::FT_ColrV1_Paint_ColorLine_Copy(face_ref(handle).map(|face| &face.face), opaque_paint)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_transform(
+    handle: usize,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    rust_ffi::FT_ColrV1_Paint_Transform_Copy(face_ref(handle).map(|face| &face.face), opaque_paint)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_paint_graph(
+    handle: usize,
+) -> Option<rust_ffi::FT_ColrV1_PaintGraph_Snapshot> {
+    rust_ffi::FT_ColrV1_PaintGraph_Copy(face_ref(handle).map(|face| &face.face))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_colr_v1_public_paint_solid(
+    handle: usize,
+    glyph_index: FT_UInt,
+) -> rust_ffi::FT_ColrV1_PublicPaintSolid_Snapshot {
+    rust_ffi::FT_ColrV1_PublicPaintSolid_Copy(face_ref(handle).map(|face| &face.face), glyph_index)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_truetype_gx_free(handle: usize, table: FT_Bytes) {
     rust_ffi::FT_TrueTypeGX_Free(face_ref(handle).map(|face| &face.face), table);
 }
@@ -1066,6 +1299,25 @@ pub extern "C" fn fontdone_wasm_truetype_gx_free(handle: usize, table: FT_Bytes)
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_classic_kern_free(handle: usize, table: FT_Bytes) {
     rust_ffi::FT_ClassicKern_Free(face_ref(handle).map(|face| &face.face), table);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_classic_kern_validate(
+    handle: usize,
+    validation_flags: FT_UInt,
+    ckern_table: *mut FT_Bytes,
+) -> FT_Error {
+    let face = face_ref(handle).map(|face| &face.face);
+    let mut table = ptr::null();
+    let err = rust_ffi::FT_ClassicKern_Validate(
+        face,
+        validation_flags,
+        (!ckern_table.is_null()).then_some(&mut table),
+    );
+    if err == rust_ffi::FT_Err_Ok {
+        write_ft_bytes(ckern_table, table);
+    }
+    err
 }
 
 #[repr(C)]
@@ -1124,6 +1376,26 @@ pub struct FontdoneWasmVertHeader {
     pub number_Of_VMetrics: FT_UShort,
     pub long_metrics: FT_Pointer,
     pub short_metrics: FT_Pointer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FontdoneWasmMaxProfile {
+    pub version: FT_Fixed,
+    pub numGlyphs: FT_UShort,
+    pub maxPoints: FT_UShort,
+    pub maxContours: FT_UShort,
+    pub maxCompositePoints: FT_UShort,
+    pub maxCompositeContours: FT_UShort,
+    pub maxZones: FT_UShort,
+    pub maxTwilightPoints: FT_UShort,
+    pub maxStorage: FT_UShort,
+    pub maxFunctionDefs: FT_UShort,
+    pub maxInstructionDefs: FT_UShort,
+    pub maxStackElements: FT_UShort,
+    pub maxSizeOfInstructions: FT_UShort,
+    pub maxComponentElements: FT_UShort,
+    pub maxComponentDepth: FT_UShort,
 }
 
 #[repr(C)]
@@ -1323,6 +1595,15 @@ pub struct AbiOutlineGlyphSnapshot {
 }
 
 #[cfg(feature = "abi-test-support")]
+#[derive(Clone)]
+pub struct AbiBitmapGlyphSnapshot {
+    pub root: FontdoneWasmGlyph,
+    pub left: i32,
+    pub top: i32,
+    pub bitmap: AbiBitmapSnapshot,
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_outline_glyph_snapshot(glyph_handle: usize) -> Option<AbiOutlineGlyphSnapshot> {
     let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
     let owned = wasm_owned_outline_glyph_from_root(glyph)?;
@@ -1336,9 +1617,37 @@ pub fn abi_outline_glyph_snapshot(glyph_handle: usize) -> Option<AbiOutlineGlyph
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_bitmap_glyph_snapshot(glyph_handle: usize) -> Option<AbiBitmapGlyphSnapshot> {
+    let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
+    let owned = wasm_owned_bitmap_glyph_from_root(glyph)?;
+    Some(AbiBitmapGlyphSnapshot {
+        root: owned.record.root,
+        left: owned.record.left,
+        top: owned.record.top,
+        bitmap: AbiBitmapSnapshot {
+            rows: owned.record.bitmap.rows,
+            width: owned.record.bitmap.width,
+            pitch: owned.record.bitmap.pitch,
+            num_grays: owned.record.bitmap.num_grays,
+            pixel_mode: owned.record.bitmap.pixel_mode,
+            left: owned.record.left,
+            top: owned.record.top,
+            owns_bitmap: true,
+            buffer: owned.buffer.to_vec(),
+        },
+    })
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_face_info(handle: usize) -> Option<rust_ffi::FT_FaceRecPublic> {
     let face = face_ref(handle)?;
     Some(rust_face_info(&face.face))
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_face_stream_info(handle: usize) -> Option<rust_ffi::FT_StreamRec> {
+    let face = face_ref(handle)?;
+    Some(face.face.memory_stream_record())
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -1448,6 +1757,99 @@ pub extern "C" fn fontdone_wasm_free(ptr: *mut c_void, size: usize) {
     };
     // SAFETY: callers pass a pointer returned by `fontdone_wasm_malloc` with the same size.
     unsafe { dealloc(ptr.cast::<u8>(), layout) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_gzip_uncompress(
+    memory: FT_Memory,
+    output: *mut FT_Byte,
+    output_len: *mut FT_ULong,
+    input: *const FT_Byte,
+    input_len: FT_ULong,
+) -> FT_Error {
+    if memory.is_null() || output.is_null() || output_len.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Ok(input_len) = usize::try_from(input_len) else {
+        return rust_ffi::FT_Err_Invalid_Table;
+    };
+    // SAFETY: `output_len` is non-null and is exclusively borrowed for this
+    // synchronous WASM ABI call.
+    let output_len_ref = unsafe { &mut *output_len };
+    let Ok(output_capacity) = usize::try_from(*output_len_ref) else {
+        return rust_ffi::FT_Err_Array_Too_Large as FT_Error;
+    };
+    // SAFETY: `output` is non-null and `*output_len` is the caller-provided
+    // output capacity, matching the FreeType-shaped ABI.
+    let output_slice = unsafe { slice::from_raw_parts_mut(output, output_capacity) };
+    let input_slice = if input.is_null() {
+        None
+    } else {
+        // SAFETY: non-null `input` and `input_len` describe the caller-owned
+        // compressed bytes for this call.
+        Some(unsafe { slice::from_raw_parts(input, input_len) })
+    };
+    let memory_view = rust_ffi::FT_MemoryRec::default();
+    rust_ffi::FT_Gzip_Uncompress(
+        Some(&memory_view),
+        Some(output_slice),
+        Some(output_len_ref),
+        input_slice,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_stream_open_gzip(
+    stream: *mut rust_ffi::FT_StreamRec,
+    source: *const rust_ffi::FT_StreamRec,
+) -> FT_Error {
+    let Some(stream_ref) = (unsafe { stream.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    let Some(source_ref) = (unsafe { source.as_ref() }) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    if source_ref.base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    }
+    let Ok(source_len) = usize::try_from(source_ref.size) else {
+        return rust_ffi::FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    // SAFETY: the WASM ABI parity fixtures pass a memory-backed source stream
+    // with `base` readable for `size` bytes.
+    let source_bytes = unsafe { slice::from_raw_parts(source_ref.base.cast_const(), source_len) };
+    rust_ffi::FT_Stream_OpenGzip(Some(stream_ref), Some(source_ref), Some(source_bytes))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_stream_open_bzip2(
+    stream: *mut rust_ffi::FT_StreamRec,
+    source: *const rust_ffi::FT_StreamRec,
+) -> FT_Error {
+    rust_ffi::FT_Stream_OpenBzip2(unsafe { stream.as_mut() }, unsafe { source.as_ref() })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_node_unref(
+    node: rust_ffi::FTC_Node,
+    manager: rust_ffi::FTC_Manager,
+) {
+    rust_ffi::FTC_Node_Unref(node, manager);
+}
+
+pub fn abi_support_gzip_stream_bytes(
+    stream: *const rust_ffi::FT_StreamRec,
+    offset: FT_ULong,
+    count: FT_ULong,
+) -> Option<Vec<FT_Byte>> {
+    let stream_ref = unsafe { stream.as_ref() }?;
+    rust_ffi::FT_Gzip_Stream_Read(Some(stream_ref), offset, count)
+}
+
+pub fn abi_support_gzip_stream_close(stream: *mut rust_ffi::FT_StreamRec) {
+    if let Some(stream_ref) = unsafe { stream.as_mut() } {
+        rust_ffi::FT_Gzip_Stream_Close(Some(stream_ref));
+    }
 }
 
 fn wasm_alloc_zeroed_array<T>(count: usize) -> *mut u8 {
@@ -1730,6 +2132,23 @@ fn wasm_glyph_cbox_snapshot(
             cbox: Some(cbox),
         });
     }
+    if glyph.clazz == wasm_owned_bitmap_glyph_class() {
+        let owned = wasm_owned_bitmap_glyph_from_root(glyph)?;
+        let x_min = i64::from(owned.record.left).saturating_mul(64);
+        let y_max = i64::from(owned.record.top).saturating_mul(64);
+        let x_max = x_min.saturating_add(i64::from(owned.record.bitmap.width).saturating_mul(64));
+        let y_min = y_max.saturating_sub(i64::from(owned.record.bitmap.rows).saturating_mul(64));
+        return Some(rust_ffi::FT_GlyphCBoxSnapshot {
+            has_class: true,
+            has_bbox_hook: true,
+            cbox: Some(rust_ffi::FT_BBox {
+                xMin: x_min,
+                yMin: y_min,
+                xMax: x_max,
+                yMax: y_max,
+            }),
+        });
+    }
     // SAFETY: `glyph->clazz` is non-null.  This thin WASM ABI wrapper reads
     // only the class facade's bbox-hook presence and delegates FreeType's
     // zero-first `FT_Glyph_Get_CBox` contract to safe Rust.
@@ -1786,10 +2205,16 @@ pub extern "C" fn fontdone_wasm_get_glyph_from_face(
     let Some(out) = (unsafe { aglyph.as_mut() }) else {
         return err;
     };
-    match rust_ffi::FT_Get_Outline_Glyph(slot) {
-        Ok(core) => {
-            let glyph = Box::new(WasmOwnedOutlineGlyph::new(core));
-            *out = Box::into_raw(glyph).addr();
+    let glyph_result = if slot.is_some_and(|slot| slot.format == rust_ffi::FT_GLYPH_FORMAT_BITMAP) {
+        rust_ffi::FT_Get_Bitmap_Glyph(slot)
+            .map(|core| Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(core))).addr())
+    } else {
+        rust_ffi::FT_Get_Outline_Glyph(slot)
+            .map(|core| Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(core))).addr())
+    };
+    match glyph_result {
+        Ok(glyph) => {
+            *out = glyph;
             rust_ffi::FT_Err_Ok
         }
         Err(error) => {
@@ -1812,6 +2237,28 @@ pub extern "C" fn fontdone_wasm_glyph_copy(
         unsafe { !(*source).clazz.is_null() }
     };
     let err = rust_ffi::FT_Glyph_Copy(!source.is_null(), !target.is_null(), source_has_class);
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = wasm_owned_outline_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Outline_Glyph_Copy(&source.core);
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(copy))).addr();
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
+    if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error
+        && !target.is_null()
+        && let Some(source) = wasm_owned_bitmap_glyph_from_root(source)
+    {
+        let copy = rust_ffi::FT_Bitmap_Glyph_Copy(&source.core);
+        // SAFETY: `target` is non-null and points to caller-provided output storage.
+        unsafe {
+            *target = Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(copy))).addr();
+        }
+        return rust_ffi::FT_Err_Ok;
+    }
     if err == rust_ffi::FT_Err_Unimplemented_Feature as FT_Error && !target.is_null() {
         // SAFETY: `target` is non-null and points to caller-provided output storage.
         unsafe {
@@ -1832,6 +2279,12 @@ pub extern "C" fn fontdone_wasm_done_glyph_handle(glyph: *mut FontdoneWasmGlyph)
         // SAFETY: the private class marker proves this pointer came from
         // `Box<WasmOwnedOutlineGlyph>` in `fontdone_wasm_get_glyph_from_face`.
         unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedOutlineGlyph>())) };
+        return;
+    }
+    if wasm_owned_bitmap_glyph_from_root(glyph).is_some() {
+        // SAFETY: the private class marker proves this pointer came from
+        // `Box<WasmOwnedBitmapGlyph>` in `fontdone_wasm_get_glyph_from_face`.
+        unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedBitmapGlyph>())) };
         return;
     }
     rust_ffi::FT_Done_Glyph(!glyph.is_null());
@@ -1890,6 +2343,42 @@ pub extern "C" fn fontdone_wasm_glyph_to_bitmap(
         class_present != 0,
         prepare_hook_present != 0,
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_glyph_to_bitmap_handle(
+    the_glyph: *mut usize,
+    render_mode: i32,
+    origin: *const FontdoneWasmVector,
+    destroy: FT_Bool,
+) -> FT_Error {
+    let Some(handle) = (unsafe { the_glyph.as_mut() }) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let glyph = ptr::with_exposed_provenance_mut::<FontdoneWasmGlyph>(*handle);
+    if wasm_owned_bitmap_glyph_from_root(glyph).is_some() {
+        // FreeType `src/base/ftglyph.c:794-795` returns success without
+        // replacing or freeing an already-bitmap glyph.
+        return rust_ffi::FT_Err_Ok;
+    }
+    let Some(owned) = wasm_owned_outline_glyph_from_root(glyph) else {
+        return rust_ffi::FT_Glyph_To_Bitmap(true, *handle != 0, true, false, false);
+    };
+    if !origin.is_null() {
+        return rust_ffi::FT_Err_Unimplemented_Feature;
+    }
+    let bitmap = match rust_ffi::FT_Outline_Glyph_To_Bitmap(&owned.core, render_mode) {
+        Ok(bitmap) => bitmap,
+        Err(error) => return error,
+    };
+    let bitmap = Box::into_raw(Box::new(WasmOwnedBitmapGlyph::new(bitmap))).addr();
+    if destroy != 0 {
+        // SAFETY: the private class marker proves this pointer came from
+        // `Box<WasmOwnedOutlineGlyph>` in `fontdone_wasm_get_glyph_from_face`.
+        unsafe { drop(Box::from_raw(glyph.cast::<WasmOwnedOutlineGlyph>())) };
+    }
+    *handle = bitmap;
+    rust_ffi::FT_Err_Ok
 }
 
 #[unsafe(no_mangle)]
@@ -2237,6 +2726,486 @@ pub fn abi_support_stroker_null_noop(action: i32) -> bool {
         _ => return false,
     }
     true
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_lifecycle(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    match action {
+        1 => {}
+        2 => rust_ffi::FT_Stroker_Export(stroker, None),
+        3 => {
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+        }
+        4 => {
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
+        }
+        5 => {
+            rust_ffi::FT_Stroker_Set(
+                stroker,
+                128,
+                rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+                rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let mut outline = rust_ffi::FT_OutlineSnapshot::default();
+            rust_ffi::FT_Stroker_Export(stroker, Some(&mut outline));
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            rust_ffi::FT_Stroker_Rewind(stroker);
+        }
+        _ => return false,
+    }
+    rust_ffi::FT_Stroker_Done(stroker);
+    true
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_zero_line() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        128,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 256, y: 256 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = rust_ffi::FT_Stroker_LineTo(stroker, Some(&start));
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && line_error == rust_ffi::FT_Err_Ok
+        && counts_error == rust_ffi::FT_Err_Ok
+        && points == 0
+        && contours == 0
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_simple_line_counts() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let to = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = rust_ffi::FT_Stroker_LineTo(stroker, Some(&to));
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && line_error == rust_ffi::FT_Err_Ok
+        && left_error == rust_ffi::FT_Err_Invalid_Outline
+        && right_error == rust_ffi::FT_Err_Invalid_Outline
+        && total_error == rust_ffi::FT_Err_Invalid_Outline
+        && left_points == 0
+        && left_contours == 0
+        && right_points == 0
+        && right_contours == 0
+        && total_points == 0
+        && total_contours == 0
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_open_line_geometry(action: i32) -> bool {
+    let actions: &[i32] = if action == 0 { &[1, 2, 3] } else { &[action] };
+    for action in actions {
+        let library = rust_ffi::FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+            return false;
+        }
+        if stroker.is_null() {
+            return false;
+        }
+        let cap = match action {
+            1 => rust_ffi::FT_STROKER_LINECAP_BUTT as FT_Int,
+            3 => rust_ffi::FT_STROKER_LINECAP_SQUARE as FT_Int,
+            _ => rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        };
+        rust_ffi::FT_Stroker_Set(
+            stroker,
+            96,
+            cap,
+            rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+        let to = rust_ffi::FT_Vector { x: 640, y: 0 };
+        let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 1);
+        let line_error = if begin_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_LineTo(stroker, Some(&to))
+        } else {
+            begin_error
+        };
+        let end_error = if line_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            line_error
+        };
+        let mut count_points = 0;
+        let mut count_contours = 0;
+        let counts_error = if end_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_GetCounts(
+                stroker,
+                Some(&mut count_points),
+                Some(&mut count_contours),
+            )
+        } else {
+            end_error
+        };
+        let mut left = rust_ffi::FT_OutlineSnapshot::default();
+        let mut right = rust_ffi::FT_OutlineSnapshot::default();
+        let mut combined = rust_ffi::FT_OutlineSnapshot::default();
+        if counts_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut left),
+            );
+            rust_ffi::FT_Stroker_ExportBorder(
+                stroker,
+                rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+                Some(&mut right),
+            );
+            rust_ffi::FT_Stroker_Export(stroker, Some(&mut combined));
+        }
+        rust_ffi::FT_Stroker_Done(stroker);
+        let expected_points = match action {
+            1 => 5,
+            3 => 6,
+            _ => 15,
+        };
+        if counts_error != rust_ffi::FT_Err_Ok
+            || left.points.len() != expected_points
+            || left.contours.len() != 1
+            || !right.points.is_empty()
+            || combined.points.len() != expected_points
+        {
+            return false;
+        }
+    }
+    true
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_finalized_counts(open: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+    let begin_error =
+        rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), if open != 0 { 1 } else { 0 });
+    let line1_error = if begin_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if open == 0 && line1_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    let expected = if open != 0 {
+        (15, 1, 0, 0, 15, 1)
+    } else {
+        (3, 1, 18, 1, 21, 2)
+    };
+    end_error == rust_ffi::FT_Err_Ok
+        && left_error == rust_ffi::FT_Err_Ok
+        && right_error == rust_ffi::FT_Err_Ok
+        && total_error == rust_ffi::FT_Err_Ok
+        && (
+            left_points,
+            left_contours,
+            right_points,
+            right_contours,
+            total_points,
+            total_contours,
+        ) == expected
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_reset_counts(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line1_error = if begin_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut before_points = 99;
+    let mut before_contours = 99;
+    let before_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut before_points),
+        Some(&mut before_contours),
+    );
+    match action {
+        1 => rust_ffi::FT_Stroker_Rewind(stroker),
+        2 => rust_ffi::FT_Stroker_Set(
+            stroker,
+            128,
+            rust_ffi::FT_STROKER_LINECAP_SQUARE as FT_Int,
+            rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        _ => {
+            rust_ffi::FT_Stroker_Done(stroker);
+            return false;
+        }
+    }
+    let mut after_points = 99;
+    let mut after_contours = 99;
+    let after_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut after_points), Some(&mut after_contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    end_error == rust_ffi::FT_Err_Ok
+        && before_error == rust_ffi::FT_Err_Ok
+        && after_error == rust_ffi::FT_Err_Ok
+        && before_points == 21
+        && before_contours == 2
+        && after_points == 0
+        && after_contours == 0
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_parse_degenerate() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let single_point = rust_ffi::FT_OutlineSnapshot {
+        points: vec![rust_ffi::FT_Vector { x: 0, y: 0 }],
+        tags: vec![1],
+        contours: vec![0],
+        flags: 0,
+    };
+    let first_error = rust_ffi::FT_Stroker_ParseOutline(stroker, Some(&single_point), 0);
+    let mut points_after_first = 99;
+    let mut contours_after_first = 99;
+    let first_counts_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut points_after_first),
+        Some(&mut contours_after_first),
+    );
+    let empty = rust_ffi::FT_OutlineSnapshot::default();
+    let second_error = rust_ffi::FT_Stroker_ParseOutline(stroker, Some(&empty), 0);
+    let mut points_after_second = 99;
+    let mut contours_after_second = 99;
+    let second_counts_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut points_after_second),
+        Some(&mut contours_after_second),
+    );
+    rust_ffi::FT_Stroker_Done(stroker);
+    first_error == rust_ffi::FT_Err_Ok
+        && first_counts_error == rust_ffi::FT_Err_Ok
+        && points_after_first == 0
+        && contours_after_first == 0
+        && second_error == rust_ffi::FT_Err_Ok
+        && second_counts_error == rust_ffi::FT_Err_Ok
+        && points_after_second == 0
+        && contours_after_second == 0
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_end_subpath_no_segment() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let end_error = rust_ffi::FT_Stroker_EndSubPath(stroker);
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok && end_error == rust_ffi::FT_Err_Ok
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_degenerate_curve(action: i32) -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        128,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 100, y: 100 };
+    let near = rust_ffi::FT_Vector { x: 101, y: 101 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let curve_error = match action {
+        1 => rust_ffi::FT_Stroker_ConicTo(stroker, Some(&near), Some(&near)),
+        2 => rust_ffi::FT_Stroker_CubicTo(stroker, Some(&near), Some(&near), Some(&near)),
+        _ => {
+            rust_ffi::FT_Stroker_Done(stroker);
+            return false;
+        }
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error =
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && curve_error == rust_ffi::FT_Err_Ok
+        && counts_error == rust_ffi::FT_Err_Ok
+        && points == 0
+        && contours == 0
 }
 
 #[unsafe(no_mangle)]
@@ -2785,6 +3754,82 @@ pub fn abi_support_add_default_modules_observation(
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_minimal_module_observation()
+-> (i32, usize, bool, Option<rust_ffi::FT_Installed_Module_Info>) {
+    let (status, module_count, lookup_present, info, _, _, _, _) =
+        abi_support_add_synthetic_module_observation("fixture_minimal", 0, false, false);
+    (status, module_count, lookup_present, info)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub type SyntheticModuleObservation = (
+    i32,
+    usize,
+    bool,
+    Option<rust_ffi::FT_Installed_Module_Info>,
+    bool,
+    bool,
+    bool,
+    Option<(i32, Option<&'static str>)>,
+);
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_add_synthetic_module_observation(
+    module_name: &'static str,
+    module_flags: rust_ffi::FT_ULong,
+    module_interface_present: bool,
+    add_default_modules: bool,
+) -> SyntheticModuleObservation {
+    let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    if add_default_modules {
+        rust_ffi::FT_Add_Default_Modules(Some(&mut library));
+    }
+    let outline_renderer_before =
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE);
+    let class = rust_ffi::FT_Module_Class_Info {
+        module_flags,
+        module_size: 1,
+        module_name: Some(module_name),
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface_present,
+        module_init: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
+        module_done: rust_ffi::FT_Module_Callback_Behavior::RecordThenOk,
+    };
+    let status = rust_ffi::FT_Add_Module(Some(&mut library), Some(&class));
+    let outline_renderer_after =
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE);
+    let module_count = rust_ffi::FT_Library_Module_Count(Some(&library));
+    let lookup_present = rust_ffi::FT_Library_Has_Module(Some(&library), module_name);
+    let info = rust_ffi::FT_Library_Synthetic_Module_Info(Some(&library), module_name);
+    let renderer_membership = if module_flags & rust_ffi::FT_MODULE_RENDERER as rust_ffi::FT_ULong
+        != 0
+    {
+        let set_status = rust_ffi::FT_Library_Set_Renderer_By_Format(
+            Some(&mut library),
+            rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+            module_name,
+        );
+        let current_renderer =
+            rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE)
+                .map(|(name, _, _, _)| name);
+        Some((set_status, current_renderer))
+    } else {
+        None
+    };
+    (
+        status,
+        module_count,
+        lookup_present,
+        info,
+        outline_renderer_before.is_some(),
+        outline_renderer_after.is_some(),
+        outline_renderer_before == outline_renderer_after,
+        renderer_membership,
+    )
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_new_library_observation() -> (i32, i32, i32, usize, bool, bool) {
     let mut memory = rust_ffi::FT_MemoryRec::default();
     let mut library = rust_ffi::FT_New_Library(Some(&mut memory))
@@ -2842,6 +3887,13 @@ pub fn abi_support_reference_then_done_library_observation() -> (i32, i32, bool,
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_final_done_library_observation() -> i32 {
+    let mut library = rust_ffi::FT_New_Library_Without_Default_Modules();
+    rust_ffi::FT_Add_Default_Modules(Some(&mut library));
+    rust_ffi::FT_Done_Library(Some(&mut library))
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_default_module_flags(name: &str) -> Option<rust_ffi::FT_ULong> {
     let library = rust_ffi::FT_Init_FreeType();
     rust_ffi::FT_Library_Module_Flags(Some(&library), name)
@@ -2894,6 +3946,23 @@ pub fn abi_support_null_renderer_class(
     format: rust_ffi::FT_Glyph_Format,
 ) -> Option<(&'static str, rust_ffi::FT_Glyph_Format, bool, bool)> {
     rust_ffi::FT_Library_Renderer_Class(None, format)
+}
+
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_set_default_outline_renderer() -> (
+    FT_Error,
+    Option<(&'static str, rust_ffi::FT_Glyph_Format, bool, bool)>,
+) {
+    let mut library = rust_ffi::FT_Init_FreeType();
+    let error = rust_ffi::FT_Library_Set_Renderer_By_Format(
+        Some(&mut library),
+        rust_ffi::FT_GLYPH_FORMAT_OUTLINE,
+        "smooth",
+    );
+    (
+        error,
+        rust_ffi::FT_Library_Renderer_Class(Some(&library), rust_ffi::FT_GLYPH_FORMAT_OUTLINE),
+    )
 }
 
 #[cfg(feature = "abi-test-support")]
@@ -3347,6 +4416,24 @@ pub extern "C" fn fontdone_wasm_set_pixel_sizes(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_set_transform(
+    handle: usize,
+    matrix: *const FT_Matrix,
+    delta: *const FT_Vector,
+) {
+    let Some(face) = face_mut(handle) else {
+        return;
+    };
+    // SAFETY: nullable pointers are converted to `Option<&T>` and never
+    // retained after this thin ABI call returns.
+    let matrix = unsafe { matrix.as_ref() };
+    // SAFETY: nullable pointers are converted to `Option<&T>` and never
+    // retained after this thin ABI call returns.
+    let delta = unsafe { delta.as_ref() };
+    rust_ffi::FT_Set_Transform(Some(&mut face.face), matrix, delta);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_set_char_size(
     handle: usize,
     char_width: FT_Long,
@@ -3747,6 +4834,47 @@ pub extern "C" fn fontdone_wasm_get_fstype_flags(handle: usize) -> FT_UShort {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_attach_stream(
+    handle: usize,
+    file_base: *const FT_Byte,
+    file_size: usize,
+) -> FT_Error {
+    let Some(face) = face_mut(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    if file_base.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    // SAFETY: caller provides a readable linear-memory range of `file_size` bytes.
+    let data = unsafe { slice::from_raw_parts(file_base, file_size) };
+    rust_ffi::FT_Attach_Stream(Some(&mut face.face), Some(data))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_track_kerning(
+    handle: usize,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: *mut FT_Fixed,
+) -> FT_Error {
+    let mut kerning = 0;
+    let output = ptr::NonNull::new(akerning);
+    let error = rust_ffi::FT_Get_Track_Kerning(
+        face_ref(handle).map(|face| &face.face),
+        point_size,
+        degree,
+        output.map(|_| &mut kerning),
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        if let Some(output) = output {
+            // SAFETY: `akerning` was checked for null and points to writable linear memory.
+            unsafe { *output.as_ptr() = kerning };
+        }
+    }
+    error
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_gasp(handle: usize, ppem: FT_UInt) -> FT_Int {
     rust_ffi::FT_Get_Gasp(face_ref(handle).map(|face| &face.face), ppem)
 }
@@ -4105,6 +5233,11 @@ pub extern "C" fn fontdone_wasm_get_ps_font_private(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_has_ps_glyph_names(handle: usize) -> FT_Int {
+    rust_ffi::FT_Has_PS_Glyph_Names(face_ref(handle).map(|face| &face.face))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_get_ps_font_value(
     handle: usize,
     key: PS_Dict_Keys,
@@ -4209,6 +5342,82 @@ pub extern "C" fn fontdone_wasm_get_bdf_charset_id(
             } else {
                 CStr::from_ptr(registry).to_bytes().len() as FT_UInt
             };
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_is_internally_cid_keyed(
+    handle: usize,
+    is_cid: *mut FT_Bool,
+) -> FT_Error {
+    let mut value = 0;
+    let err = rust_ffi::FT_Get_CID_Is_Internally_CID_Keyed(
+        face_ref(handle).map(|face| &face.face),
+        (!is_cid.is_null()).then_some(&mut value),
+    );
+    if !is_cid.is_null() {
+        // SAFETY: null was checked and caller provides writable scalar output.
+        unsafe {
+            *is_cid = value;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_from_glyph_index(
+    handle: usize,
+    glyph_index: FT_UInt,
+    cid: *mut FT_UInt,
+) -> FT_Error {
+    let mut value = 0;
+    let err = rust_ffi::FT_Get_CID_From_Glyph_Index(
+        face_ref(handle).map(|face| &face.face),
+        glyph_index,
+        (!cid.is_null()).then_some(&mut value),
+    );
+    if !cid.is_null() {
+        // SAFETY: null was checked and caller provides writable scalar output.
+        unsafe {
+            *cid = value;
+        }
+    }
+    err
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_cid_registry_ordering_supplement(
+    handle: usize,
+    output: *mut FontdoneWasmCidRos,
+) -> FT_Error {
+    let mut registry: *const rust_ffi::FT_String = std::ptr::null();
+    let mut ordering: *const rust_ffi::FT_String = std::ptr::null();
+    let mut supplement = 0;
+    let err = rust_ffi::FT_Get_CID_Registry_Ordering_Supplement(
+        face_ref(handle).map(|face| &face.face),
+        (!output.is_null()).then_some(&mut registry),
+        (!output.is_null()).then_some(&mut ordering),
+        (!output.is_null()).then_some(&mut supplement),
+    );
+    if !output.is_null() {
+        // SAFETY: null was checked above and caller provided writable
+        // linear-memory storage for the flat WASM ROS record.
+        unsafe {
+            (*output).registry = registry.cast::<FT_Byte>();
+            (*output).registry_len = if registry.is_null() {
+                0
+            } else {
+                CStr::from_ptr(registry).to_bytes().len() as FT_UInt
+            };
+            (*output).ordering = ordering.cast::<FT_Byte>();
+            (*output).ordering_len = if ordering.is_null() {
+                0
+            } else {
+                CStr::from_ptr(ordering).to_bytes().len() as FT_UInt
+            };
+            (*output).supplement = supplement;
         }
     }
     err
@@ -4352,6 +5561,47 @@ pub extern "C" fn fontdone_wasm_get_sfnt_vhea(
             number_Of_VMetrics: vhea.number_Of_VMetrics,
             long_metrics: vhea.long_metrics.cast(),
             short_metrics: vhea.short_metrics.cast(),
+        };
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fontdone_wasm_get_sfnt_maxp(
+    handle: usize,
+    tag: FT_Sfnt_Tag,
+    out: *mut FontdoneWasmMaxProfile,
+) -> FT_Error {
+    if out.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(face) = face_ref(handle) else {
+        return rust_ffi::FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let table = rust_ffi::FT_Get_Sfnt_Table(&face.face, tag);
+    if table.is_null() {
+        return rust_ffi::FT_Err_Invalid_Table as FT_Error;
+    }
+    // SAFETY: `FT_Get_Sfnt_Table` returns a live face-owned `TT_MaxProfile` pointer for this tag.
+    let maxp = unsafe { &*table.cast::<rust_ffi::TT_MaxProfile>() };
+    // SAFETY: `out` is non-null and caller provides writable storage.
+    unsafe {
+        *out = FontdoneWasmMaxProfile {
+            version: maxp.version,
+            numGlyphs: maxp.numGlyphs,
+            maxPoints: maxp.maxPoints,
+            maxContours: maxp.maxContours,
+            maxCompositePoints: maxp.maxCompositePoints,
+            maxCompositeContours: maxp.maxCompositeContours,
+            maxZones: maxp.maxZones,
+            maxTwilightPoints: maxp.maxTwilightPoints,
+            maxStorage: maxp.maxStorage,
+            maxFunctionDefs: maxp.maxFunctionDefs,
+            maxInstructionDefs: maxp.maxInstructionDefs,
+            maxStackElements: maxp.maxStackElements,
+            maxSizeOfInstructions: maxp.maxSizeOfInstructions,
+            maxComponentElements: maxp.maxComponentElements,
+            maxComponentDepth: maxp.maxComponentDepth,
         };
     }
     rust_ffi::FT_Err_Ok
@@ -4874,6 +6124,7 @@ fn rust_face_info(face: &rust_ffi::FT_Face) -> rust_ffi::FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..rust_ffi::FT_FaceRecPublic::default()
     }
 }

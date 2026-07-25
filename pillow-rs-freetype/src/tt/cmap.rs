@@ -1,8 +1,9 @@
 //! 'cmap' table — character to glyph index mapping.
 //!
-//! Faithful port of FreeType's `src/sfnt/ttcmap.c` format-4 and format-12
+//! Faithful port of FreeType's `src/sfnt/ttcmap.c` format-4, format-12, and format-13
 //! decoders (the Unicode subtables used by DejaVu/Liberation and the test fonts). The
-//! `char_index` lookup reproduces `tt_cmap4_char_index` / `tt_cmap12_char_index`.
+//! `char_index` lookup reproduces `tt_cmap4_char_index`, `tt_cmap12_char_index`,
+//! and `tt_cmap13_char_index`.
 
 use crate::casts::{u16_from_i16, u16_from_u32};
 
@@ -20,6 +21,8 @@ pub struct CmapTable {
     pub format6: Vec<Format6Subtable>,
     /// Format 12 subtables (full Unicode, U+0000–U+10FFFF).
     pub format12: Vec<Format12Subtable>,
+    /// Format 13 subtables (many-to-one full Unicode, U+0000–U+10FFFF).
+    pub format13: Vec<Format13Subtable>,
     /// Format 14 Unicode variation selector subtables.
     pub format14: Vec<Format14Subtable>,
 }
@@ -39,6 +42,7 @@ enum CharmapKind {
     Format4(usize),
     Format6(usize),
     Format12(usize),
+    Format13(usize),
     Format14,
 }
 
@@ -75,6 +79,17 @@ pub struct Format12Subtable {
     pub start_codes: Vec<u32>,
     pub end_codes: Vec<u32>,
     pub start_glyph_ids: Vec<u32>,
+}
+
+/// Format 13: Many-to-one grouped mapping for full Unicode.
+#[derive(Debug, Clone)]
+pub struct Format13Subtable {
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub language_id: u32,
+    pub start_codes: Vec<u32>,
+    pub end_codes: Vec<u32>,
+    pub glyph_ids: Vec<u32>,
 }
 
 /// Format 14: Unicode variation selector metadata.
@@ -145,6 +160,7 @@ impl CmapTable {
                 }
             }
             CharmapKind::Format12(index) => self.format12[index].char_index(codepoint),
+            CharmapKind::Format13(index) => self.format13[index].char_index(codepoint),
             CharmapKind::Format14 => None,
         }
     }
@@ -227,6 +243,7 @@ impl CmapTable {
             CharmapKind::Format4(index) => self.format4[index].next_char(after),
             CharmapKind::Format6(index) => self.format6[index].next_char(after),
             CharmapKind::Format12(index) => self.format12[index].next_char(after),
+            CharmapKind::Format13(index) => self.format13[index].next_char(after),
             CharmapKind::Format14 => None,
         }
     }
@@ -300,6 +317,33 @@ impl Format12Subtable {
                 // zero group start is skipped, not the remainder of the group.
                 if candidate < self.end_codes[i] {
                     return Some((candidate + 1, 1));
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Format13Subtable {
+    fn char_index(&self, codepoint: u32) -> Option<u16> {
+        for i in 0..self.start_codes.len() {
+            if codepoint < self.start_codes[i] {
+                break;
+            }
+            if codepoint <= self.end_codes[i] {
+                return Some(u16_from_u32(self.glyph_ids[i]));
+            }
+        }
+        None
+    }
+
+    fn next_char(&self, after: u32) -> Option<(u32, u16)> {
+        for i in 0..self.start_codes.len() {
+            let candidate = self.start_codes[i].max(after.checked_add(1)?);
+            if candidate <= self.end_codes[i] {
+                let glyph = self.glyph_ids[i];
+                if glyph != 0 {
+                    return Some((candidate, u16_from_u32(glyph)));
                 }
             }
         }
@@ -540,6 +584,21 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
                 }
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
             },
+            13 => match parse_format13(data, sub_off, *platform_id, *encoding_id) {
+                Ok(sub) => {
+                    let index = table.format13.len();
+                    let language_id = sub.language_id;
+                    table.format13.push(sub);
+                    table.charmaps.push(CharmapRecord {
+                        platform_id: *platform_id,
+                        encoding_id: *encoding_id,
+                        format,
+                        language_id,
+                        kind: CharmapKind::Format13(index),
+                    });
+                }
+                Err(e) => warn!("[cmap] format 13 parse failed: {e}"),
+            },
             14 => match parse_format14(data, sub_off, *platform_id, *encoding_id) {
                 Ok(sub) => {
                     table.format14.push(sub);
@@ -760,6 +819,70 @@ fn parse_format12(
         start_codes,
         end_codes,
         start_glyph_ids,
+    })
+}
+
+fn parse_format13(
+    data: &[u8],
+    offset: usize,
+    platform_id: u16,
+    encoding_id: u16,
+) -> Result<Format13Subtable, FontError> {
+    // FreeType format-13 support uses the format-12 class shape in
+    // `src/sfnt/ttcmap.c`, but `tt_cmap13_char_index` returns the group's
+    // constant glyph ID instead of adding the character-code delta.
+    let body = &data[offset..];
+    if body.len() < 16 {
+        return Err(FontError::InvalidFont("cmap format 13: too short".into()));
+    }
+    let length = u32::from_be_bytes([body[4], body[5], body[6], body[7]]) as usize;
+    let body = data
+        .get(offset..offset + length)
+        .ok_or_else(|| FontError::InvalidFont("cmap format 13: length exceeds data".into()))?;
+    if body.len() < 16 {
+        return Err(FontError::InvalidFont(
+            "cmap format 13: truncated header".into(),
+        ));
+    }
+    let language_id = u32::from_be_bytes([body[8], body[9], body[10], body[11]]);
+    let num_groups = u32::from_be_bytes([body[12], body[13], body[14], body[15]]) as usize;
+    if 16 + num_groups * 12 > body.len() {
+        return Err(FontError::InvalidFont(
+            "cmap format 13: groups overflow".into(),
+        ));
+    }
+
+    let mut start_codes = Vec::with_capacity(num_groups);
+    let mut end_codes = Vec::with_capacity(num_groups);
+    let mut glyph_ids = Vec::with_capacity(num_groups);
+    let mut prev_end = None;
+    for i in 0..num_groups {
+        let o = 16 + i * 12;
+        let start = u32::from_be_bytes([body[o], body[o + 1], body[o + 2], body[o + 3]]);
+        let end = u32::from_be_bytes([body[o + 4], body[o + 5], body[o + 6], body[o + 7]]);
+        if start > end || end > 0x10FFFF || prev_end.is_some_and(|prev| start <= prev) {
+            return Err(FontError::InvalidFont(
+                "cmap format 13: invalid or unordered groups".into(),
+            ));
+        }
+        start_codes.push(start);
+        end_codes.push(end);
+        glyph_ids.push(u32::from_be_bytes([
+            body[o + 8],
+            body[o + 9],
+            body[o + 10],
+            body[o + 11],
+        ]));
+        prev_end = Some(end);
+    }
+
+    Ok(Format13Subtable {
+        platform_id,
+        encoding_id,
+        language_id,
+        start_codes,
+        end_codes,
+        glyph_ids,
     })
 }
 

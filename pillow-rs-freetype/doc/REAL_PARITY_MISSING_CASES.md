@@ -1,5 +1,345 @@
 # Real-Parity Missing Cases
 
+### Issue Set Result: FT_Stroker open-line cap/export geometry
+
+Status: promoted on 2026-07-22 from `main`.
+
+Promoted rows:
+
+- `ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry`
+- `ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry`
+- `ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry`
+- `ftstroke.FT_Stroker_LineCap.open_path_cap_geometry`
+- `ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry`
+- `ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry`
+- `ftstroke.FT_StrokerBorder.border_selection_runtime_shape`
+- `ftstroke.FT_Stroker_Export.exports_left_then_right`
+- `ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export`
+- `ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty`
+
+Finding:
+
+- Pinned FreeType 2.14.3 only exports stroker border geometry after the public
+  count query validates the border: `EndSubPath -> GetCounts -> Export`.
+  Exporting immediately after `EndSubPath` leaves the border invalid and is not
+  the same public route.
+- For the maintained open horizontal line fixture, C emits all geometry into
+  `FT_STROKER_BORDER_LEFT` and leaves `FT_STROKER_BORDER_RIGHT` empty. Butt,
+  round, and square caps now compare exact points, tags, contours, and combined
+  export order through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+
+Implementation note:
+
+- Core now stores the maintained open-line exported outline after finalization.
+  The route is deliberately scoped to the horizontal line fixture used by the
+  API/ABI audit; joins, curves, closed paths, and append-to-existing-outline
+  remain pending.
+- The C ABI wrapper remains thin: it copies the core `FT_OutlineSnapshot` into
+  caller-provided `FT_Outline` storage. It does not own stroker geometry logic.
+- The C oracle gained `--stroker-open-line-geometry`, which records exact
+  pinned C output instead of relying on hardcoded expected JSON.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftstroke.open_path_geometry
+make -C pillow-rs-freetype test-op OP=ftstroke.export_border
+make -C pillow-rs-freetype test-op OP=ftstroke.export
+```
+
+Result:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 195, 'real-null-validation': 9, 'real-parity': 4827}
+ftstroke.open_path_geometry: runtime_parity: passed=4 failed=0 total=4
+ftstroke.export_border: runtime_parity: passed=6 failed=0 total=6; pending=1 append route
+ftstroke.export: runtime_parity: passed=8 failed=0 total=8; pending=2 append routes
+pending-route: 205 -> 195
+real-parity: 4817 -> 4827
+```
+
+### Issue Set Current: 2026-07-22 pending-route bulk sweep on `main`
+
+Status: audited on 2026-07-22 from `main` at `bf49ebd56`. This is a sweep
+classification only; no rows were promoted and no fixtures, expected output, or
+thresholds were changed.
+
+Current route-audit baseline:
+
+```text
+route audit concrete_cases=7297 category_counts={'compile-contract': 2266, 'pending-route': 205, 'real-null-validation': 9, 'real-parity': 4817}
+pending_route_rows=205
+duplicate_operation_input_buckets=37
+```
+
+High-impact buckets:
+
+| Rows | Bucket | Families | Reducibility |
+| ---: | --- | --- | --- |
+| 66 | Special-format fixture/parser validators | `ftgxval`, `ftotval`, `ftcid`, `ftpfr`, `ftbdf` | Bulk reducible only by adding real C-openable fixtures and parser/routes for GX/AAT, OpenType validation, CID, PFR, BDF/PCF. Do not promote from duplicate declarations alone. |
+| 44 | Stroker geometry/export algorithm | `ftstroke` | One real stroker geometry/export implementation can collapse many rows: caps, joins, borders, parse-outline, export, glyph-stroke ownership. Count-only routes are already exhausted. |
+| 17 | SVG glyph route | `freetype`, `ftglyph`, `ftimage`, `ftrender`, `otsvg` | Bulk reducible by one maintained SVG-enabled glyph route that compares slot format, `FT_SvgGlyphRec`, copy/transform behavior, and unsupported-build classification. |
+| 12 | Incremental font callback contract | `ftincrem` | Bulk reducible by one callback harness proving callback table validation, glyph-data acquire/release, metrics overrides, object identity, and event order. Null/absent behavior is already promoted. |
+| 7 | Driver property runtime effect | `ftdriver` | Reducible by typed `FT_Property_Set/Get` routes plus C-openable CFF/TT fixtures proving public output changes for hinting-engine/interpreter-version settings. |
+| 7 | Glyph object lifetime/record route | `ftglyph` | Reducible with an owned-glyph facade covering `FT_New_Glyph`, `FT_Get_Glyph`, `FT_Glyph_Copy`, `FT_Glyph_To_Bitmap`, valid/null/stale free semantics, and record inspection. |
+| 6 | Custom renderer callback lifecycle | `ftimage` | Reducible by a renderer registration/lifecycle harness proving `new`, `reset`, `set_mode`, `render`, and `done` callback behavior. |
+| 5 | Face-open parameter runtime fixture | `ftparams` | Needs real SBIX/CFF/Type1/CID fixture routes for `IGNORE_SBIX`, `RANDOM_SEED`, and `STEM_DARKENING`. |
+| 5 | Optional compression module contract | `ftbzip2` | Split enabled-build behavior from the active pinned oracle's disabled bzip2 behavior before promoting. |
+| 3 | External stream callback contract | `ftsystem` | Needs maintained external-stream callback/read/seek failure harness. |
+| 3 | Malformed font error contract | `fterrdef` | Needs fixtures that actually reach the named pinned-C public error path. Current generated name-table controls do not. |
+| 30 | Misc small routes | mixed | Sweep individually after the large harness/implementation buckets; these are not a single root cause. |
+
+Duplicate finding:
+
+- The duplicate rows are mostly semantic aliases over the same absent input or
+  same unimplemented route, not redundant tests that can be deleted.
+- Largest duplicate groups are `FT_TrueTypeGX_Validate` constants and output
+  slot indexes, `FT_OpenType_Validate` table selectors, and `ftstroke` public
+  enum aliases. They should collapse only when the shared real route exists.
+- Hash-based duplicate grouping is useful for prioritization, but deleting rows
+  would hide API obligations and create green placeholders.
+
+Sweep order:
+
+1. `ftstroke` geometry/export if the goal is pure implementation progress
+   without searching for new font assets. This has the best chance of reducing
+   dozens of rows through one core algorithm surface.
+2. SVG glyph route if we can add/verify a maintained SVG fixture and feature
+   classification. This is a medium-size cross-family collapse.
+3. Incremental callback harness. This is a coherent callback/lifetime surface
+   and should be handled as one batch, not isolated rows.
+4. Special-format validators only after fixture acquisition is solved. GX/AAT,
+   OpenType validation, CID, PFR, and BDF/PCF are the largest count bucket, but
+   they are fixture/parser gated and unsafe to promote from declarations alone.
+
+### Issue Set Result: FT_BitmapGlyphRec dual creation-path record fields
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap`
+
+Finding:
+
+- Pinned FreeType 2.14.3 exposes the same public `FT_BitmapGlyphRec` field
+  shape through both maintained creation paths: `FT_Get_Glyph` on a bitmap
+  glyph slot and `FT_Glyph_To_Bitmap` on an outline glyph.
+- The two concrete fixture variants now compare the root format/advance,
+  library/class pointer presence, left/top placement, bitmap descriptor, and
+  bitmap bytes through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+
+Implementation note:
+
+- The route is scoped to the concrete `@m1` and `@m2` runtime rows generated
+  from the fixture variants. It does not promote SVG glyph-record rows or broad
+  glyph lifetime rows.
+- The bitmap-strike semantic glyph selector is resolved to the maintained
+  bitmap glyph index before calling the oracle. The C oracle also guards the
+  bitmap cast by checking `FT_GLYPH_FORMAT_BITMAP`.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=2 failed=0 total=2
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 233, 'real-null-validation': 9, 'real-parity': 4754}
+```
+
+### Issue Set Result: FT_PARAM_TAG_INCREMENTAL parameter-route absent/null behavior
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c`
+
+Finding:
+
+- Pinned FreeType 2.14.3 `FT_Open_Face` with `FT_OPEN_MEMORY` behaves the same
+  when the incremental parameter is absent and when an
+  `FT_PARAM_TAG_INCREMENTAL` parameter is present with `data = NULL`.
+- The maintained public result is successful embedded-font open, successful
+  glyph load for the declared glyph, null stored-interface class, and callback
+  count zero.
+
+Implementation note:
+
+- The ftparams row now reuses the maintained incremental nullness oracle route
+  through pinned C, Rust FFI, thin C ABI, and WASM ABI.
+- The route accepts both fixture spellings for the glyph selector:
+  `load_glyph` for the ftincrem row and `glyph_index` for the ftparams row.
+- `ftparams.FT_PARAM_TAG_INCREMENTAL.incremental_interface_used_for_glyph_load`
+  remains pending. That row still needs a real incremental callback route that
+  stores the callback interface, invokes glyph-data callbacks, releases glyph
+  data, applies metrics overrides, and compares callback event logs plus public
+  glyph output across all four lanes.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c
+make -C pillow-rs-freetype test-op OP=freetype.open_face_incremental
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=1 failed=0 total=1
+runtime_cases: runnable=1 pending=1
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 235, 'real-null-validation': 9, 'real-parity': 4752}
+```
+
+### Issue Set Result: FT_PARAM_TAG_INCREMENTAL absent/null interface behavior
+
+Status: promoted on 2026-07-22.
+
+Promoted row:
+
+- `ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior`
+
+Finding:
+
+- Pinned FreeType 2.14.3 opens and loads the embedded glyph data the same way
+  when `FT_PARAM_TAG_INCREMENTAL` is absent and when the tag is present with
+  `data = NULL`.
+- No incremental callbacks are invoked for either variant; the observable
+  public result is successful face open, successful glyph load for the
+  maintained DejaVuSans glyph input, null stored-interface class, and callback
+  count zero.
+
+Implementation note:
+
+- The runtime route now compares both variants through the pinned C oracle,
+  Rust FFI, thin C ABI, and WASM ABI.
+- The C ABI path uses `FT_Open_Face` with `FT_OPEN_MEMORY` and a public
+  `FT_Parameter { tag: FT_PARAM_TAG_INCREMENTAL, data: NULL }` for the null
+  interface variant. The Rust and WASM lanes expose the same public null/absent
+  behavior without fabricating callback events.
+- Full incremental callback success, client lifetime, required callback
+  validation, and glyph-data release behavior remain pending until a real
+  incremental callback harness exists.
+
+Verification evidence:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior
+make -C pillow-rs-freetype test-op OP=ftincrem.open_face_incremental_nullness
+make -C pillow-rs-freetype route-audit
+```
+
+Result:
+
+```text
+runtime_parity: passed=1 failed=0 total=1
+route audit concrete_cases=7262 category_counts={'compile-contract': 2266, 'pending-route': 236, 'real-null-validation': 9, 'real-parity': 4751}
+```
+
+### Issue Set Current: 2026-07-21 FTMM residual route sweep on `main`
+
+Status: audited on 2026-07-21 from `main` at `5fed74445`. This section
+tracks the current FTMM residual rows separately from the older route-audit
+triage below.
+
+Current route-audit baseline:
+
+```text
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 351, 'real-null-validation': 9, 'real-parity': 4609}
+```
+
+Focused runtime evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmm.get_var_design_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.set_mm_design_coordinates
+make -C pillow-rs-freetype test-op OP=ftmm.set_mm_blend_coordinates
+```
+
+```text
+ftmm.get_var_design_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.get_var_design_coordinates:FT_Get_Var_Design_Coordinates excess-output fixture is not a sound same-input parity row for the current TrueType variable font: pinned FreeType 2.14.3 `TT_Get_Var_Design` clamps the active axis count but then reads default values past the axis array for excess outputs, while Type1 MM zero-fills; promoting Rust's safe zero-fill or modeling pinned-C adjacent memory would be a green placeholder:1
+
+ftmm.set_mm_design_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.set_mm_design_coordinates:FT_Set_MM_Design_Coordinates Adobe-MM glyph-output fixture is not currently a C-observable success row: pinned FreeType 2.14.3 returns OK for FT_Set_Pixel_Sizes and FT_Set_MM_Design_Coordinates on the maintained Type1 MM fixture, then FT_Load_Glyph returns error 6 for the declared glyph_index=42; promoting this as glyph output parity would be a green placeholder until the input names a glyph that C can load successfully:1
+
+ftmm.set_mm_blend_coordinates:
+runtime_parity: passed=4 failed=0 total=4
+runtime_cases: runnable=4 pending=1
+pending_reasons=ftmm.set_mm_blend_coordinates:FT_Set_MM_Blend_Coordinates output parity needs a maintained MM route proving active blend-coordinate changes alter subsequent coordinates, metrics, and exposed state like pinned C:1
+```
+
+Disposition:
+
+- Keep `ftmm.FT_Get_Var_Design_Coordinates.excess_output_coordinates_zero_filled`
+  pending for the current TrueType variable fixture. This is not a valid
+  same-input Rust parity target because the pinned C observation depends on an
+  adjacent-memory read past the active axis default array. A future fix must use
+  a C-defined same-input observation, such as a Type1 MM excess-output fixture
+  where pinned C defines zero-fill behavior.
+- Keep `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design`
+  pending until the input names a C-loadable glyph after the MM design mutation,
+  or is split into an exact public error row plus a separate C-loadable success
+  row. The current declared success row cannot be promoted because pinned C
+  returns `FT_Err_Invalid_Argument` for glyph index 42 after the successful
+  design-coordinate set.
+- Treat `ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend` as
+  blocked by the current declared input shape, not by missing Rust glue. A
+  direct pinned-C probe of the same current input
+  `fonts/variable/gvar-hvar-wght.ttf`, `num_coords=1`,
+  `coords_16_16=[65536]` shows `FT_Set_MM_Blend_Coordinates` returns the
+  public wrapper sentinel `-2` for the TrueType/OpenType variation service,
+  while the row declares `expect_error=false` and a glyph-output success shape.
+  The sibling `FT_Set_Var_Blend_Coordinates` row is the valid glyph-output
+  setter for this font. Do not promote the MM row until it is changed through a
+  reviewed input-plan update to an exact `-2` public-error observation or to a
+  true Adobe MM same-input output route.
+
+### Issue Set Current: 2026-07-21 module-lifecycle route sweep on `main`
+
+Status: audited on 2026-07-21 from `main` at `5fed74445`.
+
+Focused runtime evidence:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftmodapi.set_debug_hook
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_module
+make -C pillow-rs-freetype test-op OP=ftmodapi.add_get_remove_module
+make -C pillow-rs-freetype test-op OP=ftmodapi.module_class_lifecycle
+make -C pillow-rs-freetype test-op OP=ftmodapi.done_library
+```
+
+```text
+ftmodapi.set_debug_hook: runtime_parity passed=3 failed=0 total=3, pending=1
+ftmodapi.add_module: runtime_parity passed=4 failed=0 total=4, pending=3
+ftmodapi.add_get_remove_module: runtime_parity passed=0 failed=0 total=0, pending=1
+ftmodapi.module_class_lifecycle: runtime_parity passed=0 failed=0 total=0, pending=1
+ftmodapi.done_library: runtime_parity passed=1 failed=0 total=1, pending=1
+```
+
+Disposition:
+
+- Keep these module-lifecycle success rows pending until a maintained synthetic
+  module-class route exists. The missing scope is real FreeType behavior in
+  `src/base/ftobjs.c`: `FT_Add_Module` version/name checks, module allocation,
+  library/memory initialization, optional renderer/hinter/driver side effects,
+  `module_init`, table insertion, `FT_Get_Module`/interface lookup,
+  `FT_Remove_Module`, reverse-order teardown, and final `FT_Done_Library`
+  destruction.
+- Do not promote constant/layout/import-contract rows as lifecycle parity.
+  Existing null/future-version/duplicate/non-final rows prove only their exact
+  error paths, not successful module installation/removal/destruction.
+
 ### Issue Set Current: 2026-07-21 route-audit blocker triage after NONE script promotion
 
 Status: audited on 2026-07-21 from branch
@@ -56,14 +396,12 @@ Inspected blockers:
   pinned C cannot load successfully after the design-coordinate mutation. It
   must be split into an exact-error row plus a separate C-loadable success row,
   or fixed to name a C-loadable glyph.
-- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` and `ftcolor.FT_ClipBox.color_glyph_clipbox_values`
-  remain pending. The declared COLR v1 clipbox fixtures such as
-  `fonts/color/colr-v1-clipbox-format1-format2.ttf`,
-  `fonts/color/colr-v1-no-clipbox-control.ttf`, and
-  `fonts/color/colr-v1-all-paints.ttf` are not present in the maintained fixture
-  tree, and there is no current Rust/ABI `FT_Get_Color_Glyph_ClipBox` runtime
-  export. The next real fix must add compact COLR v1 clipbox fixtures and a pure
-  Rust clipbox implementation before adding C/WASM ABI route glue.
+- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` and
+  `ftcolor.FT_ClipBox.color_glyph_clipbox_values` now have maintained same-input
+  routes for COLRv1 ClipList format 1 success, active size/transform handling,
+  public `FT_ClipBox` corner copying, and no-clipbox false-return output
+  preservation. Remaining clipbox expansion should add a dedicated variable
+  ClipBox format 2 expected-output row before crediting variation-delta parity.
 - `ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color`
   and `ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy`
   remain pending for the same COLR v1 foreground-paint fixture gap. The CPAL
@@ -85,10 +423,11 @@ Inspected blockers:
   across pinned C, Rust FFI, thin C ABI, and WASM ABI. Layout parity for
   `FT_StreamRec` and `FT_OPEN_STREAM` close-callback ownership do not prove
   this memory-stream field contract.
-- `fterrdef.FT_Err_Missing_Property.known_property_success` remains pending
-  because the declared success input asks for module `svg` property `svg-hooks`,
-  while pinned FreeType exposes the maintained property on module `ot-svg`.
-  Reusing a different known-property route would not be the same public input.
+- `fterrdef.FT_Err_Missing_Property.known_property_success` was corrected in
+  the maintained public input to use documented `autofitter:fallback-script`
+  `FT_Property_Get` value storage and promoted on `main` at the current
+  2026-07-21 property-route sweep. The old `svg:svg-hooks` spelling remains a
+  useful fixture-contract lesson, but is no longer the active success input.
 
 Required fix plan:
 
@@ -111,9 +450,9 @@ Required fix plan:
 6. For FTMM residuals, fix the declared input shape first: use C-loadable Type1
    MM glyphs for output rows and avoid treating pinned-C adjacent-memory reads
    as safe Rust parity.
-7. For the known-property row, either change the manifest/input through a
-   reviewed fixture-plan update to the pinned-C `ot-svg` property, or keep the
-   current `svg` row pending as an invalid declared success input.
+7. Completed for the known-property row on 2026-07-21 by changing the active
+   success input to documented `autofitter:fallback-script` and routing it
+   through pinned C, Rust FFI, C ABI, and WASM ABI exact value comparison.
 
 ### Issue Set Completed: FT_OPEN_STREAM external-stream ownership
 
@@ -154,11 +493,12 @@ runtime_parity: passed=1 failed=0 total=1
 route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 399, 'real-null-validation': 9, 'real-parity': 4561}
 ```
 
-### Issue Set Current: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
+### Issue Set Result: FT_Set_MM_Design_Coordinates Type1 MM glyph-output row
 
-Status: audited on 2026-07-21; remains pending. A maintained glyph-output
-route was added for diagnosis, but the current fixture row is not a pinned-C
-success case.
+Status: partially resolved on 2026-07-22. The original glyph 42 fixture row
+remains pending because pinned C returns `Invalid_Glyph_Index`; a separate
+same-input success row now uses glyph 1, which pinned C loads and renders
+successfully after `FT_Set_MM_Design_Coordinates`.
 
 Still-pending row:
 
@@ -182,29 +522,46 @@ Maintained route state:
 - The unified oracle, Rust FFI, thin C ABI, and WASM harness now have a
   Type1-MM `FT_Set_MM_Design_Coordinates` glyph-output route analogous to the
   already-routed OpenType `FT_Set_Var_Design_Coordinates` glyph-output route.
-- The route must remain pending until the input names a glyph that pinned C can
-  load and render successfully, or the fixture is explicitly reclassified as an
-  exact error row.
+- `ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph`
+  uses glyph 1 from the maintained Adobe MM fixture. Pinned FreeType 2.14.3
+  returns OK and produces exact metrics/bitmap output; Rust FFI, thin C ABI,
+  and WASM now match that output.
+- The original glyph 42 row remains pending and visible. It should either stay
+  pending as an invalid success input or be split later into an exact-error row.
+
+Implementation finding:
+
+- First divergence: after successful `FT_Set_Pixel_Sizes` and
+  `FT_Set_MM_Design_Coordinates`, pinned C `FT_Load_Glyph(face, 1,
+  FT_LOAD_DEFAULT)` decoded the Type1 charstring and rendered a bitmap; Rust
+  previously routed Type1 faces through the SFNT `glyf` loader and returned
+  error 6.
+- C behavior for the maintained glyph 1 charstring applies the Type1 `hsbw`
+  side bearing before `rmoveto`, then scales Type1 coordinates with truncating
+  16.16 multiplication before normal slot metric grid fitting. Using the
+  rounded TrueType `FT_MulFix` path shifted right/top fractional edges by one
+  26.6 unit and changed smooth-raster coverage.
 
 Required follow-up:
 
-1. Find a glyph index in the maintained Type1 MM fixture that pinned C loads
-   after the same design-coordinate mutation, then compare Rust FFI, C ABI, and
-   WASM glyph output exactly; or
-2. Split this into an exact-error row for glyph 42 and a separate success row
-   with a C-loadable glyph.
+1. Keep the glyph 42 pending row visible until it is intentionally reclassified
+   as exact-error parity or replaced by a corrected input shape.
+2. Extend Type1 charstring support beyond the currently routed operators before
+   promoting broader Type1 glyph-output rows.
 
 Verification evidence:
 
 ```bash
+make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph
 make -C pillow-rs-freetype test-op OP=ftmm.set_mm_design_coordinates
 ```
 
-With the route temporarily classified as real, the focused run failed with:
+Result after the fix:
 
 ```text
-rust ffi: ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design
-oracle returned unexpected error 6
+runtime_parity: passed=1 failed=0 total=1 covered_manifest_cases=1
+runtime_parity: passed=5 failed=0 total=5 covered_manifest_cases=5
+route audit concrete_cases=7261 category_counts={'compile-contract': 2266, 'pending-route': 237, 'real-null-validation': 9, 'real-parity': 4749}
 ```
 
 ### Issue Set Current: FT_Get_Var_Design_Coordinates excess output row
@@ -888,17 +1245,17 @@ Required fix plan:
    compare the same validation flags, output pointer initialization, and table
    pointer classes.
 
-### Issue Set Current: property-route pending rows with fixture/input mismatches
+### Issue Set Completed: property-route known-property correction
 
-Status: classified on 2026-07-20; no route promoted.
+Status: promoted on 2026-07-21.
 
-Rejected candidate:
+Promoted row:
 
 - `fterrdef.FT_Err_Missing_Property.known_property_success`
 
 Finding:
 
-- The fixture input currently says `module_name="svg"` and
+- The fixture input previously said `module_name="svg"` and
   `property_name="svg-hooks"`, with expected success.
 - FreeType 2.14.3 documents and implements SVG renderer hooks on module
   `ot-svg`, not `svg`; see `include/freetype/ftdriver.h` `svg-hooks` example
@@ -909,19 +1266,21 @@ Finding:
   - `FT_Property_Get(library, "ot-svg", "svg-hooks", &hooks) -> 0`
 - Promoting the existing row through the scalar `truetype:interpreter-version`
   helper would use a different public input and would be a green placeholder.
+- The active row now uses documented `autofitter:fallback-script`, which is a
+  scalar public property already represented by the maintained Rust FFI, C ABI,
+  and WASM property selector facade.
 
-Required fix plan:
+Verification:
 
-1. Add a maintained typed property route for `svg-hooks` that preserves the
-   public input module name and hook-record shape.
-2. Correct the public input row or add a replacement row that uses
-   `module_name="ot-svg"` for the SVG hook success control; keep the current
-   `module_name="svg"` behavior visible as an exact `Missing_Module` case if
-   the manifest intends to exercise that spelling.
-3. Implement the behavior in core Rust first, then expose it through thin C ABI
-   and WASM ABI helpers without parsing hook semantics in the wrappers.
-4. Promote only after the pinned C oracle, Rust FFI, C ABI, and WASM ABI all
-   compare the same module/property input and output.
+```bash
+make -C pillow-rs-freetype test-op OP=FT_Property_Get
+make -C pillow-rs-freetype route-audit
+```
+
+```text
+runtime_parity: passed=3 failed=0 total=3
+route audit concrete_cases=7235 category_counts={'compile-contract': 2266, 'pending-route': 350, 'real-null-validation': 9, 'real-parity': 4610}
+```
 
 Related property rows still pending:
 
@@ -950,15 +1309,13 @@ make -C pillow-rs-freetype test-case CASE=ftdriver.FT_AUTOHINTER_SCRIPT_LATIN.de
 
 Findings:
 
-- `tttables.TT_MaxProfile.malformed_table_error_source` is not an asset-only
-  problem.  The declared assets `input/fonts/sfnt/truncated-maxp.ttf` and
-  `input/fonts/sfnt/invalid-maxp.ttf` are missing, but the operation
-  `face.load_then_get_sfnt_table.maxp` also has no maintained runtime runner.
-  Required next fix: extend `scripts/build_sfnt_fixtures.py` to generate the
-  declared malformed `maxp` assets, then add an explicit pinned-C/Rust/C
-  ABI/WASM route that compares face-open error, nullness, and any loaded
-  `TT_MaxProfile` fields.  Do not alias this to `sfnt.get_sfnt_table.maxp`,
-  which only covers already-open valid faces.
+- `tttables.TT_MaxProfile.malformed_table_error_source` was promoted on
+  2026-07-21.  The maintained SFNT generator now emits the declared malformed
+  `maxp` assets, and the explicit `face.load_then_get_sfnt_table.maxp` route
+  compares pinned-C face-open status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer
+  nullness, and any loaded `TT_MaxProfile` fields through Rust FFI, thin C ABI,
+  and WASM ABI.  This route remains intentionally separate from
+  `sfnt.get_sfnt_table.maxp`, which only covers already-open valid faces.
 - `ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output` is a fixture
   expectation mismatch in the pinned build.  The audit records pinned
   FreeType 2.14.3 returning `FT_Err_Unimplemented_Feature` (`7`) for
@@ -1336,6 +1693,118 @@ Impact:
 Verification:
 
 ```bash
+make -C pillow-rs-freetype route-audit
+```
+
+### Issue Set Current: Classic kern validate ABI export and service-missing route
+
+Status: ABI surface cleanup completed on 2026-07-21 for
+`FT_ClassicKern_Validate`; success/lifetime validation rows remain pending.
+
+Finding:
+
+- Pinned FreeType 2.14.3 `FT_ClassicKern_Validate` validates null arguments,
+  clears the output table slot, then looks up the `CLASSICKERN_VALIDATE`
+  service in `src/base/ftgxval.c`. The current oracle build does not provide
+  that service, so valid classic kern inputs return `FT_Err_Unimplemented_Feature`
+  (`7`) instead of a copied validation table.
+- Rust previously modeled `FT_ClassicKern_Free` but had no core
+  `FT_ClassicKern_Validate` facade, and the thin C/WASM ABI surfaces exported
+  `FT_ClassicKern_Free` without the matching public validate function.
+- The fix adds the core facade plus thin C and WASM exports, preserving the
+  pinned-C service-missing behavior and null output-slot clearing. It does not
+  promote the success/lifetime rows because targeted same-input C oracle probes
+  return error `7`; crediting them as successful validation would be a green
+  placeholder.
+
+Remaining related blockers:
+
+- `ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern`
+- `ftgxval.FT_VALIDATE_CKERN.output_table_lifetime`
+- `ftgxval.FT_ClassicKern_Free.frees_classic_kern_validation_buffer`
+
+Impact:
+
+- `real-parity`: stays `4718`
+- `pending-route`: stays `245`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftgxval.classic_kern_validate
+make -C pillow-rs-freetype test-ffi
+make -C pillow-rs-freetype test-ffi-compat
+make -C pillow-rs-freetype lint
+```
+
+### Issue Set Completed: COLRv1 `FT_PaintFormat` all-paint union route
+
+Status: one-row runtime route completed on 2026-07-21 for
+`ftcolor.FT_PaintFormat.paint_union_shape_runtime`.
+
+Finding:
+
+- The public input preserved the historical logical fixture id
+  `fonts/color/colr_v1_all_paint_formats.ttf`, while the maintained generated
+  fixture is `fonts/color/colr-v1-all-paints.ttf`. No duplicate fixture was
+  added; the resolver now maps the legacy id to the maintained file.
+- The C oracle and Rust harness already had a maintained COLRv1 all-paints
+  walker that decodes the supported `FT_COLR_Paint` format tags and payload
+  classes through `FT_Get_Color_Glyph_Paint` and `FT_Get_Paint`. The missing
+  piece was routing the `FT_PaintFormat` record/enum row through that same
+  all-paints comparison instead of leaving it pending.
+- This is not a placeholder promotion: the exact case now compares the same
+  all-paints fixture through pinned C FreeType 2.14.3, Rust FFI, thin C ABI,
+  and WASM ABI.
+
+Impact:
+
+- `real-parity`: `4718 -> 4719`
+- `pending-route`: `245 -> 244`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_PaintFormat.paint_union_shape_runtime
+make -C pillow-rs-freetype route-audit
+```
+
+### Issue Set Completed: COLRv1 include-root-transform paint route
+
+Status: one-row runtime route completed on 2026-07-21 for
+`ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform`.
+
+Finding:
+
+- The public input preserved the historical logical fixture id
+  `fonts/color/colr-v1-root-paint-cpal.ttf`, while the maintained generated
+  fixture is `fonts/color/colr-v1-root-transform.ttf`. No duplicate fixture was
+  added; the resolver maps the legacy id to the maintained file.
+- The row declares a specific same-input transform:
+  `pixel_size=24`, matrix `{xx=65536, xy=8192, yx=0, yy=65536}`, and
+  delta `{x=64, y=32}`. The existing generic root-transform route used a
+  different transform, so it could not be reused as proof.
+- The fix adds a dedicated same-input branch in the generated C oracle and the
+  Rust parity harness. The case now compares the inserted transform paint from
+  `FT_Get_Color_Glyph_Paint(..., FT_COLOR_INCLUDE_ROOT_TRANSFORM, ...)` followed
+  by `FT_Get_Paint` through pinned C FreeType 2.14.3, Rust FFI, thin C ABI, and
+  WASM ABI.
+
+Impact:
+
+- `real-parity`: `4719 -> 4720`
+- `pending-route`: `244 -> 243`
+- `compile-contract`: stays `2266`
+- `real-null-validation`: stays `9`
+
+Verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform
 make -C pillow-rs-freetype route-audit
 ```
 
@@ -2248,8 +2717,9 @@ Required fix plan:
    null output, validated table ownership, and face-memory lifetime semantics.
 5. Implement pure-Rust outline orientation and PFR behavior first: reverse
    orientation toggling, PFR metrics, and non-PFR kerning fallback semantics.
-6. Implement pure-Rust malformed TrueType table behavior first: `maxp` parse
-   errors must preserve the same public error source as C FreeType.
+6. Completed for malformed `maxp` on 2026-07-21: Rust now preserves pinned C's
+   face-owned `TT_MaxProfile` state, including reading from the `maxp` stream
+   offset beyond the declared table length and forcing `maxFunctionDefs >= 64`.
 7. Compare exact return codes, output records, nullness, ownership/free events,
    orientation state, metric values, kerning values, and error classifications
    for the same input.
@@ -7453,7 +7923,7 @@ Missing real-parity rows: 966.
 | `otsvg` | 6 | 6 | 0 | 0 | `otsvg.svg_document_type_import`, `otsvg.svg_document_type_abi`, `otsvg.svg_renderer_callback_capture`, `otsvg.svg_document_rec_abi` |
 | `ftlzw` | 5 | 2 | 3 | 0 | `ftlzw.stream_open_lzw`, `ftlzw.stream_open_lzw_abi` |
 | `ftsystem` | 4 | 4 | 0 | 0 | `ftsystem.open_face_with_external_stream`, `ftsystem.new_library_with_custom_memory`, `ftsystem.memory_stream_probe` |
-| `tttables` | 3 | 2 | 0 | 1 | `face.load_then_get_sfnt_table.maxp`, `face.new`, `sfnt.get_sfnt_table.record` |
+| `tttables` | 3 | 3 | 0 | 0 | `face.load_then_get_sfnt_table.maxp`, `face.new`, `sfnt.get_sfnt_table.record` |
 | `ftbitmap` | 1 | 0 | 0 | 1 | `ftbitmap.glyphslot_own_bitmap` |
 | `fttypes` | 1 | 1 | 0 | 0 | `winfnt.get_header` |
 
@@ -11890,6 +12360,67 @@ Verification for the classification batch:
 make -C pillow-rs-freetype route-audit
 ```
 
+### Issue Set Current: COLRv1 variable ColorLine and VarColorStop parity
+
+Previous blocker:
+
+- `ftcolor.FT_ColorStop.iterator_output_values` and
+  `ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops`
+  remained pending because `fonts/color/colr-v1-variable-gradients.ttf` was not
+  a maintained fixture and the runtime route only covered static ColorLine
+  stops.
+
+First divergence after adding the maintained route:
+
+- Pinned C FreeType 2.14.3 returned the first variable color stop alpha as
+  `8192` for the default coordinate run.
+- Rust FFI left the sentinel output alpha `-291`, so C ABI and WASM ABI were
+  also unproven for the same variable route.
+- Source behavior compared:
+  - `freetype/src/sfnt/ttcolr.c:502-523` initializes
+    `FT_ColorStopIterator.read_variable` from the paint's variable colorline
+    class.
+  - `freetype/src/sfnt/ttcolr.c:1584-1645` reads 10-byte VarColorStop records,
+    advances past `VarIndexBase`, and applies two COLR VarStore deltas to
+    `stop_offset` and `alpha`.
+
+Fix:
+
+1. Extended the deterministic COLR/CPAL fixture generator to produce
+   `fonts/color/colr-v1-variable-gradients.ttf` with `wght` and `GRAD` axes,
+   a `PaintVarLinearGradient`, two `VarColorStop` records, and a COLR
+   `VarStore`.
+2. Added pinned-C, Rust FFI, thin C ABI, and WASM ABI runtime routes that
+   compare default and `wght=900, GRAD=1` design-coordinate runs.
+3. Updated pure Rust COLR parsing to preserve variable colorline state, parse
+   10-byte VarColorStop records, and evaluate COLR item variation deltas via
+   the shared pure-Rust item variation store.
+
+Verified result:
+
+```bash
+make -C pillow-rs-freetype test-op OP=ftcolor.get_colorline_stops
+```
+
+- Before: `runtime_parity_progress compared=7 total=7 passed=5 failed=2`,
+  pending rows visible in route audit.
+- After: `runtime_parity_progress compared=7 total=7 passed=7 failed=0`;
+  route audit moved `pending-route 247 -> 245` and `real-parity 4716 -> 4718`.
+
+Remaining nearby blockers:
+
+- `ftcolor.FT_ColorStopIterator.initialized_by_get_paint` is already covered by
+  the all-paints route, but broader root-transform/clipbox/foreground rows still
+  require their own same-input public routes.
+- `ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_values` still
+  remains pending after the variable split because it also declares the
+  unresolved malformed COLR fixture
+  `fonts/color/malformed-colr-v1-paints.ttf`; keep that broad row visible until
+  the malformed route exists.
+- `ftcolor.FT_Get_Color_Glyph_ClipBox.*` still needs maintained clipbox
+  success/no-clipbox fixtures and route output for scaled/transformed
+  `FT_ClipBox` values.
+
 ### Issue Set Current: `FT_Open_Args` abstract open-face route
 
 Status:
@@ -12628,44 +13159,53 @@ make -C pillow-rs-freetype test-case CASE=freetype.FT_LOAD_SVG_ONLY.svg_only_beh
 make -C pillow-rs-freetype test-case CASE=freetype.FT_Parameter.tag_data_parameters_match_c_behavior
 ```
 
-### Issue Set Current: `TT_MaxProfile` malformed maxp fixture blocker
+### Issue Set Completed: `TT_MaxProfile` malformed maxp route
 
-Status: classified as explicit pending-route on 2026-07-20.
+Status: promoted on 2026-07-21.
 
 Finding:
 
 - `tttables.TT_MaxProfile.malformed_table_error_source` is intended to compare
   the pinned C face-load error or C-adjusted parsed `TT_MaxProfile` state for
   malformed `maxp` tables.
-- The declared assets resolve, but they are not malformed maxp fixtures:
+- The declared assets previously resolved to non-malformed DejaVuSans symlinks.
+  That would have compared a normal DejaVuSans face and would not have proved
+  the declared `ttload.c:785-835` malformed-table behavior.
+- `scripts/build_sfnt_fixtures.py` generates real malformed SFNT wrappers for
   `tests/fixtures/input/fonts/sfnt/truncated-maxp.ttf` and
-  `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf` are symlinks to
-  `../DejaVuSans.ttf`.
-- Treating that row as runtime parity would compare a normal DejaVuSans face
-  and would not prove the declared `ttload.c:785-835` malformed-table behavior.
+  `tests/fixtures/input/fonts/sfnt/invalid-maxp.ttf`.
+- `face.load_then_get_sfnt_table.maxp` is now an executable same-input route
+  across pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+- Pinned FreeType 2.14.3 keeps both malformed faces open and exposes non-null
+  `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` records.  For the truncated table,
+  `tt_face_load_maxp` reads from the `maxp` stream offset beyond the declared
+  four-byte table length, then applies the compatibility adjustment that forces
+  `maxFunctionDefs` to at least 64.
 
 Classification change:
 
-- The row remains `pending-route`, but the route-audit reason now names the
-  exact fixture blocker instead of the generic residual public-surface bucket.
+- The row moved from `pending-route` to `real-parity`; route audit changed
+  `pending-route 350 -> 349` and `real-parity 4610 -> 4611`.
 - The stale residual mention of
   `ftcid.FT_Get_CID_Registry_Ordering_Supplement.public_header_signature` was
   removed from the residual list; current route audit already classifies that
   row as a compile contract.
 
-Required fix plan:
+Implemented fix:
 
-1. Add or generate real malformed SFNT fixtures for truncated and invalid
-   `maxp` tables under the maintained fixture workflow.
-2. Add a maintained `face.load_then_get_sfnt_table.maxp` route that opens each
-   malformed face through pinned C FreeType, Rust FFI, thin C ABI, and WASM ABI.
+1. Keep the generated malformed SFNT fixtures under the maintained
+   `font-fixture-sfnt` workflow.
+2. Added a maintained `face.load_then_get_sfnt_table.maxp` route that opens
+   each malformed face through pinned C FreeType, Rust FFI, thin C ABI, and
+   WASM ABI.
 3. Compare exact face-load status, `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` pointer
-   nullness, and any C-adjusted `TT_MaxProfile` fields when FreeType keeps the
-   face open.
-4. Promote the row only after the focused case is runnable and proves exact
-   same-input parity across all four lanes.
+   nullness, and C-adjusted `TT_MaxProfile` fields when FreeType keeps the face
+   open.
+4. Updated Rust's face-owned `TT_MaxProfile` snapshot to mirror
+   `tt_face_load_maxp` stream-offset reads and `maxFunctionDefs >= 64`
+   adjustment while keeping `FT_Load_Sfnt_Table` length-bounded.
 
-Verification for this audit-only clarification:
+Verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=tttables.TT_MaxProfile.malformed_table_error_source
@@ -13903,6 +14443,23 @@ Follow-up finding for blend-coordinate state rows:
   Keep the route guard in place.  The required next fix is an oracle-backed
   success fixture and glyph-output runner; classifier movement alone is not a
   valid parity gain.
+- Follow-up on 2026-07-22: added a separate
+  `ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend`
+  row instead of reclassifying the pending blend-dependent row.  Pinned
+  FreeType 2.14.3 accepts
+  `FT_Set_MM_Blend_Coordinates(adobe-mm-two-axis.pfb, [49152,16384])`, then
+  loads and renders glyph 1 successfully.  Rust FFI, thin C ABI, and WASM ABI
+  match the exact glyph metrics, outline cbox, bitmap descriptor, and bitmap
+  bytes.  This proves glyph output after the MM blend setter for a C-loadable
+  Type 1 MM glyph; it deliberately does not claim
+  `output_changes_for_active_blend`, because the maintained minimal Type 1
+  fixture does not yet have blend-dependent charstring interpolation.
+  Verification:
+  `make -C pillow-rs-freetype test-case CASE=ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend`
+  passed `runtime_parity: passed=1 failed=0 total=1`, and
+  `make -C pillow-rs-freetype test-op OP=ftmm.set_mm_blend_coordinates`
+  passed `runtime_parity: passed=5 failed=0 total=5` with the original
+  blend-dependent row still pending.
 - The promoted variation-flag matrix pins the C state transitions on
   `fonts/variable/inter-wght.ttf`: blend coords `[0]` keep `face_flags=2841`
   and `FT_IS_VARIATION=false`, blend coords `[32768]` set

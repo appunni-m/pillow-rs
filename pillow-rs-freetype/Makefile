@@ -29,9 +29,11 @@ help:
 	@printf "  make font-fixture-autohint-scripts Rebuild compact autohint script fixture\n"
 	@printf "  make font-fixture-cff Rebuild compact CFF/OpenType fixtures\n"
 	@printf "  make font-fixture-cmap Rebuild compact cmap table fixtures\n"
+	@printf "  make font-fixture-color Rebuild compact COLR/CPAL fixtures\n"
 	@printf "  make font-fixture-cjk Rebuild the compact multiscript topology fixture\n"
 	@printf "  make font-fixture-fvar Rebuild compact fvar table fixtures\n"
 	@printf "  make font-fixture-gasp Rebuild compact gasp table fixtures\n"
+	@printf "  make font-fixture-gzip Rebuild compact gzip/zlib payload fixtures\n"
 	@printf "  make font-fixture-hinter Rebuild the compact TrueType program fixture\n"
 	@printf "  make font-fixture-metrics Rebuild compact face metric fallback fixtures\n"
 	@printf "  make font-fixture-mvar Rebuild compact MVAR variation metrics fixtures\n"
@@ -60,6 +62,7 @@ help:
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make api-abi-check    Check manifest/input routing and thin FFI ABI surfaces\n"
 	@printf "  make route-audit      Classify public input rows by real, fallback, pending, or unsupported route\n"
+	@printf "  make route-buckets    Group pending routes by operation/input hash for batch planning\n"
 	@printf "  make real-parity-verify Run parity, route audit, FFI gates, fmt, and clippy\n"
 	@printf "  make scaler-parity-focused Run the exact public FT_Load_Glyph vertical-flags bucket\n"
 	@printf "  make scaler-condition-coverage Run full condition coverage into scaler-owned artifacts\n"
@@ -298,6 +301,10 @@ api-abi-check: api-abi-audit
 .PHONY: route-audit
 route-audit: api-abi-check
 
+.PHONY: route-buckets
+route-buckets: route-audit
+	$(PYTHON) scripts/report_pending_route_buckets.py
+
 .PHONY: font-fixture-hinter
 font-fixture-hinter:
 	$(PYTHON) -m fontTools.ttx -q --no-recalc-timestamp -o tests/fixtures/fonts/glyf/hinter-control-matrix.ttf \
@@ -335,6 +342,10 @@ font-fixture-winfnt:
 font-fixture-gasp: font-fixture-hinter
 	$(PYTHON) scripts/build_gasp_fixtures.py
 
+.PHONY: font-fixture-gzip
+font-fixture-gzip:
+	$(PYTHON) scripts/build_gzip_fixtures.py
+
 .PHONY: font-fixture-metrics
 font-fixture-metrics: font-fixture-hinter
 	$(PYTHON) scripts/build_metric_fixtures.py
@@ -346,6 +357,10 @@ font-fixture-mvar:
 .PHONY: font-fixture-cmap
 font-fixture-cmap: font-fixture-hinter
 	$(PYTHON) scripts/build_cmap_fixtures.py
+
+.PHONY: font-fixture-color
+font-fixture-color:
+	$(PYTHON) scripts/build_cpal_palette_fixtures.py
 
 .PHONY: font-fixture-post
 font-fixture-post: font-fixture-hinter

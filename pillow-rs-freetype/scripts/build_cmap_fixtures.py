@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE_FONT = ROOT / "tests" / "fixtures" / "fonts" / "glyf" / "hinter-control-matrix.ttf"
 OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "cmap"
 CHARMAP_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "charmap"
+INPUT_CHARMAPS_OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "charmaps"
 
 
 def cmap_subtable(
@@ -177,6 +178,22 @@ def raw_format14_subtable(
         + struct.pack(">I", len(records))
         + record_bytes
         + payload
+    )
+
+
+def raw_format13_subtable(
+    groups: list[tuple[int, int, int]],
+    *,
+    language: int = 0,
+) -> bytes:
+    """Build a format-13 cmap subtable with constant glyph IDs per group."""
+    length = 16 + len(groups) * 12
+    return (
+        struct.pack(">HHIII", 13, 0, length, language, len(groups))
+        + b"".join(
+            struct.pack(">III", start, end, glyph_id)
+            for start, end, glyph_id in groups
+        )
     )
 
 
@@ -407,6 +424,32 @@ def build_non_uvs_format14_platforms_font() -> None:
     font.save(out, reorderTables=True)
 
 
+def build_apple_full_unicode_format13_font() -> None:
+    font = TTFont(BASE_FONT, recalcTimestamp=False)
+    font["cmap"] = raw_cmap_table(
+        pack_raw_cmap(
+            [
+                (
+                    0,
+                    6,
+                    raw_format13_subtable(
+                        [
+                            (0x0041, 0x0042, 1),
+                            (0x1F600, 0x1F600, 2),
+                        ]
+                    ),
+                ),
+            ]
+        )
+    )
+
+    INPUT_CHARMAPS_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = INPUT_CHARMAPS_OUT_DIR / "apple-full-unicode-type13.ttf"
+    if out.exists() or out.is_symlink():
+        out.unlink()
+    font.save(out, reorderTables=True)
+
+
 def main() -> None:
     build_matrix_font()
     build_malformed_format14_font()
@@ -415,6 +458,7 @@ def main() -> None:
     build_format14_only_font()
     build_platform0_variation_font()
     build_non_uvs_format14_platforms_font()
+    build_apple_full_unicode_format13_font()
 
 
 if __name__ == "__main__":
