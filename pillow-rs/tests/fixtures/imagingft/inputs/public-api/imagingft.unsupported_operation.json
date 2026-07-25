@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "subject": "imagingft.unsupported_operation",
+  "operation": "imagingft.unsupported_magic",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "imagingft_unsupported_operation"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.unsupported_operation.unsupported_magic",
+      "subject": "imagingft.unsupported_operation",
+      "case": "imagingft_unsupported_operation",
+      "operation": "imagingft.unsupported_magic",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello"
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": ["error.type", "error.message"]
+        },
+        "oracle": "rust-not-implemented-check",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "NotImplementedError",
+            "message": "unsupported imagingft operation: unsupported_magic",
+            "message_pattern": "unsupported imagingft operation: unsupported_magic"
+          }
+      }
+    }
+  }
+  ],
+  "notes": [
+    "source:result-mode-coverage"
+  ]
+}

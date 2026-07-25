@@ -3,9 +3,161 @@
   "subject": "imagingft.render_text_binary",
   "operation": "render_text_binary",
   "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [],
-  "cases": [],
+  "manifest_cases": [
+    "dejavusans20_hello_render_text_binary_rgba",
+    "dejavusans20_av_render_text_binary_rgba",
+    "dejavusans20_jq_render_text_binary_rgba"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.render_text_binary.dejavusans20_hello_render_text_binary_rgba",
+      "subject": "imagingft.render_text_binary",
+      "case": "dejavusans20_hello_render_text_binary_rgba",
+      "operation": "render_text_binary",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "fill": [20,40,200,255],
+          "spacing": 0.0
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            63,
+            19
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_hello_render_text_binary_rgba.bin",
+          "sha256": "b589b45431c882788c90944fe328bdd0f78ac0cdc9e524221397b198777222f0"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.dejavusans20_av_render_text_binary_rgba",
+      "subject": "imagingft.render_text_binary",
+      "case": "dejavusans20_av_render_text_binary_rgba",
+      "operation": "render_text_binary",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "fill": [20,40,200,255],
+          "spacing": 0.0
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            28,
+            15
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_av_render_text_binary_rgba.bin",
+          "sha256": "1da50a85beb67c8cf0a3835bf5174153af8b2bbd3f2d89202fd00b62248da251"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.dejavusans20_jq_render_text_binary_rgba",
+      "subject": "imagingft.render_text_binary",
+      "case": "dejavusans20_jq_render_text_binary_rgba",
+      "operation": "render_text_binary",
+        "schema": "api_result",
+        "expect_error": false,
+        "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "fill": [20,40,200,255],
+          "spacing": 0.0
+        }
+      },
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "size": "[u32;2]",
+          "mode": "str",
+          "pixels": "raw-bytes-ref"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "size",
+            "mode",
+            "pixels",
+            "raw.sha256"
+          ]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "size": [
+            18,
+            19
+          ],
+          "mode": "RGBA",
+          "raw_path": "outputs/imagingft/raws/dejavusans20_jq_render_text_binary_rgba.bin",
+          "sha256": "360f864f458880d5d0566f0ce9ca477da749a14c8a4475d07a305b4bb93dd71a"
+        }
+      }
+    }
+  ],
   "notes": [
-    "source:not-implemented"
+    "source:imagingft_matrix.json"
   ]
 }

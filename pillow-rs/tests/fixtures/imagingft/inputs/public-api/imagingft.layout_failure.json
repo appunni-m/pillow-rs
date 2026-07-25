@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "subject": "imagingft.get_transposed_mask",
+  "operation": "imagingft.get_transposed_mask",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "imagingft_layout_rotation_failure"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.get_transposed_mask.invalid_orientation_error",
+      "subject": "imagingft.get_transposed_mask",
+      "case": "imagingft_layout_rotation_failure",
+      "operation": "imagingft.get_transposed_mask",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "orientation": "UNSUPPORTED"
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": ["error.type", "error.message"]
+        },
+        "oracle": "runtime-generated-from-pillow",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "Unknown transpose method: UNSUPPORTED. Use FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM, ROTATE_90, ROTATE_180, ROTATE_270, TRANSPOSE, or TRANSVERSE."
+          }
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:layout-failure"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "subject": "imagingft.getname",
+  "operation": "getname",
+  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
+  "manifest_cases": [
+    "imagingft_missing_font_asset"
+  ],
+  "cases": [
+    {
+      "case_id": "imagingft.load_failure.missing_font_asset",
+      "subject": "imagingft.getname",
+      "case": "imagingft_missing_font_asset",
+      "operation": "getname",
+      "schema": "api_error",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/no_such_font.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      },
+      "expectation": {
+        "status": "error",
+        "compare": {
+          "mode": "exact",
+          "paths": ["error.type", "error.message"]
+        },
+        "oracle": "rust-load-error",
+        "expected": {
+          "status": "error",
+          "error": {
+            "type": "ValueError",
+            "message": "font bytes read failed (input/fonts/no_such_font.ttf): No such file or directory (os error 2)"
+          }
+        }
+      }
+    }
+  ],
+  "notes": [
+    "source:load-failure-coverage"
+  ]
+}

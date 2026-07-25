@@ -25,7 +25,12 @@
         },
         "params": {
           "size": 20,
-          "text": "Hello"
+          "text": "Hello",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [10,18],
+          "fill": [20,40,200,255],
+          "mode": "RGBA"
         }
       },
       "classifiers": [
@@ -77,7 +82,12 @@
         },
         "params": {
           "size": 20,
-          "text": "AV"
+          "text": "AV",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [10,18],
+          "fill": [20,40,200,255],
+          "mode": "RGBA"
         }
       },
       "classifiers": [
@@ -129,7 +139,12 @@
         },
         "params": {
           "size": 20,
-          "text": "jQ"
+          "text": "jQ",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [10,18],
+          "fill": [20,40,200,255],
+          "mode": "RGBA"
         }
       },
       "classifiers": [
