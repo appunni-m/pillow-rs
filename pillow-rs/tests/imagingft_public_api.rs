@@ -21,35 +21,16 @@ enum ApiValue {
     BBox((i32, i32, i32, i32)),
     Mask {
         size: (u32, u32),
-        mode: &'static str,
+        mode: String,
         pixels: Vec<u8>,
     },
     MaskWithOffset {
         size: (u32, u32),
-        mode: &'static str,
+        mode: String,
         pixels: Vec<u8>,
         offset: (i32, i32),
     },
     Unit,
-}
-
-fn load_font(case: &Value) -> Font {
-    let inputs = &case["inputs"];
-    let font = inputs["assets"]["font"]
-        .as_object()
-        .expect("font asset must be an object");
-    let kind = font["kind"].as_str().expect("font kind must be a string");
-    let size = inputs["params"]["size"].as_f64().unwrap_or(10.0) as f32;
-
-    match kind {
-        "load_default" => Font::load_default(size).expect("default font must load"),
-        "ref" => {
-            let id = font["id"].as_str().expect("font ref id must be a string");
-            let data = fs::read(crate_fixture_dir().join(id)).expect("font bytes must read");
-            Font::from_bytes(data, size).expect("font bytes must parse")
-        }
-        other => panic!("unsupported imagingft fixture font kind: {other}"),
-    }
 }
 
 fn artifact_path(raw_path: &str) -> PathBuf {
@@ -77,14 +58,130 @@ fn parse_orientation(value: &Value) -> Option<&str> {
     value.as_str().filter(|value| !value.is_empty())
 }
 
-fn parse_start(value: &Value) -> (f64, f64) {
-    let coords = value
+fn parse_start(value: &Value) -> Result<(f64, f64), PilError> {
+    let coords = value.as_array().ok_or(PilError::ValueError(
+        "start must be an array of two numbers".into(),
+    ))?;
+    if coords.len() != 2 {
+        return Err(PilError::ValueError(
+            "start must be an array of exactly two numbers".into(),
+        ));
+    }
+    let x = coords[0]
+        .as_f64()
+        .ok_or(PilError::ValueError("start[0] must be a number".into()))?;
+    let y = coords[1]
+        .as_f64()
+        .ok_or(PilError::ValueError("start[1] must be a number".into()))?;
+    Ok((x, y))
+}
+
+fn parse_text(value: &Value) -> Result<&str, PilError> {
+    value
+        .as_str()
+        .ok_or_else(|| PilError::ValueError("text must be a string".into()))
+}
+
+fn parse_size_u32(value: &Value) -> Result<u32, PilError> {
+    let value = value.as_u64().ok_or(PilError::ValueError(
+        "size value must be an unsigned integer".into(),
+    ))?;
+    u32::try_from(value).map_err(|_| PilError::ValueError("size must fit u32".into()))
+}
+
+fn parse_u8_value(value: &Value, index: usize) -> Result<u8, PilError> {
+    value
+        .as_u64()
+        .and_then(|v| u8::try_from(v).ok())
+        .ok_or_else(|| PilError::ValueError(format!("fill[{index}] must be u8")))
+}
+
+fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
+    let fill = value
         .as_array()
-        .expect("start must be an array of two floats");
-    assert_eq!(coords.len(), 2, "start must contain exactly two values");
-    let x = coords[0].as_f64().expect("start[0] must be a number");
-    let y = coords[1].as_f64().expect("start[1] must be a number");
-    (x, y)
+        .ok_or(PilError::ValueError("fill must be an array".into()))?;
+    if fill.len() != 3 && fill.len() != 4 {
+        return Err(PilError::ValueError(
+            "fill must be [r, g, b] or [r, g, b, a]".into(),
+        ));
+    }
+    let r = parse_u8_value(&fill[0], 0)?;
+    let g = parse_u8_value(&fill[1], 1)?;
+    let b = parse_u8_value(&fill[2], 2)?;
+    let a = if fill.len() == 4 {
+        parse_u8_value(&fill[3], 3)?
+    } else {
+        255
+    };
+    Ok((r, g, b, a))
+}
+
+fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
+    let coords = value.as_array().ok_or(PilError::ValueError(
+        "draw_text xy must be an array of two integers".into(),
+    ))?;
+    if coords.len() != 2 {
+        return Err(PilError::ValueError(
+            "draw_text xy must be an array of two integers".into(),
+        ));
+    }
+    let x = coords[0]
+        .as_i64()
+        .ok_or(PilError::ValueError("xy[0] must be integer".into()))?;
+    let y = coords[1]
+        .as_i64()
+        .ok_or(PilError::ValueError("xy[1] must be integer".into()))?;
+    Ok((
+        i32::try_from(x).map_err(|_| PilError::ValueError("xy[0] out of i32 range".into()))?,
+        i32::try_from(y).map_err(|_| PilError::ValueError("xy[1] out of i32 range".into()))?,
+    ))
+}
+
+fn load_font(case: &Value) -> Result<Font, PilError> {
+    let inputs = case
+        .get("inputs")
+        .ok_or(PilError::ValueError("case inputs missing".into()))?;
+    let font = inputs
+        .get("assets")
+        .and_then(|v| v.get("font"))
+        .and_then(Value::as_object)
+        .ok_or(PilError::ValueError("font asset must be an object".into()))?;
+    let kind = font
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or(PilError::ValueError("font kind must be a string".into()))?;
+    let size = inputs
+        .get("params")
+        .and_then(|p| p.get("size"))
+        .and_then(Value::as_f64)
+        .unwrap_or(10.0) as f32;
+
+    match kind {
+        "load_default" => Font::load_default(size)
+            .map_err(|e| PilError::ValueError(format!("load_default failed: {e}"))),
+        "ref" => {
+            let id = font
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or(PilError::ValueError(
+                    "font ref requires an id string".into(),
+                ))?;
+            let data = fs::read(crate_fixture_dir().join(id))
+                .map_err(|e| PilError::ValueError(format!("font bytes read failed ({id}): {e}")))?;
+            Font::from_bytes(data, size)
+                .map_err(|e| PilError::ValueError(format!("font parse failed: {e}")))
+        }
+        other => Err(PilError::ValueError(format!(
+            "unsupported imagingft fixture font kind: {other}"
+        ))),
+    }
+}
+
+fn parse_spacing(value: &Value) -> Result<f32, PilError> {
+    value
+        .as_f64()
+        .map(|v| v as f32)
+        .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))
 }
 
 fn pil_error_kind(err: &PilError) -> &'static str {
@@ -115,60 +212,60 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
         }
         "getmetrics" => Ok(ApiValue::Metrics(imagingft::getmetrics(font))),
         "getlength" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             Ok(ApiValue::Length(imagingft::getlength(font, text)))
         }
         "has_variations" => Ok(ApiValue::Bool(imagingft::has_variations(font))),
         "getbbox" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             Ok(ApiValue::BBox(imagingft::getbbox(font, text)))
         }
         "getbbox_binary" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             Ok(ApiValue::BBox(imagingft::getbbox_binary(font, text)))
         }
         "getmask" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             let (width, height, pixels) = imagingft::getmask(font, text);
             Ok(ApiValue::Mask {
                 size: (width, height),
-                mode: "L",
+                mode: "L".to_string(),
                 pixels,
             })
         }
         "getmask2" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             let (width, height, pixels, offset) = imagingft::getmask2(font, text);
             Ok(ApiValue::MaskWithOffset {
                 size: (width, height),
-                mode: "L",
+                mode: "L".to_string(),
                 pixels,
                 offset,
             })
         }
         "getmask2_with_start" => {
-            let text = params["text"].as_str().expect("text must be string");
-            let start = parse_start(&params["start"]);
+            let text = parse_text(&params["text"])?;
+            let start = parse_start(&params["start"])?;
             let (width, height, pixels, offset) = imagingft::getmask2_with_start(font, text, start);
             Ok(ApiValue::MaskWithOffset {
                 size: (width, height),
-                mode: "L",
+                mode: "L".to_string(),
                 pixels,
                 offset,
             })
         }
         "get_transposed_mask" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             let orientation = parse_orientation(&params["orientation"]);
             let (width, height, pixels) = imagingft::get_transposed_mask(font, text, orientation)?;
             Ok(ApiValue::Mask {
                 size: (width, height),
-                mode: "L",
+                mode: "L".to_string(),
                 pixels,
             })
         }
         "transposed_bbox" => {
-            let text = params["text"].as_str().expect("text must be string");
+            let text = parse_text(&params["text"])?;
             let orientation = parse_orientation(&params["orientation"]);
             Ok(ApiValue::BBox(imagingft::transposed_bbox(
                 imagingft::getbbox(font, text),
@@ -181,18 +278,35 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             Ok(ApiValue::Unit)
         }
         "draw_text" => {
-            let text = params["text"].as_str().expect("text must be string");
-            let expected_width = 96u32;
-            let expected_height = 64u32;
-            let mut image = Image::new(expected_width, expected_height, "RGBA", (0, 0, 0, 0))
+            let text = parse_text(&params["text"])?;
+            let expected_width = parse_size_u32(&params["canvas_width"])?;
+            let expected_height = parse_size_u32(&params["canvas_height"])?;
+            let (x, y) = parse_xy(&params["xy"])?;
+            let fill = parse_fill(&params["fill"])?;
+            let mode = params
+                .get("mode")
+                .and_then(Value::as_str)
+                .ok_or(PilError::ValueError("mode must be a string".into()))?;
+            let mut image = Image::new(expected_width, expected_height, mode, (0, 0, 0, 0))
                 .expect("draw_text canvas");
-            let mut draw = Draw::new(image.clone(), Some("RGBA".to_string()));
-            draw.text(10, 18, text, font, (20, 40, 200, 255))?;
+            let mut draw = Draw::new(image.clone(), Some(mode.to_string()));
+            draw.text(x, y, text, font, fill)?;
             image = draw.image_clone();
             let pixels = image.tobytes()?;
             Ok(ApiValue::Mask {
                 size: (expected_width, expected_height),
-                mode: "RGBA",
+                mode: mode.to_string(),
+                pixels,
+            })
+        }
+        "render_text_binary" => {
+            let text = parse_text(&params["text"])?;
+            let fill = parse_fill(&params["fill"])?;
+            let spacing = parse_spacing(&params["spacing"])?;
+            let (width, height, pixels) = imagingft::render_text_binary(font, text, fill, spacing);
+            Ok(ApiValue::Mask {
+                size: (width, height),
+                mode: "RGBA".to_string(),
                 pixels,
             })
         }
@@ -316,11 +430,22 @@ fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
     let expected_type = expected_error["type"]
         .as_str()
         .expect("expected error type");
+    assert_eq!(expected_type, pil_error_kind(error), "{case_id}");
+    let actual_message = error.to_string();
+    if let Some(pattern) = expected_error
+        .get("message_pattern")
+        .and_then(Value::as_str)
+    {
+        assert!(
+            actual_message.contains(pattern),
+            "{case_id}: expected message to contain '{pattern}', got '{actual_message}'"
+        );
+        return;
+    }
     let expected_message = expected_error["message"]
         .as_str()
         .expect("expected error message");
-    assert_eq!(expected_type, pil_error_kind(error), "{case_id}");
-    assert_eq!(expected_message, &error.to_string(), "{case_id}");
+    assert_eq!(expected_message, actual_message, "{case_id}");
 }
 
 #[test]
@@ -338,6 +463,7 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         "getmask",
         "getmask2",
         "getmask2_with_start",
+        "render_text_binary",
         "get_transposed_mask",
         "draw_text",
         "transposed_bbox",
@@ -377,6 +503,17 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                 let expect_error = case["expect_error"].as_bool().unwrap_or(false);
                 let params = &case["inputs"]["params"];
                 let font = load_font(case);
+                if font.is_err() {
+                    assert!(
+                        expect_error,
+                        "{case_id}: expected success but failed to load font"
+                    );
+                    let error = font.expect_err("load_error");
+                    let expected = &case["expectation"]["expected"];
+                    assert_error_matches(case_id, &error, expected);
+                    continue;
+                }
+                let font = font.expect("case font must load");
                 let expected_status = case["expectation"]["status"].as_str().unwrap_or("ok");
                 let expected = &case["expectation"]["expected"];
                 let actual = run_case(operation, &font, params);
