@@ -19,16 +19,12 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/type1/track-kern-base.pfb",
-            "status": "required_future_asset",
-            "requires": "Type1 PFA/PFB fixture compatible with track kerning AFM attachment"
+            "path": "input/fonts/type1/track-kern-base.pfb"
           },
           "attachment": {
             "kind": "ref",
             "role": "auxiliary_metrics",
-            "path": "input/aux/type1/track-kern-base.afm",
-            "status": "required_future_asset",
-            "requires": "AFM file with track kerning data for negative, zero, and positive degrees"
+            "path": "input/aux/type1/track-kern-base.afm"
           }
         },
         "params": {
@@ -135,9 +131,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "path": "input/fonts/type1/track-kern-base.pfb",
-            "status": "required_future_asset",
-            "requires": "Type1 PFA/PFB fixture compatible with track kerning AFM attachment"
+            "path": "input/fonts/type1/track-kern-base.pfb"
           }
         },
         "params": {

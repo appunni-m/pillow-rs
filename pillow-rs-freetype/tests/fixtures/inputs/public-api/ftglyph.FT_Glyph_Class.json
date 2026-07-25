@@ -3,7 +3,9 @@
   "subject": "ftglyph.FT_Glyph_Class",
   "manifest_cases": [
     "alias_defined",
-    "opaque_class_identity_only"
+    "opaque_class_identity_only",
+    "outline_class_behavior",
+    "bitmap_class_behavior"
   ],
   "cases": [
     {
@@ -43,6 +45,119 @@
         "source_refs": [
           "freetype/include/freetype/ftglyph.h",
           "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Class.outline_class_behavior",
+      "subject": "ftglyph.FT_Glyph_Class",
+      "case": "outline_class_behavior",
+      "operation": "ftglyph.type_runtime",
+      "schema": "glyph_type_relationship",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "creation_path": "FT_Get_Glyph outline",
+          "format_filter": "FT_GLYPH_FORMAT_OUTLINE",
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "class_observation": "public_outline_behavior_only"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftglyph",
+        "runtime:glyph-class"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ctype": "FT_Glyph_Class",
+          "format": "FT_GLYPH_FORMAT_OUTLINE",
+          "classification": "private class observed only through public outline behavior"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].status",
+            "rows[*].outline",
+            "rows[*].root",
+            "rows[*].cbox"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:93-120",
+          "freetype/src/base/ftglyph.c:633-682"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_Class.bitmap_class_behavior",
+      "subject": "ftglyph.FT_Glyph_Class",
+      "case": "bitmap_class_behavior",
+      "operation": "ftglyph.type_runtime",
+      "schema": "glyph_type_relationship",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          },
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_paths": [
+            "FT_Get_Glyph bitmap"
+          ],
+          "format_filter": "FT_GLYPH_FORMAT_BITMAP",
+          "face_index": 0,
+          "pixel_size": 20,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "class_observation": "public_bitmap_behavior_only"
+        }
+      },
+      "classifiers": [
+        "kind:type",
+        "header:ftglyph",
+        "runtime:glyph-class"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "ctype": "FT_Glyph_Class",
+          "format": "FT_GLYPH_FORMAT_BITMAP",
+          "classification": "private class observed only through public bitmap behavior"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "format",
+            "advance",
+            "bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:93-120",
+          "freetype/src/base/ftglyph.c:633-682"
         ]
       }
     },

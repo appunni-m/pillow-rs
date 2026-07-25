@@ -25,9 +25,7 @@
           "attachment": {
             "kind": "ref",
             "role": "auxiliary_metrics_stream",
-            "path": "input/aux/type1/attach-afm-base.afm",
-            "status": "required_future_asset",
-            "requires": "In-memory AFM/PFM bytes accepted by Type1 attach_file hook"
+            "path": "input/aux/type1/attach-afm-base.afm"
           }
         },
         "params": {
@@ -80,9 +78,7 @@
           "attachment": {
             "kind": "ref",
             "role": "auxiliary_metrics_stream",
-            "path": "input/aux/type1/attach-afm-base.afm",
-            "status": "required_future_asset",
-            "requires": "Any open args payload"
+            "path": "input/aux/type1/attach-afm-base.afm"
           }
         },
         "params": {

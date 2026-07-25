@@ -62,6 +62,19 @@
       "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "coverage:glyph-output"],
       "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_MM_Design_Coordinates", "kind": "function"}, "source_behavior": "Successful Adobe MM design coordinate changes alter interpolation and invalidate autohint data."},
       "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "glyph_metrics": "FT_Glyph_Metrics", "outline_cbox": "FT_BBox", "bitmap": {"buffer_hash": "sha256"}}, "compare": {"mode": "bytes", "paths": ["return", "glyph_metrics", "outline_cbox", "bitmap.buffer"]}, "source_refs": ["freetype/src/base/ftmm.c:201-208", "freetype/src/type1/t1load.c"], "fixture_requirements": ["Adobe MM font with non-default design coordinates changing glyph metrics or outline."]}
+    },
+    {
+      "case_id": "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph",
+      "subject": "ftmm.FT_Set_MM_Design_Coordinates",
+      "case": "output_changes_for_mm_design",
+      "covers_manifest_cases": ["output_changes_for_mm_design"],
+      "operation": "ftmm.set_mm_design_coordinates",
+      "schema": "glyph_result",
+      "expect_error": false,
+      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/type1-mm/adobe-mm-two-axis.pfb", "asset_kind": "font"}}, "params": {"face_index": 0, "num_coords": 2, "coords_ft_long": [700, 300], "glyph_index": 1, "pixel_size": 32, "load_flags": ["FT_LOAD_DEFAULT"], "render_mode": "FT_RENDER_MODE_NORMAL"}},
+      "classifiers": ["kind:function", "header:ftmm", "surface:public-c-api", "coverage:glyph-output"],
+      "metadata": {"abi": {"header": "freetype/ftmm.h", "symbol": "FT_Set_MM_Design_Coordinates", "kind": "function"}, "source_behavior": "Pinned FreeType 2.14.3 accepts glyph index 1 in the maintained Adobe MM fixture after FT_Set_MM_Design_Coordinates; the broader glyph_index=42 row remains pending because C returns Invalid_Glyph_Index for that input."},
+      "expectation": {"status": "ok", "output_shape": {"return": "FT_Error", "glyph_metrics": "FT_Glyph_Metrics", "outline_cbox": "FT_BBox", "bitmap": {"buffer_hash": "sha256"}}, "compare": {"mode": "bytes", "paths": ["return", "glyph_metrics", "outline_cbox", "bitmap.buffer"]}, "source_refs": ["freetype/src/base/ftmm.c:201-208", "freetype/src/type1/t1load.c"], "fixture_requirements": ["Adobe MM font with a C-loadable glyph index after design coordinate mutation."]}
     }
   ]
 }

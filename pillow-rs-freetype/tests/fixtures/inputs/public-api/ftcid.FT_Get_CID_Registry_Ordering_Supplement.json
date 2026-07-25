@@ -64,9 +64,13 @@
       "inputs": {
         "assets": {
           "cid_font": {
-            "kind": "ref",
-            "id": "fonts/cid/source-han-cid.otf",
-            "asset_kind": "font"
+            "kind": "file",
+            "path": "input/fonts/cid/ot-cff-cid-keyed.otf",
+            "asset_kind": "font",
+            "source": "https://github.com/adobe-fonts/fdarray-test/blob/e0b4382dee1625833b5f9b214eac0676d8ec7334/FDArrayTest257.otf",
+            "source_commit": "e0b4382dee1625833b5f9b214eac0676d8ec7334",
+            "sha256": "211f9ecb8b8064931f860e84bfe6e746e926273ef924990887ff2df13e6fede7",
+            "license": "OFL-1.1"
           }
         },
         "params": {

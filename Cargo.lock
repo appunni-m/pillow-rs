@@ -411,6 +411,7 @@ name = "fontdone"
 version = "2.14.3"
 dependencies = [
  "env_logger",
+ "flate2",
  "fontdone-ffi-c",
  "fontdone-ffi-wasm",
  "log",

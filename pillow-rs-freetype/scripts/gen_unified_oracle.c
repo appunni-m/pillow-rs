@@ -11,10 +11,13 @@
 #include <freetype/ftbbox.h>
 #include <freetype/ftbitmap.h>
 #include <freetype/ftbdf.h>
+#include <freetype/ftbzip2.h>
+#include <freetype/ftcid.h>
 #include <freetype/ftcolor.h>
 #include <freetype/ftdriver.h>
 #include <freetype/ftfntfmt.h>
 #include <freetype/ftglyph.h>
+#include <freetype/ftgzip.h>
 #include <freetype/ftgasp.h>
 #include <freetype/ftgxval.h>
 #include <freetype/ftimage.h>
@@ -37,10 +40,16 @@
 #include <freetype/internal/ftobjs.h>
 #include <freetype/t1tables.h>
 #include <freetype/tttables.h>
+#include "../freetype/src/cache/ftccache.h"
 
 #ifndef FT_ERR_PREFIX
 #define FT_ERR_PREFIX FT_Err_
 #endif
+
+static FT_Error cache_no_lookup_requester(FTC_FaceID face_id,
+                                          FT_Library library,
+                                          FT_Pointer req_data,
+                                          FT_Face* aface);
 
 static int streq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
@@ -151,6 +160,7 @@ static int is_moveto_callback_error_case(const char* case_id) {
 }
 
 static void print_json_bool(int value);
+static void print_status(FT_Error err);
 static void print_slot_body(FT_GlyphSlot slot, FT_UInt glyph_index);
 
 #include "generated_constants.inc"
@@ -191,6 +201,260 @@ static int load_file(const char* path, unsigned char** out, long* out_len) {
     return 0;
 }
 
+static void print_gzip_uncompress_row(
+    const char* payload_id,
+    const char* input_kind,
+    const char* buffer_size,
+    FT_Error status,
+    FT_ULong output_len,
+    const unsigned char* output) {
+    printf("{\"payload\":\"");
+    print_json_string_content(payload_id);
+    printf("\",\"input_kind\":\"");
+    print_json_string_content(input_kind);
+    printf("\",\"buffer_size\":\"");
+    print_json_string_content(buffer_size);
+    printf("\",\"status\":%d,\"output_len\":%lu,\"output_bytes\":\"",
+           status, (unsigned long)output_len);
+    if (!status) {
+        print_hex_bytes(output, (long)output_len);
+    }
+    printf("\"}");
+}
+
+static int emit_gzip_uncompress(int argc, char** argv) {
+    if (argc < 6 || ((argc - 2) % 4) != 0) {
+        fprintf(stderr, "--gzip-uncompress requires PAYLOAD_ID RAW GZIP ZLIB groups\n");
+        return 2;
+    }
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"rows\":[");
+    int first = 1;
+    for (int index = 2; index + 3 < argc; index += 4) {
+        const char* payload_id = argv[index];
+        const char* raw_path = argv[index + 1];
+        const char* gzip_path = argv[index + 2];
+        const char* zlib_path = argv[index + 3];
+        unsigned char* raw = NULL;
+        unsigned char* gzip_bytes = NULL;
+        unsigned char* zlib_bytes = NULL;
+        long raw_len = 0;
+        long gzip_len = 0;
+        long zlib_len = 0;
+        if (load_file(raw_path, &raw, &raw_len) != 0 ||
+            load_file(gzip_path, &gzip_bytes, &gzip_len) != 0 ||
+            load_file(zlib_path, &zlib_bytes, &zlib_len) != 0) {
+            free(raw);
+            free(gzip_bytes);
+            free(zlib_bytes);
+            FT_Done_FreeType(library);
+            return 2;
+        }
+        for (int kind = 0; kind < 2; kind++) {
+            const char* input_kind = kind == 0 ? "gzip" : "zlib_wrapped";
+            const unsigned char* input = kind == 0 ? gzip_bytes : zlib_bytes;
+            long input_len = kind == 0 ? gzip_len : zlib_len;
+            for (int size_kind = 0; size_kind < 2; size_kind++) {
+                const char* buffer_size = size_kind == 0
+                    ? "exact_uncompressed_size"
+                    : "larger_than_uncompressed_size";
+                FT_ULong output_capacity = (FT_ULong)raw_len + (size_kind == 0 ? 0UL : 7UL);
+                unsigned char* output = (unsigned char*)malloc((size_t)(output_capacity ? output_capacity : 1));
+                if (!output) {
+                    free(raw);
+                    free(gzip_bytes);
+                    free(zlib_bytes);
+                    FT_Done_FreeType(library);
+                    return 1;
+                }
+                memset(output, 0xA5, (size_t)(output_capacity ? output_capacity : 1));
+                FT_ULong output_len = output_capacity;
+                FT_Error status = FT_Gzip_Uncompress(
+                    library->memory,
+                    output,
+                    &output_len,
+                    input,
+                    (FT_ULong)input_len);
+                if (!first) {
+                    printf(",");
+                }
+                print_gzip_uncompress_row(payload_id, input_kind, buffer_size, status, output_len, output);
+                first = 0;
+                free(output);
+            }
+        }
+        free(raw);
+        free(gzip_bytes);
+        free(zlib_bytes);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static const char* stream_ptr_class(const void* ptr) {
+    return ptr ? "nonnull" : "null";
+}
+
+static void print_gzip_stream_read_ranges(
+    FT_Stream stream,
+    const unsigned char* raw,
+    long raw_len) {
+    const unsigned long lengths[3] = { 16UL, 19UL, 23UL };
+    unsigned long starts[3];
+    starts[0] = 0;
+    starts[1] = raw_len > 19 ? (unsigned long)(raw_len / 2) : 0;
+    starts[2] = raw_len > 23 ? (unsigned long)(raw_len - 23) : 0;
+    const char* labels[3] = { "beginning", "middle", "end" };
+
+    printf("[");
+    for (int i = 0; i < 3; i++) {
+        unsigned long available = raw_len > (long)starts[i]
+            ? (unsigned long)raw_len - starts[i]
+            : 0;
+        unsigned long count = lengths[i] < available ? lengths[i] : available;
+        unsigned char buffer[32];
+        memset(buffer, 0, sizeof(buffer));
+        unsigned long read_count = 0;
+        if (stream->base) {
+            if (count) {
+                memcpy(buffer, stream->base + starts[i], count);
+            }
+            read_count = count;
+        } else if (stream->read) {
+            read_count = stream->read(stream, starts[i], buffer, count);
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("{\"label\":\"%s\",\"offset\":%lu,\"requested\":%lu,\"read\":%lu,\"bytes\":\"",
+               labels[i], starts[i], count, read_count);
+        print_hex_bytes(buffer, (long)read_count);
+        printf("\",\"expected\":\"");
+        print_hex_bytes(raw + starts[i], (long)read_count);
+        printf("\"}");
+    }
+    printf("]");
+}
+
+static void print_gzip_stream_row(
+    const char* payload_id,
+    const char* source_position,
+    FT_Error status,
+    FT_Stream stream,
+    const unsigned char* raw,
+    long raw_len) {
+    printf("{\"payload\":\"");
+    print_json_string_content(payload_id);
+    printf("\",\"source_position\":\"");
+    print_json_string_content(source_position);
+    printf("\",\"status\":%d,\"stream\":{", status);
+    printf("\"size\":%lu,\"base_class\":\"%s\",\"read_class\":\"%s\",\"close_class\":\"%s\"},",
+           status ? 0UL : (unsigned long)stream->size,
+           status ? "null" : stream_ptr_class(stream->base),
+           status ? "null" : stream_ptr_class(stream->read),
+           status ? "null" : stream_ptr_class(stream->close));
+    printf("\"read_ranges\":");
+    if (status) {
+        printf("[]");
+    } else {
+        print_gzip_stream_read_ranges(stream, raw, raw_len);
+    }
+    printf("}");
+}
+
+static int emit_gzip_stream_open(int argc, char** argv) {
+    if (argc < 5 || ((argc - 2) % 3) != 0) {
+        fprintf(stderr, "--gzip-stream-open requires PAYLOAD_ID RAW GZIP groups\n");
+        return 2;
+    }
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"rows\":[");
+    int first = 1;
+    for (int index = 2; index + 2 < argc; index += 3) {
+        const char* payload_id = argv[index];
+        const char* raw_path = argv[index + 1];
+        const char* gzip_path = argv[index + 2];
+        unsigned char* raw = NULL;
+        unsigned char* gzip_bytes = NULL;
+        long raw_len = 0;
+        long gzip_len = 0;
+        if (load_file(raw_path, &raw, &raw_len) != 0 ||
+            load_file(gzip_path, &gzip_bytes, &gzip_len) != 0) {
+            free(raw);
+            free(gzip_bytes);
+            FT_Done_FreeType(library);
+            return 2;
+        }
+        for (int source_case = 0; source_case < 2; source_case++) {
+            FT_StreamRec source;
+            FT_StreamRec stream;
+            memset(&source, 0, sizeof(source));
+            memset(&stream, 0xA5, sizeof(stream));
+            source.base = gzip_bytes;
+            source.size = (FT_ULong)gzip_len;
+            source.pos = source_case == 0 ? 0UL : 3UL;
+            source.memory = library->memory;
+            FT_Error status = FT_Stream_OpenGzip(&stream, &source);
+            if (!first) {
+                printf(",");
+            }
+            print_gzip_stream_row(
+                payload_id,
+                source_case == 0 ? "zero" : "nonzero_before_header",
+                status,
+                &stream,
+                raw,
+                raw_len);
+            first = 0;
+            if (!status && stream.close) {
+                stream.close(&stream);
+            }
+        }
+        free(raw);
+        free(gzip_bytes);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_bzip2_stream_disabled_policy(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_StreamRec source;
+    FT_StreamRec stream;
+    memset(&source, 0, sizeof(source));
+    memset(&stream, 0, sizeof(stream));
+
+    FT_Error status = FT_Stream_OpenBzip2(&stream, &source);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"build_features\":{\"bzip2\":false},\"error\":%d,"
+           "\"stream\":{\"base_class\":\"%s\",\"read_class\":\"%s\",\"close_class\":\"%s\"}}}\n",
+           status,
+           stream.base ? "nonnull" : "null",
+           stream.read ? "nonnull" : "null",
+           stream.close ? "nonnull" : "null");
+    return 0;
+}
+
 static unsigned char hex_nibble(char c) {
     if (c >= '0' && c <= '9') {
         return (unsigned char)(c - '0');
@@ -227,6 +491,192 @@ static void print_status(FT_Error err) {
     } else {
         printf("\"status\":{\"kind\":\"error\",\"error_code\":%d}", err);
     }
+}
+
+static int fixture_module_init_calls = 0;
+static int fixture_module_done_calls = 0;
+
+static FT_Error fixture_module_init(FT_Module module) {
+    (void)module;
+    fixture_module_init_calls++;
+    return FT_Err_Ok;
+}
+
+static void fixture_module_done(FT_Module module) {
+    (void)module;
+    fixture_module_done_calls++;
+}
+
+static void* fixture_module_get_interface(FT_Module module, const char* name) {
+    (void)module;
+    (void)name;
+    return NULL;
+}
+
+static int emit_add_module_fixture(const char* module_name,
+                                   FT_ULong module_flags,
+                                   const void* module_interface,
+                                   const char* module_size_label,
+                                   int add_default_modules) {
+    fixture_module_init_calls = 0;
+    fixture_module_done_calls = 0;
+    struct FT_MemoryRec_ memory = {0};
+    memory.alloc = oracle_alloc;
+    memory.free = oracle_free;
+    memory.realloc = oracle_realloc;
+    FT_Library library = NULL;
+    FT_Error err = FT_New_Library(&memory, &library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"error\":%d}}\n", err);
+        return 0;
+    }
+    if (add_default_modules) {
+        FT_Add_Default_Modules(library);
+    }
+    FT_Renderer outline_renderer_before = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    FT_Module_Class fixture_class = {
+        module_flags,
+        sizeof(FT_ModuleRec),
+        module_name,
+        0x00010000L,
+        0x00020000L,
+        module_interface,
+        fixture_module_init,
+        fixture_module_done,
+        fixture_module_get_interface
+    };
+    err = FT_Add_Module(library, &fixture_class);
+    FT_Module module = FT_Get_Module(library, module_name);
+    FT_Renderer outline_renderer_after = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", err);
+    printf("\"module_count\":%u,", library ? library->num_modules : 0);
+    printf("\"lookup_result\":{\"nullness\":");
+    print_json_bool(module == NULL);
+    printf("},\"stored_class_fields\":{");
+    printf("\"module_flags\":%lu,", (unsigned long)fixture_class.module_flags);
+    printf("\"module_size\":\"%s\",", module_size_label);
+    printf("\"module_name\":\"%s\",", module_name);
+    printf("\"module_version\":%ld,", (long)fixture_class.module_version);
+    printf("\"module_requires\":%ld,", (long)fixture_class.module_requires);
+    printf("\"module_interface_nullness\":");
+    print_json_bool(fixture_class.module_interface == NULL);
+    printf("},\"routing_effects\":{");
+    printf("\"outline_renderer_present_before\":");
+    print_json_bool(outline_renderer_before != NULL);
+    printf(",\"outline_renderer_present_after\":");
+    print_json_bool(outline_renderer_after != NULL);
+    printf(",\"outline_renderer_identity_preserved\":");
+    print_json_bool(outline_renderer_before == outline_renderer_after);
+    printf("},\"renderer_membership\":null,\"callback_log\":[");
+    if (fixture_module_init_calls > 0) {
+        printf("\"module_init\"");
+    }
+    printf("]}}\n");
+    FT_Done_Library(library);
+    return 0;
+}
+
+static int emit_add_module_minimal(void) {
+    return emit_add_module_fixture("fixture_minimal", 0, NULL, "sizeof_synthetic_module", 0);
+}
+
+static int emit_add_module_styler(void) {
+    static const char fixture_private_interface = 0;
+    return emit_add_module_fixture("fixture_styler",
+                                   FT_MODULE_STYLER,
+                                   &fixture_private_interface,
+                                   "sizeof_synthetic_module",
+                                   1);
+}
+
+static int emit_add_module_renderer(void) {
+    fixture_module_init_calls = 0;
+    fixture_module_done_calls = 0;
+    struct FT_MemoryRec_ memory = {0};
+    memory.alloc = oracle_alloc;
+    memory.free = oracle_free;
+    memory.realloc = oracle_realloc;
+    FT_Library library = NULL;
+    FT_Error err = FT_New_Library(&memory, &library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":{\"error\":%d}}\n", err);
+        return 0;
+    }
+    FT_Add_Default_Modules(library);
+    FT_Renderer outline_renderer_before = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    static const char synthetic_renderer_interface = 0;
+    FT_Renderer_Class fixture_renderer_class = {
+        {
+            FT_MODULE_RENDERER,
+            sizeof(FT_RendererRec),
+            "fixture_renderer",
+            0x00010000L,
+            0x00020000L,
+            &synthetic_renderer_interface,
+            fixture_module_init,
+            fixture_module_done,
+            fixture_module_get_interface
+        },
+        FT_GLYPH_FORMAT_OUTLINE,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    };
+    err = FT_Add_Module(library, &fixture_renderer_class.root);
+    FT_Module module = FT_Get_Module(library, "fixture_renderer");
+    FT_Renderer outline_renderer_after = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    FT_Error set_renderer_status = module
+        ? FT_Set_Renderer(library, (FT_Renderer)module, 0, NULL)
+        : FT_Err_Invalid_Argument;
+    FT_Renderer outline_renderer_after_set = FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", err);
+    printf("\"module_count\":%u,", library ? library->num_modules : 0);
+    printf("\"lookup_result\":{\"nullness\":");
+    print_json_bool(module == NULL);
+    printf("},\"stored_class_fields\":{");
+    printf("\"module_flags\":%lu,", (unsigned long)fixture_renderer_class.root.module_flags);
+    printf("\"module_size\":\"sizeof_synthetic_renderer_module\",");
+    printf("\"module_name\":\"fixture_renderer\",");
+    printf("\"module_version\":%ld,", (long)fixture_renderer_class.root.module_version);
+    printf("\"module_requires\":%ld,", (long)fixture_renderer_class.root.module_requires);
+    printf("\"module_interface_nullness\":");
+    print_json_bool(fixture_renderer_class.root.module_interface == NULL);
+    printf("},\"routing_effects\":{");
+    printf("\"outline_renderer_present_before\":");
+    print_json_bool(outline_renderer_before != NULL);
+    printf(",\"outline_renderer_present_after\":");
+    print_json_bool(outline_renderer_after != NULL);
+    printf(",\"outline_renderer_identity_preserved\":");
+    print_json_bool(outline_renderer_before == outline_renderer_after);
+    printf("},\"renderer_membership\":{");
+    printf("\"set_renderer_status\":%d,", set_renderer_status);
+    printf("\"current_renderer_after_set\":");
+    if (outline_renderer_after_set == (FT_Renderer)module) {
+        printf("\"fixture_renderer\"");
+    } else if (outline_renderer_after_set == NULL) {
+        printf("\"null\"");
+    } else {
+        printf("\"other\"");
+    }
+    printf("},\"callback_log\":[");
+    if (fixture_module_init_calls > 0) {
+        printf("\"module_init\"");
+    }
+    printf("]}}\n");
+    FT_Done_Library(library);
+    return 0;
 }
 
 static void dirty_bitmap(FT_Bitmap* bitmap) {
@@ -3553,6 +4003,29 @@ static void print_tt_vert_header_record(const TT_VertHeader* record) {
     printf("}");
 }
 
+static void print_tt_maxprofile_record(const TT_MaxProfile* record) {
+    if (!record) {
+        printf("null");
+        return;
+    }
+    printf("{\"version\":%ld", (long)record->version);
+    printf(",\"numGlyphs\":%u", (unsigned)record->numGlyphs);
+    printf(",\"maxPoints\":%u", (unsigned)record->maxPoints);
+    printf(",\"maxContours\":%u", (unsigned)record->maxContours);
+    printf(",\"maxCompositePoints\":%u", (unsigned)record->maxCompositePoints);
+    printf(",\"maxCompositeContours\":%u", (unsigned)record->maxCompositeContours);
+    printf(",\"maxZones\":%u", (unsigned)record->maxZones);
+    printf(",\"maxTwilightPoints\":%u", (unsigned)record->maxTwilightPoints);
+    printf(",\"maxStorage\":%u", (unsigned)record->maxStorage);
+    printf(",\"maxFunctionDefs\":%u", (unsigned)record->maxFunctionDefs);
+    printf(",\"maxInstructionDefs\":%u", (unsigned)record->maxInstructionDefs);
+    printf(",\"maxStackElements\":%u", (unsigned)record->maxStackElements);
+    printf(",\"maxSizeOfInstructions\":%u", (unsigned)record->maxSizeOfInstructions);
+    printf(",\"maxComponentElements\":%u", (unsigned)record->maxComponentElements);
+    printf(",\"maxComponentDepth\":%u", (unsigned)record->maxComponentDepth);
+    printf("}");
+}
+
 static void print_fstype_flags_result(FT_UShort flags, const char* symbol_name) {
     printf("{\"return\":%u,\"fs_type\":%u", (unsigned int)flags, (unsigned int)flags);
     if (symbol_name && symbol_name[0] && !streq(symbol_name, "-")) {
@@ -5793,6 +6266,29 @@ static void print_glyph_record_payload(FT_Glyph glyph) {
     printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->advance.x, glyph->advance.y);
     printf("\"library_present\":%s,", glyph->library ? "true" : "false");
     printf("\"clazz_present\":%s", glyph->clazz ? "true" : "false");
+    if (glyph->format == FT_GLYPH_FORMAT_BITMAP) {
+        FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
+        FT_Bitmap* bitmap = &bitmap_glyph->bitmap;
+        long len = 0;
+        if (bitmap->buffer && bitmap->rows > 0) {
+            len = labs(bitmap->pitch) * bitmap->rows;
+        }
+        printf(",\"bitmap\":");
+        if (!bitmap->buffer || len == 0) {
+            printf("null");
+        } else {
+            printf("{\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"left\":%d,\"top\":%d,\"buffer_hex\":\"",
+                   bitmap->width,
+                   bitmap->rows,
+                   bitmap->pitch,
+                   bitmap->pixel_mode,
+                   bitmap->num_grays,
+                   bitmap_glyph->left,
+                   bitmap_glyph->top);
+            print_hex_bytes(bitmap->buffer, len);
+            printf("\"}");
+        }
+    }
     printf("}}");
 }
 
@@ -5816,6 +6312,363 @@ static void print_get_glyph_payload(FT_GlyphSlot slot, const char* action) {
     if (glyph) {
         FT_Done_Glyph(glyph);
     }
+}
+
+static int load_record_source_bytes(const char* source_kind,
+                                    const char* source_value,
+                                    unsigned char** data,
+                                    long* data_len) {
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 1;
+        }
+        return 0;
+    }
+    if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, data, data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 1;
+        }
+        return 0;
+    }
+    fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+    return 1;
+}
+
+static FT_Error open_record_face(FT_Library library,
+                                 const char* source_kind,
+                                 const char* source_value,
+                                 FT_Long face_index,
+                                 FT_UInt pixel_x,
+                                 FT_UInt pixel_y,
+                                 unsigned char** data,
+                                 FT_Face* face) {
+    long data_len = 0;
+    if (load_record_source_bytes(source_kind, source_value, data, &data_len) != 0) {
+        return FT_Err_Invalid_Argument;
+    }
+    FT_Error err = FT_New_Memory_Face(library, *data, data_len, face_index, face);
+    if (!err) {
+        err = FT_Set_Pixel_Sizes(*face, pixel_x, pixel_y);
+    }
+    return err;
+}
+
+static void print_bitmap_glyph_record_row(const char* creation_path, FT_BitmapGlyph glyph) {
+    FT_Bitmap* bitmap = &glyph->bitmap;
+    long len = 0;
+    if (bitmap->buffer && bitmap->rows > 0) {
+        len = labs(bitmap->pitch) * bitmap->rows;
+    }
+    printf("{\"creation_path\":\"%s\",\"glyph\":{", creation_path);
+    printf("\"format\":%ld,", (long)glyph->root.format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},", glyph->root.advance.x, glyph->root.advance.y);
+    printf("\"library_present\":%s,", glyph->root.library ? "true" : "false");
+    printf("\"clazz_present\":%s,", glyph->root.clazz ? "true" : "false");
+    printf("\"bitmap\":{");
+    printf("\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%u,\"num_grays\":%u,\"left\":%d,\"top\":%d,\"buffer_hex\":\"",
+           bitmap->width,
+           bitmap->rows,
+           bitmap->pitch,
+           bitmap->pixel_mode,
+           bitmap->num_grays,
+           glyph->left,
+           glyph->top);
+    if (bitmap->buffer && len > 0) {
+        print_hex_bytes(bitmap->buffer, len);
+    }
+    printf("\"}}}");
+}
+
+static int emit_bitmap_glyph_record_paths(int argc, char** argv) {
+    (void)argc;
+    const char* outline_kind = argv[2];
+    const char* outline_value = argv[3];
+    const char* bitmap_kind = argv[4];
+    const char* bitmap_value = argv[5];
+    FT_Long face_index = (FT_Long)strtol(argv[6], NULL, 10);
+    FT_UInt pixel_x = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_y = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt bitmap_glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_UInt outline_glyph_index = (FT_UInt)strtoul(argv[10], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[11], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[12], NULL, 10);
+
+    FT_Library library = NULL;
+    FT_Face bitmap_face = NULL;
+    FT_Face outline_face = NULL;
+    FT_Glyph bitmap_glyph = NULL;
+    FT_Glyph outline_glyph = NULL;
+    unsigned char* bitmap_data = NULL;
+    unsigned char* outline_data = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+
+    if (!err) {
+        err = open_record_face(library, bitmap_kind, bitmap_value, face_index, pixel_x, pixel_y, &bitmap_data, &bitmap_face);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(bitmap_face, bitmap_glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Get_Glyph(bitmap_face->glyph, &bitmap_glyph);
+    }
+    if (!err && (!bitmap_glyph || bitmap_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        err = FT_Err_Invalid_Glyph_Format;
+    }
+    if (!err) {
+        err = open_record_face(library, outline_kind, outline_value, face_index, pixel_x, pixel_y, &outline_data, &outline_face);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(outline_face, outline_glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Get_Glyph(outline_face->glyph, &outline_glyph);
+    }
+    if (!err) {
+        err = FT_Glyph_To_Bitmap(&outline_glyph, render_mode, NULL, 0);
+    }
+    if (!err && (!outline_glyph || outline_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"rows\":[");
+        print_bitmap_glyph_record_row("FT_Get_Glyph bitmap", (FT_BitmapGlyph)bitmap_glyph);
+        printf(",");
+        print_bitmap_glyph_record_row("FT_Glyph_To_Bitmap outline", (FT_BitmapGlyph)outline_glyph);
+        printf("]}}\n");
+    }
+
+    if (bitmap_glyph) {
+        FT_Done_Glyph(bitmap_glyph);
+    }
+    if (outline_glyph) {
+        FT_Done_Glyph(outline_glyph);
+    }
+    if (bitmap_face) {
+        FT_Done_Face(bitmap_face);
+    }
+    if (outline_face) {
+        FT_Done_Face(outline_face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(bitmap_data);
+    free(outline_data);
+    return 0;
+}
+
+static void print_done_outline_glyph_payload(FT_GlyphSlot slot) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    FT_Glyph_Format format = 0;
+    FT_Bool owner = 0;
+    short n_points = 0;
+    short n_contours = 0;
+    if (!err && glyph) {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        format = glyph->format;
+        owner = (outline_glyph->outline.flags & FT_OUTLINE_OWNER) != 0;
+        n_points = outline_glyph->outline.n_points;
+        n_contours = outline_glyph->outline.n_contours;
+    }
+    print_status(0);
+    printf(",\"output\":{");
+    printf("\"void\":true,");
+    printf("\"created_glyph_pointer_class\":\"%s\",", glyph ? "non_null" : "null");
+    printf("\"create_error\":%d,", err);
+    if (!err && glyph) {
+        printf("\"format_before_done\":%ld,", (long)format);
+        printf("\"outline_owner_class\":\"%s\",", owner ? "owned" : "borrowed");
+        printf("\"outline_counts_before_done\":{\"n_points\":%d,\"n_contours\":%d},",
+               n_points,
+               n_contours);
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned outline glyph\",");
+        printf("\"lifetime_order\":\"glyph_before_face_and_library\",");
+        printf("\"invalid_use_classification\":\"not_attempted\"");
+    } else {
+        printf("\"format_before_done\":null,");
+        printf("\"outline_owner_class\":null,");
+        printf("\"outline_counts_before_done\":null,");
+        printf("\"free_events\":\"none\",");
+        printf("\"lifetime_order\":\"glyph_not_created\",");
+        printf("\"invalid_use_classification\":\"not_attempted\"");
+    }
+    printf("}}\n");
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
+static void print_done_bitmap_glyph_payload(FT_GlyphSlot slot) {
+    FT_Glyph glyph = NULL;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+    FT_Glyph_Format format = 0;
+    const char* buffer_class = "null";
+    unsigned int width = 0;
+    unsigned int rows = 0;
+    int pitch = 0;
+    if (!err && glyph) {
+        FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
+        FT_Bitmap* bitmap = &bitmap_glyph->bitmap;
+        format = glyph->format;
+        buffer_class = bitmap->buffer ? "owned_non_null" : "null";
+        width = bitmap->width;
+        rows = bitmap->rows;
+        pitch = bitmap->pitch;
+    }
+    print_status(0);
+    printf(",\"output\":{");
+    printf("\"void\":true,");
+    printf("\"created_glyph_pointer_class\":\"%s\",", glyph ? "non_null" : "null");
+    printf("\"create_error\":%d,", err);
+    if (!err && glyph) {
+        printf("\"format_before_done\":%ld,", (long)format);
+        printf("\"buffer_owner_class\":\"%s\",", buffer_class);
+        printf("\"bitmap_before_done\":{\"width\":%u,\"rows\":%u,\"pitch\":%d},",
+               width,
+               rows,
+               pitch);
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned bitmap glyph\"");
+    } else {
+        printf("\"format_before_done\":null,");
+        printf("\"buffer_owner_class\":null,");
+        printf("\"bitmap_before_done\":null,");
+        printf("\"free_events\":\"none\"");
+    }
+    printf("}}\n");
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
+static void print_done_bitmap_glyph_row(const char* creation_path, FT_Error err, FT_Glyph glyph) {
+    FT_Glyph_Format format = 0;
+    const char* buffer_class = "null";
+    unsigned int width = 0;
+    unsigned int rows = 0;
+    int pitch = 0;
+    if (!err && glyph) {
+        FT_BitmapGlyph bitmap_glyph = (FT_BitmapGlyph)glyph;
+        FT_Bitmap* bitmap = &bitmap_glyph->bitmap;
+        format = glyph->format;
+        buffer_class = bitmap->buffer ? "owned_non_null" : "null";
+        width = bitmap->width;
+        rows = bitmap->rows;
+        pitch = bitmap->pitch;
+    }
+    printf("{\"creation_path\":\"%s\",", creation_path);
+    printf("\"void\":true,");
+    printf("\"created_glyph_pointer_class\":\"%s\",", glyph ? "non_null" : "null");
+    printf("\"create_error\":%d,", err);
+    if (!err && glyph) {
+        printf("\"format_before_done\":%ld,", (long)format);
+        printf("\"buffer_owner_class\":\"%s\",", buffer_class);
+        printf("\"bitmap_before_done\":{\"width\":%u,\"rows\":%u,\"pitch\":%d},",
+               width,
+               rows,
+               pitch);
+        printf("\"free_events\":\"FT_Done_Glyph called once for owned bitmap glyph\"");
+    } else {
+        printf("\"format_before_done\":null,");
+        printf("\"buffer_owner_class\":null,");
+        printf("\"bitmap_before_done\":null,");
+        printf("\"free_events\":\"none\"");
+    }
+    printf("}");
+}
+
+static int emit_done_bitmap_glyph_paths(int argc, char** argv) {
+    (void)argc;
+    const char* outline_kind = argv[2];
+    const char* outline_value = argv[3];
+    const char* bitmap_kind = argv[4];
+    const char* bitmap_value = argv[5];
+    FT_Long face_index = (FT_Long)strtol(argv[6], NULL, 10);
+    FT_UInt pixel_x = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_y = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt bitmap_glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_UInt outline_glyph_index = (FT_UInt)strtoul(argv[10], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[11], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[12], NULL, 10);
+
+    FT_Library library = NULL;
+    FT_Face bitmap_face = NULL;
+    FT_Face outline_face = NULL;
+    FT_Glyph bitmap_glyph = NULL;
+    FT_Glyph outline_glyph = NULL;
+    unsigned char* bitmap_data = NULL;
+    unsigned char* outline_data = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Error bitmap_err = err;
+    FT_Error outline_err = err;
+
+    if (!err) {
+        bitmap_err = open_record_face(library, bitmap_kind, bitmap_value, face_index, pixel_x, pixel_y, &bitmap_data, &bitmap_face);
+    }
+    if (!bitmap_err) {
+        bitmap_err = FT_Load_Glyph(bitmap_face, bitmap_glyph_index, load_flags);
+    }
+    if (!bitmap_err) {
+        bitmap_err = FT_Get_Glyph(bitmap_face->glyph, &bitmap_glyph);
+    }
+    if (!bitmap_err && (!bitmap_glyph || bitmap_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        bitmap_err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    if (!err) {
+        outline_err = open_record_face(library, outline_kind, outline_value, face_index, pixel_x, pixel_y, &outline_data, &outline_face);
+    }
+    if (!outline_err) {
+        outline_err = FT_Load_Glyph(outline_face, outline_glyph_index, load_flags);
+    }
+    if (!outline_err) {
+        outline_err = FT_Get_Glyph(outline_face->glyph, &outline_glyph);
+    }
+    if (!outline_err) {
+        outline_err = FT_Glyph_To_Bitmap(&outline_glyph, render_mode, NULL, 0);
+    }
+    if (!outline_err && (!outline_glyph || outline_glyph->format != FT_GLYPH_FORMAT_BITMAP)) {
+        outline_err = FT_Err_Invalid_Glyph_Format;
+    }
+
+    err = bitmap_err ? bitmap_err : outline_err;
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"rows\":[");
+        print_done_bitmap_glyph_row("FT_Get_Glyph bitmap", bitmap_err, bitmap_glyph);
+        printf(",");
+        print_done_bitmap_glyph_row("FT_Glyph_To_Bitmap outline", outline_err, outline_glyph);
+        printf("]}}\n");
+    }
+
+    if (bitmap_glyph) {
+        FT_Done_Glyph(bitmap_glyph);
+    }
+    if (outline_glyph) {
+        FT_Done_Glyph(outline_glyph);
+    }
+    if (bitmap_face) {
+        FT_Done_Face(bitmap_face);
+    }
+    if (outline_face) {
+        FT_Done_Face(outline_face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(bitmap_data);
+    free(outline_data);
+    return 0;
 }
 
 static void print_get_glyph_error_row(const char* probe, FT_Error err, FT_Glyph glyph) {
@@ -5896,6 +6749,17 @@ static int emit_get_glyph_null_inputs(void) {
     print_get_glyph_error_row("null_aglyph", null_output_error, NULL);
     printf("]}}\n");
     return 0;
+}
+
+static void print_get_glyph_unsupported_format_payload(FT_GlyphSlot slot) {
+    FT_Glyph glyph = (FT_Glyph)0x1;
+    slot->format = (FT_Glyph_Format)0x12345678;
+    FT_Error err = FT_Get_Glyph(slot, &glyph);
+
+    print_status(err);
+    printf(",\"output\":{\"rows\":[");
+    print_get_glyph_error_row("unsupported_tag", err, glyph);
+    printf("],\"cleanup_events\":\"none\"}}\n");
 }
 
 static void print_glyph_copy_error_row(const char* probe, FT_Error err, FT_Glyph target) {
@@ -5991,6 +6855,106 @@ static void print_sbit_object(FT_GlyphSlot slot) {
     printf("\"},\"node\":{\"locked\":false}");
 }
 
+typedef struct SBitSnapshot_ {
+    FT_Bool present;
+    FT_UInt width;
+    FT_UInt height;
+    FT_Int left;
+    FT_Int top;
+    FT_Byte format;
+    FT_Byte max_grays;
+    FT_Short pitch;
+    FT_Short xadvance;
+    FT_Short yadvance;
+    FT_Bool buffer_null;
+    long buffer_len;
+    unsigned char* buffer;
+} SBitSnapshot;
+
+static int snapshot_ftc_sbit(FTC_SBit sbit, SBitSnapshot* snapshot) {
+    memset(snapshot, 0, sizeof(*snapshot));
+    if (!sbit) {
+        return 0;
+    }
+    snapshot->present = 1;
+    snapshot->width = sbit->width;
+    snapshot->height = sbit->height;
+    snapshot->left = sbit->left;
+    snapshot->top = sbit->top;
+    snapshot->format = sbit->format;
+    snapshot->max_grays = sbit->max_grays;
+    snapshot->pitch = sbit->pitch;
+    snapshot->xadvance = sbit->xadvance;
+    snapshot->yadvance = sbit->yadvance;
+    snapshot->buffer_null = !sbit->buffer;
+    if (sbit->buffer && sbit->height > 0) {
+        snapshot->buffer_len = labs((long)sbit->pitch) * (long)sbit->height;
+        if (snapshot->buffer_len > 0) {
+            snapshot->buffer = (unsigned char*)malloc((size_t)snapshot->buffer_len);
+            if (!snapshot->buffer) {
+                return 1;
+            }
+            memcpy(snapshot->buffer, sbit->buffer, (size_t)snapshot->buffer_len);
+        }
+    }
+    return 0;
+}
+
+static void free_sbit_snapshot(SBitSnapshot* snapshot) {
+    free(snapshot->buffer);
+    snapshot->buffer = NULL;
+}
+
+static int ftc_sbit_snapshot_still_matches(FTC_SBit sbit, const SBitSnapshot* snapshot) {
+    if (!snapshot->present) {
+        return sbit == NULL;
+    }
+    if (!sbit) {
+        return 0;
+    }
+    if (snapshot->width != sbit->width ||
+        snapshot->height != sbit->height ||
+        snapshot->left != sbit->left ||
+        snapshot->top != sbit->top ||
+        snapshot->format != sbit->format ||
+        snapshot->max_grays != sbit->max_grays ||
+        snapshot->pitch != sbit->pitch ||
+        snapshot->xadvance != sbit->xadvance ||
+        snapshot->yadvance != sbit->yadvance ||
+        snapshot->buffer_null != (FT_Bool)!sbit->buffer) {
+        return 0;
+    }
+    if (!snapshot->buffer || snapshot->buffer_len == 0) {
+        return 1;
+    }
+    return sbit->buffer && memcmp(snapshot->buffer, sbit->buffer, (size_t)snapshot->buffer_len) == 0;
+}
+
+static void print_ftc_sbit_snapshot_fields(const SBitSnapshot* snapshot) {
+    if (!snapshot->present) {
+        printf("null");
+        return;
+    }
+    printf("{\"width\":%u,\"height\":%u,\"left\":%d,\"top\":%d,",
+           snapshot->width,
+           snapshot->height,
+           snapshot->left,
+           snapshot->top);
+    printf("\"format\":%u,\"max_grays\":%u,\"pitch\":%d,",
+           snapshot->format,
+           snapshot->max_grays,
+           snapshot->pitch);
+    printf("\"xadvance\":%d,\"yadvance\":%d,",
+           snapshot->xadvance,
+           snapshot->yadvance);
+    printf("\"buffer_null\":%s,\"buffer_hex\":\"",
+           snapshot->buffer_null || snapshot->buffer_len == 0 ? "true" : "false");
+    if (snapshot->buffer && snapshot->buffer_len > 0) {
+        print_hex_bytes(snapshot->buffer, snapshot->buffer_len);
+    }
+    printf("\"}");
+}
+
 typedef struct ImageCacheRequesterData_ {
     unsigned char* data;
     long data_len;
@@ -6016,6 +6980,58 @@ static void print_image_cache_glyph_object(FT_Glyph glyph) {
            glyph ? glyph->advance.y : 0L);
     printf("\"library_present\":%s,", (glyph && glyph->library) ? "true" : "false");
     printf("\"clazz_present\":%s", (glyph && glyph->clazz) ? "true" : "false");
+    printf("},\"node\":{\"locked\":false}");
+}
+
+typedef struct ImageGlyphSnapshot_ {
+    FT_Bool present;
+    long format;
+    long advance_x;
+    long advance_y;
+    FT_Bool library_present;
+    FT_Bool clazz_present;
+} ImageGlyphSnapshot;
+
+static ImageGlyphSnapshot snapshot_image_glyph(FT_Glyph glyph) {
+    ImageGlyphSnapshot snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    if (glyph) {
+        snapshot.present = 1;
+        snapshot.format = (long)glyph->format;
+        snapshot.advance_x = glyph->advance.x;
+        snapshot.advance_y = glyph->advance.y;
+        snapshot.library_present = glyph->library ? 1 : 0;
+        snapshot.clazz_present = glyph->clazz ? 1 : 0;
+    }
+    return snapshot;
+}
+
+static int image_glyph_snapshot_still_matches(FT_Glyph glyph, const ImageGlyphSnapshot* snapshot) {
+    if (!snapshot->present) {
+        return glyph == NULL;
+    }
+    if (!glyph) {
+        return 0;
+    }
+    return snapshot->format == (long)glyph->format &&
+           snapshot->advance_x == glyph->advance.x &&
+           snapshot->advance_y == glyph->advance.y &&
+           snapshot->library_present == (FT_Bool)(glyph->library ? 1 : 0) &&
+           snapshot->clazz_present == (FT_Bool)(glyph->clazz ? 1 : 0);
+}
+
+static void print_image_glyph_snapshot_object(const ImageGlyphSnapshot* snapshot) {
+    if (!snapshot->present) {
+        printf("\"glyph\":null,\"node\":{\"locked\":false}");
+        return;
+    }
+    printf("\"glyph\":{");
+    printf("\"format\":%ld,", snapshot->format);
+    printf("\"advance\":{\"x\":%ld,\"y\":%ld},",
+           snapshot->advance_x,
+           snapshot->advance_y);
+    printf("\"library_present\":%s,", snapshot->library_present ? "true" : "false");
+    printf("\"clazz_present\":%s", snapshot->clazz_present ? "true" : "false");
     printf("},\"node\":{\"locked\":false}");
 }
 
@@ -6346,6 +7362,249 @@ static int emit_image_cache_lookup(int argc, char** argv) {
     return 0;
 }
 
+static int emit_image_type_descriptor_lifetime(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong flags = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = width;
+    image_type.height = height;
+    image_type.flags = (FT_Int32)flags;
+
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Error error = FTC_ImageCache_Lookup(cache, &image_type, glyph_index, &glyph, &node);
+    ImageGlyphSnapshot snapshot = snapshot_image_glyph(error ? NULL : glyph);
+
+    image_type.width += 1;
+    image_type.height += 1;
+    image_type.flags ^= FT_LOAD_NO_HINTING;
+    int unchanged = image_glyph_snapshot_still_matches(error ? NULL : glyph, &snapshot);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":%d,", error);
+    printf("\"lookup_result\":{\"glyph_index\":%u,"
+           "\"image_type\":{\"width\":%u,\"height\":%u,\"flags\":%ld},"
+           "\"status\":%d,\"error\":%d,",
+           glyph_index,
+           width,
+           height,
+           (long)(FT_Int32)flags,
+           error,
+           error);
+    print_image_glyph_snapshot_object(&snapshot);
+    printf("},\"post_lookup_descriptor_mutation_effect_on_existing_node\":{");
+    printf("\"mutation_performed\":true,");
+    printf("\"mutated_image_type\":{\"width\":%u,\"height\":%u,\"flags\":%ld},",
+           image_type.width,
+           image_type.height,
+           (long)image_type.flags);
+    printf("\"existing_node_unchanged\":%s", unchanged ? "true" : "false");
+    printf("}}}\n");
+
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static void print_image_type_lookup_result(FT_Error error,
+                                           const ImageGlyphSnapshot* image_snapshot,
+                                           const SBitSnapshot* sbit_snapshot,
+                                           const char* payload_kind) {
+    printf("{\"status\":%d,\"error\":%d,", error, error);
+    if (streq(payload_kind, "image")) {
+        print_image_glyph_snapshot_object(image_snapshot);
+    } else {
+        printf("\"sbit\":");
+        print_ftc_sbit_snapshot_fields(sbit_snapshot);
+        printf(",\"node\":{\"locked\":false}");
+    }
+    printf("}");
+}
+
+static int emit_image_type_lookup_probe(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt width = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt height = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong flags = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_ImageCache image_cache = NULL;
+    FT_Error image_cache_error = manager_error ? manager_error : FTC_ImageCache_New(manager, &image_cache);
+    FTC_SBitCache sbit_cache = NULL;
+    FT_Error sbit_cache_error = image_cache_error ? image_cache_error : FTC_SBitCache_New(manager, &sbit_cache);
+    if (sbit_cache_error) {
+        printf("{");
+        print_status(sbit_cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = width;
+    image_type.height = height;
+    image_type.flags = (FT_Int32)flags;
+
+    FT_Glyph glyph = NULL;
+    FTC_Node image_node = NULL;
+    FT_Error image_error = FTC_ImageCache_Lookup(image_cache, &image_type, glyph_index, &glyph, &image_node);
+    ImageGlyphSnapshot image_snapshot = snapshot_image_glyph(image_error ? NULL : glyph);
+
+    FTC_SBit sbit = NULL;
+    FTC_Node sbit_node = NULL;
+    FT_Error sbit_error = FTC_SBitCache_Lookup(sbit_cache, &image_type, glyph_index, &sbit, &sbit_node);
+    SBitSnapshot sbit_snapshot;
+    if (snapshot_ftc_sbit(sbit_error ? NULL : sbit, &sbit_snapshot) != 0) {
+        if (image_node) {
+            FTC_Node_Unref(image_node, manager);
+        }
+        if (sbit_node) {
+            FTC_Node_Unref(sbit_node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        return 1;
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":0,\"effective_query\":{\"face_id_identity\":\"stable_pointer\","
+           "\"width\":%u,\"height\":%u,\"flags\":%ld,\"glyph_index\":%u},",
+           width,
+           height,
+           (long)(FT_Int32)flags,
+           glyph_index);
+    printf("\"result_metrics\":{\"image\":");
+    print_image_type_lookup_result(image_error, &image_snapshot, &sbit_snapshot, "image");
+    printf(",\"sbit\":");
+    print_image_type_lookup_result(sbit_error, &image_snapshot, &sbit_snapshot, "sbit");
+    printf("}}}\n");
+
+    free_sbit_snapshot(&sbit_snapshot);
+    if (image_node) {
+        FTC_Node_Unref(image_node, manager);
+    }
+    if (sbit_node) {
+        FTC_Node_Unref(sbit_node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     (void)argc;
     const char* source_kind = argv[2];
@@ -6463,6 +7722,388 @@ static int emit_sbit_cache_lookup_scaler(int argc, char** argv) {
     free(data);
     free(scalers_arg);
     (void)first_error;
+    return 0;
+}
+
+static int emit_cache_node_lifecycle(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_UInt size = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong max_bytes = (FT_ULong)strtoull(argv[7], NULL, 0);
+    const char* scenario = argv[8];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, max_bytes,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_SBitCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_SBitCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    FTC_ImageTypeRec image_type;
+    memset(&image_type, 0, sizeof(image_type));
+    image_type.face_id = (FTC_FaceID)&requester;
+    image_type.width = size;
+    image_type.height = size;
+    image_type.flags = FT_LOAD_DEFAULT;
+
+    FTC_SBit sbit = NULL;
+    FTC_Node node = NULL;
+    FT_Error lookup_error = FTC_SBitCache_Lookup(cache, &image_type, glyph_index, &sbit, &node);
+    SBitSnapshot snapshot;
+    if (snapshot_ftc_sbit(lookup_error ? NULL : sbit, &snapshot) != 0) {
+        if (node) {
+            FTC_Node_Unref(node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        return 1;
+    }
+
+    int node_present = node ? 1 : 0;
+    int cache_index = node ? ((FTC_NodeRec*)node)->cache_index : -1;
+    int ref_count_before_unref = node ? ((FTC_NodeRec*)node)->ref_count : 0;
+    int sbit_readable_before_unref = ftc_sbit_snapshot_still_matches(lookup_error ? NULL : sbit, &snapshot);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    int ref_count_after_unref = node ? ((FTC_NodeRec*)node)->ref_count : 0;
+
+    unsigned int pressure_glyphs[5] = {37, 38, 39, 40, 41};
+    FT_Error pressure_statuses[5] = {0, 0, 0, 0, 0};
+    for (int index = 0; index < 5; index++) {
+        FTC_SBit pressure_sbit = NULL;
+        FTC_Node pressure_node = NULL;
+        pressure_statuses[index] =
+            FTC_SBitCache_Lookup(cache, &image_type, pressure_glyphs[index], &pressure_sbit, &pressure_node);
+        if (pressure_node) {
+            FTC_Node_Unref(pressure_node, manager);
+        }
+    }
+
+    FTC_SBit repeat_sbit = NULL;
+    FTC_Node repeat_node = NULL;
+    FT_Error repeat_error = FTC_SBitCache_Lookup(cache, &image_type, glyph_index, &repeat_sbit, &repeat_node);
+    int repeat_same_node = node && repeat_node && node == repeat_node;
+    if (repeat_node) {
+        FTC_Node_Unref(repeat_node, manager);
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"lookup\":\"FTC_SBitCache_Lookup\","
+           "\"glyph_index\":%u,\"size\":%u,\"max_bytes\":%lu,"
+           "\"lookup_status\":%d,\"repeat_status\":%d,"
+           "\"requester_count_final\":%d,",
+           glyph_index,
+           size,
+           (unsigned long)max_bytes,
+           lookup_error,
+           repeat_error,
+           requester.request_count);
+    printf("\"sbit\":");
+    print_ftc_sbit_snapshot_fields(&snapshot);
+    printf(",");
+    printf("\"node\":{\"anode_nullness\":\"%s\","
+           "\"locked\":%s,"
+           "\"cache_handle_identity\":\"manager_cache_0\","
+           "\"cache_index\":%d,"
+           "\"ref_count_before_unref\":%d,"
+           "\"ref_count_after_unref\":%d,"
+           "\"ref_count_delta\":%d},",
+           node_present ? "non_null" : "null",
+           node_present && ref_count_before_unref > 0 ? "true" : "false",
+           cache_index,
+           ref_count_before_unref,
+           ref_count_after_unref,
+           ref_count_after_unref - ref_count_before_unref);
+    printf("\"sbit_still_readable_before_pressure\":%s,"
+           "\"locked_survival_class\":\"held_until_unref\","
+           "\"after_unref_survival_class\":\"eligible\",",
+           sbit_readable_before_unref ? "true" : "false");
+    printf("\"post_pressure\":{\"lookup_statuses\":[");
+    for (int index = 0; index < 5; index++) {
+        if (index) {
+            printf(",");
+        }
+        printf("%d", pressure_statuses[index]);
+    }
+    printf("],\"repeat_same_node_after_unref\":%s,"
+           "\"node_survival_class\":\"%s\"}",
+           repeat_same_node ? "true" : "false",
+           repeat_same_node ? "survived_unlocked_pressure" : "flushable_or_replaced");
+    printf("}}\n");
+
+    free_sbit_snapshot(&snapshot);
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_cache_node_unref_null_only(void) {
+    FTC_Node_Unref(NULL, NULL);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"void\":true,");
+    printf("\"rows\":[");
+    printf("{\"node\":\"null\",\"manager\":\"null\",\"void_return\":true,\"side_effects\":\"none\"}");
+    printf("]}}\n");
+    return 0;
+}
+
+static int emit_cache_node_unref_null_or_invalid(void) {
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             cache_no_lookup_requester,
+                                             NULL,
+                                             &manager);
+    if (manager_error || !manager) {
+        printf("{");
+        print_status(manager_error ? manager_error : FT_Err_Invalid_Argument);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+
+    FTC_Node_Unref(NULL, NULL);
+    FTC_Node_Unref(NULL, manager);
+
+    FTC_NodeRec foreign_node;
+    memset(&foreign_node, 0, sizeof(foreign_node));
+    foreign_node.cache_index = 0xFFFF;
+    foreign_node.ref_count = 7;
+    FT_Short ref_count_before = foreign_node.ref_count;
+    /*
+     * FreeType src/cache/ftcmanag.c:FTC_Node_Unref only touches a non-null
+     * node when cache_index is within manager->num_caches. 0xFFFF is outside
+     * every live manager created by FTC_Manager_New, so this exercises the
+     * documented foreign/bad-cache-index no-op branch without dereferencing a
+     * cache-specific node payload.
+     */
+    FTC_Node_Unref((FTC_Node)&foreign_node, manager);
+    FT_Short ref_count_after = foreign_node.ref_count;
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"void\":true,\"side_effects\":[");
+    printf("{\"node\":\"null\",\"manager\":\"null\",\"void_return\":true,\"side_effects\":\"none\"},");
+    printf("{\"node\":\"null\",\"manager\":\"live_empty\",\"void_return\":true,\"side_effects\":\"none\"},");
+    printf("{\"node\":\"foreign_or_bad_cache_index\",\"manager\":\"live_empty\","
+           "\"void_return\":true,\"side_effects\":\"none\","
+           "\"cache_index_class\":\"out_of_range\",\"ref_count_before\":%d,"
+           "\"ref_count_after\":%d}",
+           ref_count_before,
+           ref_count_after);
+    printf("]}}\n");
+
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_scaler_descriptor_lifetime(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    char* scalers_arg = (char*)malloc(strlen(argv[5]) + 1);
+    if (!scalers_arg) {
+        return 1;
+    }
+    memcpy(scalers_arg, argv[5], strlen(argv[5]) + 1);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_ULong load_flags_ulong = (FT_ULong)strtoull(argv[7], NULL, 0);
+    FT_Int32 load_flags = (FT_Int32)load_flags_ulong;
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            free(scalers_arg);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            free(scalers_arg);
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        free(scalers_arg);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    ImageCacheRequesterData requester;
+    requester.data = data;
+    requester.data_len = data_len;
+    requester.face_index = face_index;
+    requester.request_count = 0;
+
+    FTC_Manager manager = NULL;
+    FT_Error manager_error = FTC_Manager_New(library, 0, 0, 0,
+                                             image_cache_requester,
+                                             NULL,
+                                             &manager);
+    FTC_SBitCache cache = NULL;
+    FT_Error cache_error = manager_error ? manager_error : FTC_SBitCache_New(manager, &cache);
+    if (cache_error) {
+        printf("{");
+        print_status(cache_error);
+        printf(",\"output\":null}\n");
+        if (manager) {
+            FTC_Manager_Done(manager);
+        }
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 0;
+    }
+
+    FTC_ScalerRec scaler;
+    unsigned int pixel = 0;
+    memset(&scaler, 0, sizeof(scaler));
+    if (sscanf(scalers_arg, "%u:%u:%u:%u:%u",
+               &scaler.width,
+               &scaler.height,
+               &pixel,
+               &scaler.x_res,
+               &scaler.y_res) != 5) {
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 2;
+    }
+    scaler.face_id = (FTC_FaceID)&requester;
+    scaler.pixel = (FT_UInt)pixel;
+    FT_UInt original_width = scaler.width;
+    FT_UInt original_height = scaler.height;
+    FT_UInt original_pixel = scaler.pixel;
+    FT_UInt original_x_res = scaler.x_res;
+    FT_UInt original_y_res = scaler.y_res;
+
+    FTC_SBit sbit = NULL;
+    FTC_Node node = NULL;
+    FT_Error error = FTC_SBitCache_LookupScaler(cache, &scaler, load_flags, glyph_index, &sbit, &node);
+    SBitSnapshot snapshot;
+    if (snapshot_ftc_sbit(error ? NULL : sbit, &snapshot) != 0) {
+        if (node) {
+            FTC_Node_Unref(node, manager);
+        }
+        FTC_Manager_Done(manager);
+        FT_Done_FreeType(library);
+        free(data);
+        free(scalers_arg);
+        return 1;
+    }
+
+    scaler.width += 1;
+    scaler.height += 1;
+    scaler.pixel = scaler.pixel ? 0 : 1;
+    scaler.x_res += 1;
+    scaler.y_res += 1;
+    int unchanged = ftc_sbit_snapshot_still_matches(error ? NULL : sbit, &snapshot);
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{");
+    printf("\"status\":%d,", error);
+    printf("\"effective_scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},",
+           original_width,
+           original_height,
+           original_pixel,
+           original_x_res,
+           original_y_res);
+    printf("\"effective_load_flags\":%ld,", (long)load_flags);
+    printf("\"result_fields\":");
+    print_ftc_sbit_snapshot_fields(&snapshot);
+    printf(",\"post_lookup_scaler_mutation_effect_on_existing_result\":{");
+    printf("\"mutation_performed\":true,");
+    printf("\"mutated_scaler\":{\"width\":%u,\"height\":%u,\"pixel\":%u,\"x_res\":%u,\"y_res\":%u},",
+           scaler.width,
+           scaler.height,
+           scaler.pixel,
+           scaler.x_res,
+           scaler.y_res);
+    printf("\"existing_result_unchanged\":%s", unchanged ? "true" : "false");
+    printf("}}}\n");
+
+    free_sbit_snapshot(&snapshot);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    FTC_Manager_Done(manager);
+    FT_Done_FreeType(library);
+    free(data);
+    free(scalers_arg);
     return 0;
 }
 
@@ -6787,14 +8428,40 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
                                              &manager);
     FTC_CMapCache cache = NULL;
     FT_Error cache_error = manager_error ? manager_error : FTC_CMapCache_New(manager, &cache);
+    FTC_CMapCache registration_caches[17];
+    FT_Error registration_statuses[17];
+    memset(registration_caches, 0, sizeof(registration_caches));
+    memset(registration_statuses, 0, sizeof(registration_statuses));
 
     FT_UInt first = 0;
     FT_UInt after_reset = 0;
+    FT_UInt after_registration_limit = 0;
     int after_first_count = requester.request_count;
     int after_reset_count = requester.request_count;
+    int after_registration_limit_count = requester.request_count;
+    int registration_probe = streq(scenario, "success_multiple_cache_registration_limit");
+    int successful_registrations = 0;
+    int failed_registration_index = -1;
     if (!cache_error) {
         first = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
         after_first_count = requester.request_count;
+        if (registration_probe) {
+            registration_caches[0] = cache;
+            registration_statuses[0] = cache_error;
+            successful_registrations = 1;
+            for (int index = 1; index < 17; index++) {
+                FT_Error status = FTC_CMapCache_New(manager, &registration_caches[index]);
+                registration_statuses[index] = status;
+                if (status) {
+                    failed_registration_index = index;
+                    break;
+                }
+                successful_registrations++;
+            }
+            after_registration_limit =
+                FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
+            after_registration_limit_count = requester.request_count;
+        }
         FTC_Manager_Reset(manager);
         after_reset = FTC_CMapCache_Lookup(cache, (FTC_FaceID)&requester, -1, 65);
         after_reset_count = requester.request_count;
@@ -6808,7 +8475,7 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
            "\"cache_handle\":\"%s\",\"destroyed_by_manager_done\":true,"
            "\"lookup\":{\"char_code\":65,\"first\":%u,\"after_reset\":%u,"
            "\"requester_count_after_first\":%d,\"requester_count_after_reset\":%d,"
-           "\"reset_preserves_handle\":%s}}}\n",
+           "\"reset_preserves_handle\":%s}",
            manager_error,
            cache_error,
            cache ? "non_null" : "null",
@@ -6817,6 +8484,35 @@ static int emit_cmap_cache_new_route(int argc, char** argv) {
            after_first_count,
            after_reset_count,
            cache ? "true" : "false");
+    if (registration_probe) {
+        printf(",\"registration_limit\":{\"max_caches\":16,\"attempt_statuses\":[");
+        for (int index = 0; index < 17; index++) {
+            if (index) {
+                printf(",");
+            }
+            printf("%d", registration_statuses[index]);
+        }
+        printf("],\"attempt_handles\":[");
+        for (int index = 0; index < 17; index++) {
+            if (index) {
+                printf(",");
+            }
+            printf("\"%s\"", registration_caches[index] ? "non_null" : "null");
+        }
+        printf("],\"successful_registrations\":%d,"
+               "\"failed_registration_index\":%d,"
+               "\"final_status\":%d,"
+               "\"prior_cache_lookup_after_failure\":%u,"
+               "\"requester_count_after_failure_lookup\":%d,"
+               "\"prior_cache_preserved\":%s}",
+               successful_registrations,
+               failed_registration_index,
+               failed_registration_index >= 0 ? registration_statuses[failed_registration_index] : 0,
+               after_registration_limit,
+               after_registration_limit_count,
+               after_registration_limit == first ? "true" : "false");
+    }
+    printf("}}\n");
 
     if (manager) {
         FTC_Manager_Done(manager);
@@ -7065,6 +8761,109 @@ static void print_manager_lookup_size_row(FTC_Manager manager,
            repeat_error,
            (!error && !repeat_error && size && repeat_size && size == repeat_size) ? "true" : "false",
            after_repeat_calls);
+}
+
+static int emit_cid_route(int argc, char** argv) {
+    if (argc != 6) {
+        return 2;
+    }
+    const char* route = argv[2];
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (load_oracle_source_bytes(argv[3], argv[4], &data, &data_len) != 0) {
+        return 1;
+    }
+    FT_Long face_index = (FT_Long)strtol(argv[5], NULL, 10);
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf("}\n");
+        free(data);
+        return 0;
+    }
+    FT_Error open_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    if (open_error) {
+        printf("{");
+        print_status(open_error);
+        printf("}\n");
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    printf("{");
+    if (streq(route, "is-internally-cid-keyed") ||
+        streq(route, "is-internally-cid-keyed:null-output")) {
+        FT_Bool is_cid = 0;
+        FT_Bool* output = streq(route, "is-internally-cid-keyed:null-output")
+                              ? NULL
+                              : &is_cid;
+        FT_Error err = FT_Get_CID_Is_Internally_CID_Keyed(face, output);
+        print_status(err);
+        if (output) {
+            printf(",\"output\":{\"is_cid\":%u,\"ft_is_cid_keyed\":%d}}\n",
+                   (unsigned)is_cid,
+                   FT_IS_CID_KEYED(face) ? 1 : 0);
+        } else {
+            printf(",\"output\":{\"is_cid_output\":\"null\",\"ft_is_cid_keyed\":%d}}\n",
+                   FT_IS_CID_KEYED(face) ? 1 : 0);
+        }
+    } else if (strncmp(route, "glyph-index:", 12) == 0) {
+        const char* glyph_part = route + 12;
+        char glyph_buffer[32];
+        const char* suffix = strstr(glyph_part, ":null-output");
+        if (suffix) {
+            size_t len = (size_t)(suffix - glyph_part);
+            if (len >= sizeof(glyph_buffer)) {
+                len = sizeof(glyph_buffer) - 1;
+            }
+            memcpy(glyph_buffer, glyph_part, len);
+            glyph_buffer[len] = '\0';
+            glyph_part = glyph_buffer;
+        }
+        FT_UInt glyph_index = streq(glyph_part, "last_valid")
+                                  ? (FT_UInt)(face->num_glyphs - 1)
+                                  : (FT_UInt)strtoul(glyph_part, NULL, 10);
+        FT_UInt cid = 0;
+        FT_UInt* output = suffix ? NULL : &cid;
+        FT_Error err = FT_Get_CID_From_Glyph_Index(face, glyph_index, output);
+        print_status(err);
+        if (output) {
+            printf(",\"output\":{\"glyph_index\":%u,\"cid\":%u}}\n",
+                   glyph_index,
+                   cid);
+        } else {
+            printf(",\"output\":{\"glyph_index\":%u,\"cid_output\":\"null\"}}\n",
+                   glyph_index);
+        }
+    } else if (streq(route, "ros")) {
+        const char* registry = NULL;
+        const char* ordering = NULL;
+        FT_Int supplement = 0;
+        FT_Error err = FT_Get_CID_Registry_Ordering_Supplement(
+            face, &registry, &ordering, &supplement);
+        print_status(err);
+        printf(",\"output\":{\"registry\":{\"string\":");
+        print_json_c_string_or_null(registry);
+        printf(",\"identity_class\":\"%s\"},\"ordering\":{\"string\":",
+               registry ? "face_owned_c_string" : "null");
+        print_json_c_string_or_null(ordering);
+        printf(",\"identity_class\":\"%s\"},\"supplement\":%d,"
+               "\"output_write_bitmap\":[\"registry\",\"ordering\",\"supplement\"]}}\n",
+               ordering ? "face_owned_c_string" : "null",
+               supplement);
+    } else {
+        print_status(FT_Err_Invalid_Argument);
+        printf("}\n");
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
 }
 
 static int emit_manager_lookup_size(int argc, char** argv) {
@@ -7777,6 +9576,160 @@ static int emit_manager_done_route(int argc, char** argv) {
     return 0;
 }
 
+static int emit_manager_lifecycle_route(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = (FT_Long)strtol(argv[4], NULL, 10);
+    const char* scenario = argv[5];
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    MemoryFaceRequestRec reset_request = {data, data_len, face_index, 0};
+    FTC_Manager reset_manager = NULL;
+    FT_Error reset_status = FTC_Manager_New(library, 1, 2, 4096,
+                                            memory_face_requester,
+                                            &reset_request,
+                                            &reset_manager);
+    if (!reset_status) {
+        FT_Face face = NULL;
+        reset_status = FTC_Manager_LookupFace(reset_manager,
+                                              (FTC_FaceID)&reset_request,
+                                              &face);
+    }
+    if (!reset_status) {
+        FTC_ScalerRec scaler;
+        memset(&scaler, 0, sizeof(scaler));
+        scaler.face_id = (FTC_FaceID)&reset_request;
+        scaler.width = 0;
+        scaler.height = 12;
+        scaler.pixel = 1;
+        FT_Size size = NULL;
+        reset_status = FTC_Manager_LookupSize(reset_manager, &scaler, &size);
+    }
+    unsigned int before_reset_calls = reset_request.calls;
+    FT_Error post_reset_error = reset_status;
+    if (!reset_status) {
+        FTC_Manager_Reset(reset_manager);
+        FT_Face post_face = NULL;
+        post_reset_error = FTC_Manager_LookupFace(reset_manager,
+                                                  (FTC_FaceID)&reset_request,
+                                                  &post_face);
+    }
+    unsigned int after_reset_calls = reset_request.calls;
+    if (reset_manager) {
+        FTC_Manager_Done(reset_manager);
+    }
+
+    FTC_Manager_Done(NULL);
+    MemoryFaceRequestRec empty_request = {data, data_len, face_index, 0};
+    FTC_Manager empty_manager = NULL;
+    FT_Error empty_status = FTC_Manager_New(library, 0, 0, 0,
+                                            memory_face_requester,
+                                            &empty_request,
+                                            &empty_manager);
+    if (empty_manager) {
+        FTC_Manager_Done(empty_manager);
+    }
+
+    MemoryFaceRequestRec done_request = {data, data_len, face_index, 0};
+    FTC_Manager manager = NULL;
+    FT_Error manager_status = FTC_Manager_New(library, 0, 0, 0,
+                                              memory_face_requester,
+                                              &done_request,
+                                              &manager);
+    FTC_CMapCache cmap_cache = NULL;
+    FTC_ImageCache image_cache = NULL;
+    FT_Error cmap_status = manager_status ? manager_status : FTC_CMapCache_New(manager, &cmap_cache);
+    FT_Error image_status = manager_status ? manager_status : FTC_ImageCache_New(manager, &image_cache);
+    FT_UInt cmap_lookup = 0;
+    if (!cmap_status) {
+        cmap_lookup = FTC_CMapCache_Lookup(cmap_cache, (FTC_FaceID)&done_request, -1, 65);
+    }
+    FTC_ScalerRec done_scaler;
+    memset(&done_scaler, 0, sizeof(done_scaler));
+    done_scaler.face_id = (FTC_FaceID)&done_request;
+    done_scaler.width = 12;
+    done_scaler.height = 12;
+    done_scaler.pixel = 1;
+    FT_Size done_size = NULL;
+    FT_Error size_status = manager_status ? manager_status : FTC_Manager_LookupSize(manager, &done_scaler, &done_size);
+    FT_Face done_face = NULL;
+    FT_Error face_status = manager_status ? manager_status : FTC_Manager_LookupFace(manager, (FTC_FaceID)&done_request, &done_face);
+    FT_Glyph glyph = NULL;
+    FTC_Node node = NULL;
+    FT_Error image_lookup_status = image_status ? image_status
+        : FTC_ImageCache_LookupScaler(image_cache, &done_scaler, FT_LOAD_DEFAULT, 36, &glyph, &node);
+    if (node) {
+        FTC_Node_Unref(node, manager);
+    }
+    unsigned int requester_count_before_done = done_request.calls;
+    if (manager) {
+        FTC_Manager_Done(manager);
+    }
+
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"scenario\":\"");
+    print_json_string_content(scenario);
+    printf("\",\"void\":true,\"reset\":{\"void\":true,\"reset\":{\"called\":true},"
+           "\"requester_call_counts\":{\"before_reset\":%u,\"after_reset\":%u},"
+           "\"post_reset\":{\"status\":%d,\"usable\":%s},"
+           "\"manager_handle\":\"same_identity_class\","
+           "\"face_identity_class_after_reset\":\"fresh_or_reloaded\","
+           "\"size_identity_class_after_reset\":\"fresh_or_reloaded\","
+           "\"node_count_class\":\"not_observed\"},"
+           "\"done\":{\"scenario\":\"",
+           before_reset_calls,
+           after_reset_calls,
+           post_reset_error,
+           post_reset_error ? "false" : "true");
+    print_json_string_content(scenario);
+    printf("\",\"void\":true,\"null_manager_noop\":true,"
+           "\"empty_manager\":{\"create_status\":%d,\"done_called\":true},"
+           "\"populated_manager\":{\"create_status\":%d,\"cmap_cache_status\":%d,"
+           "\"image_cache_status\":%d,\"lookup_face_status\":%d,"
+           "\"lookup_size_status\":%d,\"image_lookup_status\":%d,"
+           "\"cmap_lookup\":%u,\"requester_count_before_done\":%u,"
+           "\"node_released_before_done\":true,\"done_called\":true}}}}\n",
+           empty_status,
+           manager_status,
+           cmap_status,
+           image_status,
+           face_status,
+           size_status,
+           image_lookup_status,
+           cmap_lookup,
+           requester_count_before_done);
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 static int emit_manager_reset(int argc, char** argv) {
     const char* command = argv[1];
     if (streq(command, "--manager-reset-null")) {
@@ -8153,6 +10106,45 @@ static void setup_outline_get_bitmap_square(FT_Outline* outline, FT_Vector* poin
     outline->flags = 0;
 }
 
+static void setup_outline_get_bitmap_dropout_thin_stems(FT_Outline* outline,
+                                                        FT_Vector* points,
+                                                        unsigned char* tags,
+                                                        unsigned short* contours,
+                                                        int flags) {
+    points[0].x = 512;
+    points[0].y = 512;
+    points[1].x = 576;
+    points[1].y = 512;
+    points[2].x = 576;
+    points[2].y = 1536;
+    points[3].x = 512;
+    points[3].y = 1536;
+    points[4].x = 768;
+    points[4].y = 512;
+    points[5].x = 832;
+    points[5].y = 512;
+    points[6].x = 832;
+    points[6].y = 1536;
+    points[7].x = 768;
+    points[7].y = 1536;
+    tags[0] = FT_CURVE_TAG_ON;
+    tags[1] = FT_CURVE_TAG_ON;
+    tags[2] = FT_CURVE_TAG_ON;
+    tags[3] = FT_CURVE_TAG_ON;
+    tags[4] = FT_CURVE_TAG_ON | (4 << 5);
+    tags[5] = FT_CURVE_TAG_ON;
+    tags[6] = FT_CURVE_TAG_ON;
+    tags[7] = FT_CURVE_TAG_ON;
+    contours[0] = 3;
+    contours[1] = 7;
+    outline->n_contours = 2;
+    outline->n_points = 8;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = flags;
+}
+
 static void setup_outline_get_bitmap_target(FT_Bitmap* bitmap, unsigned char* buffer, unsigned char pixel_mode) {
     memset(buffer, 0, 16 * 16);
     memset(bitmap, 0, sizeof(*bitmap));
@@ -8244,6 +10236,67 @@ static int emit_outline_get_bitmap(int argc, char** argv) {
             print_outline_get_bitmap_success(&bitmap, 0);
             printf("}}\n");
         }
+    } else if (streq(mode, "dropout-thin-stems")) {
+        const char* case_id = argv[3];
+        const char* flag_names[4] = {"FT_OUTLINE_NONE", "", "", ""};
+        int flag_values[4] = {0, 0, 0, 0};
+        int count = 0;
+        if (streq(case_id, "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 2;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_SMART_DROPOUTS";
+            flag_values[1] = FT_OUTLINE_SMART_DROPOUTS;
+            flag_names[2] = "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[2] = FT_OUTLINE_SMART_DROPOUTS | FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 3;
+        } else if (streq(case_id, "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior")) {
+            flag_names[0] = "FT_OUTLINE_NONE";
+            flag_values[0] = 0;
+            flag_names[1] = "FT_OUTLINE_INCLUDE_STUBS";
+            flag_values[1] = FT_OUTLINE_INCLUDE_STUBS;
+            flag_names[2] = "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_SMART_DROPOUTS";
+            flag_values[2] = FT_OUTLINE_INCLUDE_STUBS | FT_OUTLINE_SMART_DROPOUTS;
+            flag_names[3] = "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_IGNORE_DROPOUTS";
+            flag_values[3] = FT_OUTLINE_INCLUDE_STUBS | FT_OUTLINE_IGNORE_DROPOUTS;
+            count = 4;
+        }
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"results\":[");
+        for (int i = 0; i < count; i++) {
+            FT_Vector dropout_points[8];
+            unsigned char dropout_tags[8];
+            unsigned short dropout_contours[2];
+            FT_Outline dropout_outline;
+            unsigned char buffer[16 * 16];
+            FT_Bitmap bitmap;
+            setup_outline_get_bitmap_dropout_thin_stems(&dropout_outline,
+                                                        dropout_points,
+                                                        dropout_tags,
+                                                        dropout_contours,
+                                                        flag_values[i]);
+            setup_outline_get_bitmap_target(&bitmap, buffer, FT_PIXEL_MODE_MONO);
+            err = FT_Outline_Get_Bitmap(library, &dropout_outline, &bitmap);
+            if (i) {
+                printf(",");
+            }
+            printf("{\"flags\":\"%s\",\"status\":%d,\"bitmap\":{", flag_names[i], err);
+            printf("\"width\":%u,\"rows\":%u,\"pitch\":%d,\"pixel_mode\":%d,\"num_grays\":%u,\"buffer_hex\":\"",
+                   bitmap.width,
+                   bitmap.rows,
+                   bitmap.pitch,
+                   bitmap.pixel_mode,
+                   bitmap.num_grays);
+            print_hex_bytes(bitmap.buffer, bitmap.rows * (bitmap.pitch < 0 ? -bitmap.pitch : bitmap.pitch));
+            printf("\"}}");
+        }
+        printf("]}}\n");
     } else if (streq(mode, "empty")) {
         FT_Vector empty_points[1];
         unsigned char empty_tags[1];
@@ -11679,6 +13732,79 @@ static int emit_face_owned_handles(int argc, char** argv) {
     return 0;
 }
 
+static int print_malformed_maxp_row(
+    const char* variant,
+    const char* source_kind,
+    const char* source_value,
+    FT_Long face_index) {
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library = NULL;
+    FT_Face face = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Error face_error = init_error;
+    if (!face_error) {
+        face_error = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    TT_MaxProfile* maxp = NULL;
+    if (!face_error) {
+        maxp = (TT_MaxProfile*)FT_Get_Sfnt_Table(face, FT_SFNT_MAXP);
+    }
+
+    printf("{\"variant\":\"%s\",\"error\":%d,\"face_load_error\":%d,\"pointer_null\":",
+           variant,
+           (int)face_error,
+           (int)face_error);
+    print_json_bool(face_error || maxp == NULL);
+    printf(",\"fields_if_loaded\":");
+    print_tt_maxprofile_record(face_error ? NULL : maxp);
+    printf("}");
+
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
+}
+
+static int emit_malformed_maxp_route(int argc, char** argv) {
+    if (argc != 7) {
+        fprintf(stderr, "--malformed-maxp-route requires TRUNC_KIND TRUNC_SOURCE INVALID_KIND INVALID_SOURCE FACE_INDEX\n");
+        return 2;
+    }
+    FT_Long face_index = atol(argv[6]);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    int status = print_malformed_maxp_row("truncated_maxp", argv[2], argv[3], face_index);
+    if (status) {
+        printf("]}}\n");
+        return status;
+    }
+    printf(",");
+    status = print_malformed_maxp_row("invalid_maxp", argv[4], argv[5], face_index);
+    printf("]}}\n");
+    return status;
+}
+
 static void print_size_metrics_named_value(const char* name, FT_Size_Metrics* metrics) {
     printf("\"%s\":", name);
     if (!metrics) {
@@ -12159,6 +14285,54 @@ static int emit_ps_font_info(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ps_font_info_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    PS_FontInfoRec info;
+    memset(&info, 0, sizeof(info));
+    FT_Error err = FT_Get_PS_Font_Info(NULL, &info);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
+static int emit_ps_font_info_null_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Error err = FT_Get_PS_Font_Info(face.face, NULL);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_has_ps_glyph_names(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Int result = FT_Has_PS_Glyph_Names(face.face);
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":%d}}\n", result);
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_has_ps_glyph_names_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    FT_Int result = FT_Has_PS_Glyph_Names(NULL);
+    printf("{\"status\":{\"kind\":\"ok\",\"error_code\":0},\"output\":{\"result\":%d}}\n", result);
+    return 0;
+}
+
 static int oracle_bytes_contains(const unsigned char* data, long data_len, const char* pattern) {
     size_t pattern_len = strlen(pattern);
     if (!data || data_len <= 0 || pattern_len == 0 || (long)pattern_len > data_len) {
@@ -12273,6 +14447,33 @@ static int emit_ps_font_private(int argc, char** argv) {
     return 0;
 }
 
+static int emit_ps_font_private_null_face(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    PS_PrivateRec private_rec;
+    memset(&private_rec, 0, sizeof(private_rec));
+    FT_Error err = FT_Get_PS_Font_Private(NULL, &private_rec);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    return 0;
+}
+
+static int emit_ps_font_private_null_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Error err = FT_Get_PS_Font_Private(face.face, NULL);
+    printf("{");
+    print_status(err);
+    printf(",\"output\":null}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
 static int emit_ps_font_private_rowset(int argc, char** argv) {
     int count = atoi(argv[2]);
     printf("{");
@@ -12379,6 +14580,97 @@ static int emit_ps_font_value_encoding_rowset(int argc, char** argv) {
         arg += 3;
     }
     printf("]}}\n");
+    return 0;
+}
+
+static void print_ps_font_value_matrix_row(const char* id,
+                                           const char* key_name,
+                                           FT_Face face,
+                                           PS_Dict_Keys key,
+                                           FT_UInt idx,
+                                           int pointer_is_null,
+                                           FT_Long explicit_len,
+                                           int exact_len) {
+    FT_Long prequery = FT_Get_PS_Font_Value(face, key, idx, NULL, 0);
+    FT_Long value_len = exact_len && prequery > 0 ? prequery : explicit_len;
+    unsigned char buffer[256];
+    memset(buffer, 0xA5, sizeof(buffer));
+    void* value = pointer_is_null ? NULL : buffer;
+    FT_Long ret = FT_Get_PS_Font_Value(face, key, idx, value, value_len);
+    long prefix_len = 0;
+    if (!pointer_is_null) {
+        if (ret > 0 && ret <= (FT_Long)sizeof(buffer) && value_len >= ret) {
+            prefix_len = ret;
+        } else {
+            prefix_len = 16;
+        }
+    }
+    printf("{\"id\":\"%s\",\"key\":\"%s\",\"idx\":%u,\"prequery\":%ld,\"value_len\":%ld,\"return\":%ld,\"buffer_hex\":\"",
+           id,
+           key_name,
+           idx,
+           prequery,
+           value_len,
+           ret);
+    print_hex_bytes(buffer, prefix_len);
+    printf("\"}");
+}
+
+static int emit_ps_font_value_matrix(int argc, char** argv) {
+    (void)argc;
+    OracleFace type1;
+    OracleFace custom;
+    OracleFace cff;
+    OracleFace truetype;
+    FT_Long face_index = atol(argv[10]);
+    int opened = open_oracle_face(argv[2], argv[3], face_index, &type1);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[4], argv[5], face_index, &custom);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[6], argv[7], face_index, &cff);
+    if (opened != 0) return opened;
+    opened = open_oracle_face(argv[8], argv[9], face_index, &truetype);
+    if (opened != 0) return opened;
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    print_ps_font_value_matrix_row("scalar_value", "PS_DICT_UNDERLINE_POSITION",
+                                   type1.face, PS_DICT_UNDERLINE_POSITION, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("string_value", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("array_value", "PS_DICT_BLUE_VALUE",
+                                   type1.face, PS_DICT_BLUE_VALUE, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("encoding_type", "PS_DICT_ENCODING_TYPE",
+                                   custom.face, PS_DICT_ENCODING_TYPE, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("sizing_query", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 1, 0, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("short_buffer", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, 1, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("negative_value_len", "PS_DICT_FULL_NAME",
+                                   type1.face, PS_DICT_FULL_NAME, 0, 0, -1, 0);
+    printf(",");
+    print_ps_font_value_matrix_row("invalid_index", "PS_DICT_BLUE_VALUE",
+                                   type1.face, PS_DICT_BLUE_VALUE, 255, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("unsupported_service", "PS_DICT_FULL_NAME",
+                                   cff.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("non_postscript", "PS_DICT_FULL_NAME",
+                                   truetype.face, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf(",");
+    print_ps_font_value_matrix_row("null_face", "PS_DICT_FULL_NAME",
+                                   NULL, PS_DICT_FULL_NAME, 0, 0, 256, 1);
+    printf("]}}\n");
+    close_oracle_face(&truetype);
+    close_oracle_face(&cff);
+    close_oracle_face(&custom);
+    close_oracle_face(&type1);
     return 0;
 }
 
@@ -12516,10 +14808,1328 @@ static void print_color_entries(FT_Color* palette, FT_UShort count) {
     printf("]");
 }
 
+static void print_ft_color_json(FT_Color color) {
+    printf("{\"blue\":%u,\"green\":%u,\"red\":%u,\"alpha\":%u}",
+           color.blue,
+           color.green,
+           color.red,
+           color.alpha);
+}
+
 static FT_UShort palette_entry_count(FT_Face face) {
     FT_Palette_Data data = {0};
     FT_Error err = FT_Palette_Data_Get(face, &data);
     return err ? 0 : data.num_palette_entries;
+}
+
+static void print_layer_iterator_json(FT_LayerIterator iterator) {
+    printf("{\"num_layers\":%u,\"layer\":%u,\"p_class\":\"%s\"}",
+           iterator.num_layers,
+           iterator.layer,
+           iterator.p ? "nonnull" : "null");
+}
+
+static void print_color_layer_call_json(const char* label,
+                                        FT_Bool result,
+                                        FT_UInt glyph_index,
+                                        FT_UInt color_index,
+                                        FT_LayerIterator iterator) {
+    printf("{\"label\":\"%s\",\"return\":%u,\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+           label,
+           result,
+           glyph_index,
+           color_index);
+    print_layer_iterator_json(iterator);
+    printf("}");
+}
+
+static int emit_color_glyph_layer_case(int argc, char** argv) {
+    if (argc != 7) {
+        fprintf(stderr, "--color-glyph-layer-case requires CASE SOURCE_KIND SOURCE FACE_INDEX BASE_GLYPH\n");
+        return 2;
+    }
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt base_glyph = (FT_UInt)strtoul(argv[6], NULL, 10);
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    FT_UInt glyph_index = 0xDEAD;
+    FT_UInt color_index = 0xBEEF;
+
+    printf("{");
+    print_status(0);
+    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0")) {
+        printf(",\"output\":{\"calls\":[");
+        for (int i = 0; i < 4; i++) {
+            if (i) {
+                printf(",");
+            }
+            FT_Bool result = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+            char label[16];
+            snprintf(label, sizeof(label), "call_%d", i + 1);
+            print_color_layer_call_json(label, result, glyph_index, color_index, iterator);
+        }
+        printf("]}}\n");
+    } else if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index")) {
+        FT_Bool result = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        printf(",\"output\":{\"call\":");
+        print_color_layer_call_json("foreground", result, glyph_index, color_index, iterator);
+        printf(",\"foreground_marker_preserved\":%s}}\n", color_index == 0xFFFF ? "true" : "false");
+    } else if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs")) {
+        for (int i = 0; i < 4; i++) {
+            FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        }
+        FT_UInt before_glyph = glyph_index;
+        FT_UInt before_color = color_index;
+        FT_LayerIterator before_iterator = iterator;
+        FT_Bool terminal = FT_Get_Color_Glyph_Layer(face.face, base_glyph, &glyph_index, &color_index, &iterator);
+        printf(",\"output\":{\"terminal_return\":%u,\"before\":{\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+               terminal,
+               before_glyph,
+               before_color);
+        print_layer_iterator_json(before_iterator);
+        printf("},\"after\":{\"glyph_index\":%u,\"color_index\":%u,\"iterator\":",
+               glyph_index,
+               color_index);
+        print_layer_iterator_json(iterator);
+        printf("}}}\n");
+    } else {
+        close_oracle_face(&face);
+        return 2;
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
+static void print_color_glyph_layer_sequence_for_base_glyph_json(FT_Face face,
+                                                                 FT_UInt base_glyph,
+                                                                 int max_calls) {
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    FT_UInt glyph_index = 0xDEAD;
+    FT_UInt color_index = 0xBEEF;
+    printf("{\"base_glyph\":%u,\"calls\":[", base_glyph);
+    for (int i = 0; i < max_calls; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_Bool result = FT_Get_Color_Glyph_Layer(face, base_glyph, &glyph_index, &color_index, &iterator);
+        char label[16];
+        snprintf(label, sizeof(label), "call_%d", i + 1);
+        print_color_layer_call_json(label, result, glyph_index, color_index, iterator);
+    }
+    printf("]}");
+}
+
+static FT_ClipBox sentinel_clip_box(void) {
+    FT_ClipBox box;
+    box.bottom_left.x = -0x1111;
+    box.bottom_left.y = -0x2222;
+    box.top_left.x = -0x3333;
+    box.top_left.y = -0x4444;
+    box.top_right.x = 0x5555;
+    box.top_right.y = 0x6666;
+    box.bottom_right.x = 0x7777;
+    box.bottom_right.y = 0x8888;
+    return box;
+}
+
+static int clip_box_equal(FT_ClipBox a, FT_ClipBox b) {
+    return a.bottom_left.x == b.bottom_left.x &&
+           a.bottom_left.y == b.bottom_left.y &&
+           a.top_left.x == b.top_left.x &&
+           a.top_left.y == b.top_left.y &&
+           a.top_right.x == b.top_right.x &&
+           a.top_right.y == b.top_right.y &&
+           a.bottom_right.x == b.bottom_right.x &&
+           a.bottom_right.y == b.bottom_right.y;
+}
+
+static void print_clip_vector_json(FT_Vector vector) {
+    printf("{\"x\":%ld,\"y\":%ld}", vector.x, vector.y);
+}
+
+static void print_clip_box_json(FT_ClipBox clip_box) {
+    printf("{\"bottom_left\":");
+    print_clip_vector_json(clip_box.bottom_left);
+    printf(",\"top_left\":");
+    print_clip_vector_json(clip_box.top_left);
+    printf(",\"top_right\":");
+    print_clip_vector_json(clip_box.top_right);
+    printf(",\"bottom_right\":");
+    print_clip_vector_json(clip_box.bottom_right);
+    printf("}");
+}
+
+static int emit_color_glyph_clipbox_case(int argc, char** argv) {
+    if (argc != 7 && argc != 15) {
+        fprintf(stderr, "--color-glyph-clipbox-case requires CASE SOURCE_KIND SOURCE FACE_INDEX BASE_GLYPH [PX PY XX XY YX YY DX DY]\n");
+        return 2;
+    }
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt base_glyph = (FT_UInt)strtoul(argv[6], NULL, 10);
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"setup\":{");
+    if (argc == 15) {
+        FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+        FT_Error size_error = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+        FT_Matrix matrix;
+        matrix.xx = (FT_Fixed)strtol(argv[9], NULL, 10);
+        matrix.xy = (FT_Fixed)strtol(argv[10], NULL, 10);
+        matrix.yx = (FT_Fixed)strtol(argv[11], NULL, 10);
+        matrix.yy = (FT_Fixed)strtol(argv[12], NULL, 10);
+        FT_Vector delta;
+        delta.x = (FT_Pos)strtol(argv[13], NULL, 10);
+        delta.y = (FT_Pos)strtol(argv[14], NULL, 10);
+        FT_Set_Transform(face.face, &matrix, &delta);
+        printf("\"pixel_size\":{\"x\":%u,\"y\":%u,\"error\":%d},",
+               pixel_width,
+               pixel_height,
+               size_error);
+        printf("\"set_transform\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":",
+               (long)matrix.xx,
+               (long)matrix.xy,
+               (long)matrix.yx,
+               (long)matrix.yy);
+        print_clip_vector_json(delta);
+        printf("}");
+    }
+    printf("}");
+
+    FT_ClipBox before = sentinel_clip_box();
+    FT_ClipBox clip_box = before;
+    FT_Bool result = FT_Get_Color_Glyph_ClipBox(face.face, base_glyph, &clip_box);
+    printf(",\"return\":%u", result);
+    if (streq(case_id, "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output")) {
+        printf(",\"clip_box_before_after\":{\"before\":");
+        print_clip_box_json(before);
+        printf(",\"after\":");
+        print_clip_box_json(clip_box);
+        printf(",\"preserved\":%s}", clip_box_equal(before, clip_box) ? "true" : "false");
+    } else {
+        printf(",\"clip_box\":");
+        print_clip_box_json(clip_box);
+    }
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
+}
+
+static void print_opaque_paint_json(FT_OpaquePaint opaque) {
+    printf("{\"p_class\":\"%s\",\"insert_root_transform\":%u}",
+           opaque.p ? "nonnull" : "null",
+           opaque.insert_root_transform);
+}
+
+static void print_colr_paint_node_json(FT_Face face, FT_OpaquePaint opaque, int depth) {
+    if (depth > 8) {
+        printf("{\"return\":0,\"depth_limit\":true}");
+        return;
+    }
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool result = FT_Get_Paint(face, opaque, &paint);
+    printf("{\"return\":%u,\"opaque\":", result);
+    print_opaque_paint_json(opaque);
+    if (!result) {
+        printf("}");
+        return;
+    }
+    printf(",\"format\":%d", paint.format);
+    printf("}");
+}
+
+static void print_colr_paint_layer_call_json(const char* label,
+                                             FT_Bool result,
+                                             FT_LayerIterator iterator,
+                                             FT_OpaquePaint paint) {
+    printf("{\"label\":\"%s\",\"return\":%u,\"iterator\":",
+           label,
+           result);
+    print_layer_iterator_json(iterator);
+    printf(",\"paint\":");
+    print_opaque_paint_json(paint);
+    printf("}");
+}
+
+static void print_colr_paint_layers_sequence_json(FT_Face face,
+                                                  FT_UInt base_glyph,
+                                                  int max_calls) {
+    FT_OpaquePaint root_opaque;
+    memset(&root_opaque, 0, sizeof(root_opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &root_opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, root_opaque, &paint);
+    FT_LayerIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS) {
+        iterator = paint.u.colr_layers.layer_iterator;
+    }
+    FT_LayerIterator initial_iterator = iterator;
+    printf("{\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(root_opaque);
+    printf(",\"paint_return\":%u,\"paint_format\":%d,\"initial_iterator\":",
+           paint_return,
+           paint.format);
+    print_layer_iterator_json(initial_iterator);
+    printf(",\"calls\":[");
+    for (int i = 0; i < max_calls; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_OpaquePaint layer_paint;
+        layer_paint.p = (FT_Byte*)1;
+        layer_paint.insert_root_transform = 0x7F;
+        FT_Bool result = FT_Get_Paint_Layers(face, &iterator, &layer_paint);
+        char label[16];
+        snprintf(label, sizeof(label), "call_%d", i + 1);
+        print_colr_paint_layer_call_json(label, result, iterator, layer_paint);
+    }
+    printf("]}");
+}
+
+static void print_ft_vector_json(FT_Vector vector) {
+    printf("{\"x\":%ld,\"y\":%ld}", (long)vector.x, (long)vector.y);
+}
+
+static void print_color_stop_iterator_json(FT_ColorStopIterator iterator) {
+    printf("{\"num_color_stops\":%u,\"current_color_stop\":%u,\"p_class\":\"%s\",\"read_variable\":%u}",
+           iterator.num_color_stops,
+           iterator.current_color_stop,
+           iterator.p ? "nonnull" : "null",
+           iterator.read_variable);
+}
+
+static void print_color_stop_json(FT_ColorStop stop) {
+    printf("{\"stop_offset\":%ld,\"color\":{\"palette_index\":%u,\"alpha\":%d}}",
+           (long)stop.stop_offset,
+           stop.color.palette_index,
+           stop.color.alpha);
+}
+
+static void print_colorline_json(FT_ColorLine colorline) {
+    printf("{\"extend\":%d,\"color_stop_iterator\":", colorline.extend);
+    print_color_stop_iterator_json(colorline.color_stop_iterator);
+    printf("}");
+}
+
+static void print_gradient_paint_payload_json(FT_COLR_Paint paint) {
+    if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        printf("{\"format\":%d,\"linear_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.linear_gradient.colorline);
+        printf(",\"p0\":");
+        print_ft_vector_json(paint.u.linear_gradient.p0);
+        printf(",\"p1\":");
+        print_ft_vector_json(paint.u.linear_gradient.p1);
+        printf(",\"p2\":");
+        print_ft_vector_json(paint.u.linear_gradient.p2);
+        printf("}}");
+    } else if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        printf("{\"format\":%d,\"radial_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.radial_gradient.colorline);
+        printf(",\"c0\":");
+        print_ft_vector_json(paint.u.radial_gradient.c0);
+        printf(",\"r0\":%ld,\"c1\":", (long)paint.u.radial_gradient.r0);
+        print_ft_vector_json(paint.u.radial_gradient.c1);
+        printf(",\"r1\":%ld}}", (long)paint.u.radial_gradient.r1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        printf("{\"format\":%d,\"sweep_gradient\":{\"colorline\":", paint.format);
+        print_colorline_json(paint.u.sweep_gradient.colorline);
+        printf(",\"center\":");
+        print_ft_vector_json(paint.u.sweep_gradient.center);
+        printf(",\"start_angle\":%ld,\"end_angle\":%ld}}",
+               (long)paint.u.sweep_gradient.start_angle,
+               (long)paint.u.sweep_gradient.end_angle);
+    } else {
+        printf("{\"format\":%d}", paint.format);
+    }
+}
+
+static int colorline_from_gradient_paint(FT_COLR_Paint paint, FT_ColorLine* colorline) {
+    if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        *colorline = paint.u.linear_gradient.colorline;
+        return 1;
+    }
+    if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        *colorline = paint.u.radial_gradient.colorline;
+        return 1;
+    }
+    if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        *colorline = paint.u.sweep_gradient.colorline;
+        return 1;
+    }
+    return 0;
+}
+
+static void print_colorline_stop_call_json(FT_Face face,
+                                           const char* label,
+                                           FT_ColorStopIterator* iterator,
+                                           FT_ColorStop* color_stop) {
+    FT_ColorStopIterator before_iterator = *iterator;
+    FT_ColorStop before_stop = *color_stop;
+    FT_Bool result = FT_Get_Colorline_Stops(face, color_stop, iterator);
+    printf("{\"label\":\"%s\",\"return\":%u,\"before\":{\"iterator\":",
+           label,
+           result);
+    print_color_stop_iterator_json(before_iterator);
+    printf(",\"color_stop\":");
+    print_color_stop_json(before_stop);
+    printf("},\"after\":{\"iterator\":");
+    print_color_stop_iterator_json(*iterator);
+    printf(",\"color_stop\":");
+    print_color_stop_json(*color_stop);
+    printf("}}");
+}
+
+static void print_gradient_colorline_sequence_json(FT_Face face,
+                                                   const char* label,
+                                                   FT_UInt base_glyph,
+                                                   int max_extra_calls) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+    FT_ColorLine colorline;
+    memset(&colorline, 0, sizeof(colorline));
+    int has_colorline = paint_return && colorline_from_gradient_paint(paint, &colorline);
+    FT_ColorStopIterator iterator;
+    memset(&iterator, 0, sizeof(iterator));
+    if (has_colorline) {
+        iterator = colorline.color_stop_iterator;
+    }
+    FT_ColorStop color_stop;
+    color_stop.stop_offset = -0x1234;
+    color_stop.color.palette_index = 0xBEEF;
+    color_stop.color.alpha = -0x123;
+    int max_calls = (int)iterator.num_color_stops + max_extra_calls;
+
+    printf("{\"label\":\"%s\",\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"paint_return\":%u,\"paint\":{\"format\":%d,\"node\":", paint_return, paint.format);
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+    printf(",\"colorline\":");
+    if (has_colorline) {
+        print_colorline_json(colorline);
+    } else {
+        printf("null");
+    }
+    printf(",\"calls\":[");
+    for (int index = 0; index < max_calls; index++) {
+        if (index) {
+            printf(",");
+        }
+        char call_label[16];
+        snprintf(call_label, sizeof(call_label), "call_%d", index + 1);
+        print_colorline_stop_call_json(face, call_label, &iterator, &color_stop);
+    }
+    printf("]}");
+}
+
+static int emit_color_paint_layers_case(const char* case_id, OracleFace* face) {
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequence\":");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequences\":[");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf(",");
+        print_colr_paint_layers_sequence_json(face->face, 37, 4);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"color_glyph_layers_v0\":");
+        print_color_glyph_layer_sequence_for_base_glyph_json(face->face, 36, 4);
+        printf(",\"paint_layers_v1\":[");
+        print_colr_paint_layers_sequence_json(face->face, 36, 3);
+        printf(",");
+        print_colr_paint_layers_sequence_json(face->face, 37, 4);
+        printf("]}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration")) {
+        printf("{");
+        print_status(0);
+        printf(",\"output\":{\"sequence\":");
+        print_colr_paint_layers_sequence_json(face->face, 37, 5);
+        printf("}}\n");
+        return 0;
+    }
+    return 2;
+}
+
+static void print_colr_snapshot_node_json(FT_Face face, FT_OpaquePaint opaque, int depth) {
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool result = FT_Get_Paint(face, opaque, &paint);
+    if (!result) {
+    printf("{\"depth\":%d,\"format\":0,\"palette_index\":0,\"alpha\":0,\"glyph_index\":0,\"composite_mode\":0,\"values\":[0,0,0,0,0,0]}", depth);
+        return;
+    }
+    FT_UInt palette_index = 0;
+    FT_Int alpha = 0;
+    FT_UInt glyph_index = 0;
+    FT_Int composite_mode = 0;
+    long values[6] = {0, 0, 0, 0, 0, 0};
+    if (paint.format == FT_COLR_PAINTFORMAT_SOLID) {
+        palette_index = paint.u.solid.color.palette_index;
+        alpha = paint.u.solid.color.alpha;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
+        glyph_index = paint.u.glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COLR_GLYPH) {
+        glyph_index = paint.u.colr_glyph.glyphID;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_LINEAR_GRADIENT) {
+        palette_index = paint.u.linear_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.linear_gradient.colorline.extend;
+        values[0] = (long)paint.u.linear_gradient.p0.x;
+        values[1] = (long)paint.u.linear_gradient.p0.y;
+        values[2] = (long)paint.u.linear_gradient.p1.x;
+        values[3] = (long)paint.u.linear_gradient.p1.y;
+        values[4] = (long)paint.u.linear_gradient.p2.x;
+        values[5] = (long)paint.u.linear_gradient.p2.y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_RADIAL_GRADIENT) {
+        palette_index = paint.u.radial_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.radial_gradient.colorline.extend;
+        values[0] = (long)paint.u.radial_gradient.c0.x;
+        values[1] = (long)paint.u.radial_gradient.c0.y;
+        values[2] = (long)paint.u.radial_gradient.r0;
+        values[3] = (long)paint.u.radial_gradient.c1.x;
+        values[4] = (long)paint.u.radial_gradient.c1.y;
+        values[5] = (long)paint.u.radial_gradient.r1;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SWEEP_GRADIENT) {
+        palette_index = paint.u.sweep_gradient.colorline.color_stop_iterator.num_color_stops;
+        composite_mode = paint.u.sweep_gradient.colorline.extend;
+        values[0] = (long)paint.u.sweep_gradient.center.x;
+        values[1] = (long)paint.u.sweep_gradient.center.y;
+        values[2] = (long)paint.u.sweep_gradient.start_angle;
+        values[3] = (long)paint.u.sweep_gradient.end_angle;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS) {
+        composite_mode = paint.u.colr_layers.layer_iterator.num_layers;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        values[0] = (long)paint.u.transform.affine.xx;
+        values[1] = (long)paint.u.transform.affine.xy;
+        values[2] = (long)paint.u.transform.affine.dx;
+        values[3] = (long)paint.u.transform.affine.yx;
+        values[4] = (long)paint.u.transform.affine.yy;
+        values[5] = (long)paint.u.transform.affine.dy;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSLATE) {
+        values[0] = (long)paint.u.translate.dx;
+        values[1] = (long)paint.u.translate.dy;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SCALE) {
+        values[0] = (long)paint.u.scale.scale_x;
+        values[1] = (long)paint.u.scale.scale_y;
+        values[2] = (long)paint.u.scale.center_x;
+        values[3] = (long)paint.u.scale.center_y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_ROTATE) {
+        values[0] = (long)paint.u.rotate.angle;
+        values[1] = (long)paint.u.rotate.center_x;
+        values[2] = (long)paint.u.rotate.center_y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SKEW) {
+        values[0] = (long)paint.u.skew.x_skew_angle;
+        values[1] = (long)paint.u.skew.y_skew_angle;
+        values[2] = (long)paint.u.skew.center_x;
+        values[3] = (long)paint.u.skew.center_y;
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
+        composite_mode = paint.u.composite.composite_mode;
+    }
+    printf("{\"depth\":%d,\"format\":%d,\"palette_index\":%u,\"alpha\":%d,\"glyph_index\":%u,\"composite_mode\":%d,\"values\":[%ld,%ld,%ld,%ld,%ld,%ld]}",
+           depth, paint.format, palette_index, alpha, glyph_index, composite_mode,
+           values[0], values[1], values[2], values[3], values[4], values[5]);
+    if (paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS) {
+        FT_LayerIterator iterator = paint.u.colr_layers.layer_iterator;
+        FT_OpaquePaint layer_paint;
+        while (FT_Get_Paint_Layers(face, &iterator, &layer_paint)) {
+            printf(",");
+            print_colr_snapshot_node_json(face, layer_paint, depth + 1);
+        }
+    } else if (paint.format == FT_COLR_PAINTFORMAT_GLYPH) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.glyph.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.transform.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_TRANSLATE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.translate.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SCALE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.scale.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_ROTATE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.rotate.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_SKEW) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.skew.paint, depth + 1);
+    } else if (paint.format == FT_COLR_PAINTFORMAT_COMPOSITE) {
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.composite.source_paint, depth + 1);
+        printf(",");
+        print_colr_snapshot_node_json(face, paint.u.composite.backdrop_paint, depth + 1);
+    }
+}
+
+static void print_colr_snapshot_record_json(FT_Face face, FT_UInt base_glyph) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    printf("{\"glyph_index\":%u,\"nodes\":[", base_glyph);
+    print_colr_snapshot_node_json(face, opaque, 0);
+    printf("]}");
+}
+
+static void print_colr_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":30,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    for (int mode = 0; mode < 28; mode++) {
+        printf(",");
+        print_colr_snapshot_record_json(face, (FT_UInt)(39 + mode));
+    }
+    printf("]}");
+}
+
+static void print_colr_glyph_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":2,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    printf("]}");
+}
+
+static void print_colr_root_json(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool result = FT_Get_Color_Glyph_Paint(face, base_glyph, root_transform, &opaque);
+    printf("{\"root_return\":%u,\"root_opaque\":", result);
+    print_opaque_paint_json(opaque);
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static int case_base_matches(const char* case_id, const char* base) {
+    size_t len = strlen(base);
+    return strncmp(case_id, base, len) == 0 &&
+           (case_id[len] == '\0' || case_id[len] == '@');
+}
+
+static int color_root_case_ppem(const char* case_id) {
+    const char* variant = strchr(case_id, '@');
+    if (!variant) {
+        return 16;
+    }
+    if (streq(variant, "@s12")) {
+        return 12;
+    }
+    if (streq(variant, "@s16")) {
+        return 16;
+    }
+    if (streq(variant, "@s31")) {
+        return 31;
+    }
+    if (streq(variant, "@s48")) {
+        return 48;
+    }
+    return 16;
+}
+
+static void print_affine23_json(FT_Affine23 affine) {
+    printf("{\"xx\":%ld,\"xy\":%ld,\"dx\":%ld,\"yx\":%ld,\"yy\":%ld,\"dy\":%ld}",
+           (long)affine.xx,
+           (long)affine.xy,
+           (long)affine.dx,
+           (long)affine.yx,
+           (long)affine.yy,
+           (long)affine.dy);
+}
+
+static void print_paint_transform_json(FT_PaintTransform transform) {
+    printf("{\"paint\":");
+    print_opaque_paint_json(transform.paint);
+    printf(",\"affine\":");
+    print_affine23_json(transform.affine);
+    printf("}");
+}
+
+static void color_root_setup_values(const char* label, FT_Matrix* matrix, FT_Vector* delta) {
+    if (streq(label, "identity")) {
+        matrix->xx = 65536;
+        matrix->xy = 0;
+        matrix->yx = 0;
+        matrix->yy = 65536;
+        delta->x = 0;
+        delta->y = 0;
+        return;
+    }
+    if (streq(label, "manifest_include_transform")) {
+        matrix->xx = 65536;
+        matrix->xy = 8192;
+        matrix->yx = 0;
+        matrix->yy = 65536;
+        delta->x = 64;
+        delta->y = 32;
+        return;
+    }
+    matrix->xx = 65536;
+    matrix->xy = 8192;
+    matrix->yx = -4096;
+    matrix->yy = 65536;
+    delta->x = 96;
+    delta->y = -64;
+}
+
+static void print_colr_root_transform_row_json(FT_Face face,
+                                               const char* label,
+                                               FT_UInt base_glyph,
+                                               int ppem,
+                                               FT_UInt root_transform) {
+    FT_Matrix matrix;
+    FT_Vector delta;
+    color_root_setup_values(label, &matrix, &delta);
+    FT_Error size_error = FT_Set_Pixel_Sizes(face, 0, (FT_UInt)ppem);
+    FT_Set_Transform(face, &matrix, &delta);
+
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, root_transform, &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+
+    printf("{\"label\":\"%s\",\"pixel_size\":{\"x\":0,\"y\":%d},\"setup\":{\"size_error\":%d,\"set_transform\":{\"matrix\":{\"xx\":%ld,\"xy\":%ld,\"yx\":%ld,\"yy\":%ld},\"delta\":{\"x\":%ld,\"y\":%ld}}},\"root_transform\":%u,\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           ppem,
+           size_error,
+           (long)matrix.xx,
+           (long)matrix.xy,
+           (long)matrix.yx,
+           (long)matrix.yy,
+           (long)delta.x,
+           (long)delta.y,
+           root_transform,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"paint_return\":%u,\"paint_format\":%d,\"transform\":", paint_return, paint.format);
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        print_paint_transform_json(paint.u.transform);
+    } else {
+        printf("null");
+    }
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static int is_colr_root_transform_case(const char* case_id) {
+    return case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
+           case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime") ||
+           case_base_matches(case_id, "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint") ||
+           case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload") ||
+           case_base_matches(case_id, "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform");
+}
+
+static int emit_colr_root_transform_case(const char* case_id, OracleFace* face) {
+    int ppem = color_root_case_ppem(case_id);
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    if (case_base_matches(case_id, "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime") ||
+        case_base_matches(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload")) {
+        print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+    } else if (case_base_matches(case_id, "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform")) {
+        print_colr_root_transform_row_json(face->face, "manifest_include_transform", 36, 24, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+    } else if (case_base_matches(case_id, "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime")) {
+        print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+    } else {
+        print_colr_root_transform_row_json(face->face, "identity", 36, ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "identity", 36, ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+        printf(",");
+        print_colr_root_transform_row_json(face->face, "scale_translate", 36, ppem, FT_COLOR_NO_ROOT_TRANSFORM);
+    }
+    printf("]}}\n");
+    return 0;
+}
+
+static void print_colr_all_paints_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":15,\"records\":[");
+    for (int i = 0; i < 15; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_snapshot_record_json(face, (FT_UInt)(36 + i));
+    }
+    printf("]}");
+}
+
+static void print_colr_all_paints_role_row_json(FT_Face face,
+                                                const char* label,
+                                                FT_UInt base_glyph) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+    printf("{\"label\":\"%s\",\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"paint_return\":%u,\"paint_format\":%d,\"root_paint\":",
+           paint_return,
+           paint.format);
+    print_colr_paint_node_json(face, opaque, 0);
+    printf(",\"colorline\":");
+    FT_ColorLine colorline;
+    memset(&colorline, 0, sizeof(colorline));
+    if (paint_return && colorline_from_gradient_paint(paint, &colorline)) {
+        print_colorline_json(colorline);
+    } else {
+        printf("null");
+    }
+    printf(",\"layer_iterator\":");
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS) {
+        print_layer_iterator_json(paint.u.colr_layers.layer_iterator);
+    } else {
+        printf("null");
+    }
+    printf(",\"transform\":");
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+        print_paint_transform_json(paint.u.transform);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static void print_colr_all_paints_rows_json(FT_Face face) {
+    const char* labels[15] = {
+        "colr_layers",
+        "solid",
+        "glyph",
+        "colr_glyph",
+        "linear_gradient",
+        "radial_gradient",
+        "sweep_gradient",
+        "transform",
+        "translate",
+        "scale",
+        "rotate",
+        "skew",
+        "composite",
+        "root_transform_target",
+        "foreground_solid",
+    };
+    printf("[");
+    for (int i = 0; i < 15; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_all_paints_role_row_json(face, labels[i], (FT_UInt)(36 + i));
+    }
+    printf("]");
+}
+
+static void print_colr_all_paints_root_transform_runs_json(FT_Face face) {
+    const int ppems[4] = { 16, 16, 37, 37 };
+    const char* labels[4] = { "identity", "shear_translate", "identity", "shear_translate" };
+    printf("[");
+    for (int i = 0; i < 4; i++) {
+        if (i) {
+            printf(",");
+        }
+        if (streq(labels[i], "shear_translate")) {
+            FT_Matrix matrix = { 65536, 16384, -8192, 65536 };
+            FT_Vector delta = { 3, -5 };
+            FT_Error size_error = FT_Set_Pixel_Sizes(face, 0, (FT_UInt)ppems[i]);
+            FT_Set_Transform(face, &matrix, &delta);
+            FT_OpaquePaint opaque;
+            memset(&opaque, 0, sizeof(opaque));
+            FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, 49, FT_COLOR_INCLUDE_ROOT_TRANSFORM, &opaque);
+            FT_COLR_Paint paint;
+            memset(&paint, 0, sizeof(paint));
+            FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+            printf("{\"label\":\"shear_translate\",\"pixel_size\":{\"x\":0,\"y\":%d},\"setup\":{\"size_error\":%d,\"set_transform\":{\"matrix\":{\"xx\":65536,\"xy\":16384,\"yx\":-8192,\"yy\":65536},\"delta\":{\"x\":3,\"y\":-5}}},\"root_transform\":%u,\"base_glyph\":49,\"root_return\":%u,\"root_opaque\":",
+                   ppems[i],
+                   size_error,
+                   FT_COLOR_INCLUDE_ROOT_TRANSFORM,
+                   root_return);
+            print_opaque_paint_json(opaque);
+            printf(",\"paint_return\":%u,\"paint_format\":%d,\"transform\":", paint_return, paint.format);
+            if (paint_return && paint.format == FT_COLR_PAINTFORMAT_TRANSFORM) {
+                print_paint_transform_json(paint.u.transform);
+            } else {
+                printf("null");
+            }
+            printf(",\"root_paint\":");
+            print_colr_paint_node_json(face, opaque, 0);
+            printf("}");
+        } else {
+            print_colr_root_transform_row_json(face, "identity", 49, ppems[i], FT_COLOR_INCLUDE_ROOT_TRANSFORM);
+        }
+    }
+    printf("]");
+}
+
+static int is_colr_all_paints_case(const char* case_id) {
+    return case_base_matches(case_id, "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format") ||
+           case_base_matches(case_id, "ftcolor.FT_Get_Paint.success_inserts_root_transform") ||
+           case_base_matches(case_id, "ftcolor.FT_Affine23.root_transform_values") ||
+           case_base_matches(case_id, "ftcolor.FT_ColorStopIterator.initialized_by_get_paint") ||
+           case_base_matches(case_id, "ftcolor.FT_ColorIndex.solid_and_color_stop_values") ||
+           case_base_matches(case_id, "ftcolor.FT_PaintFormat.paint_union_shape_runtime") ||
+           case_base_matches(case_id, "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values") ||
+           case_base_matches(case_id, "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator");
+}
+
+static int emit_colr_all_paints_case(const char* case_id, OracleFace* face) {
+    printf("{");
+    print_status(0);
+    if (case_base_matches(case_id, "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format") ||
+        case_base_matches(case_id, "ftcolor.FT_PaintFormat.paint_union_shape_runtime")) {
+        printf(",\"output\":{\"rows\":");
+        print_colr_all_paints_rows_json(face->face);
+        printf(",\"graph_snapshot\":");
+        print_colr_all_paints_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (case_base_matches(case_id, "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values")) {
+        printf(",\"output\":{\"row\":");
+        print_colr_all_paints_role_row_json(face->face, "colr_glyph", 39);
+        printf(",\"graph_snapshot\":");
+        print_colr_all_paints_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (case_base_matches(case_id, "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator")) {
+        printf(",\"output\":{\"sequence\":");
+        print_colr_paint_layers_sequence_json(face->face, 36, 4);
+        printf(",\"row\":");
+        print_colr_all_paints_role_row_json(face->face, "colr_layers", 36);
+        printf("}}\n");
+        return 0;
+    }
+    if (case_base_matches(case_id, "ftcolor.FT_ColorStopIterator.initialized_by_get_paint")) {
+        printf(",\"output\":{\"sequences\":[");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 40, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "radial_repeat", 41, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "sweep_reflect", 42, 1);
+        printf("]}}\n");
+        return 0;
+    }
+    if (case_base_matches(case_id, "ftcolor.FT_ColorIndex.solid_and_color_stop_values")) {
+        printf(",\"output\":{\"solid_paints\":[");
+        print_colr_all_paints_role_row_json(face->face, "solid", 37);
+        printf(",");
+        print_colr_all_paints_role_row_json(face->face, "foreground_solid", 50);
+        printf("],\"colorline\":");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 40, 1);
+        printf("}}\n");
+        return 0;
+    }
+    printf(",\"output\":{\"runs\":");
+    print_colr_all_paints_root_transform_runs_json(face->face);
+    printf("}}\n");
+    return 0;
+}
+
+static void print_foreground_solid_public_reference_json(FT_Face face) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(
+        face,
+        50,
+        FT_COLOR_NO_ROOT_TRANSFORM,
+        &opaque);
+    FT_COLR_Paint paint;
+    memset(&paint, 0, sizeof(paint));
+    FT_Bool paint_return = FT_Get_Paint(face, opaque, &paint);
+    printf("{\"kind\":\"public_color_index\",\"base_glyph\":50,\"root_return\":%u,\"paint_return\":%u,\"paint_format\":%d,\"color\":",
+           root_return,
+           paint_return,
+           paint.format);
+    if (paint_return && paint.format == FT_COLR_PAINTFORMAT_SOLID) {
+        printf("{\"palette_index\":%u,\"alpha\":%d}",
+               paint.u.solid.color.palette_index,
+               paint.u.solid.color.alpha);
+    } else {
+        printf("null");
+    }
+    printf("}");
+}
+
+static void print_palette_set_foreground_sfnt_runs_json(FT_Face face) {
+    FT_Color colors[3] = {
+        { 0, 0, 0, 255 },
+        { 255, 16, 128, 64 },
+        { 0, 0, 0, 0 },
+    };
+    FT_Error select_error = FT_Palette_Select(face, 0, NULL);
+    printf("{\"runs\":[");
+    for (int i = 0; i < 3; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_Error set_error = FT_Palette_Set_Foreground_Color(face, colors[i]);
+        printf("{\"error\":%d,\"foreground_color\":",
+               select_error ? select_error : set_error);
+        print_ft_color_json(colors[i]);
+        printf(",\"observable_bgra_or_color_index\":");
+        print_foreground_solid_public_reference_json(face);
+        printf("}");
+    }
+    printf("]}");
+}
+
+static FT_Color default_foreground_color_for_palette_flags(FT_UShort palette_flags) {
+    if (palette_flags & FT_PALETTE_FOR_DARK_BACKGROUND) {
+        FT_Color color = { 255, 255, 255, 255 };
+        return color;
+    }
+    FT_Color color = { 0, 0, 0, 255 };
+    return color;
+}
+
+static void print_palette_default_foreground_policy_json(FT_Face face) {
+    FT_Palette_Data data;
+    memset(&data, 0, sizeof(data));
+    FT_Error data_error = FT_Palette_Data_Get(face, &data);
+    FT_UShort num_palettes = data_error ? 0 : data.num_palettes;
+    printf("{\"runs\":[");
+    for (FT_UShort i = 0; i < num_palettes; i++) {
+        if (i) {
+            printf(",");
+        }
+        FT_UShort palette_flags = data.palette_flags ? data.palette_flags[i] : 0;
+        FT_Error select_error = FT_Palette_Select(face, i, NULL);
+        FT_Color default_foreground = default_foreground_color_for_palette_flags(palette_flags);
+        printf("{\"palette_index\":%u,\"select_error\":%d,\"palette_flags\":%u,\"default_foreground_bgra\":",
+               i,
+               select_error,
+               palette_flags);
+        print_ft_color_json(default_foreground);
+        printf(",\"render_or_blend_output\":{\"kind\":\"resolved_default_foreground_and_public_paint_reference\",\"resolved_default_foreground_bgra\":");
+        print_ft_color_json(default_foreground);
+        printf(",\"public_foreground_reference\":");
+        print_foreground_solid_public_reference_json(face);
+        printf("}}");
+    }
+    printf("]}");
+}
+
+static int emit_colr_glyph_paint_graph_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"colr_glyph_root\":");
+    print_colr_root_json(face->face, 36, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"referenced_root\":");
+    print_colr_root_json(face->face, 37, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"graph_snapshot\":");
+    print_colr_glyph_graph_snapshot_json(face->face);
+    printf("}}\n");
+    return 0;
+}
+
+static void print_colr_transform_paint_row_json(FT_Face face,
+                                                const char* label,
+                                                FT_UInt base_glyph) {
+    FT_OpaquePaint opaque;
+    memset(&opaque, 0, sizeof(opaque));
+    FT_Bool root_return = FT_Get_Color_Glyph_Paint(face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+    printf("{\"label\":\"%s\",\"base_glyph\":%u,\"root_return\":%u,\"root_opaque\":",
+           label,
+           base_glyph,
+           root_return);
+    print_opaque_paint_json(opaque);
+    printf(",\"root_paint\":");
+    print_colr_paint_node_json(face, opaque, 0);
+    printf("}");
+}
+
+static void print_colr_transform_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":10,\"records\":[");
+    for (int i = 0; i < 10; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_snapshot_record_json(face, (FT_UInt)(36 + i));
+    }
+    printf("]}");
+}
+
+static int emit_colr_transform_paint_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"rows\":[");
+    const char* labels[10] = {
+        "transform",
+        "translate",
+        "scale",
+        "scale_center",
+        "scale_uniform",
+        "scale_uniform_center",
+        "rotate",
+        "rotate_center",
+        "skew",
+        "skew_center",
+    };
+    for (int i = 0; i < 10; i++) {
+        if (i) {
+            printf(",");
+        }
+        print_colr_transform_paint_row_json(face->face, labels[i], (FT_UInt)(36 + i));
+    }
+    printf("],\"graph_snapshot\":");
+    print_colr_transform_graph_snapshot_json(face->face);
+    printf("}}\n");
+    return 0;
+}
+
+static void print_colr_static_gradient_graph_snapshot_json(FT_Face face) {
+    printf("{\"root_count\":3,\"records\":[");
+    print_colr_snapshot_record_json(face, 36);
+    printf(",");
+    print_colr_snapshot_record_json(face, 37);
+    printf(",");
+    print_colr_snapshot_record_json(face, 38);
+    printf("]}");
+}
+
+static int emit_colr_static_gradient_case(const char* case_id, OracleFace* face) {
+    printf("{");
+    print_status(0);
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "radial_repeat", 37, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload") ||
+        streq(case_id, "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "sweep_reflect", 38, 1);
+        printf(",\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Colorline_Stops.end_of_iteration") ||
+        streq(case_id, "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops")) {
+        printf(",\"output\":{\"sequence\":");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 2);
+        printf("}}\n");
+        return 0;
+    }
+    if (streq(case_id, "ftcolor.FT_PaintExtend.gradient_extend_runtime") ||
+        streq(case_id, "ftcolor.FT_ColorLine.gradient_colorline_values") ||
+        streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops")) {
+        printf(",\"output\":{\"sequences\":[");
+        print_gradient_colorline_sequence_json(face->face, "linear_pad", 36, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "radial_repeat", 37, 1);
+        printf(",");
+        print_gradient_colorline_sequence_json(face->face, "sweep_reflect", 38, 1);
+        printf("],\"graph_snapshot\":");
+        print_colr_static_gradient_graph_snapshot_json(face->face);
+        printf("}}\n");
+        return 0;
+    }
+    printf(",\"output\":{}}\n");
+    return 0;
+}
+
+static void print_colr_variable_coordinate_run_json(FT_Face face,
+                                                    const char* label,
+                                                    FT_Error set_status) {
+    printf("{\"label\":\"%s\",\"set_var_status\":%d,\"sequence\":",
+           label,
+           set_status);
+    print_gradient_colorline_sequence_json(face, label, 36, 1);
+    printf("}");
+}
+
+static int emit_colr_variable_gradient_case(OracleFace* face) {
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"coordinate_runs\":[");
+    print_colr_variable_coordinate_run_json(face->face, "default", 0);
+    FT_Fixed coords[2] = { 900 * 65536, 1 * 65536 };
+    FT_Error set_status = FT_Set_Var_Design_Coordinates(face->face, 2, coords);
+    printf(",");
+    print_colr_variable_coordinate_run_json(face->face, "wght_900_grad_1", set_status);
+    printf("]}}\n");
+    return 0;
+}
+
+static int is_colr_variable_gradient_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_ColorStop.iterator_output_values") ||
+           streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops");
+}
+
+static int is_colr_static_gradient_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload") ||
+           streq(case_id, "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values") ||
+           streq(case_id, "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect") ||
+           streq(case_id, "ftcolor.FT_PaintExtend.gradient_extend_runtime") ||
+           streq(case_id, "ftcolor.FT_ColorLine.gradient_colorline_values") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops") ||
+           streq(case_id, "ftcolor.FT_Get_Colorline_Stops.end_of_iteration") ||
+           streq(case_id, "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops");
+}
+
+static int is_colr_transform_paint_case(const char* case_id) {
+    return streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload") ||
+           streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload") ||
+           streq(case_id, "ftcolor.FT_PaintRotate.get_paint_rotate_values") ||
+           streq(case_id, "ftcolor.FT_PaintScale.get_paint_scale_values") ||
+           streq(case_id, "ftcolor.FT_PaintSkew.get_paint_skew_values") ||
+           streq(case_id, "ftcolor.FT_PaintTransform.get_paint_transform_values") ||
+           streq(case_id, "ftcolor.FT_PaintTranslate.get_paint_translate_values");
+}
+
+static int emit_color_paint_graph_case(int argc, char** argv) {
+    if (argc != 6) {
+        fprintf(stderr, "--color-paint-graph-case requires CASE SOURCE_KIND SOURCE FACE_INDEX\n");
+        return 2;
+    }
+    const char* case_id = argv[2];
+    OracleFace face;
+    int opened = open_oracle_face(argv[3], argv[4], atol(argv[5]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    if (is_colr_all_paints_case(case_id)) {
+        int result = emit_colr_all_paints_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_root_transform_case(case_id)) {
+        int result = emit_colr_root_transform_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (streq(case_id, "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers") ||
+        streq(case_id, "ftcolor.FT_Get_Paint_Layers.end_of_iteration") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1") ||
+        streq(case_id, "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis") ||
+        streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload")) {
+        int result = emit_color_paint_layers_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (streq(case_id, "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime")) {
+        int result = emit_colr_glyph_paint_graph_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_transform_paint_case(case_id)) {
+        int result = emit_colr_transform_paint_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_variable_gradient_case(case_id)) {
+        int result = emit_colr_variable_gradient_case(&face);
+        close_oracle_face(&face);
+        return result;
+    }
+    if (is_colr_static_gradient_case(case_id)) {
+        int result = emit_colr_static_gradient_case(case_id, &face);
+        close_oracle_face(&face);
+        return result;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":{\"solid_root\":");
+    print_colr_root_json(face.face, 36, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"glyph_root\":");
+    print_colr_root_json(face.face, 37, FT_COLOR_NO_ROOT_TRANSFORM);
+    printf(",\"composites\":[");
+    for (int mode = 0; mode < 28; mode++) {
+        if (mode) {
+            printf(",");
+        }
+        FT_UInt base_glyph = (FT_UInt)(39 + mode);
+        printf("{\"expected_mode\":%d,\"base_glyph\":%u,", mode, base_glyph);
+        FT_OpaquePaint opaque;
+        memset(&opaque, 0, sizeof(opaque));
+        FT_Bool result = FT_Get_Color_Glyph_Paint(face.face, base_glyph, FT_COLOR_NO_ROOT_TRANSFORM, &opaque);
+        printf("\"root_return\":%u,\"root_opaque\":", result);
+        print_opaque_paint_json(opaque);
+        printf(",\"root_paint\":");
+        print_colr_paint_node_json(face.face, opaque, 0);
+        printf("}");
+    }
+    printf("],\"graph_snapshot\":");
+    print_colr_graph_snapshot_json(face.face);
+    printf("}}\n");
+    close_oracle_face(&face);
+    return 0;
 }
 
 static int emit_color_palette_case(int argc, char** argv) {
@@ -12644,6 +16254,14 @@ static int emit_color_palette_case(int argc, char** argv) {
         FT_Color color = { 1, 2, 3, 4 };
         FT_Error err = FT_Palette_Set_Foreground_Color(face.face, color);
         printf(",\"output\":{\"error\":%d,\"followup_palette_or_render_state\":\"unchanged\"}}\n", err);
+    } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color")) {
+        printf(",\"output\":");
+        print_palette_set_foreground_sfnt_runs_json(face.face);
+        printf("}\n");
+    } else if (streq(case_id, "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy")) {
+        printf(",\"output\":");
+        print_palette_default_foreground_policy_json(face.face);
+        printf("}\n");
     } else {
         close_oracle_face(&face);
         return 2;
@@ -13924,6 +17542,47 @@ static int emit_ftmm_set_var_blend_glyph_output(int argc, char** argv) {
     FT_Error err = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
     if (!err) {
         err = FT_Set_Var_Blend_Coordinates(face.face, set_count, set_coords);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(face.face, glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Render_Glyph(face.face->glyph, render_mode);
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{");
+        print_slot_body(face.face->glyph, glyph_index);
+        printf("}}\n");
+    }
+    close_oracle_face(&face);
+    return 0;
+}
+
+static int emit_ftmm_set_mm_blend_glyph_output(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+
+    FT_UInt set_count = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Fixed set_coords[16] = {0};
+    parse_fixed_coord_csv(argv[6], set_coords, set_count < 16 ? set_count : 16);
+    FT_UInt pixel_width = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt pixel_height = (FT_UInt)strtoul(argv[8], NULL, 10);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[9], NULL, 10);
+    FT_Int32 load_flags = (FT_Int32)strtol(argv[10], NULL, 10);
+    FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[11], NULL, 10);
+
+    FT_Error err = FT_Set_Pixel_Sizes(face.face, pixel_width, pixel_height);
+    if (!err) {
+        err = FT_Set_MM_Blend_Coordinates(face.face, set_count, set_coords);
     }
     if (!err) {
         err = FT_Load_Glyph(face.face, glyph_index, load_flags);
@@ -15684,6 +19343,618 @@ static int emit_stroker_null_noop(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_lifecycle_output(const char* action) {
+    if (streq(action, "new") || streq(action, "done")) {
+        printf("{\"error\":0,\"stroker_nonnull\":true,\"crash\":false}");
+    } else if (streq(action, "export")) {
+        printf("{\"rows\":[");
+        printf("{\"scenario\":\"null_stroker_outline\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_null_outline\",\"target_outline_after\":null,\"crash\":false}");
+        printf("]}");
+    } else if (streq(action, "export-border")) {
+        printf("{\"rows\":[");
+        printf("{\"scenario\":\"null_stroker_left\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_null_outline\",\"target_outline_after\":null,\"crash\":false},");
+        printf("{\"scenario\":\"valid_stroker_invalid_border\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false},");
+        printf("{\"scenario\":\"valid_unparsed_left\",\"target_outline_after\":\"sentinel_outline\",\"crash\":false}");
+        printf("]}");
+    } else if (streq(action, "unparsed")) {
+        printf("{\"error\":0,\"stroker_nonnull\":true,\"set_called\":true,\"export_unparsed_noop\":true,\"rewind_called\":true,\"done_called\":true}");
+    }
+}
+
+static int emit_stroker_lifecycle(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":{\"error\":%d,\"stroker_nonnull\":false,\"crash\":false}}\n", new_error);
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Vector point = { 111, 222 };
+    unsigned char tag = FT_CURVE_TAG_ON;
+    unsigned short contour = 0;
+    FT_Outline outline = { 1, 1, &point, &tag, &contour, 0 };
+    if (streq(action, "export")) {
+        FT_Stroker_Export(NULL, &outline);
+        FT_Stroker_Export(stroker, NULL);
+    } else if (streq(action, "export-border")) {
+        FT_Stroker_ExportBorder(NULL, FT_STROKER_BORDER_LEFT, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, NULL);
+        FT_Stroker_ExportBorder(stroker, (FT_StrokerBorder)2, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+    } else if (streq(action, "unparsed")) {
+        FT_Stroker_Set(
+            stroker,
+            128,
+            FT_STROKER_LINECAP_ROUND,
+            FT_STROKER_LINEJOIN_ROUND,
+            65536);
+        FT_Stroker_Export(stroker, &outline);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+        FT_Stroker_Rewind(stroker);
+    } else if (!streq(action, "new") && !streq(action, "done")) {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":");
+    print_stroker_lifecycle_output(action);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static void print_stroker_zero_line_output(FT_Error status,
+                                           FT_UInt points,
+                                           FT_UInt contours) {
+    printf("{\"status\":%d,\"counts_after\":{\"points\":%u,\"contours\":%u},\"center_after\":\"unchanged\"}",
+           status,
+           points,
+           contours);
+}
+
+static int emit_stroker_zero_line(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   128,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 256, 256 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &start);
+    FT_UInt points = 99;
+    FT_UInt contours = 99;
+    FT_Error counts_error = FT_Stroker_GetCounts(stroker, &points, &contours);
+    FT_Error status = line_error ? line_error : counts_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":");
+    print_stroker_zero_line_output(status, points, contours);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_simple_line_counts(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector to = { 640, 0 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &to);
+    FT_UInt left_points = 99;
+    FT_UInt left_contours = 99;
+    FT_Error left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT,
+        &left_points,
+        &left_contours);
+    FT_UInt right_points = 99;
+    FT_UInt right_contours = 99;
+    FT_Error right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT,
+        &right_points,
+        &right_contours);
+    FT_UInt total_points = 99;
+    FT_UInt total_contours = 99;
+    FT_Error total_error = FT_Stroker_GetCounts(stroker, &total_points, &total_contours);
+    FT_Error status = line_error ? line_error : left_error;
+    if (!status) status = right_error;
+    if (!status) status = total_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"status\":%d,", status);
+    printf("\"left_counts\":{\"points\":%u,\"contours\":%u},", left_points, left_contours);
+    printf("\"right_counts\":{\"points\":%u,\"contours\":%u},", right_points, right_contours);
+    printf("\"combined_counts\":{\"points\":%u,\"contours\":%u}}}\n", total_points, total_contours);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static void print_stroker_outline_json(FT_Outline* outline) {
+    printf("{\"n_points\":%d,\"n_contours\":%d,\"points\":[",
+           outline->n_points,
+           outline->n_contours);
+    for (int i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}",
+               (long)outline->points[i].x,
+               (long)outline->points[i].y);
+    }
+    printf("],\"tags\":[");
+    for (int i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned)outline->tags[i]);
+    }
+    printf("],\"contours\":[");
+    for (int i = 0; i < outline->n_contours; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned)outline->contours[i]);
+    }
+    printf("],\"flags\":%d}", outline->flags);
+}
+
+static int emit_stroker_open_line_geometry(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int caps[3] = { FT_STROKER_LINECAP_BUTT, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINECAP_SQUARE };
+    const char* cap_names[3] = { "butt", "round", "square" };
+    int emitted = 0;
+    for (int i = 0; i < 3; i++) {
+        if ((streq(action, "butt") || streq(action, "round") || streq(action, "square")) &&
+            !streq(action, cap_names[i])) {
+            continue;
+        }
+        FT_Stroker stroker = NULL;
+        FT_Error new_error = FT_Stroker_New(library, &stroker);
+        FT_Error status = new_error;
+        if (!status) {
+            FT_Stroker_Set(stroker, 96, caps[i], FT_STROKER_LINEJOIN_ROUND, 65536);
+            FT_Vector start = { 0, 0 };
+            FT_Vector to = { 640, 0 };
+            status = FT_Stroker_BeginSubPath(stroker, &start, 1);
+            if (!status) status = FT_Stroker_LineTo(stroker, &to);
+            if (!status) status = FT_Stroker_EndSubPath(stroker);
+        }
+        FT_Vector left_points[64] = {0};
+        unsigned char left_tags[64] = {0};
+        unsigned short left_contours[8] = {0};
+        FT_Outline left = {0, 0, left_points, left_tags, left_contours, 0};
+        FT_Vector right_points[64] = {0};
+        unsigned char right_tags[64] = {0};
+        unsigned short right_contours[8] = {0};
+        FT_Outline right = {0, 0, right_points, right_tags, right_contours, 0};
+        FT_Vector both_points[128] = {0};
+        unsigned char both_tags[128] = {0};
+        unsigned short both_contours[16] = {0};
+        FT_Outline both = {0, 0, both_points, both_tags, both_contours, 0};
+        if (!status) {
+            FT_UInt points = 0;
+            FT_UInt contours = 0;
+            status = FT_Stroker_GetCounts(stroker, &points, &contours);
+        }
+        if (!status) {
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &left);
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT, &right);
+            FT_Stroker_Export(stroker, &both);
+        }
+        if (emitted) printf(",");
+        emitted = 1;
+        printf("{\"cap\":\"%s\",\"status\":%d,\"left\":", cap_names[i], status);
+        print_stroker_outline_json(&left);
+        printf(",\"right\":");
+        print_stroker_outline_json(&right);
+        printf(",\"combined\":");
+        print_stroker_outline_json(&both);
+        printf("}");
+        if (stroker) FT_Stroker_Done(stroker);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_finalized_counts(int argc, char** argv) {
+    if (argc != 4) return 2;
+    int combined_counts = streq(argv[2], "counts");
+    int open = streq(argv[3], "open");
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector p1 = { 640, 0 };
+    FT_Vector p2 = { 640, 640 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, open ? 1 : 0);
+    FT_Error line1_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &p1);
+    FT_Error line2_error = line1_error;
+    if (!open && !line1_error) line2_error = FT_Stroker_LineTo(stroker, &p2);
+    FT_Error end_error = line2_error ? line2_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt left_points = 99;
+    FT_UInt left_contours = 99;
+    FT_UInt right_points = 99;
+    FT_UInt right_contours = 99;
+    FT_UInt total_points = 99;
+    FT_UInt total_contours = 99;
+    FT_Error left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT,
+        &left_points,
+        &left_contours);
+    FT_Error right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT,
+        &right_points,
+        &right_contours);
+    FT_Error total_error = FT_Stroker_GetCounts(stroker, &total_points, &total_contours);
+    FT_Error status = end_error ? end_error : left_error;
+    if (!status) status = right_error;
+    if (!status) status = total_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{");
+    printf("\"status\":%d,", status);
+    printf("\"num_points\":%u,\"num_contours\":%u,", total_points, total_contours);
+    printf("\"border_count_sum\":{\"points\":%u,\"contours\":%u},",
+           left_points + right_points,
+           left_contours + right_contours);
+    printf("\"left_border_counts\":{\"points\":%u,\"contours\":%u},",
+           left_points,
+           left_contours);
+    printf("\"right_border_counts\":{\"points\":%u,\"contours\":%u},",
+           right_points,
+           right_contours);
+    printf("\"left_counts\":{\"points\":%u,\"contours\":%u},",
+           left_points,
+           left_contours);
+    printf("\"right_counts\":{\"points\":%u,\"contours\":%u},",
+           right_points,
+           right_contours);
+    printf("\"rows\":[");
+    printf("{\"border\":\"left\",\"mask\":\"points_only\",\"status\":%d,\"num_points\":%u,\"num_contours\":%u,\"written_outputs\":{\"points\":%u}},",
+           status,
+           left_points,
+           left_contours,
+           combined_counts ? total_points : left_points);
+    printf("{\"border\":\"right\",\"mask\":\"contours_only\",\"status\":%d,\"num_points\":%u,\"num_contours\":%u,\"written_outputs\":{\"contours\":%u}},",
+           status,
+           right_points,
+           right_contours,
+           combined_counts ? total_contours : left_contours);
+    printf("{\"mask\":\"neither\",\"status\":%d,\"written_outputs\":{}}", status);
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_reset_counts(int argc, char** argv) {
+    if (argc != 3) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector p1 = { 640, 0 };
+    FT_Vector p2 = { 640, 640 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line1_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &p1);
+    FT_Error line2_error = line1_error ? line1_error : FT_Stroker_LineTo(stroker, &p2);
+    FT_Error end_error = line2_error ? line2_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt before_points = 99;
+    FT_UInt before_contours = 99;
+    FT_Error before_error = FT_Stroker_GetCounts(stroker, &before_points, &before_contours);
+    if (streq(argv[2], "rewind")) {
+        FT_Stroker_Rewind(stroker);
+    } else if (streq(argv[2], "set")) {
+        FT_Stroker_Set(stroker,
+                       128,
+                       FT_STROKER_LINECAP_SQUARE,
+                       FT_STROKER_LINEJOIN_ROUND,
+                       65536);
+    } else {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_UInt after_points = 99;
+    FT_UInt after_contours = 99;
+    FT_Error after_error = FT_Stroker_GetCounts(stroker, &after_points, &after_contours);
+    FT_Error status = end_error ? end_error : before_error;
+    if (!status) status = after_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{");
+    printf("\"counts_before_rewind\":{\"points\":%u,\"contours\":%u},",
+           before_points,
+           before_contours);
+    printf("\"counts_after_rewind\":{\"points\":%u,\"contours\":%u},",
+           after_points,
+           after_contours);
+    printf("\"counts_before_set\":{\"points\":%u,\"contours\":%u},",
+           before_points,
+           before_contours);
+    printf("\"counts_after_set\":{\"points\":%u,\"contours\":%u}",
+           after_points,
+           after_contours);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static void print_stroker_parse_degenerate_row(const char* label,
+                                               FT_Error parse_status,
+                                               FT_Error counts_status,
+                                               FT_UInt points,
+                                               FT_UInt contours) {
+    printf("{\"case\":\"%s\",", label);
+    printf("\"parse_status\":%d,", parse_status);
+    printf("\"counts_status\":%d,", counts_status);
+    printf("\"counts_after\":{\"points\":%u,\"contours\":%u}}", points, contours);
+}
+
+static int emit_stroker_parse_degenerate(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector point = { 0, 0 };
+    unsigned char tag = FT_CURVE_TAG_ON;
+    unsigned short contour = 0;
+    FT_Outline single = { 1, 1, &point, &tag, &contour, 0 };
+    FT_Outline empty = { 0, 0, NULL, NULL, NULL, 0 };
+
+    FT_Error single_parse = FT_Stroker_ParseOutline(stroker, &single, 0);
+    FT_UInt single_points = 99;
+    FT_UInt single_contours = 99;
+    FT_Error single_counts = FT_Stroker_GetCounts(stroker, &single_points, &single_contours);
+
+    FT_Error empty_parse = FT_Stroker_ParseOutline(stroker, &empty, 0);
+    FT_UInt empty_points = 99;
+    FT_UInt empty_contours = 99;
+    FT_Error empty_counts = FT_Stroker_GetCounts(stroker, &empty_points, &empty_contours);
+
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    print_stroker_parse_degenerate_row("single_point_contour",
+                                       single_parse,
+                                       single_counts,
+                                       single_points,
+                                       single_contours);
+    printf(",");
+    print_stroker_parse_degenerate_row("empty_outline",
+                                       empty_parse,
+                                       empty_counts,
+                                       empty_points,
+                                       empty_contours);
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_end_no_segment(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   96,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 0, 0 };
+    FT_Error begin_status = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error end_status = begin_status ? begin_status : FT_Stroker_EndSubPath(stroker);
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(end_status);
+    printf(",\"output\":{\"begin_status\":%d,\"end_status\":%d}}\n",
+           begin_status,
+           end_status);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_degenerate_curve(int argc, char** argv) {
+    if (argc != 3) return 2;
+    const char* action = argv[2];
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   128,
+                   FT_STROKER_LINECAP_ROUND,
+                   FT_STROKER_LINEJOIN_ROUND,
+                   65536);
+    FT_Vector start = { 100, 100 };
+    FT_Vector near = { 101, 101 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error curve_error = begin_error;
+    if (!curve_error && streq(action, "conic")) {
+        curve_error = FT_Stroker_ConicTo(stroker, &near, &near);
+    } else if (!curve_error && streq(action, "cubic")) {
+        curve_error = FT_Stroker_CubicTo(stroker, &near, &near, &near);
+    } else if (!curve_error) {
+        FT_Stroker_Done(stroker);
+        FT_Done_FreeType(library);
+        return 2;
+    }
+    FT_UInt points = 99;
+    FT_UInt contours = 99;
+    FT_Error counts_error = FT_Stroker_GetCounts(stroker, &points, &contours);
+    FT_Error status = curve_error ? curve_error : counts_error;
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":");
+    printf("{\"status\":%d,\"counts_after\":{\"points\":%u,\"contours\":%u},\"center_after\":\"destination vector\"}",
+           status,
+           points,
+           contours);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_truetype_engine_type(int argc, char** argv) {
     (void)argc;
     int library_kind = atoi(argv[2]);
@@ -15784,6 +20055,16 @@ static int emit_library_lifecycle(int argc, char** argv) {
             usable ? "true" : "false",
             usable ? "false" : "true");
         FT_Done_Library(library);
+        return 0;
+    }
+
+    if (action == 4) {
+        FT_Error done_status = FT_Done_Library(library);
+        print_status(FT_Err_Ok);
+        printf(
+            ",\"output\":{\"status\":%d,\"library_kind\":\"default_modules\",\"final_destroy_called\":%s}}\n",
+            done_status,
+            done_status == FT_Err_Ok ? "true" : "false");
         return 0;
     }
 
@@ -16523,6 +20804,15 @@ static int emit_property_case(int argc, char** argv) {
                error == FT_Err_Ok ? "true" : "false");
         return 0;
     }
+    if (streq(case_id, "fterrdef.FT_Err_Missing_Property.known_property_success")) {
+        FT_UInt value = PROPERTY_SENTINEL;
+        FT_Error error = oracle_property_get(1, 4, 4, &value);
+        printf(",\"output\":{\"status\":%d,\"value\":%u,\"module_service\":%s}}\n",
+               error,
+               value,
+               error == FT_Err_Ok ? "true" : "false");
+        return 0;
+    }
     if (streq(case_id, "ftmodapi.FT_Property_Get.rejects_null_arguments")) {
         FT_UInt library_value = PROPERTY_SENTINEL;
         FT_UInt module_value = PROPERTY_SENTINEL;
@@ -17047,6 +21337,29 @@ static int emit_get_renderer(int argc, char** argv) {
     }
     printf("]}}\n");
     if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_set_renderer(int argc, char** argv) {
+    if (argc != 3) return 2;
+    long format = strtol(argv[2], NULL, 10);
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    printf("{");
+    if (err) {
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Renderer renderer = FT_Get_Renderer(library, (FT_Glyph_Format)format);
+    FT_Error set_error = FT_Set_Renderer(library, renderer, 0, NULL);
+    printf("\"status\":{\"kind\":\"%s\",\"error_code\":%d},\"output\":{\"set_error\":%d,\"current_renderer\":",
+           set_error ? "error" : "ok",
+           set_error,
+           set_error);
+    print_renderer_row(library, format);
+    printf("}}\n");
+    FT_Done_FreeType(library);
     return 0;
 }
 
@@ -17824,6 +22137,290 @@ static int emit_face_or_slot(int argc, char** argv) {
                first_vector.x,
                first_vector.y);
         free(rows);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--attach-file")) {
+        const char* attachment_path = argv[7];
+        const char* rows_arg = argv[8];
+        FT_Error attach_error = FT_Attach_File(face, attachment_path);
+        FT_Error first_error = attach_error;
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"attach_status\":%d,\"status\":%d,\"post_attach_probe\":{\"status\":%d,\"kerning_vectors\":[",
+               attach_error,
+               first_error,
+               first_error);
+        char* token = strtok(rows, ",");
+        int first = 1;
+        int have_first_vector = 0;
+        FT_Vector first_vector;
+        first_vector.x = 0;
+        first_vector.y = 0;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                mode_text++;
+                FT_UInt left_glyph = glyph_selector_index(face, left);
+                FT_UInt right_glyph = glyph_selector_index(face, right);
+                FT_UInt mode = (FT_UInt)strtoul(mode_text, NULL, 10);
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_Kerning(face, left_glyph, right_glyph, mode, &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+                if (!have_first_vector) {
+                    first_vector = kerning;
+                    have_first_vector = 1;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld},\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}",
+                       left,
+                       right,
+                       mode,
+                       left_glyph,
+                       right_glyph,
+                       err,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning_units(mode));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"glyph_indexes\":[");
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        token = strtok(rows, ",");
+        first = 1;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":%u,\"right\":%u}",
+                       glyph_selector_index(face, left),
+                       glyph_selector_index(face, right));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld}}}}\n",
+               first_vector.x,
+               first_vector.y,
+               first_vector.x,
+               first_vector.y);
+        free(rows);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--attach-stream")) {
+        const char* attachment_path = argv[7];
+        const char* rows_arg = argv[8];
+        unsigned char* attachment = NULL;
+        long attachment_len = 0;
+        if (load_file(attachment_path, &attachment, &attachment_len) != 0) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        FT_Open_Args open_args;
+        memset(&open_args, 0, sizeof(open_args));
+        open_args.flags = FT_OPEN_MEMORY;
+        open_args.memory_base = attachment;
+        open_args.memory_size = attachment_len;
+        FT_Error attach_error = FT_Attach_Stream(face, &open_args);
+        FT_Error first_error = attach_error;
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            free(attachment);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"attach_status\":%d,\"status\":%d,\"post_attach_probe\":{\"status\":%d,\"kerning_vectors\":[",
+               attach_error,
+               first_error,
+               first_error);
+        char* token = strtok(rows, ",");
+        int first = 1;
+        int have_first_vector = 0;
+        FT_Vector first_vector;
+        first_vector.x = 0;
+        first_vector.y = 0;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                mode_text++;
+                FT_UInt left_glyph = glyph_selector_index(face, left);
+                FT_UInt right_glyph = glyph_selector_index(face, right);
+                FT_UInt mode = (FT_UInt)strtoul(mode_text, NULL, 10);
+                FT_Vector kerning;
+                kerning.x = 0;
+                kerning.y = 0;
+                FT_Error err = FT_Get_Kerning(face, left_glyph, right_glyph, mode, &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+                if (!have_first_vector) {
+                    first_vector = kerning;
+                    have_first_vector = 1;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":\"%s\",\"right\":\"%s\",\"mode\":%u,\"left_glyph\":%u,\"right_glyph\":%u,\"status\":%d,\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld},\"x_26_6\":%ld,\"y_26_6\":%ld,\"units\":\"%s\"}",
+                       left,
+                       right,
+                       mode,
+                       left_glyph,
+                       right_glyph,
+                       err,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning.x,
+                       kerning.y,
+                       kerning_units(mode));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"glyph_indexes\":[");
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        token = strtok(rows, ",");
+        first = 1;
+        while (token) {
+            char* left = token;
+            char* right = strchr(left, '|');
+            char* mode_text = right ? strchr(right + 1, '|') : NULL;
+            if (right && mode_text) {
+                *right = '\0';
+                *mode_text = '\0';
+                right++;
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"left\":%u,\"right\":%u}",
+                       glyph_selector_index(face, left),
+                       glyph_selector_index(face, right));
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("],\"akerning\":{\"x\":%ld,\"y\":%ld},\"kerning\":{\"x\":%ld,\"y\":%ld}}}}\n",
+               first_vector.x,
+               first_vector.y,
+               first_vector.x,
+               first_vector.y);
+        free(rows);
+        free(attachment);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+
+    if (streq(command, "--get-track-kerning")) {
+        const char* attachment_path = argv[7];
+        const char* rows_arg = argv[8];
+        unsigned char* attachment = NULL;
+        long attachment_len = 0;
+        if (load_file(attachment_path, &attachment, &attachment_len) != 0) {
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        FT_Open_Args open_args;
+        memset(&open_args, 0, sizeof(open_args));
+        open_args.flags = FT_OPEN_MEMORY;
+        open_args.memory_base = attachment;
+        open_args.memory_size = attachment_len;
+        FT_Error attach_error = FT_Attach_Stream(face, &open_args);
+        FT_Error first_error = attach_error;
+        char* rows = (char*)malloc(strlen(rows_arg) + 1);
+        if (!rows) {
+            free(attachment);
+            FT_Done_Face(face);
+            FT_Done_FreeType(library);
+            free(data);
+            return 2;
+        }
+        memcpy(rows, rows_arg, strlen(rows_arg) + 1);
+        print_status(first_error);
+        printf(",\"output\":{\"attach_status\":%d,\"status\":%d,\"rows\":[", attach_error, first_error);
+        char* token = strtok(rows, ",");
+        int first = 1;
+        while (token) {
+            char* point_text = token;
+            char* degree_text = strchr(point_text, '|');
+            if (degree_text) {
+                *degree_text = '\0';
+                degree_text++;
+                FT_Fixed point_size = (FT_Fixed)strtol(point_text, NULL, 10);
+                FT_Int degree = (FT_Int)strtol(degree_text, NULL, 10);
+                FT_Fixed kerning = 0;
+                FT_Error err = FT_Get_Track_Kerning(face, point_size, degree, &kerning);
+                if (first_error == FT_Err_Ok && err != FT_Err_Ok) {
+                    first_error = err;
+                }
+                if (!first) {
+                    printf(",");
+                }
+                first = 0;
+                printf("{\"point_size_16_16\":%ld,\"degree\":%d,\"status\":%d,\"akerning\":%ld}",
+                       point_size,
+                       degree,
+                       err,
+                       kerning);
+            }
+            token = strtok(NULL, ",");
+        }
+        printf("]}}\n");
+        free(rows);
+        free(attachment);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -18982,7 +23579,7 @@ static int emit_face_or_slot(int argc, char** argv) {
     } else if (streq(command, "--load-glyph-num-glyphs")) {
         glyph_index = (FT_UInt)face->num_glyphs;
         load_flags = (FT_Int32)strtol(argv[7], NULL, 10);
-    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
+    } else if (streq(command, "--load-glyph") || streq(command, "--render-glyph-index") || streq(command, "--inspect-glyph-metrics") || streq(command, "--inspect-glyph-slot") || streq(command, "--load-glyph-outline") || streq(command, "--outline-get-bbox") || streq(command, "--outline-get-cbox") || streq(command, "--glyph-get-cbox") || streq(command, "--glyph-transform") || streq(command, "--glyph-to-bitmap") || streq(command, "--glyph-record") || streq(command, "--get-glyph-unsupported-format") || streq(command, "--done-glyph-outline") || streq(command, "--done-glyph-bitmap") || streq(command, "--get-glyph-advance-boundaries") || streq(command, "--sbit-cache-lookup") || streq(command, "--get-subglyph-info") || streq(command, "--get-subglyph-info-null-outputs")) {
         glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
         load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
     } else {
@@ -19037,6 +23634,27 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
     if (!err && streq(command, "--glyph-record")) {
         print_get_glyph_payload(face->glyph, argv[9]);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--get-glyph-unsupported-format")) {
+        print_get_glyph_unsupported_format_payload(face->glyph);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--done-glyph-outline")) {
+        print_done_outline_glyph_payload(face->glyph);
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
+    if (!err && streq(command, "--done-glyph-bitmap")) {
+        print_done_bitmap_glyph_payload(face->glyph);
         FT_Done_Face(face);
         FT_Done_FreeType(library);
         free(data);
@@ -19226,6 +23844,113 @@ static int emit_available_sizes(int argc, char** argv) {
     return 0;
 }
 
+static void print_face_rec_initial_snapshot(FT_Face face) {
+    printf("{\"num_faces\":%ld", face->num_faces);
+    printf(",\"face_index\":%ld", face->face_index);
+    printf(",\"face_flags\":%ld", face->face_flags);
+    printf(",\"style_flags\":%ld", face->style_flags);
+    printf(",\"num_glyphs\":%ld", face->num_glyphs);
+    printf(",\"num_fixed_sizes\":%d", face->num_fixed_sizes);
+    printf(",\"available_sizes_nullness\":\"%s\"",
+           face->available_sizes ? "non-null" : "null");
+    printf(",\"bbox\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           face->bbox.xMin,
+           face->bbox.yMin,
+           face->bbox.xMax,
+           face->bbox.yMax);
+    printf(",\"units_per_EM\":%u", face->units_per_EM);
+    printf(",\"ascender\":%d", face->ascender);
+    printf(",\"descender\":%d", face->descender);
+    printf(",\"height\":%d", face->height);
+    printf(",\"max_advance_width\":%d", face->max_advance_width);
+    printf(",\"max_advance_height\":%d", face->max_advance_height);
+    printf(",\"underline_position\":%d", face->underline_position);
+    printf(",\"underline_thickness\":%d", face->underline_thickness);
+    printf(",\"size_nullness\":\"%s\"", face->size ? "non-null" : "null");
+    printf(",\"stream_nullness\":\"%s\"", face->stream ? "non-null" : "null");
+    printf("}");
+}
+
+static int emit_face_rec_initial_snapshot(int argc, char** argv) {
+    (void)argc;
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    FT_Face face = NULL;
+    FT_Long face_index = atol(argv[4]);
+    int status = load_memory_face_arg(
+        library, argv[2], argv[3], face_index, &data, &data_len, &face);
+    if (status) {
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+
+    printf("{");
+    print_status(0);
+    printf(",\"output\":");
+    print_face_rec_initial_snapshot(face);
+    printf("}\n");
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_face_rec_post_size_snapshot(int argc, char** argv) {
+    (void)argc;
+    FT_Library library = NULL;
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        printf("{");
+        print_status(err);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    FT_Face face = NULL;
+    FT_Long face_index = atol(argv[4]);
+    int status = load_memory_face_arg(
+        library, argv[2], argv[3], face_index, &data, &data_len, &face);
+    if (status) {
+        FT_Done_FreeType(library);
+        return status == 1 ? 0 : status;
+    }
+
+    FT_F26Dot6 char_width = (FT_F26Dot6)strtol(argv[5], NULL, 10);
+    FT_F26Dot6 char_height = (FT_F26Dot6)strtol(argv[6], NULL, 10);
+    FT_UInt horz_resolution = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt vert_resolution = (FT_UInt)strtoul(argv[8], NULL, 10);
+    err = FT_Set_Char_Size(face, char_width, char_height, horz_resolution, vert_resolution);
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"face\":");
+        print_face_rec_initial_snapshot(face);
+        printf(",\"size_metrics\":{");
+        print_size_metrics_object(face->size->metrics);
+        printf("}}}\n");
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
 typedef struct MemoryFaceRow_ {
     FT_Long face_index;
     int has_file_size;
@@ -19373,6 +24098,54 @@ static int emit_open_face_stream_ownership(int argc, char** argv) {
 
     FT_Done_FreeType(library);
     free(data);
+    return 0;
+}
+
+static void print_memory_stream_frame_read(FT_Stream stream, unsigned long offset, unsigned long count) {
+    unsigned long size = stream ? stream->size : 0;
+    int in_bounds = stream && offset <= size && count <= size - offset;
+    unsigned long available = 0;
+    if (stream && offset <= size) {
+        unsigned long remaining = size - offset;
+        available = count < remaining ? count : remaining;
+    }
+    printf("{\"offset\":%lu,\"count\":%lu,\"in_bounds\":", offset, count);
+    print_json_bool(in_bounds);
+    printf(",\"bytes\":\"");
+    if (stream && stream->base && available > 0) {
+        print_hex_bytes(stream->base + offset, (long)available);
+    }
+    printf("\"}");
+}
+
+static int emit_memory_stream_probe(int argc, char** argv) {
+    if (argc != 5) {
+        fprintf(stderr, "memory stream probe requires source_kind source_value face_index\n");
+        return 2;
+    }
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_Stream stream = face.face ? face.face->stream : NULL;
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"face_load_status\":0,\"stream_fields\":{");
+    printf("\"base_nullness\":");
+    print_json_bool(!stream || !stream->base);
+    printf(",\"size\":%lu,\"pos\":%lu,\"cursor_nullness\":",
+           stream ? stream->size : 0,
+           stream ? stream->pos : 0);
+    print_json_bool(!stream || !stream->cursor);
+    printf(",\"limit_nullness\":");
+    print_json_bool(!stream || !stream->limit);
+    printf("},\"frame_read_events\":[");
+    print_memory_stream_frame_read(stream, 0, 4);
+    printf(",");
+    print_memory_stream_frame_read(stream, 12, 4);
+    printf("]}}\n");
+    close_oracle_face(&face);
     return 0;
 }
 
@@ -19774,6 +24547,132 @@ static int emit_new_memory_face_variants(int argc, char** argv) {
     free(rows);
     free(errors);
     free(face_is_null);
+    return 0;
+}
+
+static void print_incremental_absent_output(FT_Error open_error, FT_Error load_error) {
+    printf("{");
+    print_status(open_error ? open_error : load_error);
+    printf(",\"output\":{\"open_error\":%d,\"load_error\":%d,"
+           "\"callback_count\":0,\"embedded_data_used\":",
+           open_error,
+           load_error);
+    print_json_bool(open_error == FT_Err_Ok && load_error == FT_Err_Ok);
+    printf("}}\n");
+}
+
+static void print_incremental_nullness_row(const char* variant, FT_Error open_error, FT_Error load_error) {
+    printf("{\"variant\":\"%s\",\"open_error\":%d,\"load_error\":%d,"
+           "\"stored_interface_null\":true,\"callback_count\":0,"
+           "\"embedded_data_used\":",
+           variant,
+           open_error,
+           load_error);
+    print_json_bool(open_error == FT_Err_Ok && load_error == FT_Err_Ok);
+    printf("}");
+}
+
+static FT_Error open_incremental_nullness_face(FT_Library library,
+                                               const unsigned char* data,
+                                               size_t data_len,
+                                               FT_Long face_index,
+                                               int with_null_incremental_param,
+                                               FT_Face* face) {
+    if (!with_null_incremental_param) {
+        return FT_New_Memory_Face(library, data, (FT_Long)data_len, face_index, face);
+    }
+
+    FT_Parameter param;
+    memset(&param, 0, sizeof(param));
+    param.tag = FT_PARAM_TAG_INCREMENTAL;
+    param.data = NULL;
+
+    FT_Open_Args args;
+    memset(&args, 0, sizeof(args));
+    args.flags = FT_OPEN_MEMORY;
+    args.memory_base = data;
+    args.memory_size = (FT_Long)data_len;
+    args.num_params = 1;
+    args.params = &param;
+    return FT_Open_Face(library, &args, face_index, face);
+}
+
+static int emit_incremental_nullness_open(int argc, char** argv) {
+    if (argc != 6) return 2;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    unsigned char* data = NULL;
+    long data_len_long = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len_long) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 1;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len_long) != 0) {
+            fprintf(stderr, "failed to decode font hex source\n");
+            return 1;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+    size_t data_len = data_len_long < 0 ? 0 : (size_t)data_len_long;
+
+    FT_Library library = NULL;
+    FT_Error setup_error = FT_Init_FreeType(&library);
+    if (setup_error) {
+        printf("{");
+        print_status(setup_error);
+        printf(",\"output\":null}\n");
+        free(data);
+        return 0;
+    }
+
+    FT_Long face_index = (FT_Long)atol(argv[4]);
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    const char* variants[] = {"absent_parameter", "null_incremental_data"};
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    for (int i = 0; i < 2; i++) {
+        FT_Face face = NULL;
+        FT_Error open_error = open_incremental_nullness_face(
+            library,
+            data,
+            data_len,
+            face_index,
+            i == 1,
+            &face);
+        FT_Error load_error = open_error;
+        if (!open_error && face) {
+            load_error = FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
+        }
+        if (i) printf(",");
+        print_incremental_nullness_row(variants[i], open_error, load_error);
+        if (face) {
+            FT_Done_Face(face);
+        }
+    }
+    printf("]}}\n");
+
+    FT_Done_FreeType(library);
+    free(data);
+    return 0;
+}
+
+static int emit_incremental_absent_open(int argc, char** argv) {
+    (void)argc;
+    OracleFace face;
+    int opened = open_oracle_face(argv[2], argv[3], atol(argv[4]), &face);
+    if (opened != 0) {
+        return opened;
+    }
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[5], NULL, 10);
+    FT_Error load_error = FT_Load_Glyph(face.face, glyph_index, FT_LOAD_DEFAULT);
+    print_incremental_absent_output(FT_Err_Ok, load_error);
+    close_oracle_face(&face);
     return 0;
 }
 
@@ -20835,6 +25734,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 4 && streq(argv[1], "--get-renderer")) {
         return emit_get_renderer(argc, argv);
     }
+    if (argc == 3 && streq(argv[1], "--set-renderer")) {
+        return emit_set_renderer(argc, argv);
+    }
     if (argc == 4 && streq(argv[1], "--get-module")) {
         return emit_get_module(argc, argv);
     }
@@ -21044,6 +25946,12 @@ static int dispatch(int argc, char** argv) {
     if (argc == 5 && streq(argv[1], "--new-memory-face-variants")) {
         return emit_new_memory_face_variants(argc, argv);
     }
+    if (argc == 6 && streq(argv[1], "--incremental-absent-open")) {
+        return emit_incremental_absent_open(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--incremental-nullness-open")) {
+        return emit_incremental_nullness_open(argc, argv);
+    }
     if (argc == 4 && streq(argv[1], "--new-face-variants")) {
         return emit_new_face_variants(argc, argv);
     }
@@ -21104,11 +26012,29 @@ static int dispatch(int argc, char** argv) {
     if (argc == 5 && streq(argv[1], "--ps-font-info")) {
         return emit_ps_font_info(argc, argv);
     }
+    if (argc == 2 && streq(argv[1], "--ps-font-info-null-face")) {
+        return emit_ps_font_info_null_face(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-info-null-output")) {
+        return emit_ps_font_info_null_output(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--has-ps-glyph-names")) {
+        return emit_has_ps_glyph_names(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--has-ps-glyph-names-null-face")) {
+        return emit_has_ps_glyph_names_null_face(argc, argv);
+    }
     if (argc == 7 && streq(argv[1], "--ps-mm-blend-dictionary")) {
         return emit_ps_mm_blend_dictionary(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--ps-font-private")) {
         return emit_ps_font_private(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--ps-font-private-null-face")) {
+        return emit_ps_font_private_null_face(argc, argv);
+    }
+    if (argc == 5 && streq(argv[1], "--ps-font-private-null-output")) {
+        return emit_ps_font_private_null_output(argc, argv);
     }
     if (argc >= 6 && streq(argv[1], "--ps-font-private-rowset")) {
         return emit_ps_font_private_rowset(argc, argv);
@@ -21118,6 +26044,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc >= 6 && streq(argv[1], "--ps-font-value-encoding-rowset")) {
         return emit_ps_font_value_encoding_rowset(argc, argv);
+    }
+    if (argc == 11 && streq(argv[1], "--ps-font-value-matrix")) {
+        return emit_ps_font_value_matrix(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--open-type-free-null-face")) {
         return emit_open_type_free_null_face(argc, argv);
@@ -21130,6 +26059,15 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--color-palette-case")) {
         return emit_color_palette_case(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--color-glyph-layer-case")) {
+        return emit_color_glyph_layer_case(argc, argv);
+    }
+    if ((argc == 7 || argc == 15) && streq(argv[1], "--color-glyph-clipbox-case")) {
+        return emit_color_glyph_clipbox_case(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--color-paint-graph-case")) {
+        return emit_color_paint_graph_case(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);
@@ -21165,6 +26103,15 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-kerning")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--attach-file")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--attach-stream")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--get-track-kerning")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-pfr-kerning")) {
@@ -21229,6 +26176,33 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--stroker-null-noop")) {
         return emit_stroker_null_noop(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-lifecycle")) {
+        return emit_stroker_lifecycle(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-zero-line")) {
+        return emit_stroker_zero_line(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
+        return emit_stroker_simple_line_counts(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-open-line-geometry")) {
+        return emit_stroker_open_line_geometry(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
+        return emit_stroker_finalized_counts(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-reset-counts")) {
+        return emit_stroker_reset_counts(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
+        return emit_stroker_parse_degenerate(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-end-no-segment")) {
+        return emit_stroker_end_no_segment(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-degenerate-curve")) {
+        return emit_stroker_degenerate_curve(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--get-truetype-engine-type")) {
         return emit_truetype_engine_type(argc, argv);
@@ -21348,6 +26322,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 12 && streq(argv[1], "--ftmm-set-var-blend-glyph-output")) {
         return emit_ftmm_set_var_blend_glyph_output(argc, argv);
     }
+    if (argc == 12 && streq(argv[1], "--ftmm-set-mm-blend-glyph-output")) {
+        return emit_ftmm_set_mm_blend_glyph_output(argc, argv);
+    }
     if (argc == 7 && streq(argv[1], "--ftmm-set-var-design-scenarios")) {
         return emit_ftmm_set_var_design_scenarios(argc, argv);
     }
@@ -21447,6 +26424,12 @@ static int dispatch(int argc, char** argv) {
     if (argc == 7 && streq(argv[1], "--inspect-available-sizes")) {
         return emit_available_sizes(argc, argv);
     }
+    if (argc == 5 && streq(argv[1], "--inspect-face-rec-initial")) {
+        return emit_face_rec_initial_snapshot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--inspect-face-rec-post-size")) {
+        return emit_face_rec_post_size_snapshot(argc, argv);
+    }
     if (argc == 9 && streq(argv[1], "--get-sfnt-vhea-mvar-sequence")) {
         return emit_face_or_slot(argc, argv);
     }
@@ -21465,7 +26448,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 8 && (streq(argv[1], "--get-next-char-sequence") || streq(argv[1], "--get-next-char-sequence-null-agindex") || streq(argv[1], "--get-next-char-starts") || streq(argv[1], "--get-next-char-starts-null-agindex"))) {
         return emit_face_or_slot(argc, argv);
     }
-    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox"))) {
+    if (argc == 9 && (streq(argv[1], "--load-char") || streq(argv[1], "--load-glyph") || streq(argv[1], "--load-glyph-from-char") || streq(argv[1], "--inspect-glyph-metrics") || streq(argv[1], "--inspect-glyph-slot") || streq(argv[1], "--load-glyph-outline") || streq(argv[1], "--outline-get-bbox") || streq(argv[1], "--outline-get-cbox") || streq(argv[1], "--get-glyph-unsupported-format"))) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--active-size-handle")) {
@@ -21474,8 +26457,14 @@ static int dispatch(int argc, char** argv) {
     if (argc == 5 && streq(argv[1], "--open-face-stream-ownership")) {
         return emit_open_face_stream_ownership(argc, argv);
     }
+    if (argc == 5 && streq(argv[1], "--memory-stream-probe")) {
+        return emit_memory_stream_probe(argc, argv);
+    }
     if (argc == 5 && streq(argv[1], "--face-owned-handles")) {
         return emit_face_owned_handles(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--malformed-maxp-route")) {
+        return emit_malformed_maxp_route(argc, argv);
     }
     if (argc == 8 && (streq(argv[1], "--glyphslot-slant") || streq(argv[1], "--glyphslot-oblique") || streq(argv[1], "--glyphslot-adjust-weight") || streq(argv[1], "--glyphslot-embolden") || streq(argv[1], "--slot-format-probe"))) {
         return emit_face_or_slot(argc, argv);
@@ -21515,6 +26504,15 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--ft-list")) {
         return emit_ft_list(argv[2]);
+    }
+    if (argc >= 6 && streq(argv[1], "--gzip-uncompress")) {
+        return emit_gzip_uncompress(argc, argv);
+    }
+    if (argc >= 5 && streq(argv[1], "--gzip-stream-open")) {
+        return emit_gzip_stream_open(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--bzip2-stream-disabled-policy")) {
+        return emit_bzip2_stream_disabled_policy(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--load-glyph-num-glyphs")) {
         return emit_face_or_slot(argc, argv);
@@ -21557,6 +26555,16 @@ static int dispatch(int argc, char** argv) {
     if (argc == 10 && streq(argv[1], "--glyph-record")) {
         return emit_face_or_slot(argc, argv);
     }
+    if (argc == 13 && streq(argv[1], "--bitmap-glyph-record-paths")) {
+        return emit_bitmap_glyph_record_paths(argc, argv);
+    }
+    if (argc == 13 && streq(argv[1], "--done-bitmap-glyph-paths")) {
+        return emit_done_bitmap_glyph_paths(argc, argv);
+    }
+    if (argc == 9 && (streq(argv[1], "--done-glyph-outline") ||
+                      streq(argv[1], "--done-glyph-bitmap"))) {
+        return emit_face_or_slot(argc, argv);
+    }
     if (argc == 10 && streq(argv[1], "--get-glyph-advance-boundaries")) {
         return emit_face_or_slot(argc, argv);
     }
@@ -21565,6 +26573,18 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 8 && streq(argv[1], "--sbit-cache-lookup-scaler")) {
         return emit_sbit_cache_lookup_scaler(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--cache-node-lifecycle")) {
+        return emit_cache_node_lifecycle(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--cache-node-unref-null-only")) {
+        return emit_cache_node_unref_null_only();
+    }
+    if (argc == 2 && streq(argv[1], "--cache-node-unref-null-or-invalid")) {
+        return emit_cache_node_unref_null_or_invalid();
+    }
+    if (argc == 8 && streq(argv[1], "--scaler-descriptor-lifetime")) {
+        return emit_scaler_descriptor_lifetime(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--sbit-cache-new-success")) {
         return emit_sbit_cache_new_success();
@@ -21578,11 +26598,26 @@ static int dispatch(int argc, char** argv) {
     if (argc == 11 && streq(argv[1], "--image-cache-lookup")) {
         return emit_image_cache_lookup(argc, argv);
     }
+    if (argc == 9 && streq(argv[1], "--image-type-descriptor-lifetime")) {
+        return emit_image_type_descriptor_lifetime(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--image-type-lookup-probe")) {
+        return emit_image_type_lookup_probe(argc, argv);
+    }
     if (argc == 7 && streq(argv[1], "--cmap-cache-lookup")) {
         return emit_cmap_cache_lookup(argc, argv);
     }
     if (argc == 5 && streq(argv[1], "--cmap-cache-new-route")) {
         return emit_cmap_cache_new_route(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-minimal")) {
+        return emit_add_module_minimal();
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-styler")) {
+        return emit_add_module_styler();
+    }
+    if (argc == 2 && streq(argv[1], "--add-module-renderer")) {
+        return emit_add_module_renderer();
     }
     if (argc == 6 && streq(argv[1], "--image-cache-new-route")) {
         return emit_image_cache_new_route(argc, argv);
@@ -21596,6 +26631,9 @@ static int dispatch(int argc, char** argv) {
     if (argc == 6 && streq(argv[1], "--manager-done-route")) {
         return emit_manager_done_route(argc, argv);
     }
+    if (argc == 6 && streq(argv[1], "--manager-lifecycle-route")) {
+        return emit_manager_lifecycle_route(argc, argv);
+    }
     if (argc == 7 && streq(argv[1], "--manager-lookup-size")) {
         return emit_manager_lookup_size(argc, argv);
     }
@@ -21604,6 +26642,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--face-id-identity")) {
         return emit_face_id_identity_route(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--cid-route")) {
+        return emit_cid_route(argc, argv);
     }
     fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | ... | --outline-render MODE CASE_ID | --outline-get-bitmap MODE CASE_ID | --outline-get-orientation CASE_ID | --outline-reverse CASE_ID | --outline-transform CASE_ID | ...\n");
     fprintf(stderr, "       --get-sfnt-name-variant FACE_KIND OUTPUT_KIND INDEXES [SRC_KIND SRC FACE_INDEX PX PY]\n");

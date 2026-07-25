@@ -25,9 +25,7 @@
           "attachment": {
             "kind": "ref",
             "role": "auxiliary_metrics",
-            "path": "input/aux/type1/attach-afm-base.afm",
-            "status": "required_future_asset",
-            "requires": "AFM or PFM metrics file accepted by the Type1 driver and known to mutate kerning/metrics observably"
+            "path": "input/aux/type1/attach-afm-base.afm"
           }
         },
         "params": {
@@ -75,9 +73,7 @@
           "attachment": {
             "kind": "ref",
             "role": "auxiliary_metrics",
-            "path": "input/aux/type1/attach-afm-base.afm",
-            "status": "required_future_asset",
-            "requires": "Any readable auxiliary file; face handle is null"
+            "path": "input/aux/type1/attach-afm-base.afm"
           }
         },
         "params": {

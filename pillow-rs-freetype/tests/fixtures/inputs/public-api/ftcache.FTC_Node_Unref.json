@@ -2,11 +2,55 @@
   "version": 1,
   "subject": "ftcache.FTC_Node_Unref",
   "manifest_cases": [
+    "null_inputs_noop",
     "null_or_invalid_inputs_noop",
     "releases_lookup_reference",
     "unreferenced_node_becomes_flushable"
   ],
   "cases": [
+    {
+      "case_id": "ftcache.FTC_Node_Unref.null_inputs_noop",
+      "subject": "ftcache.FTC_Node_Unref",
+      "case": "null_inputs_noop",
+      "operation": "ftcache.node_unref",
+      "schema": "api_void",
+      "expect_error": false,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "variants": [
+            {
+              "node": "null",
+              "manager": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftcache",
+        "area:cache-node"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "writes": "none"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].node",
+            "rows[*].manager",
+            "rows[*].void_return",
+            "rows[*].side_effects"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/cache/ftcmanag.c:667-677"
+        ]
+      }
+    },
     {
       "case_id": "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop",
       "subject": "ftcache.FTC_Node_Unref",

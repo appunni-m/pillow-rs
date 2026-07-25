@@ -3,8 +3,11 @@
   "subject": "ftglyph.FT_Done_Glyph",
   "manifest_cases": [
     "success_releases_owned_glyph",
+    "success_releases_owned_outline_glyph",
+    "success_releases_owned_bitmap_glyph",
     "success_null_is_noop",
-    "lifetime_before_library_done"
+    "lifetime_before_library_done",
+    "outline_glyph_before_library_done"
   ],
   "cases": [
     {
@@ -87,6 +90,126 @@
       }
     },
     {
+      "case_id": "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph",
+      "subject": "ftglyph.FT_Done_Glyph",
+      "case": "success_releases_owned_outline_glyph",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "creation_path": "FT_Get_Glyph outline",
+          "destroy_order": "glyph_before_face_and_library"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "runtime:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "create_error": "FT_Error",
+          "created_glyph_pointer_class": "null_or_non_null",
+          "format_before_done": "FT_GLYPH_FORMAT_OUTLINE",
+          "outline_owner_class": "owned",
+          "outline_counts_before_done": {
+            "n_points": "i16",
+            "n_contours": "i16"
+          },
+          "free_events": "FT_Done_Glyph called once for owned outline glyph"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "create_error",
+            "created_glyph_pointer_class",
+            "format_before_done",
+            "outline_owner_class",
+            "outline_counts_before_done",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:667-677",
+          "freetype/src/base/ftglyph.c:886-899"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph",
+      "subject": "ftglyph.FT_Done_Glyph",
+      "case": "success_releases_owned_bitmap_glyph",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_path": "FT_Get_Glyph bitmap",
+          "glyph_index": "bitmap_glyph",
+          "destroy_with": "FT_Done_Glyph"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "runtime:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "create_error": "FT_Error",
+          "created_glyph_pointer_class": "null_or_non_null",
+          "format_before_done": "FT_GLYPH_FORMAT_BITMAP",
+          "buffer_owner_class": "owned_non_null_or_null",
+          "bitmap_before_done": {
+            "width": "u32",
+            "rows": "u32",
+            "pitch": "i32"
+          },
+          "free_events": "FT_Done_Glyph called once for owned bitmap glyph"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "create_error",
+            "created_glyph_pointer_class",
+            "format_before_done",
+            "buffer_owner_class",
+            "bitmap_before_done",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:667-677",
+          "freetype/src/base/ftglyph.c:886-899"
+        ]
+      }
+    },
+    {
       "case_id": "ftglyph.FT_Done_Glyph.success_null_is_noop",
       "subject": "ftglyph.FT_Done_Glyph",
       "case": "success_null_is_noop",
@@ -118,6 +241,58 @@
         "source_refs": [
           "freetype/include/freetype/ftglyph.h",
           "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done",
+      "subject": "ftglyph.FT_Done_Glyph",
+      "case": "outline_glyph_before_library_done",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "creation_path": "FT_Get_Glyph outline",
+          "destroy_order": "glyph_before_face_and_library"
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "runtime:lifecycle"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "void",
+          "lifetime_order": "glyph_before_face_and_library",
+          "invalid_use_classification": "not_attempted"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "free_events",
+            "lifetime_order",
+            "invalid_use_classification"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h:667-677",
+          "freetype/src/base/ftglyph.c:886-899"
         ]
       }
     },

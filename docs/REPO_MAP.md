@@ -346,6 +346,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_ftmm_future_variable_fixtures.py
 |   |   |-- build_fvar_fixtures.py
 |   |   |-- build_gasp_fixtures.py
+|   |   |-- build_gzip_fixtures.py
 |   |   |-- build_hinter_edge_fixtures.py
 |   |   |-- build_metric_fixtures.py
 |   |   |-- build_mvar_fixtures.py
@@ -362,7 +363,8 @@ generated reports, build outputs, and package installs.
 |   |   |-- gen_unified_oracle.c
 |   |   |-- generate_malformed_bdf_fixtures.py
 |   |   |-- generate_public_constants.py
-|   |   `-- generate_winfnt_fixtures.py
+|   |   |-- generate_winfnt_fixtures.py
+|   |   `-- report_pending_route_buckets.py
 |   |-- src/
 |   |   |-- api.rs
 |   |   |-- autohint/

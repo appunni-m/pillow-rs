@@ -4,7 +4,9 @@
   "manifest_cases": [
     "layout_matches_c",
     "field_order_matches_c",
-    "initialized_and_advanced_by_layer_apis"
+    "initialized_and_advanced_by_layer_apis",
+    "initialized_and_advanced_by_color_glyph_layers_v0",
+    "initialized_and_advanced_by_paint_layers_v1"
   ],
   "cases": [
     {
@@ -158,6 +160,139 @@
         },
         "fixture_requirements": [
           "Runtime C oracle generation; do not store generated outputs"
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1",
+      "subject": "ftcolor.FT_LayerIterator",
+      "case": "initialized_and_advanced_by_paint_layers_v1",
+      "operation": "ftcolor.get_paint_layers",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 1 base glyph list",
+              "CPAL table with at least two palettes and named entries",
+              "paint graph containing PaintColrLayers records",
+              "nested COLR v1 layer paints"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "glyph_roles": [
+            "colr_layers_zero",
+            "colr_layers_many"
+          ],
+          "walk": [
+            "FT_Get_Color_Glyph_Paint",
+            "FT_Get_Paint",
+            "FT_Get_Paint_Layers"
+          ],
+          "iterate_until_zero": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v1",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p_identity_class"
+          ],
+          "paint": "FT_OpaquePaint sequence"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "sequences[*].calls[*].return",
+            "sequences[*].calls[*].iterator.num_layers",
+            "sequences[*].calls[*].iterator.layer",
+            "sequences[*].calls[*].iterator.p_identity_class",
+            "sequences[*].calls[*].paint.p_identity_class",
+            "sequences[*].calls[*].paint.insert_root_transform"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs",
+          "Does not replace initialized_and_advanced_by_layer_apis, which remains the broad COLR v0+v1 row."
+        ]
+      }
+    },
+    {
+      "case_id": "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0",
+      "subject": "ftcolor.FT_LayerIterator",
+      "case": "initialized_and_advanced_by_color_glyph_layers_v0",
+      "operation": "ftcolor.get_color_glyph_layer",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "fonts/color/colr-v0-layers-cpal.ttf",
+            "asset_kind": "font",
+            "properties": [
+              "COLR version 0 base glyph list",
+              "CPAL table",
+              "base glyph with three deterministic layers"
+            ]
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "base_glyph": "glyph_with_three_colr_v0_layers",
+          "iterator_initial_p": null,
+          "repeat_until_false": true,
+          "prefill_outputs": "sentinel-scalars"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftcolor",
+        "area:colr-v0",
+        "requires:font",
+        "path:runtime"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_LayerIterator",
+          "fields": [
+            "num_layers",
+            "layer",
+            "p_identity_class"
+          ],
+          "layer": "glyph index and color index sequence"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "calls[*].return",
+            "calls[*].glyph_index",
+            "calls[*].color_index",
+            "calls[*].iterator.num_layers",
+            "calls[*].iterator.layer",
+            "calls[*].iterator.p_identity_class"
+          ]
+        },
+        "fixture_requirements": [
+          "Runtime C oracle generation; do not store generated outputs",
+          "Covers the maintained COLR v0 layer fixture only. The older broad initialized_and_advanced_by_layer_apis row remains pending because it declares both COLR v0 and COLR v1 APIs together."
         ]
       }
     }

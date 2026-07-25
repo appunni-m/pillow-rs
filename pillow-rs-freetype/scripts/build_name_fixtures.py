@@ -15,6 +15,7 @@ BASE_VARIABLE = ROOT / "tests" / "fixtures" / "fonts" / "variable" / "compact-va
 NAME_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "names"
 LEGACY_ASSET_FONT_OUT_DIR = ROOT / "tests" / "fixtures" / "fixtures" / "assets" / "fonts"
 VARIABLE_OUT_DIR = ROOT / "tests" / "fixtures" / "fonts" / "variable"
+NAME_CMAP_OUT_DIR = ROOT / "tests" / "fixtures" / "input" / "fonts" / "name-cmap"
 
 
 @dataclass(frozen=True)
@@ -542,6 +543,106 @@ def write_variable_long_postscript_name() -> None:
     )
 
 
+def write_name_cmap_fixture(
+    name: str,
+    platform_id: int,
+    encoding_id: int,
+    language_id: int,
+    name_data: bytes,
+    cmap_format: int = 4,
+    name_id: int = 1,
+    cmap_mappings: dict[int, int] | None = None,
+) -> None:
+    path = NAME_CMAP_OUT_DIR / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        path.unlink()
+    path.write_bytes(BASE_STATIC.read_bytes())
+    replace_table_bytes(
+        path,
+        b"name",
+        build_name_table(
+            [
+                NameRecordSpec(
+                    platform_id,
+                    encoding_id,
+                    language_id,
+                    name_id,
+                    name_data,
+                )
+            ]
+        ),
+    )
+    replace_table_bytes(
+        path,
+        b"cmap",
+        build_single_mapping_cmap(
+            platform_id,
+            encoding_id,
+            cmap_format,
+            cmap_mappings,
+        ),
+    )
+
+
+def write_name_cmap_fixtures() -> None:
+    write_name_cmap_fixture(
+        "apple-unicode-platform.ttf",
+        0,
+        3,
+        0,
+        utf16be("Apple Unicode Platform"),
+    )
+    write_name_cmap_fixture(
+        "apple-unicode-iso10646.ttf",
+        0,
+        2,
+        0,
+        utf16be("Apple ISO 10646"),
+    )
+    write_name_cmap_fixture(
+        "deprecated-iso-platform.ttf",
+        2,
+        1,
+        0,
+        utf16be("Deprecated ISO Platform"),
+    )
+    write_name_cmap_fixture(
+        "iso-10646.ttf",
+        2,
+        1,
+        0,
+        utf16be("ISO 10646"),
+    )
+    write_name_cmap_fixture(
+        "microsoft-unicode-platform.ttf",
+        3,
+        1,
+        0x0409,
+        utf16be("Microsoft Unicode Platform"),
+    )
+    write_name_cmap_fixture(
+        "custom-platform.ttf",
+        4,
+        0,
+        0,
+        utf16be("Custom Platform"),
+    )
+    write_name_cmap_fixture(
+        "mac-japanese.ttf",
+        1,
+        1,
+        11,
+        b"Mac Japanese Full Name",
+        name_id=4,
+        cmap_mappings={
+            0x3042: 1,
+            0x30A2: 1,
+            0x4E00: 1,
+        },
+    )
+
+
 def build_missing_subfamily_fvar() -> bytes:
     payload = bytearray(table_payload(BASE_VARIABLE, b"fvar"))
     axes_offset = int.from_bytes(payload[4:6], "big")
@@ -616,6 +717,76 @@ def build_name_table(
         + bytes(rows)
         + bytes(lang_rows)
         + bytes(storage)
+    )
+
+
+def build_single_mapping_cmap(
+    platform_id: int,
+    encoding_id: int,
+    format_: int,
+    mappings: dict[int, int] | None = None,
+) -> bytes:
+    if format_ == 0:
+        subtable = build_format0_cmap()
+    elif format_ == 4:
+        subtable = build_format4_cmap(mappings or {0x0041: 1})
+    else:
+        raise ValueError(f"unsupported cmap format {format_}")
+    return (
+        (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + platform_id.to_bytes(2, "big")
+        + encoding_id.to_bytes(2, "big")
+        + (12).to_bytes(4, "big")
+        + subtable
+    )
+
+
+def build_format0_cmap() -> bytes:
+    glyphs = bytearray(256)
+    glyphs[65] = 1
+    return (
+        (0).to_bytes(2, "big")
+        + (262).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + bytes(glyphs)
+    )
+
+
+def build_format4_cmap(mappings: dict[int, int]) -> bytes:
+    # One direct idDelta segment per codepoint, followed by the required 0xFFFF
+    # terminator segment.  Keeping each generated segment single-codepoint
+    # avoids glyphIdArray offsets and makes fixture intent obvious.
+    pairs = sorted(mappings.items())
+    seg_count = len(pairs) + 1
+    seg_count_x2 = seg_count * 2
+    length = 16 + seg_count * 8
+    search_range = 2
+    entry_selector = 0
+    while search_range * 2 <= seg_count_x2:
+        search_range *= 2
+        entry_selector += 1
+    range_shift = seg_count_x2 - search_range
+    end_codes = [codepoint for codepoint, _ in pairs] + [0xFFFF]
+    start_codes = [codepoint for codepoint, _ in pairs] + [0xFFFF]
+    id_deltas = [
+        ((glyph_index - codepoint) & 0xFFFF) for codepoint, glyph_index in pairs
+    ]
+    id_deltas.append(1)
+    id_range_offsets = [0] * seg_count
+    return (
+        (4).to_bytes(2, "big")
+        + length.to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + seg_count_x2.to_bytes(2, "big")
+        + search_range.to_bytes(2, "big")
+        + entry_selector.to_bytes(2, "big")
+        + range_shift.to_bytes(2, "big")
+        + b"".join(value.to_bytes(2, "big") for value in end_codes)
+        + (0).to_bytes(2, "big")
+        + b"".join(value.to_bytes(2, "big") for value in start_codes)
+        + b"".join(value.to_bytes(2, "big") for value in id_deltas)
+        + b"".join(value.to_bytes(2, "big") for value in id_range_offsets)
     )
 
 
@@ -741,6 +912,7 @@ def main() -> None:
     write_variable_subfamily_conversion()
     write_variable_missing_subfamily()
     write_variable_long_postscript_name()
+    write_name_cmap_fixtures()
 
 
 if __name__ == "__main__":

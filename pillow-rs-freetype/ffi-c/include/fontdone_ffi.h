@@ -22,6 +22,7 @@ typedef long FT_Pos;
 typedef long FT_Fixed;
 typedef long FT_Angle;
 typedef long FT_F26Dot6;
+typedef short FT_F2Dot14;
 typedef short FT_Short;
 typedef unsigned short FT_UShort;
 typedef int FT_Render_Mode;
@@ -33,6 +34,9 @@ typedef int FT_Encoding;
 typedef unsigned int FT_Sfnt_Tag;
 typedef int FT_LcdFilter;
 typedef int FT_TrueTypeEngineType;
+typedef int FT_PaintExtend;
+typedef int FT_Composite_Mode;
+typedef int FT_PaintFormat;
 typedef char FT_String;
 typedef int FT_StrokerBorder;
 typedef FT_Error (*FT_DebugHook_Func)(void* arg);
@@ -45,6 +49,8 @@ typedef struct FT_FaceRec_* FT_Face;
 typedef struct FT_SizeRec_* FT_Size;
 typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
 typedef struct FT_GlyphRec_* FT_Glyph;
+typedef struct FT_RendererRec_* FT_Renderer;
+typedef struct FT_ModuleRec_* FT_Module;
 typedef struct FT_CharMapRec_* FT_CharMap;
 typedef struct FT_StrokerRec_* FT_Stroker;
 typedef struct FT_ListNodeRec_* FT_ListNode;
@@ -125,6 +131,18 @@ typedef struct FT_Parameter_ {
   FT_ULong tag;
   void* data;
 } FT_Parameter;
+
+typedef struct FT_Module_Class_ {
+  FT_ULong module_flags;
+  FT_Long module_size;
+  const FT_String* module_name;
+  FT_Fixed module_version;
+  FT_Fixed module_requires;
+  const void* module_interface;
+  FT_Pointer module_init;
+  FT_Pointer module_done;
+  FT_Pointer get_interface;
+} FT_Module_Class;
 
 typedef struct FT_MM_Axis_ {
   char* name;
@@ -229,8 +247,53 @@ typedef enum T1_EncodingType_ {
 } T1_EncodingType;
 
 typedef enum PS_Dict_Keys_ {
+  PS_DICT_FONT_TYPE = 0,
+  PS_DICT_FONT_MATRIX = 1,
+  PS_DICT_FONT_BBOX = 2,
+  PS_DICT_PAINT_TYPE = 3,
+  PS_DICT_FONT_NAME = 4,
+  PS_DICT_UNIQUE_ID = 5,
+  PS_DICT_NUM_CHAR_STRINGS = 6,
+  PS_DICT_CHAR_STRING_KEY = 7,
+  PS_DICT_CHAR_STRING = 8,
   PS_DICT_ENCODING_TYPE = 9,
-  PS_DICT_ENCODING_ENTRY = 10
+  PS_DICT_ENCODING_ENTRY = 10,
+  PS_DICT_NUM_SUBRS = 11,
+  PS_DICT_SUBR = 12,
+  PS_DICT_STD_HW = 13,
+  PS_DICT_STD_VW = 14,
+  PS_DICT_NUM_BLUE_VALUES = 15,
+  PS_DICT_BLUE_VALUE = 16,
+  PS_DICT_BLUE_FUZZ = 17,
+  PS_DICT_NUM_OTHER_BLUES = 18,
+  PS_DICT_OTHER_BLUE = 19,
+  PS_DICT_NUM_FAMILY_BLUES = 20,
+  PS_DICT_FAMILY_BLUE = 21,
+  PS_DICT_NUM_FAMILY_OTHER_BLUES = 22,
+  PS_DICT_FAMILY_OTHER_BLUE = 23,
+  PS_DICT_BLUE_SCALE = 24,
+  PS_DICT_BLUE_SHIFT = 25,
+  PS_DICT_NUM_STEM_SNAP_H = 26,
+  PS_DICT_STEM_SNAP_H = 27,
+  PS_DICT_NUM_STEM_SNAP_V = 28,
+  PS_DICT_STEM_SNAP_V = 29,
+  PS_DICT_FORCE_BOLD = 30,
+  PS_DICT_RND_STEM_UP = 31,
+  PS_DICT_MIN_FEATURE = 32,
+  PS_DICT_LEN_IV = 33,
+  PS_DICT_PASSWORD = 34,
+  PS_DICT_LANGUAGE_GROUP = 35,
+  PS_DICT_VERSION = 36,
+  PS_DICT_NOTICE = 37,
+  PS_DICT_FULL_NAME = 38,
+  PS_DICT_FAMILY_NAME = 39,
+  PS_DICT_WEIGHT = 40,
+  PS_DICT_IS_FIXED_PITCH = 41,
+  PS_DICT_UNDERLINE_POSITION = 42,
+  PS_DICT_UNDERLINE_THICKNESS = 43,
+  PS_DICT_FS_TYPE = 44,
+  PS_DICT_ITALIC_ANGLE = 45,
+  PS_DICT_MAX = PS_DICT_ITALIC_ANGLE
 } PS_Dict_Keys;
 
 typedef struct PS_FontInfoRec_ {
@@ -398,8 +461,154 @@ typedef struct FT_Palette_Data_ {
   const FT_UShort* palette_entry_name_ids;
 } FT_Palette_Data;
 
+typedef struct FT_LayerIterator_ {
+  FT_UInt num_layers;
+  FT_UInt layer;
+  FT_Byte* p;
+} FT_LayerIterator;
+
+typedef struct FT_OpaquePaint_ {
+  FT_Byte* p;
+  FT_Bool insert_root_transform;
+} FT_OpaquePaint;
+
+typedef struct FT_ColorStopIterator_ {
+  FT_UInt num_color_stops;
+  FT_UInt current_color_stop;
+  FT_Byte* p;
+  FT_Bool read_variable;
+} FT_ColorStopIterator;
+
+typedef struct FT_ColorIndex_ {
+  uint16_t palette_index;
+  FT_F2Dot14 alpha;
+} FT_ColorIndex;
+
+typedef struct FT_ColorStop_ {
+  FT_Fixed stop_offset;
+  FT_ColorIndex color;
+} FT_ColorStop;
+
+typedef struct FT_ColorLine_ {
+  FT_PaintExtend extend;
+  FT_ColorStopIterator color_stop_iterator;
+} FT_ColorLine;
+
+typedef struct FT_Affine23_ {
+  FT_Fixed xx;
+  FT_Fixed xy;
+  FT_Fixed dx;
+  FT_Fixed yx;
+  FT_Fixed yy;
+  FT_Fixed dy;
+} FT_Affine23;
+
+typedef struct FT_PaintColrLayers_ {
+  FT_LayerIterator layer_iterator;
+} FT_PaintColrLayers;
+
+typedef struct FT_PaintSolid_ {
+  FT_ColorIndex color;
+} FT_PaintSolid;
+
+typedef struct FT_PaintLinearGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector p0;
+  FT_Vector p1;
+  FT_Vector p2;
+} FT_PaintLinearGradient;
+
+typedef struct FT_PaintRadialGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector c0;
+  FT_Pos r0;
+  FT_Vector c1;
+  FT_Pos r1;
+} FT_PaintRadialGradient;
+
+typedef struct FT_PaintSweepGradient_ {
+  FT_ColorLine colorline;
+  FT_Vector center;
+  FT_Fixed start_angle;
+  FT_Fixed end_angle;
+} FT_PaintSweepGradient;
+
+typedef struct FT_PaintGlyph_ {
+  FT_OpaquePaint paint;
+  FT_UInt glyphID;
+} FT_PaintGlyph;
+
+typedef struct FT_PaintColrGlyph_ {
+  FT_UInt glyphID;
+} FT_PaintColrGlyph;
+
+typedef struct FT_PaintTransform_ {
+  FT_OpaquePaint paint;
+  FT_Affine23 affine;
+} FT_PaintTransform;
+
+typedef struct FT_PaintTranslate_ {
+  FT_OpaquePaint paint;
+  FT_Fixed dx;
+  FT_Fixed dy;
+} FT_PaintTranslate;
+
+typedef struct FT_PaintScale_ {
+  FT_OpaquePaint paint;
+  FT_Fixed scale_x;
+  FT_Fixed scale_y;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintScale;
+
+typedef struct FT_PaintRotate_ {
+  FT_OpaquePaint paint;
+  FT_Fixed angle;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintRotate;
+
+typedef struct FT_PaintSkew_ {
+  FT_OpaquePaint paint;
+  FT_Fixed x_skew_angle;
+  FT_Fixed y_skew_angle;
+  FT_Fixed center_x;
+  FT_Fixed center_y;
+} FT_PaintSkew;
+
+typedef struct FT_PaintComposite_ {
+  FT_OpaquePaint source_paint;
+  FT_Composite_Mode composite_mode;
+  FT_OpaquePaint backdrop_paint;
+} FT_PaintComposite;
+
+typedef union FT_COLR_PaintUnion_ {
+  FT_PaintColrLayers colr_layers;
+  FT_PaintGlyph glyph;
+  FT_PaintSolid solid;
+  FT_PaintLinearGradient linear_gradient;
+  FT_PaintRadialGradient radial_gradient;
+  FT_PaintSweepGradient sweep_gradient;
+  FT_PaintTransform transform;
+  FT_PaintTranslate translate;
+  FT_PaintScale scale;
+  FT_PaintRotate rotate;
+  FT_PaintSkew skew;
+  FT_PaintComposite composite;
+  FT_PaintColrGlyph colr_glyph;
+} FT_COLR_PaintUnion;
+
+typedef struct FT_COLR_Paint_ {
+  FT_PaintFormat format;
+  FT_COLR_PaintUnion u;
+} FT_COLR_Paint;
+
 void FT_Bitmap_Init(FT_Bitmap* abitmap);
 void FT_Bitmap_New(FT_Bitmap* abitmap);
+FT_Error FT_Gzip_Uncompress(FT_Memory memory, FT_Byte* output, FT_ULong* output_len, const FT_Byte* input, FT_ULong input_len);
+FT_Error FT_Stream_OpenBzip2(FT_Stream stream, FT_Stream source);
+FT_Error FT_Stream_OpenGzip(FT_Stream stream, FT_Stream source);
+void FTC_Node_Unref(FTC_Node node, FTC_Manager manager);
 FT_Error FT_Bitmap_Copy(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target);
 FT_Error FT_Bitmap_Convert(FT_Library library, const FT_Bitmap* source, FT_Bitmap* target, FT_Int alignment);
 FT_Error FT_Bitmap_Done(FT_Library library, FT_Bitmap* bitmap);
@@ -409,8 +618,15 @@ FT_Error FT_GlyphSlot_Own_Bitmap(FT_GlyphSlot slot);
 FT_Error FT_Palette_Data_Get(FT_Face face, FT_Palette_Data* apalette_data);
 FT_Error FT_Palette_Select(FT_Face face, FT_UShort palette_index, FT_Color** apalette);
 FT_Error FT_Palette_Set_Foreground_Color(FT_Face face, FT_Color foreground_color);
+FT_Bool FT_Get_Color_Glyph_Layer(FT_Face face, FT_UInt base_glyph, FT_UInt* aglyph_index, FT_UInt* acolor_index, FT_LayerIterator* iterator);
+FT_Bool FT_Get_Color_Glyph_ClipBox(FT_Face face, FT_UInt base_glyph, FT_ClipBox* clip_box);
+FT_Bool FT_Get_Color_Glyph_Paint(FT_Face face, FT_UInt base_glyph, FT_UInt root_transform, FT_OpaquePaint* paint);
+FT_Bool FT_Get_Paint(FT_Face face, FT_OpaquePaint opaque_paint, FT_COLR_Paint* paint);
+FT_Bool FT_Get_Paint_Layers(FT_Face face, FT_LayerIterator* layer_iterator, FT_OpaquePaint* paint);
+FT_Bool FT_Get_Colorline_Stops(FT_Face face, FT_ColorStop* color_stop, FT_ColorStopIterator* iterator);
 void FT_TrueTypeGX_Free(FT_Face face, FT_Bytes table);
 void FT_ClassicKern_Free(FT_Face face, FT_Bytes table);
+FT_Error FT_ClassicKern_Validate(FT_Face face, FT_UInt validation_flags, FT_Bytes* ckern_table);
 
 typedef struct FT_SfntName_ {
   FT_UShort platform_id;
@@ -533,7 +749,11 @@ FT_Error FT_Property_Set(FT_Library library, const FT_String* module_name, const
 void FT_Set_Default_Properties(FT_Library library);
 FT_Error FT_Face_Properties(FT_Face face, FT_UInt num_properties, FT_Parameter* properties);
 void FT_Add_Default_Modules(FT_Library library);
+FT_Error FT_Add_Module(FT_Library library, const FT_Module_Class* clazz);
+FT_Module FT_Get_Module(FT_Library library, const FT_String* module_name);
 void FT_Set_Debug_Hook(FT_Library library, FT_UInt hook_index, FT_DebugHook_Func debug_hook);
+FT_Renderer FT_Get_Renderer(FT_Library library, FT_Glyph_Format format);
+FT_Error FT_Set_Renderer(FT_Library library, FT_Renderer renderer, FT_UInt num_params, FT_Parameter* parameters);
 FT_Long FT_MulDiv(FT_Long a, FT_Long b, FT_Long c);
 FT_Long FT_MulFix(FT_Long a, FT_Long b);
 FT_Long FT_DivFix(FT_Long a, FT_Long b);
@@ -554,6 +774,7 @@ void FT_Vector_Transform(FT_Vector* vector, const FT_Matrix* matrix);
 void FT_Matrix_Multiply(const FT_Matrix* a, FT_Matrix* b);
 FT_Error FT_Matrix_Invert(FT_Matrix* matrix);
 FT_Error FT_Open_Face(FT_Library library, const FT_Open_Args* args, FT_Long face_index, FT_Face* aface);
+FT_Error FT_Attach_Stream(FT_Face face, const FT_Open_Args* parameters);
 FT_Error FT_New_Memory_Face(FT_Library library, const unsigned char* file_base, FT_Long file_size, FT_Long face_index, FT_Face* aface);
 FT_Error FT_Done_Face(FT_Face face);
 FT_Error FT_New_Size(FT_Face face, FT_Size* asize);
@@ -579,15 +800,27 @@ FT_Error FT_Outline_Embolden(FT_Outline* outline, FT_Pos strength);
 FT_Error FT_Outline_EmboldenXY(FT_Outline* outline, FT_Pos xstrength, FT_Pos ystrength);
 FT_StrokerBorder FT_Outline_GetInsideBorder(const FT_Outline* outline);
 FT_StrokerBorder FT_Outline_GetOutsideBorder(const FT_Outline* outline);
+FT_Error FT_Stroker_New(FT_Library library, FT_Stroker* astroker);
 void FT_Stroker_Set(FT_Stroker stroker, FT_Fixed radius, int line_cap, int line_join, FT_Fixed miter_limit);
 void FT_Stroker_Rewind(FT_Stroker stroker);
+FT_Error FT_Stroker_BeginSubPath(FT_Stroker stroker, FT_Vector* to, FT_Bool open);
+FT_Error FT_Stroker_ParseOutline(FT_Stroker stroker, FT_Outline* outline, FT_Bool opened);
+FT_Error FT_Stroker_LineTo(FT_Stroker stroker, FT_Vector* to);
+FT_Error FT_Stroker_ConicTo(FT_Stroker stroker, FT_Vector* control, FT_Vector* to);
+FT_Error FT_Stroker_CubicTo(FT_Stroker stroker, FT_Vector* control1, FT_Vector* control2, FT_Vector* to);
+FT_Error FT_Stroker_EndSubPath(FT_Stroker stroker);
+FT_Error FT_Stroker_GetBorderCounts(FT_Stroker stroker, FT_StrokerBorder border, FT_UInt* anum_points, FT_UInt* anum_contours);
+FT_Error FT_Stroker_GetCounts(FT_Stroker stroker, FT_UInt* anum_points, FT_UInt* anum_contours);
 void FT_Stroker_Done(FT_Stroker stroker);
+void FT_Stroker_ExportBorder(FT_Stroker stroker, FT_StrokerBorder border, FT_Outline* outline);
+void FT_Stroker_Export(FT_Stroker stroker, FT_Outline* outline);
 FT_Orientation FT_Outline_Get_Orientation(const FT_Outline* outline);
 void FT_Outline_Reverse(FT_Outline* outline);
 void FT_Outline_Transform(const FT_Outline* outline, const FT_Matrix* matrix);
 void FT_Outline_Translate(const FT_Outline* outline, FT_Pos xOffset, FT_Pos yOffset);
 FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
 FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
+void FT_Set_Transform(FT_Face face, const FT_Matrix* matrix, const FT_Vector* delta);
 FT_Error FT_Request_Size(FT_Face face, FT_Size_Request req);
 FT_Error FT_Select_Size(FT_Face face, FT_Int strike_index);
 FT_UInt FT_Get_Char_Index(FT_Face face, FT_ULong char_code);
@@ -597,6 +830,7 @@ FT_UInt32* FT_Face_GetVariantSelectors(FT_Face face);
 FT_UInt32* FT_Face_GetVariantsOfChar(FT_Face face, FT_ULong charcode);
 FT_UInt32* FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variant_selector);
 FT_Error FT_Get_Kerning(FT_Face face, FT_UInt left_glyph, FT_UInt right_glyph, FT_UInt kern_mode, FT_Vector* akerning);
+FT_Error FT_Get_Track_Kerning(FT_Face face, FT_Fixed point_size, FT_Int degree, FT_Fixed* akerning);
 FT_Error FT_Get_PFR_Kerning(FT_Face face, FT_UInt left_glyph, FT_UInt right_glyph, FT_Vector* avector);
 FT_Error FT_Select_Charmap(FT_Face face, FT_Encoding encoding);
 FT_Error FT_Set_Charmap(FT_Face face, FT_CharMap charmap);
@@ -632,8 +866,12 @@ FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt* instance_index);
 FT_Error FT_Get_WinFNT_Header(FT_Face face, FT_WinFNT_HeaderRec* aheader);
 FT_Error FT_Get_BDF_Property(FT_Face face, const char* prop_name, BDF_PropertyRec* aproperty);
 FT_Error FT_Get_BDF_Charset_ID(FT_Face face, const char** acharset_encoding, const char** acharset_registry);
+FT_Error FT_Get_CID_Is_Internally_CID_Keyed(FT_Face face, FT_Bool* is_cid);
+FT_Error FT_Get_CID_From_Glyph_Index(FT_Face face, FT_UInt glyph_index, FT_UInt* cid);
+FT_Error FT_Get_CID_Registry_Ordering_Supplement(FT_Face face, const char** registry, const char** ordering, FT_Int* supplement);
 FT_Error FT_Get_PS_Font_Info(FT_Face face, PS_FontInfo afont_info);
 FT_Error FT_Get_PS_Font_Private(FT_Face face, PS_Private afont_private);
+FT_Int FT_Has_PS_Glyph_Names(FT_Face face);
 FT_Long FT_Get_PS_Font_Value(FT_Face face, PS_Dict_Keys key, FT_UInt idx, void* value, FT_Long value_len);
 FT_UInt FT_Get_Sfnt_Name_Count(FT_Face face);
 FT_Error FT_Get_Sfnt_Name(FT_Face face, FT_UInt idx, FT_SfntName* aname);

@@ -58,7 +58,7 @@
       "case_id": "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
       "subject": "fterrdef.FT_Err_Invalid_Post_Table_Format",
       "case": "sfnt_post_format_rejected",
-      "operation": "new_memory_face",
+      "operation": "face.new",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {
@@ -73,7 +73,7 @@
         "params": {
           "expected_error_symbol": "FT_Err_Invalid_Post_Table_Format",
           "expected_error_value_source": "pinned fterrdef.h",
-          "pinned_source": "freetype/src/sfnt/ttload.c:1361",
+          "pinned_source": "freetype/src/sfnt/ttload.c:1338-1344",
           "face_index": 0,
           "output_face": "sentinel_non_null_before_call"
         }

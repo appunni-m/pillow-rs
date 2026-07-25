@@ -5,6 +5,7 @@
 //! operators without subroutines.
 
 use crate::error::FontError;
+use crate::font::Type1FontInfo;
 use crate::tt::glyf::{GlyphOutline, OutlinePoint};
 
 const TYPE2_TAG_ON: u8 = 0x01;
@@ -13,6 +14,16 @@ const TYPE2_TAG_CUBIC: u8 = 0x02;
 #[derive(Debug, Clone)]
 pub struct CffTable {
     charstrings: Vec<Vec<u8>>,
+    font_info: Type1FontInfo,
+    cid_info: Option<CffCidInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CffCidInfo {
+    registry: String,
+    ordering: String,
+    supplement: i32,
+    glyph_cids: Vec<u16>,
 }
 
 pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
@@ -31,7 +42,7 @@ pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
     let top_dict = top_dict_index
         .first()
         .ok_or_else(|| FontError::InvalidFont("CFF: missing Top DICT".into()))?;
-    let (_, next) = read_index(data, pos)?;
+    let (strings, next) = read_index(data, pos)?;
     pos = next;
     let (_, _) = read_index(data, pos)?;
 
@@ -49,12 +60,28 @@ pub fn parse_cff(data: &[u8]) -> Result<CffTable, FontError> {
         }
     })?;
     let (charstrings, _) = read_index(data, charstrings_offset)?;
+    let font_info = top.font_info(&strings);
+    let cid_info = top.cid_info(data, &strings, charstrings.len())?;
     Ok(CffTable {
         charstrings: charstrings.into_iter().map(<[u8]>::to_vec).collect(),
+        font_info,
+        cid_info,
     })
 }
 
 impl CffTable {
+    pub(crate) fn font_info(&self) -> &Type1FontInfo {
+        &self.font_info
+    }
+
+    pub(crate) fn cid_info(&self) -> Option<&CffCidInfo> {
+        self.cid_info.as_ref()
+    }
+
+    pub(crate) fn is_cid_keyed(&self) -> bool {
+        self.cid_info.is_some()
+    }
+
     pub fn load_glyph(&self, glyph_index: u16) -> Result<GlyphOutline, FontError> {
         let charstring = self
             .charstrings
@@ -66,10 +93,111 @@ impl CffTable {
     }
 }
 
-#[derive(Default)]
+impl CffCidInfo {
+    pub(crate) fn registry(&self) -> &str {
+        &self.registry
+    }
+
+    pub(crate) fn ordering(&self) -> &str {
+        &self.ordering
+    }
+
+    pub(crate) fn supplement(&self) -> i32 {
+        self.supplement
+    }
+
+    pub(crate) fn cid_for_glyph_index(&self, glyph_index: u32) -> Option<u16> {
+        self.glyph_cids
+            .get(usize::try_from(glyph_index).ok()?)
+            .copied()
+    }
+}
+
 struct TopDict {
     charstrings_offset: Option<usize>,
     consumed_non_charstrings_operands: bool,
+    version_sid: Option<u16>,
+    notice_sid: Option<u16>,
+    full_name_sid: Option<u16>,
+    family_name_sid: Option<u16>,
+    weight_sid: Option<u16>,
+    italic_angle: i32,
+    is_fixed_pitch: bool,
+    underline_position: i16,
+    underline_thickness: u16,
+    charset_offset: Option<usize>,
+    cid_registry_sid: Option<u16>,
+    cid_ordering_sid: Option<u16>,
+    cid_supplement: Option<i32>,
+}
+
+impl Default for TopDict {
+    fn default() -> Self {
+        Self {
+            charstrings_offset: None,
+            consumed_non_charstrings_operands: false,
+            version_sid: None,
+            notice_sid: None,
+            full_name_sid: None,
+            family_name_sid: None,
+            weight_sid: None,
+            italic_angle: 0,
+            is_fixed_pitch: false,
+            // FreeType initializes CFF top dict defaults in
+            // `src/cff/cffload.c:cff_subfont_load` before parsing the Top DICT.
+            underline_position: -100,
+            underline_thickness: 50,
+            charset_offset: None,
+            cid_registry_sid: None,
+            cid_ordering_sid: None,
+            cid_supplement: None,
+        }
+    }
+}
+
+impl TopDict {
+    fn font_info(&self, strings: &[&[u8]]) -> Type1FontInfo {
+        Type1FontInfo {
+            version: self.version_sid.and_then(|sid| sid_string(sid, strings)),
+            notice: self.notice_sid.and_then(|sid| sid_string(sid, strings)),
+            full_name: self.full_name_sid.and_then(|sid| sid_string(sid, strings)),
+            family_name: self
+                .family_name_sid
+                .and_then(|sid| sid_string(sid, strings)),
+            weight: self.weight_sid.and_then(|sid| sid_string(sid, strings)),
+            italic_angle: self.italic_angle,
+            is_fixed_pitch: self.is_fixed_pitch,
+            underline_position: self.underline_position,
+            underline_thickness: self.underline_thickness,
+        }
+    }
+
+    fn cid_info(
+        &self,
+        data: &[u8],
+        strings: &[&[u8]],
+        glyph_count: usize,
+    ) -> Result<Option<CffCidInfo>, FontError> {
+        let Some(registry_sid) = self.cid_registry_sid else {
+            return Ok(None);
+        };
+        let Some(ordering_sid) = self.cid_ordering_sid else {
+            return Ok(None);
+        };
+        let registry = sid_string(registry_sid, strings).ok_or_else(|| {
+            FontError::InvalidTable("CFF: CID registry SID is not resolvable".into())
+        })?;
+        let ordering = sid_string(ordering_sid, strings).ok_or_else(|| {
+            FontError::InvalidTable("CFF: CID ordering SID is not resolvable".into())
+        })?;
+        let glyph_cids = parse_cff_charset_cids(data, self.charset_offset, glyph_count)?;
+        Ok(Some(CffCidInfo {
+            registry,
+            ordering,
+            supplement: self.cid_supplement.unwrap_or(0),
+            glyph_cids,
+        }))
+    }
 }
 
 fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
@@ -92,7 +220,12 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
             } else {
                 u16::from(byte)
             };
-            if op == 17 {
+            if op == 15 {
+                let offset = stack.last().copied().ok_or_else(|| {
+                    FontError::InvalidArgument("CFF: charset operand missing".into())
+                })?;
+                dict.charset_offset = usize::try_from(offset).ok();
+            } else if op == 17 {
                 let offset = stack.last().copied().ok_or_else(|| {
                     // CFF Top DICT operator 17 (`CharStrings`) consumes one
                     // operand.  Pinned `cffparse.c` reports the underflow as a
@@ -100,6 +233,51 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
                     FontError::InvalidArgument("CFF: CharStrings operand missing".into())
                 })?;
                 dict.charstrings_offset = usize::try_from(offset).ok();
+            } else if op == 0x0C1E {
+                // CFF Top DICT escaped operator 30 is `ROS`.  FreeType sets
+                // `FT_FACE_FLAG_CID_KEYED` for SFNT-wrapped CFF faces when
+                // these registry/ordering/supplement operands are present
+                // (`src/cff/cffobjs.c`, `src/cff/cffload.c`).
+                if stack.len() < 3 {
+                    return Err(FontError::InvalidArgument(
+                        "CFF: ROS operands missing".into(),
+                    ));
+                }
+                dict.cid_registry_sid = u16::try_from(stack[0]).ok();
+                dict.cid_ordering_sid = u16::try_from(stack[1]).ok();
+                dict.cid_supplement = Some(stack[2]);
+                dict.consumed_non_charstrings_operands = true;
+            } else if matches!(op, 0..=4) {
+                let sid = stack.last().and_then(|value| u16::try_from(*value).ok());
+                match op {
+                    0 => dict.version_sid = sid,
+                    1 => dict.notice_sid = sid,
+                    2 => dict.full_name_sid = sid,
+                    3 => dict.family_name_sid = sid,
+                    4 => dict.weight_sid = sid,
+                    _ => {}
+                }
+                dict.consumed_non_charstrings_operands = true;
+            } else if matches!(op, 0x0C02..=0x0C05) {
+                let value = stack.last().copied().unwrap_or(0);
+                match op {
+                    0x0C02 => dict.italic_angle = value,
+                    0x0C03 => {
+                        dict.underline_position = i16::try_from(value).unwrap_or_else(|_| {
+                            if value.is_negative() {
+                                i16::MIN
+                            } else {
+                                i16::MAX
+                            }
+                        });
+                    }
+                    0x0C04 => {
+                        dict.underline_thickness = u16::try_from(value.max(0)).unwrap_or(u16::MAX);
+                    }
+                    0x0C05 => dict.is_fixed_pitch = value != 0,
+                    _ => {}
+                }
+                dict.consumed_non_charstrings_operands = true;
             } else if !stack.is_empty() {
                 dict.consumed_non_charstrings_operands = true;
             }
@@ -111,6 +289,104 @@ fn parse_top_dict(data: &[u8]) -> Result<TopDict, FontError> {
         }
     }
     Ok(dict)
+}
+
+fn parse_cff_charset_cids(
+    data: &[u8],
+    charset_offset: Option<usize>,
+    glyph_count: usize,
+) -> Result<Vec<u16>, FontError> {
+    let mut cids = Vec::with_capacity(glyph_count);
+    if glyph_count == 0 {
+        return Ok(cids);
+    }
+    // CFF charsets omit glyph 0 (`.notdef`).  FreeType reports CID 0 for GID
+    // 0 through `cff_get_cid_from_glyph_index`.
+    cids.push(0);
+    if glyph_count == 1 {
+        return Ok(cids);
+    }
+    let Some(offset) = charset_offset else {
+        return Err(FontError::InvalidTable("CFF: CID charset missing".into()));
+    };
+    // ISOAdobe, Expert, and ExpertSubset are name-keyed predefined charsets.
+    // They are not valid CID mappings for the ROS route.
+    if let 0..=2 = offset {
+        return Err(FontError::InvalidTable(
+            "CFF: predefined charset cannot supply CID mapping".into(),
+        ));
+    }
+    let format = *data
+        .get(offset)
+        .ok_or_else(|| FontError::InvalidTable("CFF: charset format missing".into()))?;
+    let mut cursor = offset + 1;
+    while cids.len() < glyph_count {
+        match format {
+            0 => {
+                let cid = read_u16(data, cursor, "CFF: charset format 0 CID overflow")?;
+                cursor += 2;
+                cids.push(cid);
+            }
+            1 => {
+                let first = read_u16(data, cursor, "CFF: charset format 1 first CID overflow")?;
+                let n_left = u16::from(*data.get(cursor + 2).ok_or_else(|| {
+                    FontError::InvalidTable("CFF: charset format 1 range overflow".into())
+                })?);
+                cursor += 3;
+                push_charset_range(&mut cids, glyph_count, first, n_left)?;
+            }
+            2 => {
+                let first = read_u16(data, cursor, "CFF: charset format 2 first CID overflow")?;
+                let n_left = read_u16(data, cursor + 2, "CFF: charset format 2 range overflow")?;
+                cursor += 4;
+                push_charset_range(&mut cids, glyph_count, first, n_left)?;
+            }
+            _ => {
+                return Err(FontError::InvalidTable(
+                    "CFF: unsupported charset format".into(),
+                ));
+            }
+        }
+    }
+    Ok(cids)
+}
+
+fn push_charset_range(
+    cids: &mut Vec<u16>,
+    glyph_count: usize,
+    first: u16,
+    n_left: u16,
+) -> Result<(), FontError> {
+    for delta in 0..=n_left {
+        if cids.len() == glyph_count {
+            break;
+        }
+        cids.push(
+            first
+                .checked_add(delta)
+                .ok_or_else(|| FontError::InvalidTable("CFF: charset CID range overflow".into()))?,
+        );
+    }
+    Ok(())
+}
+
+fn read_u16(data: &[u8], pos: usize, context: &str) -> Result<u16, FontError> {
+    let bytes = data
+        .get(pos..pos + 2)
+        .ok_or_else(|| FontError::InvalidTable(context.into()))?;
+    Ok(u16::from_be_bytes([bytes[0], bytes[1]]))
+}
+
+fn sid_string(sid: u16, strings: &[&[u8]]) -> Option<String> {
+    match sid {
+        388 => Some("Regular".to_string()),
+        0xFFFF => None,
+        sid if sid >= 391 => strings
+            .get(usize::from(sid - 391))
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(ToOwned::to_owned),
+        _ => None,
+    }
 }
 
 fn read_index(data: &[u8], pos: usize) -> Result<(Vec<&[u8]>, usize), FontError> {

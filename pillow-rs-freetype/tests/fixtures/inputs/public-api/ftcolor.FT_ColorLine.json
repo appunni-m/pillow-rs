@@ -108,7 +108,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-all-paints.ttf",
+            "id": "fonts/color/colr-v1-static-gradients.ttf",
             "asset_kind": "font",
             "properties": [
               "COLR version 1 base glyph list",

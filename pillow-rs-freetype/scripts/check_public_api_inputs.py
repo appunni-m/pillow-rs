@@ -121,6 +121,10 @@ WASM_ABI_SOURCE = ROOT / "ffi-wasm" / "src" / "lib.rs"
 WASM_EXPORTS = {
     "fontdone_wasm_malloc",
     "fontdone_wasm_free",
+    "fontdone_wasm_gzip_uncompress",
+    "fontdone_wasm_node_unref",
+    "fontdone_wasm_stream_open_bzip2",
+    "fontdone_wasm_stream_open_gzip",
     "fontdone_wasm_open_face",
     "fontdone_wasm_open_external_stream_face",
     "fontdone_wasm_open_face_with_name_options",
@@ -156,6 +160,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_done_glyph_handle",
     "fontdone_wasm_glyph_transform",
     "fontdone_wasm_glyph_to_bitmap",
+    "fontdone_wasm_glyph_to_bitmap_handle",
     "fontdone_wasm_outline_get_bbox",
     "fontdone_wasm_outline_get_bitmap",
     "fontdone_wasm_outline_render",
@@ -184,17 +189,25 @@ WASM_EXPORTS = {
     "fontdone_wasm_palette_data_get",
     "fontdone_wasm_palette_select",
     "fontdone_wasm_palette_set_foreground_color",
+    "fontdone_wasm_get_color_glyph_layer",
+    "fontdone_wasm_get_color_glyph_clipbox",
+    "fontdone_wasm_get_color_glyph_paint",
+    "fontdone_wasm_get_paint",
+    "fontdone_wasm_get_paint_layers",
+    "fontdone_wasm_get_colorline_stops",
     "fontdone_wasm_mul_div",
     "fontdone_wasm_mul_fix",
     "fontdone_wasm_div_fix",
     "fontdone_wasm_error_string",
     "fontdone_wasm_get_ps_font_info",
     "fontdone_wasm_get_ps_font_private",
+    "fontdone_wasm_has_ps_glyph_names",
     "fontdone_wasm_get_ps_font_value",
     "fontdone_wasm_open_type_validate",
     "fontdone_wasm_open_type_free",
     "fontdone_wasm_truetype_gx_free",
     "fontdone_wasm_classic_kern_free",
+    "fontdone_wasm_classic_kern_validate",
     "fontdone_wasm_round_fix",
     "fontdone_wasm_ceil_fix",
     "fontdone_wasm_floor_fix",
@@ -212,6 +225,7 @@ WASM_EXPORTS = {
     "fontdone_wasm_matrix_multiply",
     "fontdone_wasm_matrix_invert",
     "fontdone_wasm_set_pixel_sizes",
+    "fontdone_wasm_set_transform",
     "fontdone_wasm_set_char_size",
     "fontdone_wasm_request_size",
     "fontdone_wasm_select_size",
@@ -232,6 +246,8 @@ WASM_EXPORTS = {
     "fontdone_wasm_set_charmap",
     "fontdone_wasm_set_charmap_from_face",
     "fontdone_wasm_get_fstype_flags",
+    "fontdone_wasm_attach_stream",
+    "fontdone_wasm_get_track_kerning",
     "fontdone_wasm_get_gasp",
     "fontdone_wasm_get_glyph_name",
     "fontdone_wasm_get_name_index",
@@ -255,10 +271,14 @@ WASM_EXPORTS = {
     "fontdone_wasm_get_winfnt_header",
     "fontdone_wasm_get_bdf_property",
     "fontdone_wasm_get_bdf_charset_id",
+    "fontdone_wasm_get_cid_is_internally_cid_keyed",
+    "fontdone_wasm_get_cid_from_glyph_index",
+    "fontdone_wasm_get_cid_registry_ordering_supplement",
     "fontdone_wasm_get_sfnt_name_count",
     "fontdone_wasm_get_sfnt_name",
     "fontdone_wasm_get_sfnt_os2",
     "fontdone_wasm_get_sfnt_vhea",
+    "fontdone_wasm_get_sfnt_maxp",
     "fontdone_wasm_load_sfnt_table",
     "fontdone_wasm_sfnt_table_info",
     "fontdone_wasm_get_first_char",
@@ -349,6 +369,7 @@ REAL_PARITY_OPERATIONS = {
     "charmap.get_char_index",
     "freetype.select_charmap",
     "freetype.set_charmap",
+    "freetype.inspect_face_rec",
     "freetype.inspect_available_sizes",
     "freetype.inspect_charmaps",
     "freetype.charmap_ownership",
@@ -357,6 +378,9 @@ REAL_PARITY_OPERATIONS = {
     "freetype.face_properties",
     "freetype.get_fstype_flags",
     "freetype.get_kerning",
+    "freetype.get_track_kerning",
+    "freetype.attach_file",
+    "freetype.attach_stream",
     "freetype.ceil_fix",
     "freetype.floor_fix",
     "freetype.round_fix",
@@ -393,6 +417,7 @@ REAL_PARITY_OPERATIONS = {
     "sfnt.get_sfnt_table.maxp",
     "sfnt.get_sfnt_table.hhea",
     "sfnt.get_sfnt_table.hhea.after_variation",
+    "face.load_then_get_sfnt_table.maxp",
     "sfnt.load_sfnt_table",
     "sfnt.table_info",
     "sfnt.mac_encoding_record",
@@ -440,6 +465,7 @@ REAL_PARITY_OPERATIONS = {
     "ftglyph.get_glyph",
     "ftglyph.glyph_copy",
     "ftglyph.record_inspect",
+    "ftglyph.type_runtime",
     "ftbitmap.bitmap_blend",
     "ftbitmap.bitmap_convert",
     "ftbitmap.bitmap_copy",
@@ -1000,6 +1026,7 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "fterrdef.FT_Err_Missing_Font_Field.bdf_chars_before_font",
         "fterrdef.FT_Err_Missing_Fontboundingbox_Field.bdf_chars_before_fontboundingbox",
         "fterrdef.FT_Err_Hmtx_Table_Missing.sfnt_missing_hmtx_returns_error",
+        "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
         "fterrdef.FT_Err_Missing_Size_Field.bdf_chars_before_size",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_encoding_before_startchar",
         "fterrdef.FT_Err_Missing_Startchar_Field.bdf_nested_startchar_before_endchar",
@@ -1055,8 +1082,6 @@ def exact_error_public_route(operation: str, case_id: str, expect_error: bool) -
         "ftcache.FTC_SBitCache_New.error_outputs_null_cache",
         "ftcache.FTC_SBitCache_New.invalid_arguments_match_c",
         "freetype.FT_Open_Face.error_unknown_format_or_out_of_range_face",
-        "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source",
-        "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header",
         "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments",
         "ftgxval.FT_ClassicKern_Validate.reports_unimplemented_or_invalid_table",
         "ftgxval.FT_VALIDATE_APPLE.absent_or_invalid_kern_table",
@@ -1588,6 +1613,13 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
         return None
     if ftstroke_null_noop_real_parity_reason(row):
         return None
+    if row.case_id in {
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop",
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop",
+    }:
+        return None
     if operation_is_compile_contract(row.operation):
         return None
     if row.operation in {
@@ -1660,6 +1692,111 @@ def ftstroke_null_noop_real_parity_reason(row: ConcreteInput) -> str | None:
         return (
             "FreeType ftstroke.c null-stroker no-op with explicit C oracle, "
             "Rust FFI, C ABI, and WASM route"
+        )
+    return None
+
+
+def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact zero-length LineTo route verified against FreeType ftstroke.c."""
+    if row.operation != "ftstroke.line_to":
+        return None
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop":
+        return (
+            "FT_Stroker_LineTo zero-length no-op validates through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI; full non-zero stroker "
+            "geometry remains pending"
+        )
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline":
+        return (
+            "FT_Stroker_LineTo first non-zero segment pre-EndSubPath count "
+            "error validates through pinned C oracle, Rust FFI, C ABI, and "
+            "WASM ABI; finalized counts and exported border geometry remain "
+            "pending"
+        )
+    return None
+
+
+def ftstroke_degenerate_curve_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact coincident conic/cubic no-op routes verified against ftstroke.c."""
+    if row.case_id in {
+        "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop",
+        "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop",
+    }:
+        return (
+            "FT_Stroker conic/cubic coincident-control no-op validates through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI; full curve "
+            "geometry remains pending"
+        )
+    return None
+
+
+def ftstroke_parse_degenerate_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact degenerate ParseOutline no-op route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id
+        == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+    ):
+        return (
+            "FT_Stroker_ParseOutline empty and single-point contour no-op "
+            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; "
+            "full parse/finalization/export geometry remains pending"
+        )
+    return None
+
+
+def ftstroke_end_no_segment_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact direct EndSubPath no-segment status route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.end_subpath"
+        and row.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only"
+    ):
+        return (
+            "FT_Stroker_EndSubPath closed no-segment status validates through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI; counts after this "
+            "direct state are not promoted because the pinned C build segfaults"
+        )
+    return None
+
+
+def ftstroke_finalized_counts_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact finalized count routes for simple open/closed stroker paths."""
+    exact_cases = {
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts",
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts",
+        "ftstroke.FT_Stroker_GetCounts.optional_output_pointers",
+        "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts",
+        "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts",
+        "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers",
+    }
+    if row.case_id in exact_cases and row.operation in {
+        "ftstroke.get_counts",
+        "ftstroke.get_border_counts",
+    }:
+        return (
+            "FT_Stroker finalized open/closed public count outputs validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI; exported "
+            "outline geometry remains pending"
+        )
+    return None
+
+
+def ftstroke_reset_counts_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact Set/Rewind path-clearing routes proven through public counts."""
+    exact_cases = {
+        "ftstroke.FT_Stroker_Set.clears_existing_path",
+        "ftstroke.FT_Stroker_Rewind.clears_previous_path",
+        "ftstroke.FT_Stroker_Rewind.set_calls_rewind",
+    }
+    if row.case_id in exact_cases and row.operation in {
+        "ftstroke.set",
+        "ftstroke.rewind",
+        "ftstroke.set_then_rewind_observed",
+    }:
+        return (
+            "FT_Stroker Set/Rewind path-clearing count outputs validate "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI; attribute "
+            "geometry remains pending"
         )
     return None
 
@@ -1813,12 +1950,6 @@ def ftcache_manager_lookup_size_pending_reason(row: ConcreteInput) -> str | None
             "pixel=0 interprets width/height as 26.6 point sizes with x/y "
             "resolution exactly like pinned C"
         ),
-        "ftcache.FTC_Scaler.points_to_call_owned_scaler": (
-            "FTC_Scaler pointer-lifetime parity needs a maintained route "
-            "proving the public FTC_Scaler argument is a call-owned descriptor "
-            "whose pointed fields are copied or consumed with pinned C lifetime "
-            "semantics"
-        ),
     }
     return exact_cases.get(row.case_id)
 
@@ -1866,17 +1997,6 @@ def ftcache_image_lookup_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcache."):
         return None
     exact_cases = {
-        "ftcache.FTC_ImageType.points_to_call_owned_descriptor": (
-            "FTC_ImageType pointer-lifetime parity needs a maintained route "
-            "proving the public FTC_ImageType argument is a call-owned "
-            "descriptor whose fields are copied or consumed with pinned-C "
-            "lifetime semantics"
-        ),
-        "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup": (
-            "FTC_ImageTypeRec descriptor parity needs a maintained route "
-            "proving face_id, width, height, flags, and load_flags drive image "
-            "and sbit cache lookup exactly like pinned C"
-        ),
         "ftcache.FTC_ImageCache_Lookup.planned_cache_subsystem_not_out_of_scope": (
             "FTC_ImageCache_Lookup planning parity needs a maintained "
             "same-input image-cache route instead of treating cache lookup as "
@@ -2044,36 +2164,12 @@ def ftcache_node_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftcache."):
         return None
     exact_cases = {
-        "ftcache.FTC_Node.reference_counted_cache_handle": (
-            "FTC_Node cache-handle parity needs a maintained node lifecycle "
-            "route proving a lookup-acquired node records the same manager "
-            "cache handle identity and cache index as pinned C"
-        ),
-        "ftcache.FTC_Node_Unref.releases_lookup_reference": (
-            "FTC_Node_Unref release parity needs a maintained node lifecycle "
-            "route proving one unref releases exactly the lookup reference and "
-            "preserves any remaining references like pinned C"
-        ),
-        "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable": (
-            "FTC_Node_Unref flushability parity needs a maintained route "
-            "proving the final unref makes the node eligible for cache flush "
-            "or eviction with pinned-C observable state"
-        ),
     }
     return exact_cases.get(row.case_id)
 
 
 def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the cache subsystem that do not have a maintained success route."""
-    if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
-        return (
-            "FTC_Node_Unref null-node/null-manager variants are C no-ops, but "
-            "this fixture also includes a non-null foreign/bad-cache-index node; "
-            "pinned FreeType src/cache/ftcmanag.c:FTC_Node_Unref reads "
-            "node->cache_index when both node and manager are non-null, so exact "
-            "same-input parity requires a maintained FTC node/manager layout "
-            "facade instead of a generic no-op"
-        )
     if exact_error_public_route(row.operation, row.case_id, row.expect_error):
         return None
     image_lookup_scaler_pending = ftcache_image_lookup_scaler_pending_reason(row)
@@ -2133,11 +2229,6 @@ def ftcache_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FTC_CMapCache_New lifecycle parity needs a maintained route proving "
             "a manager-created CMap cache is destroyed through FTC_Manager_Done "
             "with the same ownership side effects as pinned C"
-        ),
-        "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit": (
-            "FTC_CMapCache_New registration-limit parity needs a maintained "
-            "route proving repeated cache registration fails at the same "
-            "manager limit and preserves prior caches like pinned C"
         ),
         "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset": (
             "FTC_CMapCache_New reset parity needs a maintained route proving "
@@ -2390,16 +2481,6 @@ def ftcolor_palette_pending_reason(row: ConcreteInput) -> str | None:
             "active color-layer-disabled condition; the focused runtime "
             "currently has no font source for this error case"
         ),
-        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color": (
-            "FT_Palette_Set_Foreground_Color SFNT parity needs a maintained "
-            "route proving foreground color mutation affects subsequent COLR "
-            "foreground paint output like pinned C"
-        ),
-        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy": (
-            "FT_Palette_Set_Foreground_Color default policy parity needs a "
-            "maintained route proving default foreground color and later "
-            "overrides match pinned C"
-        ),
         "ftcolor.FT_Palette_Set_Foreground_Color.error_color_layers_disabled": (
             "FT_Palette_Set_Foreground_Color disabled-color-layers parity "
             "needs a maintained same-input route with a C-observable color "
@@ -2592,11 +2673,6 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
             "proving false return after the final v1 paint layer preserves "
             "output paint and iterator fields like pinned C"
         ),
-        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis": (
-            "FT_LayerIterator parity needs a maintained route proving public "
-            "iterator fields are initialized and advanced by COLR v0 and v1 "
-            "layer APIs with pinned C counter and opaque-state semantics"
-        ),
         "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload": (
             "FT_COLR_PAINTFORMAT_COLR_LAYERS parity needs a maintained "
             "FT_Get_Paint route proving COLR_LAYERS payload initializes the "
@@ -2608,12 +2684,221 @@ def ftcolor_layer_iterator_pending_reason(row: ConcreteInput) -> str | None:
             "pinned C public union output"
         ),
     }
+    if row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+    }:
+        return None
     return exact_cases.get(row.case_id)
+
+
+def ftcolor_colrv1_composite_real_parity_reason(row: ConcreteInput) -> str | None:
+    if not row.operation.startswith("ftcolor."):
+        return None
+    if row.operation == "ftcolor.get_color_glyph_clipbox" and row.case_id in {
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed",
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output",
+    }:
+        return (
+            "FT_Get_Color_Glyph_ClipBox validates ClipList format 1 scaling, "
+            "active face transform application, public FT_ClipBox field "
+            "copying, and false-return output preservation through the "
+            "maintained COLRv1 clipbox fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    # These rows are routed by `emit_colr_all_paints_case` and the matching
+    # Rust/C-ABI/WASM all-paints harness path.  Their fixture JSON still
+    # declares a future malformed-font asset, but this maintained public
+    # payload route consumes only `colr-v1-all-paints.ttf` and compares the
+    # public union/iterator output against pinned C.
+    if row.case_id in {
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
+    }:
+        return (
+            "COLRv1 all-paints FT_Get_Paint route validates PaintColrGlyph "
+            "payloads and initialized PaintColrLayers iterators through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if unresolved_assets_reason(row) is not None:
+        return None
+    if row.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform":
+        return (
+            "FT_Get_Color_Glyph_Paint no-root-transform root lookup validates "
+            "through the maintained COLRv1 composite fixture, pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id == "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform":
+        return (
+            "FT_Get_Color_Glyph_Paint include-root-transform lookup validates "
+            "the inserted transform paint through the maintained COLRv1 root "
+            "transform fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract",
+        "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis",
+    }:
+        return (
+            "COLRv1 opaque paint production and downstream FT_Get_Paint "
+            "consumption validate for the maintained solid/glyph/composite "
+            "paint graph through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index",
+        "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload",
+    }:
+        return (
+            "COLRv1 FT_COLR_Paint format dispatch validates the maintained "
+            "solid, glyph, and composite payload rows through pinned C oracle, "
+            "Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_PaintSolid.get_paint_solid_values",
+        "ftcolor.FT_PaintGlyph.get_paint_glyph_values",
+        "ftcolor.FT_PaintComposite.get_paint_composite_values",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint public union payload values validate for "
+            "PaintSolid, PaintGlyph, and PaintComposite through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format",
+        "ftcolor.FT_Get_Paint.success_inserts_root_transform",
+        "ftcolor.FT_Affine23.root_transform_values",
+        "ftcolor.FT_ColorStopIterator.initialized_by_get_paint",
+        "ftcolor.FT_ColorIndex.solid_and_color_stop_values",
+        "ftcolor.FT_PaintFormat.paint_union_shape_runtime",
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values",
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator",
+    }:
+        return (
+            "COLRv1 all-paints FT_Get_Paint route validates supported paint "
+            "formats, initialized colorline and layer iterators, PaintColrGlyph "
+            "payloads, and inserted root-transform affine values through pinned "
+            "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime",
+        "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph",
+    }:
+        return (
+            "COLRv1 PaintComposite mode graph validates every real composite "
+            "mode and sentinel absence through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload":
+        return (
+            "COLRv1 PaintColrLayers payload and FT_Get_Paint_Layers traversal "
+            "validate through the maintained layer-list fixture, pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers",
+        "ftcolor.FT_Get_Paint_Layers.end_of_iteration",
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint_Layers success and terminal iteration "
+            "validate layer paint handles, iterator fields, and exhausted-call "
+            "preservation through the maintained layer-list fixture, pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime":
+        return (
+            "COLRv1 PaintColrGlyph payload and referenced BaseGlyphV1List root "
+            "lookup validate through the maintained recursive COLRv1 fixture, "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload",
+    }:
+        return (
+            "COLRv1 transform paint format dispatch and FreeType-normalized "
+            "public payload values validate through the maintained transform "
+            "fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_PaintRotate.get_paint_rotate_values",
+        "ftcolor.FT_PaintScale.get_paint_scale_values",
+        "ftcolor.FT_PaintSkew.get_paint_skew_values",
+        "ftcolor.FT_PaintTransform.get_paint_transform_values",
+        "ftcolor.FT_PaintTranslate.get_paint_translate_values",
+    }:
+        return (
+            "COLRv1 FT_Get_Paint public transform union records validate "
+            "exact child opaque-paint classes and fixed-point fields through "
+            "the maintained transform fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload",
+        "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values",
+        "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload",
+        "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload",
+        "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values",
+        "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values",
+        "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad",
+        "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat",
+        "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect",
+        "ftcolor.FT_PaintExtend.gradient_extend_runtime",
+        "ftcolor.FT_ColorLine.gradient_colorline_values",
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops",
+        "ftcolor.FT_Get_Colorline_Stops.end_of_iteration",
+        "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops",
+    }:
+        return (
+            "COLRv1 static gradient payloads and ColorLine stop iteration "
+            "validate through the maintained PAD/REPEAT/REFLECT static "
+            "gradient fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_ColorStop.iterator_output_values",
+        "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values",
+        "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops",
+    }:
+        return (
+            "COLRv1 variable gradient PaintLinearGradient payload and "
+            "VarColorStop iteration validate default and non-default wght/GRAD "
+            "design-coordinate runs through the maintained variable-gradient "
+            "fixture, pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if row.case_id in {
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime",
+        "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime",
+        "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint",
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload",
+    }:
+        return (
+            "COLRv1 included-root-transform synthesis validates exact public "
+            "PaintTransform affine fields and nested opaque paint class through "
+            "the maintained root-transform fixture, pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if row.case_id.startswith("ftcolor.FT_COLR_COMPOSITE_") and (
+        row.case_id.endswith(".paint_composite_runtime")
+        or row.case_id.endswith(".paint_composite_mode_runtime")
+    ):
+        return (
+            "COLRv1 PaintComposite node validates exact composite_mode and "
+            "source/backdrop paint traversal through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    return None
 
 
 def ftcolor_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for the COLR/CPAL subsystem that do not have a maintained success route."""
     if not row.operation.startswith("ftcolor."):
+        return None
+    if ftcolor_colrv1_composite_real_parity_reason(row):
         return None
     if absent_or_noop_surface_real_parity_reason(row):
         return None
@@ -2664,11 +2949,6 @@ def t1tables_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Get_PS_Font_Private parity needs a C-openable Type1/CFF "
             "fixture and exact T1_Private dictionary scalar/array comparison "
             "across all ABI lanes"
-        ),
-        "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix": (
-            "FT_Get_PS_Font_Value parity needs maintained selector routing for "
-            "font-info, private, encoding, and blend keys with exact value "
-            "bytes, lengths, and public errors"
         ),
         "t1tables.FT_Has_PS_Glyph_Names.signature_and_behavior_matrix": (
             "FT_Has_PS_Glyph_Names parity needs Type1/CFF fixtures proving "
@@ -2925,8 +3205,10 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         ),
         "ftmm.FT_Set_MM_Blend_Coordinates.output_changes_for_active_blend": (
             "FT_Set_MM_Blend_Coordinates output parity needs a maintained MM "
-            "route proving active blend-coordinate changes alter subsequent "
-            "coordinates, metrics, and exposed state like pinned C"
+            "fixture whose pinned C route is a glyph-output success row: the "
+            "current TrueType variable fixture gvar-hvar-wght.ttf returns "
+            "error -2 from FT_Set_MM_Blend_Coordinates for coords=[65536], and "
+            "reusing the Var-blend success path would be a green placeholder"
         ),
         "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design": (
             "FT_Set_MM_Design_Coordinates Adobe-MM glyph-output fixture is not "
@@ -2958,7 +3240,13 @@ def ftmm_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for module/library lifecycle data that do not have a maintained route."""
     if row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success":
-        if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_without_modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_minimal"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
             return None
         return (
             "FT_Add_Module success requires a maintained synthetic module-class "
@@ -2981,6 +3269,17 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "null-library and non-final refcount rows are not final destruction"
         )
     if row.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration":
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_then_FT_Add_Default_Modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_renderer"
+            and "FT_MODULE_RENDERER" in row.params["module_class"].get("module_flags", [])
+            and row.params["module_class"].get("module_interface")
+            == "synthetic_renderer_interface"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -2992,6 +3291,16 @@ def ftmodapi_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "constant value alone would be a green placeholder"
         )
     if row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration":
+        if (
+            row.operation == "ftmodapi.add_module"
+            and row.params.get("library") == "new_from_FT_New_Library_then_FT_Add_Default_Modules"
+            and isinstance(row.params.get("module_class"), dict)
+            and row.params["module_class"].get("module_name") == "fixture_styler"
+            and "FT_MODULE_STYLER" in row.params["module_class"].get("module_flags", [])
+            and row.params["module_class"].get("module_interface") == "fixture_private_interface"
+            and row.params["module_class"].get("module_init") == "record_call_then_ok"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -3075,15 +3384,6 @@ def ftdriver_subsystem_pending_reason(row: ConcreteInput) -> str | None:
 
 
 def property_service_pending_reason(row: ConcreteInput) -> str | None:
-    if row.case_id == "fterrdef.FT_Err_Missing_Property.known_property_success":
-        return (
-            "FT_Err_Missing_Property known-property success fixture asks for "
-            'module_name="svg" property_name="svg-hooks", but pinned '
-            'FreeType exposes svg-hooks on module "ot-svg"; reusing the '
-            "maintained truetype interpreter-version route would be a "
-            "different input and a green placeholder"
-        )
-
     property_rows_without_maintained_route = {
         "ftdriver.FT_Prop_GlyphToScriptMap.map_mutation_affects_autohint_script": (
             "FT_Prop_GlyphToScriptMap mutation parity needs maintained typed "
@@ -3135,12 +3435,6 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "interpreted as FT_Incremental_InterfaceRec* with exact null/bad "
             "shape handling across all ABI lanes"
         ),
-        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior": (
-            "FT_Incremental_Interface null/absent parity needs a maintained "
-            "open-face incremental route that compares pinned C behavior for "
-            "null data, missing parameter, and incomplete interface without "
-            "fabricating callbacks"
-        ),
         "ftincrem.FT_Incremental_InterfaceRec.open_face_stores_interface": (
             "FT_Incremental_InterfaceRec storage parity needs a maintained "
             "FT_Open_Face route proving FreeType stores the interface on the "
@@ -3151,12 +3445,6 @@ def ftincrem_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Incremental_InterfaceRec object parity needs callback event "
             "logs proving the client object pointer/value round-trips into "
             "glyph-data and metrics callbacks exactly like pinned C"
-        ),
-        "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data": (
-            "absent FT_PARAM_TAG_INCREMENTAL parity needs the same open-face "
-            "fixture proving pinned C uses embedded font data and does not call "
-            "incremental callbacks, with matching Rust FFI, C ABI, and WASM "
-            "glyph output"
         ),
         "ftincrem.FT_Incremental_Metrics.null_not_passed_by_c": (
             "FT_Incremental_Metrics nullness parity needs a maintained metrics "
@@ -3192,11 +3480,47 @@ def done_glyph_lifecycle_pending_reason(row: ConcreteInput) -> str | None:
     """Case-specific non-null FT_Done_Glyph rows that need owned glyph routing."""
     if row.operation != "ftglyph.done_glyph":
         return None
+    if row.case_id == "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays":
+        if {"glyph_index", "load_flags"} <= row.params.keys() and (
+            "font" in row.assets or "outline_font" in row.assets
+        ):
+            return None
     if (
         row.case_id == "ftglyph.FT_Done_Glyph.success_null_is_noop"
         and row.params.get("glyph") is None
     ):
         return None
+    if (
+        row.case_id == "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
+        and row.params.get("destroy_order") == "glyph_before_face_and_library"
+        and "outline_font" in row.assets
+    ):
+        return None
+    if (
+        row.case_id == "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph"
+        and row.params.get("creation_path") == "FT_Get_Glyph outline"
+        and row.params.get("destroy_order") == "glyph_before_face_and_library"
+        and {"glyph_index", "load_flags"} <= row.params.keys()
+        and "outline_font" in row.assets
+    ):
+        return None
+    if (
+        row.case_id == "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph"
+        and row.params.get("creation_path") == "FT_Get_Glyph bitmap"
+        and row.params.get("destroy_with") == "FT_Done_Glyph"
+        and "bitmap_strike_font" in row.assets
+    ):
+        return None
+    if row.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer":
+        creation_paths = row.params.get("creation_paths")
+        if (
+            isinstance(creation_paths, list)
+            and {"FT_Get_Glyph bitmap", "FT_Glyph_To_Bitmap outline"}
+            <= set(creation_paths)
+            and "outline_font" in row.assets
+            and "bitmap_strike_font" in row.assets
+        ):
+            return None
     pending_cases = {
         "fterrdef.FT_Err_Invalid_Handle.generic_object_handle_validation": (
             "FT_Done_Glyph invalid-handle parity needs a maintained owned-glyph "
@@ -3232,14 +3556,29 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     done_glyph_pending = done_glyph_lifecycle_pending_reason(row)
     if done_glyph_pending:
         return done_glyph_pending
-    ftglyph_rows_without_maintained_route = {
-        "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record": (
-            "FT_BitmapGlyph alias parity needs a maintained FT_Get_Glyph or "
-            "FT_Glyph_To_Bitmap route that creates a real bitmap glyph, casts "
-            "it to FT_BitmapGlyph, and compares root fields plus "
-            "FT_BitmapGlyphRec payload across pinned C, Rust FFI, C ABI, and "
-            "WASM ABI"
+    glyph_object_rows_without_exact_payload_route = {
+        "ftglyph.FT_Get_Glyph.success_svg_slot_deep_copy": (
+            "FT_Get_Glyph SVG success parity needs an SVG-enabled glyph route "
+            "that creates FT_GLYPH_FORMAT_SVG and compares FT_SvgGlyphRec "
+            "document/metrics/range/transform fields; slot format/advance "
+            "alone is not the declared output"
         ),
+        "ftglyph.FT_Glyph_Copy.success_svg_copy_is_independent": (
+            "FT_Glyph_Copy SVG success parity needs an SVG-enabled glyph copy "
+            "route proving document bytes, metrics, glyph range, transform, "
+            "and delta are copied exactly or classified as unsupported like "
+            "pinned C"
+        ),
+        "ftglyph.FT_SvgGlyphRec.fields_match_svg_get_copy_transform": (
+            "FT_SvgGlyphRec field parity needs an SVG-enabled FT_Get_Glyph, "
+            "FT_Glyph_Copy, and FT_Glyph_Transform route comparing the public "
+            "SVG record payload; generic glyph root snapshots are not enough"
+        ),
+    }
+    reason = glyph_object_rows_without_exact_payload_route.get(row.case_id)
+    if reason is not None:
+        return reason
+    ftglyph_rows_without_maintained_route = {
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "
             "allocation/free event route for FT_New_Glyph, FT_Get_Glyph, "
@@ -3263,11 +3602,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "synthetic renderer registration route where pinned C accepts the "
             "format, initializes the glyph class payload, and exposes matching "
             "root fields and ownership across Rust FFI, C ABI, and WASM ABI"
-        ),
-        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record": (
-            "FT_OutlineGlyph alias parity needs a maintained FT_Get_Glyph route "
-            "for real outline glyphs that compares the root record and "
-            "FT_OutlineGlyphRec outline arrays after cast across all ABI lanes"
         ),
         "ftglyph.FT_SvgGlyph.pointer_alias_matches_record_when_enabled": (
             "FT_SvgGlyph alias parity needs an SVG-enabled fixture where "
@@ -3320,13 +3654,6 @@ def ftparams_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Open_Face, invokes glyph-data callbacks, releases glyph data, "
             "applies metrics overrides, and compares callback event logs and "
             "public glyph output across pinned C, Rust FFI, C ABI, and WASM ABI"
-        ),
-        "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c": (
-            "FT_PARAM_TAG_INCREMENTAL null or incomplete interface behavior "
-            "must be proven through the FT_Open_Face parameter route from "
-            "pinned C FreeType src/base/ftobjs.c and mirrored Rust/C-ABI/WASM "
-            "validation; a generic open-face or exact-error route would not "
-            "prove the parameter-table branch"
         ),
         "ftparams.FT_PARAM_TAG_RANDOM_SEED.valid_seed_sets_face_property": (
             "FT_PARAM_TAG_RANDOM_SEED valid-data parity needs a maintained "
@@ -3421,27 +3748,11 @@ def ftimage_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "FFI, C ABI, and WASM ABI behavior for the same SVG glyph input; "
             "treating any load error as equivalent would be a green placeholder"
         ),
-        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior": (
-            "FT_OUTLINE_IGNORE_DROPOUTS mono parity needs a maintained "
-            "FT_Outline_Get_Bitmap or glyph render route carrying this outline "
-            "flag into the mono rasterizer and comparing exact bitmap bytes "
-            "against pinned C across all ABI lanes"
-        ),
-        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior": (
-            "FT_OUTLINE_INCLUDE_STUBS mono parity needs a maintained dropout "
-            "fixture with stubs where FreeType's mono rasterizer behavior is "
-            "observable in exact bitmap bytes through Rust FFI, C ABI, and WASM ABI"
-        ),
         "ftimage.FT_OUTLINE_OWNER.destruction_ownership_behavior": (
             "FT_OUTLINE_OWNER lifecycle parity needs a maintained outline "
             "allocation/free route that proves owner-bit destruction semantics "
             "and allocator ownership across pinned C, Rust FFI, C ABI, and "
             "WASM ABI; generic drop behavior would not prove the public flag"
-        ),
-        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior": (
-            "FT_OUTLINE_SMART_DROPOUTS mono parity needs a maintained smart "
-            "dropout fixture and exact C/Rust/C-ABI/WASM bitmap comparison; "
-            "smooth-raster or flag-value checks do not prove mono behavior"
         ),
         "ftimage.FT_Raster.lifecycle_callback_contract": (
             "FT_Raster lifecycle parity needs a maintained custom renderer "
@@ -3515,6 +3826,8 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if row.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
+        if row.operation == "freetype.attach_file" and not row.expect_error:
+            return None
         return (
             "FT_Attach_File success requires the declared C-openable Type1 "
             "PFA/PFB face plus matching AFM/PFM pathname asset and a maintained "
@@ -3525,6 +3838,8 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         )
     if row.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
+            return None
+        if row.operation == "freetype.attach_stream" and not row.expect_error:
             return None
         return (
             "FT_Attach_Stream success requires the declared C-openable Type1 "
@@ -3549,14 +3864,15 @@ def freetype_core_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if row.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
+        if row.operation == "freetype.get_track_kerning" and not row.expect_error:
+            return None
         return (
             "FT_Get_Track_Kerning Type1/AFM success requires maintained "
-            "input/fonts/type1/track-kern-base.pfb and "
-            "input/aux/type1/track-kern-base.afm assets plus an attach-first "
-            "route that compares exact akerning values for negative, zero, and "
-            "positive track degrees over declared 16.16 point sizes across "
-            "pinned C, Rust FFI, C ABI, and WASM; null-face and no-track-data "
-            "error rows are not success parity"
+            "attach-first routing, pure-Rust AFM track-kerning state, and exact "
+            "akerning comparisons for negative, zero, and positive track "
+            "degrees over declared 16.16 point sizes across pinned C, Rust "
+            "FFI, C ABI, and WASM; the generated Type1/AFM assets alone are "
+            "not success parity"
         )
     if row.case_id == "freetype.FT_Open_Args.open_face_consumes_args_like_c":
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
@@ -3601,6 +3917,20 @@ def specialized_record_subsystem_pending_reason(row: ConcreteInput) -> str | Non
 def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     """Rows for compressed and external stream behavior without a maintained route."""
     bzip2_stream_rows_without_maintained_route = {
+        "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source": (
+            "FT_Stream_OpenBzip2 null stream/source validation is enabled-build "
+            "behavior. The active pinned oracle build disables bzip2 and returns "
+            "Unimplemented_Feature before null validation, so this row must stay "
+            "pending until split by build configuration or a bzip2-enabled oracle "
+            "variant is maintained"
+        ),
+        "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header": (
+            "FT_Stream_OpenBzip2 invalid/truncated header validation is enabled-build "
+            "behavior. The active pinned oracle build disables bzip2 and returns "
+            "Unimplemented_Feature before reading source bytes, so this row must stay "
+            "pending until split by build configuration or a bzip2-enabled oracle "
+            "variant is maintained"
+        ),
         "ftbzip2.FT_Stream_OpenBzip2.success_open_valid_bzip2_stream": (
             "FT_Stream_OpenBzip2 open parity needs maintained compressed/raw "
             "fixtures plus a pure-Rust bzip2 stream route proving target stream "
@@ -3624,6 +3954,11 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
         ),
     }
     if row.case_id in bzip2_stream_rows_without_maintained_route:
+        if (
+            row.case_id
+            == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
+        ):
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return bzip2_stream_rows_without_maintained_route[row.case_id]
@@ -3639,6 +3974,8 @@ def stream_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "gzip routing"
         )
     if row.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream":
+        if row.operation == "ftgzip.stream_open_gzip":
+            return None
         if exact_error_public_route(row.operation, row.case_id, row.expect_error):
             return None
         return (
@@ -3759,7 +4096,6 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
     residual_rows_without_maintained_route = {
         "fterrdef.FT_Err_Missing_Property.known_property_success",
         "ftotval.FT_VALIDATE_BASE.absent_table_returns_null_output",
-        "tttables.TT_MaxProfile.malformed_table_error_source",
     }
     if row.case_id not in residual_rows_without_maintained_route:
         return None
@@ -3773,15 +4109,10 @@ def residual_public_surface_pending_reason(row: ConcreteInput) -> str | None:
 
 
 def malformed_maxp_fixture_pending_reason(row: ConcreteInput) -> str | None:
-    """Rows whose declared malformed maxp assets are current placeholders."""
+    """Malformed maxp rows that still need an executable same-input route."""
     if row.case_id != "tttables.TT_MaxProfile.malformed_table_error_source":
         return None
-    return (
-        "Declared malformed maxp assets resolve to placeholder DejaVuSans symlinks "
-        "instead of truncated/invalid maxp tables; a maintained malformed SFNT "
-        "fixture or generator is required before same-input C/Rust/C-ABI/WASM "
-        "parity can be claimed"
-    )
+    return None
 
 
 def otvalid_expectation_mismatch_pending_reason(row: ConcreteInput) -> str | None:
@@ -3884,6 +4215,14 @@ def fixture_reference_exists(reference: str) -> bool:
         "fonts/bdf/properties-atoms-integers-cardinals.bdf": (
             "input/fonts/bdf/properties-atoms-integers-cardinals.bdf"
         ),
+        # Historical logical id for the maintained COLRv1 all-paints fixture.
+        "fonts/color/colr_v1_all_paint_formats.ttf": (
+            "fonts/color/colr-v1-all-paints.ttf"
+        ),
+        # Historical logical id for the maintained COLRv1 root-transform fixture.
+        "fonts/color/colr-v1-root-paint-cpal.ttf": (
+            "fonts/color/colr-v1-root-transform.ttf"
+        ),
     }
     alias = aliases.get(reference)
     return alias is not None and (FIXTURE_DIR / alias).is_file()
@@ -3949,10 +4288,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "ftcache.FTC_SBitCache_Lookup.missing_bitmap_has_null_buffer": (
             "tracked cache bitmap strike asset is not a C-openable success fixture; "
             "pinned C returns error 6, so exact success would be a green placeholder"
-        ),
-        "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected": (
-            "generated unsupported-post-format SFNT opens successfully in pinned C; "
-            "counting any Rust error as parity would be a green placeholder"
         ),
         "fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds": (
             "generated bad-storage name table returns pinned-C public error 3, not "
@@ -4128,6 +4463,7 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
         "freetype.FT_Get_FSType_Flags.sfnt_restricted_embedding_bits",
         "freetype.FT_Get_First_Char.charcode_zero_disambiguated_by_glyph_index",
         "freetype.FT_HAS_FIXED_SIZES.bitmap_strike_font_true",
+        "freetype.FT_HAS_GLYPH_NAMES.cid_keyed_cff_false",
         "freetype.FT_HAS_GLYPH_NAMES.glyph_names_font_true",
         "freetype.FT_HAS_GLYPH_NAMES.no_glyph_names_control_false",
         "freetype.FT_Get_Char_Index.active_charmap_present_and_missing_codes",
@@ -4308,6 +4644,9 @@ def font_format_real_parity_reason(row: ConcreteInput) -> str | None:
 def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
     ftimage_outline_get_bitmap_cases = {
         ("ftimage.FT_Bitmap", "empty_bitmap_is_valid"),
+        ("ftimage.FT_OUTLINE_IGNORE_DROPOUTS", "mono_dropout_behavior"),
+        ("ftimage.FT_OUTLINE_INCLUDE_STUBS", "mono_stub_dropout_behavior"),
+        ("ftimage.FT_OUTLINE_SMART_DROPOUTS", "mono_smart_dropout_behavior"),
         ("ftimage.FT_RASTER_FLAG_DEFAULT", "default_monochrome_target_path"),
     }
     if (
@@ -4336,7 +4675,10 @@ def outline_get_bitmap_real_parity_reason(row: ConcreteInput) -> str | None:
 
 
 def set_debug_hook_real_parity_reason(row: ConcreteInput) -> str | None:
-    if row.operation == "ftmodapi.set_debug_hook" and row.subject == "ftmodapi.FT_Set_Debug_Hook":
+    if row.operation == "ftmodapi.set_debug_hook" and row.subject in {
+        "ftmodapi.FT_Set_Debug_Hook",
+        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE",
+    }:
         return "FT_Set_Debug_Hook slot mutation/no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     return None
 
@@ -4377,6 +4719,28 @@ def interpreter_version_property_real_parity_reason(row: ConcreteInput) -> str |
 
 def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
     if (
+        row.operation == "ftoutln.outline_render_direct"
+        and row.case_id == "ftimage.FT_Raster_Span_Func.direct_render_emits_spans"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Outline_Render direct span callback output validates emitted "
+            "span y/x/len/coverage tuples, observed clipping, user callback "
+            "identity, and target preservation through pinned C oracle, Rust "
+            "FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftsystem.memory_stream_probe"
+        and row.case_id == "ftsystem.FT_StreamRec.memory_stream_field_contract"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_StreamRec memory-stream field contract validates "
+            "FT_New_Memory_Face stream base/size/pos/cursor/limit nullness and "
+            "declared frame byte reads through pinned C oracle, Rust FFI, C ABI, "
+            "and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.get_ps_font_private_mm_blend"
         and row.case_id != "t1tables.T1_BLEND_FORCE_BOLD.private_force_bold_runtime_value"
         and "rows" not in row.params
@@ -4403,6 +4767,104 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         return (
             "FT_Get_PS_Font_Info Type1 FontInfo fields validate through pinned "
             "C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_private"
+        and row.case_id
+        in {
+            "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success",
+            "t1tables.FT_Get_PS_Font_Private.cff_invalid_argument",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        if row.expect_error:
+            return (
+                "FT_Get_PS_Font_Private CFF unsupported-service Invalid_Argument validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        return (
+            "FT_Get_PS_Font_Private Type1 private dictionary record validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_info"
+        and row.case_id
+        in {
+            "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success",
+            "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success",
+            "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument",
+            "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle",
+            "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        if row.expect_error:
+            if row.case_id == "t1tables.FT_Get_PS_Font_Info.truetype_invalid_argument":
+                return (
+                    "FT_Get_PS_Font_Info TrueType unsupported-service Invalid_Argument "
+                    "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+                )
+            return (
+                "FT_Get_PS_Font_Info null face/output error behavior validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        if row.case_id == "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success":
+            return (
+                "FT_Get_PS_Font_Info CFF top-dict FontInfo string/scalar record "
+                "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        return (
+            "FT_Get_PS_Font_Info Type1 FontInfo string/scalar record validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.has_ps_glyph_names"
+        and row.case_id
+        in {
+            "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true",
+            "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true",
+            "t1tables.FT_Has_PS_Glyph_Names.truetype_false",
+            "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false",
+            "t1tables.FT_Has_PS_Glyph_Names.null_face_false",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        if row.case_id == "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true":
+            return (
+                "FT_Has_PS_Glyph_Names CFF glyph-name flag behavior validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        if row.case_id == "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false":
+            return (
+                "FT_Has_PS_Glyph_Names CID-keyed CFF false result validates "
+                "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        return (
+            "FT_Has_PS_Glyph_Names Type1, TrueType, and null-face results "
+            "validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_private"
+        and row.case_id
+        == "t1tables.FT_Get_PS_Font_Private.truetype_invalid_argument"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private TrueType unsupported-service Invalid_Argument "
+            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_private"
+        and row.case_id
+        in {
+            "t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle",
+            "t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Private null face/output error behavior validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "t1tables.t1_blend_flags_private_group"
@@ -4452,6 +4914,38 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
             "Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "freetype.open_face_args"
+        and row.case_id
+        in {
+            "freetype.FT_Open_Args.memory_source_success_matches_c",
+            "freetype.FT_Open_Args.memory_source_error_variants_match_c",
+            "freetype.FT_Open_Args.memory_source_negative_face_index_probe_matches_c",
+            "freetype.FT_Open_Args.memory_source_out_of_range_face_index_matches_c",
+            "freetype.FT_Open_Args.memory_source_short_sizes_match_c",
+            "freetype.FT_Open_Args.memory_source_truncated_sfnt_size_matches_c",
+            "freetype.FT_Open_Args.memory_source_optional_flags_noop_match_c",
+            "freetype.FT_Open_Args.source_flag_error_matrix_matches_c",
+        }
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Open_Args FT_OPEN_MEMORY source dispatch, invalid source flags, "
+            "null args/library/aface rows validate exact "
+            "FT_Open_Face status plus output pointer nullness through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "t1tables.get_ps_font_value"
+        and row.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
+        and unresolved_assets_reason(row) is None
+    ):
+        return (
+            "FT_Get_PS_Font_Value selector matrix validates scalar, string, "
+            "array, encoding, sizing-query, short-buffer, negative-length, "
+            "unsupported-service, non-PostScript, and null-face behavior "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "t1tables.get_ps_font_value"
         and row.case_id.startswith("t1tables.T1_ENCODING_TYPE_")
         and unresolved_assets_reason(row) is None
@@ -4476,6 +4970,11 @@ def focused_success_real_parity_reason(row: ConcreteInput) -> str | None:
         )
     case_reasons = {
         "freetype.FT_Bitmap_Size.available_sizes_values_match_c": "FT_Bitmap_Size available_sizes validates WinFNT fixed-size public records through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_FaceRec.available_sizes_public_fields_match_c": "FT_FaceRec num_fixed_sizes and available_sizes pointer-derived records validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_FaceRec.charmap_public_fields_match_c": "FT_FaceRec num_charmaps, owned charmap records, active charmap selection, and char-index probes validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.typographic_name_params_match_c": "FT_Parameter typographic family/subfamily tag dispatch validates through FT_Open_Face with pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.ignored_open_params_match_c": "FT_Parameter ignored open-face tags validate no-effect public output through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "freetype.FT_Parameter.incremental_null_data_matches_c": "FT_Parameter incremental absent/null-data dispatch validates embedded glyph loading and null callback state through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
     }
     return case_reasons.get(row.case_id)
 
@@ -4600,16 +5099,20 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftdriver.FT_AUTOHINTER_SCRIPT_NONE.glyph_to_script_map_runtime": "FT_Prop_GlyphToScriptMap NONE runtime map entry and force-autohint glyph output validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_null_output_ok": "CID glyph-index null output behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c": "CID glyph-index output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_null_output_ok": "CID-keyed null output behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c": "CID-keyed face output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face": "CID registry/ordering/supplement output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "freetype.FT_SizeRec.active_size_record_runtime": "FT_SizeRec public face/generic/metrics/internal state validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftglyph.FT_New_Glyph.success_bitmap_outline_svg_empty_glyph": "FT_New_Glyph supported empty glyph allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_GlyphToScriptMap.property_get_returns_face_map": "FT_Property_Get glyph-to-script-map output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit": "FT_Property_Set/Get increase-x-height face-scoped limit roundtrip validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "fterrdef.FT_Err_Missing_Property.known_property_success": "FT_Property_Get known autofitter fallback-script property success validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftdriver.TT_INTERPRETER_VERSION_40.default_interpreter_version": "FT_Property_Get TrueType interpreter-version default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftmodapi.FT_Done_Library.default_modules_final_destroy_status": "FT_Done_Library final destroy status for a default-module library validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; owned face closure and synthetic module destructor ordering remain pending",
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables": "FT_TrueTypeGX_Validate table-selection output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization": "FT_TrueTypeGX_Validate output-slot initialization validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern": "FT_ClassicKern_Validate MS/classic-kern output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -4617,6 +5120,11 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_bsln_INDEX.indexes_bsln_output_slot": "FT_TrueTypeGX_Validate bsln output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat.validates_feat_table_slot": "FT_TrueTypeGX_Validate feat table slot validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker": "FT_Stroker_New non-null allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c": "FT_Stroker unparsed non-null handle lifecycle validates New, Set, unparsed Export/ExportBorder no-op, Rewind, and Done through pinned C oracle, Rust FFI, C ABI, and WASM ABI; path geometry/count lifecycle remains pending",
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": "FT_Stroker_ExportBorder null/invalid-border/unparsed-stroker no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.outline_renderer_lookup_success": "FT_Get_Renderer outline renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.bitmap_svg_and_unknown_formats": "FT_Get_Renderer bitmap/SVG/outline/unknown renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.null_library_returns_null": "FT_Get_Renderer null-library lookup returns no renderer through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
@@ -4734,6 +5242,10 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         ): "FFI invalid-outline error mapping validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "face.new",
+            "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected",
+        ): "FT_New_Face invalid-post-format exact error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "face.new",
             "tttables.TT_Postscript.invalid_post_format_error_runtime",
         ): "TT_Postscript invalid-post-format runtime error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
@@ -4744,6 +5256,50 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "ftglyph.done_glyph",
             "ftglyph.FT_Done_Glyph.success_null_is_noop",
         ): "FT_Done_Glyph(NULL) void no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph",
+        ): "FT_Done_Glyph outline ownership validates a real FT_Get_Glyph outline, copied outline arrays before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph",
+        ): "FT_Done_Glyph bitmap ownership validates a real FT_Get_Glyph bitmap, owned bitmap buffer fields before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays",
+        ): "FT_Done_Glyph outline-glyph ownership validates a real FT_Get_Glyph outline, owned outline flags/counts before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done",
+        ): "FT_Done_Glyph outline glyph-before-library lifetime validates a real FT_Get_Glyph outline is released before face/library teardown through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",
+        ): "FT_Done_Glyph bitmap-glyph ownership validates a real FT_Get_Glyph bitmap, owned bitmap buffer fields before release, and one public release call through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.done_glyph",
+            "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer",
+        ): "FT_BitmapGlyphRec ownership validates both FT_Get_Glyph bitmap and FT_Glyph_To_Bitmap outline bitmap-glyph creation paths, owned bitmap buffer fields before release, and one public FT_Done_Glyph release per owned bitmap glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.record_inspect",
+            "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap",
+        ): "FT_BitmapGlyphRec fields validate both FT_Get_Glyph bitmap and FT_Glyph_To_Bitmap outline creation paths through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph.outline_caller_owned_lifetime",
+        ): "FT_Glyph outline caller-owned lifetime validates a real FT_Get_Glyph outline record and release through public behavior against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph.bitmap_caller_owned_lifetime",
+        ): "FT_Glyph bitmap caller-owned lifetime validates a real FT_Get_Glyph bitmap record and release through public behavior against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph_Class.outline_class_behavior",
+        ): "FT_Glyph_Class outline behavior validates the private class only through public FT_Get_Glyph outline output against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        (
+            "ftglyph.type_runtime",
+            "ftglyph.FT_Glyph_Class.bitmap_class_behavior",
+        ): "FT_Glyph_Class bitmap behavior validates the private class only through public FT_Get_Glyph bitmap output against pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         (
             "ftoutln.outline_copy",
             "ftoutln.FT_Outline_Copy.invalid_pointer_or_size_mismatch",
@@ -5203,6 +5759,13 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcolor.FT_Get_Color_Glyph_Layer.malformed_layer_record_false_behavior"
     ):
         return "FT_Get_Color_Glyph_Layer malformed-layer rejection validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.operation == "ftcolor.get_color_glyph_layer" and row.case_id in {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success",
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index",
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs",
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0",
+    }:
+        return "FT_Get_Color_Glyph_Layer COLR v0 layer iterator output validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.get_color_glyph_paint"
         and row.case_id
@@ -5254,6 +5817,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftcolor.FT_Get_Paint_Layers.error_null_arguments_policy"
     ):
         return "FT_Get_Paint_Layers null-argument policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.get_paint_layers"
+        and row.case_id
+        == "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
+    ):
+        return "FT_LayerIterator COLR v0 FT_Get_Color_Glyph_Layer and COLR v1 FT_Get_Paint_Layers iterator advancement validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcolor.palette_data_get"
         and row.case_id == "ftcolor.FT_Palette_Data_Get.error_null_face_or_output"
@@ -5314,6 +5883,18 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Palette_Set_Foreground_Color non-SFNT no-op behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id
+        == "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color"
+    ):
+        return "FT_Palette_Set_Foreground_Color SFNT foreground-color state and public COLR foreground 0xFFFF PaintSolid reference validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcolor.palette_set_foreground_color"
+        and row.case_id
+        == "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy"
+    ):
+        return "FT_Palette_Set_Foreground_Color default COLR foreground policy for dark-background and non-dark CPAL palette flags validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftcid.get_cid_from_glyph_index"
         and row.case_id
         == "ftcid.FT_Get_CID_From_Glyph_Index.non_cid_or_null_face_errors_and_clears_output"
@@ -5363,13 +5944,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         in {
             "ftcache.FTC_CMapCache_New.planned_cache_subsystem_not_out_of_scope",
             "ftcache.FTC_CMapCache_New.success_create_and_destroy_with_manager",
+            "ftcache.FTC_CMapCache_New.success_multiple_cache_registration_limit",
             "ftcache.FTC_CMapCache_New.lifecycle_after_manager_reset",
         }
     ):
         return (
             "FTC_CMapCache_New create, manager-owned destruction, lookup "
-            "usability, and reset-preserved cache handle behavior validate "
-            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            "usability, registration limit, and reset-preserved cache handle "
+            "behavior validate through pinned C oracle, Rust FFI, C ABI, and "
+            "WASM ABI"
         )
     if (
         row.operation == "ftcache.image_cache_lookup"
@@ -5397,6 +5980,33 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "lookup, requester count, null/non-null anode ownership "
             "classification, and node-unref behavior validate through pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation in {"ftcache.node_lifecycle", "ftcache.node_unref"}
+        and row.case_id
+        in {
+            "ftcache.FTC_Node.reference_counted_cache_handle",
+            "ftcache.FTC_Node_Unref.null_inputs_noop",
+            "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop",
+            "ftcache.FTC_Node_Unref.releases_lookup_reference",
+            "ftcache.FTC_Node_Unref.unreferenced_node_becomes_flushable",
+        }
+    ):
+        if row.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop":
+            return (
+                "FTC_Node_Unref null node/null manager no-op validates through "
+                "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        if row.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop":
+            return (
+                "FTC_Node_Unref null node/live manager and foreign "
+                "out-of-range cache-index no-op behavior validates through "
+                "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
+        return (
+            "FTC_Node and FTC_Node_Unref lookup-acquired node handle, cache "
+            "index, reference release, and post-unref flushability classes "
+            "validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     if (
         row.operation == "ftcache.image_cache_lookup_scaler"
@@ -5577,6 +6187,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "Rust FFI, C ABI, and WASM ABI"
         )
     if (
+        row.operation == "ftcache.manager_lifecycle"
+        and row.case_id == "ftcache.FTC_Manager.reset_and_done_lifecycle"
+    ):
+        return (
+            "FTC_Manager reset/done lifecycle validates through a maintained "
+            "same-input route proving reset preserves manager usability and "
+            "done tears down populated manager-owned cache/face/size/node "
+            "state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
         row.operation == "ftcache.sbit_cache_lookup_scaler"
         and row.case_id
         == "ftcache.FTC_SBitCache_LookupScaler.rejects_null_sbit_or_scaler"
@@ -5588,6 +6208,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftcache.FTC_SBitCache_LookupScaler.clears_outputs_before_lookup"
     ):
         return "FTC_SBitCache_LookupScaler output-clearing behavior validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.scaler_descriptor_lifetime"
+        and row.case_id == "ftcache.FTC_Scaler.points_to_call_owned_scaler"
+    ):
+        return "FTC_Scaler caller-owned descriptor lifetime validates through actual pinned C FTC_SBitCache_LookupScaler, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_type_descriptor_lifetime"
+        and row.case_id == "ftcache.FTC_ImageType.points_to_call_owned_descriptor"
+    ):
+        return "FTC_ImageType caller-owned descriptor lifetime validates through actual pinned C FTC_ImageCache_Lookup, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftcache.image_type_lookup_probe"
+        and row.case_id == "ftcache.FTC_ImageTypeRec.drives_image_and_sbit_lookup"
+    ):
+        return "FTC_ImageTypeRec image and sbit lookup fields validate through actual pinned C FTC_ImageCache_Lookup and FTC_SBitCache_Lookup, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftcache.sbit_cache_new"
         and row.case_id == "ftcache.FTC_SBitCache_New.error_outputs_null_cache"
@@ -5620,15 +6255,19 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FTC_FaceID raw pointer identity, same-bytes distinct-pointer miss, and same-address alias hit behavior validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbzip2.stream_open_bzip2"
-        and row.case_id == "ftbzip2.FT_Stream_OpenBzip2.error_null_stream_or_source"
+        and row.case_id
+        == "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
     ):
-        return "FT_Stream_OpenBzip2 null-stream/source errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        return "FT_Stream_OpenBzip2 disabled-bzip2 build policy validates Unimplemented_Feature through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftbzip2.stream_open_bzip2"
         and row.case_id
-        == "ftbzip2.FT_Stream_OpenBzip2.error_invalid_or_truncated_bzip2_header"
+        in {
+            "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation",
+            "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation",
+        }
     ):
-        return "FT_Stream_OpenBzip2 invalid/truncated-header errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        return "FT_Stream_OpenBzip2 active disabled-bzip2 build precedence validates Unimplemented_Feature before enabled-build input validation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgxval.classic_kern_validate"
         and row.case_id == "ftgxval.FT_ClassicKern_Validate.rejects_invalid_arguments"
@@ -5704,6 +6343,17 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftlist.FT_List_Iterate.null_list_or_iterator_error"
     ):
         return "FT_List_Iterate null-list/iterator errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftrender.set_renderer"
+        and row.case_id == "ftrender.FT_Set_Renderer.set_outline_renderer_success"
+    ):
+        return (
+            "FT_Set_Renderer default outline renderer success validates "
+            "FT_Get_Renderer-selected library-owned renderer handle, OK status, "
+            "and current renderer class through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI; custom renderer set_mode and rendered-output "
+            "mutation remain pending"
+        )
     if (
         row.operation == "ftrender.set_renderer"
         and row.case_id == "ftrender.FT_Set_Renderer.invalid_library_renderer_or_params"
@@ -5802,6 +6452,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_TrueTypeGX_Validate unimplemented/invalid-table errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgzip.gzip_uncompress"
+        and row.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer"
+    ):
+        return "FT_Gzip_Uncompress gzip/zlib success validates exact bytes through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.gzip_uncompress"
         and row.case_id == "ftgzip.FT_Gzip_Uncompress.rejects_invalid_arguments"
     ):
         return "FT_Gzip_Uncompress invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
@@ -5820,6 +6475,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftgzip.FT_Gzip_Uncompress.reports_unimplemented_without_zlib"
     ):
         return "FT_Gzip_Uncompress no-zlib unimplemented errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftgzip.stream_open_gzip"
+        and row.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream"
+    ):
+        return "FT_Stream_OpenGzip small/large gzip stream success validates stream classes and exact range reads through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftgzip.stream_open_gzip"
         and row.case_id == "ftgzip.FT_Stream_OpenGzip.rejects_invalid_stream_handles"
@@ -5947,6 +6607,28 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Stroker_LineTo.invalid_arguments"
     ):
         return "FT_Stroker_LineTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if row.operation in {
+        "ftstroke.open_path_geometry",
+        "ftstroke.export_border",
+        "ftstroke.export",
+        "ftstroke.join_geometry_alias",
+    } and row.case_id in {
+        "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry",
+        "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry",
+        "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry",
+        "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry",
+        "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry",
+        "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry",
+        "ftstroke.FT_StrokerBorder.border_selection_runtime_shape",
+        "ftstroke.FT_Stroker_Export.exports_left_then_right",
+        "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
+        "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
+    }:
+        return (
+            "FT_Stroker open-line geometry validates exact exported outline "
+            "points, tags, contours, empty right border, and combined export "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftpfr.get_pfr_advance"
         and row.case_id == "ftpfr.FT_Get_PFR_Advance.non_pfr_returns_invalid_argument"
@@ -6005,6 +6687,11 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "fterrdef.FT_Err_Raster_Overflow.raster_buffer_or_cell_overflow"
     ):
         return "FT_Err_Raster_Overflow render-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.get_glyph"
+        and row.case_id == "ftglyph.FT_Get_Glyph.error_unsupported_synthetic_format"
+    ):
+        return "FT_Get_Glyph unsupported synthetic slot-format error and output-pointer preservation validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "sfnt.load_sfnt_table"
         and row.case_id == "tttables.FT_Load_Sfnt_Table.missing_table_or_invalid_face_error"
@@ -6088,6 +6775,21 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Reference_Library null-library error validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success"
+    ):
+        return "FT_Add_Module minimal synthetic module success validates module table insertion, FT_Get_Module lookup, stored class fields, and module_init callback through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration"
+    ):
+        return "FT_MODULE_STYLER registration validates stored styler module flags, FT_Get_Module lookup, private interface presence, module_init callback, and unchanged outline renderer routing through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
+        and row.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration"
+    ):
+        return "FT_MODULE_RENDERER registration validates renderer module insertion, FT_Get_Module lookup, stored renderer class fields, module_init callback, preserved default outline renderer lookup, and FT_Set_Renderer membership for the installed renderer through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftmodapi.add_module"
         and row.case_id == "ftmodapi.FT_Add_Module.rejects_null_library"
         and lifecycle_handle(row, "library") == "null"
     ):
@@ -6148,6 +6850,24 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftmodapi.FT_Done_Library.decrements_reference_without_destroying"
     ):
         return "FT_Done_Library refcount decrement without destruction validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftincrem.open_face_without_incremental_parameter"
+        and row.case_id
+        == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data"
+    ):
+        return "Absent FT_PARAM_TAG_INCREMENTAL open/load behavior validates embedded font data use and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftincrem.open_face_incremental_nullness"
+        and row.case_id
+        == "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
+    ):
+        return "Absent and NULL FT_PARAM_TAG_INCREMENTAL interface behavior validates embedded font data use, null stored-interface class, and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_incremental"
+        and row.case_id
+        == "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c"
+    ):
+        return "FT_PARAM_TAG_INCREMENTAL absent and NULL parameter-data behavior validates FT_Open_Face parameter dispatch, embedded font data use, null stored-interface class, and zero callback count through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftmodapi.face_driver_name"
         and row.case_id == "ftmodapi.FT_FACE_DRIVER_NAME.returns_driver_module_name"
@@ -6463,6 +7183,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_MM_Design_Coordinates partial, extra, and reset scenarios validate generated Type 1 MM design-coordinate state through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_mm_design_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph"
+    ):
+        return "FT_Set_MM_Design_Coordinates loadable Type 1 MM glyph output validates design-coordinate mutation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
         row.operation == "ftmm.set_named_instance"
         and row.case_id == "ftmm.FT_Set_Named_Instance.success_adobe_mm_resets_default"
     ):
@@ -6519,6 +7245,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return "FT_Set_MM_Blend_Coordinates Adobe MM reset-to-default validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
+        row.operation == "ftmm.set_mm_blend_coordinates"
+        and row.case_id
+        == "ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend"
+    ):
+        return "FT_Set_MM_Blend_Coordinates Type 1 MM glyph output after active blend validates FT_Load_Glyph/FT_Render_Glyph through pinned C oracle, Rust FFI, C ABI, and WASM ABI; the separate blend-dependent output-change row remains pending"
+    if (
         row.operation == "ftmm.set_then_get_mm_blend_coordinates"
         and row.case_id
         == "ftmm.FT_Get_MM_Blend_Coordinates.after_set_blend_coordinates"
@@ -6550,6 +7282,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "freetype.FT_FACE_FLAG_EXTERNAL_STREAM.open_face_stream_ownership"
     ):
         return "FT_OPEN_STREAM external-stream ownership validates face_flags, external-stream bit, close-call count, and caller stream lifetime through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "freetype.open_face_stream"
+        and row.case_id
+        in {
+            "freetype.FT_Open_Args.stream_source_success_matches_c",
+            "ftsystem.FT_Stream.valid_external_memory_stream_face_open",
+            "ftsystem.FT_StreamRec.external_base_close_fields_match_c",
+        }
+    ):
+        return "FT_OPEN_STREAM valid caller-owned external memory stream validates return code, opened flag, external-stream face flag, close-call count, and caller stream lifetime through pinned C oracle, Rust FFI, C ABI, and WASM ABI; malformed callback stream harness rows remain pending"
     if (
         row.operation == "freetype.active_size_handle"
         and row.case_id == "freetype.FT_Size.active_size_handle_runtime"
@@ -6878,11 +7620,12 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
     runtime_skipped_needs_input_cases = {
         "ftcid.FT_Get_CID_From_Glyph_Index.cid_face_returns_cid",
         "ftcid.FT_Get_CID_From_Glyph_Index.null_cid_output_matches_c",
-        "ftcid.FT_Get_CID_From_Glyph_Index.opentype_cid_face_supported",
+        # SFNT-wrapped CID rows are backed by the maintained OFL-1.1
+        # FDArrayTest257 OpenType/CFF CID fixture.
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.cid_face_reports_true",
         "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.null_output_matches_c",
-        "ftcid.FT_Get_CID_Is_Internally_CID_Keyed.sfnt_wrapped_cid_supported",
-        "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face",
+        # SFNT-wrapped CID keyed-state row is backed by the maintained
+        # FDArrayTest257 OpenType/CFF CID fixture.
         "ftgxval.FT_VALIDATE_GX.validates_all_requested_tables",
         "ftgxval.FT_VALIDATE_GX_LENGTH.controls_output_slot_initialization",
         "ftgxval.FT_VALIDATE_MS.validates_ms_classic_kern",
@@ -6900,19 +7643,10 @@ def unresolved_runtime_asset_pending_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_mort_INDEX.indexes_mort_output_slot",
         "ftgxval.FT_VALIDATE_morx.validates_morx_table_slot",
         "ftgxval.FT_VALIDATE_morx_INDEX.indexes_morx_output_slot",
-        "ftmodapi.FT_DEBUG_HOOK_TRUETYPE.debug_hook_index_import_contract",
         "ftpfr.FT_Get_PFR_Advance.pfr_glyph_advance_success",
         "ftpfr.FT_Get_PFR_Kerning.pfr_pair_kerning_success",
         "ttnameid.TT_ADOBE_ID_CUSTOM.representative_charmap_encoding_match",
-        "ttnameid.TT_APPLE_ID_FULL_UNICODE.representative_charmap_encoding_match",
-        "ttnameid.TT_APPLE_ID_ISO_10646.deprecated_apple_unicode_encoding_runtime",
-        "ttnameid.TT_ISO_ID_10646.deprecated_iso_10646_runtime",
-        "ttnameid.TT_MAC_ID_JAPANESE.mac_japanese_charmap_runtime",
         "ttnameid.TT_PLATFORM_ADOBE.representative_adobe_charmap_match",
-        "ttnameid.TT_PLATFORM_APPLE_UNICODE.unicode_charmap_platform_runtime",
-        "ttnameid.TT_PLATFORM_CUSTOM.custom_charmap_platform_runtime",
-        "ttnameid.TT_PLATFORM_ISO.deprecated_iso_platform_runtime",
-        "ttnameid.TT_PLATFORM_MICROSOFT.microsoft_unicode_platform_runtime",
     }
     if row.case_id in runtime_skipped_needs_input_cases:
         return (
@@ -6966,6 +7700,24 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_null_noop_reason = ftstroke_null_noop_real_parity_reason(row)
     if ftstroke_null_noop_reason:
         return ("real-parity", ftstroke_null_noop_reason)
+    ftstroke_zero_line_reason = ftstroke_zero_line_real_parity_reason(row)
+    if ftstroke_zero_line_reason:
+        return ("real-parity", ftstroke_zero_line_reason)
+    ftstroke_degenerate_curve_reason = ftstroke_degenerate_curve_real_parity_reason(row)
+    if ftstroke_degenerate_curve_reason:
+        return ("real-parity", ftstroke_degenerate_curve_reason)
+    ftstroke_parse_degenerate_reason = ftstroke_parse_degenerate_real_parity_reason(row)
+    if ftstroke_parse_degenerate_reason:
+        return ("real-parity", ftstroke_parse_degenerate_reason)
+    ftstroke_end_no_segment_reason = ftstroke_end_no_segment_real_parity_reason(row)
+    if ftstroke_end_no_segment_reason:
+        return ("real-parity", ftstroke_end_no_segment_reason)
+    ftstroke_finalized_counts_reason = ftstroke_finalized_counts_real_parity_reason(row)
+    if ftstroke_finalized_counts_reason:
+        return ("real-parity", ftstroke_finalized_counts_reason)
+    ftstroke_reset_counts_reason = ftstroke_reset_counts_real_parity_reason(row)
+    if ftstroke_reset_counts_reason:
+        return ("real-parity", ftstroke_reset_counts_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)
@@ -7005,6 +7757,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftcache_pending = ftcache_subsystem_pending_reason(row)
     if ftcache_pending:
         return ("pending-route", ftcache_pending)
+    ftcolor_colrv1_real = ftcolor_colrv1_composite_real_parity_reason(row)
+    if ftcolor_colrv1_real:
+        return ("real-parity", ftcolor_colrv1_real)
     ftcolor_pending = ftcolor_subsystem_pending_reason(row)
     if ftcolor_pending:
         return ("pending-route", ftcolor_pending)

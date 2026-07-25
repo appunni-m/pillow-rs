@@ -329,6 +329,77 @@
           "freetype/src/base/ftstroke.c:2229-2237"
         ]
       }
+    },
+    {
+      "case_id": "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop",
+      "subject": "ftstroke.FT_Stroker_ParseOutline",
+      "case": "degenerate_contours_skipped",
+      "operation": "ftstroke.parse_outline",
+      "schema": "api_result",
+      "expect_error": false,
+      "abi": {
+        "header": "freetype/ftstroke.h",
+        "symbol": "FT_Stroker_ParseOutline",
+        "signature": "FT_Error FT_Stroker_ParseOutline(FT_Stroker stroker, FT_Outline* outline, FT_Bool opened)"
+      },
+      "inputs": {
+        "assets": {
+          "single_point": {
+            "kind": "ref",
+            "id": "outlines/basic/single-point-contour.json",
+            "asset_kind": "outline_records"
+          },
+          "empty": {
+            "kind": "ref",
+            "id": "outlines/basic/empty.json",
+            "asset_kind": "outline_records"
+          }
+        },
+        "params": {
+          "rows": [
+            "single_point_contour",
+            "empty_outline"
+          ],
+          "opened": false,
+          "radius": 96,
+          "line_cap": "FT_STROKER_LINECAP_ROUND",
+          "line_join": "FT_STROKER_LINEJOIN_ROUND",
+          "miter_limit": 65536
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftstroke",
+        "area:stroker",
+        "area:degenerate"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "rows": [
+            {
+              "parse_status": "FT_Error",
+              "counts_status": "FT_Error",
+              "counts_after": {
+                "points": "FT_UInt",
+                "contours": "FT_UInt"
+              }
+            }
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "rows[*].parse_status",
+            "rows[*].counts_status",
+            "rows[*].counts_after"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftstroke.c:2067-2102",
+          "freetype/src/base/ftstroke.c:2229-2237"
+        ]
+      }
     }
   ]
 }

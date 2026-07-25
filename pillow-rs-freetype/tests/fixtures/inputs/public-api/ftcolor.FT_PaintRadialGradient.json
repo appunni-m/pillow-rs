@@ -122,7 +122,7 @@
           "font": {
             "kind": "ref",
             "role": "font",
-            "id": "fonts/color/colr-v1-radial-gradients.ttf",
+            "id": "fonts/color/colr-v1-static-gradients.ttf",
             "asset_kind": "font"
           }
         },

@@ -105,8 +105,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "role": "font",
-            "id": "fonts/color/colr-v1-solid-palette.ttf",
+            "id": "fonts/color/colr_v1_composite_modes.ttf",
             "asset_kind": "font"
           }
         },

@@ -123,6 +123,8 @@
           }
         },
         "params": {
+          "scenario": "reset_and_done_lifecycle",
+          "face_index": 0,
           "sequence": [
             "FTC_Manager_New",
             "populate_cache",

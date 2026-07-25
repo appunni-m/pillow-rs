@@ -61,7 +61,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-rotate-centered-and-default.ttf",
+            "id": "fonts/color/colr-v1-transform-paints.ttf",
             "asset_kind": "font"
           }
         },

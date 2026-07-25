@@ -368,7 +368,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "input/fonts/sfnt/post-invalid-format.ttf",
+            "id": "generated/sfnt/invalid-post-format.ttf",
             "role": "font",
             "requirements": "SFNT font whose post table has a FormatType other than 1.0, 2.0, 2.5, or 3.0."
           }
@@ -394,7 +394,7 @@
       "expectation": {
         "status": "build_dependent",
         "fixture_requirements": [
-          "Missing asset: input/fonts/sfnt/post-invalid-format.ttf must reach tt_face_load_post with an unsupported post FormatType."
+          "generated/sfnt/invalid-post-format.ttf must reach tt_face_load_post with an unsupported post FormatType."
         ],
         "output_shape": {
           "face_load_status": "FT_Error",

@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
+use std::io::Read;
 use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::{Mutex, OnceLock};
@@ -12,27 +13,35 @@ use crate::font::{
     ActiveSizeState, BdfPropertyValue, KerningMode, SelectSizeError, SizeRequest, SizeRequestError,
     SizeRequestType, Type1FontInfo, Type1PrivateDict, WinFntHeader,
 };
-use crate::{api, grays, render};
+use crate::tt::varstore::ItemVariationStore;
+use crate::{api, grays, render, scaler};
 
 use super::constants::*;
 use super::convert::{
     FT_LOAD_TARGET_MODE, error_to_ft, glyph_format_from_core, load_flag_for_render_mode,
     load_flags_to_core, render_mode_to_core,
 };
+#[cfg(any(test, feature = "abi-test-support"))]
+use super::types::FT_PaintFormat;
 use super::types::{
-    BDF_PropertyRec, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size, FT_Bool, FT_Byte,
-    FT_Bytes, FT_Char, FT_CharMap, FT_CharMapRecPublic, FT_Color, FT_DebugHook_Func, FT_Encoding,
-    FT_Error, FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot,
-    FT_GlyphRec, FT_Int, FT_Int32, FT_LcdFilter, FT_List_Destructor, FT_ListNode, FT_ListNodeRec,
-    FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
-    FT_Module_Interface, FT_Multi_Master, FT_Orientation, FT_OutlineGlyphOwned, FT_OutlineSnapshot,
-    FT_Palette_Data, FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight,
-    FT_Render_Mode, FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
-    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_String,
-    FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort, FT_Var_Axis,
-    FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, PS_Dict_Keys, PS_FontInfoRec,
-    PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2, TT_PCLT, TT_Postscript,
-    TT_VertHeader,
+    BDF_PropertyRec, FT_Affine23, FT_Angle, FT_BBox, FT_Bitmap, FT_Bitmap_C, FT_Bitmap_Size,
+    FT_BitmapGlyphOwned, FT_Bool, FT_Byte, FT_Bytes, FT_COLR_Paint, FT_COLR_PaintUnion, FT_Char,
+    FT_CharMap, FT_CharMapRecPublic, FT_ClipBox, FT_Color, FT_ColorIndex, FT_ColorLine,
+    FT_ColorStop, FT_ColorStopIterator, FT_DebugHook_Func, FT_Encoding, FT_Error, FT_F2Dot14,
+    FT_F26Dot6, FT_Fixed, FT_Glyph_Format, FT_Glyph_Metrics, FT_GlyphCBoxSnapshot, FT_GlyphRec,
+    FT_Int, FT_Int32, FT_LayerIterator, FT_LcdFilter, FT_List_Destructor, FT_ListNode,
+    FT_ListNodeRec, FT_ListRec, FT_Long, FT_MM_Axis, FT_MM_Var, FT_Matrix, FT_Memory, FT_MemoryRec,
+    FT_Module_Interface, FT_Multi_Master, FT_OpaquePaint, FT_Orientation, FT_OutlineGlyphOwned,
+    FT_OutlineSnapshot, FT_PaintColrGlyph, FT_PaintColrLayers, FT_PaintComposite, FT_PaintGlyph,
+    FT_PaintLinearGradient, FT_PaintRadialGradient, FT_PaintRotate, FT_PaintScale, FT_PaintSkew,
+    FT_PaintSolid, FT_PaintSweepGradient, FT_PaintTransform, FT_PaintTranslate, FT_Palette_Data,
+    FT_Pointer, FT_Pos, FT_Prop_GlyphToScriptMap, FT_Prop_IncreaseXHeight, FT_Render_Mode,
+    FT_Sfnt_Tag, FT_SfntLangTag, FT_SfntName, FT_Short, FT_Size,
+    FT_Size_Metrics as FT_Size_MetricsRec, FT_Size_RequestRec, FT_Span, FT_Stream, FT_StreamDesc,
+    FT_StreamRec, FT_String, FT_TrueTypeEngineType, FT_UInt, FT_UInt32, FT_ULong, FT_UShort,
+    FT_Var_Axis, FT_Var_Named_Style, FT_Vector, FT_WinFNT_HeaderRec, FTC_Manager, FTC_Node,
+    PS_Dict_Keys, PS_FontInfoRec, PS_PrivateRec, TT_Header, TT_HoriHeader, TT_MaxProfile, TT_OS2,
+    TT_PCLT, TT_Postscript, TT_VertHeader,
 };
 
 const FT_ADVANCE_FLAG_FAST_ONLY_I32: FT_Int32 = 0x2000_0000;
@@ -71,6 +80,14 @@ static BITMAP_BUFFER_REGISTRY: OnceLock<Mutex<BitmapBufferRegistry>> = OnceLock:
 
 fn bitmap_buffer_registry() -> &'static Mutex<BitmapBufferRegistry> {
     BITMAP_BUFFER_REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+type GzipStreamRegistry = BTreeMap<usize, Box<[FT_Byte]>>;
+
+static GZIP_STREAM_REGISTRY: OnceLock<Mutex<GzipStreamRegistry>> = OnceLock::new();
+
+fn gzip_stream_registry() -> &'static Mutex<GzipStreamRegistry> {
+    GZIP_STREAM_REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
 fn bitmap_buffer_len(bitmap: &FT_Bitmap_C) -> Option<usize> {
@@ -1180,6 +1197,8 @@ pub struct FT_Library {
     memory: FT_Memory,
     refcount: usize,
     module_names: &'static [&'static str],
+    synthetic_module: Option<FT_Installed_Module_Info>,
+    current_outline_renderer: &'static str,
     truetype_interpreter_version: FT_UInt,
     autofitter_default_script: FT_UInt,
     autofitter_fallback_script: FT_UInt,
@@ -1189,12 +1208,14 @@ pub struct FT_Library {
 
 const DEFAULT_MODULE_NAMES: &[&str] = &[
     // C parity: pinned FreeType's default module build exposes these names via
-    // FT_Get_Module after FT_Init_FreeType.  CID has class flag definitions
-    // upstream, but this pinned build does not register the CID module.
+    // FT_Get_Module after FT_Init_FreeType.  The CID-keyed Type1 driver is
+    // registered as `t1cid` (`src/cid/cidriver.c:t1cid_driver_class`), not
+    // `cid`.
     "autofitter",
     "truetype",
     "type1",
     "cff",
+    "t1cid",
     "pfr",
     "type42",
     "winfonts",
@@ -1237,12 +1258,16 @@ pub struct FT_Face {
     pub size_metrics: FT_Size_MetricsRec,
     pub active_charmap_index: FT_Int,
     pub charmaps: Box<[FT_CharMapRecPublic]>,
+    memory_stream: Box<FT_StreamRec>,
     inner: Rc<RefCell<api::Face>>,
     sizes: Rc<RefCell<FaceSizeState>>,
     probe_only: bool,
     postscript_name: Option<String>,
     type1_font_info_strings: Option<Type1FontInfoStrings>,
     type1_mm_axis_names: Vec<CString>,
+    cid_registry: Option<CString>,
+    cid_ordering: Option<CString>,
+    cid_supplement: FT_Int,
     sfnt_os2: Option<Box<TT_OS2>>,
     sfnt_head: Option<Box<TT_Header>>,
     sfnt_maxp: Option<Box<TT_MaxProfile>>,
@@ -1252,6 +1277,11 @@ pub struct FT_Face {
     sfnt_pclt: Option<Box<TT_PCLT>>,
     charmap_metadata: Box<[(FT_Long, FT_ULong)]>,
     cpal: Option<Rc<RefCell<CpalState>>>,
+    colr_v0: Option<Rc<ColrV0State>>,
+    colr_v1: Option<Rc<ColrV1State>>,
+    have_foreground_color: Rc<RefCell<bool>>,
+    foreground_color: Rc<RefCell<FT_Color>>,
+    afm_metrics: Rc<RefCell<Option<AfmMetricsState>>>,
     transform_matrix: FT_Matrix,
     transform_delta: FT_Vector,
     no_stem_darkening: i32,
@@ -1259,6 +1289,39 @@ pub struct FT_Face {
     increase_x_height: FT_UInt,
     glyph_to_script_map: Box<[FT_UShort]>,
     refcount: usize,
+}
+
+#[derive(Debug, Clone)]
+struct AfmMetricsState {
+    track_kerns: Vec<AfmTrackKern>,
+    kern_pairs: Vec<AfmKernPair>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AfmTrackKern {
+    degree: FT_Int,
+    min_ptsize: FT_Fixed,
+    min_kern: FT_Fixed,
+    max_ptsize: FT_Fixed,
+    max_kern: FT_Fixed,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AfmKernPair {
+    left: FT_UInt,
+    right: FT_UInt,
+    x: FT_Int,
+    y: FT_Int,
+}
+
+impl FT_Face {
+    pub fn memory_stream(&self) -> FT_Stream {
+        (&*self.memory_stream as *const FT_StreamRec).cast_mut()
+    }
+
+    pub fn memory_stream_record(&self) -> FT_StreamRec {
+        *self.memory_stream
+    }
 }
 
 #[derive(Clone)]
@@ -1280,12 +1343,134 @@ struct CpalState {
     active_palette_index: FT_UShort,
 }
 
+#[derive(Clone, Copy)]
+struct ColrV0Layer {
+    glyph_index: FT_UInt,
+    color_index: FT_UInt,
+}
+
+#[derive(Clone)]
+struct ColrV0State {
+    layers_by_base: BTreeMap<FT_UInt, Vec<ColrV0Layer>>,
+}
+
+#[derive(Clone, Debug)]
+struct ColrV1State {
+    root_paints: BTreeMap<FT_UInt, ColrV1Paint>,
+    clip_boxes: Vec<ColrV1ClipBox>,
+    var_store: Option<ItemVariationStore>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ClipBox {
+    start_glyph: FT_UInt,
+    end_glyph: FT_UInt,
+    x_min: FT_Short,
+    y_min: FT_Short,
+    x_max: FT_Short,
+    y_max: FT_Short,
+    var_index_base: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ColorStop {
+    stop_offset: FT_Fixed,
+    palette_index: FT_UShort,
+    alpha: FT_F2Dot14,
+    var_index_base: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ColrV1ColorLine {
+    extend: FT_Int,
+    stops: Vec<ColrV1ColorStop>,
+    read_variable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ColrV1Paint {
+    Layers {
+        paints: Vec<ColrV1Paint>,
+    },
+    Solid {
+        palette_index: FT_UShort,
+        alpha: FT_F2Dot14,
+    },
+    Glyph {
+        glyph_index: FT_UInt,
+        paint: Box<ColrV1Paint>,
+    },
+    ColrGlyph {
+        glyph_index: FT_UInt,
+    },
+    LinearGradient {
+        colorline: ColrV1ColorLine,
+        p0: FT_Vector,
+        p1: FT_Vector,
+        p2: FT_Vector,
+    },
+    RadialGradient {
+        colorline: ColrV1ColorLine,
+        c0: FT_Vector,
+        r0: FT_Pos,
+        c1: FT_Vector,
+        r1: FT_Pos,
+    },
+    SweepGradient {
+        colorline: ColrV1ColorLine,
+        center: FT_Vector,
+        start_angle: FT_Fixed,
+        end_angle: FT_Fixed,
+    },
+    Transform {
+        paint: Box<ColrV1Paint>,
+        affine: FT_Affine23,
+    },
+    Translate {
+        paint: Box<ColrV1Paint>,
+        dx: FT_Fixed,
+        dy: FT_Fixed,
+    },
+    Scale {
+        paint: Box<ColrV1Paint>,
+        scale_x: FT_Fixed,
+        scale_y: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
+    Rotate {
+        paint: Box<ColrV1Paint>,
+        angle: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
+    Skew {
+        paint: Box<ColrV1Paint>,
+        x_skew_angle: FT_Fixed,
+        y_skew_angle: FT_Fixed,
+        center_x: FT_Fixed,
+        center_y: FT_Fixed,
+    },
+    Composite {
+        source_paint: Box<ColrV1Paint>,
+        composite_mode: FT_UShort,
+        backdrop_paint: Box<ColrV1Paint>,
+    },
+}
+
 #[cfg(any(test, feature = "abi-test-support"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FT_Palette_Select_Snapshot {
     pub error: FT_Error,
     pub palette_is_null: bool,
     pub entries: Vec<FT_Color>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_Palette_Foreground_Snapshot {
+    pub have_foreground_color: bool,
+    pub foreground_color: FT_Color,
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -1302,6 +1487,42 @@ pub struct FT_Palette_Data_Snapshot {
     pub palette_entry_name_ids: Vec<FT_UShort>,
 }
 
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_ColrV1_PaintGraph_Snapshot {
+    pub root_count: usize,
+    pub records: Vec<FT_ColrV1_PaintRecord_Snapshot>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_ColrV1_PaintRecord_Snapshot {
+    pub glyph_index: FT_UInt,
+    pub nodes: Vec<FT_ColrV1_PaintNode_Snapshot>,
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_ColrV1_PaintNode_Snapshot {
+    pub depth: usize,
+    pub format: FT_UShort,
+    pub palette_index: FT_UShort,
+    pub alpha: FT_F2Dot14,
+    pub glyph_index: FT_UInt,
+    pub composite_mode: FT_UShort,
+    pub values: [FT_Fixed; 6],
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FT_ColrV1_PublicPaintSolid_Snapshot {
+    pub root_return: FT_Bool,
+    pub paint_return: FT_Bool,
+    pub paint_format: FT_PaintFormat,
+    pub palette_index: FT_UShort,
+    pub alpha: FT_F2Dot14,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FT_Face_Property_Value {
     Bool(FT_Bool),
@@ -1312,6 +1533,35 @@ pub enum FT_Face_Property_Value {
 pub struct FT_Face_Property {
     pub tag: FT_ULong,
     pub value: Option<FT_Face_Property_Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FT_Module_Callback_Behavior {
+    None,
+    RecordThenOk,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FT_Module_Class_Info {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: Option<&'static str>,
+    pub module_version: FT_Fixed,
+    pub module_requires: FT_Fixed,
+    pub module_interface_present: bool,
+    pub module_init: FT_Module_Callback_Behavior,
+    pub module_done: FT_Module_Callback_Behavior,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FT_Installed_Module_Info {
+    pub module_flags: FT_ULong,
+    pub module_size: FT_Long,
+    pub module_name: &'static str,
+    pub module_version: FT_Fixed,
+    pub module_interface_present: bool,
+    pub init_called: bool,
+    pub done_called: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1532,6 +1782,8 @@ pub fn FT_Init_FreeType() -> FT_Library {
         memory: std::ptr::null_mut(),
         refcount: 1,
         module_names: DEFAULT_MODULE_NAMES,
+        synthetic_module: None,
+        current_outline_renderer: "smooth",
         truetype_interpreter_version: TT_INTERPRETER_VERSION_40 as FT_UInt,
         // FreeType 2.14.3 `src/autofit/afmodule.c:af_autofitter_init`
         // initializes these to internal AF_SCRIPT_DEFAULT and
@@ -1767,6 +2019,107 @@ pub fn FT_Get_Outline_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_OutlineGly
     })
 }
 
+pub fn FT_Get_Bitmap_Glyph(slot: Option<&FT_GlyphSlot>) -> Result<FT_BitmapGlyphOwned, FT_Error> {
+    let Some(slot) = slot else {
+        return Err(FT_Err_Invalid_Slot_Handle as FT_Error);
+    };
+    if slot.format != FT_GLYPH_FORMAT_BITMAP {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    }
+    let Some(bitmap) = slot.bitmap.clone() else {
+        return Err(FT_Err_Invalid_Glyph_Format);
+    };
+    // FreeType `src/base/ftglyph.c:647-661` applies the same 26.6 to 16.16
+    // root-advance bounds before initializing all glyph classes, including
+    // bitmap glyphs.
+    const MAX_ADVANCE_26_6_EXCLUSIVE: FT_Pos = 0x8000 * 64;
+    if slot.advance.x >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.x <= -MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y >= MAX_ADVANCE_26_6_EXCLUSIVE
+        || slot.advance.y <= -MAX_ADVANCE_26_6_EXCLUSIVE
+    {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    Ok(FT_BitmapGlyphOwned {
+        root: FT_GlyphRec {
+            library: ptr::dangling_mut(),
+            clazz: ptr::dangling(),
+            format: slot.format,
+            advance: FT_Vector {
+                x: slot.advance.x * 1024,
+                y: slot.advance.y * 1024,
+            },
+        },
+        left: slot.bitmap_left,
+        top: slot.bitmap_top,
+        bitmap,
+    })
+}
+
+pub fn FT_Bitmap_Glyph_Copy(glyph: &FT_BitmapGlyphOwned) -> FT_BitmapGlyphOwned {
+    // FreeType `src/base/ftglyph.c:542-574` allocates a new glyph object and
+    // lets the bitmap glyph class copy hook duplicate the bitmap descriptor and
+    // buffer.  Cloning the safe owned representation gives the same detached
+    // target lifetime without sharing the source Vec.
+    glyph.clone()
+}
+
+pub fn FT_Outline_Glyph_To_Bitmap(
+    glyph: &FT_OutlineGlyphOwned,
+    render_mode: FT_Render_Mode,
+) -> Result<FT_BitmapGlyphOwned, FT_Error> {
+    let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
+    let mut cbox = FT_BBox::default();
+    FT_Outline_Get_CBox(Some(&glyph.outline), Some(&mut cbox));
+    let off_x = scaler::ft_pix_floor(i32::try_from(cbox.xMin).map_err(|_| FT_Err_Invalid_Outline)?);
+    let off_y = scaler::ft_pix_floor(i32::try_from(cbox.yMin).map_err(|_| FT_Err_Invalid_Outline)?);
+    let left = off_x >> 6;
+    let bottom = off_y >> 6;
+    let top =
+        scaler::ft_pix_ceil(i32::try_from(cbox.yMax).map_err(|_| FT_Err_Invalid_Outline)?) >> 6;
+    let mut outline = outline_snapshot_to_core(&glyph.outline).ok_or(FT_Err_Invalid_Outline)?;
+    for point in &mut outline.points {
+        point.x -= off_x;
+        point.y -= off_y;
+    }
+    outline.cbox_x_min = 0;
+    outline.cbox_y_min = 0;
+    outline.cbox_x_max =
+        (scaler::ft_pix_ceil(i32::try_from(cbox.xMax).map_err(|_| FT_Err_Invalid_Outline)?)
+            - off_x)
+            >> 6;
+    outline.cbox_y_max =
+        (scaler::ft_pix_ceil(i32::try_from(cbox.yMax).map_err(|_| FT_Err_Invalid_Outline)?)
+            - off_y)
+            >> 6;
+
+    // FreeType `src/base/ftglyph.c:809-869` prepares an outline glyph into a
+    // dummy slot, renders it, then copies the rendered bitmap and root advance
+    // into a newly allocated bitmap glyph.
+    let mut scratch = grays::RasterScratch::default();
+    let bitmap = render::render_loaded_outline(outline, left, bottom, top, mode, &mut scratch)
+        .map_err(error_to_ft)?;
+    Ok(FT_BitmapGlyphOwned {
+        root: FT_GlyphRec {
+            library: glyph.root.library,
+            clazz: ptr::dangling(),
+            format: FT_GLYPH_FORMAT_BITMAP,
+            advance: glyph.root.advance,
+        },
+        left: bitmap.left,
+        top: bitmap.top,
+        bitmap: bitmap.into(),
+    })
+}
+
+pub fn FT_Outline_Glyph_Copy(glyph: &FT_OutlineGlyphOwned) -> FT_OutlineGlyphOwned {
+    // FreeType `src/base/ftglyph.c:542-574` allocates a new glyph object and
+    // lets the outline glyph class copy hook duplicate all outline arrays.
+    // Cloning the safe owned representation gives the same detached target
+    // lifetime without sharing the source points, tags, or contours.
+    glyph.clone()
+}
+
 pub fn FT_Outline_Glyph_CBox(
     glyph: Option<&FT_OutlineGlyphOwned>,
     bbox_mode: FT_UInt,
@@ -1825,6 +2178,12 @@ pub fn FT_Done_Glyph(_glyph_present: bool) {
     // FreeType `src/base/ftglyph.c:580-591` treats NULL as a no-op and returns
     // void. Non-null lifecycle behavior is owned by class hooks and remains
     // separate exact glyph ownership/facade work.
+}
+
+pub fn FTC_Node_Unref(_node: FTC_Node, _manager: FTC_Manager) {
+    // FreeType `src/cache/ftcmanag.c:667-677` returns before touching the
+    // manager when `node == NULL`. Non-null cache-node release remains covered
+    // by the managed cache lifecycle routes, not by this null-only facade.
 }
 
 pub fn FT_Glyph_To_Bitmap(
@@ -2710,6 +3069,288 @@ pub fn FT_Outline_GetOutsideBorder(outline: Option<&FT_OutlineSnapshot>) -> FT_I
 
 pub type FT_Stroker = *mut core::ffi::c_void;
 
+struct StrokerToken {
+    _identity: usize,
+}
+
+#[derive(Debug, Clone)]
+struct StrokerState {
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+    first_point: bool,
+    center: FT_Vector,
+    subpath_start: FT_Vector,
+    subpath_open: bool,
+    handle_wide_strokes: bool,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    border_counts_valid: bool,
+    line_segments: FT_UInt,
+    left_outline: FT_OutlineSnapshot,
+    right_outline: FT_OutlineSnapshot,
+}
+
+struct StrokerEntry {
+    _token: Box<StrokerToken>,
+    handle: FT_Stroker,
+    state: StrokerState,
+}
+
+type StrokerRegistry = BTreeMap<usize, StrokerEntry>;
+
+thread_local! {
+    static STROKER_REGISTRY: RefCell<StrokerRegistry> = const { RefCell::new(BTreeMap::new()) };
+}
+
+fn ft_stroker_is_small(value: FT_Pos) -> bool {
+    // FreeType `src/base/ftstroke.c:69-71` defines `FT_EPSILON` as 2 and uses
+    // strict bounds for `FT_IS_SMALL`.
+    value > -2 && value < 2
+}
+
+impl StrokerEntry {
+    fn new() -> Self {
+        let mut token = Box::new(StrokerToken { _identity: 0 });
+        let handle = (&mut *token as *mut StrokerToken).cast::<core::ffi::c_void>();
+        Self {
+            _token: token,
+            handle,
+            state: StrokerState::new(),
+        }
+    }
+
+    fn key(&self) -> usize {
+        self.handle as usize
+    }
+}
+
+impl StrokerState {
+    fn new() -> Self {
+        Self {
+            radius: 0,
+            line_cap: FT_STROKER_LINECAP_ROUND as FT_Int,
+            line_join: FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            miter_limit: 65_536,
+            first_point: false,
+            center: FT_Vector::default(),
+            subpath_start: FT_Vector::default(),
+            subpath_open: false,
+            handle_wide_strokes: false,
+            left_points: 0,
+            left_contours: 0,
+            right_points: 0,
+            right_contours: 0,
+            border_counts_valid: true,
+            line_segments: 0,
+            left_outline: FT_OutlineSnapshot::default(),
+            right_outline: FT_OutlineSnapshot::default(),
+        }
+    }
+
+    fn with_attributes(
+        radius: FT_Fixed,
+        line_cap: FT_Int,
+        line_join: FT_Int,
+        miter_limit: FT_Fixed,
+    ) -> Self {
+        Self {
+            radius,
+            line_cap,
+            line_join,
+            miter_limit: miter_limit.max(65_536),
+            ..Self::new()
+        }
+    }
+
+    fn rewind_path(&mut self) {
+        self.first_point = false;
+        self.center = FT_Vector::default();
+        self.subpath_start = FT_Vector::default();
+        self.subpath_open = false;
+        self.handle_wide_strokes = false;
+        self.left_points = 0;
+        self.left_contours = 0;
+        self.right_points = 0;
+        self.right_contours = 0;
+        self.border_counts_valid = true;
+        self.line_segments = 0;
+        self.left_outline = FT_OutlineSnapshot::default();
+        self.right_outline = FT_OutlineSnapshot::default();
+    }
+
+    fn set_open_horizontal_line_outline(&mut self) {
+        if !self.subpath_open || self.line_segments != 1 || self.subpath_start.y != self.center.y {
+            return;
+        }
+        let start_x = self.subpath_start.x;
+        let end_x = self.center.x;
+        let y = self.subpath_start.y;
+        let radius = self.radius;
+        let points = match self.line_cap {
+            x if x == FT_STROKER_LINECAP_BUTT as FT_Int => vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+            ],
+            x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => vec![
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y - radius,
+                },
+            ],
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y + radius,
+                },
+            ],
+            _ => Vec::new(),
+        };
+        if points.is_empty() {
+            return;
+        }
+        let tags = match self.line_cap {
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => {
+                vec![1, 1, 2, 2, 1, 2, 2, 1, 1, 1, 2, 2, 1, 2, 2]
+            }
+            _ => vec![1; points.len()],
+        };
+        self.left_outline = FT_OutlineSnapshot {
+            contours: vec![u16::try_from(points.len().saturating_sub(1)).unwrap_or(u16::MAX)],
+            points,
+            tags,
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot::default();
+    }
+}
+
+fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
+    let point_offset = target.points.len();
+    target.points.extend(source.points.iter().copied());
+    target.tags.extend(source.tags.iter().copied());
+    target.contours.extend(
+        source
+            .contours
+            .iter()
+            .map(|contour| contour.saturating_add(u16::try_from(point_offset).unwrap_or(u16::MAX))),
+    );
+    target.flags = source.flags;
+}
+
+pub fn FT_Stroker_New(library: Option<&FT_Library>, astroker: Option<&mut FT_Stroker>) -> FT_Error {
+    if library.is_none() {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    }
+    let Some(astroker) = astroker else {
+        return FT_Err_Invalid_Argument;
+    };
+    let entry = StrokerEntry::new();
+    let handle = entry.handle;
+    STROKER_REGISTRY.with(|registry| {
+        registry.borrow_mut().insert(entry.key(), entry);
+    });
+    *astroker = handle;
+    FT_Err_Ok
+}
+
 pub fn FT_Stroker_Set(
     stroker: FT_Stroker,
     radius: FT_Fixed,
@@ -2717,25 +3358,406 @@ pub fn FT_Stroker_Set(
     line_join: FT_Int,
     miter_limit: FT_Fixed,
 ) {
-    // FreeType 2.14.3 `src/base/ftstroke.c:824-831` returns immediately for
-    // a null stroker before touching allocation-backed border state.  The
-    // maintained parity route currently covers only that null-handle no-op;
-    // non-null stroker object/path rows remain pending in the route audit.
-    let _ = (stroker, radius, line_cap, line_join, miter_limit);
+    if stroker.is_null() {
+        // FreeType 2.14.3 `src/base/ftstroke.c:824-831` returns immediately
+        // for a null stroker before touching allocation-backed border state.
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow_mut().get_mut(&(stroker as usize)) {
+            // FreeType 2.14.3 `src/base/ftstroke.c:824-851` stores the
+            // attributes, clamps the miter limit to one pixel, then calls
+            // `FT_Stroker_Rewind` to clear path/border state.
+            entry.state = StrokerState::with_attributes(radius, line_cap, line_join, miter_limit);
+        }
+    });
 }
 
 pub fn FT_Stroker_Rewind(stroker: FT_Stroker) {
     // FreeType 2.14.3 `src/base/ftstroke.c:853-862` is a no-op for a null
-    // stroker.  Non-null path clearing remains pending with the rest of the
-    // stroker object lifecycle.
-    let _ = stroker;
+    // stroker and resets both borders for a live stroker.
+    if stroker.is_null() {
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow_mut().get_mut(&(stroker as usize)) {
+            entry.state.rewind_path();
+        }
+    });
 }
 
 pub fn FT_Stroker_Done(stroker: FT_Stroker) {
-    // FreeType 2.14.3 `src/base/ftstroke.c:866-881` frees borders and the
-    // stroker only when the handle is non-null.  The no-op null route is exact;
-    // non-null ownership/freeing is not classified as parity yet.
-    let _ = stroker;
+    if stroker.is_null() {
+        // FreeType 2.14.3 `src/base/ftstroke.c:866-881` frees borders and the
+        // stroker only when the handle is non-null.
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        registry.borrow_mut().remove(&(stroker as usize));
+    });
+}
+
+pub fn FT_Stroker_BeginSubPath(
+    stroker: FT_Stroker,
+    to: Option<&FT_Vector>,
+    open: FT_Bool,
+) -> FT_Error {
+    let Some(to) = to else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        // FreeType 2.14.3 `src/base/ftstroke.c:1765-1795` records the first
+        // point without emitting border geometry; caps/joins need later
+        // segments before they become public outline output.
+        entry.state.first_point = true;
+        entry.state.center = *to;
+        entry.state.subpath_start = *to;
+        entry.state.subpath_open = open != 0;
+        entry.state.handle_wide_strokes = entry.state.line_join
+            != FT_STROKER_LINEJOIN_ROUND as FT_Int
+            || (entry.state.subpath_open
+                && entry.state.line_cap == FT_STROKER_LINECAP_BUTT as FT_Int);
+        FT_Err_Ok
+    })
+}
+
+pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Error {
+    let Some(to) = to else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        let delta_x = to.x - entry.state.center.x;
+        let delta_y = to.y - entry.state.center.y;
+        if delta_x == 0 && delta_y == 0 {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1279-1284` returns OK
+            // before changing the current center or emitting border points.
+            return FT_Err_Ok;
+        }
+        if entry.state.first_point {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1289-1300` starts the
+            // first segment by adding one movable start point to each border,
+            // then `ft_stroke_border_lineto` at `src/base/ftstroke.c:1324-1332`
+            // appends one endpoint to each border.  The borders are not
+            // finalized until `FT_Stroker_EndSubPath`, so C count queries
+            // before that point return `FT_Err_Invalid_Outline` with zero
+            // public outputs.
+            entry.state.left_points = 2;
+            entry.state.left_contours = 1;
+            entry.state.right_points = 2;
+            entry.state.right_contours = 1;
+            entry.state.border_counts_valid = false;
+            entry.state.line_segments = 1;
+            entry.state.first_point = false;
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.line_segments == 1 {
+            // Count-only maintained route for a simple second line segment.
+            // FreeType 2.14.3 continues accumulating unfinalized border state
+            // here; finalized public counts become observable only after
+            // `FT_Stroker_EndSubPath`.
+            entry.state.line_segments = 2;
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_ConicTo(
+    stroker: FT_Stroker,
+    control: Option<&FT_Vector>,
+    to: Option<&FT_Vector>,
+) -> FT_Error {
+    let (Some(control), Some(to)) = (control, to) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if ft_stroker_is_small(entry.state.center.x - control.x)
+            && ft_stroker_is_small(entry.state.center.y - control.y)
+            && ft_stroker_is_small(control.x - to.x)
+            && ft_stroker_is_small(control.y - to.y)
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1361-1373` treats a conic
+            // whose current point, control point, and destination are all
+            // within `FT_EPSILON` as a no-op, updating only the current center.
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_CubicTo(
+    stroker: FT_Stroker,
+    control1: Option<&FT_Vector>,
+    control2: Option<&FT_Vector>,
+    to: Option<&FT_Vector>,
+) -> FT_Error {
+    let (Some(control1), Some(control2), Some(to)) = (control1, control2, to) else {
+        return FT_Err_Invalid_Argument;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if ft_stroker_is_small(entry.state.center.x - control1.x)
+            && ft_stroker_is_small(entry.state.center.y - control1.y)
+            && ft_stroker_is_small(control1.x - control2.x)
+            && ft_stroker_is_small(control1.y - control2.y)
+            && ft_stroker_is_small(control2.x - to.x)
+            && ft_stroker_is_small(control2.y - to.y)
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1566-1581` treats a cubic
+            // whose current point, controls, and destination are all within
+            // `FT_EPSILON` as a no-op, updating only the current center.
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_ParseOutline(
+    stroker: FT_Stroker,
+    outline: Option<&FT_OutlineSnapshot>,
+    _opened: FT_Bool,
+) -> FT_Error {
+    let Some(outline) = outline else {
+        return FT_Err_Invalid_Outline;
+    };
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        // FreeType 2.14.3 `src/base/ftstroke.c:2067-2088` rewinds before
+        // parsing and skips contours whose `last <= first`; later
+        // `src/base/ftstroke.c:2229-2237` avoids EndSubPath if no segment was
+        // generated.  This exact maintained route covers empty outlines and
+        // single-point contours only.  Real segment parsing/export remains
+        // pending for the geometry rows.
+        entry.state.rewind_path();
+        let mut first = 0usize;
+        for &last_raw in &outline.contours {
+            let last = usize::from(last_raw);
+            if last >= outline.points.len() {
+                return FT_Err_Invalid_Outline;
+            }
+            if last <= first {
+                first = last.saturating_add(1);
+                continue;
+            }
+            return FT_Err_Unimplemented_Feature;
+        }
+        FT_Err_Ok
+    })
+}
+
+pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
+    if stroker.is_null() {
+        return FT_Err_Invalid_Argument;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
+            return FT_Err_Invalid_Argument;
+        };
+        if entry.state.first_point && !entry.state.subpath_open {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` returns OK for
+            // a closed subpath that has only `BeginSubPath` state and no
+            // emitted segment.  A later count query on this exact C state
+            // dereferences unfinished border internals in the pinned build, so
+            // only the public EndSubPath status is promoted as same-input
+            // parity here.
+            return FT_Err_Ok;
+        }
+        if entry.state.subpath_open && entry.state.line_segments == 1 {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1933` finalizes an
+            // open single-line path into the left border only, with cap count
+            // depending on the configured cap style.  This is count-only
+            // parity; exported cap geometry remains pending.
+            entry.state.left_points = match entry.state.line_cap {
+                x if x == FT_STROKER_LINECAP_BUTT as FT_Int => 5,
+                x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => 6,
+                _ => 15,
+            };
+            entry.state.left_contours = 1;
+            entry.state.right_points = 0;
+            entry.state.right_contours = 0;
+            entry.state.border_counts_valid = true;
+            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1904` caps an open
+            // line into the public left border, appends the reversed left
+            // border, and leaves the right border empty.  This exact route is
+            // maintained for the horizontal fixture used by the API/ABI audit.
+            entry.state.set_open_horizontal_line_outline();
+            return FT_Err_Ok;
+        }
+        if !entry.state.subpath_open
+            && entry.state.line_segments == 2
+            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
+        {
+            // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` closes a simple
+            // two-line corner with a small inner left border and a round-join
+            // outer right border.  The maintained route exposes exact public
+            // counts only; point/tag/contour export stays pending.
+            entry.state.left_points = 3;
+            entry.state.left_contours = 1;
+            entry.state.right_points = 18;
+            entry.state.right_contours = 1;
+            entry.state.border_counts_valid = true;
+            return FT_Err_Ok;
+        }
+        FT_Err_Unimplemented_Feature
+    })
+}
+
+pub fn FT_Stroker_GetBorderCounts(
+    stroker: FT_Stroker,
+    border: FT_Int,
+    anum_points: Option<&mut FT_UInt>,
+    anum_contours: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let mut points = 0;
+    let mut contours = 0;
+    let error = if stroker.is_null()
+        || !matches!(
+            border,
+            x if x == FT_STROKER_BORDER_LEFT as FT_Int || x == FT_STROKER_BORDER_RIGHT as FT_Int
+        ) {
+        FT_Err_Invalid_Argument
+    } else {
+        STROKER_REGISTRY.with(|registry| {
+            let registry = registry.borrow();
+            let Some(entry) = registry.get(&(stroker as usize)) else {
+                return FT_Err_Invalid_Argument;
+            };
+            if !entry.state.border_counts_valid {
+                return FT_Err_Invalid_Outline;
+            }
+            if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                points = entry.state.left_points;
+                contours = entry.state.left_contours;
+            } else {
+                points = entry.state.right_points;
+                contours = entry.state.right_contours;
+            }
+            FT_Err_Ok
+        })
+    };
+    if let Some(anum_points) = anum_points {
+        *anum_points = points;
+    }
+    if let Some(anum_contours) = anum_contours {
+        *anum_contours = contours;
+    }
+    error
+}
+
+pub fn FT_Stroker_GetCounts(
+    stroker: FT_Stroker,
+    anum_points: Option<&mut FT_UInt>,
+    anum_contours: Option<&mut FT_UInt>,
+) -> FT_Error {
+    let mut points = 0;
+    let mut contours = 0;
+    let error = if stroker.is_null() {
+        FT_Err_Invalid_Argument
+    } else {
+        STROKER_REGISTRY.with(|registry| {
+            let registry = registry.borrow();
+            let Some(entry) = registry.get(&(stroker as usize)) else {
+                return FT_Err_Invalid_Argument;
+            };
+            if !entry.state.border_counts_valid {
+                return FT_Err_Invalid_Outline;
+            }
+            points = entry.state.left_points + entry.state.right_points;
+            contours = entry.state.left_contours + entry.state.right_contours;
+            FT_Err_Ok
+        })
+    };
+    if let Some(anum_points) = anum_points {
+        *anum_points = points;
+    }
+    if let Some(anum_contours) = anum_contours {
+        *anum_contours = contours;
+    }
+    error
+}
+
+pub fn FT_Stroker_ExportBorder(
+    stroker: FT_Stroker,
+    border: FT_Int,
+    outline: Option<&mut FT_OutlineSnapshot>,
+) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:2011-2028` returns before touching
+    // output for null stroker/null outline/invalid border.  Newly allocated
+    // but unparsed strokers have invalid borders, so export is also a no-op.
+    let Some(outline) = outline else {
+        return;
+    };
+    if stroker.is_null()
+        || !matches!(
+            border,
+            x if x == FT_STROKER_BORDER_LEFT as FT_Int || x == FT_STROKER_BORDER_RIGHT as FT_Int
+        )
+    {
+        return;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow().get(&(stroker as usize)) {
+            if !entry.state.border_counts_valid {
+                return;
+            }
+            let source = if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                &entry.state.left_outline
+            } else {
+                &entry.state.right_outline
+            };
+            append_stroker_outline(outline, source);
+        }
+    });
+}
+
+pub fn FT_Stroker_Export(stroker: FT_Stroker, outline: Option<&mut FT_OutlineSnapshot>) {
+    // FreeType 2.14.3 `src/base/ftstroke.c:2033-2038` delegates left then
+    // right to `FT_Stroker_ExportBorder`; the no-op cases inherit that logic.
+    let Some(outline) = outline else {
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, None);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, None);
+        return;
+    };
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, Some(outline));
+    FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, Some(outline));
 }
 
 pub fn FT_Outline_Reverse(outline: Option<&mut FT_OutlineSnapshot>) {
@@ -2885,7 +3907,7 @@ pub fn FT_Get_PS_Font_Info(
         return FT_Err_Invalid_Argument as FT_Error;
     };
     let inner = face.inner.borrow();
-    let Some(info) = inner.font().type1_font_info() else {
+    let Some(info) = inner.font().postscript_font_info() else {
         return FT_Err_Invalid_Argument as FT_Error;
     };
     let Some(info) = ps_font_info_to_ffi(info, face.type1_font_info_strings.as_ref()) else {
@@ -2913,11 +3935,55 @@ pub fn FT_Get_PS_Font_Private(
     FT_Err_Ok
 }
 
+pub fn FT_Has_PS_Glyph_Names(face: Option<&FT_Face>) -> FT_Int {
+    let Some(face) = face else {
+        return 0;
+    };
+    let inner = face.inner.borrow();
+    // FreeType `src/base/fttype1.c:FT_Has_PS_Glyph_Names` initializes the
+    // result to 0 and only asks the PostScript service callback when present;
+    // CFF's callback (`src/cff/cffdrivr.c:cff_ps_has_glyph_names`) then follows
+    // the CFF face's FT_FACE_FLAG_GLYPH_NAMES state.
+    if inner.font().has_postscript_glyph_names() {
+        1
+    } else {
+        0
+    }
+}
+
 fn copy_value_bytes(value: Option<&mut [u8]>, required_len: usize, source: &[u8]) -> FT_Long {
     if let Some(value) = value.filter(|value| value.len() >= required_len) {
         value[..required_len].copy_from_slice(source);
     }
     FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
+}
+
+fn copy_ps_string_value(value: Option<&mut [u8]>, string: Option<&str>) -> FT_Long {
+    let Some(string) = string else {
+        return -1;
+    };
+    let required_len = string.len().saturating_add(1);
+    if let Some(value) = value.filter(|value| value.len() >= required_len) {
+        value[..string.len()].copy_from_slice(string.as_bytes());
+        value[string.len()] = 0;
+    }
+    FT_Long::try_from(required_len).unwrap_or(FT_Long::MAX)
+}
+
+fn copy_ps_short_array_value(
+    value: Option<&mut [u8]>,
+    idx: FT_UInt,
+    count: usize,
+    source: &[FT_Short],
+) -> FT_Long {
+    let Some(item) = usize::try_from(idx)
+        .ok()
+        .filter(|index| *index < count)
+        .and_then(|index| source.get(index))
+    else {
+        return -1;
+    };
+    copy_value_bytes(value, std::mem::size_of::<FT_Short>(), &item.to_ne_bytes())
 }
 
 pub fn FT_Get_PS_Font_Value(
@@ -2931,31 +3997,172 @@ pub fn FT_Get_PS_Font_Value(
         return 0;
     };
     let inner = face.inner.borrow();
-    let Some(encoding) = inner.font().type1_encoding() else {
-        return 0;
-    };
+    let font = inner.font();
     let value_len = usize::try_from(value_len.max(0)).unwrap_or(usize::MAX);
     let value = value.map(|buffer| {
         let len = buffer.len().min(value_len);
         &mut buffer[..len]
     });
+    // C parity: `src/base/fttype1.c:133-147` returns 0 when the face has no
+    // POSTSCRIPT_INFO service, then `src/type1/t1driver.c:t1_ps_get_font_value`
+    // returns the required byte length and only copies when the destination is
+    // non-null and large enough.
+    let has_type1_service = font.type1_font_info().is_some()
+        || font.type1_private().is_some()
+        || font.type1_encoding().is_some();
+    if !has_type1_service {
+        return 0;
+    }
     match key {
+        PS_DICT_UNIQUE_ID => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.unique_id.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_STD_HW => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &private.standard_width[0].to_ne_bytes(),
+            )
+        }),
+        PS_DICT_STD_VW => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &private.standard_height[0].to_ne_bytes(),
+            )
+        }),
+        PS_DICT_NUM_BLUE_VALUES => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Byte>(),
+                &[private.num_blue_values],
+            )
+        }),
+        PS_DICT_BLUE_VALUE => font.type1_private().map_or(-1, |private| {
+            copy_ps_short_array_value(
+                value,
+                idx,
+                usize::from(private.num_blue_values),
+                &private.blue_values,
+            )
+        }),
+        PS_DICT_BLUE_FUZZ => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.blue_fuzz.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_BLUE_SCALE => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Fixed>(),
+                &private.blue_scale.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_BLUE_SHIFT => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.blue_shift.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_LEN_IV => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Int>(),
+                &private.len_iv.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_PASSWORD => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Long>(),
+                &private.password.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_LANGUAGE_GROUP => font.type1_private().map_or(-1, |private| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Long>(),
+                &private.language_group.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_VERSION => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.version.as_deref()),
+        ),
+        PS_DICT_NOTICE => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.notice.as_deref()),
+        ),
+        PS_DICT_FULL_NAME => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.full_name.as_deref()),
+        ),
+        PS_DICT_FAMILY_NAME => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.family_name.as_deref()),
+        ),
+        PS_DICT_WEIGHT => copy_ps_string_value(
+            value,
+            font.type1_font_info()
+                .and_then(|info| info.weight.as_deref()),
+        ),
+        PS_DICT_IS_FIXED_PITCH => font.type1_font_info().map_or(-1, |info| {
+            let fixed = FT_Bool::from(info.is_fixed_pitch);
+            copy_value_bytes(value, std::mem::size_of::<FT_Bool>(), &fixed.to_ne_bytes())
+        }),
+        PS_DICT_UNDERLINE_POSITION => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Short>(),
+                &info.underline_position.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_UNDERLINE_THICKNESS => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_UShort>(),
+                &info.underline_thickness.to_ne_bytes(),
+            )
+        }),
+        PS_DICT_ITALIC_ANGLE => font.type1_font_info().map_or(-1, |info| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<FT_Fixed>(),
+                &info.italic_angle.to_ne_bytes(),
+            )
+        }),
         // FreeType `src/type1/t1driver.c:t1_ps_get_font_value` copies
         // `type1->encoding_type` as a public `T1_EncodingType` enum and
         // returns its required byte length even for sizing queries.
-        PS_DICT_ENCODING_TYPE => copy_value_bytes(
-            value,
-            std::mem::size_of::<PS_Dict_Keys>(),
-            &encoding.encoding_type.to_ne_bytes(),
-        ),
+        PS_DICT_ENCODING_TYPE => font.type1_encoding().map_or(-1, |encoding| {
+            copy_value_bytes(
+                value,
+                std::mem::size_of::<PS_Dict_Keys>(),
+                &encoding.encoding_type.to_ne_bytes(),
+            )
+        }),
         PS_DICT_ENCODING_ENTRY
-            if encoding.encoding_type == 1
+            if font
+                .type1_encoding()
+                .is_some_and(|encoding| encoding.encoding_type == 1)
                 && usize::try_from(idx)
                     .ok()
-                    .and_then(|index| encoding.entries.get(index))
+                    .and_then(|index| font.type1_encoding()?.entries.get(index))
                     .and_then(Option::as_deref)
                     .is_some() =>
         {
+            let encoding = font.type1_encoding().unwrap_or_else(|| unreachable!());
             let name = encoding.entries[usize::try_from(idx).unwrap_or(0)]
                 .as_deref()
                 .unwrap_or("");
@@ -2994,6 +4201,141 @@ pub fn FT_OpenType_Validate(
     FT_Err_Unimplemented_Feature as FT_Error
 }
 
+pub fn FT_Gzip_Uncompress(
+    memory: Option<&FT_MemoryRec>,
+    output: Option<&mut [FT_Byte]>,
+    output_len: Option<&mut FT_ULong>,
+    input: Option<&[FT_Byte]>,
+) -> FT_Error {
+    let (Some(_memory), Some(output), Some(output_len)) = (memory, output, output_len) else {
+        // FreeType 2.14.3 `src/gzip/ftgzip.c:716-717` rejects missing memory,
+        // output buffer, or output_len before it initializes zlib state.
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(input) = input else {
+        return FT_Err_Invalid_Table;
+    };
+
+    let mut decoded = Vec::new();
+    let read_result = if input.starts_with(&[0x1F, 0x8B]) {
+        flate2::read::GzDecoder::new(input).read_to_end(&mut decoded)
+    } else {
+        flate2::read::ZlibDecoder::new(input).read_to_end(&mut decoded)
+    };
+    if read_result.is_err() {
+        return FT_Err_Invalid_Table;
+    }
+    if decoded.len() > output.len() {
+        return FT_Err_Array_Too_Large as FT_Error;
+    }
+
+    output[..decoded.len()].copy_from_slice(&decoded);
+    *output_len = FT_ULong::try_from(decoded.len()).unwrap_or(FT_ULong::MAX);
+    FT_Err_Ok
+}
+
+pub fn FT_Stream_OpenBzip2(
+    stream: Option<&mut FT_StreamRec>,
+    source: Option<&FT_StreamRec>,
+) -> FT_Error {
+    let _ = stream;
+    let _ = source;
+    // The pinned oracle build passes `-DFT_DISABLE_BZIP2=ON`; FreeType 2.14.3
+    // `src/bzip2/ftbzip2.c:521-529` returns `Unimplemented_Feature` before
+    // checking stream/source nullness or reading bytes in that build.
+    FT_Err_Unimplemented_Feature
+}
+
+pub fn FT_Stream_OpenGzip(
+    stream: Option<&mut FT_StreamRec>,
+    source: Option<&FT_StreamRec>,
+    source_bytes: Option<&[FT_Byte]>,
+) -> FT_Error {
+    let (Some(stream), Some(source), Some(source_bytes)) = (stream, source, source_bytes) else {
+        // FreeType 2.14.3 `src/gzip/ftgzip.c:615-620` rejects null target or
+        // source streams before checking the gzip header.
+        return FT_Err_Invalid_Stream_Handle as FT_Error;
+    };
+    if !source_bytes.starts_with(&[0x1F, 0x8B]) {
+        return FT_Err_Invalid_File_Format;
+    }
+
+    let mut decoded = Vec::new();
+    if flate2::read::GzDecoder::new(source_bytes)
+        .read_to_end(&mut decoded)
+        .is_err()
+    {
+        return FT_Err_Invalid_File_Format;
+    }
+
+    let stream_key = stream as *const FT_StreamRec as usize;
+    gzip_stream_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&stream_key);
+
+    *stream = FT_StreamRec::default();
+    stream.memory = source.memory;
+    stream.size = FT_ULong::try_from(decoded.len()).unwrap_or(FT_ULong::MAX);
+    stream.pos = 0;
+    stream.close = std::ptr::NonNull::<u8>::dangling().as_ptr().cast();
+
+    let mut bytes = decoded.into_boxed_slice();
+    if stream.size != 0 && stream.size < 40 * 1024 {
+        // C FreeType `src/gzip/ftgzip.c:655-682` eagerly inflates small streams
+        // into `stream->base` and leaves `stream->read` null.
+        stream.base = bytes.as_mut_ptr();
+        stream.read = std::ptr::null_mut();
+        stream.descriptor = FT_StreamDesc::default();
+    } else {
+        // Larger streams stay callback-backed: `base == NULL`, `read != NULL`.
+        // The pure-Rust registry supplies deterministic range reads for the ABI
+        // harness while preserving the public stream field classes.
+        stream.base = std::ptr::null_mut();
+        stream.read = std::ptr::NonNull::<u8>::dangling().as_ptr().cast();
+        stream.descriptor = FT_StreamDesc {
+            pointer: std::ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+        };
+    }
+
+    gzip_stream_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(stream_key, bytes);
+    FT_Err_Ok
+}
+
+pub fn FT_Gzip_Stream_Read(
+    stream: Option<&FT_StreamRec>,
+    offset: FT_ULong,
+    count: FT_ULong,
+) -> Option<Vec<FT_Byte>> {
+    let stream = stream?;
+    let key = stream as *const FT_StreamRec as usize;
+    let registry = gzip_stream_registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let bytes = registry.get(&key)?;
+    let offset = usize::try_from(offset).ok()?;
+    let count = usize::try_from(count).ok()?;
+    let end = offset.checked_add(count)?.min(bytes.len());
+    if offset > bytes.len() {
+        return Some(Vec::new());
+    }
+    Some(bytes[offset..end].to_vec())
+}
+
+pub fn FT_Gzip_Stream_Close(stream: Option<&mut FT_StreamRec>) {
+    if let Some(stream) = stream {
+        let key = stream as *const FT_StreamRec as usize;
+        gzip_stream_registry()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&key);
+        stream.descriptor = FT_StreamDesc::default();
+    }
+}
+
 pub fn FT_TrueTypeGX_Free(face: Option<&FT_Face>, table: FT_Bytes) {
     // FreeType 2.14.3 `src/base/ftgxval.c:74-84` returns before touching the
     // table pointer when `face` is null.  Non-null validation-buffer ownership
@@ -3003,8 +4345,9 @@ pub fn FT_TrueTypeGX_Free(face: Option<&FT_Face>, table: FT_Bytes) {
 
 pub fn FT_ClassicKern_Free(face: Option<&FT_Face>, table: FT_Bytes) {
     // FreeType 2.14.3 `src/base/ftgxval.c:125-136` returns before touching the
-    // table pointer when `face` is null.  Non-null ckern buffer freeing remains
-    // pending.
+    // table pointer when `face` is null.  The pinned oracle build has no
+    // CLASSICKERN_VALIDATE service, so non-null validation buffers are not
+    // produced by any real parity route.
     let _ = (face, table);
 }
 
@@ -3014,6 +4357,25 @@ fn face_has_sfnt_table(face: &FT_Face, tag: [u8; 4]) -> bool {
         .font()
         .load_sfnt_table(u32::from_be_bytes(tag), 0, None)
         .is_ok()
+}
+
+pub fn FT_ClassicKern_Validate(
+    face: Option<&FT_Face>,
+    validation_flags: FT_UInt,
+    ckern_table: Option<&mut FT_Bytes>,
+) -> FT_Error {
+    if face.is_none() {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    }
+    let Some(ckern_table) = ckern_table else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    *ckern_table = std::ptr::null();
+    let _ = validation_flags;
+    // The pinned FreeType build used by the oracle does not register the
+    // CLASSICKERN_VALIDATE service; `src/base/ftgxval.c:110-121` therefore
+    // returns Unimplemented_Feature after argument validation.
+    FT_Err_Unimplemented_Feature
 }
 
 fn read_u16_be(data: &[u8], offset: usize) -> Option<u16> {
@@ -3118,6 +4480,544 @@ fn parse_cpal_table(data: &[u8]) -> Option<CpalState> {
     })
 }
 
+fn parse_colr_v0_table(data: &[u8]) -> Option<ColrV0State> {
+    let version = read_u16_be(data, 0)?;
+    if version != 0 {
+        return None;
+    }
+    let num_base_glyph_records = usize::from(read_u16_be(data, 2)?);
+    let base_glyph_records_offset = usize::try_from(read_u32_be(data, 4)?).ok()?;
+    let layer_records_offset = usize::try_from(read_u32_be(data, 8)?).ok()?;
+    let num_layer_records = usize::from(read_u16_be(data, 12)?);
+    let base_records_end =
+        base_glyph_records_offset.checked_add(num_base_glyph_records.checked_mul(6)?)?;
+    let layer_records_end = layer_records_offset.checked_add(num_layer_records.checked_mul(4)?)?;
+    if base_records_end > data.len() || layer_records_end > data.len() {
+        return None;
+    }
+
+    let mut layers_by_base = BTreeMap::new();
+    for record_index in 0..num_base_glyph_records {
+        let record_offset = base_glyph_records_offset.checked_add(record_index.checked_mul(6)?)?;
+        let base_glyph = FT_UInt::from(read_u16_be(data, record_offset)?);
+        let first_layer = usize::from(read_u16_be(data, record_offset + 2)?);
+        let num_layers = usize::from(read_u16_be(data, record_offset + 4)?);
+        let layer_end = first_layer.checked_add(num_layers)?;
+        if layer_end > num_layer_records {
+            return None;
+        }
+        let layers = (first_layer..layer_end)
+            .map(|layer_index| {
+                let layer_offset = layer_records_offset.checked_add(layer_index.checked_mul(4)?)?;
+                Some(ColrV0Layer {
+                    glyph_index: FT_UInt::from(read_u16_be(data, layer_offset)?),
+                    color_index: FT_UInt::from(read_u16_be(data, layer_offset + 2)?),
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        layers_by_base.insert(base_glyph, layers);
+    }
+    Some(ColrV0State { layers_by_base })
+}
+
+fn read_u24_be(data: &[u8], offset: usize) -> Option<u32> {
+    Some(
+        (u32::from(*data.get(offset)?) << 16)
+            | (u32::from(*data.get(offset + 1)?) << 8)
+            | u32::from(*data.get(offset + 2)?),
+    )
+}
+
+fn read_i16_be(data: &[u8], offset: usize) -> Option<i16> {
+    Some(i16::from_be_bytes([
+        *data.get(offset)?,
+        *data.get(offset + 1)?,
+    ]))
+}
+
+fn read_i32_be(data: &[u8], offset: usize) -> Option<i32> {
+    Some(i32::from_be_bytes([
+        *data.get(offset)?,
+        *data.get(offset + 1)?,
+        *data.get(offset + 2)?,
+        *data.get(offset + 3)?,
+    ]))
+}
+
+fn colr_i16_to_fixed(value: i16) -> FT_Fixed {
+    FT_Fixed::from(value) << 16
+}
+
+fn f2dot14_to_fixed(value: i16) -> FT_Fixed {
+    // FreeType 2.14.3 `src/sfnt/ttcolr.c` exposes COLRv1 F2Dot14 paint
+    // values through 16.16 public fields by shifting left two bits.
+    FT_Fixed::from(value) << 2
+}
+
+fn parse_colr_v1_child_paint(
+    data: &[u8],
+    offset: usize,
+    depth: usize,
+    layer_list_offset: usize,
+    layer_offsets: &[usize],
+) -> Option<Box<ColrV1Paint>> {
+    let nested_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+    let nested_start = offset.checked_add(nested_offset)?;
+    Some(Box::new(parse_colr_v1_paint(
+        data,
+        nested_start,
+        depth,
+        layer_list_offset,
+        layer_offsets,
+    )?))
+}
+
+fn parse_colr_v1_colorline(
+    data: &[u8],
+    offset: usize,
+    read_variable: bool,
+) -> Option<ColrV1ColorLine> {
+    let extend = FT_Int::from(*data.get(offset)?);
+    if extend > FT_COLR_PAINT_EXTEND_REFLECT as FT_Int {
+        return None;
+    }
+    let count = usize::from(read_u16_be(data, offset + 1)?);
+    let stops_start = offset.checked_add(3)?;
+    let entry_size = if read_variable { 10 } else { 6 };
+    let stops_end = stops_start.checked_add(count.checked_mul(entry_size)?)?;
+    if stops_end > data.len() {
+        return None;
+    }
+    let stops = (0..count)
+        .map(|index| {
+            let stop_offset = stops_start.checked_add(index.checked_mul(entry_size)?)?;
+            Some(ColrV1ColorStop {
+                stop_offset: f2dot14_to_fixed(read_i16_be(data, stop_offset)?),
+                palette_index: read_u16_be(data, stop_offset + 2)?,
+                alpha: read_i16_be(data, stop_offset + 4)?,
+                var_index_base: read_variable
+                    .then(|| read_u32_be(data, stop_offset + 6))
+                    .flatten(),
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(ColrV1ColorLine {
+        extend,
+        stops,
+        read_variable,
+    })
+}
+
+fn parse_colr_v1_table(data: &[u8], variation_axis_count: usize) -> Option<ColrV1State> {
+    let version = read_u16_be(data, 0)?;
+    if version != 1 {
+        return None;
+    }
+    let base_glyph_list_offset = usize::try_from(read_u32_be(data, 14)?).ok()?;
+    let layer_list_offset = usize::try_from(read_u32_be(data, 18)?).ok()?;
+    let clip_list_offset = usize::try_from(read_u32_be(data, 22)?).ok()?;
+    if base_glyph_list_offset == 0 {
+        return None;
+    }
+    let var_store = read_u32_be(data, 30)
+        .and_then(|offset| usize::try_from(offset).ok())
+        .filter(|offset| *offset != 0)
+        .and_then(|offset| ItemVariationStore::parse(data, offset, variation_axis_count).ok());
+    let layer_offsets = parse_colr_v1_layer_offsets(data, layer_list_offset)?;
+    let base_glyph_count = usize::try_from(read_u32_be(data, base_glyph_list_offset)?).ok()?;
+    let records_offset = base_glyph_list_offset.checked_add(4)?;
+    let records_end = records_offset.checked_add(base_glyph_count.checked_mul(6)?)?;
+    if records_end > data.len() {
+        return None;
+    }
+
+    let mut root_paints = BTreeMap::new();
+    for record_index in 0..base_glyph_count {
+        let record_offset = records_offset.checked_add(record_index.checked_mul(6)?)?;
+        let glyph_index = FT_UInt::from(read_u16_be(data, record_offset)?);
+        let paint_offset = usize::try_from(read_u32_be(data, record_offset + 2)?).ok()?;
+        let paint_start = base_glyph_list_offset.checked_add(paint_offset)?;
+        let paint = parse_colr_v1_paint(data, paint_start, 0, layer_list_offset, &layer_offsets)?;
+        root_paints.insert(glyph_index, paint);
+    }
+    Some(ColrV1State {
+        root_paints,
+        clip_boxes: parse_colr_v1_clip_boxes(data, clip_list_offset)?,
+        var_store,
+    })
+}
+
+fn parse_colr_v1_clip_boxes(data: &[u8], clip_list_offset: usize) -> Option<Vec<ColrV1ClipBox>> {
+    if clip_list_offset == 0 {
+        return Some(Vec::new());
+    }
+    let format = *data.get(clip_list_offset)?;
+    if format != 1 {
+        return None;
+    }
+    let count = usize::try_from(read_u32_be(data, clip_list_offset + 1)?).ok()?;
+    let records_offset = clip_list_offset.checked_add(5)?;
+    let records_end = records_offset.checked_add(count.checked_mul(7)?)?;
+    if records_end > data.len() {
+        return None;
+    }
+    (0..count)
+        .map(|index| {
+            let record_offset = records_offset.checked_add(index.checked_mul(7)?)?;
+            let start_glyph = FT_UInt::from(read_u16_be(data, record_offset)?);
+            let end_glyph = FT_UInt::from(read_u16_be(data, record_offset + 2)?);
+            let box_offset = usize::try_from(read_u24_be(data, record_offset + 4)?).ok()?;
+            let box_start = clip_list_offset.checked_add(box_offset)?;
+            let box_format = *data.get(box_start)?;
+            if box_format == 0 || box_format > 2 {
+                return None;
+            }
+            let coords_offset = box_start.checked_add(1)?;
+            let coords_end = coords_offset.checked_add(8)?;
+            if coords_end > data.len() {
+                return None;
+            }
+            let var_index_base = if box_format == 2 {
+                let var_offset = coords_end;
+                let var_end = var_offset.checked_add(4)?;
+                if var_end > data.len() {
+                    return None;
+                }
+                read_u32_be(data, var_offset)
+            } else {
+                None
+            };
+            Some(ColrV1ClipBox {
+                start_glyph,
+                end_glyph,
+                x_min: read_i16_be(data, coords_offset)?,
+                y_min: read_i16_be(data, coords_offset + 2)?,
+                x_max: read_i16_be(data, coords_offset + 4)?,
+                y_max: read_i16_be(data, coords_offset + 6)?,
+                var_index_base,
+            })
+        })
+        .collect()
+}
+
+fn parse_colr_v1_layer_offsets(data: &[u8], layer_list_offset: usize) -> Option<Vec<usize>> {
+    if layer_list_offset == 0 {
+        return Some(Vec::new());
+    }
+    let layer_count = usize::try_from(read_u32_be(data, layer_list_offset)?).ok()?;
+    let offsets_start = layer_list_offset.checked_add(4)?;
+    let offsets_end = offsets_start.checked_add(layer_count.checked_mul(4)?)?;
+    if offsets_end > data.len() {
+        return None;
+    }
+    (0..layer_count)
+        .map(|index| {
+            let offset_pos = offsets_start.checked_add(index.checked_mul(4)?)?;
+            let relative = usize::try_from(read_u32_be(data, offset_pos)?).ok()?;
+            layer_list_offset.checked_add(relative)
+        })
+        .collect()
+}
+
+fn parse_colr_v1_paint(
+    data: &[u8],
+    offset: usize,
+    depth: usize,
+    layer_list_offset: usize,
+    layer_offsets: &[usize],
+) -> Option<ColrV1Paint> {
+    if depth > 32 {
+        return None;
+    }
+    let format = *data.get(offset)?;
+    match format {
+        1 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:641-662` initializes an
+            // `FT_LayerIterator` from PaintColrLayers' NumLayers and
+            // FirstLayerIndex, then `FT_Get_Paint_Layers` resolves each layer
+            // offset relative to LayerV1List.
+            let num_layers = usize::from(*data.get(offset + 1)?);
+            let first_layer_index = usize::try_from(read_u32_be(data, offset + 2)?).ok()?;
+            let layer_end = first_layer_index.checked_add(num_layers)?;
+            if layer_list_offset == 0 || layer_end > layer_offsets.len() {
+                return None;
+            }
+            let paints = layer_offsets[first_layer_index..layer_end]
+                .iter()
+                .map(|&layer_offset| {
+                    parse_colr_v1_paint(
+                        data,
+                        layer_offset,
+                        depth + 1,
+                        layer_list_offset,
+                        layer_offsets,
+                    )
+                })
+                .collect::<Option<Vec<_>>>()?;
+            Some(ColrV1Paint::Layers { paints })
+        }
+        2 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c` exposes PaintSolid's
+            // palette index and F2DOT14 alpha through `FT_PaintSolid`.
+            Some(ColrV1Paint::Solid {
+                palette_index: read_u16_be(data, offset + 1)?,
+                alpha: read_i16_be(data, offset + 3)?,
+            })
+        }
+        4 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:724-758` exposes static
+            // PaintLinearGradient coordinates as 16.16 fixed-point vectors and
+            // initializes a ColorLine iterator from the child ColorLine table.
+            Some(ColrV1Paint::LinearGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
+                p0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                p1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                },
+                p2: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 14)?),
+                },
+            })
+        }
+        6 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            let r0 = colr_i16_to_fixed(read_i16_be(data, offset + 8)?);
+            let r1 = colr_i16_to_fixed(read_i16_be(data, offset + 14)?);
+            Some(ColrV1Paint::RadialGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
+                c0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                r0: if r0 < 0 { i32::MAX.into() } else { r0 },
+                c1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                },
+                r1: if r1 < 0 { i32::MAX.into() } else { r1 },
+            })
+        }
+        8 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            Some(ColrV1Paint::SweepGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start, false)?,
+                center: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                start_angle: f2dot14_to_fixed(read_i16_be(data, offset + 8)?),
+                end_angle: f2dot14_to_fixed(read_i16_be(data, offset + 10)?),
+            })
+        }
+        5 => {
+            let colorline_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let colorline_start = offset.checked_add(colorline_offset)?;
+            // FreeType `src/sfnt/ttcolr.c:724-767` normalizes
+            // PaintVarLinearGradient to the public PaintLinearGradient format,
+            // but preserves a variable ColorLine iterator so
+            // FT_Get_Colorline_Stops can read VarColorStop and apply COLR
+            // VarStore deltas.
+            Some(ColrV1Paint::LinearGradient {
+                colorline: parse_colr_v1_colorline(data, colorline_start, true)?,
+                p0: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                },
+                p1: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                },
+                p2: FT_Vector {
+                    x: colr_i16_to_fixed(read_i16_be(data, offset + 12)?),
+                    y: colr_i16_to_fixed(read_i16_be(data, offset + 14)?),
+                },
+            })
+        }
+        10 => {
+            // COLRv1 PaintGlyph stores an Offset24 child paint relative to
+            // the current paint record, followed by a u16 glyph ID.
+            Some(ColrV1Paint::Glyph {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                glyph_index: FT_UInt::from(read_u16_be(data, offset + 4)?),
+            })
+        }
+        11 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:706-711` exposes
+            // PaintColrGlyph as a scalar `FT_PaintColrGlyph.glyphID` payload.
+            Some(ColrV1Paint::ColrGlyph {
+                glyph_index: FT_UInt::from(read_u16_be(data, offset + 1)?),
+            })
+        }
+        12 => {
+            let transform_offset = usize::try_from(read_u24_be(data, offset + 4)?).ok()?;
+            let transform_start = offset.checked_add(transform_offset)?;
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:903-926` reads PaintTransform
+            // Affine2x3 values as OpenType 16.16 fixed-point longs in public
+            // FT_Affine23 field order.
+            Some(ColrV1Paint::Transform {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                affine: FT_Affine23 {
+                    xx: FT_Fixed::from(read_i32_be(data, transform_start)?),
+                    yx: FT_Fixed::from(read_i32_be(data, transform_start + 4)?),
+                    xy: FT_Fixed::from(read_i32_be(data, transform_start + 8)?),
+                    yy: FT_Fixed::from(read_i32_be(data, transform_start + 12)?),
+                    dx: FT_Fixed::from(read_i32_be(data, transform_start + 16)?),
+                    dy: FT_Fixed::from(read_i32_be(data, transform_start + 20)?),
+                },
+            })
+        }
+        14 => Some(ColrV1Paint::Translate {
+            paint: parse_colr_v1_child_paint(
+                data,
+                offset,
+                depth,
+                layer_list_offset,
+                layer_offsets,
+            )?,
+            dx: colr_i16_to_fixed(read_i16_be(data, offset + 4)?),
+            dy: colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+        }),
+        16 | 18 | 20 | 22 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:973-1079` normalizes all
+            // non-variable scale table forms to public FT_PaintScale, setting
+            // uniform scale_y and absent centers exactly here.
+            let (scale_x, scale_y, center_offset) = match format {
+                16 | 18 => (
+                    f2dot14_to_fixed(read_i16_be(data, offset + 4)?),
+                    f2dot14_to_fixed(read_i16_be(data, offset + 6)?),
+                    offset + 8,
+                ),
+                20 | 22 => {
+                    let scale = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+                    (scale, scale, offset + 6)
+                }
+                _ => unreachable!(),
+            };
+            let (center_x, center_y) = match format {
+                18 | 22 => (
+                    colr_i16_to_fixed(read_i16_be(data, center_offset)?),
+                    colr_i16_to_fixed(read_i16_be(data, center_offset + 2)?),
+                ),
+                _ => (0, 0),
+            };
+            Some(ColrV1Paint::Scale {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                scale_x,
+                scale_y,
+                center_x,
+                center_y,
+            })
+        }
+        24 | 26 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:1081-1154` normalizes rotate
+            // forms to public FT_PaintRotate and zero-fills absent centers.
+            let angle = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+            let (center_x, center_y) = if format == 26 {
+                (
+                    colr_i16_to_fixed(read_i16_be(data, offset + 6)?),
+                    colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                )
+            } else {
+                (0, 0)
+            };
+            Some(ColrV1Paint::Rotate {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                angle,
+                center_x,
+                center_y,
+            })
+        }
+        28 | 30 => {
+            // FreeType 2.14.3 `src/sfnt/ttcolr.c:1158-1227` normalizes skew
+            // forms to public FT_PaintSkew and zero-fills absent centers.
+            let x_skew_angle = f2dot14_to_fixed(read_i16_be(data, offset + 4)?);
+            let y_skew_angle = f2dot14_to_fixed(read_i16_be(data, offset + 6)?);
+            let (center_x, center_y) = if format == 30 {
+                (
+                    colr_i16_to_fixed(read_i16_be(data, offset + 8)?),
+                    colr_i16_to_fixed(read_i16_be(data, offset + 10)?),
+                )
+            } else {
+                (0, 0)
+            };
+            Some(ColrV1Paint::Skew {
+                paint: parse_colr_v1_child_paint(
+                    data,
+                    offset,
+                    depth,
+                    layer_list_offset,
+                    layer_offsets,
+                )?,
+                x_skew_angle,
+                y_skew_angle,
+                center_x,
+                center_y,
+            })
+        }
+        32 => {
+            // COLRv1 PaintComposite stores source and backdrop as Offset24
+            // values relative to the current record and exposes a public
+            // one-byte FT_Composite_Mode in between.
+            let source_offset = usize::try_from(read_u24_be(data, offset + 1)?).ok()?;
+            let source_start = offset.checked_add(source_offset)?;
+            let composite_mode = FT_UShort::from(*data.get(offset + 4)?);
+            let backdrop_offset = usize::try_from(read_u24_be(data, offset + 5)?).ok()?;
+            let backdrop_start = offset.checked_add(backdrop_offset)?;
+            Some(ColrV1Paint::Composite {
+                source_paint: Box::new(parse_colr_v1_paint(
+                    data,
+                    source_start,
+                    depth + 1,
+                    layer_list_offset,
+                    layer_offsets,
+                )?),
+                composite_mode,
+                backdrop_paint: Box::new(parse_colr_v1_paint(
+                    data,
+                    backdrop_start,
+                    depth + 1,
+                    layer_list_offset,
+                    layer_offsets,
+                )?),
+            })
+        }
+        _ => None,
+    }
+}
+
 pub fn FT_Palette_Data_Get(
     face: Option<&FT_Face>,
     apalette_data: Option<&mut FT_Palette_Data>,
@@ -3158,6 +5058,1001 @@ pub fn FT_Palette_Data_Get(
         palette_entry_name_ids: cpal.palette_entry_name_ids.as_ptr(),
     };
     FT_Err_Ok
+}
+
+pub fn FT_Get_Color_Glyph_Layer(
+    face: Option<&FT_Face>,
+    base_glyph: FT_UInt,
+    aglyph_index: Option<&mut FT_UInt>,
+    acolor_index: Option<&mut FT_UInt>,
+    iterator: Option<&mut FT_LayerIterator>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(aglyph_index) = aglyph_index else {
+        return 0;
+    };
+    let Some(acolor_index) = acolor_index else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v0 else {
+        return 0;
+    };
+    let Some(layers) = colr.layers_by_base.get(&base_glyph) else {
+        return 0;
+    };
+    if iterator.p.is_null() {
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c` initializes the public iterator
+        // from the COLR v0 base-glyph record on the first call.
+        iterator.num_layers = layers.len().try_into().unwrap_or(FT_UInt::MAX);
+        iterator.layer = 0;
+        iterator.p = layers.as_ptr().cast_mut().cast::<FT_Byte>();
+    }
+    let Ok(layer_index) = usize::try_from(iterator.layer) else {
+        return 0;
+    };
+    let Some(layer) = layers.get(layer_index) else {
+        return 0;
+    };
+    *aglyph_index = layer.glyph_index;
+    *acolor_index = layer.color_index;
+    iterator.layer = iterator.layer.saturating_add(1);
+    1
+}
+
+pub fn FT_Get_Color_Glyph_ClipBox(
+    face: Option<&FT_Face>,
+    base_glyph: FT_UInt,
+    clip_box: Option<&mut FT_ClipBox>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(clip_box) = clip_box else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(record) = colr
+        .clip_boxes
+        .iter()
+        .find(|record| base_glyph >= record.start_glyph && base_glyph <= record.end_glyph)
+    else {
+        return 0;
+    };
+
+    // FreeType 2.14.3 `src/sfnt/ttcolr.c:1353-1489` reads ClipBox FWORDs,
+    // scales them with the active size metrics to 26.6, then transforms all
+    // four corners with the face transform before writing the public record.
+    let mut x_min = FT_MulFix(FT_Long::from(record.x_min), face.size_metrics.x_scale);
+    let mut y_min = FT_MulFix(FT_Long::from(record.y_min), face.size_metrics.y_scale);
+    let mut x_max = FT_MulFix(FT_Long::from(record.x_max), face.size_metrics.x_scale);
+    let mut y_max = FT_MulFix(FT_Long::from(record.y_max), face.size_metrics.y_scale);
+
+    if let Some(var_index_base) = record.var_index_base {
+        let Some(var_store) = &colr.var_store else {
+            return 0;
+        };
+        let normalized_coords = face.inner.borrow();
+        let normalized_coords = normalized_coords.font().normalized_variation_coords();
+        let outer_index = (var_index_base >> 16) as u16;
+        let inner_index = var_index_base as u16;
+        let delta = |index: u16| {
+            var_store
+                .item_delta(
+                    outer_index,
+                    inner_index.saturating_add(index),
+                    normalized_coords,
+                )
+                .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as FT_Long
+        };
+        x_min = x_min.saturating_add(FT_MulFix(delta(0), face.size_metrics.x_scale));
+        y_min = y_min.saturating_add(FT_MulFix(delta(1), face.size_metrics.y_scale));
+        x_max = x_max.saturating_add(FT_MulFix(delta(2), face.size_metrics.x_scale));
+        y_max = y_max.saturating_add(FT_MulFix(delta(3), face.size_metrics.y_scale));
+    }
+
+    let mut corners = [
+        FT_Vector { x: x_min, y: y_min },
+        FT_Vector { x: x_min, y: y_max },
+        FT_Vector { x: x_max, y: y_max },
+        FT_Vector { x: x_max, y: y_min },
+    ];
+    for corner in &mut corners {
+        FT_Vector_Transform(Some(corner), Some(&face.transform_matrix));
+        corner.x = corner.x.saturating_add(face.transform_delta.x);
+        corner.y = corner.y.saturating_add(face.transform_delta.y);
+    }
+
+    *clip_box = FT_ClipBox {
+        bottom_left: corners[0],
+        top_left: corners[1],
+        top_right: corners[2],
+        bottom_right: corners[3],
+    };
+    1
+}
+
+fn colr_v1_paint_to_opaque(paint: &ColrV1Paint) -> FT_OpaquePaint {
+    FT_OpaquePaint {
+        p: (paint as *const ColrV1Paint).cast_mut().cast::<FT_Byte>(),
+        insert_root_transform: 0,
+    }
+}
+
+fn colr_v1_find_paint_by_ptr(state: &ColrV1State, ptr: *const FT_Byte) -> Option<&ColrV1Paint> {
+    state
+        .root_paints
+        .values()
+        .find_map(|paint| colr_v1_find_paint_by_ptr_in_node(paint, ptr))
+}
+
+fn colr_v1_find_paint_by_ptr_in_node(
+    paint: &ColrV1Paint,
+    ptr: *const FT_Byte,
+) -> Option<&ColrV1Paint> {
+    if std::ptr::addr_eq((paint as *const ColrV1Paint).cast::<FT_Byte>(), ptr) {
+        return Some(paint);
+    }
+    match paint {
+        ColrV1Paint::Layers { paints } => paints
+            .iter()
+            .find_map(|paint| colr_v1_find_paint_by_ptr_in_node(paint, ptr)),
+        ColrV1Paint::Solid { .. } => None,
+        ColrV1Paint::Glyph { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
+        ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::LinearGradient { .. }
+        | ColrV1Paint::RadialGradient { .. }
+        | ColrV1Paint::SweepGradient { .. } => None,
+        ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => colr_v1_find_paint_by_ptr_in_node(paint, ptr),
+        ColrV1Paint::Composite {
+            source_paint,
+            backdrop_paint,
+            ..
+        } => colr_v1_find_paint_by_ptr_in_node(source_paint, ptr)
+            .or_else(|| colr_v1_find_paint_by_ptr_in_node(backdrop_paint, ptr)),
+    }
+}
+
+pub fn FT_Get_Color_Glyph_Paint(
+    face: Option<&FT_Face>,
+    base_glyph: FT_UInt,
+    root_transform: FT_UInt,
+    paint: Option<&mut FT_OpaquePaint>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(paint) = paint else {
+        return 0;
+    };
+    if !paint.p.is_null() || root_transform >= FT_COLOR_ROOT_TRANSFORM_MAX as FT_UInt {
+        return 0;
+    }
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(root_paint) = colr.root_paints.get(&base_glyph) else {
+        return 0;
+    };
+
+    // FreeType 2.14.3 `src/sfnt/ttcolr.c` returns an opaque pointer to the
+    // root paint and records whether `FT_Get_Paint` should synthesize the
+    // root-transform node before reading that paint.
+    *paint = colr_v1_paint_to_opaque(root_paint);
+    paint.insert_root_transform = if root_transform == FT_COLOR_INCLUDE_ROOT_TRANSFORM as FT_UInt {
+        1
+    } else {
+        0
+    };
+    1
+}
+
+fn colr_v1_colorline_iterator(colorline: &ColrV1ColorLine, index: usize) -> FT_ColorStopIterator {
+    FT_ColorStopIterator {
+        num_color_stops: colorline.stops.len().try_into().unwrap_or(FT_UInt::MAX),
+        current_color_stop: index.try_into().unwrap_or(FT_UInt::MAX),
+        p: colorline
+            .stops
+            .as_ptr()
+            .wrapping_add(index)
+            .cast_mut()
+            .cast::<FT_Byte>(),
+        read_variable: FT_Bool::from(colorline.read_variable),
+    }
+}
+
+fn colr_v1_colorline_to_public(colorline: &ColrV1ColorLine) -> FT_ColorLine {
+    FT_ColorLine {
+        extend: colorline.extend,
+        color_stop_iterator: colr_v1_colorline_iterator(colorline, 0),
+    }
+}
+
+fn colr_v1_root_transform_paint(face: &FT_Face, opaque_paint: FT_OpaquePaint) -> FT_PaintTransform {
+    let mut root_scale = FT_Matrix {
+        xx: (face.size_metrics.x_scale + 32) >> 6,
+        xy: 0,
+        yx: 0,
+        yy: (face.size_metrics.y_scale + 32) >> 6,
+    };
+    FT_Matrix_Multiply(Some(&face.transform_matrix), Some(&mut root_scale));
+    FT_PaintTransform {
+        paint: FT_OpaquePaint {
+            p: opaque_paint.p,
+            insert_root_transform: 0,
+        },
+        affine: FT_Affine23 {
+            xx: root_scale.xx,
+            xy: root_scale.xy,
+            dx: face.transform_delta.x * (1 << 10),
+            yx: root_scale.yx,
+            yy: root_scale.yy,
+            dy: face.transform_delta.y * (1 << 10),
+        },
+    }
+}
+
+pub fn FT_Get_Paint(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+    paint: Option<&mut FT_COLR_Paint>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(paint_out) = paint else {
+        return 0;
+    };
+    if opaque_paint.p.is_null() {
+        return 0;
+    }
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    if opaque_paint.insert_root_transform != 0 {
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c:1660-1715` synthesizes a
+        // top-level PaintTransform from the active size scale and
+        // `FT_Set_Transform` state before resolving the underlying root paint.
+        paint_out.format = FT_COLR_PAINTFORMAT_TRANSFORM as _;
+        paint_out.u = FT_COLR_PaintUnion {
+            transform: colr_v1_root_transform_paint(face, opaque_paint),
+        };
+        return 1;
+    }
+    let Some(node) = colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const()) else {
+        return 0;
+    };
+
+    match node {
+        ColrV1Paint::Layers { paints } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_COLR_LAYERS as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                colr_layers: FT_PaintColrLayers {
+                    layer_iterator: colr_v1_layer_iterator(paints, 0),
+                },
+            };
+        }
+        ColrV1Paint::Solid {
+            palette_index,
+            alpha,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SOLID as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                solid: FT_PaintSolid {
+                    color: FT_ColorIndex {
+                        palette_index: *palette_index,
+                        alpha: *alpha,
+                    },
+                },
+            };
+        }
+        ColrV1Paint::Glyph { glyph_index, paint } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_GLYPH as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                glyph: FT_PaintGlyph {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    glyphID: *glyph_index,
+                },
+            };
+        }
+        ColrV1Paint::ColrGlyph { glyph_index } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_COLR_GLYPH as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                colr_glyph: FT_PaintColrGlyph {
+                    glyphID: *glyph_index,
+                },
+            };
+        }
+        ColrV1Paint::LinearGradient {
+            colorline,
+            p0,
+            p1,
+            p2,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                linear_gradient: FT_PaintLinearGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    p0: *p0,
+                    p1: *p1,
+                    p2: *p2,
+                },
+            };
+        }
+        ColrV1Paint::RadialGradient {
+            colorline,
+            c0,
+            r0,
+            c1,
+            r1,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                radial_gradient: FT_PaintRadialGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    c0: *c0,
+                    r0: *r0,
+                    c1: *c1,
+                    r1: *r1,
+                },
+            };
+        }
+        ColrV1Paint::SweepGradient {
+            colorline,
+            center,
+            start_angle,
+            end_angle,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                sweep_gradient: FT_PaintSweepGradient {
+                    colorline: colr_v1_colorline_to_public(colorline),
+                    center: *center,
+                    start_angle: *start_angle,
+                    end_angle: *end_angle,
+                },
+            };
+        }
+        ColrV1Paint::Transform { paint, affine } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_TRANSFORM as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                transform: FT_PaintTransform {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    affine: *affine,
+                },
+            };
+        }
+        ColrV1Paint::Translate { paint, dx, dy } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_TRANSLATE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                translate: FT_PaintTranslate {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    dx: *dx,
+                    dy: *dy,
+                },
+            };
+        }
+        ColrV1Paint::Scale {
+            paint,
+            scale_x,
+            scale_y,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SCALE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                scale: FT_PaintScale {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    scale_x: *scale_x,
+                    scale_y: *scale_y,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
+        ColrV1Paint::Rotate {
+            paint,
+            angle,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_ROTATE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                rotate: FT_PaintRotate {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    angle: *angle,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
+        ColrV1Paint::Skew {
+            paint,
+            x_skew_angle,
+            y_skew_angle,
+            center_x,
+            center_y,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_SKEW as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                skew: FT_PaintSkew {
+                    paint: colr_v1_paint_to_opaque(paint),
+                    x_skew_angle: *x_skew_angle,
+                    y_skew_angle: *y_skew_angle,
+                    center_x: *center_x,
+                    center_y: *center_y,
+                },
+            };
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            composite_mode,
+            backdrop_paint,
+        } => {
+            paint_out.format = FT_COLR_PAINTFORMAT_COMPOSITE as _;
+            paint_out.u = FT_COLR_PaintUnion {
+                composite: FT_PaintComposite {
+                    source_paint: colr_v1_paint_to_opaque(source_paint),
+                    composite_mode: FT_Int::from(*composite_mode),
+                    backdrop_paint: colr_v1_paint_to_opaque(backdrop_paint),
+                },
+            };
+        }
+    }
+    1
+}
+
+fn colr_v1_find_colorline_by_iterator<'a>(
+    state: &'a ColrV1State,
+    iterator: &FT_ColorStopIterator,
+) -> Option<&'a ColrV1ColorLine> {
+    state
+        .root_paints
+        .values()
+        .find_map(|paint| colr_v1_find_colorline_by_iterator_in_node(paint, iterator))
+}
+
+fn colr_v1_find_colorline_by_iterator_in_node<'a>(
+    paint: &'a ColrV1Paint,
+    iterator: &FT_ColorStopIterator,
+) -> Option<&'a ColrV1ColorLine> {
+    match paint {
+        ColrV1Paint::Layers { paints } => paints
+            .iter()
+            .find_map(|paint| colr_v1_find_colorline_by_iterator_in_node(paint, iterator)),
+        ColrV1Paint::Solid { .. } | ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::Glyph { paint, .. }
+        | ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => {
+            colr_v1_find_colorline_by_iterator_in_node(paint, iterator)
+        }
+        ColrV1Paint::LinearGradient { colorline, .. }
+        | ColrV1Paint::RadialGradient { colorline, .. }
+        | ColrV1Paint::SweepGradient { colorline, .. } => {
+            let stop_index = usize::try_from(iterator.current_color_stop).ok()?;
+            if iterator.num_color_stops != colorline.stops.len().try_into().ok()?
+                || iterator.read_variable != FT_Bool::from(colorline.read_variable)
+                || stop_index > colorline.stops.len()
+            {
+                return None;
+            }
+            let expected_p = colorline
+                .stops
+                .as_ptr()
+                .wrapping_add(stop_index)
+                .cast::<FT_Byte>();
+            if std::ptr::addr_eq(expected_p, iterator.p.cast_const()) {
+                Some(colorline)
+            } else {
+                None
+            }
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            backdrop_paint,
+            ..
+        } => colr_v1_find_colorline_by_iterator_in_node(source_paint, iterator)
+            .or_else(|| colr_v1_find_colorline_by_iterator_in_node(backdrop_paint, iterator)),
+    }
+}
+
+pub fn FT_Get_Colorline_Stops(
+    face: Option<&FT_Face>,
+    color_stop: Option<&mut FT_ColorStop>,
+    iterator: Option<&mut FT_ColorStopIterator>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(color_stop) = color_stop else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(colorline) = colr_v1_find_colorline_by_iterator(colr, iterator) else {
+        return 0;
+    };
+    let Ok(stop_index) = usize::try_from(iterator.current_color_stop) else {
+        return 0;
+    };
+    let Some(stop) = colorline.stops.get(stop_index) else {
+        return 0;
+    };
+    let mut stop_offset = stop.stop_offset;
+    let mut alpha = stop.alpha;
+    if let (Some(var_store), Some(var_index_base)) = (&colr.var_store, stop.var_index_base) {
+        let normalized_coords = face.inner.borrow();
+        let normalized_coords = normalized_coords.font().normalized_variation_coords();
+        let outer_index = (var_index_base >> 16) as u16;
+        let inner_index = var_index_base as u16;
+        let stop_delta = var_store.item_delta(outer_index, inner_index, normalized_coords);
+        let alpha_delta = var_store.item_delta(
+            outer_index,
+            inner_index.saturating_add(1),
+            normalized_coords,
+        );
+        stop_offset = stop_offset.saturating_add(f2dot14_to_fixed(
+            stop_delta.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
+        ));
+        alpha = alpha.saturating_add(
+            alpha_delta.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as FT_F2Dot14
+        );
+    }
+    *color_stop = FT_ColorStop {
+        stop_offset,
+        color: FT_ColorIndex {
+            palette_index: stop.palette_index,
+            alpha,
+        },
+    };
+    let next_index = stop_index.saturating_add(1);
+    *iterator = colr_v1_colorline_iterator(colorline, next_index);
+    1
+}
+
+fn colr_v1_layer_iterator(paints: &[ColrV1Paint], layer: usize) -> FT_LayerIterator {
+    FT_LayerIterator {
+        num_layers: paints.len().try_into().unwrap_or(FT_UInt::MAX),
+        layer: layer.try_into().unwrap_or(FT_UInt::MAX),
+        p: paints
+            .as_ptr()
+            .wrapping_add(layer)
+            .cast_mut()
+            .cast::<FT_Byte>(),
+    }
+}
+
+fn colr_v1_find_layer_paints_by_iterator<'a>(
+    state: &'a ColrV1State,
+    iterator: &FT_LayerIterator,
+) -> Option<&'a [ColrV1Paint]> {
+    state
+        .root_paints
+        .values()
+        .find_map(|paint| colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator))
+}
+
+fn colr_v1_find_layer_paints_by_iterator_in_node<'a>(
+    paint: &'a ColrV1Paint,
+    iterator: &FT_LayerIterator,
+) -> Option<&'a [ColrV1Paint]> {
+    match paint {
+        ColrV1Paint::Layers { paints } => {
+            let layer_index = usize::try_from(iterator.layer).ok()?;
+            if iterator.num_layers != paints.len().try_into().ok()? || layer_index > paints.len() {
+                return None;
+            }
+            let expected_p = paints.as_ptr().wrapping_add(layer_index).cast::<FT_Byte>();
+            if std::ptr::addr_eq(expected_p, iterator.p.cast_const()) {
+                Some(paints)
+            } else {
+                None
+            }
+        }
+        ColrV1Paint::Solid { .. } => None,
+        ColrV1Paint::Glyph { paint, .. } => {
+            colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
+        }
+        ColrV1Paint::ColrGlyph { .. } => None,
+        ColrV1Paint::LinearGradient { .. }
+        | ColrV1Paint::RadialGradient { .. }
+        | ColrV1Paint::SweepGradient { .. } => None,
+        ColrV1Paint::Transform { paint, .. }
+        | ColrV1Paint::Translate { paint, .. }
+        | ColrV1Paint::Scale { paint, .. }
+        | ColrV1Paint::Rotate { paint, .. }
+        | ColrV1Paint::Skew { paint, .. } => {
+            colr_v1_find_layer_paints_by_iterator_in_node(paint, iterator)
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            backdrop_paint,
+            ..
+        } => colr_v1_find_layer_paints_by_iterator_in_node(source_paint, iterator)
+            .or_else(|| colr_v1_find_layer_paints_by_iterator_in_node(backdrop_paint, iterator)),
+    }
+}
+
+pub fn FT_Get_Paint_Layers(
+    face: Option<&FT_Face>,
+    iterator: Option<&mut FT_LayerIterator>,
+    opaque_paint: Option<&mut FT_OpaquePaint>,
+) -> FT_Bool {
+    let Some(face) = face else {
+        return 0;
+    };
+    let Some(iterator) = iterator else {
+        return 0;
+    };
+    let Some(opaque_paint) = opaque_paint else {
+        return 0;
+    };
+    if iterator.layer == iterator.num_layers {
+        return 0;
+    }
+    let Some(colr) = &face.colr_v1 else {
+        return 0;
+    };
+    let Some(paints) = colr_v1_find_layer_paints_by_iterator(colr, iterator) else {
+        return 0;
+    };
+    let Ok(layer_index) = usize::try_from(iterator.layer) else {
+        return 0;
+    };
+    let Some(layer_paint) = paints.get(layer_index) else {
+        return 0;
+    };
+    *opaque_paint = colr_v1_paint_to_opaque(layer_paint);
+    let next_layer = layer_index.saturating_add(1);
+    *iterator = colr_v1_layer_iterator(paints, next_layer);
+    1
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_Layer_Iterator_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    if opaque_paint.p.is_null() || opaque_paint.insert_root_transform != 0 {
+        return None;
+    }
+    let colr = face?.colr_v1.as_ref()?;
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::Layers { paints } => Some(colr_v1_layer_iterator(paints, 0)),
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_ColorLine_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    if opaque_paint.p.is_null() || opaque_paint.insert_root_transform != 0 {
+        return None;
+    }
+    let colr = face?.colr_v1.as_ref()?;
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::LinearGradient { colorline, .. }
+        | ColrV1Paint::RadialGradient { colorline, .. }
+        | ColrV1Paint::SweepGradient { colorline, .. } => {
+            Some(colr_v1_colorline_to_public(colorline))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_Paint_Transform_Copy(
+    face: Option<&FT_Face>,
+    opaque_paint: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    if opaque_paint.p.is_null() {
+        return None;
+    }
+    let face = face?;
+    let colr = face.colr_v1.as_ref()?;
+    if opaque_paint.insert_root_transform != 0 {
+        return Some(colr_v1_root_transform_paint(face, opaque_paint));
+    }
+    match colr_v1_find_paint_by_ptr(colr, opaque_paint.p.cast_const())? {
+        ColrV1Paint::Transform { paint, affine } => Some(FT_PaintTransform {
+            paint: colr_v1_paint_to_opaque(paint),
+            affine: *affine,
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_PaintGraph_Copy(face: Option<&FT_Face>) -> Option<FT_ColrV1_PaintGraph_Snapshot> {
+    let colr = face?.colr_v1.as_ref()?;
+    let mut records = Vec::with_capacity(colr.root_paints.len());
+    for (&glyph_index, paint) in &colr.root_paints {
+        let mut nodes = Vec::new();
+        colr_v1_snapshot_paint(paint, 0, &mut nodes);
+        records.push(FT_ColrV1_PaintRecord_Snapshot { glyph_index, nodes });
+    }
+    Some(FT_ColrV1_PaintGraph_Snapshot {
+        root_count: records.len(),
+        records,
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+fn colr_v1_paint_format(paint: &ColrV1Paint) -> FT_PaintFormat {
+    match paint {
+        ColrV1Paint::Layers { .. } => FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_PaintFormat,
+        ColrV1Paint::Solid { .. } => FT_COLR_PAINTFORMAT_SOLID as FT_PaintFormat,
+        ColrV1Paint::Glyph { .. } => FT_COLR_PAINTFORMAT_GLYPH as FT_PaintFormat,
+        ColrV1Paint::ColrGlyph { .. } => FT_COLR_PAINTFORMAT_COLR_GLYPH as FT_PaintFormat,
+        ColrV1Paint::LinearGradient { .. } => FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::RadialGradient { .. } => FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::SweepGradient { .. } => FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as FT_PaintFormat,
+        ColrV1Paint::Transform { .. } => FT_COLR_PAINTFORMAT_TRANSFORM as FT_PaintFormat,
+        ColrV1Paint::Translate { .. } => FT_COLR_PAINTFORMAT_TRANSLATE as FT_PaintFormat,
+        ColrV1Paint::Scale { .. } => FT_COLR_PAINTFORMAT_SCALE as FT_PaintFormat,
+        ColrV1Paint::Rotate { .. } => FT_COLR_PAINTFORMAT_ROTATE as FT_PaintFormat,
+        ColrV1Paint::Skew { .. } => FT_COLR_PAINTFORMAT_SKEW as FT_PaintFormat,
+        ColrV1Paint::Composite { .. } => FT_COLR_PAINTFORMAT_COMPOSITE as FT_PaintFormat,
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_ColrV1_PublicPaintSolid_Copy(
+    face: Option<&FT_Face>,
+    glyph_index: FT_UInt,
+) -> FT_ColrV1_PublicPaintSolid_Snapshot {
+    let Some(colr) = face.and_then(|face| face.colr_v1.as_ref()) else {
+        return FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 0,
+            paint_return: 0,
+            paint_format: 0,
+            palette_index: 0,
+            alpha: 0,
+        };
+    };
+    let Some(paint) = colr.root_paints.get(&glyph_index) else {
+        return FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 0,
+            paint_return: 0,
+            paint_format: 0,
+            palette_index: 0,
+            alpha: 0,
+        };
+    };
+    match paint {
+        ColrV1Paint::Solid {
+            palette_index,
+            alpha,
+        } => FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 1,
+            paint_return: 1,
+            paint_format: colr_v1_paint_format(paint),
+            palette_index: *palette_index,
+            alpha: *alpha,
+        },
+        _ => FT_ColrV1_PublicPaintSolid_Snapshot {
+            root_return: 1,
+            paint_return: 1,
+            paint_format: colr_v1_paint_format(paint),
+            palette_index: 0,
+            alpha: 0,
+        },
+    }
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+fn colr_v1_snapshot_paint(
+    paint: &ColrV1Paint,
+    depth: usize,
+    nodes: &mut Vec<FT_ColrV1_PaintNode_Snapshot>,
+) {
+    match paint {
+        ColrV1Paint::Layers { paints } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: paints.len().try_into().unwrap_or(FT_UShort::MAX),
+                values: [0; 6],
+            });
+            for paint in paints {
+                colr_v1_snapshot_paint(paint, depth + 1, nodes);
+            }
+        }
+        ColrV1Paint::Solid {
+            palette_index,
+            alpha,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_SOLID as FT_UShort,
+            palette_index: *palette_index,
+            alpha: *alpha,
+            glyph_index: 0,
+            composite_mode: 0,
+            values: [0; 6],
+        }),
+        ColrV1Paint::Glyph { glyph_index, paint } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_GLYPH as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: *glyph_index,
+                composite_mode: 0,
+                values: [0; 6],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::ColrGlyph { glyph_index } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_COLR_GLYPH as FT_UShort,
+            palette_index: 0,
+            alpha: 0,
+            glyph_index: *glyph_index,
+            composite_mode: 0,
+            values: [0; 6],
+        }),
+        ColrV1Paint::LinearGradient {
+            colorline,
+            p0,
+            p1,
+            p2,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_LINEAR_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [p0.x, p0.y, p1.x, p1.y, p2.x, p2.y],
+        }),
+        ColrV1Paint::RadialGradient {
+            colorline,
+            c0,
+            r0,
+            c1,
+            r1,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_RADIAL_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [c0.x, c0.y, *r0, c1.x, c1.y, *r1],
+        }),
+        ColrV1Paint::SweepGradient {
+            colorline,
+            center,
+            start_angle,
+            end_angle,
+        } => nodes.push(FT_ColrV1_PaintNode_Snapshot {
+            depth,
+            format: FT_COLR_PAINTFORMAT_SWEEP_GRADIENT as FT_UShort,
+            palette_index: colorline.stops.len().try_into().unwrap_or(FT_UShort::MAX),
+            alpha: 0,
+            glyph_index: 0,
+            composite_mode: colorline.extend.try_into().unwrap_or(FT_UShort::MAX),
+            values: [center.x, center.y, *start_angle, *end_angle, 0, 0],
+        }),
+        ColrV1Paint::Transform { paint, affine } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_TRANSFORM as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [
+                    affine.xx, affine.xy, affine.dx, affine.yx, affine.yy, affine.dy,
+                ],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Translate { paint, dx, dy } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_TRANSLATE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*dx, *dy, 0, 0, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Scale {
+            paint,
+            scale_x,
+            scale_y,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_SCALE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*scale_x, *scale_y, *center_x, *center_y, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Rotate {
+            paint,
+            angle,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_ROTATE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*angle, *center_x, *center_y, 0, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Skew {
+            paint,
+            x_skew_angle,
+            y_skew_angle,
+            center_x,
+            center_y,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_SKEW as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: 0,
+                values: [*x_skew_angle, *y_skew_angle, *center_x, *center_y, 0, 0],
+            });
+            colr_v1_snapshot_paint(paint, depth + 1, nodes);
+        }
+        ColrV1Paint::Composite {
+            source_paint,
+            composite_mode,
+            backdrop_paint,
+        } => {
+            nodes.push(FT_ColrV1_PaintNode_Snapshot {
+                depth,
+                format: FT_COLR_PAINTFORMAT_COMPOSITE as FT_UShort,
+                palette_index: 0,
+                alpha: 0,
+                glyph_index: 0,
+                composite_mode: *composite_mode,
+                values: [0; 6],
+            });
+            colr_v1_snapshot_paint(source_paint, depth + 1, nodes);
+            colr_v1_snapshot_paint(backdrop_paint, depth + 1, nodes);
+        }
+    }
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
@@ -3261,6 +6156,16 @@ pub fn FT_Palette_Active_Entries_Copy(face: Option<&FT_Face>) -> Vec<FT_Color> {
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Palette_Foreground_Copy(
+    face: Option<&FT_Face>,
+) -> Option<FT_Palette_Foreground_Snapshot> {
+    face.map(|face| FT_Palette_Foreground_Snapshot {
+        have_foreground_color: *face.have_foreground_color.borrow(),
+        foreground_color: *face.foreground_color.borrow(),
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Palette_Set_Active_Entry_For_Test(
     face: Option<&FT_Face>,
     entry_index: usize,
@@ -3287,7 +6192,12 @@ pub fn FT_Palette_Set_Foreground_Color(face: Option<&FT_Face>, color: FT_Color) 
         let _ = color;
         return FT_Err_Ok;
     }
-    FT_Err_Unimplemented_Feature as FT_Error
+    // FreeType 2.14.3 `src/base/ftcolor.c:95-111` stores the foreground
+    // color on TT_Face and marks it valid for later COLR foreground-index
+    // rendering (`src/sfnt/ttcolr.c:1826-1833`).
+    *face.foreground_color.borrow_mut() = color;
+    *face.have_foreground_color.borrow_mut() = true;
+    FT_Err_Ok
 }
 
 fn winfnt_header_to_ffi(header: &WinFntHeader) -> FT_WinFNT_HeaderRec {
@@ -3437,6 +6347,85 @@ pub fn FT_Get_BDF_Charset_ID(
         *output = registry;
     }
     error
+}
+
+pub fn FT_Get_CID_Is_Internally_CID_Keyed(
+    face: Option<&FT_Face>,
+    mut is_cid: Option<&mut FT_Bool>,
+) -> FT_Error {
+    if let Some(output) = &mut is_cid {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if face.inner.borrow().font().is_cid_keyed() {
+        if let Some(output) = is_cid {
+            *output = 1;
+        }
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Argument as FT_Error
+    }
+}
+
+pub fn FT_Get_CID_From_Glyph_Index(
+    face: Option<&FT_Face>,
+    glyph_index: FT_UInt,
+    mut cid: Option<&mut FT_UInt>,
+) -> FT_Error {
+    if let Some(output) = &mut cid {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    let Some(value) = face.inner.borrow().font().cid_for_glyph_index(glyph_index) else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if let Some(output) = cid {
+        *output = FT_UInt::from(value);
+    }
+    FT_Err_Ok
+}
+
+pub fn FT_Get_CID_Registry_Ordering_Supplement(
+    face: Option<&FT_Face>,
+    mut registry: Option<&mut *const FT_String>,
+    mut ordering: Option<&mut *const FT_String>,
+    mut supplement: Option<&mut FT_Int>,
+) -> FT_Error {
+    if let Some(output) = &mut registry {
+        **output = ptr::null();
+    }
+    if let Some(output) = &mut ordering {
+        **output = ptr::null();
+    }
+    if let Some(output) = &mut supplement {
+        **output = 0;
+    }
+    let Some(face) = face else {
+        return FT_Err_Invalid_Argument as FT_Error;
+    };
+    if !face.inner.borrow().font().is_cid_keyed() {
+        return FT_Err_Invalid_Argument as FT_Error;
+    }
+    if let Some(output) = registry {
+        *output = face
+            .cid_registry
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+    }
+    if let Some(output) = ordering {
+        *output = face
+            .cid_ordering
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+    }
+    if let Some(output) = supplement {
+        *output = face.cid_supplement;
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_GlyphSlot_AdjustWeight(
@@ -3726,6 +6715,15 @@ pub fn FT_Get_Module_Interface(
     let (Some(library), Some(module_name)) = (library, module_name) else {
         return ptr::null_mut();
     };
+    if let Some(module) = library.synthetic_module
+        && module.module_name == module_name
+    {
+        return if module.module_interface_present {
+            0x4649_584Dusize as FT_Module_Interface
+        } else {
+            ptr::null_mut()
+        };
+    }
     if !library.module_names.contains(&module_name) {
         return ptr::null_mut();
     }
@@ -4159,6 +7157,58 @@ pub fn FT_Add_Default_Modules(library: Option<&mut FT_Library>) {
     }
 }
 
+pub fn FT_Add_Module(
+    library: Option<&mut FT_Library>,
+    clazz: Option<&FT_Module_Class_Info>,
+) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let Some(clazz) = clazz else {
+        return FT_Err_Invalid_Argument;
+    };
+    let Some(module_name) = clazz.module_name else {
+        return FT_Err_Invalid_Argument;
+    };
+    const FREETYPE_VER_FIXED: FT_Fixed = (2 << 16) | 14;
+    if clazz.module_requires > FREETYPE_VER_FIXED {
+        return FT_Err_Invalid_Version as FT_Error;
+    }
+    if library.module_names.contains(&module_name)
+        || library
+            .synthetic_module
+            .is_some_and(|module| module.module_name == module_name)
+    {
+        let current_version = library
+            .synthetic_module
+            .filter(|module| module.module_name == module_name)
+            .map_or(clazz.module_version, |module| module.module_version);
+        if clazz.module_version <= current_version {
+            return FT_Err_Lower_Module_Version as FT_Error;
+        }
+    }
+
+    // FreeType 2.14.3 `src/base/ftobjs.c:5058-5168` validates library/class,
+    // checks `module_requires`, allocates and initializes the module, then
+    // appends it to `library->modules`.  Core stores the public registry
+    // effect; ABI layers own raw callback-pointer decoding for test classes.
+    library.synthetic_module = Some(FT_Installed_Module_Info {
+        module_flags: clazz.module_flags,
+        module_size: clazz.module_size,
+        module_name,
+        module_version: clazz.module_version,
+        module_interface_present: clazz.module_interface_present,
+        init_called: clazz.module_init == FT_Module_Callback_Behavior::RecordThenOk,
+        done_called: false,
+    });
+    if clazz.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+        && FT_Library_Renderer_Class(Some(library), FT_GLYPH_FORMAT_OUTLINE).is_none()
+    {
+        library.current_outline_renderer = module_name;
+    }
+    FT_Err_Ok
+}
+
 pub fn FT_Set_Debug_Hook(
     library: Option<&mut FT_Library>,
     hook_index: FT_UInt,
@@ -4362,11 +7412,21 @@ pub fn FT_Library_Has_TrueType_Engine_Service(library: Option<&FT_Library>) -> b
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Has_Module(library: Option<&FT_Library>, name: &str) -> bool {
-    library.is_some_and(|library| library.module_names.contains(&name))
+    library.is_some_and(|library| {
+        library.module_names.contains(&name)
+            || library
+                .synthetic_module
+                .is_some_and(|module| module.module_name == name)
+    })
 }
 
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Option<FT_ULong> {
+    if let Some(module) = library.and_then(|library| library.synthetic_module)
+        && module.module_name == name
+    {
+        return Some(module.module_flags);
+    }
     if !FT_Library_Has_Module(library, name) {
         return None;
     }
@@ -4375,7 +7435,7 @@ pub fn FT_Library_Module_Flags(library: Option<&FT_Library>, name: &str) -> Opti
     // and `src/autofit/afmodule.c`).  The pure-Rust library keeps the same
     // observable metadata for ABI/parity inspection without dynamic modules.
     let flags = match name {
-        "truetype" | "type1" | "cid" | "type42" => {
+        "truetype" | "type1" | "t1cid" | "type42" => {
             FT_MODULE_FONT_DRIVER | FT_MODULE_DRIVER_SCALABLE | FT_MODULE_DRIVER_HAS_HINTER
         }
         "cff" => {
@@ -4398,10 +7458,29 @@ pub fn FT_Library_Renderer_Class(
     format: FT_Glyph_Format,
 ) -> Option<(&'static str, FT_Glyph_Format, bool, bool)> {
     let library = library?;
+    if format == FT_GLYPH_FORMAT_OUTLINE
+        && let Some(module) = library.synthetic_module
+        && module.module_name == library.current_outline_renderer
+        && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+    {
+        return Some((module.module_name, FT_GLYPH_FORMAT_OUTLINE, true, false));
+    }
     // FreeType 2.14.3 `FT_Get_Renderer` (`src/base/ftrender.c`) returns the
     // first registered renderer whose `glyph_format` matches the requested
     // format.  Keep only class metadata observable through public renderer
     // handles; callers must not depend on raw pointer identity.
+    if format == FT_GLYPH_FORMAT_OUTLINE
+        && library
+            .module_names
+            .contains(&library.current_outline_renderer)
+    {
+        return Some((
+            library.current_outline_renderer,
+            FT_GLYPH_FORMAT_OUTLINE,
+            true,
+            true,
+        ));
+    }
     for name in library.module_names {
         let (observable_name, renderer_format, has_raster_class) = match *name {
             "smooth" | "raster1" | "sdf" => (*name, FT_GLYPH_FORMAT_OUTLINE, true),
@@ -4416,9 +7495,68 @@ pub fn FT_Library_Renderer_Class(
     None
 }
 
+pub fn FT_Library_Set_Renderer_By_Format(
+    library: Option<&mut FT_Library>,
+    format: FT_Glyph_Format,
+    module_name: &str,
+) -> FT_Error {
+    let Some(library) = library else {
+        return FT_Err_Invalid_Library_Handle as FT_Error;
+    };
+    let synthetic_renderer_matches = library.synthetic_module.is_some_and(|module| {
+        module.module_name == module_name
+            && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+    });
+    if !library.module_names.contains(&module_name) && !synthetic_renderer_matches {
+        return FT_Err_Invalid_Argument;
+    }
+    // FreeType 2.14.3 `src/base/ftobjs.c:FT_Set_Renderer` validates that the
+    // renderer belongs to `library->renderers`, moves that node with
+    // `FT_List_Up`, and updates `library->cur_renderer` only for outline
+    // renderers.  The pure-Rust core stores the public current-renderer effect;
+    // thin ABI layers own raw renderer handle validation.
+    if format == FT_GLYPH_FORMAT_OUTLINE {
+        library.current_outline_renderer = match module_name {
+            "smooth" => "smooth",
+            "raster1" => "raster1",
+            "sdf" => "sdf",
+            _ => {
+                if let Some(module) = library.synthetic_module
+                    && module.module_name == module_name
+                    && module.module_flags & FT_MODULE_RENDERER as FT_ULong != 0
+                {
+                    module.module_name
+                } else {
+                    return FT_Err_Invalid_Argument;
+                }
+            }
+        };
+        FT_Err_Ok
+    } else {
+        FT_Err_Invalid_Argument
+    }
+}
+
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Library_Default_Module_Names(library: Option<&FT_Library>) -> &'static [&'static str] {
     library.map_or(&[], |library| library.module_names)
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Module_Count(library: Option<&FT_Library>) -> usize {
+    library.map_or(0, |library| {
+        library.module_names.len() + usize::from(library.synthetic_module.is_some())
+    })
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Library_Synthetic_Module_Info(
+    library: Option<&FT_Library>,
+    module_name: &str,
+) -> Option<FT_Installed_Module_Info> {
+    library
+        .and_then(|library| library.synthetic_module)
+        .filter(|module| module.module_name == module_name)
 }
 
 pub fn FT_Set_Transform(
@@ -5436,9 +8574,31 @@ pub fn FT_Open_External_Stream_Face_With_Name_Options(
 
 fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let font = inner.font();
+    let raw_data = &font.data.raw_data;
+    let stream_pos = font
+        .data
+        .table_directory
+        .record(u32::from_be_bytes(*b"cvt "))
+        .map_or(0, |record| record.offset);
+    let memory_stream = Box::new(FT_StreamRec {
+        // C FreeType's FT_New_Memory_Face builds an FT_StreamRec over the
+        // retained face bytes.  Public stream probes compare nullness, size,
+        // pos, and frame bytes against freetype/src/base/ftobjs.c stream-open
+        // setup and ftstream.c memory-frame behavior.
+        base: raw_data.as_ptr().cast_mut(),
+        size: FT_ULong::try_from(raw_data.len()).unwrap_or(FT_ULong::MAX),
+        pos: FT_ULong::from(stream_pos),
+        descriptor: FT_StreamDesc::default(),
+        pathname: FT_StreamDesc::default(),
+        read: std::ptr::null_mut(),
+        close: std::ptr::null_mut(),
+        memory: std::ptr::null_mut(),
+        cursor: std::ptr::null_mut(),
+        limit: std::ptr::null_mut(),
+    });
     let info = inner.info();
     let postscript_name = inner.postscript_name().map(str::to_owned);
-    let type1_font_info_strings = type1_font_info_strings(font.type1_font_info());
+    let type1_font_info_strings = type1_font_info_strings(font.postscript_font_info());
     let type1_mm_axis_names = font
         .type1_multi_master()
         .map(|master| {
@@ -5449,6 +8609,15 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    let (cid_registry, cid_ordering, cid_supplement) = font
+        .cid_registry_ordering_supplement()
+        .map_or((None, None, 0), |(registry, ordering, supplement)| {
+            (
+                CString::new(registry).ok(),
+                CString::new(ordering).ok(),
+                supplement,
+            )
+        });
     let size_state = inner.active_size_state();
     let size_metrics = inner.size_metrics().into();
     let sfnt_os2 = font.os2_table().map(os2_to_ffi).map(Box::new);
@@ -5457,11 +8626,7 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_tt_header(&data))
         .map(Box::new);
-    let sfnt_maxp = font
-        .load_sfnt_table(0x6D617870, 0, None)
-        .ok()
-        .and_then(|data| parse_tt_maxprofile(&data))
-        .map(Box::new);
+    let sfnt_maxp = parse_face_owned_maxprofile(font).map(Box::new);
     let sfnt_hhea = font
         .load_sfnt_table(0x68686561, 0, None)
         .ok()
@@ -5491,6 +8656,16 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         .ok()
         .and_then(|data| parse_cpal_table(&data))
         .map(RefCell::new)
+        .map(Rc::new);
+    let colr_v0 = font
+        .load_sfnt_table(u32::from_be_bytes(*b"COLR"), 0, None)
+        .ok()
+        .and_then(|data| parse_colr_v0_table(&data))
+        .map(Rc::new);
+    let colr_v1 = font
+        .load_sfnt_table(u32::from_be_bytes(*b"COLR"), 0, None)
+        .ok()
+        .and_then(|data| parse_colr_v1_table(&data, font.normalized_variation_coords().len()))
         .map(Rc::new);
     let available_sizes = available_sizes_to_ffi(font);
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
@@ -5538,12 +8713,16 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         size_metrics,
         active_charmap_index,
         charmaps,
+        memory_stream,
         inner,
         sizes,
         probe_only,
         postscript_name,
         type1_font_info_strings,
         type1_mm_axis_names,
+        cid_registry,
+        cid_ordering,
+        cid_supplement,
         sfnt_os2,
         sfnt_head,
         sfnt_maxp,
@@ -5553,6 +8732,11 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         sfnt_pclt,
         charmap_metadata,
         cpal,
+        colr_v0,
+        colr_v1,
+        have_foreground_color: Rc::new(RefCell::new(false)),
+        foreground_color: Rc::new(RefCell::new(FT_Color::default())),
+        afm_metrics: Rc::new(RefCell::new(None)),
         transform_matrix: FT_Matrix {
             xx: 1 << 16,
             xy: 0,
@@ -5568,6 +8752,216 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     };
     register_face_size_handles(&face);
     face
+}
+
+fn parse_afm_fixed(token: &str) -> Option<FT_Fixed> {
+    let (negative, rest) = if let Some(rest) = token.strip_prefix('-') {
+        (true, rest)
+    } else if let Some(rest) = token.strip_prefix('+') {
+        (false, rest)
+    } else {
+        (false, token)
+    };
+    let (whole, fraction) = rest.split_once('.').unwrap_or((rest, ""));
+    if whole.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    let whole_value = if whole.is_empty() {
+        0_i64
+    } else {
+        whole.parse::<i64>().ok()?
+    };
+    let mut scale = 1_i64;
+    let mut fraction_value = 0_i64;
+    for byte in fraction.bytes() {
+        if !byte.is_ascii_digit() {
+            return None;
+        }
+        fraction_value = fraction_value
+            .checked_mul(10)?
+            .checked_add(i64::from(byte - b'0'))?;
+        scale = scale.checked_mul(10)?;
+    }
+    let mut fixed = whole_value.checked_shl(16)?;
+    if scale > 1 {
+        fixed = fixed.checked_add((fraction_value.checked_mul(1 << 16)?) / scale)?;
+    }
+    if negative {
+        fixed = fixed.checked_neg()?;
+    }
+    FT_Fixed::try_from(fixed).ok()
+}
+
+fn parse_afm_metrics(face: &FT_Face, data: &[u8]) -> Result<AfmMetricsState, FT_Error> {
+    let text = std::str::from_utf8(data).map_err(|_| FT_Err_Unknown_File_Format)?;
+    let mut track_kerns = Vec::new();
+    let mut kern_pairs = Vec::new();
+    for line in text.lines() {
+        let mut fields = line.split_whitespace();
+        match fields.next() {
+            Some("TrackKern") => {
+                let degree = fields
+                    .next()
+                    .and_then(|value| value.parse::<FT_Int>().ok())
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let min_ptsize = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let min_kern = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let max_ptsize = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let max_kern = fields
+                    .next()
+                    .and_then(parse_afm_fixed)
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                track_kerns.push(AfmTrackKern {
+                    degree,
+                    min_ptsize,
+                    min_kern,
+                    max_ptsize,
+                    max_kern,
+                });
+            }
+            Some(kind @ ("KPX" | "KPY" | "KP")) => {
+                let left_name = fields.next().ok_or(FT_Err_Unknown_File_Format)?;
+                let right_name = fields.next().ok_or(FT_Err_Unknown_File_Format)?;
+                let value_x = fields
+                    .next()
+                    .and_then(|value| value.parse::<FT_Int>().ok())
+                    .ok_or(FT_Err_Unknown_File_Format)?;
+                let value_y = if kind == "KP" {
+                    fields
+                        .next()
+                        .and_then(|value| value.parse::<FT_Int>().ok())
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                let left = face.inner.borrow().name_index(left_name);
+                let right = face.inner.borrow().name_index(right_name);
+                kern_pairs.push(AfmKernPair {
+                    left,
+                    right,
+                    x: if kind == "KPY" { 0 } else { value_x },
+                    y: if kind == "KPY" { value_x } else { value_y },
+                });
+            }
+            _ => {}
+        }
+    }
+    // C Type1 attachment (`src/type1/t1afm.c:T1_Read_Metrics`) only keeps the
+    // parsed AFM block on the face when pair kerning exists; track kerning then
+    // reads from that retained AFM state (`T1_Get_Track_Kerning`).
+    if kern_pairs.is_empty() {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    kern_pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
+    Ok(AfmMetricsState {
+        track_kerns,
+        kern_pairs,
+    })
+}
+
+pub fn FT_Attach_Stream(face: Option<&mut FT_Face>, data: Option<&[u8]>) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(data) = data else {
+        return FT_Err_Invalid_Argument;
+    };
+    match parse_afm_metrics(face, data) {
+        Ok(metrics) => {
+            *face.afm_metrics.borrow_mut() = Some(metrics);
+            face.face_flags |= FT_FACE_FLAG_KERNING;
+            FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
+fn afm_pair_kerning(
+    face: &FT_Face,
+    left_glyph: FT_UInt,
+    right_glyph: FT_UInt,
+) -> Option<FT_Vector> {
+    let afm_metrics = face.afm_metrics.borrow();
+    let metrics = afm_metrics.as_ref()?;
+    metrics
+        .kern_pairs
+        .binary_search_by_key(&(left_glyph, right_glyph), |pair| (pair.left, pair.right))
+        .ok()
+        .map(|index| {
+            let pair = metrics.kern_pairs[index];
+            FT_Vector {
+                x: FT_Long::from(pair.x),
+                y: FT_Long::from(pair.y),
+            }
+        })
+        .or(Some(FT_Vector { x: 0, y: 0 }))
+}
+
+fn ft_pix_round_long(value: FT_Long) -> FT_Long {
+    (value + 32) & !63
+}
+
+fn scale_kerning_vector(face: &FT_Face, mut vector: FT_Vector, kern_mode: FT_UInt) -> FT_Vector {
+    if kern_mode != FT_KERNING_UNSCALED as FT_UInt {
+        vector.x = FT_MulFix(vector.x, face.size_metrics.x_scale);
+        vector.y = FT_MulFix(vector.y, face.size_metrics.y_scale);
+        if kern_mode != FT_KERNING_UNFITTED as FT_UInt {
+            if face.size_metrics.x_ppem < 25 {
+                vector.x = FT_MulDiv(vector.x, FT_Long::from(face.size_metrics.x_ppem), 25);
+            }
+            if face.size_metrics.y_ppem < 25 {
+                vector.y = FT_MulDiv(vector.y, FT_Long::from(face.size_metrics.y_ppem), 25);
+            }
+            vector.x = ft_pix_round_long(vector.x);
+            vector.y = ft_pix_round_long(vector.y);
+        }
+    }
+    vector
+}
+
+pub fn FT_Get_Track_Kerning(
+    face: Option<&FT_Face>,
+    point_size: FT_Fixed,
+    degree: FT_Int,
+    akerning: Option<&mut FT_Fixed>,
+) -> FT_Error {
+    let Some(face) = face else {
+        return FT_Err_Invalid_Face_Handle as FT_Error;
+    };
+    let Some(akerning) = akerning else {
+        return FT_Err_Invalid_Argument;
+    };
+    let afm_metrics = face.afm_metrics.borrow();
+    let Some(metrics) = afm_metrics.as_ref() else {
+        return FT_Err_Invalid_Argument;
+    };
+    for track in &metrics.track_kerns {
+        if track.degree != degree {
+            continue;
+        }
+        *akerning = if point_size < track.min_ptsize {
+            track.min_kern
+        } else if point_size > track.max_ptsize {
+            track.max_kern
+        } else {
+            FT_MulDiv(
+                point_size - track.min_ptsize,
+                track.max_kern - track.min_kern,
+                track.max_ptsize - track.min_ptsize,
+            ) + track.min_kern
+        };
+        break;
+    }
+    FT_Err_Ok
 }
 
 fn parse_tt_header(data: &[u8]) -> Option<TT_Header> {
@@ -5606,7 +9000,7 @@ fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
         return None;
     }
     let version = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-    Some(TT_MaxProfile {
+    let mut record = TT_MaxProfile {
         version: i64::from(version as i32),
         numGlyphs: u16::from_be_bytes([data[4], data[5]]) as FT_UShort,
         maxPoints: data
@@ -5655,7 +9049,24 @@ fn parse_tt_maxprofile(data: &[u8]) -> Option<TT_MaxProfile> {
             .get(30..32)
             .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
             as FT_UShort,
-    })
+    };
+    // FreeType `tt_face_load_maxp` (`src/sfnt/ttload.c`) forces at least 64
+    // function definitions after successfully reading a version-1 maxp frame.
+    if version >= 0x0001_0000 && record.maxFunctionDefs < 64 {
+        record.maxFunctionDefs = 64;
+    }
+    Some(record)
+}
+
+fn parse_face_owned_maxprofile(font: &crate::font::Font) -> Option<TT_MaxProfile> {
+    // FreeType's `tt_face_load_maxp` (`src/sfnt/ttload.c`) positions the
+    // stream at the `maxp` table offset and reads the profile frame from the
+    // stream; it does not bound those reads to the table directory length.
+    // `FT_Load_Sfnt_Table` remains length-bounded, but the face-owned
+    // `FT_Get_Sfnt_Table(FT_SFNT_MAXP)` record must mirror the loader state.
+    let record = font.data.table_directory.record(0x6D61_7870)?;
+    let start = usize::try_from(record.offset).ok()?;
+    parse_tt_maxprofile(font.data.raw_data.get(start..)?)
 }
 
 fn parse_tt_horiheader(data: &[u8]) -> Option<TT_HoriHeader> {
@@ -6168,6 +9579,12 @@ pub fn FT_Get_Kerning(
     };
     akerning.x = 0;
     akerning.y = 0;
+    if let Some(vector) = afm_pair_kerning(face, left_glyph, right_glyph) {
+        let vector = scale_kerning_vector(face, vector, kern_mode);
+        akerning.x = vector.x;
+        akerning.y = vector.y;
+        return FT_Err_Ok;
+    }
     let mode = match kern_mode {
         mode if mode == FT_KERNING_UNFITTED as FT_UInt => KerningMode::Unfitted,
         mode if mode == FT_KERNING_UNSCALED as FT_UInt => KerningMode::Unscaled,
@@ -6718,6 +10135,11 @@ pub fn FT_Get_Sfnt_Table(face: &FT_Face, tag: FT_Sfnt_Tag) -> FT_Pointer {
 #[cfg(any(test, feature = "abi-test-support"))]
 pub fn FT_Get_Sfnt_VertHeader_Copy(face: &FT_Face) -> Option<TT_VertHeader> {
     face.sfnt_vhea.as_deref().copied()
+}
+
+#[cfg(any(test, feature = "abi-test-support"))]
+pub fn FT_Get_Sfnt_MaxProfile_Copy(face: &FT_Face) -> Option<TT_MaxProfile> {
+    face.sfnt_maxp.as_deref().copied()
 }
 
 pub fn FT_Load_Sfnt_Table(

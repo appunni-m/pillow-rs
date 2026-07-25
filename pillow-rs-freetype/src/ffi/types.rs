@@ -49,6 +49,7 @@ pub type PS_Dict_Keys = c_int;
 pub type T1_EncodingType = c_int;
 pub type FT_PaintExtend = FT_Int;
 pub type FT_Composite_Mode = FT_Int;
+pub type FT_PaintFormat = FT_Int;
 pub type FT_Incremental = FT_Pointer;
 pub type FT_Incremental_Metrics = *mut FT_Incremental_MetricsRec;
 pub type FT_Incremental_Interface = *mut FT_Incremental_InterfaceRec;
@@ -856,6 +857,14 @@ pub struct FT_OutlineGlyphOwned {
     pub outline: FT_OutlineSnapshot,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FT_BitmapGlyphOwned {
+    pub root: FT_GlyphRec,
+    pub left: FT_Int,
+    pub top: FT_Int,
+    pub bitmap: FT_Bitmap,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FT_BitmapGlyphRec {
@@ -1136,6 +1145,39 @@ pub struct FT_PaintComposite {
     pub source_paint: FT_OpaquePaint,
     pub composite_mode: FT_Composite_Mode,
     pub backdrop_paint: FT_OpaquePaint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union FT_COLR_PaintUnion {
+    pub colr_layers: FT_PaintColrLayers,
+    pub glyph: FT_PaintGlyph,
+    pub solid: FT_PaintSolid,
+    pub linear_gradient: FT_PaintLinearGradient,
+    pub radial_gradient: FT_PaintRadialGradient,
+    pub sweep_gradient: FT_PaintSweepGradient,
+    pub transform: FT_PaintTransform,
+    pub translate: FT_PaintTranslate,
+    pub scale: FT_PaintScale,
+    pub rotate: FT_PaintRotate,
+    pub skew: FT_PaintSkew,
+    pub composite: FT_PaintComposite,
+    pub colr_glyph: FT_PaintColrGlyph,
+}
+
+impl Default for FT_COLR_PaintUnion {
+    fn default() -> Self {
+        Self {
+            solid: FT_PaintSolid::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FT_COLR_Paint {
+    pub format: FT_PaintFormat,
+    pub u: FT_COLR_PaintUnion,
 }
 
 #[repr(C)]

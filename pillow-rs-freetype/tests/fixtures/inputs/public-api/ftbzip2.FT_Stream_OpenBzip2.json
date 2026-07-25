@@ -7,6 +7,8 @@
     "lifecycle_close_does_not_close_source",
     "error_null_stream_or_source",
     "error_invalid_or_truncated_bzip2_header",
+    "disabled_build_precedes_null_validation",
+    "disabled_build_precedes_header_validation",
     "out_of_scope_uncompiled_bzip2_policy"
   ],
   "cases": [
@@ -264,6 +266,104 @@
         "error": "Invalid_File_Format",
         "fixture_requirements": [
           "Invalid and truncated bzip2 byte fixtures"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "disabled_build_precedes_null_validation",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "active_build": {
+            "bzip2": false
+          },
+          "null_cases": [
+            "target_stream",
+            "source_stream"
+          ],
+          "sentinel_target": true
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:build-policy",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "build_feature": "bzip2 disabled",
+          "stream_write_state": "untouched disabled-build output"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "build_features.bzip2",
+            "error",
+            "stream.base_class",
+            "stream.read_class",
+            "stream.close_class"
+          ]
+        },
+        "error": "Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/bzip2/ftbzip2.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation",
+      "subject": "ftbzip2.FT_Stream_OpenBzip2",
+      "case": "disabled_build_precedes_header_validation",
+      "operation": "ftbzip2.stream_open_bzip2",
+      "schema": "stream_wrapper",
+      "expect_error": true,
+      "inputs": {
+        "assets": {},
+        "params": {
+          "active_build": {
+            "bzip2": false
+          },
+          "inputs": [
+            "invalid",
+            "truncated",
+            "empty"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftbzip2",
+        "area:build-policy",
+        "path:error"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "build_feature": "bzip2 disabled",
+          "header_bytes_read": false
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "build_features.bzip2",
+            "error",
+            "stream.base_class",
+            "stream.read_class",
+            "stream.close_class"
+          ]
+        },
+        "error": "Unimplemented_Feature",
+        "source_refs": [
+          "freetype/src/bzip2/ftbzip2.c"
         ]
       }
     },

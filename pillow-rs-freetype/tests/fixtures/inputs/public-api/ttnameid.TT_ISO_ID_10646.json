@@ -122,7 +122,7 @@
       "case_id": "ttnameid.TT_ISO_ID_10646.deprecated_iso_10646_runtime",
       "subject": "ttnameid.TT_ISO_ID_10646",
       "case": "deprecated_iso_10646_runtime",
-      "operation": "sfnt.charmap_and_name_metadata",
+      "operation": "sfnt.mac_encoding_record",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
@@ -130,17 +130,24 @@
           "font": {
             "kind": "ref",
             "id": "input/fonts/name-cmap/iso-10646.ttf",
-            "role": "font",
-            "requirements": "SFNT font with deprecated ISO platform encodingID 1 visible through charmap metadata and name records."
+            "role": "font"
           }
         },
         "params": {
           "function_group": "sfnt.charmap_and_name_metadata",
           "face_index": 0,
-          "platform_id": "TT_PLATFORM_ISO",
+          "platform_id": 2,
           "platform_id_value": 2,
-          "encoding_id": "TT_ISO_ID_10646",
-          "encoding_id_value": 1
+          "encoding_id": 1,
+          "encoding_id_value": 1,
+          "language_id": 0,
+          "name_id": 1,
+          "codepoints": [
+            65
+          ],
+          "representative_codepoints": [
+            65
+          ]
         }
       },
       "classifiers": [

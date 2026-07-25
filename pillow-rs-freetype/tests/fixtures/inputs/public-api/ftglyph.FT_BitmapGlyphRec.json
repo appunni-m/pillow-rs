@@ -4,6 +4,8 @@
   "manifest_cases": [
     "layout_matches_c",
     "fields_match_get_glyph_and_to_bitmap",
+    "fields_match_get_glyph_bitmap",
+    "owns_bitmap_buffer_get_glyph_bitmap",
     "owns_bitmap_buffer"
   ],
   "cases": [
@@ -154,6 +156,62 @@
       }
     },
     {
+      "case_id": "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap",
+      "subject": "ftglyph.FT_BitmapGlyphRec",
+      "case": "fields_match_get_glyph_bitmap",
+      "operation": "ftglyph.record_inspect",
+      "schema": "glyph_record",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_path": "FT_Get_Glyph bitmap",
+          "glyph_index": "bitmap_glyph",
+          "render_mode": "NORMAL"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_BitmapGlyphRec",
+          "fields": [
+            "root",
+            "left",
+            "top",
+            "FT_Bitmap descriptor",
+            "buffer bytes"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "record.root",
+            "record.left",
+            "record.top",
+            "record.bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    },
+    {
       "case_id": "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer",
       "subject": "ftglyph.FT_BitmapGlyphRec",
       "case": "owns_bitmap_buffer",
@@ -178,6 +236,54 @@
             "FT_Get_Glyph bitmap",
             "FT_Glyph_To_Bitmap outline"
           ],
+          "destroy_with": "FT_Done_Glyph"
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:ftglyph"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "record": "FT_BitmapGlyphRec",
+          "ownership": "bitmap buffer released by bitmap glyph done hook"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "buffer_owner_class",
+            "free_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "fixture_requirements": [
+          "fonts/bitmap-strikes/public-bitmap-strike.ttf must contain at least one loadable embedded bitmap strike whose FT_GlyphSlot format becomes FT_GLYPH_FORMAT_BITMAP."
+        ]
+      }
+    }
+    ,
+    {
+      "case_id": "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap",
+      "subject": "ftglyph.FT_BitmapGlyphRec",
+      "case": "owns_bitmap_buffer_get_glyph_bitmap",
+      "operation": "ftglyph.done_glyph",
+      "schema": "glyph_lifecycle",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "bitmap_strike_font": {
+            "kind": "ref",
+            "id": "fonts/bitmap-strikes/public-bitmap-strike.ttf",
+            "asset_kind": "font"
+          }
+        },
+        "params": {
+          "creation_path": "FT_Get_Glyph bitmap",
+          "glyph_index": "bitmap_glyph",
           "destroy_with": "FT_Done_Glyph"
         }
       },

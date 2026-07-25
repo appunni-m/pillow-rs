@@ -6,6 +6,7 @@
     "success_bitmap_slot_deep_copy",
     "success_svg_slot_deep_copy",
     "error_null_slot_or_output",
+    "error_unsupported_synthetic_format",
     "error_unsupported_format_or_bad_slot_payload",
     "error_advance_out_of_16_16_range"
   ],
@@ -307,6 +308,62 @@
         "error": {
           "null_slot": "FT_Err_Invalid_Slot_Handle",
           "null_aglyph": "FT_Err_Invalid_Argument"
+        }
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Get_Glyph.error_unsupported_synthetic_format",
+      "subject": "ftglyph.FT_Get_Glyph",
+      "case": "error_unsupported_synthetic_format",
+      "operation": "ftglyph.get_glyph",
+      "schema": "glyph_get",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "role": "font",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": 24,
+          "glyph_index": 36,
+          "load_flags": [
+            "FT_LOAD_DEFAULT"
+          ],
+          "unsupported_slot_formats": [
+            "unsupported_tag"
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "return": "FT_Error",
+          "output_pointer": "non_null_preserved",
+          "cleanup_events": "none"
+        },
+        "compare": {
+          "mode": "exact_error",
+          "paths": [
+            "error",
+            "output_pointer_class",
+            "cleanup_events"
+          ]
+        },
+        "source_refs": [
+          "freetype/include/freetype/ftglyph.h",
+          "freetype/src/base/ftglyph.c"
+        ],
+        "error": {
+          "unsupported_format": "FT_Err_Invalid_Glyph_Format"
         }
       }
     },

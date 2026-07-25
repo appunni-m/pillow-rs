@@ -2322,6 +2322,14 @@ subjects:
     cases:
       - id: layout_matches_c
         description: Size, alignment, and offsets match the pinned C field order from num_faces through internal, including handle, FT_Generic, FT_BBox, FT_ListRec, string pointer, and private pointer fields.
+      - id: initial_public_fields_match_c
+        description: Stable public scalar fields, bbox, and active pointer nullness match the pinned C oracle immediately after opening a scalable SFNT face.
+      - id: post_size_public_fields_match_c
+        description: Stable public scalar fields, active size pointer nullness, and exact FT_Size_Metrics match the pinned C oracle after FT_Set_Char_Size on a scalable SFNT face.
+      - id: available_sizes_public_fields_match_c
+        description: Bitmap strike count and FT_FaceRec::available_sizes records match pinned C for a fixed-size face and a scalable no-strike control.
+      - id: charmap_public_fields_match_c
+        description: FT_FaceRec::num_charmaps, owned charmap records, and active charmap selection behavior match pinned C for a representative SFNT face.
       # needs-input: operation inspect FT_FaceRec immediately after FT_Open_Face/FT_New_Memory_Face and after FT_Set_Char_Size, FT_Load_Glyph, FT_Select_Charmap, FT_Attach_Stream, and variation-coordinate calls; fixture assets scalable SFNT, bitmap-strike font, variable font, and optional auxiliary AFM attachment font; params live FT_Face handles and operation-specific inputs; expected output shape public scalar fields, string contents/pointers, child handle pointers, bbox/metrics, flags, charmap arrays, and available_sizes; comparison rule exact C parity for stable public fields, pointer NULL/non-NULL and identity relationships, and documented mutation behavior after operations.
       - id: populated_public_fields_match_c
         description: Public metadata, strings, flags, metrics, bbox, strike, charmap, glyph, size, and active charmap fields match the pinned C oracle for representative faces and state transitions.
@@ -2360,6 +2368,24 @@ subjects:
     cases:
       - id: layout_matches_c
         description: Size, alignment, and offsets match the pinned C field order flags, memory_base, memory_size, pathname, stream, driver, num_params, params.
+      - id: memory_source_success_matches_c
+        description: FT_Open_Face accepts an FT_Open_Args memory source and returns the exact C status plus output face pointer nullness.
+      - id: memory_source_error_variants_match_c
+        description: FT_Open_Face rejects missing or multiple source flags, null args, null library, and null output face with the exact pinned C status and output pointer contract.
+      - id: memory_source_negative_face_index_probe_matches_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and face_index -1 performs the same pinned C face-count probe and output pointer behavior.
+      - id: memory_source_out_of_range_face_index_matches_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and an out-of-range face index returns the exact pinned C error and null output face.
+      - id: memory_source_short_sizes_match_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and very short memory sizes returns the exact pinned C invalid-stream error and null output face.
+      - id: memory_source_truncated_sfnt_size_matches_c
+        description: FT_Open_Face with FT_OPEN_MEMORY and a truncated SFNT-sized memory slice returns the exact pinned C unknown-format error and null output face.
+      - id: memory_source_optional_flags_noop_match_c
+        description: FT_Open_Face with FT_OPEN_MEMORY plus null FT_OPEN_PARAMS and/or null FT_OPEN_DRIVER opens with the same pinned C status and output face pointer behavior.
+      - id: source_flag_error_matrix_matches_c
+        description: FT_Open_Face rejects stream-only and multiple-source-flag FT_Open_Args rows with the exact pinned C error and null output face.
+      - id: stream_source_success_matches_c
+        description: FT_Open_Face accepts a valid caller-owned FT_OPEN_STREAM source and returns the same status, external-stream face flag, close-callback count, and caller stream lifetime as C.
       # needs-input: operation FT_Open_Face and FT_Attach_Stream using FT_Open_Args; fixture assets valid font bytes, valid pathname font, invalid/missing source, optional custom stream fixture, and an 'sbix' font for FT_OPEN_PARAMS with FT_PARAM_TAG_IGNORE_SBIX; params FT_Open_Args combinations for FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, FT_OPEN_DRIVER, FT_OPEN_PARAMS, no source flag, and multiple source flags; expected output shape FT_Error, output FT_Face pointer/null, and selected face flags; comparison rule exact C error-code parity, exact source-selection precedence/invalidity behavior, no caller-owned buffer copies or ownership changes beyond C rules, and exact parameter effect where observable.
       - id: open_face_consumes_args_like_c
         description: FT_Open_Face interprets source, driver, and parameter fields with the same validation, ownership, and observable face-state behavior as C.
@@ -2372,6 +2398,12 @@ subjects:
     cases:
       - id: layout_matches_c
         description: Size, alignment, and offsets match the pinned C field order tag, data with FT_ULong and FT_Pointer field types.
+      - id: typographic_name_params_match_c
+        description: FT_Open_Face consumes FT_Parameter typographic family/subfamily tags with null data exactly like pinned C.
+      - id: ignored_open_params_match_c
+        description: FT_Open_Face accepts ignored or deprecated FT_Parameter tags without changing public face/glyph output.
+      - id: incremental_null_data_matches_c
+        description: FT_PARAM_TAG_INCREMENTAL with null data behaves like absent incremental data and leaves embedded glyph loading observable exactly like pinned C.
       # needs-input: operation FT_Open_Face with FT_OPEN_PARAMS and FT_Face_Properties where implemented; fixture assets 'sbix' font for FT_PARAM_TAG_IGNORE_SBIX and a face/property case such as LCD filter weights, random seed, or TrueType interpreter version if exposed by the pinned build; params FT_Parameter arrays with known tags, unknown tags, NULL data where accepted, non-NULL data, and num_params zero/nonzero; expected output shape FT_Error plus observable face flags/properties; comparison rule exact tag numeric handling, exact data pointer interpretation/lifetime, exact C error-code parity, and exact ignore/accept/reject behavior for known and unknown parameter tags.
       - id: tag_data_parameters_match_c_behavior
         description: APIs that consume FT_Parameter arrays preserve C tag dispatch, data pointer interpretation, and error behavior.
@@ -2824,6 +2856,10 @@ subjects:
         description: Null target or source stream returns Invalid_Stream_Handle and preserves target/source state.
       - id: error_invalid_or_truncated_bzip2_header
         description: Invalid, empty, or truncated compressed data returns the same C error and avoids unnecessary wrapper allocation.
+      - id: disabled_build_precedes_null_validation
+        description: In the active pinned build without bzip2 support, FT_Stream_OpenBzip2 returns Unimplemented_Feature before null target/source validation.
+      - id: disabled_build_precedes_header_validation
+        description: In the active pinned build without bzip2 support, FT_Stream_OpenBzip2 returns Unimplemented_Feature before reading invalid, truncated, or empty bzip2 headers.
       - id: out_of_scope_uncompiled_bzip2_policy
         description: If this build intentionally excludes bzip2, the ABI-visible behavior must be documented as C-compatible Unimplemented_Feature rather than silently omitting the symbol.
     # needs-input: operation=FT_Stream_OpenBzip2 plus FT_Stream read/close through wrapper; fixture_asset=valid .pcf.bz2 or compressed byte fixture, raw expected decompressed bytes, invalid/truncated bzip2 byte fixtures; params valid source stream, null target, null source, corrupt header, truncated stream, uncompiled-bzip2 feature configuration; output shape=FT_Error, target FT_Stream fields memory/size/pos/base/read/close/descriptor classification, read byte chunks, and source close-count state; comparison=exact C oracle error, stream field classification, decompressed bytes, close ownership behavior, and Unimplemented_Feature policy when excluded.
@@ -3042,6 +3078,8 @@ subjects:
     description: FreeType C API function that releases one cache-node reference acquired by a cache lookup.
     cases:
       # needs-input: operation FTC_SBitCache_Lookup or FTC_ImageCache_Lookup with non-null anode followed by FTC_Node_Unref and manager pressure; fixture asset input/fonts/DejaVuSans.ttf plus requester-backed FTC_Manager; params one glyph index, small cache max_bytes, repeated lookup/fill sequence; expected output shape node pointer, ref_count classification before and after unref if oracle helper exposes it, and survival/flush classification under cache pressure; comparison rule exact C oracle no-op behavior for null/foreign-invalid handles and exact lifecycle classification for referenced versus unreferenced nodes.
+      - id: null_inputs_noop
+        description: FTC_Node_Unref with null node and null manager returns void without touching memory.
       - id: null_or_invalid_inputs_noop
         description: Null node, null manager, or a node whose cache index is outside the manager cache count is ignored like ftcmanag.c.
       - id: releases_lookup_reference
@@ -3327,7 +3365,7 @@ subjects:
         description: "Variants and implicit C enum values match the pinned public header: INCLUDE_ROOT_TRANSFORM=0, NO_ROOT_TRANSFORM=1, ROOT_TRANSFORM_MAX=2."
       - id: root_transform_controls_initial_paint
         description: FT_Get_Color_Glyph_Paint returns an initial FT_COLR_PAINTFORMAT_TRANSFORM paint only when FT_COLOR_INCLUDE_ROOT_TRANSFORM is requested and otherwise returns the font's root paint directly.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params base_glyph with COLR v1 graph, sizes 12px and 48px, FT_Set_Transform identity and non-identity, root_transform in {INCLUDE_ROOT_TRANSFORM, NO_ROOT_TRANSFORM}; expected output shape={FT_Bool, FT_OpaquePaint{p_nonnull, insert_root_transform}, first FT_COLR_Paint JSON with format, transform affine xx/xy/dx/yx/yy/dy when included, and nested paint reference}; comparison=exact C oracle bool, enum value, fixed-point affine fields, opaque null/non-null classification, and paint graph shape.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params base_glyph with COLR v1 graph, sizes 12px and 48px, FT_Set_Transform identity and non-identity, root_transform in {INCLUDE_ROOT_TRANSFORM, NO_ROOT_TRANSFORM}; expected output shape={FT_Bool, FT_OpaquePaint{p_nonnull, insert_root_transform}, first FT_COLR_Paint JSON with format, transform affine xx/xy/dx/yx/yy/dy when included, and nested paint reference}; comparison=exact C oracle bool, enum value, fixed-point affine fields, opaque null/non-null classification, and paint graph shape.
 
   - id: ftcolor.FT_Composite_Mode
     kind: enum
@@ -3375,7 +3413,7 @@ subjects:
         description: Implicit C enum value 0 matches the pinned public header.
       - id: include_transform_runtime
         description: FT_Get_Color_Glyph_Paint marks the returned opaque paint so FT_Get_Paint first yields a root FT_COLR_PAINTFORMAT_TRANSFORM node.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_INCLUDE_ROOT_TRANSFORM, sizes and FT_Set_Transform values covering scale and translation; expected output shape={FT_Bool, first_paint:{format:TRANSFORM, affine:{xx,xy,dx,yx,yy,dy}, child_ref}}; comparison=exact C oracle bool, enum value 0, 16.16 affine fields, and nested paint reference.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_INCLUDE_ROOT_TRANSFORM, sizes and FT_Set_Transform values covering scale and translation; expected output shape={FT_Bool, first_paint:{format:TRANSFORM, affine:{xx,xy,dx,yx,yy,dy}, child_ref}}; comparison=exact C oracle bool, enum value 0, 16.16 affine fields, and nested paint reference.
 
   - id: ftcolor.FT_COLOR_NO_ROOT_TRANSFORM
     kind: enum_variant
@@ -3387,7 +3425,7 @@ subjects:
         description: Implicit C enum value 1 matches the pinned public header.
       - id: omit_transform_runtime
         description: FT_Get_Color_Glyph_Paint returns the font's root paint without an inserted root transform when this variant is used.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_NO_ROOT_TRANSFORM with same base glyph, size, and transform matrix as include-transform case; expected output shape={FT_Bool, first_paint:{format:not inserted TRANSFORM unless font root itself is transform, payload_by_format}}; comparison=exact C oracle bool, enum value 1, first paint format/payload, and absence of synthetic root transform.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint followed by FT_Get_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_NO_ROOT_TRANSFORM with same base glyph, size, and transform matrix as include-transform case; expected output shape={FT_Bool, first_paint:{format:not inserted TRANSFORM unless font root itself is transform, payload_by_format}}; comparison=exact C oracle bool, enum value 1, first paint format/payload, and absence of synthetic root transform.
 
   - id: ftcolor.FT_COLOR_ROOT_TRANSFORM_MAX
     kind: enum_variant
@@ -3399,7 +3437,7 @@ subjects:
         description: Implicit C enum value 2 matches the pinned public header.
       - id: invalid_runtime_behavior
         description: Passing the sentinel as root_transform to FT_Get_Color_Glyph_Paint matches C FreeType's failure and output preservation behavior.
-    # needs-input: operation=FT_Get_Color_Glyph_Paint; fixture_asset=input/fonts/color/colr_v1_root_transform.ttf; params root_transform=FT_COLOR_ROOT_TRANSFORM_MAX and output FT_OpaquePaint initialized with sentinels; expected output shape={FT_Bool, FT_OpaquePaint before/after null/non-null and insert_root_transform fields}; comparison=exact C oracle bool, enum value 2, and output write/preservation behavior.
+    # needs-input: operation=FT_Get_Color_Glyph_Paint; fixture_asset=input/fonts/color/colr-v1-root-transform.ttf; params root_transform=FT_COLOR_ROOT_TRANSFORM_MAX and output FT_OpaquePaint initialized with sentinels; expected output shape={FT_Bool, FT_OpaquePaint before/after null/non-null and insert_root_transform fields}; comparison=exact C oracle bool, enum value 2, and output write/preservation behavior.
 
   - id: ftcolor.FT_COLR_COMPOSITE_CLEAR
     kind: enum_variant
@@ -4242,6 +4280,10 @@ subjects:
         description: Field order is num_layers, layer, p exactly, preserving the opaque COLR cursor ABI.
       - id: initialized_and_advanced_by_layer_apis
         description: FT_Get_Color_Glyph_Layer, FT_Get_Paint, and FT_Get_Paint_Layers initialize and advance iterator state exactly like C.
+      - id: initialized_and_advanced_by_color_glyph_layers_v0
+        description: FT_Get_Color_Glyph_Layer initializes and advances COLR v0 FT_LayerIterator state exactly like C for the maintained COLR v0 layer fixture.
+      - id: initialized_and_advanced_by_paint_layers_v1
+        description: FT_Get_Paint_Layers initializes and advances COLR v1 FT_LayerIterator state exactly like C for the maintained all-paints fixture.
     # needs-input: operation=FT_Get_Color_Glyph_Layer and FT_Get_Paint_Layers; fixture_asset=COLR v0 and COLR v1 fonts with multiple layers; params first-call p=NULL, repeated iteration, exhausted iterator, and malformed cursor controls; expected output shape=FT_LayerIterator { num_layers, layer, p/null-class } plus per-layer outputs; comparison=exact C oracle scalar equality, pointer-null classification, iteration progression, and output preservation on 0 return.
 
   - id: ftcolor.FT_OpaquePaint
@@ -4326,6 +4368,10 @@ subjects:
         description: Field order is colorline, p0, p1, p2 exactly, with p0/p1/p2 FT_Vector coordinates exposed as 16.16 fixed-point font units.
       - id: get_paint_linear_gradient_values
         description: FT_Get_Paint returns ColorLine and p0/p1/p2 values exactly as C, including variable COLR v1 interpolation when available.
+      - id: get_paint_linear_gradient_static_values
+        description: FT_Get_Paint returns the static PaintLinearGradient ColorLine and p0/p1/p2 values exactly as C for the maintained COLR v1 static-gradient fixture.
+      - id: get_paint_linear_gradient_variable_values
+        description: FT_Get_Paint returns variable PaintLinearGradient ColorLine and p0/p1/p2 values exactly as C for the maintained COLR v1 variable-gradient fixture at default and non-default design coordinates.
     # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static and variable PaintLinearGradient records covering horizontal, vertical, diagonal, p2 equal to p0, p2 distinct from p0, negative coordinates, and nested transforms; params resolve gradients under default and varied design coordinates, then iterate color stops; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_LINEAR_GRADIENT, u.linear_gradient { colorline { extend, color_stop_iterator }, p0, p1, p2 } } plus FT_ColorStop sequence; comparison=exact C oracle format, 16.16 vector fields, colorline iterator fields, color stop sequence, variable interpolation, and output preservation on malformed/truncated gradient data.
   - id: ftcolor.FT_PaintRadialGradient
     kind: record
@@ -5184,7 +5230,7 @@ subjects:
         description: Numeric value is exactly 154, matching FT_ERRORDEF_(Invalid_Post_Table_Format, 0x9A) in the pinned header.
       - id: sfnt_post_format_rejected
         description: Loading an SFNT post table whose FormatType is not 1.0, 2.0, 2.5, or 3.0 returns FT_Err_Invalid_Post_Table_Format from ttload.c.
-    # needs-input: operation=new_memory_face; fixture_asset=synthetic SFNT with a present post table and invalid FormatType such as 0x00040000; params={face_index:0}; output shape={FT_Error}; comparison=exact C oracle error code 154 and no face success.
+    # needs-input: operation=FT_New_Face; fixture_asset=generated/sfnt/invalid-post-format.ttf; params={face_index:0}; output shape={FT_Error}; comparison=exact C oracle error code 154 and no face success.
 
   - id: fterrdef.FT_Err_Invalid_Reference
     kind: error
@@ -6151,10 +6197,16 @@ subjects:
     cases:
       - id: success_releases_owned_glyph
         description: A live outline, bitmap, or SVG glyph invokes the class-specific done hook, releases owned outline/bitmap/SVG storage, and frees the glyph allocation exactly once.
+      - id: success_releases_owned_outline_glyph
+        description: A detached outline glyph created from a loaded glyph slot with FT_Get_Glyph owns its copied outline arrays and is released once by FT_Done_Glyph.
+      - id: success_releases_owned_bitmap_glyph
+        description: A detached bitmap glyph created from an embedded bitmap slot with FT_Get_Glyph owns its bitmap buffer and is released once by FT_Done_Glyph.
       - id: success_null_is_noop
         description: Passing a null glyph returns without reading library memory or mutating observable state.
       - id: lifetime_before_library_done
         description: Detached glyphs are owned by the caller and must be destroyed before the owning library is finalized; fixture comparison records C lifetime ordering and invalid-use behavior through the FFI facade.
+      - id: outline_glyph_before_library_done
+        description: A detached outline glyph created with FT_Get_Glyph is released with FT_Done_Glyph before the face and library are finalized.
     # needs-input: operation=FT_Get_Glyph/FT_New_Glyph followed by FT_Done_Glyph; fixture_asset=outline, bitmap-strike, and OT-SVG capable fonts where available; params={glyph_format, destroy_order, null_glyph}; output shape={no return, allocation/free event stream, sanitizer-safe lifetime classification}; comparison=exact C oracle free/done hook sequence and no-op behavior for null.
   - id: ftglyph.FT_Get_Glyph
     kind: function
@@ -6170,6 +6222,8 @@ subjects:
         description: When SVG glyph support is enabled and the slot contains a valid FT_SVG_Document, copies the SVG document bytes, metrics, glyph range, transform, and delta into FT_SvgGlyphRec.
       - id: error_null_slot_or_output
         description: A null slot returns FT_Err_Invalid_Slot_Handle, a null aglyph returns FT_Err_Invalid_Argument, and C output write/preservation behavior is recorded exactly.
+      - id: error_unsupported_synthetic_format
+        description: A live glyph slot with a synthetic unsupported public format returns FT_Err_Invalid_Glyph_Format and preserves the caller's output glyph pointer.
       - id: error_unsupported_format_or_bad_slot_payload
         description: Unsupported glyph formats, mismatched slot format for the class init hook, null SVG document, or zero-length SVG document return C errors and leave *aglyph null.
       - id: error_advance_out_of_16_16_range
@@ -6300,6 +6354,10 @@ subjects:
         description: Size, alignment, and field offsets for root, left, top, and bitmap match the pinned C header.
       - id: fields_match_get_glyph_and_to_bitmap
         description: FT_Get_Glyph and FT_Glyph_To_Bitmap populate root, left, top, and bitmap fields with exact C values for bitmap glyph fixtures.
+      - id: fields_match_get_glyph_bitmap
+        description: FT_Get_Glyph on the maintained bitmap strike fixture populates root, left, top, and bitmap fields with exact C values.
+      - id: owns_bitmap_buffer_get_glyph_bitmap
+        description: FT_Get_Glyph on the maintained bitmap strike fixture creates a bitmap glyph whose buffer is owned until FT_Done_Glyph.
       - id: owns_bitmap_buffer
         description: The bitmap buffer is owned by FT_BitmapGlyphRec and is released by FT_Done_Glyph through the bitmap glyph done hook.
     # needs-input: operation=FT_Get_Glyph and FT_Glyph_To_Bitmap with record inspection; fixture_asset=bitmap strike font and outline font rendered to bitmap; params={glyph index, size, render mode}; output shape={layout metadata, root fields, left/top, FT_Bitmap fields/bytes, free events}; comparison=exact C oracle layout, field values, bytes, and ownership.
@@ -6363,6 +6421,10 @@ subjects:
         description: Type alias is present in the pinned C public interface as struct FT_GlyphRec_*.
       - id: caller_owned_lifetime
         description: Handles returned by FT_New_Glyph, FT_Get_Glyph, FT_Glyph_Copy, and FT_Glyph_To_Bitmap are caller-owned and must be released with FT_Done_Glyph.
+      - id: outline_caller_owned_lifetime
+        description: An outline FT_Glyph returned by FT_Get_Glyph is caller-owned and released with FT_Done_Glyph before face teardown.
+      - id: bitmap_caller_owned_lifetime
+        description: A bitmap FT_Glyph returned by FT_Get_Glyph is caller-owned and released with FT_Done_Glyph before face teardown.
     # needs-input: operation=create/copy/convert/done glyph lifecycle; fixture_asset=outline and bitmap fonts; params={creation path, destroy order}; output shape={handle nullness, root fields, allocation/free event stream}; comparison=exact C oracle handle ownership and root record relationship.
   - id: ftglyph.FT_Glyph_Class
     kind: type
@@ -6374,6 +6436,10 @@ subjects:
         description: Type alias is present in the pinned C public interface as an opaque forward declaration.
       - id: opaque_class_identity_only
         description: Public tests compare only nullness and stable class identity effects through public operations, not private FT_Glyph_Class_ field names.
+      - id: outline_class_behavior
+        description: The outline glyph class remains private but is observable through public FT_Get_Glyph outline behavior and FT_OutlineGlyphRec-compatible output.
+      - id: bitmap_class_behavior
+        description: The bitmap glyph class remains private but is observable through public FT_Get_Glyph bitmap behavior and FT_BitmapGlyphRec-compatible output.
     # needs-input: operation=FT_New_Glyph/FT_Get_Glyph class identity inspection through public behavior; fixture_asset=outline/bitmap/SVG glyphs; params={glyph format}; output shape={clazz nullness/class-kind classification, supported operation behavior}; comparison=exact C oracle public behavior without private struct dereference.
   - id: ftglyph.FT_OutlineGlyph
     kind: type
@@ -8356,6 +8422,8 @@ subjects:
         description: Nonzero num_coords with a null coords pointer returns Invalid_Argument before service dispatch.
       - id: output_changes_for_active_blend
         description: Setting non-default blend coordinates changes variable glyph metrics, cbox/bbox, and rendered bytes in the same way as C.
+      - id: success_type1_mm_glyph_output_after_blend
+        description: Setting Adobe Type 1 MM blend coordinates succeeds and preserves exact subsequent glyph load/render output across the public ABI surfaces.
     # needs-input: operation=FT_Set_MM_Blend_Coordinates followed by FT_Get_Var_Blend_Coordinates and glyph load/render; fixture_asset=variable TrueType fonts with gvar/HVAR/MVAR coverage and Adobe MM fixture where available; params={blend_coords, num_coords, coords_null, glyph_index, size, load_flags}; output shape={FT_Error, returned blend coords, face_flags variation bit, metrics, outline cbox/bbox, bitmap descriptor/bytes}; comparison=exact C oracle error code, coordinate state, variation flag, metrics, geometry, and render bytes.
 
   - id: ftmm.FT_Set_MM_Design_Coordinates
@@ -8728,6 +8796,8 @@ subjects:
       # needs-input: operation=FT_Reference_Library then FT_Done_Library; fixture asset=none; params={library: valid, refcount incremented}; output shape={FT_Error, library remains usable, refcount effect}; comparison=exact C status and delayed destruction.
       - id: decrements_reference_without_destroying
         description: Referenced libraries return FT_Err_Ok and remain alive until the final FT_Done_Library call.
+      - id: default_modules_final_destroy_status
+        description: A library populated only with default modules can be finally destroyed with the same public FT_Error status as C.
       # needs-input: operation=FT_Done_Library; fixture asset=font with opened face and default modules; params={library: initialized}; output shape={FT_Error, module destructor order, face closure status}; comparison=exact C success and reverse module removal behavior.
       - id: final_destroy_closes_faces_and_modules
         description: Final destruction closes driver faces, removes modules in reverse table order, frees the library, and returns FT_Err_Ok.
@@ -10529,6 +10599,8 @@ subjects:
         description: The pinned public header defines FT_Stroker as a pointer to struct FT_StrokerRec_.
       - id: opaque_handle_import_contract
         description: Client code can declare, pass, compare, and destroy FT_Stroker handles without the public header exposing the record fields.
+      - id: unparsed_handle_lifecycle_matches_c
+        description: A non-null unparsed stroker handle can be constructed, configured, exported as a no-op, rewound, and destroyed with the same observable status and no-crash behavior as C.
       - id: lifecycle_contract
         description: Handles produced by FT_Stroker_New are consumed by FT_Stroker_Set, path commands, export/count queries, and FT_Stroker_Done.
     # needs-input: operation=C import/ABI compile probe plus FT_Stroker_New/Done lifecycle fixture; fixture_asset=small C translation unit and no-font lifecycle run; params={include=freetype/ftstroke.h, declare_handle, pass_to_public_functions}; expected output shape={compile_status, pointer_size, lifecycle FT_Error sequence}; comparison=exact C compiler success, ABI pointer shape, and constructor/destructor status.
@@ -10624,6 +10696,8 @@ subjects:
         description: Size, alignment, and field offsets match the pinned C header for base, size, pos, descriptor, pathname, read, close, memory, cursor, and limit.
       - id: memory_stream_field_contract
         description: Memory streams expose base, size, pos, cursor, and limit behavior used by FT_Stream_OpenMemory and frame-reading helpers.
+      - id: external_base_close_fields_match_c
+        description: A caller-owned external FT_StreamRec with base/size and close callback opens a face and preserves the same face flags, close-call count, and stream lifetime as C.
       - id: callback_stream_field_contract
         description: Callback streams use descriptor/pathname unions plus read and close function pointers without changing the public record shape.
     # needs-input: operation=C ABI layout probe plus FT_Open_Args external stream fixture; fixture_asset=in-memory font bytes and custom callback stream binary harness; params={initial FT_StreamRec fields, read callback behavior, close callback behavior}; expected output shape={sizeof, alignof, field_offsets, stream positions, callback event log, face load status}; comparison=exact C ABI layout and stream callback observations.
@@ -10652,6 +10726,8 @@ subjects:
         description: Type alias is present as struct FT_StreamRec_* in the pinned C public interface.
       - id: pointer_abi_contract
         description: The handle has pointer size/alignment and points to the public FT_StreamRec fields used by callbacks.
+      - id: valid_external_memory_stream_face_open
+        description: A valid caller-owned external memory stream can be passed through FT_Open_Args and keeps C-equivalent ownership, face flag, and close-callback behavior.
       - id: external_stream_runtime_contract
         description: Passing a caller-owned FT_Stream through FT_Open_Args keeps stream ownership and invokes the public close callback only according to C's external-stream rules.
     # needs-input: operation=FT_Open_Face using FT_OPEN_STREAM with caller-owned FT_StreamRec; fixture_asset=valid font bytes and malformed stream callback fixture; params={read callback returns, seek behavior, close callback present}; expected output shape={ABI pointer layout, callback event log, face load status, stream field mutations}; comparison=exact C oracle pointer/ownership behavior and returned error.
@@ -20270,7 +20346,7 @@ subjects:
       - id: invalid_post_format_error_runtime
         description: C oracle rejects unsupported post FormatType values during face load with Invalid_Post_Table_Format before this record can be used successfully.
     # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/sfnt/post-format-2.ttf; params={tag=FT_SFNT_POST}; expected output shape={pointer_null, FormatType, italicAngle, underlinePosition, underlineThickness, isFixedPitch, minMemType42, maxMemType42, minMemType1, maxMemType1}; comparison=exact C oracle field values, excluding glyph-name data by design.
-    # needs-input: operation=FT_New_Face; fixture_asset=input/fonts/sfnt/post-invalid-format.ttf; params={}; expected output shape={FT_Error}; comparison=exact C oracle error classification Invalid_Post_Table_Format.
+    # needs-input: operation=FT_New_Face; fixture_asset=generated/sfnt/invalid-post-format.ttf; params={}; expected output shape={FT_Error}; comparison=exact C oracle error classification Invalid_Post_Table_Format.
 
   - id: tttables.TT_VertHeader
     kind: record

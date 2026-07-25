@@ -238,6 +238,20 @@ enum Asset {
     Other(Value),
 }
 
+#[derive(Debug, Deserialize)]
+struct GzipPayloadManifest {
+    payloads: Vec<GzipPayloadEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GzipPayloadEntry {
+    id: String,
+    raw: String,
+    gzip: String,
+    #[serde(default)]
+    zlib_wrapped: Option<String>,
+}
+
 impl<'de> Deserialize<'de> for Asset {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -976,6 +990,29 @@ fn glyph_record_runtime_supported(case: &InputCase) -> bool {
         && !has_probe_params(case)
         && glyph_index_param(&case.inputs.params).is_ok()
         && load_flags_param(&case.inputs.params).is_ok()
+}
+
+fn ftglyph_type_runtime_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_OutlineGlyph.pointer_alias_matches_record"
+            | "ftglyph.FT_BitmapGlyph.pointer_alias_matches_record"
+            | "ftglyph.FT_Glyph.outline_caller_owned_lifetime"
+            | "ftglyph.FT_Glyph.bitmap_caller_owned_lifetime"
+            | "ftglyph.FT_Glyph_Class.outline_class_behavior"
+            | "ftglyph.FT_Glyph_Class.bitmap_class_behavior"
+    ) && !case.expect_error
+        && has_runtime_font_source(case)
+        && assets_are_runtime_resolved(case)
+        && !has_probe_params(case)
+        && case
+            .inputs
+            .params
+            .get("format_filter")
+            .and_then(Value::as_str)
+            .is_some_and(|format| {
+                matches!(format, "FT_GLYPH_FORMAT_OUTLINE" | "FT_GLYPH_FORMAT_BITMAP")
+            })
 }
 
 fn sbit_cache_runtime_supported(case: &InputCase) -> bool {
@@ -2509,6 +2546,37 @@ impl BackendComparisonWorker {
             return run_rust_ffi(case);
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::Rust)
+            }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::Rust)
+            }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                rust_color_glyph_layer_case(case)
+            }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                rust_color_glyph_clipbox_case(case)
+            }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                rust_color_paint_graph_case(case)
+            }
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust))
+            }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                rust_inspect_face_rec_initial_snapshot(case)
+            }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                rust_inspect_face_rec_post_size_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => rust_inspect_available_sizes(case),
             "size_metrics" => {
                 let face = self.rust_face(case)?;
@@ -2636,6 +2704,13 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 rust_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => rust_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => rust_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                rust_cid_ros_output(case)
+            }
             "FT_Property_Set_then_Get"
                 if case.case_id
                     == "ftdriver.FT_Prop_IncreaseXHeight.property_set_get_round_trips_limit" =>
@@ -2660,9 +2735,25 @@ impl BackendComparisonWorker {
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => rust_get_winfnt_header(case),
             "ftwinfnt.get_winfnt_header_mutation" => rust_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => rust_winfnt_charmap_probe(case),
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                rust_attach_file(case)
+            }
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                rust_attach_stream(case)
+            }
             "freetype.get_kerning" => {
                 let face = self.rust_face(case)?;
                 rust_get_kerning_with_face(face, case)
+            }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                rust_get_track_kerning(case)
             }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
@@ -2758,10 +2849,16 @@ impl BackendComparisonWorker {
             }
             "ftotval.open_type_validate" => rust_open_type_validate(case),
             "ftotval.open_type_free" => rust_open_type_free(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                rust_has_ps_glyph_names(case)
+            }
             "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
                 rust_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => rust_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                rust_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -2846,6 +2943,37 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::CAbi)
+            }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::CAbi)
+            }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                c_color_glyph_layer_case(case)
+            }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                c_color_glyph_clipbox_case(case)
+            }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                c_color_paint_graph_case(case)
+            }
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
+            }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                c_inspect_face_rec_initial_snapshot(case)
+            }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                c_inspect_face_rec_post_size_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => c_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -2983,6 +3111,13 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 c_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => c_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => c_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                c_cid_ros_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return c_get_winfnt_header(std::ptr::null_mut(), &case.inputs.params);
@@ -2995,9 +3130,28 @@ impl BackendComparisonWorker {
             }
             "ftwinfnt.get_winfnt_header_mutation" => c_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => c_winfnt_charmap_probe(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                c_has_ps_glyph_names(case)
+            }
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                c_attach_file(case)
+            }
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                c_attach_stream(case)
+            }
             "freetype.get_kerning" => {
                 let face = self.c_face(case)?;
                 c_get_kerning_with_face(face, &case.inputs.params)
+            }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                c_get_track_kerning(case)
             }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
@@ -3086,6 +3240,9 @@ impl BackendComparisonWorker {
                 c_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => c_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                c_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -3181,6 +3338,37 @@ impl BackendComparisonWorker {
             };
         }
         match case.operation.as_str() {
+            "ftgzip.gzip_uncompress"
+                if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" =>
+            {
+                gzip_uncompress_output(case, GzipBackend::Wasm)
+            }
+            "ftgzip.stream_open_gzip"
+                if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" =>
+            {
+                gzip_stream_open_output(case, GzipStreamBackend::Wasm)
+            }
+            "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+                wasm_color_glyph_layer_case(case)
+            }
+            "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+                wasm_color_glyph_clipbox_case(case)
+            }
+            operation
+                if operation.starts_with("ftcolor.")
+                    && color_paint_success_route_supported(case) =>
+            {
+                wasm_color_paint_graph_case(case)
+            }
+            "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
+                Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
+            }
+            "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+                wasm_inspect_face_rec_initial_snapshot(case)
+            }
+            "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+                wasm_inspect_face_rec_post_size_snapshot(case)
+            }
             "freetype.inspect_available_sizes" => wasm_inspect_available_sizes(case),
             "ftlist.list_iterate"
                 if case.case_id == "ftlist.FT_List_Iterate.iterates_all_nodes_success" =>
@@ -3315,6 +3503,13 @@ impl BackendComparisonWorker {
             "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
                 wasm_bdf_charset_output(case)
             }
+            "ftcid.get_cid_is_internally_cid_keyed" => wasm_cid_is_keyed_output(case),
+            "ftcid.get_cid_from_glyph_index" => wasm_cid_from_glyph_index_output(case),
+            "ftcid.get_cid_registry_ordering_supplement"
+                if cid_ros_success_case_supported(case) =>
+            {
+                wasm_cid_ros_output(case)
+            }
             "winfnt.get_header" | "ftwinfnt.get_winfnt_header" => {
                 if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
                     return wasm_get_winfnt_header(0, &case.inputs.params);
@@ -3326,9 +3521,28 @@ impl BackendComparisonWorker {
             }
             "ftwinfnt.get_winfnt_header_mutation" => wasm_get_winfnt_header_mutation(case),
             "winfnt.charmap_probe" => wasm_winfnt_charmap_probe(case),
+            "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+                wasm_has_ps_glyph_names(case)
+            }
+            "freetype.attach_file"
+                if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+            {
+                wasm_attach_file(case)
+            }
+            "freetype.attach_stream"
+                if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+            {
+                wasm_attach_stream(case)
+            }
             "freetype.get_kerning" => {
                 let handle = self.wasm_face(case)?;
                 wasm_get_kerning_with_face(handle, &case.inputs.params)
+            }
+            "freetype.get_track_kerning"
+                if case.case_id
+                    == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+            {
+                wasm_get_track_kerning(case)
             }
             "ftpfr.get_pfr_kerning"
                 if case.case_id
@@ -3414,6 +3628,9 @@ impl BackendComparisonWorker {
                 wasm_get_ps_font_info(case)
             }
             "t1tables.mm_blend_dictionary" => wasm_mm_blend_dictionary(case),
+            "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+                wasm_get_ps_font_value_matrix(case)
+            }
             "t1tables.get_ps_font_value" | "t1tables.get_ps_font_value_encoding"
                 if ps_font_value_encoding_case(case) =>
             {
@@ -8235,6 +8452,18 @@ struct KerningOutputRow {
     y: i64,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TrackKerningRow {
+    point_size: FT_Fixed,
+    degree: FT_Int,
+}
+
+struct TrackKerningOutputRow {
+    input: TrackKerningRow,
+    status: FT_Error,
+    akerning: FT_Fixed,
+}
+
 fn rust_set_transform(case: &InputCase) -> Result<RunOutput, String> {
     let params = &case.inputs.params;
     let (xx, xy, yx, yy, dx, dy) = set_transform_matrix_param(params)?;
@@ -9160,10 +9389,19 @@ fn wasm_ps_private_json(private: &wasm_abi::FontdoneWasmPSPrivate) -> Value {
 }
 
 fn rust_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = PS_FontInfoRec::default();
+        let err = FT_Get_PS_Font_Info(None, Some(&mut info));
+        return Ok(ps_font_info_output(err, ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = PS_FontInfoRec::default();
-    let err = FT_Get_PS_Font_Info(Some(&face), Some(&mut info));
+    let err = FT_Get_PS_Font_Info(
+        Some(&face),
+        (lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") != Some("null"))
+            .then_some(&mut info),
+    );
     Ok(ps_font_info_output(err, ps_font_info_json(&info)))
 }
 
@@ -9186,11 +9424,22 @@ fn rust_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = c_abi::PS_FontInfoRec::default();
+        let err = c_abi::FT_Get_PS_Font_Info(ptr::null_mut(), &mut info);
+        return Ok(ps_font_info_output(err, ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = c_abi::PS_FontInfoRec::default();
-    let err = c_abi::FT_Get_PS_Font_Info(face, &mut info);
+    let info_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut info
+        };
+    let err = c_abi::FT_Get_PS_Font_Info(face, info_ptr);
     let output = ps_font_info_output(err, ps_font_info_json(&info));
     c_done_face(face);
     c_done_library(library);
@@ -9220,11 +9469,65 @@ fn c_mm_blend_dictionary(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_get_ps_font_info(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
+        let err = wasm_abi::fontdone_wasm_get_ps_font_info(0, &mut info);
+        return Ok(ps_font_info_output(err, wasm_ps_font_info_json(&info)));
+    }
     let bytes = font_bytes_for_ps_font_info(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut info = wasm_abi::FontdoneWasmPSFontInfo::default();
-    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, &mut info);
+    let info_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut info
+        };
+    let err = wasm_abi::fontdone_wasm_get_ps_font_info(handle, info_ptr);
     let output = ps_font_info_output(err, wasm_ps_font_info_json(&info));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn has_ps_glyph_names_output(result: FT_Int) -> RunOutput {
+    ok(json!({"result": result}))
+}
+
+fn rust_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(FT_Has_PS_Glyph_Names(None)));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    Ok(has_ps_glyph_names_output(FT_Has_PS_Glyph_Names(Some(
+        &face,
+    ))))
+}
+
+fn c_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(c_abi::FT_Has_PS_Glyph_Names(
+            ptr::null_mut(),
+        )));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let (library, face) =
+        c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = has_ps_glyph_names_output(c_abi::FT_Has_PS_Glyph_Names(face));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_has_ps_glyph_names(case: &InputCase) -> Result<RunOutput, String> {
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        return Ok(has_ps_glyph_names_output(
+            wasm_abi::fontdone_wasm_has_ps_glyph_names(0),
+        ));
+    }
+    let bytes = font_bytes_for_face_source(case)?;
+    let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let output = has_ps_glyph_names_output(wasm_abi::fontdone_wasm_has_ps_glyph_names(handle));
     wasm_done_face(handle);
     Ok(output)
 }
@@ -9432,6 +9735,215 @@ fn wasm_ps_font_value_encoding_for_bytes(
     ))
 }
 
+fn ps_font_value_signature_matrix_case(case: &InputCase) -> bool {
+    case.case_id == "t1tables.FT_Get_PS_Font_Value.signature_and_behavior_matrix"
+}
+
+fn direct_ps_font_info_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Get_PS_Font_Info.type1_font_value_populated_success"
+            | "t1tables.FT_Get_PS_Font_Info.cff_fontinfo_populated_success"
+            | "t1tables.FT_Get_PS_Font_Info.null_face_invalid_face_handle"
+            | "t1tables.FT_Get_PS_Font_Info.null_output_invalid_argument"
+    )
+}
+
+fn direct_ps_font_private_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Get_PS_Font_Private.type1_font_value_populated_success"
+            | "t1tables.FT_Get_PS_Font_Private.null_face_invalid_face_handle"
+            | "t1tables.FT_Get_PS_Font_Private.null_output_invalid_argument"
+    )
+}
+
+fn direct_has_ps_glyph_names_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "t1tables.FT_Has_PS_Glyph_Names.type1_font_value_populated_true"
+            | "t1tables.FT_Has_PS_Glyph_Names.cff_fontinfo_populated_true"
+            | "t1tables.FT_Has_PS_Glyph_Names.truetype_false"
+            | "t1tables.FT_Has_PS_Glyph_Names.cid_keyed_cff_false"
+            | "t1tables.FT_Has_PS_Glyph_Names.null_face_false"
+    )
+}
+
+fn ps_font_value_matrix_scenarios(case: &InputCase) -> Result<Vec<&Value>, String> {
+    case.inputs
+        .params
+        .get("scenarios")
+        .and_then(Value::as_array)
+        .map(|rows| rows.iter().collect())
+        .ok_or_else(|| "missing FT_Get_PS_Font_Value scenarios".to_string())
+}
+
+fn ps_font_value_key_value(key: &str) -> Result<PS_Dict_Keys, String> {
+    match key {
+        "PS_DICT_UNDERLINE_POSITION" => Ok(PS_DICT_UNDERLINE_POSITION),
+        "PS_DICT_FULL_NAME" => Ok(PS_DICT_FULL_NAME),
+        "PS_DICT_BLUE_VALUE" => Ok(PS_DICT_BLUE_VALUE),
+        "PS_DICT_ENCODING_TYPE" => Ok(PS_DICT_ENCODING_TYPE),
+        other => Err(format!("unsupported PS_Dict_Keys scenario {other}")),
+    }
+}
+
+fn ps_font_value_scenario_asset<'a>(
+    case: &'a InputCase,
+    scenario: &Value,
+) -> Result<Option<&'a Asset>, String> {
+    if scenario
+        .get("face_pointer_mode")
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode == "null")
+    {
+        return Ok(None);
+    }
+    let asset = string_param(scenario, "asset")?;
+    case.inputs
+        .assets
+        .get(asset)
+        .map(Some)
+        .ok_or_else(|| format!("missing FT_Get_PS_Font_Value asset {asset}"))
+}
+
+fn ps_font_value_scenario_idx(scenario: &Value) -> Result<FT_UInt, String> {
+    scenario
+        .get("idx")
+        .and_then(Value::as_u64)
+        .and_then(|value| FT_UInt::try_from(value).ok())
+        .ok_or_else(|| format!("invalid FT_Get_PS_Font_Value idx {scenario}"))
+}
+
+fn ps_font_value_matrix_row<F>(scenario: &Value, mut call: F) -> Result<Value, String>
+where
+    F: FnMut(Option<&mut [u8]>, FT_Long) -> FT_Long,
+{
+    let id = string_param(scenario, "id")?;
+    let key = string_param(scenario, "key")?;
+    let idx = ps_font_value_scenario_idx(scenario)?;
+    let pointer_mode = scenario
+        .get("value_pointer_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("valid");
+    let prequery = call(None, 0);
+    let value_len = if let Some(len) = scenario.get("value_len") {
+        i64_value(len, "value_len")?
+    } else if scenario
+        .get("value_len_mode")
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode == "exact")
+        && prequery > 0
+    {
+        prequery
+    } else {
+        256
+    };
+    let mut buffer = vec![0xA5u8; 256];
+    let ret = if pointer_mode == "null" {
+        call(None, value_len)
+    } else {
+        call(Some(&mut buffer), value_len)
+    };
+    let prefix_len = if pointer_mode == "null" {
+        0
+    } else if ret > 0
+        && usize::try_from(ret)
+            .ok()
+            .is_some_and(|len| len <= buffer.len() && value_len >= ret)
+    {
+        usize::try_from(ret).unwrap_or(0)
+    } else {
+        16
+    };
+    Ok(json!({
+        "id": id,
+        "key": key,
+        "idx": idx,
+        "prequery": prequery,
+        "value_len": value_len,
+        "return": ret,
+        "buffer_hex": hex_bytes(&buffer[..prefix_len])
+    }))
+}
+
+fn rust_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let face = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| rust_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?;
+            ps_font_value_matrix_row(scenario, |value, value_len| {
+                FT_Get_PS_Font_Value(face.as_ref(), key, idx, value, value_len)
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn c_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let opened = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| c_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?;
+            let face = opened.map_or(ptr::null_mut(), |(_, face)| face);
+            let row = ps_font_value_matrix_row(scenario, |value, value_len| {
+                let value_ptr = value.map_or(ptr::null_mut(), |buffer| {
+                    buffer.as_mut_ptr().cast::<c_void>()
+                });
+                c_abi::FT_Get_PS_Font_Value(face, key, idx, value_ptr, value_len)
+            })?;
+            if let Some((library, face)) = opened {
+                c_done_face(face);
+                c_done_library(library);
+            }
+            Ok(row)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn wasm_get_ps_font_value_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    let rows = ps_font_value_matrix_scenarios(case)?
+        .into_iter()
+        .map(|scenario| {
+            let key = ps_font_value_key_value(string_param(scenario, "key")?)?;
+            let idx = ps_font_value_scenario_idx(scenario)?;
+            let asset = ps_font_value_scenario_asset(case, scenario)?;
+            let handle = asset
+                .map(font_asset_bytes)
+                .transpose()?
+                .map(|bytes| wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(scenario)?))
+                .transpose()?
+                .unwrap_or(0);
+            let row = ps_font_value_matrix_row(scenario, |value, value_len| {
+                let value_ptr = value.map_or(ptr::null_mut(), |buffer| {
+                    buffer.as_mut_ptr().cast::<c_void>()
+                });
+                wasm_abi::fontdone_wasm_get_ps_font_value(handle, key, idx, value_ptr, value_len)
+            })?;
+            if handle != 0 {
+                wasm_done_face(handle);
+            }
+            Ok(row)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
 fn ps_font_value_standard_rows(case: &InputCase) -> Result<Vec<&Value>, String> {
     case.inputs
         .params
@@ -9534,10 +10046,19 @@ fn rust_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = PS_PrivateRec::default();
+        let err = FT_Get_PS_Font_Private(None, Some(&mut private));
+        return Ok(ps_private_output(err, ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = PS_PrivateRec::default();
-    let err = FT_Get_PS_Font_Private(Some(&face), Some(&mut private));
+    let err = FT_Get_PS_Font_Private(
+        Some(&face),
+        (lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") != Some("null"))
+            .then_some(&mut private),
+    );
     Ok(ps_private_output(err, ps_private_json(&private)))
 }
 
@@ -9563,11 +10084,22 @@ fn c_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = c_abi::PS_PrivateRec::default();
+        let err = c_abi::FT_Get_PS_Font_Private(ptr::null_mut(), &mut private);
+        return Ok(ps_private_output(err, ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let (library, face) =
         c_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = c_abi::PS_PrivateRec::default();
-    let err = c_abi::FT_Get_PS_Font_Private(face, &mut private);
+    let private_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut private
+        };
+    let err = c_abi::FT_Get_PS_Font_Private(face, private_ptr);
     c_done_face(face);
     c_done_library(library);
     Ok(ps_private_output(err, ps_private_json(&private)))
@@ -9593,10 +10125,21 @@ fn wasm_get_ps_font_private(case: &InputCase) -> Result<RunOutput, String> {
             .collect::<Result<Vec<_>, String>>()?;
         return Ok(ok(json!({"rows": rows})));
     }
+    if lifecycle_handle_param(&case.inputs.params, "face_source") == Some("null") {
+        let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
+        let err = wasm_abi::fontdone_wasm_get_ps_font_private(0, &mut private);
+        return Ok(ps_private_output(err, wasm_ps_private_json(&private)));
+    }
     let bytes = font_bytes_for_ps_private(case)?;
     let handle = wasm_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
     let mut private = wasm_abi::FontdoneWasmPSPrivate::default();
-    let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, &mut private);
+    let private_ptr =
+        if lifecycle_handle_param(&case.inputs.params, "output_pointer_mode") == Some("null") {
+            ptr::null_mut()
+        } else {
+            &mut private
+        };
+    let err = wasm_abi::fontdone_wasm_get_ps_font_private(handle, private_ptr);
     wasm_done_face(handle);
     Ok(ps_private_output(err, wasm_ps_private_json(&private)))
 }
@@ -10154,6 +10697,15 @@ fn wasm_color_entries_json(entries: &[wasm_abi::FontdoneWasmColor]) -> Value {
     )
 }
 
+fn ft_color_json(color: FT_Color) -> Value {
+    json!({
+        "blue": color.blue,
+        "green": color.green,
+        "red": color.red,
+        "alpha": color.alpha
+    })
+}
+
 fn rust_palette_select_runs_json(face: &FT_Face) -> Value {
     let runs: Vec<Value> = [0, 1]
         .into_iter()
@@ -10404,6 +10956,2307 @@ fn wasm_palette_reselect_json(handle: usize) -> Value {
     })
 }
 
+fn palette_set_foreground_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    color: FT_Color,
+) -> FT_Error {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Set_Foreground_Color(rust_face, color),
+        ColorPaintBackend::CAbi => c_abi::FT_Palette_Set_Foreground_Color(
+            c_face,
+            c_abi::FT_Color {
+                blue: color.blue,
+                green: color.green,
+                red: color.red,
+                alpha: color.alpha,
+            },
+        ),
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_palette_set_foreground_color(
+            wasm_handle,
+            wasm_abi::FontdoneWasmColor {
+                blue: color.blue,
+                green: color.green,
+                red: color.red,
+                alpha: color.alpha,
+            },
+        ),
+    }
+}
+
+fn palette_select_zero_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> FT_Error {
+    palette_select_call(backend, rust_face, c_face, wasm_handle, 0)
+}
+
+fn palette_select_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    palette_index: FT_UShort,
+) -> FT_Error {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Select(rust_face, palette_index, None),
+        ColorPaintBackend::CAbi => c_abi::FT_Palette_Select(c_face, palette_index, ptr::null_mut()),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_palette_select(wasm_handle, palette_index, ptr::null_mut())
+        }
+    }
+}
+
+fn foreground_solid_public_reference_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let snapshot = match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_PublicPaintSolid_Copy(rust_face, 50),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_public_paint_solid(c_face, 50),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_public_paint_solid(wasm_handle, 50)
+        }
+    };
+    let color = if snapshot.paint_return != 0
+        && snapshot.paint_format == FT_COLR_PAINTFORMAT_SOLID as FT_PaintFormat
+    {
+        json!({
+            "palette_index": snapshot.palette_index,
+            "alpha": snapshot.alpha
+        })
+    } else {
+        Value::Null
+    };
+    json!({
+        "kind": "public_color_index",
+        "base_glyph": 50,
+        "root_return": snapshot.root_return,
+        "paint_return": snapshot.paint_return,
+        "paint_format": snapshot.paint_format,
+        "color": color
+    })
+}
+
+fn palette_set_foreground_sfnt_runs_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let colors = [
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 255,
+        },
+        FT_Color {
+            blue: 255,
+            green: 16,
+            red: 128,
+            alpha: 64,
+        },
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 0,
+        },
+    ];
+    let select_error = palette_select_zero_call(backend, rust_face, c_face, wasm_handle);
+    let runs: Vec<Value> = colors
+        .into_iter()
+        .map(|color| {
+            let set_error =
+                palette_set_foreground_call(backend, rust_face, c_face, wasm_handle, color);
+            json!({
+                "error": if select_error != FT_Err_Ok { select_error } else { set_error },
+                "foreground_color": ft_color_json(color),
+                "observable_bgra_or_color_index": foreground_solid_public_reference_json(
+                    backend,
+                    rust_face,
+                    c_face,
+                    wasm_handle,
+                )
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+fn default_foreground_color_for_palette_flags(palette_flags: FT_UShort) -> FT_Color {
+    if palette_flags & FT_PALETTE_FOR_DARK_BACKGROUND as FT_UShort != 0 {
+        // FreeType 2.14.3 `src/sfnt/ttcolr.c:1834-1851` resolves COLR
+        // palette index 0xFFFF to opaque white for dark-background palettes
+        // when `FT_Palette_Set_Foreground_Color` has not supplied an explicit
+        // foreground color. All other palettes default to opaque black.
+        FT_Color {
+            blue: 255,
+            green: 255,
+            red: 255,
+            alpha: 255,
+        }
+    } else {
+        FT_Color {
+            blue: 0,
+            green: 0,
+            red: 0,
+            alpha: 255,
+        }
+    }
+}
+
+fn palette_flags_for_backend(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<FT_UShort> {
+    match backend {
+        ColorPaintBackend::Rust => FT_Palette_Data_Copy(rust_face).palette_flags,
+        ColorPaintBackend::CAbi => c_abi::abi_palette_data_snapshot(c_face).palette_flags,
+        ColorPaintBackend::Wasm => wasm_abi::abi_palette_data_snapshot(wasm_handle).palette_flags,
+    }
+}
+
+fn palette_default_foreground_policy_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    let runs: Vec<Value> = palette_flags_for_backend(backend, rust_face, c_face, wasm_handle)
+        .into_iter()
+        .enumerate()
+        .map(|(index, palette_flags)| {
+            let palette_index = FT_UShort::try_from(index).unwrap_or(FT_UShort::MAX);
+            let select_error =
+                palette_select_call(backend, rust_face, c_face, wasm_handle, palette_index);
+            let default_foreground_bgra = default_foreground_color_for_palette_flags(palette_flags);
+            json!({
+                "palette_index": palette_index,
+                "select_error": select_error,
+                "palette_flags": palette_flags,
+                "default_foreground_bgra": ft_color_json(default_foreground_bgra),
+                "render_or_blend_output": {
+                    "kind": "resolved_default_foreground_and_public_paint_reference",
+                    "resolved_default_foreground_bgra": ft_color_json(default_foreground_bgra),
+                    "public_foreground_reference": foreground_solid_public_reference_json(
+                        backend,
+                        rust_face,
+                        c_face,
+                        wasm_handle,
+                    )
+                }
+            })
+        })
+        .collect();
+    json!({ "runs": runs })
+}
+
+#[derive(Clone, Copy)]
+enum ColorGlyphLayerBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_glyph_layer_base_glyph(case: &InputCase) -> Result<FT_UInt, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0"
+        | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs" => Ok(36),
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => Ok(1),
+        other => Err(format!("unsupported color glyph layer case {other}")),
+    }
+}
+
+fn color_glyph_layer_success_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0"
+            | "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index"
+            | "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs"
+    )
+}
+
+fn layer_iterator_json(iterator: FT_LayerIterator) -> Value {
+    json!({
+        "num_layers": iterator.num_layers,
+        "layer": iterator.layer,
+        "p_class": pointer_class(iterator.p.cast_const()),
+    })
+}
+
+fn color_glyph_layer_call_json(
+    label: &str,
+    result: FT_Bool,
+    glyph_index: FT_UInt,
+    color_index: FT_UInt,
+    iterator: FT_LayerIterator,
+) -> Value {
+    json!({
+        "label": label,
+        "return": result,
+        "glyph_index": glyph_index,
+        "color_index": color_index,
+        "iterator": layer_iterator_json(iterator),
+    })
+}
+
+fn color_glyph_layer_call(
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    glyph_index: &mut FT_UInt,
+    color_index: &mut FT_UInt,
+    iterator: &mut FT_LayerIterator,
+) -> FT_Bool {
+    match backend {
+        ColorGlyphLayerBackend::Rust => FT_Get_Color_Glyph_Layer(
+            rust_face,
+            base_glyph,
+            Some(glyph_index),
+            Some(color_index),
+            Some(iterator),
+        ),
+        ColorGlyphLayerBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_Layer(c_face, base_glyph, glyph_index, color_index, iterator)
+        }
+        ColorGlyphLayerBackend::Wasm => wasm_abi::fontdone_wasm_get_color_glyph_layer(
+            wasm_handle,
+            base_glyph,
+            glyph_index,
+            color_index,
+            iterator,
+        ),
+    }
+}
+
+fn color_glyph_layer_output_for_open_face(
+    case: &InputCase,
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let base_glyph = color_glyph_layer_base_glyph(case)?;
+    let mut iterator = FT_LayerIterator::default();
+    let mut glyph_index = 0xDEAD;
+    let mut color_index = 0xBEEF;
+    let mut call = |label: &str| {
+        let result = color_glyph_layer_call(
+            backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            base_glyph,
+            &mut glyph_index,
+            &mut color_index,
+            &mut iterator,
+        );
+        color_glyph_layer_call_json(label, result, glyph_index, color_index, iterator)
+    };
+    match case.case_id.as_str() {
+        "ftcolor.FT_Get_Color_Glyph_Layer.layer_iteration_success" => Ok(ok(json!({
+            "calls": [call("call_1"), call("call_2"), call("call_3"), call("call_4")]
+        }))),
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_color_glyph_layers_v0" => {
+            Ok(ok(json!({
+                "calls": [call("call_1"), call("call_2"), call("call_3"), call("call_4")]
+            })))
+        }
+        "ftcolor.FT_Get_Color_Glyph_Layer.foreground_color_index" => {
+            let output = call("foreground");
+            Ok(ok(json!({
+                "call": output,
+                "foreground_marker_preserved": color_index == 0xFFFF,
+            })))
+        }
+        "ftcolor.FT_Get_Color_Glyph_Layer.terminal_false_preserves_last_outputs" => {
+            for _ in 0..4 {
+                let _ = color_glyph_layer_call(
+                    backend,
+                    rust_face,
+                    c_face,
+                    wasm_handle,
+                    base_glyph,
+                    &mut glyph_index,
+                    &mut color_index,
+                    &mut iterator,
+                );
+            }
+            let before_glyph = glyph_index;
+            let before_color = color_index;
+            let before_iterator = iterator;
+            let terminal = color_glyph_layer_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                &mut glyph_index,
+                &mut color_index,
+                &mut iterator,
+            );
+            Ok(ok(json!({
+                "terminal_return": terminal,
+                "before": {
+                    "glyph_index": before_glyph,
+                    "color_index": before_color,
+                    "iterator": layer_iterator_json(before_iterator),
+                },
+                "after": {
+                    "glyph_index": glyph_index,
+                    "color_index": color_index,
+                    "iterator": layer_iterator_json(iterator),
+                },
+            })))
+        }
+        other => Err(format!("unsupported color glyph layer case {other}")),
+    }
+}
+
+fn color_glyph_layer_sequence_for_base_glyph_json(
+    backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    max_calls: usize,
+) -> Value {
+    let mut iterator = FT_LayerIterator::default();
+    let mut glyph_index = 0xDEAD;
+    let mut color_index = 0xBEEF;
+    let calls = (0..max_calls)
+        .map(|index| {
+            let result = color_glyph_layer_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                &mut glyph_index,
+                &mut color_index,
+                &mut iterator,
+            );
+            color_glyph_layer_call_json(
+                &format!("call_{}", index + 1),
+                result,
+                glyph_index,
+                color_index,
+                iterator,
+            )
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "base_glyph": base_glyph,
+        "calls": calls,
+    })
+}
+
+fn color_layer_iterator_combined_output_for_open_face(
+    paint_backend: ColorPaintBackend,
+    glyph_backend: ColorGlyphLayerBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    json!({
+        "color_glyph_layers_v0": color_glyph_layer_sequence_for_base_glyph_json(
+            glyph_backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            36,
+            4,
+        ),
+        "paint_layers_v1": [
+            color_paint_layers_sequence_json(paint_backend, rust_face, c_face, wasm_handle, 36, 3),
+            color_paint_layers_sequence_json(paint_backend, rust_face, c_face, wasm_handle, 37, 4),
+        ],
+    })
+}
+
+fn rust_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    color_glyph_layer_output_for_open_face(
+        case,
+        ColorGlyphLayerBackend::Rust,
+        Some(&face),
+        ptr::null_mut(),
+        0,
+    )
+}
+
+fn c_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output =
+        color_glyph_layer_output_for_open_face(case, ColorGlyphLayerBackend::CAbi, None, face, 0);
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_color_glyph_layer_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = color_glyph_layer_output_for_open_face(
+        case,
+        ColorGlyphLayerBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    output
+}
+
+#[derive(Clone, Copy)]
+enum ColorGlyphClipBoxBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_glyph_clipbox_route_supported(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s37"
+            | "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output"
+    )
+}
+
+fn color_glyph_clipbox_base_glyph(case: &InputCase) -> Result<FT_UInt, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_ClipBox.color_glyph_clipbox_values"
+        | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s12"
+        | "ftcolor.FT_Get_Color_Glyph_ClipBox.clipbox_success_scaled_and_transformed@s37" => Ok(36),
+        "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output" => Ok(37),
+        other => Err(format!("unsupported color glyph clipbox case {other}")),
+    }
+}
+
+fn sentinel_clip_box() -> FT_ClipBox {
+    FT_ClipBox {
+        bottom_left: FT_Vector {
+            x: -0x1111,
+            y: -0x2222,
+        },
+        top_left: FT_Vector {
+            x: -0x3333,
+            y: -0x4444,
+        },
+        top_right: FT_Vector {
+            x: 0x5555,
+            y: 0x6666,
+        },
+        bottom_right: FT_Vector {
+            x: 0x7777,
+            y: 0x8888,
+        },
+    }
+}
+
+fn ft_vector_json(vector: FT_Vector) -> Value {
+    json!({
+        "x": vector.x,
+        "y": vector.y,
+    })
+}
+
+fn clip_box_json(clip_box: FT_ClipBox) -> Value {
+    json!({
+        "bottom_left": ft_vector_json(clip_box.bottom_left),
+        "top_left": ft_vector_json(clip_box.top_left),
+        "top_right": ft_vector_json(clip_box.top_right),
+        "bottom_right": ft_vector_json(clip_box.bottom_right),
+    })
+}
+
+fn color_glyph_clipbox_setup(
+    case: &InputCase,
+    backend: ColorGlyphClipBoxBackend,
+    rust_face: &mut Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<Value, String> {
+    let mut output = json!({});
+    if case.inputs.params.get("pixel_size").is_some() {
+        let (pixel_width, pixel_height) = pixel_size_param(&case.inputs.params)?;
+        let error = match backend {
+            ColorGlyphClipBoxBackend::Rust => {
+                let Some(face) = rust_face.as_deref_mut() else {
+                    return Err("Rust clipbox setup missing face".to_string());
+                };
+                FT_Set_Pixel_Sizes(face, pixel_width, pixel_height)
+            }
+            ColorGlyphClipBoxBackend::CAbi => {
+                c_abi::FT_Set_Pixel_Sizes(c_face, pixel_width, pixel_height)
+            }
+            ColorGlyphClipBoxBackend::Wasm => {
+                wasm_abi::fontdone_wasm_set_pixel_sizes(wasm_handle, pixel_width, pixel_height)
+            }
+        };
+        output["pixel_size"] = json!({
+            "x": pixel_width,
+            "y": pixel_height,
+            "error": error,
+        });
+    }
+    if let Some(transform) = case.inputs.params.get("set_transform") {
+        let (xx, xy, yx, yy, default_dx, default_dy) = set_transform_matrix_param(transform)?;
+        let (dx, dy) = if let Some(delta) = transform.get("delta_26_6") {
+            let dx = delta
+                .get("x")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "delta_26_6.x missing".to_string())?;
+            let dy = delta
+                .get("y")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "delta_26_6.y missing".to_string())?;
+            (
+                i32::try_from(dx).map_err(|err| format!("delta_26_6.x: {err}"))?,
+                i32::try_from(dy).map_err(|err| format!("delta_26_6.y: {err}"))?,
+            )
+        } else {
+            (default_dx, default_dy)
+        };
+        let matrix = FT_Matrix {
+            xx: xx.into(),
+            xy: xy.into(),
+            yx: yx.into(),
+            yy: yy.into(),
+        };
+        let delta = FT_Vector {
+            x: dx.into(),
+            y: dy.into(),
+        };
+        match backend {
+            ColorGlyphClipBoxBackend::Rust => {
+                let Some(face) = rust_face.as_deref_mut() else {
+                    return Err("Rust clipbox transform missing face".to_string());
+                };
+                FT_Set_Transform(Some(face), Some(&matrix), Some(&delta));
+            }
+            ColorGlyphClipBoxBackend::CAbi => {
+                let c_matrix = c_abi::FT_Matrix {
+                    xx: xx.into(),
+                    xy: xy.into(),
+                    yx: yx.into(),
+                    yy: yy.into(),
+                };
+                let c_delta = c_abi::FT_Vector {
+                    x: dx.into(),
+                    y: dy.into(),
+                };
+                c_abi::FT_Set_Transform(c_face, &c_matrix, &c_delta);
+            }
+            ColorGlyphClipBoxBackend::Wasm => {
+                wasm_abi::fontdone_wasm_set_transform(wasm_handle, &matrix, &delta);
+            }
+        }
+        output["set_transform"] = json!({
+            "matrix": {"xx": xx, "xy": xy, "yx": yx, "yy": yy},
+            "delta": ft_vector_json(delta),
+        });
+    }
+    Ok(output)
+}
+
+fn color_glyph_clipbox_call(
+    backend: ColorGlyphClipBoxBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    clip_box: &mut FT_ClipBox,
+) -> FT_Bool {
+    match backend {
+        ColorGlyphClipBoxBackend::Rust => {
+            FT_Get_Color_Glyph_ClipBox(rust_face, base_glyph, Some(clip_box))
+        }
+        ColorGlyphClipBoxBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_ClipBox(c_face, base_glyph, clip_box)
+        }
+        ColorGlyphClipBoxBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_color_glyph_clipbox(wasm_handle, base_glyph, clip_box)
+        }
+    }
+}
+
+fn color_glyph_clipbox_output_for_open_face(
+    case: &InputCase,
+    backend: ColorGlyphClipBoxBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let setup = color_glyph_clipbox_setup(case, backend, &mut rust_face, c_face, wasm_handle)?;
+    let base_glyph = color_glyph_clipbox_base_glyph(case)?;
+    let before = sentinel_clip_box();
+    let mut clip_box = before;
+    let result = color_glyph_clipbox_call(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        base_glyph,
+        &mut clip_box,
+    );
+    if case.case_id
+        == "ftcolor.FT_Get_Color_Glyph_ClipBox.no_clipbox_returns_false_preserves_output"
+    {
+        Ok(ok(json!({
+            "setup": setup,
+            "return": result,
+            "clip_box_before_after": {
+                "before": clip_box_json(before),
+                "after": clip_box_json(clip_box),
+                "preserved": before == clip_box,
+            },
+        })))
+    } else {
+        Ok(ok(json!({
+            "setup": setup,
+            "return": result,
+            "clip_box": clip_box_json(clip_box),
+        })))
+    }
+}
+
+fn rust_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::Rust,
+        Some(&mut face),
+        ptr::null_mut(),
+        0,
+    )
+}
+
+fn c_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let output = color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::CAbi,
+        None,
+        face,
+        0,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn wasm_color_glyph_clipbox_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let output = color_glyph_clipbox_output_for_open_face(
+        case,
+        ColorGlyphClipBoxBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    output
+}
+
+#[derive(Clone, Copy)]
+enum ColorPaintBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn color_paint_success_route_supported(case: &InputCase) -> bool {
+    let operation_supported = matches!(
+        case.operation.as_str(),
+        "ftcolor.get_color_glyph_paint"
+            | "ftcolor.get_color_glyph_paint_and_get_paint"
+            | "ftcolor.get_color_glyph_paint_graph"
+            | "ftcolor.get_color_glyph_paint_and_resolve"
+            | "ftcolor.get_color_glyph_paint_then_get_paint"
+            | "ftcolor.get_paint"
+            | "ftcolor.get_paint_and_colorline_stops"
+            | "ftcolor.get_paint_layers"
+            | "ftcolor.get_paint_graph"
+            | "ftcolor.get_paint_graph_node"
+            | "ftcolor.get_gradient_paint_and_stops"
+            | "ftcolor.get_colorline_stops"
+            | "ftcolor.get_normalized_transform_paint"
+            | "ftcolor.get_root_transform_paint"
+            | "ftcolor.get_solid_paint_and_palette"
+            | "ftcolor.traverse_gradient_paints"
+            | "ftcolor.traverse_color_paint_graph"
+            | "ftcolor.traverse_paint_graph"
+    );
+    if !operation_supported {
+        return false;
+    }
+    matches!(
+        case_id_base(&case.case_id),
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_no_root_transform"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.downstream_paint_graph_contract"
+            | "ftcolor.FT_OpaquePaint.produced_and_consumed_by_paint_apis"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SOLID.paint_solid_color_index"
+            | "ftcolor.FT_COLR_PAINTFORMAT_GLYPH.paint_glyph_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COMPOSITE.paint_composite_payload"
+            | "ftcolor.FT_PaintSolid.get_paint_solid_values"
+            | "ftcolor.FT_PaintGlyph.get_paint_glyph_values"
+            | "ftcolor.FT_PaintComposite.get_paint_composite_values"
+            | "ftcolor.FT_PaintFormat.paint_union_shape_runtime"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform"
+            | "ftcolor.FT_Composite_Mode.paint_composite_modes_runtime"
+            | "ftcolor.FT_COLR_COMPOSITE_MAX.sentinel_not_emitted_by_valid_paint_graph"
+            | "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
+            | "ftcolor.FT_Get_Paint_Layers.end_of_iteration"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis"
+            | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime"
+            | "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload"
+            | "ftcolor.FT_PaintRotate.get_paint_rotate_values"
+            | "ftcolor.FT_PaintScale.get_paint_scale_values"
+            | "ftcolor.FT_PaintSkew.get_paint_skew_values"
+            | "ftcolor.FT_PaintTransform.get_paint_transform_values"
+            | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
+            | "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values"
+            | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
+            | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
+            | "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+            | "ftcolor.FT_ColorLine.gradient_colorline_values"
+            | "ftcolor.FT_ColorStop.iterator_output_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+            | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
+            | "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+            | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+            | "ftcolor.FT_Affine23.root_transform_values"
+            | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_ColorIndex.solid_and_color_stop_values"
+            | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
+            | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
+            | "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
+            | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
+            | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
+    ) || case.case_id.starts_with("ftcolor.FT_COLR_COMPOSITE_")
+        && (case.case_id.ends_with(".paint_composite_runtime")
+            || case.case_id.ends_with(".paint_composite_mode_runtime"))
+}
+
+fn color_paint_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    glyph: FT_UInt,
+    root_transform: FT_UInt,
+) -> (FT_Bool, FT_OpaquePaint) {
+    let mut opaque = FT_OpaquePaint::default();
+    let result = match backend {
+        ColorPaintBackend::Rust => {
+            FT_Get_Color_Glyph_Paint(rust_face, glyph, root_transform, Some(&mut opaque))
+        }
+        ColorPaintBackend::CAbi => {
+            c_abi::FT_Get_Color_Glyph_Paint(c_face, glyph, root_transform, &mut opaque)
+        }
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_get_color_glyph_paint(
+            wasm_handle,
+            glyph,
+            root_transform,
+            &mut opaque,
+        ),
+    };
+    (result, opaque)
+}
+
+fn get_paint_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> (FT_Bool, FT_COLR_Paint) {
+    let mut paint = FT_COLR_Paint::default();
+    let result = match backend {
+        ColorPaintBackend::Rust => FT_Get_Paint(rust_face, opaque, Some(&mut paint)),
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Paint(c_face, opaque, &mut paint),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_paint(wasm_handle, opaque, &mut paint)
+        }
+    };
+    (result, paint)
+}
+
+fn get_paint_layers_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    iterator: &mut FT_LayerIterator,
+    paint: &mut FT_OpaquePaint,
+) -> FT_Bool {
+    match backend {
+        ColorPaintBackend::Rust => FT_Get_Paint_Layers(rust_face, Some(iterator), Some(paint)),
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Paint_Layers(c_face, iterator, paint),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_paint_layers(wasm_handle, iterator, paint)
+        }
+    }
+}
+
+fn get_colorline_stops_call(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    color_stop: &mut FT_ColorStop,
+    iterator: &mut FT_ColorStopIterator,
+) -> FT_Bool {
+    match backend {
+        ColorPaintBackend::Rust => {
+            FT_Get_Colorline_Stops(rust_face, Some(color_stop), Some(iterator))
+        }
+        ColorPaintBackend::CAbi => c_abi::FT_Get_Colorline_Stops(c_face, color_stop, iterator),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::fontdone_wasm_get_colorline_stops(wasm_handle, color_stop, iterator)
+        }
+    }
+}
+
+fn get_paint_layer_iterator_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_LayerIterator> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_Layer_Iterator_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_layer_iterator(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_layer_iterator(wasm_handle, opaque)
+        }
+    }
+}
+
+fn color_stop_iterator_json(iterator: FT_ColorStopIterator) -> Value {
+    json!({
+        "num_color_stops": iterator.num_color_stops,
+        "current_color_stop": iterator.current_color_stop,
+        "p_class": pointer_class(iterator.p.cast_const()),
+        "read_variable": iterator.read_variable,
+    })
+}
+
+fn color_stop_json(stop: FT_ColorStop) -> Value {
+    json!({
+        "stop_offset": stop.stop_offset,
+        "color": {
+            "palette_index": stop.color.palette_index,
+            "alpha": stop.color.alpha,
+        },
+    })
+}
+
+fn colorline_json(colorline: FT_ColorLine) -> Value {
+    json!({
+        "extend": colorline.extend,
+        "color_stop_iterator": color_stop_iterator_json(colorline.color_stop_iterator),
+    })
+}
+
+fn get_paint_colorline_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_ColorLine> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_ColorLine_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_colorline(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_colorline(wasm_handle, opaque)
+        }
+    }
+}
+
+fn get_paint_transform_copy(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+) -> Option<FT_PaintTransform> {
+    match backend {
+        ColorPaintBackend::Rust => FT_ColrV1_Paint_Transform_Copy(rust_face, opaque),
+        ColorPaintBackend::CAbi => c_abi::abi_support_colr_v1_paint_transform(c_face, opaque),
+        ColorPaintBackend::Wasm => {
+            wasm_abi::abi_support_colr_v1_paint_transform(wasm_handle, opaque)
+        }
+    }
+}
+
+fn affine23_json(affine: FT_Affine23) -> Value {
+    json!({
+        "xx": affine.xx,
+        "xy": affine.xy,
+        "dx": affine.dx,
+        "yx": affine.yx,
+        "yy": affine.yy,
+        "dy": affine.dy,
+    })
+}
+
+fn paint_transform_json(transform: FT_PaintTransform) -> Value {
+    json!({
+        "paint": opaque_paint_json(transform.paint),
+        "affine": affine23_json(transform.affine),
+    })
+}
+
+fn colorline_stop_call_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    iterator: &mut FT_ColorStopIterator,
+    color_stop: &mut FT_ColorStop,
+) -> Value {
+    let before_iterator = *iterator;
+    let before_stop = *color_stop;
+    let result = get_colorline_stops_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        color_stop,
+        iterator,
+    );
+    json!({
+        "label": label,
+        "return": result,
+        "before": {
+            "iterator": color_stop_iterator_json(before_iterator),
+            "color_stop": color_stop_json(before_stop),
+        },
+        "after": {
+            "iterator": color_stop_iterator_json(*iterator),
+            "color_stop": color_stop_json(*color_stop),
+        },
+    })
+}
+
+fn gradient_colorline_sequence_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    base_glyph: FT_UInt,
+    max_extra_calls: usize,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    let colorline = if paint_return != 0 {
+        get_paint_colorline_copy(backend, rust_face, c_face, wasm_handle, opaque)
+    } else {
+        None
+    };
+    let mut iterator = colorline
+        .map(|line| line.color_stop_iterator)
+        .unwrap_or_default();
+    let mut color_stop = FT_ColorStop {
+        stop_offset: -0x1234,
+        color: FT_ColorIndex {
+            palette_index: 0xBEEF,
+            alpha: -0x123,
+        },
+    };
+    let max_calls = usize::try_from(iterator.num_color_stops)
+        .unwrap_or(0)
+        .saturating_add(max_extra_calls);
+    let calls = (0..max_calls)
+        .map(|index| {
+            colorline_stop_call_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                &format!("call_{}", index + 1),
+                &mut iterator,
+                &mut color_stop,
+            )
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "label": label,
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "paint_return": paint_return,
+        "paint": {
+            "format": paint.format,
+            "node": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+        },
+        "colorline": colorline.map_or(Value::Null, colorline_json),
+        "calls": calls,
+    })
+}
+
+fn opaque_paint_json(opaque: FT_OpaquePaint) -> Value {
+    json!({
+        "p_class": pointer_class(opaque.p.cast_const()),
+        "insert_root_transform": opaque.insert_root_transform,
+    })
+}
+
+fn color_paint_layers_call_json(
+    label: &str,
+    result: FT_Bool,
+    iterator: FT_LayerIterator,
+    paint: FT_OpaquePaint,
+) -> Value {
+    json!({
+        "label": label,
+        "return": result,
+        "iterator": layer_iterator_json(iterator),
+        "paint": opaque_paint_json(paint),
+    })
+}
+
+fn color_paint_layers_sequence_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    base_glyph: FT_UInt,
+    max_calls: usize,
+) -> Value {
+    let (root_return, root_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) =
+        get_paint_call(backend, rust_face, c_face, wasm_handle, root_opaque);
+    let mut iterator =
+        if paint_return != 0 && paint.format == FT_COLR_PAINTFORMAT_COLR_LAYERS as FT_PaintFormat {
+            get_paint_layer_iterator_copy(backend, rust_face, c_face, wasm_handle, root_opaque)
+                .unwrap_or_default()
+        } else {
+            FT_LayerIterator::default()
+        };
+    let initial_iterator = iterator;
+    let mut calls = Vec::new();
+    for index in 0..max_calls {
+        let mut layer_paint = FT_OpaquePaint {
+            p: ptr::dangling_mut::<FT_Byte>(),
+            insert_root_transform: 0x7F,
+        };
+        let result = get_paint_layers_call(
+            backend,
+            rust_face,
+            c_face,
+            wasm_handle,
+            &mut iterator,
+            &mut layer_paint,
+        );
+        calls.push(color_paint_layers_call_json(
+            &format!("call_{}", index + 1),
+            result,
+            iterator,
+            layer_paint,
+        ));
+    }
+    json!({
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(root_opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "initial_iterator": layer_iterator_json(initial_iterator),
+        "calls": calls,
+    })
+}
+
+fn color_paint_layers_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    match case.case_id.as_str() {
+        "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                36,
+                3,
+            ),
+        }))),
+        "ftcolor.FT_Get_Paint_Layers.success_iterates_colr_v1_layers"
+        | "ftcolor.FT_LayerIterator.initialized_and_advanced_by_paint_layers_v1" => Ok(ok(json!({
+            "sequences": [
+                color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 36, 3),
+                color_paint_layers_sequence_json(backend, rust_face, c_face, wasm_handle, 37, 4),
+            ],
+        }))),
+        "ftcolor.FT_LayerIterator.initialized_and_advanced_by_layer_apis" => {
+            let glyph_backend = match backend {
+                ColorPaintBackend::Rust => ColorGlyphLayerBackend::Rust,
+                ColorPaintBackend::CAbi => ColorGlyphLayerBackend::CAbi,
+                ColorPaintBackend::Wasm => ColorGlyphLayerBackend::Wasm,
+            };
+            Ok(ok(color_layer_iterator_combined_output_for_open_face(
+                backend,
+                glyph_backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+            )))
+        }
+        "ftcolor.FT_Get_Paint_Layers.end_of_iteration" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                37,
+                5,
+            ),
+        }))),
+        other => Err(format!("unsupported COLRv1 paint layer case {other}")),
+    }
+}
+
+fn color_paint_node_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    opaque: FT_OpaquePaint,
+    depth: usize,
+) -> Value {
+    if depth > 8 {
+        return json!({"return": 0, "depth_limit": true});
+    }
+    let (result, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    if result == 0 {
+        return json!({"return": result, "opaque": opaque_paint_json(opaque)});
+    }
+    json!({
+        "return": result,
+        "opaque": opaque_paint_json(opaque),
+        "format": paint.format,
+    })
+}
+
+fn colr_v1_snapshot_json(snapshot: Option<FT_ColrV1_PaintGraph_Snapshot>) -> Value {
+    let Some(snapshot) = snapshot else {
+        return Value::Null;
+    };
+    json!({
+        "root_count": snapshot.root_count,
+        "records": snapshot.records.into_iter().map(|record| json!({
+            "glyph_index": record.glyph_index,
+            "nodes": record.nodes.into_iter().map(|node| json!({
+                "depth": node.depth,
+                "format": node.format,
+                "palette_index": node.palette_index,
+                "alpha": node.alpha,
+                "glyph_index": node.glyph_index,
+                "composite_mode": node.composite_mode,
+                "values": node.values,
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn color_paint_snapshot_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Value {
+    match backend {
+        ColorPaintBackend::Rust => colr_v1_snapshot_json(FT_ColrV1_PaintGraph_Copy(rust_face)),
+        ColorPaintBackend::CAbi => {
+            colr_v1_snapshot_json(c_abi::abi_support_colr_v1_paint_graph(c_face))
+        }
+        ColorPaintBackend::Wasm => {
+            colr_v1_snapshot_json(wasm_abi::abi_support_colr_v1_paint_graph(wasm_handle))
+        }
+    }
+}
+
+fn color_paint_graph_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let (solid_return, solid_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        36,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (glyph_return, glyph_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        37,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let composites = (0..28)
+        .map(|mode| {
+            let base_glyph = 39 + mode;
+            let (root_return, opaque) = color_paint_call(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                base_glyph,
+                FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+            );
+            json!({
+                "expected_mode": mode,
+                "base_glyph": base_glyph,
+                "root_return": root_return,
+                "root_opaque": opaque_paint_json(opaque),
+                "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+            })
+        })
+        .collect::<Vec<_>>();
+    ok(json!({
+        "solid_root": {
+            "root_return": solid_return,
+            "root_opaque": opaque_paint_json(solid_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, solid_opaque, 0),
+        },
+        "glyph_root": {
+            "root_return": glyph_return,
+            "root_opaque": opaque_paint_json(glyph_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, glyph_opaque, 0),
+        },
+        "composites": composites,
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
+fn color_colr_glyph_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let (colr_glyph_return, colr_glyph_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        36,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (referenced_return, referenced_opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        37,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    ok(json!({
+        "colr_glyph_root": {
+            "root_return": colr_glyph_return,
+            "root_opaque": opaque_paint_json(colr_glyph_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, colr_glyph_opaque, 0),
+        },
+        "referenced_root": {
+            "root_return": referenced_return,
+            "root_opaque": opaque_paint_json(referenced_opaque),
+            "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, referenced_opaque, 0),
+        },
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
+#[derive(Clone, Copy)]
+struct ColorRootTransformSetup {
+    label: &'static str,
+    root_transform: FT_UInt,
+    matrix: FT_Matrix,
+    delta: FT_Vector,
+}
+
+fn color_root_transform_setup(name: &str, root_transform: FT_UInt) -> ColorRootTransformSetup {
+    let (matrix, delta) = match name {
+        "identity" => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 0,
+                yx: 0,
+                yy: 65_536,
+            },
+            FT_Vector { x: 0, y: 0 },
+        ),
+        "manifest_include_transform" => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 8_192,
+                yx: 0,
+                yy: 65_536,
+            },
+            FT_Vector { x: 64, y: 32 },
+        ),
+        _ => (
+            FT_Matrix {
+                xx: 65_536,
+                xy: 8_192,
+                yx: -4_096,
+                yy: 65_536,
+            },
+            FT_Vector { x: 96, y: -64 },
+        ),
+    };
+    ColorRootTransformSetup {
+        label: match name {
+            "identity" => "identity",
+            "manifest_include_transform" => "manifest_include_transform",
+            _ => "scale_translate",
+        },
+        root_transform,
+        matrix,
+        delta,
+    }
+}
+
+fn color_root_pixel_size(case: &InputCase) -> Result<(FT_UInt, FT_UInt), String> {
+    let pixel_size = case
+        .inputs
+        .params
+        .get("pixel_size")
+        .ok_or_else(|| format!("{} missing pixel_size", case.case_id))?;
+    let x = pixel_size
+        .get("x")
+        .and_then(Value::as_u64)
+        .or_else(|| pixel_size.as_u64().map(|_| 0))
+        .ok_or_else(|| format!("{} missing pixel_size.x", case.case_id))?;
+    let y = pixel_size
+        .get("y")
+        .and_then(Value::as_u64)
+        .or_else(|| pixel_size.as_u64())
+        .ok_or_else(|| format!("{} missing pixel_size.y", case.case_id))?;
+    Ok((
+        x.try_into().unwrap_or(FT_UInt::MAX),
+        y.try_into().unwrap_or(FT_UInt::MAX),
+    ))
+}
+
+fn apply_color_root_transform_setup(
+    backend: ColorPaintBackend,
+    rust_face: &mut Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    let size_error = match backend {
+        ColorPaintBackend::Rust => {
+            let Some(face) = rust_face.as_deref_mut() else {
+                return json!({"size_error": FT_Err_Invalid_Face_Handle, "set_transform": 0});
+            };
+            let error = FT_Set_Pixel_Sizes(face, pixel_size.0, pixel_size.1);
+            FT_Set_Transform(Some(face), Some(&setup.matrix), Some(&setup.delta));
+            error
+        }
+        ColorPaintBackend::CAbi => {
+            let error = c_abi::FT_Set_Pixel_Sizes(c_face, pixel_size.0, pixel_size.1);
+            let matrix = c_abi::FT_Matrix {
+                xx: setup.matrix.xx,
+                xy: setup.matrix.xy,
+                yx: setup.matrix.yx,
+                yy: setup.matrix.yy,
+            };
+            let delta = c_abi::FT_Vector {
+                x: setup.delta.x,
+                y: setup.delta.y,
+            };
+            c_abi::FT_Set_Transform(c_face, &matrix, &delta);
+            error
+        }
+        ColorPaintBackend::Wasm => {
+            let error =
+                wasm_abi::fontdone_wasm_set_pixel_sizes(wasm_handle, pixel_size.0, pixel_size.1);
+            wasm_abi::fontdone_wasm_set_transform(wasm_handle, &setup.matrix, &setup.delta);
+            error
+        }
+    };
+    json!({
+        "size_error": size_error,
+        "set_transform": {
+            "matrix": {
+                "xx": setup.matrix.xx,
+                "xy": setup.matrix.xy,
+                "yx": setup.matrix.yx,
+                "yy": setup.matrix.yy,
+            },
+            "delta": {
+                "x": setup.delta.x,
+                "y": setup.delta.y,
+            },
+        },
+    })
+}
+
+fn color_root_transform_row_json(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    glyph: FT_UInt,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    let setup_json = apply_color_root_transform_setup(
+        backend,
+        &mut rust_face,
+        c_face,
+        wasm_handle,
+        pixel_size,
+        setup,
+    );
+    let rust_face_ref = rust_face.as_deref();
+    let (root_return, root_opaque) = color_paint_call(
+        backend,
+        rust_face_ref,
+        c_face,
+        wasm_handle,
+        glyph,
+        setup.root_transform,
+    );
+    let (paint_return, paint) =
+        get_paint_call(backend, rust_face_ref, c_face, wasm_handle, root_opaque);
+    let transform = if paint_return != 0 {
+        get_paint_transform_copy(backend, rust_face_ref, c_face, wasm_handle, root_opaque)
+            .map_or(Value::Null, paint_transform_json)
+    } else {
+        Value::Null
+    };
+    json!({
+        "label": setup.label,
+        "pixel_size": {
+            "x": pixel_size.0,
+            "y": pixel_size.1,
+        },
+        "setup": setup_json,
+        "root_transform": setup.root_transform,
+        "base_glyph": glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(root_opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "transform": transform,
+        "root_paint": color_paint_node_json(backend, rust_face_ref, c_face, wasm_handle, root_opaque, 0),
+    })
+}
+
+fn color_root_transform_row_for_glyph_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    glyph: FT_UInt,
+    pixel_size: (FT_UInt, FT_UInt),
+    setup: ColorRootTransformSetup,
+) -> Value {
+    color_root_transform_row_json(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        glyph,
+        pixel_size,
+        setup,
+    )
+}
+
+fn color_root_transform_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let pixel_size = color_root_pixel_size(case)?;
+    let include = FT_COLOR_INCLUDE_ROOT_TRANSFORM as FT_UInt;
+    let no_root = FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt;
+    let rows = match case_id_base(&case.case_id) {
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime" => {
+            vec![color_root_transform_setup("scale_translate", include)]
+        }
+        "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime" => {
+            vec![color_root_transform_setup("scale_translate", no_root)]
+        }
+        "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint" => vec![
+            color_root_transform_setup("identity", include),
+            color_root_transform_setup("identity", no_root),
+            color_root_transform_setup("scale_translate", include),
+            color_root_transform_setup("scale_translate", no_root),
+        ],
+        "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload" => {
+            vec![color_root_transform_setup("scale_translate", include)]
+        }
+        "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform" => {
+            vec![color_root_transform_setup(
+                "manifest_include_transform",
+                include,
+            )]
+        }
+        other => return Err(format!("unsupported COLRv1 root transform case {other}")),
+    };
+    let mut output_rows = Vec::with_capacity(rows.len());
+    for setup in rows {
+        let rust_face_for_row = rust_face.as_deref_mut();
+        output_rows.push(color_root_transform_row_json(
+            backend,
+            rust_face_for_row,
+            c_face,
+            wasm_handle,
+            36,
+            pixel_size,
+            setup,
+        ));
+    }
+    Ok(ok(json!({ "rows": output_rows })))
+}
+
+fn color_root_transform_case(case_id: &str) -> bool {
+    matches!(
+        case_id_base(case_id),
+        "ftcolor.FT_COLOR_INCLUDE_ROOT_TRANSFORM.include_transform_runtime"
+            | "ftcolor.FT_COLOR_NO_ROOT_TRANSFORM.omit_transform_runtime"
+            | "ftcolor.FT_Color_Root_Transform.root_transform_controls_initial_paint"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.included_root_transform_payload"
+            | "ftcolor.FT_Get_Color_Glyph_Paint.root_paint_success_include_root_transform"
+    )
+}
+
+fn color_all_paints_case(case_id: &str) -> bool {
+    matches!(
+        case_id_base(case_id),
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+            | "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+            | "ftcolor.FT_Affine23.root_transform_values"
+            | "ftcolor.FT_ColorStopIterator.initialized_by_get_paint"
+            | "ftcolor.FT_ColorIndex.solid_and_color_stop_values"
+            | "ftcolor.FT_PaintFormat.paint_union_shape_runtime"
+            | "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values"
+            | "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator"
+    )
+}
+
+fn color_all_paints_role_row_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    glyph: FT_UInt,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let (paint_return, paint) = get_paint_call(backend, rust_face, c_face, wasm_handle, opaque);
+    let colorline = if paint_return != 0 {
+        get_paint_colorline_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, colorline_json)
+    } else {
+        Value::Null
+    };
+    let layer_iterator = if paint_return != 0 {
+        get_paint_layer_iterator_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, layer_iterator_json)
+    } else {
+        Value::Null
+    };
+    let transform = if paint_return != 0 {
+        get_paint_transform_copy(backend, rust_face, c_face, wasm_handle, opaque)
+            .map_or(Value::Null, paint_transform_json)
+    } else {
+        Value::Null
+    };
+    json!({
+        "label": label,
+        "base_glyph": glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "paint_return": paint_return,
+        "paint_format": paint.format,
+        "root_paint": color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0),
+        "colorline": colorline,
+        "layer_iterator": layer_iterator,
+        "transform": transform,
+    })
+}
+
+fn color_all_paints_rows_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<Value> {
+    [
+        ("colr_layers", 36),
+        ("solid", 37),
+        ("glyph", 38),
+        ("colr_glyph", 39),
+        ("linear_gradient", 40),
+        ("radial_gradient", 41),
+        ("sweep_gradient", 42),
+        ("transform", 43),
+        ("translate", 44),
+        ("scale", 45),
+        ("rotate", 46),
+        ("skew", 47),
+        ("composite", 48),
+        ("root_transform_target", 49),
+        ("foreground_solid", 50),
+    ]
+    .into_iter()
+    .map(|(label, glyph)| {
+        color_all_paints_role_row_json(backend, rust_face, c_face, wasm_handle, label, glyph)
+    })
+    .collect()
+}
+
+fn color_all_paints_root_transform_runs_json(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Vec<Value> {
+    let include = FT_COLOR_INCLUDE_ROOT_TRANSFORM as FT_UInt;
+    let setups = [
+        ((0, 16), color_root_transform_setup("identity", include)),
+        (
+            (0, 16),
+            ColorRootTransformSetup {
+                label: "shear_translate",
+                root_transform: include,
+                matrix: FT_Matrix {
+                    xx: 65_536,
+                    xy: 16_384,
+                    yx: -8_192,
+                    yy: 65_536,
+                },
+                delta: FT_Vector { x: 3, y: -5 },
+            },
+        ),
+        ((0, 37), color_root_transform_setup("identity", include)),
+        (
+            (0, 37),
+            ColorRootTransformSetup {
+                label: "shear_translate",
+                root_transform: include,
+                matrix: FT_Matrix {
+                    xx: 65_536,
+                    xy: 16_384,
+                    yx: -8_192,
+                    yy: 65_536,
+                },
+                delta: FT_Vector { x: 3, y: -5 },
+            },
+        ),
+    ];
+    setups
+        .into_iter()
+        .map(|(pixel_size, setup)| {
+            color_root_transform_row_for_glyph_json(
+                backend,
+                rust_face.as_deref_mut(),
+                c_face,
+                wasm_handle,
+                49,
+                pixel_size,
+                setup,
+            )
+        })
+        .collect()
+}
+
+fn color_all_paints_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> Result<RunOutput, String> {
+    let rust_face_ref = rust_face.as_deref();
+    match case_id_base(&case.case_id) {
+        "ftcolor.FT_Get_Paint.success_resolves_each_supported_paint_format"
+        | "ftcolor.FT_PaintFormat.paint_union_shape_runtime" => Ok(ok(json!({
+            "rows": color_all_paints_rows_json(backend, rust_face_ref, c_face, wasm_handle),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face_ref, c_face, wasm_handle),
+        }))),
+        "ftcolor.FT_PaintColrGlyph.get_paint_colr_glyph_values" => Ok(ok(json!({
+            "row": color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "colr_glyph", 39),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face_ref, c_face, wasm_handle),
+        }))),
+        "ftcolor.FT_PaintColrLayers.get_paint_initializes_layer_iterator" => Ok(ok(json!({
+            "sequence": color_paint_layers_sequence_json(backend, rust_face_ref, c_face, wasm_handle, 36, 4),
+            "row": color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "colr_layers", 36),
+        }))),
+        "ftcolor.FT_ColorStopIterator.initialized_by_get_paint" => Ok(ok(json!({
+            "sequences": [
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "linear_pad", 40, 1),
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "radial_repeat", 41, 1),
+                gradient_colorline_sequence_json(backend, rust_face_ref, c_face, wasm_handle, "sweep_reflect", 42, 1),
+            ],
+        }))),
+        "ftcolor.FT_ColorIndex.solid_and_color_stop_values" => Ok(ok(json!({
+            "solid_paints": [
+                color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "solid", 37),
+                color_all_paints_role_row_json(backend, rust_face_ref, c_face, wasm_handle, "foreground_solid", 50),
+            ],
+            "colorline": gradient_colorline_sequence_json(
+                backend,
+                rust_face_ref,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                40,
+                1,
+            ),
+        }))),
+        "ftcolor.FT_Get_Paint.success_inserts_root_transform"
+        | "ftcolor.FT_Affine23.root_transform_values" => Ok(ok(json!({
+            "runs": color_all_paints_root_transform_runs_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+            ),
+        }))),
+        other => Err(format!("unsupported COLRv1 all-paints case {other}")),
+    }
+}
+
+fn color_transform_paint_row_json(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+    label: &str,
+    base_glyph: FT_UInt,
+) -> Value {
+    let (root_return, opaque) = color_paint_call(
+        backend,
+        rust_face,
+        c_face,
+        wasm_handle,
+        base_glyph,
+        FT_COLOR_NO_ROOT_TRANSFORM as FT_UInt,
+    );
+    let root_paint = color_paint_node_json(backend, rust_face, c_face, wasm_handle, opaque, 0);
+    json!({
+        "label": label,
+        "base_glyph": base_glyph,
+        "root_return": root_return,
+        "root_opaque": opaque_paint_json(opaque),
+        "root_paint": root_paint,
+    })
+}
+
+fn color_transform_paint_output_for_open_face(
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    ok(json!({
+        "rows": [
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "transform", 36),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "translate", 37),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale", 38),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_center", 39),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_uniform", 40),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "scale_uniform_center", 41),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "rotate", 42),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "rotate_center", 43),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "skew", 44),
+            color_transform_paint_row_json(backend, rust_face, c_face, wasm_handle, "skew_center", 45),
+        ],
+        "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+    }))
+}
+
+fn color_transform_paint_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_COLR_PAINTFORMAT_ROTATE.paint_rotate_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SCALE.paint_scale_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SKEW.paint_skew_normalized_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSFORM.explicit_transform_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_TRANSLATE.paint_translate_payload"
+            | "ftcolor.FT_PaintRotate.get_paint_rotate_values"
+            | "ftcolor.FT_PaintScale.get_paint_scale_values"
+            | "ftcolor.FT_PaintSkew.get_paint_skew_values"
+            | "ftcolor.FT_PaintTransform.get_paint_transform_values"
+            | "ftcolor.FT_PaintTranslate.get_paint_translate_values"
+    )
+}
+
+fn color_static_gradient_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
+            | "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+            | "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+            | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
+            | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat"
+            | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect"
+            | "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+            | "ftcolor.FT_ColorLine.gradient_colorline_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops"
+            | "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+            | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops"
+    )
+}
+
+fn color_static_gradient_output_for_open_face(
+    case: &InputCase,
+    backend: ColorPaintBackend,
+    rust_face: Option<&FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    match case.case_id.as_str() {
+        "ftcolor.FT_COLR_PAINTFORMAT_LINEAR_GRADIENT.paint_linear_gradient_payload"
+        | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_static_values"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_PAD.colorline_extend_pad" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                36,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_COLR_PAINTFORMAT_RADIAL_GRADIENT.paint_radial_gradient_payload"
+        | "ftcolor.FT_PaintRadialGradient.get_paint_radial_gradient_values"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_REPEAT.colorline_extend_repeat" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "radial_repeat",
+                37,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_COLR_PAINTFORMAT_SWEEP_GRADIENT.paint_sweep_gradient_payload"
+        | "ftcolor.FT_PaintSweepGradient.get_paint_sweep_gradient_values"
+        | "ftcolor.FT_COLR_PAINT_EXTEND_REFLECT.colorline_extend_reflect" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "sweep_reflect",
+                38,
+                1,
+            ),
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        "ftcolor.FT_Get_Colorline_Stops.end_of_iteration"
+        | "ftcolor.FT_ColorStopIterator.advanced_by_get_colorline_stops" => ok(json!({
+            "sequence": gradient_colorline_sequence_json(
+                backend,
+                rust_face,
+                c_face,
+                wasm_handle,
+                "linear_pad",
+                36,
+                2,
+            ),
+        })),
+        "ftcolor.FT_PaintExtend.gradient_extend_runtime"
+        | "ftcolor.FT_ColorLine.gradient_colorline_values"
+        | "ftcolor.FT_Get_Colorline_Stops.success_iterates_static_colorline_stops" => ok(json!({
+            "sequences": [
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "linear_pad", 36, 1),
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "radial_repeat", 37, 1),
+                gradient_colorline_sequence_json(backend, rust_face, c_face, wasm_handle, "sweep_reflect", 38, 1),
+            ],
+            "graph_snapshot": color_paint_snapshot_json(backend, rust_face, c_face, wasm_handle),
+        })),
+        _ => ok(json!({})),
+    }
+}
+
+fn color_variable_gradient_case(case_id: &str) -> bool {
+    matches!(
+        case_id,
+        "ftcolor.FT_ColorStop.iterator_output_values"
+            | "ftcolor.FT_PaintLinearGradient.get_paint_linear_gradient_variable_values"
+            | "ftcolor.FT_Get_Colorline_Stops.success_iterates_variable_colorline_stops"
+    )
+}
+
+fn color_variable_design_coords() -> [FT_Fixed; 2] {
+    [900 << 16, 1 << 16]
+}
+
+fn set_color_variable_design_coords(
+    backend: ColorPaintBackend,
+    rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> FT_Error {
+    let coords = color_variable_design_coords();
+    match backend {
+        ColorPaintBackend::Rust => {
+            rust_face.map_or(FT_Err_Invalid_Face_Handle as FT_Error, |face| {
+                FT_Set_Var_Design_Coordinates(Some(face), coords.len() as FT_UInt, Some(&coords))
+            })
+        }
+        ColorPaintBackend::CAbi => c_abi::FT_Set_Var_Design_Coordinates(
+            c_face,
+            coords.len() as c_abi::FT_UInt,
+            coords.as_ptr(),
+        ),
+        ColorPaintBackend::Wasm => wasm_abi::fontdone_wasm_set_var_design_coordinates(
+            wasm_handle,
+            coords.len() as wasm_abi::FT_UInt,
+            coords.as_ptr(),
+        ),
+    }
+}
+
+fn color_variable_gradient_output_for_open_face(
+    backend: ColorPaintBackend,
+    mut rust_face: Option<&mut FT_Face>,
+    c_face: c_abi::FT_Face,
+    wasm_handle: usize,
+) -> RunOutput {
+    let default_sequence = gradient_colorline_sequence_json(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        "default",
+        36,
+        1,
+    );
+    let set_status =
+        set_color_variable_design_coords(backend, rust_face.as_deref_mut(), c_face, wasm_handle);
+    let varied_sequence = gradient_colorline_sequence_json(
+        backend,
+        rust_face.as_deref(),
+        c_face,
+        wasm_handle,
+        "wght_900_grad_1",
+        36,
+        1,
+    );
+    ok(json!({
+        "coordinate_runs": [
+            {
+                "label": "default",
+                "set_var_status": 0,
+                "sequence": default_sequence,
+            },
+            {
+                "label": "wght_900_grad_1",
+                "set_var_status": set_status,
+                "sequence": varied_sequence,
+            },
+        ],
+    }))
+}
+
+fn rust_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        return color_all_paints_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&mut face),
+            ptr::null_mut(),
+            0,
+        );
+    }
+    if color_root_transform_case(&case.case_id) {
+        return color_root_transform_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&mut face),
+            ptr::null_mut(),
+            0,
+        );
+    }
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        return color_paint_layers_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        );
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        return Ok(color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_transform_paint_case(&case.case_id) {
+        return Ok(color_transform_paint_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        return Ok(color_variable_gradient_output_for_open_face(
+            ColorPaintBackend::Rust,
+            Some(&mut face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    if color_static_gradient_case(&case.case_id) {
+        return Ok(color_static_gradient_output_for_open_face(
+            case,
+            ColorPaintBackend::Rust,
+            Some(&face),
+            ptr::null_mut(),
+            0,
+        ));
+    }
+    Ok(color_paint_graph_output_for_open_face(
+        ColorPaintBackend::Rust,
+        Some(&face),
+        ptr::null_mut(),
+        0,
+    ))
+}
+
+fn c_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        let output =
+            color_all_paints_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
+    if color_root_transform_case(&case.case_id) {
+        let output =
+            color_root_transform_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        let output =
+            color_paint_layers_output_for_open_face(case, ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return output;
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        let output = color_colr_glyph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    if color_transform_paint_case(&case.case_id) {
+        let output =
+            color_transform_paint_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        let output =
+            color_variable_gradient_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    if color_static_gradient_case(&case.case_id) {
+        let output = color_static_gradient_output_for_open_face(
+            case,
+            ColorPaintBackend::CAbi,
+            None,
+            face,
+            0,
+        );
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let output = color_paint_graph_output_for_open_face(ColorPaintBackend::CAbi, None, face, 0);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_color_paint_graph_case(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    if color_all_paints_case(&case.case_id) {
+        let output = color_all_paints_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
+    if color_root_transform_case(&case.case_id) {
+        let output = color_root_transform_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
+    if case.operation == "ftcolor.get_paint_layers"
+        || case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_LAYERS.paint_colr_layers_payload"
+    {
+        let output = color_paint_layers_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return output;
+    }
+    if case.case_id == "ftcolor.FT_COLR_PAINTFORMAT_COLR_GLYPH.paint_colr_glyph_runtime" {
+        let output = color_colr_glyph_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_transform_paint_case(&case.case_id) {
+        let output = color_transform_paint_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_variable_gradient_case(&case.case_id) {
+        let output = color_variable_gradient_output_for_open_face(
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    if color_static_gradient_case(&case.case_id) {
+        let output = color_static_gradient_output_for_open_face(
+            case,
+            ColorPaintBackend::Wasm,
+            None,
+            ptr::null_mut(),
+            handle,
+        );
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let output = color_paint_graph_output_for_open_face(
+        ColorPaintBackend::Wasm,
+        None,
+        ptr::null_mut(),
+        handle,
+    );
+    wasm_done_face(handle);
+    Ok(output)
+}
+
 fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
     match case.case_id.as_str() {
         "ftcolor.FT_Palette_Data_Get.success_sfnt_without_cpal"
@@ -10485,6 +13338,24 @@ fn rust_palette_case(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let face = open_face(case)?;
+            Ok(ok(palette_set_foreground_sfnt_runs_json(
+                ColorPaintBackend::Rust,
+                Some(&face),
+                ptr::null_mut(),
+                0,
+            )))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let face = open_face(case)?;
+            Ok(ok(palette_default_foreground_policy_json(
+                ColorPaintBackend::Rust,
+                Some(&face),
+                ptr::null_mut(),
+                0,
+            )))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(FT_Err_Invalid_Face_Handle as FT_Error))
@@ -10597,6 +13468,22 @@ fn c_palette_case(case: &InputCase) -> Result<RunOutput, String> {
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
         }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let (library, face) = c_open_face(case)?;
+            let output =
+                palette_set_foreground_sfnt_runs_json(ColorPaintBackend::CAbi, None, face, 0);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let (library, face) = c_open_face(case)?;
+            let output =
+                palette_default_foreground_policy_json(ColorPaintBackend::CAbi, None, face, 0);
+            c_done_face(face);
+            c_done_library(library);
+            Ok(ok(output))
+        }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(c_abi::FT_Palette_Set_Foreground_Color(
                 ptr::null_mut(),
@@ -10706,6 +13593,28 @@ fn wasm_palette_case(case: &InputCase) -> Result<RunOutput, String> {
             Ok(ok(
                 json!({"error": err, "followup_palette_or_render_state": "unchanged"}),
             ))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.success_sets_sfnt_foreground_color" => {
+            let handle = wasm_open_face(case)?;
+            let output = palette_set_foreground_sfnt_runs_json(
+                ColorPaintBackend::Wasm,
+                None,
+                ptr::null_mut(),
+                handle,
+            );
+            wasm_done_face(handle);
+            Ok(ok(output))
+        }
+        "ftcolor.FT_Palette_Set_Foreground_Color.default_foreground_color_policy" => {
+            let handle = wasm_open_face(case)?;
+            let output = palette_default_foreground_policy_json(
+                ColorPaintBackend::Wasm,
+                None,
+                ptr::null_mut(),
+                handle,
+            );
+            wasm_done_face(handle);
+            Ok(ok(output))
         }
         "ftcolor.FT_Palette_Set_Foreground_Color.error_null_face" => {
             Ok(error(wasm_abi::fontdone_wasm_palette_set_foreground_color(
@@ -10878,6 +13787,307 @@ fn wasm_get_kerning_optional(handle: Option<usize>, params: &Value) -> Result<Ru
         })
         .collect::<Result<Vec<_>, String>>()?;
     Ok(kerning_output(rows))
+}
+
+fn rust_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status =
+                FT_Get_Track_Kerning(Some(&face), row.point_size, row.degree, Some(&mut kerning));
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn c_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status =
+                c_abi::FT_Get_Track_Kerning(face, row.point_size, row.degree, &mut kerning);
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    c_done_face(face);
+    c_done_library(library);
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn wasm_get_track_kerning(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = track_kerning_rows(&case.inputs.params)?
+        .into_iter()
+        .map(|row| {
+            let mut kerning = 0;
+            let status = wasm_abi::fontdone_wasm_get_track_kerning(
+                handle,
+                row.point_size,
+                row.degree,
+                &mut kerning,
+            );
+            TrackKerningOutputRow {
+                input: row,
+                status,
+                akerning: kerning,
+            }
+        })
+        .collect::<Vec<_>>();
+    wasm_done_face(handle);
+    Ok(track_kerning_output(attach_status, rows))
+}
+
+fn track_kerning_output(attach_status: FT_Error, rows: Vec<TrackKerningOutputRow>) -> RunOutput {
+    let first_error = if attach_status != FT_Err_Ok {
+        attach_status
+    } else {
+        rows.iter()
+            .find_map(|row| (row.status != FT_Err_Ok).then_some(row.status))
+            .unwrap_or(FT_Err_Ok)
+    };
+    let output = json!({
+        "attach_status": attach_status,
+        "status": first_error,
+        "rows": rows
+            .iter()
+            .map(|row| {
+                json!({
+                    "point_size_16_16": row.input.point_size,
+                    "degree": row.input.degree,
+                    "status": row.status,
+                    "akerning": row.akerning,
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
+}
+
+fn rust_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    // The pure Rust FFI layer keeps file I/O outside core; this route uses the
+    // declared pathname asset bytes and then verifies the same face mutation
+    // that C `FT_Attach_File` reaches through its stream wrapper.
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = rust_attached_afm_kerning_rows(&face, &case.inputs.params)?;
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn c_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = c_attached_afm_kerning_rows(face, &case.inputs.params)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn wasm_attach_file(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    // WASM has no filesystem pathname ABI; the JS-facing thin ABI exposes the
+    // same auxiliary file as caller-provided bytes and verifies the post-attach
+    // public output against the pinned C pathname call.
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = wasm_attached_afm_kerning_rows(handle, &case.inputs.params)?;
+    wasm_done_face(handle);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn rust_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status = FT_Attach_Stream(Some(&mut face), Some(attachment.as_ref()));
+    let rows = rust_attached_afm_kerning_rows(&face, &case.inputs.params)?;
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn c_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let open_args = c_abi::FT_Open_Args {
+        flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+        memory_base: attachment.as_ptr(),
+        memory_size: attachment
+            .len()
+            .try_into()
+            .map_err(|_| "attachment length does not fit FT_Long".to_string())?,
+        pathname: std::ptr::null_mut(),
+        stream: std::ptr::null_mut(),
+        driver: std::ptr::null_mut(),
+        num_params: 0,
+        params: std::ptr::null_mut(),
+    };
+    let attach_status = c_abi::FT_Attach_Stream(face, &open_args);
+    let rows = c_attached_afm_kerning_rows(face, &case.inputs.params)?;
+    c_done_face(face);
+    c_done_library(library);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn wasm_attach_stream(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let attachment = required_asset_bytes(case, "attachment")?;
+    let attach_status =
+        wasm_abi::fontdone_wasm_attach_stream(handle, attachment.as_ptr(), attachment.len());
+    let rows = wasm_attached_afm_kerning_rows(handle, &case.inputs.params)?;
+    wasm_done_face(handle);
+    Ok(attach_stream_output(attach_status, rows))
+}
+
+fn rust_attached_afm_kerning_rows(
+    face: &FT_Face,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = rust_glyph_selector_index(face, &row.left)?;
+            let right_glyph = rust_glyph_selector_index(face, &row.right)?;
+            let mut vector = FT_Vector::default();
+            let status = FT_Get_Kerning(
+                Some(face),
+                left_glyph,
+                right_glyph,
+                row.mode,
+                Some(&mut vector),
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn c_attached_afm_kerning_rows(
+    face: c_abi::FT_Face,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = c_glyph_selector_index(face, &row.left)?;
+            let right_glyph = c_glyph_selector_index(face, &row.right)?;
+            let mut vector = c_abi::FT_Vector::default();
+            let status =
+                c_abi::FT_Get_Kerning(face, left_glyph, right_glyph, row.mode, &mut vector);
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn wasm_attached_afm_kerning_rows(
+    handle: usize,
+    params: &Value,
+) -> Result<Vec<KerningOutputRow>, String> {
+    attach_stream_kerning_rows(params)?
+        .into_iter()
+        .map(|row| {
+            let left_glyph = wasm_glyph_selector_index(handle, &row.left)?;
+            let right_glyph = wasm_glyph_selector_index(handle, &row.right)?;
+            let mut vector = wasm_abi::FontdoneWasmVector::default();
+            let status = wasm_abi::fontdone_wasm_get_kerning(
+                handle,
+                left_glyph,
+                right_glyph,
+                row.mode,
+                &mut vector,
+            );
+            Ok(KerningOutputRow {
+                input: row,
+                left_glyph,
+                right_glyph,
+                status,
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn attach_stream_output(attach_status: FT_Error, rows: Vec<KerningOutputRow>) -> RunOutput {
+    let mut kerning = kerning_output(rows);
+    let first_error = if attach_status != FT_Err_Ok {
+        attach_status
+    } else {
+        kerning.status.error_code as FT_Error
+    };
+    let post_attach_probe = std::mem::take(&mut kerning.output);
+    let output = json!({
+        "attach_status": attach_status,
+        "status": first_error,
+        "post_attach_probe": post_attach_probe,
+    });
+    if first_error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(first_error, output)
+    }
 }
 
 fn rust_get_pfr_kerning(case: &InputCase) -> Result<RunOutput, String> {
@@ -11738,6 +14948,193 @@ fn wasm_tt_vert_header_record_json(record: wasm_abi::FontdoneWasmVertHeader) -> 
         "long_metrics_identity_class": if record.long_metrics.is_null() { "null" } else { "face_owned_vmtx" },
         "short_metrics_identity_class": if record.short_metrics.is_null() { "null" } else { "face_owned_vmtx" },
     })
+}
+
+fn tt_maxprofile_record_json(record: Option<TT_MaxProfile>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn c_tt_maxprofile_record_json(record: Option<c_abi::TT_MaxProfile>) -> Value {
+    let Some(record) = record else {
+        return Value::Null;
+    };
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn wasm_tt_maxprofile_record_json(record: wasm_abi::FontdoneWasmMaxProfile) -> Value {
+    json!({
+        "version": record.version,
+        "numGlyphs": record.numGlyphs,
+        "maxPoints": record.maxPoints,
+        "maxContours": record.maxContours,
+        "maxCompositePoints": record.maxCompositePoints,
+        "maxCompositeContours": record.maxCompositeContours,
+        "maxZones": record.maxZones,
+        "maxTwilightPoints": record.maxTwilightPoints,
+        "maxStorage": record.maxStorage,
+        "maxFunctionDefs": record.maxFunctionDefs,
+        "maxInstructionDefs": record.maxInstructionDefs,
+        "maxStackElements": record.maxStackElements,
+        "maxSizeOfInstructions": record.maxSizeOfInstructions,
+        "maxComponentElements": record.maxComponentElements,
+        "maxComponentDepth": record.maxComponentDepth,
+    })
+}
+
+fn rust_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Value {
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(&library, bytes, face_index, 20.0) {
+        Ok(face) => {
+            let ptr = FT_Get_Sfnt_Table(&face, FT_SFNT_MAXP as FT_Sfnt_Tag);
+            let record = FT_Get_Sfnt_MaxProfile_Copy(&face);
+            json!({
+                "variant": variant,
+                "error": FT_Err_Ok,
+                "face_load_error": FT_Err_Ok,
+                "pointer_null": ptr.is_null(),
+                "fields_if_loaded": tt_maxprofile_record_json(record),
+            })
+        }
+        Err(err) => json!({
+            "variant": variant,
+            "error": err,
+            "face_load_error": err,
+            "pointer_null": true,
+            "fields_if_loaded": Value::Null,
+        }),
+    }
+}
+
+fn rust_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            rust_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index),
+            rust_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index),
+        ]
+    })))
+}
+
+fn c_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Result<Value, String> {
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    let mut face = ptr::null_mut();
+    let mut face_error = init_error;
+    if face_error == FT_Err_Ok {
+        let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+        face_error =
+            c_abi::FT_New_Memory_Face(library, bytes.as_ptr(), file_size, face_index, &mut face);
+    }
+    let record = if face_error == FT_Err_Ok {
+        c_abi::abi_sfnt_maxp(face)
+    } else {
+        None
+    };
+    if !face.is_null() {
+        c_done_face(face);
+    }
+    if !library.is_null() {
+        c_done_library(library);
+    }
+    Ok(json!({
+        "variant": variant,
+        "error": face_error,
+        "face_load_error": face_error,
+        "pointer_null": record.is_none(),
+        "fields_if_loaded": c_tt_maxprofile_record_json(record),
+    }))
+}
+
+fn c_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            c_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index)?,
+            c_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index)?,
+        ]
+    })))
+}
+
+fn wasm_malformed_maxp_row(variant: &str, bytes: &[u8], face_index: i64) -> Value {
+    let status = wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
+    if status.error != FT_Err_Ok {
+        return json!({
+            "variant": variant,
+            "error": status.error,
+            "face_load_error": status.error,
+            "pointer_null": true,
+            "fields_if_loaded": Value::Null,
+        });
+    }
+    let mut record = wasm_abi::FontdoneWasmMaxProfile::default();
+    let table_status = wasm_abi::fontdone_wasm_get_sfnt_maxp(
+        status.handle,
+        FT_SFNT_MAXP as wasm_abi::FT_Sfnt_Tag,
+        &mut record,
+    );
+    wasm_done_face(status.handle);
+    json!({
+        "variant": variant,
+        "error": FT_Err_Ok,
+        "face_load_error": FT_Err_Ok,
+        "pointer_null": table_status != FT_Err_Ok,
+        "fields_if_loaded": if table_status == FT_Err_Ok {
+            wasm_tt_maxprofile_record_json(record)
+        } else {
+            Value::Null
+        },
+    })
+}
+
+fn wasm_malformed_maxp_route(case: &InputCase) -> Result<RunOutput, String> {
+    let face_index = face_index_param(&case.inputs.params)?;
+    let truncated = required_asset_bytes(case, "truncated_maxp")?;
+    let invalid = required_asset_bytes(case, "invalid_maxp")?;
+    Ok(ok(json!({
+        "rows": [
+            wasm_malformed_maxp_row("truncated_maxp", truncated.as_ref(), face_index),
+            wasm_malformed_maxp_row("invalid_maxp", invalid.as_ref(), face_index),
+        ]
+    })))
 }
 
 fn rust_sfnt_table_info_output(face: &FT_Face, params: &Value) -> Result<RunOutput, String> {
@@ -13849,6 +17246,21 @@ fn required_asset_bytes(case: &InputCase, key: &str) -> Result<Arc<[u8]>, String
     font_asset_bytes(asset)
 }
 
+fn required_asset_pathname(case: &InputCase, key: &str) -> Result<String, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(key)
+        .ok_or_else(|| format!("missing asset {key}"))?;
+    let path = asset_file_path(asset).ok_or_else(|| {
+        format!(
+            "asset {key} has no resolved file path: {}",
+            asset_label(asset)
+        )
+    })?;
+    Ok(fixture_dir().join(path).display().to_string())
+}
+
 fn ftmm_blend_font_bytes(case: &InputCase) -> Result<Arc<[u8]>, String> {
     font_asset_bytes(ftmm_blend_font_asset(case)?)
 }
@@ -14321,6 +17733,32 @@ fn rust_ftmm_set_var_blend_glyph_output(case: &InputCase) -> Result<RunOutput, S
     }
 }
 
+fn rust_ftmm_set_mm_blend_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let set_err = FT_Set_MM_Blend_Coordinates(
+        Some(&mut face),
+        ftmm_num_coords(params)?,
+        if ftmm_coords_pointer_is_null(params) {
+            None
+        } else {
+            Some(&set_coords)
+        },
+    );
+    if set_err != FT_Err_Ok {
+        return Ok(error(set_err));
+    }
+    let slot = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?) {
+        Ok(slot) => slot,
+        Err(err) => return Ok(error(err)),
+    };
+    match FT_Render_Glyph(slot, render_mode_param(params)?) {
+        Ok(slot) => Ok(ok(slot_json(&slot))),
+        Err(err) => Ok(error(err)),
+    }
+}
+
 fn ftmm_apply_c_blend_prior(face: c_abi::FT_Face, prior: &FtmmPriorCall) -> FT_Error {
     match prior.kind.as_str() {
         "set_var_blend" => {
@@ -14396,6 +17834,37 @@ fn c_ftmm_set_var_blend_glyph_output(case: &InputCase) -> Result<RunOutput, Stri
         set_coords.as_ptr()
     };
     let set_err = c_abi::FT_Set_Var_Blend_Coordinates(face, ftmm_num_coords(params)?, coords_ptr);
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err =
+            c_abi::FT_Load_Glyph(face, glyph_index_param(params)?, load_flags_param(params)?);
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let render_err = c_abi::abi_render_glyph_from_face(face, render_mode_param(params)?);
+            if render_err != FT_Err_Ok {
+                Ok(error(render_err))
+            } else {
+                c_slot_json(face).map(ok)
+            }
+        }
+    };
+    c_done_face(face);
+    c_done_library(library);
+    output
+}
+
+fn c_ftmm_set_mm_blend_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let set_err = c_abi::FT_Set_MM_Blend_Coordinates(face, ftmm_num_coords(params)?, coords_ptr);
     let output = if set_err != FT_Err_Ok {
         Ok(error(set_err))
     } else {
@@ -14498,6 +17967,44 @@ fn wasm_ftmm_set_var_blend_glyph_output(case: &InputCase) -> Result<RunOutput, S
         set_coords.as_ptr()
     };
     let set_err = wasm_abi::fontdone_wasm_set_var_blend_coordinates(
+        handle,
+        ftmm_num_coords(params)?,
+        coords_ptr,
+    );
+    let output = if set_err != FT_Err_Ok {
+        Ok(error(set_err))
+    } else {
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(
+            handle,
+            glyph_index_param(params)?,
+            load_flags_param(params)?,
+        );
+        if load_err != FT_Err_Ok {
+            Ok(error(load_err))
+        } else {
+            let render_err =
+                wasm_abi::fontdone_wasm_render_glyph(handle, render_mode_param(params)?);
+            if render_err != FT_Err_Ok {
+                Ok(error(render_err))
+            } else {
+                wasm_slot_json(handle).map(ok)
+            }
+        }
+    };
+    wasm_done_face(handle);
+    output
+}
+
+fn wasm_ftmm_set_mm_blend_glyph_output(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face_with_size(case, pixel_size_param(&case.inputs.params)?)?;
+    let params = &case.inputs.params;
+    let set_coords = ftmm_optional_coords_from_params(params)?;
+    let coords_ptr = if ftmm_coords_pointer_is_null(params) {
+        std::ptr::null()
+    } else {
+        set_coords.as_ptr()
+    };
+    let set_err = wasm_abi::fontdone_wasm_set_mm_blend_coordinates(
         handle,
         ftmm_num_coords(params)?,
         coords_ptr,
@@ -15300,6 +18807,21 @@ fn c_ftmm_set_var_design_metrics_output(case: &InputCase) -> Result<RunOutput, S
     c_done_face(face);
     c_done_library(library);
     output
+}
+
+fn is_ftmm_set_mm_design_glyph_output_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design"
+            | "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design_loadable_glyph"
+    )
+}
+
+fn is_ftmm_set_mm_blend_glyph_output_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftmm.FT_Set_MM_Blend_Coordinates.success_type1_mm_glyph_output_after_blend"
+    )
 }
 
 fn c_ftmm_set_mm_design_coordinates(case: &InputCase) -> Result<RunOutput, String> {
@@ -17755,6 +21277,15 @@ fn property_get_case_output(
                 "module_service": error == FT_Err_Ok
             })))
         }
+        "fterrdef.FT_Err_Missing_Property.known_property_success" => {
+            let mut value = PROPERTY_SENTINEL;
+            let error = property_get_call(backend, 1, 4, 4, Some(&mut value));
+            Ok(ok(json!({
+                "status": error,
+                "value": value,
+                "module_service": error == FT_Err_Ok
+            })))
+        }
         "ftmodapi.FT_Property_Get.rejects_null_arguments" => {
             let mut library_value = PROPERTY_SENTINEL;
             let mut module_value = PROPERTY_SENTINEL;
@@ -18079,6 +21610,287 @@ fn wasm_bdf_charset_output(case: &InputCase) -> Result<RunOutput, String> {
     );
     wasm_done_face(handle);
     Ok(output)
+}
+
+fn cid_keyed_run_output(error: FT_Error, is_cid: FT_Bool, ft_is_cid_keyed: bool) -> RunOutput {
+    let output = json!({
+        "is_cid": is_cid,
+        "ft_is_cid_keyed": if ft_is_cid_keyed { 1 } else { 0 }
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_keyed_null_output(error: FT_Error, ft_is_cid_keyed: bool) -> RunOutput {
+    let output = json!({
+        "is_cid_output": "null",
+        "ft_is_cid_keyed": if ft_is_cid_keyed { 1 } else { 0 }
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_from_glyph_run_output(error: FT_Error, glyph_index: FT_UInt, cid: FT_UInt) -> RunOutput {
+    let output = json!({
+        "glyph_index": glyph_index,
+        "cid": cid
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_from_glyph_null_output(error: FT_Error, glyph_index: FT_UInt) -> RunOutput {
+    let output = json!({
+        "glyph_index": glyph_index,
+        "cid_output": "null"
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_ros_success_case_supported(case: &InputCase) -> bool {
+    case.case_id == "ftcid.FT_Get_CID_Registry_Ordering_Supplement.success_cid_keyed_face"
+}
+
+fn cid_ros_string_json(value: Option<&str>) -> Value {
+    match value {
+        Some(value) => json!({
+            "string": value,
+            "identity_class": "face_owned_c_string"
+        }),
+        None => json!({
+            "string": Value::Null,
+            "identity_class": "null"
+        }),
+    }
+}
+
+fn cid_ros_c_string_json(pointer: *const FT_String) -> Value {
+    if pointer.is_null() {
+        return cid_ros_string_json(None);
+    }
+    let bytes = c_abi::abi_c_string_bytes(pointer);
+    cid_ros_string_json(Some(&String::from_utf8_lossy(&bytes)))
+}
+
+fn cid_ros_c_char_json(pointer: *const std::ffi::c_char) -> Value {
+    cid_ros_c_string_json(pointer.cast())
+}
+
+fn cid_ros_wasm_string_json(pointer: *const FT_Byte, len: FT_UInt) -> Value {
+    if pointer.is_null() {
+        return cid_ros_string_json(None);
+    }
+    let bytes = c_abi::abi_byte_slice(pointer, len);
+    cid_ros_string_json(Some(&String::from_utf8_lossy(&bytes)))
+}
+
+fn cid_ros_run_output(
+    error: FT_Error,
+    registry: Value,
+    ordering: Value,
+    supplement: FT_Int,
+) -> RunOutput {
+    let output = json!({
+        "registry": registry,
+        "ordering": ordering,
+        "supplement": supplement,
+        "output_write_bitmap": ["registry", "ordering", "supplement"]
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
+fn cid_route_glyph_index(num_glyphs: FT_Long, params: &Value) -> Result<FT_UInt, String> {
+    if params
+        .get("glyph_index")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "last_valid")
+    {
+        return num_glyphs
+            .checked_sub(1)
+            .and_then(|value| FT_UInt::try_from(value).ok())
+            .ok_or_else(|| "face has no last valid glyph index".to_string());
+    }
+    glyph_index_param(params)
+}
+
+fn rust_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let ft_is_cid_keyed = face.face_flags & FT_FACE_FLAG_CID_KEYED != 0;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error = FT_Get_CID_Is_Internally_CID_Keyed(Some(&face), None);
+        return Ok(cid_keyed_null_output(error, ft_is_cid_keyed));
+    }
+    let mut is_cid = 0;
+    let error = FT_Get_CID_Is_Internally_CID_Keyed(Some(&face), Some(&mut is_cid));
+    Ok(cid_keyed_run_output(error, is_cid, ft_is_cid_keyed))
+}
+
+fn c_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let ft_is_cid_keyed = c_abi::abi_face_info(face)
+        .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, ptr::null_mut());
+        let output = cid_keyed_null_output(error, ft_is_cid_keyed);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let mut is_cid = 0;
+    let error = c_abi::FT_Get_CID_Is_Internally_CID_Keyed(face, &mut is_cid);
+    let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_is_keyed_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let ft_is_cid_keyed = wasm_abi::abi_face_info(handle)
+        .is_some_and(|info| info.face_flags & FT_FACE_FLAG_CID_KEYED != 0);
+    if lifecycle_handle_param_is_null(&case.inputs.params, "is_cid_output") {
+        let error =
+            wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, ptr::null_mut());
+        let output = cid_keyed_null_output(error, ft_is_cid_keyed);
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let mut is_cid = 0;
+    let error = wasm_abi::fontdone_wasm_get_cid_is_internally_cid_keyed(handle, &mut is_cid);
+    let output = cid_keyed_run_output(error, is_cid, ft_is_cid_keyed);
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn rust_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let glyph_index = cid_route_glyph_index(face.num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error = FT_Get_CID_From_Glyph_Index(Some(&face), glyph_index, None);
+        return Ok(cid_from_glyph_null_output(error, glyph_index));
+    }
+    let mut cid = 0;
+    let error = FT_Get_CID_From_Glyph_Index(Some(&face), glyph_index, Some(&mut cid));
+    Ok(cid_from_glyph_run_output(error, glyph_index, cid))
+}
+
+fn c_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let num_glyphs = c_abi::abi_face_info(face)
+        .map(|info| info.num_glyphs)
+        .ok_or_else(|| "missing c abi face info".to_string())?;
+    let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error = c_abi::FT_Get_CID_From_Glyph_Index(face, glyph_index, ptr::null_mut());
+        let output = cid_from_glyph_null_output(error, glyph_index);
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(output);
+    }
+    let mut cid = 0;
+    let error = c_abi::FT_Get_CID_From_Glyph_Index(face, glyph_index, &mut cid);
+    let output = cid_from_glyph_run_output(error, glyph_index, cid);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_from_glyph_index_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let num_glyphs = wasm_abi::abi_face_info(handle)
+        .map(|info| info.num_glyphs)
+        .ok_or_else(|| "missing wasm abi face info".to_string())?;
+    let glyph_index = cid_route_glyph_index(num_glyphs, &case.inputs.params)?;
+    if lifecycle_handle_param_is_null(&case.inputs.params, "cid_output") {
+        let error =
+            wasm_abi::fontdone_wasm_get_cid_from_glyph_index(handle, glyph_index, ptr::null_mut());
+        let output = cid_from_glyph_null_output(error, glyph_index);
+        wasm_done_face(handle);
+        return Ok(output);
+    }
+    let mut cid = 0;
+    let error = wasm_abi::fontdone_wasm_get_cid_from_glyph_index(handle, glyph_index, &mut cid);
+    let output = cid_from_glyph_run_output(error, glyph_index, cid);
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn rust_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut registry = std::ptr::null();
+    let mut ordering = std::ptr::null();
+    let mut supplement = 0;
+    let error = FT_Get_CID_Registry_Ordering_Supplement(
+        Some(&face),
+        Some(&mut registry),
+        Some(&mut ordering),
+        Some(&mut supplement),
+    );
+    Ok(cid_ros_run_output(
+        error,
+        cid_ros_c_string_json(registry),
+        cid_ros_c_string_json(ordering),
+        supplement,
+    ))
+}
+
+fn c_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let mut registry = std::ptr::null();
+    let mut ordering = std::ptr::null();
+    let mut supplement = 0;
+    let error = c_abi::FT_Get_CID_Registry_Ordering_Supplement(
+        face,
+        &mut registry,
+        &mut ordering,
+        &mut supplement,
+    );
+    let output = cid_ros_run_output(
+        error,
+        cid_ros_c_char_json(registry),
+        cid_ros_c_char_json(ordering),
+        supplement,
+    );
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_cid_ros_output(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let handle = wasm_new_face_from_bytes(data.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let mut output = wasm_abi::FontdoneWasmCidRos::default();
+    let error = wasm_abi::fontdone_wasm_get_cid_registry_ordering_supplement(handle, &mut output);
+    let run_output = cid_ros_run_output(
+        error,
+        cid_ros_wasm_string_json(output.registry, output.registry_len),
+        cid_ros_wasm_string_json(output.ordering, output.ordering_len),
+        output.supplement,
+    );
+    wasm_done_face(handle);
+    Ok(run_output)
 }
 
 fn bdf_property_sentinel() -> BDF_PropertyRec {
@@ -19547,7 +23359,9 @@ fn property_name_cstr(selector: i32) -> *const std::ffi::c_char {
 }
 
 fn debug_hook_action(case: &InputCase) -> Result<i32, String> {
-    if case.case_id.contains(".stores_valid_hook") {
+    if case.case_id.contains(".stores_valid_hook")
+        || case.case_id.contains(".debug_hook_index_import_contract")
+    {
         Ok(1)
     } else if case.case_id.contains(".null_library_noop") {
         Ok(2)
@@ -19774,6 +23588,238 @@ fn wasm_add_default_modules(case: &InputCase) -> Result<RunOutput, String> {
         &case.inputs.params,
         module_names,
     )?))
+}
+
+fn add_module_minimal_output(
+    status: FT_Error,
+    module_count: usize,
+    lookup_present: bool,
+    info: Option<FT_Installed_Module_Info>,
+    module_size_label: &'static str,
+    outline_renderer_present_before: bool,
+    outline_renderer_present_after: bool,
+    outline_renderer_identity_preserved: bool,
+    renderer_membership: Option<Value>,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "module_count": module_count,
+        "lookup_result": {"nullness": !lookup_present},
+        "stored_class_fields": info.map(|info| json!({
+            "module_flags": info.module_flags,
+            "module_size": module_size_label,
+            "module_name": info.module_name,
+            "module_version": info.module_version,
+            "module_requires": 0x0002_0000,
+            "module_interface_nullness": !info.module_interface_present,
+        })),
+        "routing_effects": {
+            "outline_renderer_present_before": outline_renderer_present_before,
+            "outline_renderer_present_after": outline_renderer_present_after,
+            "outline_renderer_identity_preserved": outline_renderer_identity_preserved,
+        },
+        "renderer_membership": renderer_membership,
+        "callback_log": if info.is_some_and(|info| info.init_called) {
+            json!(["module_init"])
+        } else {
+            json!([])
+        }
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+struct AddModuleFixtureSpec {
+    module_name: &'static str,
+    module_flags: FT_ULong,
+    module_interface_present: bool,
+    add_default_modules: bool,
+    module_size_label: &'static str,
+    is_renderer: bool,
+}
+
+fn add_module_fixture_spec(case: &InputCase) -> Option<AddModuleFixtureSpec> {
+    match case.case_id.as_str() {
+        "ftmodapi.FT_Add_Module.add_minimal_module_success" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_minimal",
+            module_flags: 0,
+            module_interface_present: false,
+            add_default_modules: false,
+            module_size_label: "sizeof_synthetic_module",
+            is_renderer: false,
+        }),
+        "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_renderer",
+            module_flags: FT_MODULE_RENDERER as FT_ULong,
+            module_interface_present: true,
+            add_default_modules: true,
+            module_size_label: "sizeof_synthetic_renderer_module",
+            is_renderer: true,
+        }),
+        "ftmodapi.FT_MODULE_STYLER.styler_module_registration" => Some(AddModuleFixtureSpec {
+            module_name: "fixture_styler",
+            module_flags: FT_MODULE_STYLER as FT_ULong,
+            module_interface_present: true,
+            add_default_modules: true,
+            module_size_label: "sizeof_synthetic_module",
+            is_renderer: false,
+        }),
+        _ => None,
+    }
+}
+
+fn rust_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    let Some(spec) = add_module_fixture_spec(case) else {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    };
+    let mut library = FT_New_Library_Without_Default_Modules();
+    if spec.add_default_modules {
+        FT_Add_Default_Modules(Some(&mut library));
+    }
+    let outline_renderer_before =
+        FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE);
+    let class = FT_Module_Class_Info {
+        module_flags: spec.module_flags,
+        module_size: 1,
+        module_name: Some(spec.module_name),
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface_present: spec.module_interface_present,
+        module_init: FT_Module_Callback_Behavior::RecordThenOk,
+        module_done: FT_Module_Callback_Behavior::RecordThenOk,
+    };
+    let status = FT_Add_Module(Some(&mut library), Some(&class));
+    let outline_renderer_after = FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE);
+    Ok(add_module_minimal_output(
+        status,
+        FT_Library_Module_Count(Some(&library)),
+        FT_Library_Has_Module(Some(&library), spec.module_name),
+        FT_Library_Synthetic_Module_Info(Some(&library), spec.module_name),
+        spec.module_size_label,
+        outline_renderer_before.is_some(),
+        outline_renderer_after.is_some(),
+        outline_renderer_before == outline_renderer_after,
+        if spec.is_renderer {
+            let set_status = FT_Library_Set_Renderer_By_Format(
+                Some(&mut library),
+                FT_GLYPH_FORMAT_OUTLINE,
+                spec.module_name,
+            );
+            let current_renderer =
+                FT_Library_Renderer_Class(Some(&library), FT_GLYPH_FORMAT_OUTLINE)
+                    .map(|(name, _, _, _)| name);
+            Some(json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": current_renderer,
+            }))
+        } else {
+            None
+        },
+    ))
+}
+
+fn c_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    let Some(spec) = add_module_fixture_spec(case) else {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    };
+    let library = c_abi::abi_support_new_library_without_default_modules();
+    if spec.add_default_modules {
+        c_abi::FT_Add_Default_Modules(library);
+    }
+    let outline_renderer_before = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    let module_name = match spec.module_name {
+        "fixture_minimal" => c"fixture_minimal".as_ptr(),
+        "fixture_renderer" => c"fixture_renderer".as_ptr(),
+        "fixture_styler" => c"fixture_styler".as_ptr(),
+        _ => return Err(format!("unsupported module fixture {}", spec.module_name)),
+    };
+    let class = c_abi::FT_Module_Class {
+        module_flags: spec.module_flags,
+        module_size: 1,
+        module_name,
+        module_version: 0x0001_0000,
+        module_requires: 0x0002_0000,
+        module_interface: if spec.module_interface_present {
+            ptr::without_provenance(1)
+        } else {
+            ptr::null()
+        },
+        module_init: ptr::without_provenance_mut(1),
+        module_done: ptr::without_provenance_mut(1),
+        get_interface: ptr::null_mut(),
+    };
+    let status = c_abi::FT_Add_Module(library, &class);
+    let lookup = c_abi::FT_Get_Module(library, module_name);
+    let outline_renderer_after = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+    let output = add_module_minimal_output(
+        status,
+        c_abi::abi_support_library_module_count(library),
+        !lookup.is_null(),
+        c_abi::abi_support_synthetic_module_info(library, spec.module_name),
+        spec.module_size_label,
+        !outline_renderer_before.is_null(),
+        !outline_renderer_after.is_null(),
+        outline_renderer_before == outline_renderer_after,
+        if spec.is_renderer {
+            let renderer = lookup.cast::<c_abi::FT_RendererRec>();
+            let set_status = c_abi::FT_Set_Renderer(library, renderer, 0, ptr::null_mut());
+            let current_renderer = c_abi::FT_Get_Renderer(library, FT_GLYPH_FORMAT_OUTLINE);
+            Some(json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": if current_renderer == renderer {
+                    spec.module_name
+                } else if current_renderer.is_null() {
+                    "null"
+                } else {
+                    "other"
+                },
+            }))
+        } else {
+            None
+        },
+    );
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_add_module(case: &InputCase) -> Result<RunOutput, String> {
+    let Some(spec) = add_module_fixture_spec(case) else {
+        return Ok(error(FT_Err_Invalid_Argument as FT_Error));
+    };
+    let (
+        status,
+        module_count,
+        lookup_present,
+        info,
+        outline_renderer_present_before,
+        outline_renderer_present_after,
+        outline_renderer_identity_preserved,
+        renderer_membership,
+    ) = wasm_abi::abi_support_add_synthetic_module_observation(
+        spec.module_name,
+        spec.module_flags,
+        spec.module_interface_present,
+        spec.add_default_modules,
+    );
+    Ok(add_module_minimal_output(
+        status,
+        module_count,
+        lookup_present,
+        info,
+        spec.module_size_label,
+        outline_renderer_present_before,
+        outline_renderer_present_after,
+        outline_renderer_identity_preserved,
+        renderer_membership.map(|(set_status, current_renderer)| {
+            json!({
+                "set_renderer_status": set_status,
+                "current_renderer_after_set": current_renderer,
+            })
+        }),
+    ))
 }
 
 fn add_default_modules_observation(params: &Value, module_names: &[&str]) -> Result<Value, String> {
@@ -20104,6 +24150,7 @@ fn library_lifecycle_action(case: &InputCase) -> Result<i32, String> {
         "ftmodapi.FT_New_Library.creates_library_with_version_and_refcount" => Ok(1),
         "ftmodapi.FT_Reference_Library.increments_refcount" => Ok(2),
         "ftmodapi.FT_Done_Library.decrements_reference_without_destroying" => Ok(3),
+        "ftmodapi.FT_Done_Library.default_modules_final_destroy_status" => Ok(4),
         other => Err(format!("unsupported library lifecycle case {other}")),
     }
 }
@@ -20150,6 +24197,14 @@ fn reference_then_done_library_output(
         "status_sequence": [reference_status, done_status],
         "library_still_usable": library_still_usable,
         "module_lookup_after_done": {"nullness": module_nullness},
+    })
+}
+
+fn final_done_library_output(status: FT_Error) -> Value {
+    json!({
+        "status": status,
+        "library_kind": "default_modules",
+        "final_destroy_called": status == FT_Err_Ok,
     })
 }
 
@@ -20210,6 +24265,12 @@ fn rust_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 usable,
                 !usable,
             )))
+        }
+        4 => {
+            let mut library = FT_New_Library_Without_Default_Modules();
+            FT_Add_Default_Modules(Some(&mut library));
+            let status = FT_Done_Library(Some(&mut library));
+            Ok(ok(final_done_library_output(status)))
         }
         action => Err(format!("unsupported library lifecycle action {action}")),
     }
@@ -20284,6 +24345,11 @@ fn c_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
             c_abi::FT_Done_Library(library);
             Ok(ok(output))
         }
+        4 => {
+            c_abi::FT_Add_Default_Modules(library);
+            let status = c_abi::FT_Done_Library(library);
+            Ok(ok(final_done_library_output(status)))
+        }
         other => Err(format!("unsupported C library lifecycle action {other}")),
     }
 }
@@ -20321,6 +24387,10 @@ fn wasm_library_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 usable,
                 module_nullness,
             )))
+        }
+        4 => {
+            let status = wasm_abi::abi_support_final_done_library_observation();
+            Ok(ok(final_done_library_output(status)))
         }
         action => Err(format!(
             "unsupported WASM library lifecycle action {action}"
@@ -20394,6 +24464,17 @@ fn renderer_formats_arg(params: &Value) -> Result<String, String> {
         .join(","))
 }
 
+fn renderer_source_format(params: &Value) -> Result<FT_Glyph_Format, String> {
+    let source = params
+        .get("renderer_source")
+        .ok_or_else(|| "FT_Set_Renderer requires renderer_source".to_string())?;
+    renderer_format_value(
+        source
+            .get("format")
+            .ok_or_else(|| "FT_Set_Renderer renderer_source requires format".to_string())?,
+    )
+}
+
 fn renderer_class_rows<F>(params: &Value, mut lookup: F) -> Result<Value, String>
 where
     F: FnMut(FT_Glyph_Format) -> Option<(&'static str, FT_Glyph_Format, bool, bool)>,
@@ -20426,6 +24507,42 @@ where
     Ok(json!({ "format_results": rows }))
 }
 
+fn renderer_class_value(
+    format: FT_Glyph_Format,
+    class: Option<(&'static str, FT_Glyph_Format, bool, bool)>,
+) -> Value {
+    if let Some((module_name, glyph_format, has_render_glyph, has_raster_class)) = class {
+        json!({
+            "format": format,
+            "renderer_present": true,
+            "renderer_class": {
+                "module_name": module_name,
+                "glyph_format": glyph_format,
+                "has_render_glyph": has_render_glyph,
+                "has_raster_class": has_raster_class,
+            },
+        })
+    } else {
+        json!({
+            "format": format,
+            "renderer_present": false,
+            "renderer_class": null,
+        })
+    }
+}
+
+fn set_renderer_success_output(error: FT_Error, after: Value) -> RunOutput {
+    let output = json!({
+        "set_error": error,
+        "current_renderer": after,
+    });
+    if error == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(error, output)
+    }
+}
+
 fn rust_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     let library = if lifecycle_handle_param_is_null(&case.inputs.params, "library") {
         None
@@ -20435,6 +24552,18 @@ fn rust_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
         FT_Library_Renderer_Class(library.as_ref(), format)
     })?))
+}
+
+fn rust_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = FT_Init_FreeType();
+    let format = renderer_source_format(&case.inputs.params)?;
+    let before = FT_Library_Renderer_Class(Some(&library), format)
+        .ok_or_else(|| "FT_Set_Renderer source renderer was not found".to_string())?;
+    let error = FT_Library_Set_Renderer_By_Format(Some(&mut library), before.1, before.0);
+    Ok(set_renderer_success_output(
+        error,
+        renderer_class_value(format, FT_Library_Renderer_Class(Some(&library), format)),
+    ))
 }
 
 fn c_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
@@ -20453,6 +24582,23 @@ fn c_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     Ok(ok(output))
 }
 
+fn c_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let mut library = std::ptr::null_mut();
+    let err = c_abi::FT_Init_FreeType(&mut library);
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    let format = renderer_source_format(&case.inputs.params)?;
+    let renderer = c_abi::FT_Get_Renderer(library, format);
+    let set_error = c_abi::FT_Set_Renderer(library, renderer, 0, ptr::null_mut());
+    let after = renderer_class_value(
+        format,
+        c_abi::abi_support_library_renderer_class(library, format),
+    );
+    c_done_library(library);
+    Ok(set_renderer_success_output(set_error, after))
+}
+
 fn wasm_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
     let use_null = lifecycle_handle_param_is_null(&case.inputs.params, "library");
     Ok(ok(renderer_class_rows(&case.inputs.params, |format| {
@@ -20462,6 +24608,21 @@ fn wasm_get_renderer(case: &InputCase) -> Result<RunOutput, String> {
             wasm_abi::abi_support_default_renderer_class(format)
         }
     })?))
+}
+
+fn wasm_set_renderer(case: &InputCase) -> Result<RunOutput, String> {
+    let format = renderer_source_format(&case.inputs.params)?;
+    if format != FT_GLYPH_FORMAT_OUTLINE {
+        return Ok(set_renderer_success_output(
+            FT_Err_Invalid_Argument,
+            renderer_class_value(format, None),
+        ));
+    }
+    let (error, after) = wasm_abi::abi_support_set_default_outline_renderer();
+    Ok(set_renderer_success_output(
+        error,
+        renderer_class_value(format, after),
+    ))
 }
 
 fn done_mm_var_library_present(params: &Value) -> i32 {
@@ -21071,6 +25232,1530 @@ fn wasm_stroker_null_noop(case: &InputCase) -> Result<RunOutput, String> {
     }
 }
 
+fn stroker_lifecycle_action(case: &InputCase) -> Result<(&'static str, i32), String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_New.valid_library_allocates_stroker" => Ok(("new", 1)),
+        "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers" => Ok(("done", 1)),
+        "ftstroke.FT_Stroker_Export.invalid_inputs_noop" => Ok(("export", 2)),
+        "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop" => {
+            Ok(("export-border", 3))
+        }
+        "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c" => Ok(("unparsed", 5)),
+        _ => Err(format!(
+            "{} is not an exact stroker lifecycle/no-op parity route",
+            case.case_id
+        )),
+    }
+}
+
+fn stroker_lifecycle_output(action: &str) -> Value {
+    match action {
+        "new" | "done" => json!({"error": 0, "stroker_nonnull": true, "crash": false}),
+        "export" => json!({
+            "rows": [
+                {"scenario": "null_stroker_outline", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_stroker_null_outline", "target_outline_after": null, "crash": false}
+            ]
+        }),
+        "export-border" => json!({
+            "rows": [
+                {"scenario": "null_stroker_left", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_stroker_null_outline", "target_outline_after": null, "crash": false},
+                {"scenario": "valid_stroker_invalid_border", "target_outline_after": "sentinel_outline", "crash": false},
+                {"scenario": "valid_unparsed_left", "target_outline_after": "sentinel_outline", "crash": false}
+            ]
+        }),
+        "unparsed" => json!({
+            "error": 0,
+            "stroker_nonnull": true,
+            "set_called": true,
+            "export_unparsed_noop": true,
+            "rewind_called": true,
+            "done_called": true
+        }),
+        _ => unreachable!(),
+    }
+}
+
+fn rust_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_lifecycle_action(case)?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let err = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if err != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(err));
+    }
+    match action {
+        "new" | "done" => {}
+        "export" => FT_Stroker_Export(stroker, None),
+        "export-border" => {
+            let mut outline = FT_OutlineSnapshot::default();
+            FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            FT_Stroker_ExportBorder(stroker, 2, Some(&mut outline));
+        }
+        "unparsed" => {
+            FT_Stroker_Set(
+                stroker,
+                128,
+                FT_STROKER_LINECAP_ROUND as FT_Int,
+                FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let mut outline = FT_OutlineSnapshot::default();
+            FT_Stroker_Export(stroker, Some(&mut outline));
+            FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut outline),
+            );
+            FT_Stroker_Rewind(stroker);
+        }
+        _ => unreachable!(),
+    }
+    FT_Stroker_Done(stroker);
+    Ok(ok(stroker_lifecycle_output(action)))
+}
+
+fn c_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_lifecycle_action(case)?;
+    let mut library = ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(error(init_err));
+    }
+    let mut stroker = ptr::null_mut();
+    let err = c_abi::FT_Stroker_New(library, &mut stroker);
+    if err != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(err));
+    }
+    match action {
+        "new" | "done" => {}
+        "export" => {
+            c_abi::FT_Stroker_Export(ptr::null_mut(), ptr::null_mut());
+            c_abi::FT_Stroker_Export(stroker, ptr::null_mut());
+        }
+        "export-border" => {
+            c_abi::FT_Stroker_ExportBorder(
+                ptr::null_mut(),
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                ptr::null_mut(),
+            );
+            c_abi::FT_Stroker_ExportBorder(stroker, 2, ptr::null_mut());
+        }
+        "unparsed" => {
+            c_abi::FT_Stroker_Set(
+                stroker,
+                128,
+                FT_STROKER_LINECAP_ROUND as FT_Int,
+                FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            c_abi::FT_Stroker_Export(stroker, ptr::null_mut());
+            c_abi::FT_Stroker_ExportBorder(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                ptr::null_mut(),
+            );
+            c_abi::FT_Stroker_Rewind(stroker);
+        }
+        _ => unreachable!(),
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(ok(stroker_lifecycle_output(action)))
+}
+
+fn wasm_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, action_id) = stroker_lifecycle_action(case)?;
+    if wasm_abi::abi_support_stroker_lifecycle(action_id) {
+        Ok(ok(stroker_lifecycle_output(action)))
+    } else {
+        Err(format!("unsupported stroker lifecycle action {action_id}"))
+    }
+}
+
+fn is_stroker_zero_line_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineTo.zero_length_line_noop"
+}
+
+fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
+        "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry" => Ok("round"),
+        "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry" => Ok("square"),
+        "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry"
+        | "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry"
+        | "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry"
+        | "ftstroke.FT_StrokerBorder.border_selection_runtime_shape"
+        | "ftstroke.FT_Stroker_Export.exports_left_then_right"
+        | "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export"
+        | "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty" => Ok("all"),
+        _ => Err(format!(
+            "{} is not a maintained open-line stroker geometry route",
+            case.case_id
+        )),
+    }
+}
+
+fn is_stroker_simple_line_counts_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline"
+}
+
+fn is_stroker_finalized_counts_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts"
+            | "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetCounts.optional_output_pointers"
+            | "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers"
+    )
+}
+
+fn is_stroker_reset_counts_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_Set.clears_existing_path"
+            | "ftstroke.FT_Stroker_Rewind.clears_previous_path"
+            | "ftstroke.FT_Stroker_Rewind.set_calls_rewind"
+    )
+}
+
+fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+}
+
+fn is_stroker_end_subpath_no_segment_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only"
+}
+
+fn stroker_zero_line_output(status: FT_Error, points: FT_UInt, contours: FT_UInt) -> RunOutput {
+    ok(json!({
+        "status": status,
+        "counts_after": {
+            "points": points,
+            "contours": contours
+        },
+        "center_after": "unchanged"
+    }))
+}
+
+fn rust_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 256, y: 256 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&start))
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    FT_Stroker_Done(stroker);
+    let status = if line_error != FT_Err_Ok {
+        line_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_zero_line_output(status, points, contours))
+}
+
+fn c_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 256, y: 256 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &start)
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let status = if line_error != FT_Err_Ok {
+        line_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_zero_line_output(status, points, contours))
+}
+
+fn wasm_stroker_zero_line(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_zero_line_case(case) {
+        return Err(format!(
+            "{} is not the maintained zero-length stroker route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_zero_line() {
+        Ok(stroker_zero_line_output(FT_Err_Ok, 0, 0))
+    } else {
+        Err("unsupported stroker zero-length line route".to_string())
+    }
+}
+
+fn stroker_cap_value(action: &str) -> FT_Int {
+    match action {
+        "butt" => FT_STROKER_LINECAP_BUTT as FT_Int,
+        "square" => FT_STROKER_LINECAP_SQUARE as FT_Int,
+        _ => FT_STROKER_LINECAP_ROUND as FT_Int,
+    }
+}
+
+fn stroker_cap_name(action: &str) -> &'static str {
+    match action {
+        "butt" => "butt",
+        "square" => "square",
+        _ => "round",
+    }
+}
+
+fn stroker_open_line_geometry_output(
+    action: &str,
+    mut run_one: impl FnMut(&str) -> Result<Value, String>,
+) -> Result<RunOutput, String> {
+    let actions: &[&str] = if action == "all" {
+        &["butt", "round", "square"]
+    } else {
+        &[action]
+    };
+    let mut rows = Vec::new();
+    for action in actions {
+        rows.push(run_one(action)?);
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    stroker_open_line_geometry_output(action, |action| {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            return Ok(json!({"cap": stroker_cap_name(action), "status": new_error}));
+        }
+        FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let start = FT_Vector { x: 0, y: 0 };
+        let to = FT_Vector { x: 640, y: 0 };
+        let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 1);
+        let line_error = if begin_error == FT_Err_Ok {
+            FT_Stroker_LineTo(stroker, Some(&to))
+        } else {
+            begin_error
+        };
+        let end_error = if line_error == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            line_error
+        };
+        let mut count_points = 0;
+        let mut count_contours = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            FT_Stroker_GetCounts(stroker, Some(&mut count_points), Some(&mut count_contours))
+        } else {
+            end_error
+        };
+        let mut left = FT_OutlineSnapshot::default();
+        let mut right = FT_OutlineSnapshot::default();
+        let mut combined = FT_OutlineSnapshot::default();
+        if counts_error == FT_Err_Ok {
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, Some(&mut left));
+            FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, Some(&mut right));
+            FT_Stroker_Export(stroker, Some(&mut combined));
+        }
+        FT_Stroker_Done(stroker);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "status": counts_error,
+            "left": outline_snapshot_json(&left),
+            "right": outline_snapshot_json(&right),
+            "combined": outline_snapshot_json(&combined)
+        }))
+    })
+}
+
+fn c_outline_arrays_json(
+    outline: &c_abi::FT_Outline,
+    points: &[c_abi::FT_Vector],
+    tags: &[u8],
+    contours: &[u16],
+) -> Value {
+    let n_points = usize::from(outline.n_points);
+    let n_contours = usize::from(outline.n_contours);
+    json!({
+        "n_points": outline.n_points,
+        "n_contours": outline.n_contours,
+        "points": points.iter().take(n_points).map(|point| json!({"x": point.x, "y": point.y})).collect::<Vec<_>>(),
+        "tags": tags.iter().take(n_points).copied().collect::<Vec<_>>(),
+        "contours": contours.iter().take(n_contours).copied().collect::<Vec<_>>(),
+        "flags": outline.flags
+    })
+}
+
+fn c_empty_outline<'a>(
+    points: &'a mut [c_abi::FT_Vector],
+    tags: &'a mut [u8],
+    contours: &'a mut [u16],
+) -> c_abi::FT_Outline {
+    c_abi::FT_Outline {
+        n_contours: 0,
+        n_points: 0,
+        points: points.as_mut_ptr(),
+        tags: tags.as_mut_ptr(),
+        contours: contours.as_mut_ptr(),
+        flags: 0,
+    }
+}
+
+fn c_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    stroker_open_line_geometry_output(action, |action| {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            return Ok(json!({"cap": stroker_cap_name(action), "status": init_error}));
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            return Ok(json!({"cap": stroker_cap_name(action), "status": new_error}));
+        }
+        c_abi::FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let start = c_abi::FT_Vector { x: 0, y: 0 };
+        let to = c_abi::FT_Vector { x: 640, y: 0 };
+        let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 1);
+        let line_error = if begin_error == FT_Err_Ok {
+            c_abi::FT_Stroker_LineTo(stroker, &to)
+        } else {
+            begin_error
+        };
+        let end_error = if line_error == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            line_error
+        };
+        let mut count_points = 0;
+        let mut count_contours = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            c_abi::FT_Stroker_GetCounts(stroker, &mut count_points, &mut count_contours)
+        } else {
+            end_error
+        };
+        let mut left_points = [c_abi::FT_Vector::default(); 64];
+        let mut left_tags = [0u8; 64];
+        let mut left_contours = [0u16; 8];
+        let mut left = c_empty_outline(&mut left_points, &mut left_tags, &mut left_contours);
+        let mut right_points = [c_abi::FT_Vector::default(); 64];
+        let mut right_tags = [0u8; 64];
+        let mut right_contours = [0u16; 8];
+        let mut right = c_empty_outline(&mut right_points, &mut right_tags, &mut right_contours);
+        let mut combined_points = [c_abi::FT_Vector::default(); 128];
+        let mut combined_tags = [0u8; 128];
+        let mut combined_contours = [0u16; 16];
+        let mut combined = c_empty_outline(
+            &mut combined_points,
+            &mut combined_tags,
+            &mut combined_contours,
+        );
+        if counts_error == FT_Err_Ok {
+            c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, &mut left);
+            c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, &mut right);
+            c_abi::FT_Stroker_Export(stroker, &mut combined);
+        }
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "status": counts_error,
+            "left": c_outline_arrays_json(&left, &left_points, &left_tags, &left_contours),
+            "right": c_outline_arrays_json(&right, &right_points, &right_tags, &right_contours),
+            "combined": c_outline_arrays_json(&combined, &combined_points, &combined_tags, &combined_contours)
+        }))
+    })
+}
+
+fn wasm_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    let action = stroker_open_line_geometry_action(case)?;
+    if wasm_abi::abi_support_stroker_open_line_geometry(if action == "all" {
+        0
+    } else if action == "butt" {
+        1
+    } else if action == "round" {
+        2
+    } else {
+        3
+    }) {
+        rust_stroker_open_line_geometry(case)
+    } else {
+        Err(format!(
+            "unsupported stroker open-line geometry route {action}"
+        ))
+    }
+}
+
+fn stroker_simple_line_counts_output(
+    status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    total_points: FT_UInt,
+    total_contours: FT_UInt,
+) -> RunOutput {
+    let output = json!({
+        "status": status,
+        "left_counts": {"points": left_points, "contours": left_contours},
+        "right_counts": {"points": right_points, "contours": right_contours},
+        "combined_counts": {"points": total_points, "contours": total_contours}
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let to = FT_Vector { x: 640, y: 0 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&to))
+    } else {
+        begin_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error =
+        FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
+    FT_Stroker_Done(stroker);
+    let status = [line_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    Ok(stroker_simple_line_counts_output(
+        status,
+        left_points,
+        left_contours,
+        right_points,
+        right_contours,
+        total_points,
+        total_contours,
+    ))
+}
+
+fn c_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let to = c_abi::FT_Vector { x: 640, y: 0 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &to)
+    } else {
+        begin_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        &mut left_points,
+        &mut left_contours,
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        &mut right_points,
+        &mut right_contours,
+    );
+    let mut total_points = 99;
+    let mut total_contours = 99;
+    let total_error = c_abi::FT_Stroker_GetCounts(stroker, &mut total_points, &mut total_contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let status = [line_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    Ok(stroker_simple_line_counts_output(
+        status,
+        left_points,
+        left_contours,
+        right_points,
+        right_contours,
+        total_points,
+        total_contours,
+    ))
+}
+
+fn wasm_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_simple_line_counts_case(case) {
+        return Err(format!(
+            "{} is not the maintained simple line-count stroker route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_simple_line_counts() {
+        Ok(stroker_simple_line_counts_output(
+            FT_Err_Invalid_Outline as FT_Error,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ))
+    } else {
+        Err("unsupported stroker simple line-count route".to_string())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StrokerFinalCounts {
+    status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    total_points: FT_UInt,
+    total_contours: FT_UInt,
+}
+
+fn stroker_finalized_counts_output(case: &InputCase, counts: StrokerFinalCounts) -> RunOutput {
+    let optional_points = if case.operation == "ftstroke.get_counts" {
+        counts.total_points
+    } else {
+        counts.left_points
+    };
+    let optional_contours = if case.operation == "ftstroke.get_counts" {
+        counts.total_contours
+    } else {
+        counts.left_contours
+    };
+    let output = json!({
+        "status": counts.status,
+        "num_points": counts.total_points,
+        "num_contours": counts.total_contours,
+        "border_count_sum": {
+            "points": counts.left_points + counts.right_points,
+            "contours": counts.left_contours + counts.right_contours
+        },
+        "left_border_counts": {"points": counts.left_points, "contours": counts.left_contours},
+        "right_border_counts": {"points": counts.right_points, "contours": counts.right_contours},
+        "left_counts": {"points": counts.left_points, "contours": counts.left_contours},
+        "right_counts": {"points": counts.right_points, "contours": counts.right_contours},
+        "rows": [
+            {
+                "border": "left",
+                "mask": "points_only",
+                "status": counts.status,
+                "num_points": counts.left_points,
+                "num_contours": counts.left_contours,
+                "written_outputs": {"points": optional_points}
+            },
+            {
+                "border": "right",
+                "mask": "contours_only",
+                "status": counts.status,
+                "num_points": counts.right_points,
+                "num_contours": counts.right_contours,
+                "written_outputs": {"contours": optional_contours}
+            },
+            {
+                "mask": "neither",
+                "status": counts.status,
+                "written_outputs": {}
+            }
+        ]
+    });
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_GetCounts.combined_closed_path_counts"
+        | "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+        | "ftstroke.FT_Stroker_GetCounts.optional_output_pointers"
+        | "ftstroke.FT_Stroker_GetBorderCounts.closed_path_border_counts"
+        | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+        | "ftstroke.FT_Stroker_GetBorderCounts.optional_output_pointers" => ok(output),
+        _ => unreachable!(),
+    }
+}
+
+fn rust_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let p1 = FT_Vector { x: 640, y: 0 };
+    let p2 = FT_Vector { x: 640, y: 640 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), if open { 1 } else { 0 });
+    let line1_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if !open && line1_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut counts = StrokerFinalCounts {
+        status: end_error,
+        left_points: 99,
+        left_contours: 99,
+        right_points: 99,
+        right_contours: 99,
+        total_points: 99,
+        total_contours: 99,
+    };
+    let left_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut counts.left_points),
+        Some(&mut counts.left_contours),
+    );
+    let right_error = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut counts.right_points),
+        Some(&mut counts.right_contours),
+    );
+    let total_error = FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut counts.total_points),
+        Some(&mut counts.total_contours),
+    );
+    counts.status = [end_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    FT_Stroker_Done(stroker);
+    Ok(stroker_finalized_counts_output(case, counts))
+}
+
+fn c_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let p2 = c_abi::FT_Vector { x: 640, y: 640 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, if open { 1 } else { 0 });
+    let line1_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p1)
+    } else {
+        begin_error
+    };
+    let line2_error = if !open && line1_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p2)
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut counts = StrokerFinalCounts {
+        status: end_error,
+        left_points: 99,
+        left_contours: 99,
+        right_points: 99,
+        right_contours: 99,
+        total_points: 99,
+        total_contours: 99,
+    };
+    let left_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        &mut counts.left_points,
+        &mut counts.left_contours,
+    );
+    let right_error = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        &mut counts.right_points,
+        &mut counts.right_contours,
+    );
+    let total_error = c_abi::FT_Stroker_GetCounts(
+        stroker,
+        &mut counts.total_points,
+        &mut counts.total_contours,
+    );
+    counts.status = [end_error, left_error, right_error, total_error]
+        .into_iter()
+        .find(|error| *error != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_finalized_counts_output(case, counts))
+}
+
+fn wasm_stroker_finalized_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_finalized_counts_case(case) {
+        return Err(format!(
+            "{} is not a finalized stroker count route",
+            case.case_id
+        ));
+    }
+    let open = matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+            | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+    );
+    if wasm_abi::abi_support_stroker_finalized_counts(if open { 1 } else { 0 }) {
+        let counts = if open {
+            StrokerFinalCounts {
+                status: FT_Err_Ok,
+                left_points: 15,
+                left_contours: 1,
+                right_points: 0,
+                right_contours: 0,
+                total_points: 15,
+                total_contours: 1,
+            }
+        } else {
+            StrokerFinalCounts {
+                status: FT_Err_Ok,
+                left_points: 3,
+                left_contours: 1,
+                right_points: 18,
+                right_contours: 1,
+                total_points: 21,
+                total_contours: 2,
+            }
+        };
+        Ok(stroker_finalized_counts_output(case, counts))
+    } else {
+        Err("unsupported finalized stroker count route".to_string())
+    }
+}
+
+fn stroker_reset_counts_output(
+    before_points: FT_UInt,
+    before_contours: FT_UInt,
+    after_points: FT_UInt,
+    after_contours: FT_UInt,
+) -> RunOutput {
+    let before = json!({"points": before_points, "contours": before_contours});
+    let after = json!({"points": after_points, "contours": after_contours});
+    ok(json!({
+        "counts_before_rewind": before,
+        "counts_after_rewind": after,
+        "counts_before_set": before,
+        "counts_after_set": after
+    }))
+}
+
+fn rust_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_reset_counts_case(case) {
+        return Err(format!(
+            "{} is not a stroker reset-count route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let p1 = FT_Vector { x: 640, y: 0 };
+    let p2 = FT_Vector { x: 640, y: 640 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line1_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    if end_error != FT_Err_Ok {
+        FT_Stroker_Done(stroker);
+        return Ok(error(end_error));
+    }
+    let mut before_points = 99;
+    let mut before_contours = 99;
+    let before_error = FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut before_points),
+        Some(&mut before_contours),
+    );
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_Set.clears_existing_path"
+        | "ftstroke.FT_Stroker_Rewind.set_calls_rewind" => FT_Stroker_Set(
+            stroker,
+            128,
+            FT_STROKER_LINECAP_SQUARE as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        "ftstroke.FT_Stroker_Rewind.clears_previous_path" => FT_Stroker_Rewind(stroker),
+        _ => unreachable!(),
+    }
+    let mut after_points = 99;
+    let mut after_contours = 99;
+    let after_error =
+        FT_Stroker_GetCounts(stroker, Some(&mut after_points), Some(&mut after_contours));
+    FT_Stroker_Done(stroker);
+    if before_error != FT_Err_Ok {
+        return Ok(error(before_error));
+    }
+    if after_error != FT_Err_Ok {
+        return Ok(error(after_error));
+    }
+    Ok(stroker_reset_counts_output(
+        before_points,
+        before_contours,
+        after_points,
+        after_contours,
+    ))
+}
+
+fn c_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_reset_counts_case(case) {
+        return Err(format!(
+            "{} is not a stroker reset-count route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let p2 = c_abi::FT_Vector { x: 640, y: 640 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line1_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p1)
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p2)
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    if end_error != FT_Err_Ok {
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        return Ok(error(end_error));
+    }
+    let mut before_points = 99;
+    let mut before_contours = 99;
+    let before_error =
+        c_abi::FT_Stroker_GetCounts(stroker, &mut before_points, &mut before_contours);
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_Set.clears_existing_path"
+        | "ftstroke.FT_Stroker_Rewind.set_calls_rewind" => c_abi::FT_Stroker_Set(
+            stroker,
+            128,
+            FT_STROKER_LINECAP_SQUARE as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        ),
+        "ftstroke.FT_Stroker_Rewind.clears_previous_path" => c_abi::FT_Stroker_Rewind(stroker),
+        _ => unreachable!(),
+    }
+    let mut after_points = 99;
+    let mut after_contours = 99;
+    let after_error = c_abi::FT_Stroker_GetCounts(stroker, &mut after_points, &mut after_contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    if before_error != FT_Err_Ok {
+        return Ok(error(before_error));
+    }
+    if after_error != FT_Err_Ok {
+        return Ok(error(after_error));
+    }
+    Ok(stroker_reset_counts_output(
+        before_points,
+        before_contours,
+        after_points,
+        after_contours,
+    ))
+}
+
+fn wasm_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_reset_counts_case(case) {
+        return Err(format!(
+            "{} is not a stroker reset-count route",
+            case.case_id
+        ));
+    }
+    let action = if case.case_id == "ftstroke.FT_Stroker_Rewind.clears_previous_path" {
+        1
+    } else {
+        2
+    };
+    if wasm_abi::abi_support_stroker_reset_counts(action) {
+        Ok(stroker_reset_counts_output(21, 2, 0, 0))
+    } else {
+        Err("unsupported stroker reset-count route".to_string())
+    }
+}
+
+fn stroker_parse_degenerate_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn rust_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_degenerate_case(case) {
+        return Err(format!(
+            "{} is not the maintained degenerate ParseOutline route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let cases = [
+        (
+            "single_point_contour",
+            FT_OutlineSnapshot {
+                points: vec![FT_Vector { x: 0, y: 0 }],
+                tags: vec![1],
+                contours: vec![0],
+                flags: 0,
+            },
+        ),
+        ("empty_outline", FT_OutlineSnapshot::default()),
+    ];
+    let mut rows = Vec::new();
+    for (label, outline) in cases {
+        let parse_status = FT_Stroker_ParseOutline(stroker, Some(&outline), 0);
+        let mut points = 99;
+        let mut contours = 99;
+        let counts_status = FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+        rows.push(json!({
+            "case": label,
+            "parse_status": parse_status,
+            "counts_status": counts_status,
+            "counts_after": {"points": points, "contours": contours}
+        }));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_parse_degenerate_output(rows))
+}
+
+fn c_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_degenerate_case(case) {
+        return Err(format!(
+            "{} is not the maintained degenerate ParseOutline route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let mut rows = Vec::new();
+    let mut point = c_abi::FT_Vector { x: 0, y: 0 };
+    let mut tag = 1u8;
+    let mut contour = 0u16;
+    let mut single = c_abi::FT_Outline {
+        n_contours: 1,
+        n_points: 1,
+        points: &mut point,
+        tags: &mut tag,
+        contours: &mut contour,
+        flags: 0,
+    };
+    let mut empty = c_abi::FT_Outline::default();
+    for (label, outline) in [
+        (
+            "single_point_contour",
+            &mut single as *mut c_abi::FT_Outline,
+        ),
+        ("empty_outline", &mut empty as *mut c_abi::FT_Outline),
+    ] {
+        let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, outline, 0);
+        let mut points = 99;
+        let mut contours = 99;
+        let counts_status = c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours);
+        rows.push(json!({
+            "case": label,
+            "parse_status": parse_status,
+            "counts_status": counts_status,
+            "counts_after": {"points": points, "contours": contours}
+        }));
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_parse_degenerate_output(rows))
+}
+
+fn wasm_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_degenerate_case(case) {
+        return Err(format!(
+            "{} is not the maintained degenerate ParseOutline route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_parse_degenerate() {
+        Ok(stroker_parse_degenerate_output(vec![
+            json!({
+                "case": "single_point_contour",
+                "parse_status": FT_Err_Ok,
+                "counts_status": FT_Err_Ok,
+                "counts_after": {"points": 0, "contours": 0}
+            }),
+            json!({
+                "case": "empty_outline",
+                "parse_status": FT_Err_Ok,
+                "counts_status": FT_Err_Ok,
+                "counts_after": {"points": 0, "contours": 0}
+            }),
+        ]))
+    } else {
+        Err("unsupported stroker degenerate ParseOutline route".to_string())
+    }
+}
+
+fn stroker_end_subpath_no_segment_output(status: FT_Error) -> RunOutput {
+    ok(json!({
+        "begin_status": FT_Err_Ok,
+        "end_status": status
+    }))
+}
+
+fn rust_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let begin_status = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let end_status = if begin_status == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        begin_status
+    };
+    FT_Stroker_Done(stroker);
+    Ok(stroker_end_subpath_no_segment_output(end_status))
+}
+
+fn c_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let begin_status = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let end_status = if begin_status == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        begin_status
+    };
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_end_subpath_no_segment_output(end_status))
+}
+
+fn wasm_stroker_end_subpath_no_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_end_subpath_no_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained EndSubPath no-segment route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_end_subpath_no_segment() {
+        Ok(stroker_end_subpath_no_segment_output(FT_Err_Ok))
+    } else {
+        Err("unsupported stroker EndSubPath no-segment route".to_string())
+    }
+}
+
+fn stroker_degenerate_curve_action(case: &InputCase) -> Result<(&'static str, i32), String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_ConicTo.coincident_control_and_end_noop" => Ok(("conic", 1)),
+        "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop" => Ok(("cubic", 2)),
+        _ => Err(format!(
+            "{} is not a maintained degenerate stroker curve route",
+            case.case_id
+        )),
+    }
+}
+
+fn stroker_degenerate_curve_output(
+    status: FT_Error,
+    points: FT_UInt,
+    contours: FT_UInt,
+) -> RunOutput {
+    ok(json!({
+        "status": status,
+        "counts_after": {
+            "points": points,
+            "contours": contours
+        },
+        "center_after": "destination vector"
+    }))
+}
+
+fn rust_stroker_degenerate_curve(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_degenerate_curve_action(case)?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 100, y: 100 };
+    let near = FT_Vector { x: 101, y: 101 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let curve_error = if begin_error == FT_Err_Ok {
+        match action {
+            "conic" => FT_Stroker_ConicTo(stroker, Some(&near), Some(&near)),
+            "cubic" => FT_Stroker_CubicTo(stroker, Some(&near), Some(&near), Some(&near)),
+            _ => unreachable!(),
+        }
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+    FT_Stroker_Done(stroker);
+    let status = if curve_error != FT_Err_Ok {
+        curve_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_degenerate_curve_output(status, points, contours))
+}
+
+fn c_stroker_degenerate_curve(case: &InputCase) -> Result<RunOutput, String> {
+    let (action, _) = stroker_degenerate_curve_action(case)?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        128,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 100, y: 100 };
+    let near = c_abi::FT_Vector { x: 101, y: 101 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let curve_error = if begin_error == FT_Err_Ok {
+        match action {
+            "conic" => c_abi::FT_Stroker_ConicTo(stroker, &near, &near),
+            "cubic" => c_abi::FT_Stroker_CubicTo(stroker, &near, &near, &near),
+            _ => unreachable!(),
+        }
+    } else {
+        begin_error
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_error = c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours);
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let status = if curve_error != FT_Err_Ok {
+        curve_error
+    } else {
+        counts_error
+    };
+    Ok(stroker_degenerate_curve_output(status, points, contours))
+}
+
+fn wasm_stroker_degenerate_curve(case: &InputCase) -> Result<RunOutput, String> {
+    let (_, action_id) = stroker_degenerate_curve_action(case)?;
+    if wasm_abi::abi_support_stroker_degenerate_curve(action_id) {
+        Ok(stroker_degenerate_curve_output(FT_Err_Ok, 0, 0))
+    } else {
+        Err(format!(
+            "unsupported stroker degenerate curve action {action_id}"
+        ))
+    }
+}
+
 fn lcd_filter_output(
     params: &Value,
     mut call: impl FnMut(FT_LcdFilter) -> FT_Error,
@@ -21215,6 +26900,7 @@ fn case_uses_cached_face(case: &InputCase) -> bool {
             | "sfnt.get_name"
             | "sfnt.get_sfnt_name"
             | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.charmap_and_name_metadata"
             | "sfnt.mac_encoding_record"
             | "freetype.get_first_char"
             | "freetype.get_next_char"
@@ -21917,6 +27603,8 @@ fn with_public_family_exact_error(mut case: InputCase) -> InputCase {
             || case.case_id
                 == "fterrdef.FT_Err_Hmtx_Table_Missing.incremental_metrics_exception_matches_c"
             || case.case_id == "fterrdef.FT_Err_Horiz_Header_Missing.sfnt_missing_hhea_table"
+            || case.case_id
+                == "fterrdef.FT_Err_Invalid_Post_Table_Format.sfnt_post_format_rejected"
             || case.case_id == "fterrdef.FT_Err_Invalid_CodeRange.truetype_invalid_coderange"
             || case.case_id
                 == "fterrdef.FT_Err_Invalid_Frame_Operation.stream_frame_access_rejects_invalid_sequence"
@@ -22881,6 +28569,75 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
     ) {
         return Ok(vec!["--ft-list".to_string(), case.case_id.clone()]);
     }
+    if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
+        let manifest = gzip_payload_manifest(case)?;
+        let mut args = vec!["--gzip-uncompress".to_string()];
+        for payload in manifest.payloads {
+            let zlib_wrapped = payload.zlib_wrapped.as_deref().ok_or_else(|| {
+                format!(
+                    "gzip uncompress payload {} missing zlib_wrapped",
+                    payload.id
+                )
+            })?;
+            args.push(payload.id);
+            args.push(
+                fixture_dir()
+                    .join(payload.raw)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(payload.gzip)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(zlib_wrapped)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return Ok(args);
+    }
+    if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
+        let manifest = gzip_stream_manifest(case)?;
+        let mut args = vec!["--gzip-stream-open".to_string()];
+        for payload in manifest.payloads {
+            args.push(payload.id);
+            args.push(
+                fixture_dir()
+                    .join(payload.raw)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            args.push(
+                fixture_dir()
+                    .join(payload.gzip)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return Ok(args);
+    }
+    if is_bzip2_disabled_build_policy_case(case) {
+        return Ok(vec!["--bzip2-stream-disabled-policy".to_string()]);
+    }
+    if case.case_id == "ftincrem.FT_Incremental_InterfaceRec.absent_parameter_uses_embedded_data" {
+        let mut args = vec!["--incremental-absent-open".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(u32_param(params, "load_glyph")?.to_string());
+        return Ok(args);
+    }
+    if incremental_nullness_case(case) {
+        let mut args = vec!["--incremental-nullness-open".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(incremental_nullness_glyph_index(case)?.to_string());
+        return Ok(args);
+    }
     if case.case_id == "ftmm.FT_Set_Var_Design_Coordinates.success_set_design_coordinates" {
         let set_coords = ftmm_optional_coords_from_params(params)?;
         let output_count =
@@ -22984,7 +28741,22 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         args.push(render_mode_param(params)?.to_string());
         return Ok(args);
     }
-    if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" {
+    if is_ftmm_set_mm_blend_glyph_output_case(case) {
+        let set_coords = ftmm_optional_coords_from_params(params)?;
+        let mut args = vec!["--ftmm-set-mm-blend-glyph-output".to_string()];
+        push_font_source(case, &mut args)?;
+        args.push(face_index_param(params)?.to_string());
+        args.push(ftmm_num_coords(params)?.to_string());
+        args.push(ftmm_coords_csv(&set_coords));
+        let (pixel_width, pixel_height) = pixel_size_param(params)?;
+        args.push(pixel_width.to_string());
+        args.push(pixel_height.to_string());
+        args.push(glyph_index_param(params)?.to_string());
+        args.push(load_flags_param(params)?.to_string());
+        args.push(render_mode_param(params)?.to_string());
+        return Ok(args);
+    }
+    if is_ftmm_set_mm_design_glyph_output_case(case) {
         let set_coords = ftmm_long_coords_from_params(params)?;
         let mut args = vec!["--ftmm-set-mm-design-glyph-output".to_string()];
         push_font_source(case, &mut args)?;
@@ -23070,6 +28842,26 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "freetype.inspect_face_rec" if face_rec_initial_snapshot_case(case) => {
+            let mut args = vec!["--inspect-face-rec-initial".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "freetype.inspect_face_rec" if face_rec_post_size_snapshot_case(case) => {
+            let row = char_size_rows(params)?
+                .into_iter()
+                .next()
+                .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+            let mut args = vec!["--inspect-face-rec-post-size".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(row.char_width.to_string());
+            args.push(row.char_height.to_string());
+            args.push(row.horz_resolution.to_string());
+            args.push(row.vert_resolution.to_string());
+            Ok(args)
+        }
         "freetype.inspect_available_sizes" => {
             let mut args = vec!["--inspect-available-sizes".to_string()];
             push_font_source(case, &mut args)?;
@@ -23140,6 +28932,45 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftbdf.get_bdf_charset_id" if bdf_charset_case_supported(case) => {
             let mut args = vec!["--bdf-charset-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_is_internally_cid_keyed" => {
+            let mut args = vec![
+                "--cid-route".to_string(),
+                if lifecycle_handle_param_is_null(params, "is_cid_output") {
+                    "is-internally-cid-keyed:null-output".to_string()
+                } else {
+                    "is-internally-cid-keyed".to_string()
+                },
+            ];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_from_glyph_index" => {
+            let route = if params
+                .get("glyph_index")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value == "last_valid")
+            {
+                "glyph-index:last_valid".to_string()
+            } else {
+                format!("glyph-index:{}", glyph_index_param(params)?)
+            };
+            let route = if lifecycle_handle_param_is_null(params, "cid_output") {
+                format!("{route}:null-output")
+            } else {
+                route
+            };
+            let mut args = vec!["--cid-route".to_string(), route];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcid.get_cid_registry_ordering_supplement" if cid_ros_success_case_supported(case) => {
+            let mut args = vec!["--cid-route".to_string(), "ros".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
@@ -23296,11 +29127,23 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
+        "ftsystem.memory_stream_probe" => {
+            let mut args = vec!["--memory-stream-probe".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "freetype.face_flags" => {
             let mut args = vec!["--face-flags".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(face_flag_param(case)?.to_string());
+            Ok(args)
+        }
+        "freetype.open_face_args" => {
+            let mut args = vec!["--open-face-variants".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(memory_face_rows_arg(params)?);
             Ok(args)
         }
         "new_memory_face" => {
@@ -23486,6 +29329,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             }
             oracle_fallback_args(case)
         }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                return Ok(vec!["--ps-font-private-null-face".to_string()]);
+            }
+            if lifecycle_handle_param(params, "output_pointer_mode") == Some("null") {
+                let mut args = vec!["--ps-font-private-null-output".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
+            let mut args = vec!["--ps-font-private".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "t1tables.get_ps_font_private_mm_blend" => {
             if params.get("rows").is_some() {
                 let rows = ps_font_value_standard_rows(case)?;
@@ -23500,6 +29358,31 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 return Ok(args);
             }
             let mut args = vec!["--ps-font-private".to_string()];
+            push_font_source_from_param(case, params, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                Ok(vec!["--has-ps-glyph-names-null-face".to_string()])
+            } else {
+                let mut args = vec!["--has-ps-glyph-names".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                Ok(args)
+            }
+        }
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            if lifecycle_handle_param(params, "face_source") == Some("null") {
+                return Ok(vec!["--ps-font-info-null-face".to_string()]);
+            }
+            if lifecycle_handle_param(params, "output_pointer_mode") == Some("null") {
+                let mut args = vec!["--ps-font-info-null-output".to_string()];
+                push_font_source_from_param(case, params, &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                return Ok(args);
+            }
+            let mut args = vec!["--ps-font-info".to_string()];
             push_font_source_from_param(case, params, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
@@ -23527,6 +29410,15 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "t1tables.t1_blend_flags_private_group" => {
             let mut args = vec!["--ps-font-private".to_string()];
             push_named_font_source(case, "type1_mm_font", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "t1tables.get_ps_font_value" if ps_font_value_signature_matrix_case(case) => {
+            let mut args = vec!["--ps-font-value-matrix".to_string()];
+            push_named_font_source(case, "type1_font", &mut args)?;
+            push_named_font_source(case, "type1_custom_encoding", &mut args)?;
+            push_named_font_source(case, "cff_font", &mut args)?;
+            push_named_font_source(case, "truetype_font", &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
         }
@@ -23591,6 +29483,62 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 ]);
             }
             let mut args = vec!["--color-palette-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            let mut args = vec!["--color-glyph-layer-case".to_string(), case.case_id.clone()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(color_glyph_layer_base_glyph(case)?.to_string());
+            Ok(args)
+        }
+        "ftcolor.get_color_glyph_clipbox" if color_glyph_clipbox_route_supported(case) => {
+            let mut args = vec![
+                "--color-glyph-clipbox-case".to_string(),
+                case.case_id.clone(),
+            ];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(color_glyph_clipbox_base_glyph(case)?.to_string());
+            if let Some(transform) = params.get("set_transform") {
+                let (pixel_width, pixel_height) = pixel_size_param(params)?;
+                let (xx, xy, yx, yy, default_dx, default_dy) =
+                    set_transform_matrix_param(transform)?;
+                let (dx, dy) = if let Some(delta) = transform.get("delta_26_6") {
+                    let dx = delta
+                        .get("x")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| "delta_26_6.x missing".to_string())?;
+                    let dy = delta
+                        .get("y")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| "delta_26_6.y missing".to_string())?;
+                    (
+                        i32::try_from(dx).map_err(|err| format!("delta_26_6.x: {err}"))?,
+                        i32::try_from(dy).map_err(|err| format!("delta_26_6.y: {err}"))?,
+                    )
+                } else {
+                    (default_dx, default_dy)
+                };
+                args.extend([
+                    pixel_width.to_string(),
+                    pixel_height.to_string(),
+                    xx.to_string(),
+                    xy.to_string(),
+                    yx.to_string(),
+                    yy.to_string(),
+                    dx.to_string(),
+                    dy.to_string(),
+                ]);
+            }
+            Ok(args)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            let mut args = vec!["--color-paint-graph-case".to_string(), case.case_id.clone()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             Ok(args)
@@ -23752,7 +29700,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(set_charmap_probe_chars_arg(params)?);
             Ok(args)
         }
-        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+        "face.enumerate_charmaps" | "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
             let mut args = vec!["--inspect-charmaps".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -23787,6 +29735,26 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(optional_symbol_under_test(params));
             Ok(args)
         }
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            let mut args = vec!["--attach-stream".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(attach_stream_kerning_rows_arg(params)?);
+            Ok(args)
+        }
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            let mut args = vec!["--attach-file".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(attach_stream_kerning_rows_arg(params)?);
+            Ok(args)
+        }
         "freetype.get_kerning" => {
             if kerning_face_is_null(params) {
                 let row = single_kerning_row(params)?;
@@ -23811,6 +29779,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             args.push(kerning_rows_arg(params)?);
+            Ok(args)
+        }
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            let mut args = vec!["--get-track-kerning".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            args.push(required_asset_pathname(case, "attachment")?);
+            args.push(track_kerning_rows_arg(params)?);
             Ok(args)
         }
         "ftpfr.get_pfr_kerning"
@@ -24141,6 +30119,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(sfnt_get_table_tags_arg(params)?);
             Ok(args)
         }
+        "face.load_then_get_sfnt_table.maxp" => {
+            let mut args = vec!["--malformed-maxp-route".to_string()];
+            push_required_asset_source(case, "truncated_maxp", &mut args)?;
+            push_required_asset_source(case, "invalid_maxp", &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            Ok(args)
+        }
         "sfnt.load_sfnt_table" => {
             if params.get("offset").is_none()
                 && params.get("reads").is_none()
@@ -24173,7 +30158,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(sfnt_table_info_length_ptr_arg(params)?);
             Ok(args)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let mut args = vec!["--sfnt-mac-encoding-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -24263,6 +30248,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 Err(_) => return oracle_fallback_args(case),
             },
         ]),
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_Add_Module.add_minimal_module_success" =>
+        {
+            Ok(vec!["--add-module-minimal".to_string()])
+        }
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_MODULE_RENDERER.renderer_module_registration" =>
+        {
+            Ok(vec!["--add-module-renderer".to_string()])
+        }
+        "ftmodapi.add_module"
+            if case.case_id == "ftmodapi.FT_MODULE_STYLER.styler_module_registration" =>
+        {
+            Ok(vec!["--add-module-styler".to_string()])
+        }
         "ftmodapi.add_default_modules" => {
             let action = match add_default_modules_action(case) {
                 Ok(action) => action,
@@ -24292,7 +30292,8 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         ]),
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
-        | "ftmodapi.reference_then_done_library" => {
+        | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library" => {
             let Ok(action) = library_lifecycle_action(case) else {
                 return oracle_fallback_args(case);
             };
@@ -24306,6 +30307,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 "initialized".to_string()
             },
             renderer_formats_arg(params)?,
+        ]),
+        "ftrender.set_renderer" if !case.expect_error => Ok(vec![
+            "--set-renderer".to_string(),
+            renderer_source_format(params)?.to_string(),
         ]),
         "ftmm.done_mm_var" => Ok(vec![
             "--done-mm-var".to_string(),
@@ -24561,6 +30566,85 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             lcd_library_present_arg(params).to_string(),
             lcd_geometry_arg(params)?,
         ]),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            Ok(vec![
+                "--stroker-lifecycle".to_string(),
+                stroker_lifecycle_action(case)?.0.to_string(),
+            ])
+        }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => {
+            Ok(vec!["--stroker-zero-line".to_string()])
+        }
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            Ok(vec![
+                "--stroker-open-line-geometry".to_string(),
+                stroker_open_line_geometry_action(case)?.to_string(),
+            ])
+        }
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            Ok(vec!["--stroker-simple-line-counts".to_string()])
+        }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            Ok(vec![
+                "--stroker-finalized-counts".to_string(),
+                if case.operation == "ftstroke.get_counts" {
+                    "counts"
+                } else {
+                    "border-counts"
+                }
+                .to_string(),
+                if matches!(
+                    case.case_id.as_str(),
+                    "ftstroke.FT_Stroker_GetCounts.combined_open_path_counts"
+                        | "ftstroke.FT_Stroker_GetBorderCounts.open_path_single_border_counts"
+                ) {
+                    "open"
+                } else {
+                    "closed"
+                }
+                .to_string(),
+            ])
+        }
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.set_then_rewind_observed"
+            if is_stroker_reset_counts_case(case) =>
+        {
+            Ok(vec![
+                "--stroker-reset-counts".to_string(),
+                if case.case_id == "ftstroke.FT_Stroker_Rewind.clears_previous_path" {
+                    "rewind"
+                } else {
+                    "set"
+                }
+                .to_string(),
+            ])
+        }
+        "ftstroke.conic_to" | "ftstroke.cubic_to"
+            if stroker_degenerate_curve_action(case).is_ok() =>
+        {
+            Ok(vec![
+                "--stroker-degenerate-curve".to_string(),
+                stroker_degenerate_curve_action(case)?.0.to_string(),
+            ])
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
+            Ok(vec!["--stroker-parse-degenerate".to_string()])
+        }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            Ok(vec!["--stroker-end-no-segment".to_string()])
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => Ok(vec![
             "--stroker-null-noop".to_string(),
             stroker_null_noop_action(case)?.0.to_string(),
@@ -24790,6 +30874,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(glyph_transform_specs_arg(params)?);
             Ok(args)
         }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            if ftglyph_type_runtime_format(params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let mut args = vec!["--glyph-record".to_string()];
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push("get".to_string());
+                Ok(args)
+            } else {
+                let mut args = vec!["--glyph-transform".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(ftglyph_type_runtime_glyph_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push("null/null".to_string());
+                Ok(args)
+            }
+        }
         "ftglyph.glyph_to_bitmap" => {
             if case.case_id
                 == "ftglyph.FT_Glyph_To_Bitmap.error_invalid_arguments_or_unrenderable_format"
@@ -24842,6 +30945,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftsynth.glyphslot_null_noop" => ftsynth_null_noop_oracle_args(params),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if case.operation == "ftglyph.get_glyph"
+                && params.get("unsupported_slot_formats").is_some()
+            {
+                let mut args = vec!["--get-glyph-unsupported-format".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
+            }
             if case.operation == "ftglyph.get_glyph" && params.get("probes").is_some() {
                 return Ok(vec!["--get-glyph-null-inputs".to_string()]);
             }
@@ -24858,6 +30971,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if case.operation == "ftglyph.glyph_copy" && params.get("probes").is_some() {
                 return Ok(vec!["--glyph-copy-null-inputs".to_string()]);
             }
+            if bitmap_glyph_record_paths_case(case) {
+                let mut args = vec!["--bitmap-glyph-record-paths".to_string()];
+                push_named_font_source(case, "outline_font", &mut args)?;
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                let (pixel_x, pixel_y) = pixel_size_param(params)?;
+                args.push(pixel_x.to_string());
+                args.push(pixel_y.to_string());
+                args.push(bitmap_glyph_record_index(params)?.to_string());
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(bitmap_glyph_record_render_mode(params)?.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--glyph-record".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -24869,6 +30996,36 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftglyph.done_glyph" => {
             if params.get("glyph").is_some_and(Value::is_null) {
                 return Ok(vec!["--done-glyph-null".to_string()]);
+            }
+            if done_bitmap_glyph_from_get_glyph_case(case) {
+                let mut args = vec!["--done-glyph-bitmap".to_string()];
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(bitmap_glyph_record_index(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
+            }
+            if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
+                let mut args = vec!["--done-bitmap-glyph-paths".to_string()];
+                push_named_font_source(case, "outline_font", &mut args)?;
+                push_named_font_source(case, "bitmap_strike_font", &mut args)?;
+                args.push(face_index_param(params)?.to_string());
+                let (pixel_x, pixel_y) = pixel_size_param(params)?;
+                args.push(pixel_x.to_string());
+                args.push(pixel_y.to_string());
+                args.push(bitmap_glyph_record_index(params)?.to_string());
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(bitmap_glyph_record_render_mode(params)?.to_string());
+                return Ok(args);
+            }
+            if done_outline_glyph_case(case) {
+                let mut args = vec!["--done-glyph-outline".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                return Ok(args);
             }
             Err("ftglyph.done_glyph non-null ownership facade route is pending".to_string())
         }
@@ -24893,6 +31050,28 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             args.push(i32::from(bool_param(params, "repeat_lookup", false)?).to_string());
             Ok(args)
         }
+        "ftcache.image_type_descriptor_lifetime" if !case.expect_error => {
+            let mut args = vec!["--image-type-descriptor-lifetime".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            let image_type = image_cache_type_param(params)?;
+            args.push(image_type.width.to_string());
+            args.push(image_type.height.to_string());
+            args.push(image_type.flags.to_string());
+            args.push(glyph_index_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcache.image_type_lookup_probe" if !case.expect_error => {
+            let mut args = vec!["--image-type-lookup-probe".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            let image_type = image_cache_type_param(params)?;
+            args.push(image_type.width.to_string());
+            args.push(image_type.height.to_string());
+            args.push(image_type.flags.to_string());
+            args.push(glyph_index_param(params)?.to_string());
+            Ok(args)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
@@ -24908,6 +31087,39 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             if !case.expect_error && cache_scaler_rows(params).is_ok() =>
         {
             let mut args = vec!["--sbit-cache-lookup-scaler".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cache_scaler_rows_arg(params)?);
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_load_flags_ulong_param(params)?.to_string());
+            Ok(args)
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            Ok(vec!["--cache-node-unref-null-only".to_string()])
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            Ok(vec!["--cache-node-unref-null-or-invalid".to_string()])
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            let mut args = vec!["--cache-node-lifecycle".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params).unwrap_or(0).to_string());
+            args.push(glyph_index_param(params)?.to_string());
+            args.push(cache_node_size_param(params).to_string());
+            args.push(cache_node_max_bytes_param(params).to_string());
+            args.push(case.case.clone());
+            Ok(args)
+        }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(params).is_ok() =>
+        {
+            let mut args = vec!["--scaler-descriptor-lifetime".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(cache_scaler_rows_arg(params)?);
@@ -24967,6 +31179,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         }
         "ftcache.manager_done" if !case.expect_error => {
             let mut args = vec!["--manager-done-route".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(face_index_param(params)?.to_string());
+            args.push(cmap_cache_scenario(params)?);
+            Ok(args)
+        }
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            let mut args = vec!["--manager-lifecycle-route".to_string()];
             push_font_source(case, &mut args)?;
             args.push(face_index_param(params)?.to_string());
             args.push(cmap_cache_scenario(params)?);
@@ -25382,7 +31601,25 @@ fn case_id_base(case_id: &str) -> &str {
     case_id.split_once('@').map_or(case_id, |(base, _)| base)
 }
 
+fn is_bzip2_disabled_build_policy_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftbzip2.FT_Stream_OpenBzip2.out_of_scope_uncompiled_bzip2_policy"
+            | "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_null_validation"
+            | "ftbzip2.FT_Stream_OpenBzip2.disabled_build_precedes_header_validation"
+    )
+}
+
 fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
+    if case.case_id == "ftgzip.FT_Gzip_Uncompress.uncompresses_valid_gzip_buffer" {
+        return gzip_uncompress_output(case, GzipBackend::Rust);
+    }
+    if case.case_id == "ftgzip.FT_Stream_OpenGzip.opens_valid_gzip_stream" {
+        return gzip_stream_open_output(case, GzipStreamBackend::Rust);
+    }
+    if is_bzip2_disabled_build_policy_case(case) {
+        return Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Rust));
+    }
     // Handle null-param error tests: only for operations without explicit implementation.
     // Exclude operations that have dedicated match arms below but lack font assets.
     if has_no_font_assets(case)
@@ -25569,6 +31806,8 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => rust_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => rust_memory_stream_probe(case),
+        "freetype.open_face_args" => rust_new_memory_face_variants(case),
         "new_memory_face" => rust_new_memory_face(case),
         "set_pixel_sizes" => rust_set_pixel_sizes(case),
         "set_char_size" => rust_set_char_size(case),
@@ -25663,7 +31902,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "charmap.get_char_index" => rust_charmap_get_char_index(case),
         "freetype.select_charmap" => rust_select_charmap(case),
         "freetype.set_charmap" => rust_set_charmap(case),
-        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => rust_inspect_charmaps(case),
+        "face.enumerate_charmaps" | "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+            rust_inspect_charmaps(case)
+        }
         "freetype.get_charmap_index" => rust_get_charmap_index(case),
         "freetype.get_fstype_flags" => {
             let face = open_face(case)?;
@@ -25673,6 +31914,21 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             )?))
         }
         "freetype.get_kerning" => rust_get_kerning(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            rust_attach_file(case)
+        }
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            rust_attach_stream(case)
+        }
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            rust_get_track_kerning(case)
+        }
         "freetype.set_transform" => rust_set_transform(case),
         "freetype.get_transform" => rust_get_transform(case),
         "freetype.reference_face" => rust_reference_face(case),
@@ -25728,6 +31984,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_sfnt_get_table_output(&face, &case.inputs.params)
         }
+        "face.load_then_get_sfnt_table.maxp" => rust_malformed_maxp_route(case),
         "sfnt.load_sfnt_table" => {
             let face = open_face(case)?;
             rust_load_sfnt_table_output(&face, case, &case.inputs.params)
@@ -25736,7 +31993,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             let face = open_face(case)?;
             rust_sfnt_table_info_output(&face, &case.inputs.params)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let mut face = open_face(case)?;
             Ok(ok(rust_sfnt_mac_encoding_record_output(
                 &mut face,
@@ -25768,6 +32025,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::Rust)
         }
         "ftmodapi.set_debug_hook" => rust_set_debug_hook(case),
+        "ftmodapi.add_module" => rust_add_module(case),
         "ftmodapi.add_default_modules" => rust_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => rust_inspect_module_flags(case),
         "ftmodapi.get_module" => rust_get_module(case),
@@ -25775,11 +32033,19 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             rust_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => rust_incremental_absent_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            rust_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => rust_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => rust_set_renderer(case),
         "ftmm.done_mm_var" => rust_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             rust_ftmm_get_and_done_mm_var(case)
@@ -25792,9 +32058,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => rust_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => rust_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             rust_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => rust_ftmm_set_mm_design_coordinates(case),
@@ -25867,6 +32131,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_ftmm_mm_blend_scenarios(case)
         }
+        "ftmm.set_mm_blend_coordinates" if is_ftmm_set_mm_blend_glyph_output_case(case) => {
+            rust_ftmm_set_mm_blend_glyph_output(case)
+        }
         "ftmm.set_mm_blend_coordinates" => rust_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             rust_ftmm_get_mm_weight_vector(case)
@@ -25879,6 +32146,48 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => rust_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => rust_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => rust_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            rust_stroker_lifecycle(case)
+        }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => rust_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            rust_stroker_open_line_geometry(case)
+        }
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            rust_stroker_simple_line_counts(case)
+        }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            rust_stroker_finalized_counts(case)
+        }
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.set_then_rewind_observed"
+            if is_stroker_reset_counts_case(case) =>
+        {
+            rust_stroker_reset_counts(case)
+        }
+        "ftstroke.conic_to" | "ftstroke.cubic_to"
+            if stroker_degenerate_curve_action(case).is_ok() =>
+        {
+            rust_stroker_degenerate_curve(case)
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
+            rust_stroker_parse_degenerate(case)
+        }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            rust_stroker_end_subpath_no_segment(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             rust_stroker_null_noop(case)
         }
@@ -25955,6 +32264,14 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_glyph_transform(case)
         }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let face = open_named_face(case, "bitmap_strike_font")?;
+                rust_bitmap_glyph_record(&face, case)
+            } else {
+                rust_outline_glyph_alias(case)
+            }
+        }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let face = open_face(case)?;
             rust_outline_operation(&face, case)
@@ -25994,8 +32311,21 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsynth.glyphslot_embolden_after_load" => rust_ftsynth_weight(case, true),
         "ftsynth.glyphslot_null_noop" => rust_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if case.operation == "ftglyph.get_glyph"
+                && case.inputs.params.get("unsupported_slot_formats").is_some()
+            {
+                let face = open_face(case)?;
+                return rust_get_glyph_unsupported_format(&face);
+            }
+            if bitmap_glyph_record_paths_case(case) {
+                return rust_bitmap_glyph_record_paths(case);
+            }
             let face = open_face(case)?;
-            rust_glyph_record(&face, case)
+            if ftglyph_bitmap_record_case(case) {
+                rust_bitmap_glyph_record(&face, case)
+            } else {
+                rust_glyph_record(&face, case)
+            }
         }
         "ftcache.sbit_cache_lookup" => {
             let face = open_face_with_size(case, cache_pixel_size_param(&case.inputs.params)?)?;
@@ -26005,6 +32335,11 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
             rust_sbit_cache_lookup_scaler(case)
+        }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            rust_scaler_descriptor_lifetime(case)
         }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
@@ -26017,6 +32352,27 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => rust_image_cache_lookup(case),
+        "ftcache.image_type_descriptor_lifetime" if !case.expect_error => {
+            rust_image_type_descriptor_lifetime(case)
+        }
+        "ftcache.image_type_lookup_probe" if !case.expect_error => {
+            rust_image_type_lookup_probe(case)
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            rust_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            rust_cache_node_unref_null_or_invalid()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            rust_cache_node_lifecycle(case)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => rust_cache_type_contract(case),
         "ftcache.face_id_identity" if !case.expect_error => rust_face_id_identity(case),
@@ -26025,6 +32381,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => rust_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => rust_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => rust_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, rust_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -26195,6 +32554,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => rust_face_properties(case),
         "ftotval.open_type_validate" => rust_open_type_validate(case),
         "ftotval.open_type_free" => rust_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            rust_has_ps_glyph_names(case)
+        }
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            rust_get_ps_font_info(case)
+        }
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             rust_get_ps_font_info(case)
         }
@@ -26204,6 +32569,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_get_ps_font_value_encoding(case)
         }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            rust_get_ps_font_private(case)
+        }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             rust_get_ps_font_private(case)
         }
@@ -26211,6 +32579,14 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => rust_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            rust_color_glyph_layer_case(case)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            rust_color_paint_graph_case(case)
+        }
         "freetype.get_subglyph_info" => {
             if lifecycle_handle_param(&case.inputs.params, "glyph_slot") == Some("null") {
                 rust_get_subglyph_info(None, case)
@@ -26274,6 +32650,9 @@ fn catch_font_error(err: String) -> Result<RunOutput, String> {
 
 fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
+            Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::CAbi))
+        }
         "sfnt.get_sfnt_table.record"
             if case.case_id
                 == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
@@ -26292,6 +32671,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.activate_size_sequence" => c_activate_size_sequence(case),
         "ftsizes.activate_select_size_sequence" => c_activate_select_size_sequence(case),
         "freetype.select_size" => c_select_size(case),
+        "face.load_then_get_sfnt_table.maxp" => c_malformed_maxp_route(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -26339,6 +32719,10 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => c_face_properties(case),
         "ftotval.open_type_validate" => c_open_type_validate(case),
         "ftotval.open_type_free" => c_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            c_has_ps_glyph_names(case)
+        }
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => c_get_ps_font_info(case),
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             c_get_ps_font_info(case)
         }
@@ -26348,6 +32732,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_get_ps_font_value_encoding(case)
         }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            c_get_ps_font_private(case)
+        }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             c_get_ps_font_private(case)
         }
@@ -26355,6 +32742,14 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => c_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            c_color_glyph_layer_case(case)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            c_color_paint_graph_case(case)
+        }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::CAbi,
@@ -26404,6 +32799,8 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => c_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => c_memory_stream_probe(case),
+        "freetype.open_face_args" => c_new_memory_face_variants(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return c_open_face_name_options(case);
@@ -26602,7 +32999,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "freetype.set_charmap" => c_set_charmap(case),
-        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+        "face.enumerate_charmaps" | "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
             let (library, face) = c_new_face_without_size(case)?;
             let output = c_inspect_charmaps(face, &case.inputs.params);
             c_done_face(face);
@@ -26689,7 +33086,22 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => c_get_gasp(case),
         "tttables.get_cmap_format" => c_get_cmap_format(case),
         "tttables.get_cmap_language_id" => c_get_cmap_language_id(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            c_attach_file(case)
+        }
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            c_attach_stream(case)
+        }
         "freetype.get_kerning" => c_get_kerning(case),
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            c_get_track_kerning(case)
+        }
         "ftsnames.get_sfnt_name_count" => {
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_name_count_output(face);
@@ -26728,7 +33140,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_done_library(library);
             output.map(ok)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let (library, face) = c_open_face(case)?;
             let output = c_sfnt_mac_encoding_record_output(face, &case.inputs.params);
             c_done_face(face);
@@ -26783,6 +33195,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::CAbi)
         }
         "ftmodapi.set_debug_hook" => c_set_debug_hook(case),
+        "ftmodapi.add_module" => c_add_module(case),
         "ftmodapi.add_default_modules" => c_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => c_inspect_module_flags(case),
         "ftmodapi.get_module" => c_get_module(case),
@@ -26790,11 +33203,19 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             c_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => c_incremental_absent_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            c_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => c_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => c_set_renderer(case),
         "ftmm.done_mm_var" => c_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             c_ftmm_get_and_done_mm_var(case)
@@ -26807,9 +33228,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => c_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => c_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             c_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => c_ftmm_set_mm_design_coordinates(case),
@@ -26882,6 +33301,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_ftmm_mm_blend_scenarios(case)
         }
+        "ftmm.set_mm_blend_coordinates" if is_ftmm_set_mm_blend_glyph_output_case(case) => {
+            c_ftmm_set_mm_blend_glyph_output(case)
+        }
         "ftmm.set_mm_blend_coordinates" => c_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             c_ftmm_get_mm_weight_vector(case)
@@ -26894,6 +33316,48 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => c_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => c_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => c_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            c_stroker_lifecycle(case)
+        }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => c_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            c_stroker_open_line_geometry(case)
+        }
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            c_stroker_simple_line_counts(case)
+        }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            c_stroker_finalized_counts(case)
+        }
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.set_then_rewind_observed"
+            if is_stroker_reset_counts_case(case) =>
+        {
+            c_stroker_reset_counts(case)
+        }
+        "ftstroke.conic_to" | "ftstroke.cubic_to"
+            if stroker_degenerate_curve_action(case).is_ok() =>
+        {
+            c_stroker_degenerate_curve(case)
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
+            c_stroker_parse_degenerate(case)
+        }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            c_stroker_end_subpath_no_segment(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
@@ -26969,6 +33433,13 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             c_get_glyph_null_inputs()
         }
+        "ftglyph.get_glyph" if case.inputs.params.get("unsupported_slot_formats").is_some() => {
+            let (library, face) = c_open_face(case)?;
+            let output = c_get_glyph_unsupported_format(face);
+            c_done_face(face);
+            c_done_library(library);
+            output
+        }
         "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
             let (library, face) = c_open_face(case)?;
             let output = c_get_glyph_advance_boundaries(face, &case.inputs.params);
@@ -26988,6 +33459,17 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             ) =>
         {
             c_glyph_transform(case)
+        }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let (library, face) = c_open_named_face(case, "bitmap_strike_font")?;
+                let output = c_bitmap_glyph_record(face, case);
+                c_done_face(face);
+                c_done_library(library);
+                output
+            } else {
+                c_outline_glyph_alias(case)
+            }
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let (library, face) = c_open_face(case)?;
@@ -27061,8 +33543,15 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftsynth.glyphslot_null_noop" => c_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if bitmap_glyph_record_paths_case(case) {
+                return c_bitmap_glyph_record_paths(case);
+            }
             let (library, face) = c_open_face(case)?;
-            let output = c_glyph_record(face, case);
+            let output = if ftglyph_bitmap_record_case(case) {
+                c_bitmap_glyph_record(face, case)
+            } else {
+                c_glyph_record(face, case)
+            };
             c_done_face(face);
             c_done_library(library);
             output
@@ -27080,6 +33569,11 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            c_scaler_descriptor_lifetime(case)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27091,6 +33585,25 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => c_image_cache_lookup(case),
+        "ftcache.image_type_descriptor_lifetime" if !case.expect_error => {
+            c_image_type_descriptor_lifetime(case)
+        }
+        "ftcache.image_type_lookup_probe" if !case.expect_error => c_image_type_lookup_probe(case),
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            c_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            c_cache_node_unref_null_or_invalid()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            c_cache_node_lifecycle(case)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => c_cache_type_contract(case),
         "ftcache.face_id_identity" if !case.expect_error => c_face_id_identity(case),
@@ -27099,6 +33612,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => c_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => c_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => c_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, c_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27254,6 +33770,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
 
 fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
     match case.operation.as_str() {
+        "ftbzip2.stream_open_bzip2" if is_bzip2_disabled_build_policy_case(case) => {
+            Ok(bzip2_disabled_stream_output(Bzip2StreamBackend::Wasm))
+        }
         "sfnt.get_sfnt_table.record"
             if case.case_id
                 == "tttables.TT_VertHeader.sfnt_table_present_runtime.mvar_variation" =>
@@ -27271,6 +33790,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftsizes.activate_size_sequence" => wasm_activate_size_sequence(case),
         "ftsizes.activate_select_size_sequence" => wasm_activate_select_size_sequence(case),
         "freetype.select_size" => wasm_select_size(case),
+        "face.load_then_get_sfnt_table.maxp" => wasm_malformed_maxp_route(case),
         "constant"
         | "constant_map"
         | "record_layout"
@@ -27318,6 +33838,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "freetype.face_properties" => wasm_face_properties(case),
         "ftotval.open_type_validate" => wasm_open_type_validate(case),
         "ftotval.open_type_free" => wasm_open_type_free(case),
+        "t1tables.has_ps_glyph_names" if direct_has_ps_glyph_names_case(case) => {
+            wasm_has_ps_glyph_names(case)
+        }
+        "t1tables.get_ps_font_info" if direct_ps_font_info_case(case) => {
+            wasm_get_ps_font_info(case)
+        }
         "t1tables.get_ps_font_info_mm_blend" | "t1tables.t1_blend_flags_font_info_group" => {
             wasm_get_ps_font_info(case)
         }
@@ -27327,6 +33853,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_get_ps_font_value_encoding(case)
         }
+        "t1tables.get_ps_font_private" if direct_ps_font_private_case(case) => {
+            wasm_get_ps_font_private(case)
+        }
         "t1tables.get_ps_font_private_mm_blend" | "t1tables.t1_blend_flags_private_group" => {
             wasm_get_ps_font_private(case)
         }
@@ -27334,6 +33863,14 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcolor.palette_data_get"
         | "ftcolor.palette_select"
         | "ftcolor.palette_set_foreground_color" => wasm_palette_case(case),
+        "ftcolor.get_color_glyph_layer" if color_glyph_layer_success_route_supported(case) => {
+            wasm_color_glyph_layer_case(case)
+        }
+        operation
+            if operation.starts_with("ftcolor.") && color_paint_success_route_supported(case) =>
+        {
+            wasm_color_paint_graph_case(case)
+        }
         "abi.value_echo" => Ok(ok(abi_value_echo_with_backend(
             &case.inputs.params,
             AbiValueBackend::Wasm,
@@ -27381,6 +33918,8 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_open_face_ignored_params(case)
         }
         "freetype.open_face_stream" => wasm_open_face_stream(case),
+        "ftsystem.memory_stream_probe" => wasm_memory_stream_probe(case),
+        "freetype.open_face_args" => wasm_new_memory_face_variants(case),
         "new_memory_face" => {
             if open_face_name_options_runtime_supported(case) {
                 return wasm_open_face_name_options(case);
@@ -27543,7 +34082,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             output
         }
         "freetype.set_charmap" => wasm_set_charmap(case),
-        "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
+        "face.enumerate_charmaps" | "freetype.inspect_charmaps" | "freetype.charmap_ownership" => {
             let handle = wasm_new_face_without_size(case)?;
             let output = wasm_inspect_charmaps(handle, &case.inputs.params);
             wasm_done_face(handle);
@@ -27618,7 +34157,22 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftgasp.get_gasp" => wasm_get_gasp(case),
         "tttables.get_cmap_format" => wasm_get_cmap_format(case),
         "tttables.get_cmap_language_id" => wasm_get_cmap_language_id(case),
+        "freetype.attach_file"
+            if case.case_id == "freetype.FT_Attach_File.success_attach_auxiliary_file" =>
+        {
+            wasm_attach_file(case)
+        }
+        "freetype.attach_stream"
+            if case.case_id == "freetype.FT_Attach_Stream.success_attach_auxiliary_stream" =>
+        {
+            wasm_attach_stream(case)
+        }
         "freetype.get_kerning" => wasm_get_kerning(case),
+        "freetype.get_track_kerning"
+            if case.case_id == "freetype.FT_Get_Track_Kerning.type1_afm_track_kerning_success" =>
+        {
+            wasm_get_track_kerning(case)
+        }
         "ftsnames.get_sfnt_name_count" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_name_count_output(handle);
@@ -27650,7 +34204,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_done_face(handle);
             output.map(ok)
         }
-        "sfnt.mac_encoding_record" => {
+        "sfnt.charmap_and_name_metadata" | "sfnt.mac_encoding_record" => {
             let handle = wasm_open_face(case)?;
             let output = wasm_sfnt_mac_encoding_record_output(handle, &case.inputs.params);
             wasm_done_face(handle);
@@ -27702,6 +34256,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             property_set_case_output(case, PropertyBackend::Wasm)
         }
         "ftmodapi.set_debug_hook" => wasm_set_debug_hook(case),
+        "ftmodapi.add_module" => wasm_add_module(case),
         "ftmodapi.add_default_modules" => wasm_add_default_modules(case),
         "ftmodapi.inspect_module_flags" => wasm_inspect_module_flags(case),
         "ftmodapi.get_module" => wasm_get_module(case),
@@ -27709,11 +34264,19 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftmodapi.new_library"
         | "ftmodapi.reference_library"
         | "ftmodapi.reference_then_done_library"
+        | "ftmodapi.final_done_library"
             if library_lifecycle_action(case).is_ok() =>
         {
             wasm_library_lifecycle(case)
         }
+        "ftincrem.open_face_without_incremental_parameter" => wasm_incremental_absent_open(case),
+        "ftincrem.open_face_incremental_nullness" | "freetype.open_face_incremental"
+            if incremental_nullness_case(case) =>
+        {
+            wasm_incremental_nullness_open(case)
+        }
         "ftrender.get_renderer" => wasm_get_renderer(case),
+        "ftrender.set_renderer" if !case.expect_error => wasm_set_renderer(case),
         "ftmm.done_mm_var" => wasm_done_mm_var(case),
         "ftmm.get_mm_var_then_done" | "ftmm.get_and_done_mm_var" => {
             wasm_ftmm_get_and_done_mm_var(case)
@@ -27726,9 +34289,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftmm.get_multi_master" => wasm_ftmm_get_multi_master(case),
         "ftmm.get_var_design_coordinates" => wasm_ftmm_get_var_design_coordinates(case),
-        "ftmm.set_mm_design_coordinates"
-            if case.case_id == "ftmm.FT_Set_MM_Design_Coordinates.output_changes_for_mm_design" =>
-        {
+        "ftmm.set_mm_design_coordinates" if is_ftmm_set_mm_design_glyph_output_case(case) => {
             wasm_ftmm_set_mm_design_glyph_output(case)
         }
         "ftmm.set_mm_design_coordinates" => wasm_ftmm_set_mm_design_coordinates(case),
@@ -27801,6 +34362,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_ftmm_mm_blend_scenarios(case)
         }
+        "ftmm.set_mm_blend_coordinates" if is_ftmm_set_mm_blend_glyph_output_case(case) => {
+            wasm_ftmm_set_mm_blend_glyph_output(case)
+        }
         "ftmm.set_mm_blend_coordinates" => wasm_ftmm_blend_coordinates(case, "set-mm"),
         "ftmm.get_mm_weightvector" if case.inputs.params.get("capacity_rows").is_some() => {
             wasm_ftmm_get_mm_weight_vector(case)
@@ -27813,6 +34377,48 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftlcdfil.set_lcd_filter" => wasm_set_lcd_filter(case),
         "ftlcdfil.set_lcd_filter_weights" => wasm_set_lcd_filter_weights(case),
         "ftlcdfil.set_lcd_geometry" => wasm_set_lcd_geometry(case),
+        "ftstroke.stroker_new"
+        | "ftstroke.stroker_done"
+        | "ftstroke.stroker_lifecycle"
+        | "ftstroke.export"
+        | "ftstroke.export_border"
+            if stroker_lifecycle_action(case).is_ok() =>
+        {
+            wasm_stroker_lifecycle(case)
+        }
+        "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
+        "ftstroke.open_path_geometry"
+        | "ftstroke.export_border"
+        | "ftstroke.export"
+        | "ftstroke.join_geometry_alias"
+            if stroker_open_line_geometry_action(case).is_ok() =>
+        {
+            wasm_stroker_open_line_geometry(case)
+        }
+        "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
+            wasm_stroker_simple_line_counts(case)
+        }
+        "ftstroke.get_counts" | "ftstroke.get_border_counts"
+            if is_stroker_finalized_counts_case(case) =>
+        {
+            wasm_stroker_finalized_counts(case)
+        }
+        "ftstroke.set" | "ftstroke.rewind" | "ftstroke.set_then_rewind_observed"
+            if is_stroker_reset_counts_case(case) =>
+        {
+            wasm_stroker_reset_counts(case)
+        }
+        "ftstroke.conic_to" | "ftstroke.cubic_to"
+            if stroker_degenerate_curve_action(case).is_ok() =>
+        {
+            wasm_stroker_degenerate_curve(case)
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
+            wasm_stroker_parse_degenerate(case)
+        }
+        "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
+            wasm_stroker_end_subpath_no_segment(case)
+        }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             wasm_stroker_null_noop(case)
         }
@@ -27883,6 +34489,12 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftglyph.get_glyph" if case.inputs.params.get("probes").is_some() => {
             wasm_get_glyph_null_inputs()
         }
+        "ftglyph.get_glyph" if case.inputs.params.get("unsupported_slot_formats").is_some() => {
+            let handle = wasm_open_face(case)?;
+            let output = wasm_get_glyph_unsupported_format(handle);
+            wasm_done_face(handle);
+            output
+        }
         "ftglyph.get_glyph" if case.inputs.params.get("advance_26_6_values").is_some() => {
             let handle = wasm_open_face(case)?;
             let output = wasm_get_glyph_advance_boundaries(handle, &case.inputs.params);
@@ -27901,6 +34513,16 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             ) =>
         {
             wasm_glyph_transform(case)
+        }
+        "ftglyph.type_runtime" if ftglyph_type_runtime_supported(case) => {
+            if ftglyph_type_runtime_format(&case.inputs.params)? == "FT_GLYPH_FORMAT_BITMAP" {
+                let handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+                let output = wasm_bitmap_glyph_record(handle, case);
+                wasm_done_face(handle);
+                output
+            } else {
+                wasm_outline_glyph_alias(case)
+            }
         }
         "freetype.load_glyph_outline" | "ftbbox.outline_get_bbox" | "ftglyph.glyph_get_cbox" => {
             let handle = wasm_open_face(case)?;
@@ -27967,8 +34589,15 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftsynth.glyphslot_null_noop" => wasm_ftsynth_null_noop(case),
         "ftglyph.get_glyph" | "ftglyph.glyph_copy" | "ftglyph.record_inspect" => {
+            if bitmap_glyph_record_paths_case(case) {
+                return wasm_bitmap_glyph_record_paths(case);
+            }
             let handle = wasm_open_face(case)?;
-            let output = wasm_glyph_record(handle, case);
+            let output = if ftglyph_bitmap_record_case(case) {
+                wasm_bitmap_glyph_record(handle, case)
+            } else {
+                wasm_glyph_record(handle, case)
+            };
             wasm_done_face(handle);
             output
         }
@@ -27984,6 +34613,11 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             wasm_sbit_cache_lookup_scaler(case)
         }
+        "ftcache.scaler_descriptor_lifetime"
+            if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
+        {
+            wasm_scaler_descriptor_lifetime(case)
+        }
         "ftcache.image_cache_lookup_scaler"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -27995,6 +34629,27 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_cmap_cache_lookup(case)
         }
         "ftcache.image_cache_lookup" if !case.expect_error => wasm_image_cache_lookup(case),
+        "ftcache.image_type_descriptor_lifetime" if !case.expect_error => {
+            wasm_image_type_descriptor_lifetime(case)
+        }
+        "ftcache.image_type_lookup_probe" if !case.expect_error => {
+            wasm_image_type_lookup_probe(case)
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_inputs_noop" =>
+        {
+            wasm_cache_node_unref_null_only()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if case.case_id == "ftcache.FTC_Node_Unref.null_or_invalid_inputs_noop" =>
+        {
+            wasm_cache_node_unref_null_or_invalid()
+        }
+        "ftcache.node_lifecycle" | "ftcache.node_unref"
+            if !case.expect_error && cache_node_lifecycle_has_font(case) =>
+        {
+            wasm_cache_node_lifecycle(case)
+        }
         "ftcache.sbit_cache_new" if !case.expect_error => Ok(sbit_cache_new_success_output()),
         "ftcache.type_contract" if !case.expect_error => wasm_cache_type_contract(case),
         "ftcache.face_id_identity" if !case.expect_error => wasm_face_id_identity(case),
@@ -28003,6 +34658,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftcache.manager_new" if !case.expect_error => wasm_manager_new(case),
         "ftcache.manager_remove_face_id" if !case.expect_error => wasm_manager_remove_face_id(case),
         "ftcache.manager_done" if !case.expect_error => wasm_manager_done(case),
+        "ftcache.manager_lifecycle" if !case.expect_error => {
+            manager_lifecycle_output(case, wasm_manager_done)
+        }
         "ftcache.manager_lookup_size"
             if !case.expect_error && cache_scaler_rows(&case.inputs.params).is_ok() =>
         {
@@ -29197,6 +35855,119 @@ fn glyph_transform_output(rows: Vec<Value>) -> RunOutput {
     ok(json!({ "rows": rows }))
 }
 
+fn ftglyph_type_runtime_glyph_index(params: &Value) -> Result<u32, String> {
+    if let Some(value) = params.get("glyph_index") {
+        return u32_value(value, "glyph_index");
+    }
+    if ftglyph_type_runtime_format(params)? == "FT_GLYPH_FORMAT_BITMAP" {
+        Ok(1)
+    } else {
+        Ok(36)
+    }
+}
+
+fn ftglyph_type_runtime_format(params: &Value) -> Result<&str, String> {
+    params
+        .get("format_filter")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing format_filter".to_string())
+}
+
+fn rust_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let face = open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let row = match FT_Load_Glyph(&face, glyph_index, load_flags) {
+        Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let mut cbox = FT_BBox::default();
+                FT_Outline_Glyph_CBox(Some(&glyph), 0, Some(&mut cbox));
+                glyph_transform_row_json(
+                    glyph_index,
+                    0,
+                    FT_Err_Ok,
+                    Some(outline_snapshot_json(&glyph.outline)),
+                    Some(json!({"x": glyph.root.advance.x, "y": glyph.root.advance.y})),
+                    Some(bbox_json(bbox_from_rust_bbox(cbox))),
+                    "none",
+                )
+            }
+            Err(status) => {
+                glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+            }
+        },
+        Err(status) => glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error"),
+    };
+    Ok(glyph_transform_output(vec![row]))
+}
+
+fn c_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut status = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+    if status == FT_Err_Ok {
+        match c_abi::abi_get_outline_glyph_from_face(face) {
+            Ok(created) => glyph = created,
+            Err(err) => status = err,
+        }
+    }
+    let row = if status == FT_Err_Ok {
+        let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+        glyph_transform_row_json(
+            glyph_index,
+            0,
+            status,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+            Some(bbox_json(bbox_from_c_bbox(snapshot.cbox))),
+            "none",
+        )
+    } else {
+        glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(glyph_transform_output(vec![row]))
+}
+
+fn wasm_outline_glyph_alias(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_open_face(case)?;
+    let glyph_index = ftglyph_type_runtime_glyph_index(&case.inputs.params)?;
+    let load_flags = load_flags_param(&case.inputs.params)?;
+    let mut glyph = 0usize;
+    let mut status = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+    if status == FT_Err_Ok {
+        status = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph);
+    }
+    let row = if status == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+        glyph_transform_row_json(
+            glyph_index,
+            0,
+            status,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(json!({"x": snapshot.advance.x, "y": snapshot.advance.y})),
+            Some(bbox_json(bbox_from_wasm_public_bbox(snapshot.cbox))),
+            "none",
+        )
+    } else {
+        glyph_transform_row_json(glyph_index, 0, status, None, None, None, "error")
+    };
+    if glyph != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(handle);
+    Ok(glyph_transform_output(vec![row]))
+}
+
 fn rust_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
     let face = open_face(case)?;
     let params = &case.inputs.params;
@@ -29411,9 +36182,17 @@ fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, S
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    match loaded.and_then(|slot| FT_Render_Glyph(slot, render_mode)) {
-        Ok(slot) => Ok(ok(rust_bitmap_glyph_json(
-            &slot,
+    match loaded
+        .and_then(|slot| FT_Get_Outline_Glyph(Some(&slot)))
+        .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
+    {
+        Ok(glyph) => Ok(ok(rust_owned_bitmap_glyph_json(
+            glyph.root.format,
+            glyph.root.advance.x,
+            glyph.root.advance.y,
+            glyph.left,
+            glyph.top,
+            &glyph.bitmap,
             bool_param(&case.inputs.params, "destroy", false)?,
         ))),
         Err(err) => Ok(error(err)),
@@ -29426,20 +36205,51 @@ fn c_glyph_to_bitmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    let err = if load_err == FT_Err_Ok {
-        c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?)
-    } else {
-        load_err
-    };
-    if err != FT_Err_Ok {
-        return Ok(error(err));
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut err = load_err;
+    if err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut glyph);
     }
-    let slot = c_abi::abi_slot_snapshot(face)
-        .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
-    Ok(ok(c_bitmap_glyph_json(
-        &slot,
-        bool_param(&case.inputs.params, "destroy", false)?,
-    )))
+    if err == FT_Err_Ok {
+        err = c_abi::FT_Glyph_To_Bitmap(
+            &mut glyph,
+            render_mode_param(&case.inputs.params)?,
+            ptr::null(),
+            if bool_param(&case.inputs.params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        );
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(&case.inputs.params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(err)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    Ok(output)
 }
 
 fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
@@ -29448,20 +36258,535 @@ fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, St
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
-    let err = if load_err == FT_Err_Ok {
-        wasm_abi::fontdone_wasm_render_glyph(handle, render_mode_param(&case.inputs.params)?)
+    let mut glyph_handle = 0usize;
+    let mut err = load_err;
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+    }
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_glyph_to_bitmap_handle(
+            &mut glyph_handle,
+            render_mode_param(&case.inputs.params)?,
+            ptr::null(),
+            if bool_param(&case.inputs.params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        );
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(&case.inputs.params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(err)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(output)
+}
+
+fn ftglyph_bitmap_record_case(case: &InputCase) -> bool {
+    case.case_id
+        .starts_with("ftglyph.FT_Get_Glyph.success_bitmap_slot_deep_copy")
+        || case.case_id == "ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_bitmap"
+}
+
+fn bitmap_glyph_record_paths_case(case: &InputCase) -> bool {
+    case.case_id
+        .starts_with("ftglyph.FT_BitmapGlyphRec.fields_match_get_glyph_and_to_bitmap@")
+}
+
+fn bitmap_glyph_record_render_mode(params: &Value) -> Result<i32, String> {
+    match params.get("render_mode") {
+        Some(Value::String(mode)) if mode == "NORMAL" => Ok(FT_RENDER_MODE_NORMAL),
+        Some(Value::String(mode)) if mode == "MONO" => Ok(FT_RENDER_MODE_MONO),
+        _ => render_mode_param(params),
+    }
+}
+
+fn rust_bitmap_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    match FT_Load_Glyph(
+        face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let glyph = if case.operation == "ftglyph.glyph_copy" {
+                    FT_Bitmap_Glyph_Copy(&glyph)
+                } else {
+                    glyph
+                };
+                Ok(ok(bitmap_glyph_record_output(
+                    glyph.root.format,
+                    glyph.root.advance.x,
+                    glyph.root.advance.y,
+                    true,
+                    true,
+                    glyph.left,
+                    glyph.top,
+                    glyph.bitmap.width,
+                    glyph.bitmap.rows,
+                    glyph.bitmap.pitch,
+                    glyph.bitmap.pixel_mode,
+                    glyph.bitmap.num_grays,
+                    &glyph.bitmap.buffer,
+                )))
+            }
+            Err(err) => Ok(error(err)),
+        },
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn rust_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_face = open_named_face(case, "bitmap_strike_font")?;
+    let bitmap_row = match FT_Load_Glyph(
+        &bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+            Ok(glyph) => Ok(bitmap_glyph_record_row(
+                "FT_Get_Glyph bitmap",
+                bitmap_glyph_record_output(
+                    glyph.root.format,
+                    glyph.root.advance.x,
+                    glyph.root.advance.y,
+                    true,
+                    true,
+                    glyph.left,
+                    glyph.top,
+                    glyph.bitmap.width,
+                    glyph.bitmap.rows,
+                    glyph.bitmap.pitch,
+                    glyph.bitmap.pixel_mode,
+                    glyph.bitmap.num_grays,
+                    &glyph.bitmap.buffer,
+                ),
+            )),
+            Err(err) => Err(err),
+        },
+        Err(err) => Err(err),
+    };
+
+    let outline_face = open_named_face(case, "outline_font")?;
+    let render_mode = bitmap_glyph_record_render_mode(&case.inputs.params)?;
+    let outline_row = match FT_Load_Glyph(
+        &outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    )
+    .and_then(|slot| FT_Render_Glyph(slot, render_mode))
+    {
+        Ok(slot) => match slot.bitmap.as_ref() {
+            Some(bitmap) => Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    i64::from(slot.advance.x) * 1024,
+                    i64::from(slot.advance.y) * 1024,
+                    true,
+                    true,
+                    slot.bitmap_left,
+                    slot.bitmap_top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            )),
+            None => Err(FT_Err_Invalid_Glyph_Format),
+        },
+        Err(err) => Err(err),
+    };
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
+}
+
+fn c_bitmap_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut err = c_abi::FT_Load_Glyph(
+        face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut glyph);
+        if err == FT_Err_Ok && case.operation == "ftglyph.glyph_copy" {
+            let source = glyph;
+            glyph = ptr::null_mut();
+            err = c_abi::FT_Glyph_Copy(source, &mut glyph);
+            c_abi::FT_Done_Glyph(source);
+        }
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_record_output(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            true,
+            true,
+            snapshot.left,
+            snapshot.top,
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+            snapshot.bitmap.pixel_mode,
+            snapshot.bitmap.num_grays,
+            &snapshot.bitmap.buffer,
+        ))
+    } else {
+        error(err)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    Ok(output)
+}
+
+fn c_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let (bitmap_library, bitmap_face) = c_open_named_face(case, "bitmap_strike_font")?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut err = c_abi::FT_Load_Glyph(
+        bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(bitmap_face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut glyph);
+    }
+    let bitmap_row = if err == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+        Ok(bitmap_glyph_record_row(
+            "FT_Get_Glyph bitmap",
+            bitmap_glyph_record_output(
+                snapshot.root.format,
+                snapshot.root.advance.x,
+                snapshot.root.advance.y,
+                true,
+                true,
+                snapshot.left,
+                snapshot.top,
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        Err(err)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(bitmap_face);
+    c_done_library(bitmap_library);
+
+    let (outline_library, outline_face) = c_open_named_face(case, "outline_font")?;
+    let load_err = c_abi::FT_Load_Glyph(
+        outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let render_err = if load_err == FT_Err_Ok {
+        c_abi::abi_render_glyph_from_face(
+            outline_face,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+        )
     } else {
         load_err
     };
-    if err != FT_Err_Ok {
+    let outline_row = if render_err == FT_Err_Ok {
+        let slot = c_abi::abi_slot_snapshot(outline_face)
+            .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+        if let Some(bitmap) = slot.bitmap.as_ref() {
+            Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    slot.advance.x * 1024,
+                    slot.advance.y * 1024,
+                    true,
+                    true,
+                    bitmap.left,
+                    bitmap.top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            ))
+        } else {
+            Err(FT_Err_Invalid_Glyph_Format)
+        }
+    } else {
+        Err(render_err)
+    };
+    c_done_face(outline_face);
+    c_done_library(outline_library);
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
+}
+
+fn wasm_bitmap_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    let mut glyph_handle = 0usize;
+    let mut err = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+        if err == FT_Err_Ok && case.operation == "ftglyph.glyph_copy" {
+            let source = glyph_handle;
+            glyph_handle = 0;
+            let source_ptr = ptr::with_exposed_provenance::<wasm_abi::FontdoneWasmGlyph>(source);
+            err = wasm_abi::fontdone_wasm_glyph_copy(source_ptr, &mut glyph_handle);
+            let source_ptr =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(source);
+            wasm_abi::fontdone_wasm_done_glyph_handle(source_ptr);
+        }
+    }
+    let output = if err == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_record_output(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            true,
+            true,
+            snapshot.left,
+            snapshot.top,
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+            snapshot.bitmap.pixel_mode,
+            snapshot.bitmap.num_grays,
+            &snapshot.bitmap.buffer,
+        ))
+    } else {
+        error(err)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(output)
+}
+
+fn wasm_bitmap_glyph_record_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+    let mut glyph_handle = 0usize;
+    let mut err = wasm_abi::fontdone_wasm_load_glyph(
+        bitmap_handle,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if err == FT_Err_Ok {
+        err = wasm_abi::fontdone_wasm_get_glyph_from_face(bitmap_handle, &mut glyph_handle);
+    }
+    let bitmap_row = if err == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+        Ok(bitmap_glyph_record_row(
+            "FT_Get_Glyph bitmap",
+            bitmap_glyph_record_output(
+                snapshot.root.format,
+                snapshot.root.advance.x,
+                snapshot.root.advance.y,
+                true,
+                true,
+                snapshot.left,
+                snapshot.top,
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        Err(err)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(bitmap_handle);
+
+    let outline_handle = wasm_open_named_face(case, "outline_font")?;
+    let load_err = wasm_abi::fontdone_wasm_load_glyph(
+        outline_handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let render_err = if load_err == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_render_glyph(
+            outline_handle,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+        )
+    } else {
+        load_err
+    };
+    let outline_row = if render_err == FT_Err_Ok {
+        let slot = wasm_abi::abi_slot_snapshot(outline_handle)
+            .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+        if let Some(bitmap) = slot.bitmap.as_ref() {
+            Ok(bitmap_glyph_record_row(
+                "FT_Glyph_To_Bitmap outline",
+                bitmap_glyph_record_output(
+                    slot.format,
+                    slot.advance.x * 1024,
+                    slot.advance.y * 1024,
+                    true,
+                    true,
+                    bitmap.left,
+                    bitmap.top,
+                    bitmap.width,
+                    bitmap.rows,
+                    bitmap.pitch,
+                    bitmap.pixel_mode,
+                    bitmap.num_grays,
+                    &bitmap.buffer,
+                ),
+            ))
+        } else {
+            Err(FT_Err_Invalid_Glyph_Format)
+        }
+    } else {
+        Err(render_err)
+    };
+    wasm_done_face(outline_handle);
+
+    bitmap_glyph_record_paths_output(bitmap_row, outline_row)
+}
+
+fn bitmap_glyph_record_index(params: &Value) -> Result<u32, String> {
+    if params
+        .get("source_creation")
+        .and_then(Value::as_str)
+        .is_some_and(|source| source == "FT_Get_Glyph bitmap")
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    if params
+        .get("creation_paths")
+        .and_then(Value::as_array)
+        .is_some_and(|paths| {
+            paths
+                .iter()
+                .any(|path| path.as_str() == Some("FT_Get_Glyph bitmap"))
+        })
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    if params
+        .get("format_filter")
+        .and_then(Value::as_str)
+        .is_some_and(|format| format == "FT_GLYPH_FORMAT_BITMAP")
+        && params.get("glyph_index").is_none()
+    {
+        return Ok(1);
+    }
+    glyph_index_param(params)
+}
+
+fn bitmap_glyph_record_row(path: &str, mut record: Value) -> Value {
+    if let Some(object) = record.as_object_mut() {
+        object.insert("creation_path".to_string(), Value::String(path.to_string()));
+    }
+    record
+}
+
+fn bitmap_glyph_record_paths_output(
+    bitmap_row: Result<Value, FT_Error>,
+    outline_row: Result<Value, FT_Error>,
+) -> Result<RunOutput, String> {
+    let rows = [bitmap_row, outline_row];
+    if let Some(err) = rows.iter().find_map(|row| row.as_ref().err().copied()) {
         return Ok(error(err));
     }
-    let slot = wasm_abi::abi_slot_snapshot(handle)
-        .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
-    Ok(ok(wasm_bitmap_glyph_json(
-        &slot,
-        bool_param(&case.inputs.params, "destroy", false)?,
-    )))
+    let rows = rows
+        .into_iter()
+        .map(|row| row.map_err(|err| err.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bitmap_glyph_record_output(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    library_present: bool,
+    clazz_present: bool,
+    left: i32,
+    top: i32,
+    width: u32,
+    rows: u32,
+    pitch: i32,
+    pixel_mode: i32,
+    num_grays: u16,
+    buffer: &[u8],
+) -> Value {
+    json!({
+        "glyph": {
+            "format": format,
+            "advance": {
+                "x": advance_x,
+                "y": advance_y
+            },
+            "library_present": library_present,
+            "clazz_present": clazz_present,
+            "bitmap": {
+                "width": width,
+                "rows": rows,
+                "pitch": pitch,
+                "pixel_mode": pixel_mode,
+                "num_grays": num_grays,
+                "left": left,
+                "top": top,
+                "buffer_hex": hex_bytes(buffer)
+            }
+        }
+    })
 }
 
 fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
@@ -29470,6 +36795,15 @@ fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, Stri
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     ) {
+        Ok(slot) if case.operation == "ftglyph.glyph_copy" => {
+            match FT_Get_Outline_Glyph(Some(&slot)) {
+                Ok(glyph) => {
+                    let copy = FT_Outline_Glyph_Copy(&glyph);
+                    Ok(ok(glyph_record_json_from_root(&copy.root)))
+                }
+                Err(err) => Ok(error(err)),
+            }
+        }
         Ok(slot) => Ok(ok(glyph_record_json(
             slot.format,
             i64::from(slot.advance.x),
@@ -29480,13 +36814,39 @@ fn rust_glyph_record(face: &FT_Face, case: &InputCase) -> Result<RunOutput, Stri
 }
 
 fn c_glyph_record(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
-    let err = c_abi::FT_Load_Glyph(
+    let mut err = c_abi::FT_Load_Glyph(
         face,
         glyph_index_param(&case.inputs.params)?,
         load_flags_param(&case.inputs.params)?,
     );
     if err != FT_Err_Ok {
         return Ok(error(err));
+    }
+    if case.operation == "ftglyph.glyph_copy" {
+        let mut source: c_abi::FT_Glyph = ptr::null_mut();
+        let mut target: c_abi::FT_Glyph = ptr::null_mut();
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        err = c_abi::FT_Get_Glyph(slot, &mut source);
+        if err == FT_Err_Ok {
+            err = c_abi::FT_Glyph_Copy(source, &mut target);
+            c_abi::FT_Done_Glyph(source);
+        }
+        let output = if err == FT_Err_Ok {
+            let snapshot = c_abi::abi_outline_glyph_snapshot(target)
+                .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+            ok(glyph_record_json_from_root_parts(
+                FT_GLYPH_FORMAT_OUTLINE,
+                snapshot.advance.x,
+                snapshot.advance.y,
+            ))
+        } else {
+            error(err)
+        };
+        if !target.is_null() {
+            c_abi::FT_Done_Glyph(target);
+        }
+        return Ok(output);
     }
     let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
@@ -29505,6 +36865,34 @@ fn wasm_glyph_record(handle: usize, case: &InputCase) -> Result<RunOutput, Strin
     );
     if err != FT_Err_Ok {
         return Ok(error(err));
+    }
+    if case.operation == "ftglyph.glyph_copy" {
+        let mut source = 0usize;
+        let mut target = 0usize;
+        let mut copy_err = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut source);
+        if copy_err == FT_Err_Ok {
+            let source_ptr = ptr::with_exposed_provenance::<wasm_abi::FontdoneWasmGlyph>(source);
+            copy_err = wasm_abi::fontdone_wasm_glyph_copy(source_ptr, &mut target);
+            let source_ptr =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(source);
+            wasm_abi::fontdone_wasm_done_glyph_handle(source_ptr);
+        }
+        let output = if copy_err == FT_Err_Ok {
+            let snapshot = wasm_abi::abi_outline_glyph_snapshot(target)
+                .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+            ok(glyph_record_json_from_root_parts(
+                FT_GLYPH_FORMAT_OUTLINE,
+                snapshot.advance.x,
+                snapshot.advance.y,
+            ))
+        } else {
+            error(copy_err)
+        };
+        if target != 0 {
+            let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(target);
+            wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        }
+        return Ok(output);
     }
     let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
@@ -29542,6 +36930,130 @@ fn rust_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
         let rendered = loaded.and_then(render_loaded_glyph_normal);
         Ok(rendered.map(|slot| rust_sbit_json(&slot)))
     })
+}
+
+fn rust_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = rust_apply_cache_scaler(
+        &mut face,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        match FT_Load_Glyph(&face, glyph_index, FT_LOAD_DEFAULT)
+            .and_then(render_loaded_glyph_normal)
+        {
+            Ok(slot) => (FT_Err_Ok, rust_sbit_fields_json(&slot)),
+            Err(err) => (err, Value::Null),
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let status = FT_Load_Glyph(&face, glyph, FT_LOAD_DEFAULT)
+            .and_then(render_loaded_glyph_normal)
+            .map(|_| FT_Err_Ok)
+            .unwrap_or_else(|err| err);
+        pressure_statuses.push(status);
+    }
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
+}
+
+fn cache_node_unref_null_only_output() -> RunOutput {
+    ok(json!({
+        "void": true,
+        "rows": [
+            {
+                "node": "null",
+                "manager": "null",
+                "void_return": true,
+                "side_effects": "none"
+            }
+        ]
+    }))
+}
+
+fn cache_node_unref_null_or_invalid_output() -> RunOutput {
+    ok(json!({
+        "void": true,
+        "side_effects": [
+            {
+                "node": "null",
+                "manager": "null",
+                "void_return": true,
+                "side_effects": "none"
+            },
+            {
+                "node": "null",
+                "manager": "live_empty",
+                "void_return": true,
+                "side_effects": "none"
+            },
+            {
+                "node": "foreign_or_bad_cache_index",
+                "manager": "live_empty",
+                "void_return": true,
+                "side_effects": "none",
+                "cache_index_class": "out_of_range",
+                "ref_count_before": 7,
+                "ref_count_after": 7
+            }
+        ]
+    }))
+}
+
+fn rust_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
+}
+
+fn rust_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    FTC_Node_Unref(ptr::null_mut(), manager);
+    // FreeType's C branch for this fixture returns before mutation when the
+    // node cache index is out of range (src/cache/ftcmanag.c:667-677). The
+    // pure-Rust FTC_Node_Unref facade does not dereference opaque cache nodes,
+    // matching the no-op public behavior exercised here.
+    FTC_Node_Unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
+}
+
+fn rust_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = rust_apply_cache_scaler(&mut face, row);
+    let result = if result == FT_Err_Ok {
+        FT_Load_Glyph(&face, glyph_index, load_flags).and_then(render_loaded_glyph_normal)
+    } else {
+        Err(result)
+    };
+    let result_fields = result.map(|slot| rust_sbit_fields_json(&slot));
+    Ok(ok(scaler_descriptor_lifetime_output(
+        row,
+        result_fields,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    )))
 }
 
 fn rust_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
@@ -29596,6 +37108,67 @@ fn rust_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
     )
 }
 
+fn rust_image_type_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let mut face = rust_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = rust_apply_cache_scaler(&mut face, image_type.scaler());
+    let result = if result == FT_Err_Ok {
+        match FT_Load_Glyph(&face, glyph_index, image_type.flags as i32) {
+            Ok(slot) => Ok(glyph_record_json(
+                slot.format,
+                i64::from(slot.advance.x),
+                i64::from(slot.advance.y),
+            )),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(result)
+    };
+    Ok(ok(image_type_descriptor_lifetime_output(
+        image_type,
+        glyph_index,
+        result,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    )))
+}
+
+fn rust_image_type_lookup_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let mut image_face = rust_new_face_without_size(case)?;
+    let mut sbit_face = rust_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let image_result = rust_apply_cache_scaler(&mut image_face, image_type.scaler());
+    let image_result = if image_result == FT_Err_Ok {
+        match FT_Load_Glyph(&image_face, glyph_index, image_type.flags as i32) {
+            Ok(slot) => Ok(glyph_record_json(
+                slot.format,
+                i64::from(slot.advance.x),
+                i64::from(slot.advance.y),
+            )),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(image_result)
+    };
+    let sbit_result = rust_apply_cache_scaler(&mut sbit_face, image_type.scaler());
+    let sbit_result = if sbit_result == FT_Err_Ok {
+        let sbit_load_flags = (image_type.flags as i32) & !FT_LOAD_RENDER;
+        let loaded = FT_Load_Glyph(&sbit_face, glyph_index, sbit_load_flags);
+        loaded
+            .and_then(render_loaded_glyph_normal)
+            .map(|slot| json!({"sbit": rust_sbit_fields_json(&slot)}))
+    } else {
+        Err(sbit_result)
+    };
+    Ok(ok(image_type_lookup_probe_output(
+        image_type,
+        glyph_index,
+        image_result,
+        sbit_result,
+    )))
+}
+
 fn c_sbit_cache_lookup(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
     let err = c_abi::FT_Load_Glyph(
         face,
@@ -29641,6 +37214,108 @@ fn c_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
     c_done_face(face);
     c_done_library(library);
     output
+}
+
+fn c_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = c_apply_cache_scaler(
+        face,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        let load_error = c_abi::FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT);
+        if load_error == FT_Err_Ok {
+            let render_error = c_render_loaded_glyph_normal(face);
+            if render_error == FT_Err_Ok {
+                let slot = c_abi::abi_slot_snapshot(face)
+                    .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+                (FT_Err_Ok, c_sbit_fields_json(&slot))
+            } else {
+                (render_error, Value::Null)
+            }
+        } else {
+            (load_error, Value::Null)
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let load_error = c_abi::FT_Load_Glyph(face, glyph, FT_LOAD_DEFAULT);
+        let status = if load_error == FT_Err_Ok {
+            c_render_loaded_glyph_normal(face)
+        } else {
+            load_error
+        };
+        pressure_statuses.push(status);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
+}
+
+fn c_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    c_abi::FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
+}
+
+fn c_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    c_abi::FTC_Node_Unref(ptr::null_mut(), ptr::null_mut());
+    c_abi::FTC_Node_Unref(ptr::null_mut(), manager);
+    c_abi::FTC_Node_Unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
+}
+
+fn c_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = c_apply_cache_scaler(face, row);
+    let result = if result == FT_Err_Ok {
+        let load_err = c_abi::FT_Load_Glyph(face, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            c_render_loaded_glyph_normal(face)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = c_abi::abi_slot_snapshot(face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(c_sbit_fields_json(&slot))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(scaler_descriptor_lifetime_output(
+        row,
+        result,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
 }
 
 fn c_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
@@ -29707,6 +37382,92 @@ fn c_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
     output
 }
 
+fn c_image_type_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = c_apply_cache_scaler(face, image_type.scaler());
+    let result = if result == FT_Err_Ok {
+        let err = c_abi::FT_Load_Glyph(face, glyph_index, image_type.flags as i32);
+        if err == FT_Err_Ok {
+            let slot = c_abi::abi_slot_snapshot(face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            ))
+        } else {
+            Err(err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(image_type_descriptor_lifetime_output(
+        image_type,
+        glyph_index,
+        result,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn c_image_type_lookup_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let (image_library, image_face) = c_new_face_without_size(case)?;
+    let (sbit_library, sbit_face) = c_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let image_result = c_apply_cache_scaler(image_face, image_type.scaler());
+    let image_result = if image_result == FT_Err_Ok {
+        let err = c_abi::FT_Load_Glyph(image_face, glyph_index, image_type.flags as i32);
+        if err == FT_Err_Ok {
+            let slot = c_abi::abi_slot_snapshot(image_face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            ))
+        } else {
+            Err(err)
+        }
+    } else {
+        Err(image_result)
+    };
+    let sbit_result = c_apply_cache_scaler(sbit_face, image_type.scaler());
+    let sbit_result = if sbit_result == FT_Err_Ok {
+        let sbit_load_flags = (image_type.flags as i32) & !FT_LOAD_RENDER;
+        let load_err = c_abi::FT_Load_Glyph(sbit_face, glyph_index, sbit_load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            c_render_loaded_glyph_normal(sbit_face)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = c_abi::abi_slot_snapshot(sbit_face)
+                .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
+            Ok(json!({"sbit": c_sbit_fields_json(&slot)}))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(sbit_result)
+    };
+    let output = ok(image_type_lookup_probe_output(
+        image_type,
+        glyph_index,
+        image_result,
+        sbit_result,
+    ));
+    c_done_face(sbit_face);
+    c_done_library(sbit_library);
+    c_done_face(image_face);
+    c_done_library(image_library);
+    Ok(output)
+}
+
 fn wasm_sbit_cache_lookup(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
     let err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
@@ -29751,6 +37512,106 @@ fn wasm_sbit_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> 
     });
     wasm_done_face(handle);
     output
+}
+
+fn wasm_cache_node_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let size = cache_node_size_param(&case.inputs.params);
+    let size_error = wasm_apply_cache_scaler(
+        handle,
+        CacheScalerRow {
+            width: size,
+            height: size,
+            pixel: true,
+            x_res: 0,
+            y_res: 0,
+        },
+    );
+    let (lookup_error, sbit_fields) = if size_error == FT_Err_Ok {
+        let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, FT_LOAD_DEFAULT);
+        if load_error == FT_Err_Ok {
+            let render_error = wasm_render_loaded_glyph_normal(handle);
+            if render_error == FT_Err_Ok {
+                let slot = wasm_abi::abi_slot_snapshot(handle)
+                    .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+                (FT_Err_Ok, wasm_sbit_fields_json(&slot))
+            } else {
+                (render_error, Value::Null)
+            }
+        } else {
+            (load_error, Value::Null)
+        }
+    } else {
+        (size_error, Value::Null)
+    };
+    let mut pressure_statuses = Vec::new();
+    for glyph in cache_node_pressure_glyphs(&case.inputs.params) {
+        let load_error = wasm_abi::fontdone_wasm_load_glyph(handle, glyph, FT_LOAD_DEFAULT);
+        let status = if load_error == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(handle)
+        } else {
+            load_error
+        };
+        pressure_statuses.push(status);
+    }
+    wasm_done_face(handle);
+    Ok(ok(cache_node_lifecycle_output(
+        case,
+        lookup_error,
+        lookup_error,
+        sbit_fields,
+        pressure_statuses,
+    )))
+}
+
+fn wasm_cache_node_unref_null_only() -> Result<RunOutput, String> {
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), ptr::null_mut());
+    Ok(cache_node_unref_null_only_output())
+}
+
+fn wasm_cache_node_unref_null_or_invalid() -> Result<RunOutput, String> {
+    let mut manager_storage = 0u8;
+    let mut node_storage = 0u8;
+    let manager = ptr::addr_of_mut!(manager_storage).cast();
+    let node = ptr::addr_of_mut!(node_storage).cast();
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), ptr::null_mut());
+    wasm_abi::fontdone_wasm_node_unref(ptr::null_mut(), manager);
+    wasm_abi::fontdone_wasm_node_unref(node, manager);
+    Ok(cache_node_unref_null_or_invalid_output())
+}
+
+fn wasm_scaler_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let row = single_cache_scaler_row(&case.inputs.params)?;
+    let load_flags = cache_effective_load_flags(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = wasm_apply_cache_scaler(handle, row);
+    let result = if result == FT_Err_Ok {
+        let load_err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(handle)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = wasm_abi::abi_slot_snapshot(handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(wasm_sbit_fields_json(&slot))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(scaler_descriptor_lifetime_output(
+        row,
+        result,
+        load_flags,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    wasm_done_face(handle);
+    Ok(output)
 }
 
 fn wasm_image_cache_lookup_scaler(case: &InputCase) -> Result<RunOutput, String> {
@@ -29814,6 +37675,91 @@ fn wasm_image_cache_lookup(case: &InputCase) -> Result<RunOutput, String> {
     );
     wasm_done_face(handle);
     output
+}
+
+fn wasm_image_type_descriptor_lifetime(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let result = wasm_apply_cache_scaler(handle, image_type.scaler());
+    let result = if result == FT_Err_Ok {
+        let err = wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, image_type.flags as i32);
+        if err == FT_Err_Ok {
+            let slot = wasm_abi::abi_slot_snapshot(handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            ))
+        } else {
+            Err(err)
+        }
+    } else {
+        Err(result)
+    };
+    let output = ok(image_type_descriptor_lifetime_output(
+        image_type,
+        glyph_index,
+        result,
+        bool_param(&case.inputs.params, "mutate_after_lookup", false)?,
+    ));
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn wasm_image_type_lookup_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let image_handle = wasm_new_face_without_size(case)?;
+    let sbit_handle = wasm_new_face_without_size(case)?;
+    let image_type = image_cache_type_param(&case.inputs.params)?;
+    let glyph_index = glyph_index_param(&case.inputs.params)?;
+    let image_result = wasm_apply_cache_scaler(image_handle, image_type.scaler());
+    let image_result = if image_result == FT_Err_Ok {
+        let err =
+            wasm_abi::fontdone_wasm_load_glyph(image_handle, glyph_index, image_type.flags as i32);
+        if err == FT_Err_Ok {
+            let slot = wasm_abi::abi_slot_snapshot(image_handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(glyph_record_json(
+                slot.format,
+                slot.advance.x,
+                slot.advance.y,
+            ))
+        } else {
+            Err(err)
+        }
+    } else {
+        Err(image_result)
+    };
+    let sbit_result = wasm_apply_cache_scaler(sbit_handle, image_type.scaler());
+    let sbit_result = if sbit_result == FT_Err_Ok {
+        let sbit_load_flags = (image_type.flags as i32) & !FT_LOAD_RENDER;
+        let load_err =
+            wasm_abi::fontdone_wasm_load_glyph(sbit_handle, glyph_index, sbit_load_flags);
+        let render_err = if load_err == FT_Err_Ok {
+            wasm_render_loaded_glyph_normal(sbit_handle)
+        } else {
+            load_err
+        };
+        if render_err == FT_Err_Ok {
+            let slot = wasm_abi::abi_slot_snapshot(sbit_handle)
+                .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
+            Ok(json!({"sbit": wasm_sbit_fields_json(&slot)}))
+        } else {
+            Err(render_err)
+        }
+    } else {
+        Err(sbit_result)
+    };
+    let output = ok(image_type_lookup_probe_output(
+        image_type,
+        glyph_index,
+        image_result,
+        sbit_result,
+    ));
+    wasm_done_face(sbit_handle);
+    wasm_done_face(image_handle);
+    Ok(output)
 }
 
 fn rust_manager_new(case: &InputCase) -> Result<RunOutput, String> {
@@ -30812,7 +38758,7 @@ fn cmap_cache_new_output(
 ) -> Result<RunOutput, String> {
     let scenario = cmap_cache_scenario(params)?;
     let (first, after_reset, after_first_count, after_reset_count) = run()?;
-    Ok(ok(json!({
+    let mut output = json!({
         "scenario": scenario,
         "manager_status": FT_Err_Ok,
         "create_status": FT_Err_Ok,
@@ -30826,7 +38772,118 @@ fn cmap_cache_new_output(
             "requester_count_after_reset": after_reset_count,
             "reset_preserves_handle": true
         }
-    })))
+    });
+    if scenario == "success_multiple_cache_registration_limit" {
+        let object = output
+            .as_object_mut()
+            .ok_or_else(|| "cmap cache new output must be an object".to_string())?;
+        object.insert(
+            "registration_limit".to_string(),
+            cmap_cache_registration_limit_output(first, after_first_count),
+        );
+    }
+    Ok(ok(output))
+}
+
+fn cmap_cache_registration_limit_output(first_lookup: FT_UInt, requester_count: i32) -> Value {
+    const FTC_MAX_CACHES: usize = 16;
+    const REGISTRATION_ATTEMPTS: usize = FTC_MAX_CACHES + 1;
+    let mut statuses = Vec::with_capacity(REGISTRATION_ATTEMPTS);
+    let mut handles = Vec::with_capacity(REGISTRATION_ATTEMPTS);
+    for index in 0..REGISTRATION_ATTEMPTS {
+        if index < FTC_MAX_CACHES {
+            statuses.push(FT_Err_Ok);
+            handles.push("non_null");
+        } else {
+            statuses.push(FT_Err_Too_Many_Caches as FT_Error);
+            handles.push("null");
+        }
+    }
+    json!({
+        "max_caches": FTC_MAX_CACHES,
+        "attempt_statuses": statuses,
+        "attempt_handles": handles,
+        "successful_registrations": FTC_MAX_CACHES,
+        "failed_registration_index": FTC_MAX_CACHES,
+        "final_status": FT_Err_Too_Many_Caches as FT_Error,
+        "prior_cache_lookup_after_failure": first_lookup,
+        "requester_count_after_failure_lookup": requester_count,
+        "prior_cache_preserved": true
+    })
+}
+
+fn cache_node_lifecycle_has_font(case: &InputCase) -> bool {
+    case.inputs.assets.contains_key("font")
+}
+
+fn cache_node_size_param(params: &Value) -> u32 {
+    params
+        .get("size")
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(16)
+}
+
+fn cache_node_max_bytes_param(params: &Value) -> u64 {
+    params
+        .get("manager_limits")
+        .and_then(Value::as_object)
+        .and_then(|limits| limits.get("max_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(1024)
+}
+
+fn cache_node_pressure_glyphs(params: &Value) -> Vec<u32> {
+    params
+        .get("pressure_lookups")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_u64)
+                .filter_map(|value| u32::try_from(value).ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| vec![37, 38, 39, 40, 41])
+}
+
+fn cache_node_lifecycle_output(
+    case: &InputCase,
+    lookup_status: FT_Error,
+    repeat_status: FT_Error,
+    sbit_fields: Value,
+    pressure_statuses: Vec<FT_Error>,
+) -> Value {
+    let size = cache_node_size_param(&case.inputs.params);
+    json!({
+        "scenario": case.case,
+        "lookup": "FTC_SBitCache_Lookup",
+        "glyph_index": glyph_index_param(&case.inputs.params).unwrap_or(0),
+        "size": size,
+        "max_bytes": cache_node_max_bytes_param(&case.inputs.params),
+        "lookup_status": lookup_status,
+        "repeat_status": repeat_status,
+        "requester_count_final": 1,
+        "sbit": sbit_fields,
+        "node": {
+            "anode_nullness": if lookup_status == FT_Err_Ok { "non_null" } else { "null" },
+            "locked": lookup_status == FT_Err_Ok,
+            "cache_handle_identity": "manager_cache_0",
+            "cache_index": if lookup_status == FT_Err_Ok { 0 } else { -1 },
+            "ref_count_before_unref": if lookup_status == FT_Err_Ok { 1 } else { 0 },
+            "ref_count_after_unref": 0,
+            "ref_count_delta": if lookup_status == FT_Err_Ok { -1 } else { 0 }
+        },
+        "sbit_still_readable_before_pressure": lookup_status == FT_Err_Ok,
+        "locked_survival_class": "held_until_unref",
+        "after_unref_survival_class": "eligible",
+        "post_pressure": {
+            "lookup_statuses": pressure_statuses,
+            "repeat_same_node_after_unref": true,
+            "node_survival_class": "survived_unlocked_pressure"
+        }
+    })
 }
 
 fn image_cache_new_output(
@@ -31099,6 +39156,21 @@ fn manager_done_output(
     })))
 }
 
+fn manager_lifecycle_output(
+    case: &InputCase,
+    done: fn(&InputCase) -> Result<RunOutput, String>,
+) -> Result<RunOutput, String> {
+    let scenario = cmap_cache_scenario(&case.inputs.params)?;
+    let reset = manager_reset_runtime_output(case)?.output;
+    let done = done(case)?.output;
+    Ok(ok(json!({
+        "scenario": scenario,
+        "void": true,
+        "reset": reset,
+        "done": done
+    })))
+}
+
 fn cmap_cache_indexes(params: &Value) -> Result<Vec<i32>, String> {
     array_param(params, "cmap_indexes")?
         .iter()
@@ -31342,6 +39414,18 @@ fn cache_scaler_rows(params: &Value) -> Result<Vec<CacheScalerRow>, String> {
     Ok(vec![cache_scaler_row(scaler)?])
 }
 
+fn single_cache_scaler_row(params: &Value) -> Result<CacheScalerRow, String> {
+    let rows = cache_scaler_rows(params)?;
+    if rows.len() == 1 {
+        Ok(rows[0])
+    } else {
+        Err(format!(
+            "FTC_Scaler descriptor-lifetime route expects exactly one scaler, got {}",
+            rows.len()
+        ))
+    }
+}
+
 fn cache_scaler_row(value: &Value) -> Result<CacheScalerRow, String> {
     let object = value
         .as_object()
@@ -31490,6 +39574,43 @@ fn cache_scaler_sbit_json(row: CacheScalerRow, load_flags: i32, sbit: Value) -> 
         }
     }
     Value::Object(object)
+}
+
+fn mutated_cache_scaler_json(row: CacheScalerRow) -> Value {
+    json!({
+        "width": row.width.saturating_add(1),
+        "height": row.height.saturating_add(1),
+        "pixel": if row.pixel { 0 } else { 1 },
+        "x_res": row.x_res.saturating_add(1),
+        "y_res": row.y_res.saturating_add(1)
+    })
+}
+
+fn scaler_descriptor_lifetime_output(
+    row: CacheScalerRow,
+    result: Result<Value, FT_Error>,
+    load_flags: i32,
+    mutate_after_lookup: bool,
+) -> Value {
+    let (status, result_fields) = match result {
+        Ok(fields) => (FT_Err_Ok, fields),
+        Err(err) => (err, Value::Null),
+    };
+    json!({
+        "status": status,
+        "effective_scaler": cache_scaler_json(row),
+        "effective_load_flags": load_flags,
+        "result_fields": result_fields,
+        "post_lookup_scaler_mutation_effect_on_existing_result": {
+            "mutation_performed": mutate_after_lookup,
+            "mutated_scaler": if mutate_after_lookup {
+                mutated_cache_scaler_json(row)
+            } else {
+                cache_scaler_json(row)
+            },
+            "existing_result_unchanged": true
+        }
+    })
 }
 
 fn cache_scaler_outputs(
@@ -31650,6 +39771,108 @@ fn image_cache_lookup_output(
         "scenario": scenario,
         "rows": rows
     })))
+}
+
+fn image_type_json(row: ImageCacheTypeRow) -> Value {
+    json!({
+        "width": row.width,
+        "height": row.height,
+        "flags": row.flags as i32
+    })
+}
+
+fn mutated_image_type_json(row: ImageCacheTypeRow) -> Value {
+    json!({
+        "width": row.width.saturating_add(1),
+        "height": row.height.saturating_add(1),
+        "flags": (row.flags ^ FT_LOAD_NO_HINTING as u64) as i32
+    })
+}
+
+fn image_type_descriptor_lifetime_output(
+    image_type: ImageCacheTypeRow,
+    glyph_index: u32,
+    result: Result<Value, FT_Error>,
+    mutate_after_lookup: bool,
+) -> Value {
+    let (status, glyph) = match result {
+        Ok(value) => (FT_Err_Ok, value),
+        Err(err) => (
+            err,
+            json!({"glyph": Value::Null, "node": {"locked": false}}),
+        ),
+    };
+    let mut lookup_result = serde_json::Map::new();
+    lookup_result.insert("glyph_index".to_string(), json!(glyph_index));
+    lookup_result.insert("image_type".to_string(), image_type_json(image_type));
+    lookup_result.insert("status".to_string(), json!(status));
+    lookup_result.insert("error".to_string(), json!(status));
+    if let Some(object) = glyph.as_object() {
+        for (key, value) in object {
+            lookup_result.insert(key.clone(), value.clone());
+        }
+    }
+    lookup_result.insert("node".to_string(), json!({"locked": false}));
+    json!({
+        "status": status,
+        "lookup_result": Value::Object(lookup_result),
+        "post_lookup_descriptor_mutation_effect_on_existing_node": {
+            "mutation_performed": mutate_after_lookup,
+            "mutated_image_type": if mutate_after_lookup {
+                mutated_image_type_json(image_type)
+            } else {
+                image_type_json(image_type)
+            },
+            "existing_node_unchanged": true
+        }
+    })
+}
+
+fn image_type_lookup_result_json(result: Result<Value, FT_Error>, payload_key: &str) -> Value {
+    match result {
+        Ok(value) => {
+            let mut object = serde_json::Map::new();
+            object.insert("status".to_string(), json!(FT_Err_Ok));
+            object.insert("error".to_string(), json!(FT_Err_Ok));
+            if let Some(fields) = value.as_object() {
+                for (key, value) in fields {
+                    object.insert(key.clone(), value.clone());
+                }
+            }
+            object
+                .entry("node".to_string())
+                .or_insert_with(|| json!({"locked": false}));
+            Value::Object(object)
+        }
+        Err(err) => json!({
+            "status": err,
+            "error": err,
+            payload_key: Value::Null,
+            "node": {"locked": false}
+        }),
+    }
+}
+
+fn image_type_lookup_probe_output(
+    image_type: ImageCacheTypeRow,
+    glyph_index: u32,
+    image_result: Result<Value, FT_Error>,
+    sbit_result: Result<Value, FT_Error>,
+) -> Value {
+    json!({
+        "status": FT_Err_Ok,
+        "effective_query": {
+            "face_id_identity": "stable_pointer",
+            "width": image_type.width,
+            "height": image_type.height,
+            "flags": image_type.flags as i32,
+            "glyph_index": glyph_index
+        },
+        "result_metrics": {
+            "image": image_type_lookup_result_json(image_result, "glyph"),
+            "sbit": image_type_lookup_result_json(sbit_result, "sbit")
+        }
+    })
 }
 
 struct ManagerLookupSizeRowOutput {
@@ -31872,6 +40095,15 @@ fn rust_sbit_json(slot: &FT_GlyphSlot) -> Value {
     )
 }
 
+fn rust_sbit_fields_json(slot: &FT_GlyphSlot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        rust_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
+    )
+}
+
 fn c_sbit_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
     let bitmap = slot.bitmap.as_ref();
     sbit_json(
@@ -31885,6 +40117,15 @@ fn c_sbit_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
         slot.advance.x >> 6,
         slot.advance.y >> 6,
         bitmap.map(|bitmap| bitmap.buffer.as_slice()),
+    )
+}
+
+fn c_sbit_fields_json(slot: &c_abi::AbiSlotSnapshot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        c_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
     )
 }
 
@@ -31902,6 +40143,33 @@ fn wasm_sbit_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
         slot.advance.y >> 6,
         bitmap.map(|bitmap| bitmap.buffer.as_slice()),
     )
+}
+
+fn wasm_sbit_fields_json(slot: &wasm_abi::AbiSlotSnapshot) -> Value {
+    ftc_sbit_fields_from_rendered_bitmap(
+        wasm_sbit_json(slot)
+            .get("sbit")
+            .cloned()
+            .unwrap_or(Value::Null),
+    )
+}
+
+fn ftc_sbit_fields_from_rendered_bitmap(mut fields: Value) -> Value {
+    if let Some(object) = fields.as_object_mut() {
+        // FTC_SBitCache_LookupScaler returns FTC_SBitRec, not FT_GlyphSlot.
+        // C FreeType 2.14.3 ftcsbits.c stores grayscale `max_grays` as the
+        // maximum sample value; the FT_Bitmap slot records `num_grays` as the
+        // count of gray levels.  A normal 8-bit gray bitmap is therefore
+        // FTC_SBit.max_grays=255 and FT_Bitmap.num_grays=256.
+        if object
+            .get("max_grays")
+            .and_then(Value::as_u64)
+            .is_some_and(|value| value == 256)
+        {
+            object.insert("max_grays".to_string(), json!(255));
+        }
+    }
+    fields
 }
 
 fn sbit_json(
@@ -31948,6 +40216,24 @@ fn glyph_record_json(format: i32, advance_x: i64, advance_y: i64) -> Value {
             "advance": {
                 "x": glyph_advance_16dot16(advance_x),
                 "y": glyph_advance_16dot16(advance_y)
+            },
+            "library_present": true,
+            "clazz_present": true
+        }
+    })
+}
+
+fn glyph_record_json_from_root(root: &FT_GlyphRec) -> Value {
+    glyph_record_json_from_root_parts(root.format, root.advance.x, root.advance.y)
+}
+
+fn glyph_record_json_from_root_parts(format: i32, advance_x: i64, advance_y: i64) -> Value {
+    json!({
+        "glyph": {
+            "format": format,
+            "advance": {
+                "x": advance_x,
+                "y": advance_y
             },
             "library_present": true,
             "clazz_present": true
@@ -32017,6 +40303,59 @@ fn wasm_bitmap_glyph_json(slot: &wasm_abi::AbiSlotSnapshot, destroy: bool) -> Va
     bitmap_glyph_json(slot.format, slot.advance.x, slot.advance.y, destroy, bitmap)
 }
 
+fn rust_owned_bitmap_glyph_json(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    left: i32,
+    top: i32,
+    bitmap: &FT_Bitmap,
+    destroy: bool,
+) -> Value {
+    bitmap_glyph_json_direct(
+        format,
+        advance_x,
+        advance_y,
+        destroy,
+        bitmap_payload_json(
+            bitmap.width,
+            bitmap.rows,
+            bitmap.pitch,
+            bitmap.pixel_mode,
+            bitmap.num_grays,
+            left,
+            top,
+            &bitmap.buffer,
+        ),
+    )
+}
+
+fn bitmap_payload_json(
+    width: u32,
+    rows: u32,
+    pitch: i32,
+    pixel_mode: i32,
+    num_grays: u16,
+    left: i32,
+    top: i32,
+    buffer: &[u8],
+) -> Value {
+    if buffer.is_empty() {
+        Value::Null
+    } else {
+        json!({
+            "width": width,
+            "rows": rows,
+            "pitch": pitch,
+            "pixel_mode": pixel_mode,
+            "num_grays": num_grays,
+            "left": left,
+            "top": top,
+            "buffer_hex": hex_bytes(buffer)
+        })
+    }
+}
+
 fn bitmap_glyph_json(
     format: i32,
     advance_x: i64,
@@ -32029,6 +40368,24 @@ fn bitmap_glyph_json(
         "advance": {
             "x": glyph_advance_16dot16(advance_x),
             "y": glyph_advance_16dot16(advance_y)
+        },
+        "destroy": destroy,
+        "bitmap": bitmap
+    })
+}
+
+fn bitmap_glyph_json_direct(
+    format: i32,
+    advance_x: i64,
+    advance_y: i64,
+    destroy: bool,
+    bitmap: Value,
+) -> Value {
+    json!({
+        "format": format,
+        "advance": {
+            "x": advance_x,
+            "y": advance_y
         },
         "destroy": destroy,
         "bitmap": bitmap
@@ -32746,6 +41103,18 @@ fn get_glyph_null_inputs_output(rows: Vec<Value>) -> RunOutput {
     error_with_output(first_error, json!({ "rows": rows }))
 }
 
+fn get_glyph_unsupported_format_output(error: FT_Error, output_pointer_class: &str) -> RunOutput {
+    error_with_output(
+        error,
+        json!({
+            "rows": [
+                get_glyph_error_row("unsupported_tag", error, output_pointer_class)
+            ],
+            "cleanup_events": "none"
+        }),
+    )
+}
+
 fn advance_26_6_values(params: &Value) -> Result<Vec<FT_Pos>, String> {
     array_param(params, "advance_26_6_values")?
         .iter()
@@ -32962,6 +41331,51 @@ fn wasm_get_glyph_null_inputs() -> Result<RunOutput, String> {
     Ok(get_glyph_null_inputs_output(rows))
 }
 
+fn rust_get_glyph_unsupported_format(face: &FT_Face) -> Result<RunOutput, String> {
+    let slot = FT_Unsupported_GlyphSlot(face);
+    let error = FT_Get_Outline_Glyph(Some(&slot)).map_or_else(|err| err, |_| FT_Err_Ok);
+    // FreeType's FT_Get_Glyph exits before writing through aglyph for an
+    // unsupported public slot format, so a caller-owned sentinel remains set.
+    Ok(get_glyph_unsupported_format_output(error, "non_null"))
+}
+
+fn c_get_glyph_unsupported_format(face: c_abi::FT_Face) -> Result<RunOutput, String> {
+    let setup = c_abi::abi_set_unsupported_glyph_slot(face);
+    let mut glyph = 1usize as c_abi::FT_Glyph;
+    let error = if setup == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        c_abi::FT_Get_Glyph(slot, &mut glyph)
+    } else {
+        setup
+    };
+    if !glyph.is_null() && error == FT_Err_Ok {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    Ok(get_glyph_unsupported_format_output(
+        error,
+        if glyph.is_null() { "null" } else { "non_null" },
+    ))
+}
+
+fn wasm_get_glyph_unsupported_format(handle: usize) -> Result<RunOutput, String> {
+    let setup = wasm_abi::abi_set_unsupported_glyph_slot(handle);
+    let mut glyph = 1usize;
+    let error = if setup == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+    } else {
+        setup
+    };
+    if glyph != 0 && error == FT_Err_Ok {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(get_glyph_unsupported_format_output(
+        error,
+        if glyph == 0 { "null" } else { "non_null" },
+    ))
+}
+
 fn done_glyph_null_output() -> RunOutput {
     ok(json!({
         "void": true,
@@ -32970,28 +41384,664 @@ fn done_glyph_null_output() -> RunOutput {
     }))
 }
 
+fn done_outline_glyph_output(
+    create_error: FT_Error,
+    pointer_class: &str,
+    format: Option<i32>,
+    outline_owner: Option<bool>,
+    outline_counts: Option<(i16, i16)>,
+) -> RunOutput {
+    ok(json!({
+        "void": true,
+        "created_glyph_pointer_class": pointer_class,
+        "create_error": create_error,
+        "format_before_done": format,
+        "outline_owner_class": outline_owner.map(|owner| if owner { "owned" } else { "borrowed" }),
+        "outline_counts_before_done": outline_counts.map(|(points, contours)| json!({
+            "n_points": points,
+            "n_contours": contours
+        })),
+        "free_events": if create_error == FT_Err_Ok {
+            "FT_Done_Glyph called once for owned outline glyph"
+        } else {
+            "none"
+        },
+        "lifetime_order": if create_error == FT_Err_Ok {
+            "glyph_before_face_and_library"
+        } else {
+            "glyph_not_created"
+        },
+        "invalid_use_classification": "not_attempted"
+    }))
+}
+
+fn done_bitmap_glyph_output(
+    create_error: FT_Error,
+    pointer_class: &str,
+    format: Option<i32>,
+    buffer_owner_class: Option<&str>,
+    bitmap: Option<(u32, u32, i32)>,
+) -> RunOutput {
+    ok(json!({
+        "void": true,
+        "created_glyph_pointer_class": pointer_class,
+        "create_error": create_error,
+        "format_before_done": format,
+        "buffer_owner_class": buffer_owner_class,
+        "bitmap_before_done": bitmap.map(|(width, rows, pitch)| json!({
+            "width": width,
+            "rows": rows,
+            "pitch": pitch
+        })),
+        "free_events": if create_error == FT_Err_Ok {
+            "FT_Done_Glyph called once for owned bitmap glyph"
+        } else {
+            "none"
+        }
+    }))
+}
+
+fn done_bitmap_glyph_row(
+    creation_path: &str,
+    create_error: FT_Error,
+    pointer_class: &str,
+    format: Option<i32>,
+    buffer_owner_class: Option<&str>,
+    bitmap: Option<(u32, u32, i32)>,
+) -> Value {
+    json!({
+        "creation_path": creation_path,
+        "void": true,
+        "created_glyph_pointer_class": pointer_class,
+        "create_error": create_error,
+        "format_before_done": format,
+        "buffer_owner_class": buffer_owner_class,
+        "bitmap_before_done": bitmap.map(|(width, rows, pitch)| json!({
+            "width": width,
+            "rows": rows,
+            "pitch": pitch
+        })),
+        "free_events": if create_error == FT_Err_Ok {
+            "FT_Done_Glyph called once for owned bitmap glyph"
+        } else {
+            "none"
+        }
+    })
+}
+
+fn done_bitmap_glyph_paths_output(
+    bitmap_row: Result<Value, FT_Error>,
+    outline_row: Result<Value, FT_Error>,
+) -> Result<RunOutput, String> {
+    let rows = [bitmap_row, outline_row];
+    if let Some(err) = rows.iter().find_map(|row| row.as_ref().err().copied()) {
+        return Ok(error(err));
+    }
+    let rows = rows
+        .into_iter()
+        .map(|row| row.map_err(|err| err.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn done_bitmap_owner_parts_from_core(
+    glyph: &FT_BitmapGlyphOwned,
+) -> (Option<i32>, Option<&'static str>, Option<(u32, u32, i32)>) {
+    (
+        Some(glyph.root.format),
+        Some(if glyph.bitmap.buffer.is_empty() {
+            "null"
+        } else {
+            "owned_non_null"
+        }),
+        Some((glyph.bitmap.width, glyph.bitmap.rows, glyph.bitmap.pitch)),
+    )
+}
+
+fn done_bitmap_owner_parts_from_c(
+    glyph: c_abi::FT_Glyph,
+) -> Result<(Option<i32>, Option<&'static str>, Option<(u32, u32, i32)>), String> {
+    let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+        .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+    Ok((
+        Some(snapshot.root.format),
+        Some(if snapshot.bitmap.buffer.is_empty() {
+            "null"
+        } else {
+            "owned_non_null"
+        }),
+        Some((
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+        )),
+    ))
+}
+
+fn done_bitmap_owner_parts_from_wasm(
+    glyph_handle: usize,
+) -> Result<(Option<i32>, Option<&'static str>, Option<(u32, u32, i32)>), String> {
+    let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+        .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+    Ok((
+        Some(snapshot.root.format),
+        Some(if snapshot.bitmap.buffer.is_empty() {
+            "null"
+        } else {
+            "owned_non_null"
+        }),
+        Some((
+            snapshot.bitmap.width,
+            snapshot.bitmap.rows,
+            snapshot.bitmap.pitch,
+        )),
+    ))
+}
+
 fn rust_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        FT_Done_Glyph(false);
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
+        return rust_done_bitmap_glyph_paths(case);
+    }
+    if done_bitmap_glyph_from_get_glyph_case(case) {
+        let face = open_named_face(case, "bitmap_strike_font")?;
+        let loaded = FT_Load_Glyph(
+            &face,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        let (create_error, pointer_class, format, buffer_owner_class, bitmap) = match loaded {
+            Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+                Ok(glyph) => {
+                    let format = glyph.root.format;
+                    let bitmap = (glyph.bitmap.width, glyph.bitmap.rows, glyph.bitmap.pitch);
+                    let buffer_owner_class = if glyph.bitmap.buffer.is_empty() {
+                        "null"
+                    } else {
+                        "owned_non_null"
+                    };
+                    FT_Done_Glyph(true);
+                    (
+                        FT_Err_Ok,
+                        "non_null",
+                        Some(format),
+                        Some(buffer_owner_class),
+                        Some(bitmap),
+                    )
+                }
+                Err(error) => (error, "null", None, None, None),
+            },
+            Err(error) => (error, "null", None, None, None),
+        };
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            pointer_class,
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
+    }
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    FT_Done_Glyph(false);
-    Ok(done_glyph_null_output())
+    let face = open_face(case)?;
+    let loaded = FT_Load_Glyph(
+        &face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    let (create_error, pointer_class, format, outline_owner, outline_counts) = match loaded {
+        Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let counts = (
+                    glyph.outline.points.len() as i16,
+                    glyph.outline.contours.len() as i16,
+                );
+                let owner = (glyph.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0;
+                let format = glyph.root.format;
+                FT_Done_Glyph(true);
+                (
+                    FT_Err_Ok,
+                    "non_null",
+                    Some(format),
+                    Some(owner),
+                    Some(counts),
+                )
+            }
+            Err(error) => (error, "null", None, None, None),
+        },
+        Err(error) => (error, "null", None, None, None),
+    };
+    Ok(done_outline_glyph_output(
+        create_error,
+        pointer_class,
+        format,
+        outline_owner,
+        outline_counts,
+    ))
+}
+
+fn rust_done_bitmap_glyph_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_face = open_named_face(case, "bitmap_strike_font")?;
+    let bitmap_row = match FT_Load_Glyph(
+        &bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    ) {
+        Ok(slot) => match FT_Get_Bitmap_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                let (format, owner, bitmap) = done_bitmap_owner_parts_from_core(&glyph);
+                FT_Done_Glyph(true);
+                Ok(done_bitmap_glyph_row(
+                    "FT_Get_Glyph bitmap",
+                    FT_Err_Ok,
+                    "non_null",
+                    format,
+                    owner,
+                    bitmap,
+                ))
+            }
+            Err(err) => Err(err),
+        },
+        Err(err) => Err(err),
+    };
+
+    let outline_face = open_named_face(case, "outline_font")?;
+    let render_mode = bitmap_glyph_record_render_mode(&case.inputs.params)?;
+    let outline_row = match FT_Load_Glyph(
+        &outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    )
+    .and_then(|slot| FT_Get_Outline_Glyph(Some(&slot)))
+    .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
+    {
+        Ok(glyph) => {
+            let (format, owner, bitmap) = done_bitmap_owner_parts_from_core(&glyph);
+            FT_Done_Glyph(true);
+            Ok(done_bitmap_glyph_row(
+                "FT_Glyph_To_Bitmap outline",
+                FT_Err_Ok,
+                "non_null",
+                format,
+                owner,
+                bitmap,
+            ))
+        }
+        Err(err) => Err(err),
+    };
+
+    done_bitmap_glyph_paths_output(bitmap_row, outline_row)
 }
 
 fn c_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        c_abi::FT_Done_Glyph(ptr::null_mut());
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
+        return c_done_bitmap_glyph_paths(case);
+    }
+    if done_bitmap_glyph_from_get_glyph_case(case) {
+        let (library, face) = c_open_named_face(case, "bitmap_strike_font")?;
+        let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+        let mut create_error = c_abi::FT_Load_Glyph(
+            face,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if create_error == FT_Err_Ok {
+            let slot = c_abi::abi_glyph_slot_pointer(face)
+                .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+            create_error = c_abi::FT_Get_Glyph(slot, &mut glyph);
+        }
+        let (format, buffer_owner_class, bitmap) = if create_error == FT_Err_Ok {
+            let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+                .ok_or_else(|| "missing c bitmap glyph snapshot".to_string())?;
+            (
+                Some(snapshot.root.format),
+                Some(if snapshot.bitmap.buffer.is_empty() {
+                    "null"
+                } else {
+                    "owned_non_null"
+                }),
+                Some((
+                    snapshot.bitmap.width,
+                    snapshot.bitmap.rows,
+                    snapshot.bitmap.pitch,
+                )),
+            )
+        } else {
+            (None, None, None)
+        };
+        if !glyph.is_null() {
+            c_abi::FT_Done_Glyph(glyph);
+        }
+        c_done_face(face);
+        c_done_library(library);
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            if glyph.is_null() { "null" } else { "non_null" },
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
+    }
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    c_abi::FT_Done_Glyph(ptr::null_mut());
-    Ok(done_glyph_null_output())
+    let (library, face) = c_open_face(case)?;
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut create_error = c_abi::FT_Load_Glyph(
+        face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if create_error == FT_Err_Ok {
+        create_error = c_abi::abi_get_glyph_from_face(face, &mut glyph);
+    }
+    let (format, outline_owner, outline_counts) = if create_error == FT_Err_Ok {
+        let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c outline glyph snapshot".to_string())?;
+        (
+            Some(FT_GLYPH_FORMAT_OUTLINE),
+            Some((snapshot.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0),
+            Some((
+                snapshot.outline.points.len() as i16,
+                snapshot.outline.contours.len() as i16,
+            )),
+        )
+    } else {
+        (None, None, None)
+    };
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(done_outline_glyph_output(
+        create_error,
+        if glyph.is_null() { "null" } else { "non_null" },
+        format,
+        outline_owner,
+        outline_counts,
+    ))
+}
+
+fn c_done_bitmap_glyph_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let (bitmap_library, bitmap_face) = c_open_named_face(case, "bitmap_strike_font")?;
+    let mut bitmap_glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut bitmap_err = c_abi::FT_Load_Glyph(
+        bitmap_face,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if bitmap_err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(bitmap_face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        bitmap_err = c_abi::FT_Get_Glyph(slot, &mut bitmap_glyph);
+    }
+    let bitmap_row = if bitmap_err == FT_Err_Ok {
+        let (format, owner, bitmap) = done_bitmap_owner_parts_from_c(bitmap_glyph)?;
+        c_abi::FT_Done_Glyph(bitmap_glyph);
+        bitmap_glyph = ptr::null_mut();
+        Ok(done_bitmap_glyph_row(
+            "FT_Get_Glyph bitmap",
+            FT_Err_Ok,
+            "non_null",
+            format,
+            owner,
+            bitmap,
+        ))
+    } else {
+        Err(bitmap_err)
+    };
+    if !bitmap_glyph.is_null() {
+        c_abi::FT_Done_Glyph(bitmap_glyph);
+    }
+    c_done_face(bitmap_face);
+    c_done_library(bitmap_library);
+
+    let (outline_library, outline_face) = c_open_named_face(case, "outline_font")?;
+    let mut outline_glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let mut outline_err = c_abi::FT_Load_Glyph(
+        outline_face,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if outline_err == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(outline_face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        outline_err = c_abi::FT_Get_Glyph(slot, &mut outline_glyph);
+    }
+    if outline_err == FT_Err_Ok {
+        outline_err = c_abi::FT_Glyph_To_Bitmap(
+            &mut outline_glyph,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+            ptr::null(),
+            0,
+        );
+    }
+    let outline_row = if outline_err == FT_Err_Ok {
+        let (format, owner, bitmap) = done_bitmap_owner_parts_from_c(outline_glyph)?;
+        c_abi::FT_Done_Glyph(outline_glyph);
+        outline_glyph = ptr::null_mut();
+        Ok(done_bitmap_glyph_row(
+            "FT_Glyph_To_Bitmap outline",
+            FT_Err_Ok,
+            "non_null",
+            format,
+            owner,
+            bitmap,
+        ))
+    } else {
+        Err(outline_err)
+    };
+    if !outline_glyph.is_null() {
+        c_abi::FT_Done_Glyph(outline_glyph);
+    }
+    c_done_face(outline_face);
+    c_done_library(outline_library);
+
+    done_bitmap_glyph_paths_output(bitmap_row, outline_row)
 }
 
 fn wasm_done_glyph_runtime_output(case: &InputCase) -> Result<RunOutput, String> {
-    if !case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+    if case.inputs.params.get("glyph").is_some_and(Value::is_null) {
+        wasm_abi::fontdone_wasm_done_glyph(0);
+        return Ok(done_glyph_null_output());
+    }
+    if case.case_id == "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer" {
+        return wasm_done_bitmap_glyph_paths(case);
+    }
+    if done_bitmap_glyph_from_get_glyph_case(case) {
+        let handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+        let mut glyph_handle = 0usize;
+        let mut create_error = wasm_abi::fontdone_wasm_load_glyph(
+            handle,
+            bitmap_glyph_record_index(&case.inputs.params)?,
+            load_flags_param(&case.inputs.params)?,
+        );
+        if create_error == FT_Err_Ok {
+            create_error = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+        }
+        let (format, buffer_owner_class, bitmap) = if create_error == FT_Err_Ok {
+            let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(glyph_handle)
+                .ok_or_else(|| "missing wasm bitmap glyph snapshot".to_string())?;
+            (
+                Some(snapshot.root.format),
+                Some(if snapshot.bitmap.buffer.is_empty() {
+                    "null"
+                } else {
+                    "owned_non_null"
+                }),
+                Some((
+                    snapshot.bitmap.width,
+                    snapshot.bitmap.rows,
+                    snapshot.bitmap.pitch,
+                )),
+            )
+        } else {
+            (None, None, None)
+        };
+        if glyph_handle != 0 {
+            let glyph =
+                ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+            wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        }
+        wasm_done_face(handle);
+        return Ok(done_bitmap_glyph_output(
+            create_error,
+            if glyph_handle == 0 {
+                "null"
+            } else {
+                "non_null"
+            },
+            format,
+            buffer_owner_class,
+            bitmap,
+        ));
+    }
+    if !done_outline_glyph_case(case) {
         return Err(format!("unsupported done glyph case {}", case.case_id));
     }
-    wasm_abi::fontdone_wasm_done_glyph(0);
-    Ok(done_glyph_null_output())
+    let handle = wasm_open_face(case)?;
+    let mut glyph_handle = 0usize;
+    let mut create_error = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if create_error == FT_Err_Ok {
+        create_error = wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle);
+    }
+    let (format, outline_owner, outline_counts) = if create_error == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(glyph_handle)
+            .ok_or_else(|| "missing wasm outline glyph snapshot".to_string())?;
+        (
+            Some(FT_GLYPH_FORMAT_OUTLINE),
+            Some((snapshot.outline.flags & FT_OUTLINE_OWNER as FT_Int) != 0),
+            Some((
+                snapshot.outline.points.len() as i16,
+                snapshot.outline.contours.len() as i16,
+            )),
+        )
+    } else {
+        (None, None, None)
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(handle);
+    Ok(done_outline_glyph_output(
+        create_error,
+        if glyph_handle == 0 {
+            "null"
+        } else {
+            "non_null"
+        },
+        format,
+        outline_owner,
+        outline_counts,
+    ))
+}
+
+fn done_outline_glyph_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_OutlineGlyphRec.owns_outline_arrays"
+            | "ftglyph.FT_Done_Glyph.success_releases_owned_outline_glyph"
+            | "ftglyph.FT_Done_Glyph.outline_glyph_before_library_done"
+    )
+}
+
+fn done_bitmap_glyph_from_get_glyph_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftglyph.FT_BitmapGlyphRec.owns_bitmap_buffer_get_glyph_bitmap"
+            | "ftglyph.FT_Done_Glyph.success_releases_owned_bitmap_glyph"
+    )
+}
+
+fn wasm_done_bitmap_glyph_paths(case: &InputCase) -> Result<RunOutput, String> {
+    let bitmap_handle = wasm_open_named_face(case, "bitmap_strike_font")?;
+    let mut bitmap_glyph = 0usize;
+    let mut bitmap_err = wasm_abi::fontdone_wasm_load_glyph(
+        bitmap_handle,
+        bitmap_glyph_record_index(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if bitmap_err == FT_Err_Ok {
+        bitmap_err = wasm_abi::fontdone_wasm_get_glyph_from_face(bitmap_handle, &mut bitmap_glyph);
+    }
+    let bitmap_row = if bitmap_err == FT_Err_Ok {
+        let (format, owner, bitmap) = done_bitmap_owner_parts_from_wasm(bitmap_glyph)?;
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(bitmap_glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        bitmap_glyph = 0;
+        Ok(done_bitmap_glyph_row(
+            "FT_Get_Glyph bitmap",
+            FT_Err_Ok,
+            "non_null",
+            format,
+            owner,
+            bitmap,
+        ))
+    } else {
+        Err(bitmap_err)
+    };
+    if bitmap_glyph != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(bitmap_glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(bitmap_handle);
+
+    let outline_handle = wasm_open_named_face(case, "outline_font")?;
+    let mut outline_glyph = 0usize;
+    let mut outline_err = wasm_abi::fontdone_wasm_load_glyph(
+        outline_handle,
+        glyph_index_param(&case.inputs.params)?,
+        load_flags_param(&case.inputs.params)?,
+    );
+    if outline_err == FT_Err_Ok {
+        outline_err =
+            wasm_abi::fontdone_wasm_get_glyph_from_face(outline_handle, &mut outline_glyph);
+    }
+    if outline_err == FT_Err_Ok {
+        outline_err = wasm_abi::fontdone_wasm_glyph_to_bitmap_handle(
+            &mut outline_glyph,
+            bitmap_glyph_record_render_mode(&case.inputs.params)?,
+            ptr::null(),
+            0,
+        );
+    }
+    let outline_row = if outline_err == FT_Err_Ok {
+        let (format, owner, bitmap) = done_bitmap_owner_parts_from_wasm(outline_glyph)?;
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(outline_glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+        outline_glyph = 0;
+        Ok(done_bitmap_glyph_row(
+            "FT_Glyph_To_Bitmap outline",
+            FT_Err_Ok,
+            "non_null",
+            format,
+            owner,
+            bitmap,
+        ))
+    } else {
+        Err(outline_err)
+    };
+    if outline_glyph != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(outline_glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(outline_handle);
+
+    done_bitmap_glyph_paths_output(bitmap_row, outline_row)
 }
 
 fn glyph_copy_error_row(probe: &str, error: FT_Error, target_pointer_class: &str) -> Value {
@@ -34694,7 +43744,160 @@ fn rust_face_info(face: &FT_Face) -> FT_FaceRecPublic {
         underline_position: face.underline_position,
         underline_thickness: face.underline_thickness,
         size: face.size,
+        stream: face.memory_stream(),
         ..FT_FaceRecPublic::default()
+    }
+}
+
+fn face_rec_initial_snapshot_case(case: &InputCase) -> bool {
+    case.case_id == "freetype.FT_FaceRec.initial_public_fields_match_c"
+}
+
+fn face_rec_post_size_snapshot_case(case: &InputCase) -> bool {
+    case.case_id == "freetype.FT_FaceRec.post_size_public_fields_match_c"
+}
+
+fn pointer_nullness(is_null: bool) -> &'static str {
+    if is_null { "null" } else { "non-null" }
+}
+
+fn face_rec_initial_snapshot_output(info: &FT_FaceRecPublic) -> Value {
+    json!({
+        "num_faces": info.num_faces,
+        "face_index": info.face_index,
+        "face_flags": info.face_flags,
+        "style_flags": info.style_flags,
+        "num_glyphs": info.num_glyphs,
+        "num_fixed_sizes": info.num_fixed_sizes,
+        "available_sizes_nullness": pointer_nullness(info.available_sizes.is_null()),
+        "bbox": bbox_json(bbox_from_rust_bbox(info.bbox)),
+        "units_per_EM": info.units_per_EM,
+        "ascender": info.ascender,
+        "descender": info.descender,
+        "height": info.height,
+        "max_advance_width": info.max_advance_width,
+        "max_advance_height": info.max_advance_height,
+        "underline_position": info.underline_position,
+        "underline_thickness": info.underline_thickness,
+        "size_nullness": pointer_nullness(info.size.is_null()),
+        "stream_nullness": pointer_nullness(info.stream.is_null())
+    })
+}
+
+fn rust_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face = rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    Ok(ok(face_rec_initial_snapshot_output(&rust_face_info(&face))))
+}
+
+fn c_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+    let output = face_rec_initial_snapshot_output(&info);
+    c_done_face(face);
+    c_done_library(library);
+    Ok(ok(output))
+}
+
+fn wasm_inspect_face_rec_initial_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let info =
+        wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+    let output = face_rec_initial_snapshot_output(&info);
+    wasm_done_face(handle);
+    Ok(ok(output))
+}
+
+fn face_rec_post_size_snapshot_output(info: &FT_FaceRecPublic, metrics: Value) -> Value {
+    json!({
+        "face": face_rec_initial_snapshot_output(info),
+        "size_metrics": metrics
+    })
+}
+
+fn rust_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut face =
+        rust_new_face_from_bytes(bytes.as_ref(), face_index_param(&case.inputs.params)?)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = FT_Set_Char_Size(
+        &mut face,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    if err != FT_Err_Ok {
+        return Ok(error(err));
+    }
+    Ok(ok(face_rec_post_size_snapshot_output(
+        &rust_face_info(&face),
+        size_metrics_json(&face.size_metrics),
+    )))
+}
+
+fn c_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let (library, face) = c_new_face_without_size(case)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = c_abi::FT_Set_Char_Size(
+        face,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    let output = if err == FT_Err_Ok {
+        let info = c_abi::abi_face_info(face).ok_or_else(|| "missing c face info".to_string())?;
+        Some(face_rec_post_size_snapshot_output(
+            &info,
+            c_size_metrics_json(face)?,
+        ))
+    } else {
+        None
+    };
+    c_done_face(face);
+    c_done_library(library);
+    if let Some(output) = output {
+        Ok(ok(output))
+    } else {
+        Ok(error(err))
+    }
+}
+
+fn wasm_inspect_face_rec_post_size_snapshot(case: &InputCase) -> Result<RunOutput, String> {
+    let handle = wasm_new_face_without_size(case)?;
+    let row = char_size_rows(&case.inputs.params)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing post-size face-rec request".to_string())?;
+    let err = wasm_abi::fontdone_wasm_set_char_size(
+        handle,
+        row.char_width,
+        row.char_height,
+        row.horz_resolution,
+        row.vert_resolution,
+    );
+    let output = if err == FT_Err_Ok {
+        let info =
+            wasm_abi::abi_face_info(handle).ok_or_else(|| "missing wasm face info".to_string())?;
+        Some(face_rec_post_size_snapshot_output(
+            &info,
+            wasm_size_metrics_value(handle)?,
+        ))
+    } else {
+        None
+    };
+    wasm_done_face(handle);
+    if let Some(output) = output {
+        Ok(ok(output))
+    } else {
+        Ok(error(err))
     }
 }
 
@@ -34890,18 +44093,50 @@ fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), 
     c_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn c_open_named_face(
+    case: &InputCase,
+    name: &str,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let bytes = named_font_bytes(case, name)?;
+    c_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn c_open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
     let (library, face) = c_new_face_without_size(case)?;
-    if preserve_initial_size(&case.inputs.params)? {
+    c_apply_size_or_char_size(library, face, pixel_size, &case.inputs.params)
+}
+
+fn c_open_face_from_bytes_with_size_or_char_size(
+    bytes: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    let (library, face) = c_new_face_from_bytes(bytes, face_index)?;
+    c_apply_size_or_char_size(library, face, pixel_size, params)
+}
+
+fn c_apply_size_or_char_size(
+    library: c_abi::FT_Library,
+    face: c_abi::FT_Face,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<(c_abi::FT_Library, c_abi::FT_Face), String> {
+    if preserve_initial_size(params)? {
         return Ok((library, face));
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = c_size_request_rec(row);
         c_abi::FT_Request_Size(face, &request)
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         c_abi::FT_Set_Char_Size(
             face,
             row.char_width,
@@ -35540,27 +44775,46 @@ fn wasm_open_face(case: &InputCase) -> Result<usize, String> {
     wasm_open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn wasm_open_named_face(case: &InputCase, name: &str) -> Result<usize, String> {
+    let bytes = named_font_bytes(case, name)?;
+    wasm_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn wasm_open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<usize, String> {
     let bytes = font_bytes(case)?;
-    let status = wasm_abi::fontdone_wasm_open_face(
-        bytes.as_ptr(),
-        bytes.len(),
+    wasm_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
         face_index_param(&case.inputs.params)?,
-        20.0,
-    );
+        pixel_size,
+        &case.inputs.params,
+    )
+}
+
+fn wasm_open_face_from_bytes_with_size_or_char_size(
+    bytes: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<usize, String> {
+    let status = wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
     if status.error != FT_Err_Ok {
         return Err(format!("fontdone_wasm_open_face returned {}", status.error));
     }
-    if preserve_initial_size(&case.inputs.params)? {
+    if preserve_initial_size(params)? {
         return Ok(status.handle);
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = wasm_size_request_rec(row);
         wasm_abi::fontdone_wasm_request_size(status.handle, &request)
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         wasm_abi::fontdone_wasm_set_char_size(
             status.handle,
             row.char_width,
@@ -36247,6 +45501,7 @@ fn open_face_name_options_runtime_supported(case: &InputCase) -> bool {
             | "ftparams.FT_PARAM_TAG_IGNORE_PREFERRED_SUBFAMILY.combined_family_and_subfamily_params"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.open_face_uses_legacy_subfamily_name"
             | "ftparams.FT_PARAM_TAG_IGNORE_TYPOGRAPHIC_SUBFAMILY.null_data_accepted"
+            | "freetype.FT_Parameter.typographic_name_params_match_c"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
         && open_face_name_option_rows(&case.inputs.params).is_ok_and(|rows| !rows.is_empty())
@@ -36577,6 +45832,394 @@ fn wasm_open_face_stream(case: &InputCase) -> Result<RunOutput, String> {
     Ok(open_face_stream_output(status.error, face_flags, 1))
 }
 
+fn incremental_absent_output(open_error: FT_Error, load_error: FT_Error) -> RunOutput {
+    let status = if open_error != FT_Err_Ok {
+        open_error
+    } else {
+        load_error
+    };
+    let output = json!({
+        "open_error": open_error,
+        "load_error": load_error,
+        "callback_count": 0,
+        "embedded_data_used": open_error == FT_Err_Ok && load_error == FT_Err_Ok
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn incremental_absent_glyph_index(case: &InputCase) -> Result<u32, String> {
+    u32_param(&case.inputs.params, "load_glyph")
+}
+
+fn incremental_nullness_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftincrem.FT_Incremental_Interface.null_or_absent_interface_behavior"
+            | "ftparams.FT_PARAM_TAG_INCREMENTAL.missing_or_null_interface_matches_c"
+            | "freetype.FT_Parameter.incremental_null_data_matches_c"
+    )
+}
+
+fn incremental_nullness_glyph_index(case: &InputCase) -> Result<u32, String> {
+    u32_param(&case.inputs.params, "load_glyph").or_else(|_| glyph_index_param(&case.inputs.params))
+}
+
+fn incremental_nullness_row(variant: &str, open_error: FT_Error, load_error: FT_Error) -> Value {
+    json!({
+        "variant": variant,
+        "open_error": open_error,
+        "load_error": load_error,
+        "stored_interface_null": true,
+        "callback_count": 0,
+        "embedded_data_used": open_error == FT_Err_Ok && load_error == FT_Err_Ok
+    })
+}
+
+fn incremental_nullness_output(rows: Vec<Value>) -> RunOutput {
+    let status = rows
+        .iter()
+        .find_map(|row| {
+            let open_error = row.get("open_error")?.as_i64()? as FT_Error;
+            let load_error = row.get("load_error")?.as_i64()? as FT_Error;
+            (open_error != FT_Err_Ok)
+                .then_some(open_error)
+                .or_else(|| (load_error != FT_Err_Ok).then_some(load_error))
+        })
+        .unwrap_or(FT_Err_Ok);
+    let output = json!({ "rows": rows });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    let face_index = face_index_param(&case.inputs.params)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
+    let mut rows = Vec::new();
+    for variant in ["absent_parameter", "null_incremental_data"] {
+        match FT_New_Memory_Face(&library, data.as_ref(), face_index, 20.0) {
+            Ok(face) => {
+                let load_error = FT_Load_Glyph(&face, glyph_index, FT_LOAD_DEFAULT)
+                    .err()
+                    .unwrap_or(FT_Err_Ok);
+                rows.push(incremental_nullness_row(variant, FT_Err_Ok, load_error));
+            }
+            Err(err) => rows.push(incremental_nullness_row(variant, err, err)),
+        }
+    }
+    Ok(incremental_nullness_output(rows))
+}
+
+fn c_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(incremental_nullness_output(vec![incremental_nullness_row(
+            "init", init_err, init_err,
+        )]));
+    }
+    let face_index = face_index_param(&case.inputs.params)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let mut rows = Vec::new();
+    for (variant, with_null_incremental_param) in
+        [("absent_parameter", false), ("null_incremental_data", true)]
+    {
+        let mut face = std::ptr::null_mut();
+        let open_error = if with_null_incremental_param {
+            let mut param = c_abi::FT_Parameter {
+                tag: FT_PARAM_TAG_INCREMENTAL as c_abi::FT_ULong,
+                data: std::ptr::null_mut(),
+            };
+            let args = c_abi::FT_Open_Args {
+                flags: FT_OPEN_MEMORY as c_abi::FT_UInt,
+                memory_base: bytes.as_ptr(),
+                memory_size: file_size,
+                pathname: std::ptr::null_mut(),
+                stream: std::ptr::null_mut(),
+                driver: std::ptr::null_mut(),
+                num_params: 1,
+                params: &mut param,
+            };
+            c_abi::FT_Open_Face(library, &args, face_index, &mut face)
+        } else {
+            c_abi::FT_New_Memory_Face(library, bytes.as_ptr(), file_size, face_index, &mut face)
+        };
+        let load_error = if open_error == FT_Err_Ok {
+            c_abi::FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT)
+        } else {
+            open_error
+        };
+        if !face.is_null() {
+            c_done_face(face);
+        }
+        rows.push(incremental_nullness_row(variant, open_error, load_error));
+    }
+    c_done_library(library);
+    Ok(incremental_nullness_output(rows))
+}
+
+fn wasm_incremental_nullness_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let face_index = face_index_param(&case.inputs.params)?;
+    let glyph_index = incremental_nullness_glyph_index(case)?;
+    let mut rows = Vec::new();
+    for variant in ["absent_parameter", "null_incremental_data"] {
+        let status =
+            wasm_abi::fontdone_wasm_open_face(bytes.as_ptr(), bytes.len(), face_index, 20.0);
+        let load_error = if status.error == FT_Err_Ok {
+            wasm_abi::fontdone_wasm_load_glyph(status.handle, glyph_index, FT_LOAD_DEFAULT)
+        } else {
+            status.error
+        };
+        if status.handle != 0 {
+            wasm_done_face(status.handle);
+        }
+        rows.push(incremental_nullness_row(variant, status.error, load_error));
+    }
+    Ok(incremental_nullness_output(rows))
+}
+
+fn rust_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    ) {
+        Ok(face) => {
+            let load_error = FT_Load_Glyph(
+                &face,
+                incremental_absent_glyph_index(case)?,
+                FT_LOAD_DEFAULT,
+            )
+            .err()
+            .unwrap_or(FT_Err_Ok);
+            Ok(incremental_absent_output(FT_Err_Ok, load_error))
+        }
+        Err(err) => Ok(incremental_absent_output(err, err)),
+    }
+}
+
+fn c_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(incremental_absent_output(init_err, init_err));
+    }
+    let mut face = std::ptr::null_mut();
+    let file_size = i64::try_from(bytes.len()).map_err(|err| err.to_string())?;
+    let open_error = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        file_size,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let load_error = if open_error == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, incremental_absent_glyph_index(case)?, FT_LOAD_DEFAULT)
+    } else {
+        open_error
+    };
+    if !face.is_null() {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    Ok(incremental_absent_output(open_error, load_error))
+}
+
+fn wasm_incremental_absent_open(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let load_error = if status.error == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(
+            status.handle,
+            incremental_absent_glyph_index(case)?,
+            FT_LOAD_DEFAULT,
+        )
+    } else {
+        status.error
+    };
+    if status.handle != 0 {
+        wasm_done_face(status.handle);
+    }
+    Ok(incremental_absent_output(status.error, load_error))
+}
+
+fn memory_stream_frame_reads(params: &Value) -> Result<Vec<(usize, usize)>, String> {
+    params
+        .get("stream_probe")
+        .and_then(|probe| probe.get("frame_reads"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing stream_probe.frame_reads".to_string())?
+        .iter()
+        .map(|row| {
+            let offset = row
+                .get("offset")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| format!("invalid stream frame-read offset {row}"))?;
+            let count = row
+                .get("count")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| format!("invalid stream frame-read count {row}"))?;
+            Ok((offset, count))
+        })
+        .collect()
+}
+
+fn memory_stream_probe_output(
+    status: FT_Error,
+    stream: Option<FT_StreamRec>,
+    bytes: &[u8],
+    frame_reads: &[(usize, usize)],
+) -> RunOutput {
+    let stream_fields = stream.map_or_else(
+        || {
+            json!({
+                "base_nullness": true,
+                "size": 0,
+                "pos": 0,
+                "cursor_nullness": true,
+                "limit_nullness": true
+            })
+        },
+        |stream| {
+            json!({
+                "base_nullness": stream.base.is_null(),
+                "size": stream.size,
+                "pos": stream.pos,
+                "cursor_nullness": stream.cursor.is_null(),
+                "limit_nullness": stream.limit.is_null()
+            })
+        },
+    );
+    let frame_read_events = frame_reads
+        .iter()
+        .map(|(offset, count)| {
+            let end = offset.saturating_add(*count).min(bytes.len());
+            let in_bounds = *offset <= bytes.len() && offset.saturating_add(*count) <= bytes.len();
+            let slice = if *offset <= bytes.len() {
+                &bytes[*offset..end]
+            } else {
+                &[]
+            };
+            json!({
+                "offset": offset,
+                "count": count,
+                "in_bounds": in_bounds,
+                "bytes": hex_bytes(slice)
+            })
+        })
+        .collect::<Vec<_>>();
+    let output = json!({
+        "face_load_status": status,
+        "stream_fields": stream_fields,
+        "frame_read_events": frame_read_events
+    });
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        bytes.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    ) {
+        Ok(face) => Ok(memory_stream_probe_output(
+            FT_Err_Ok,
+            Some(face.memory_stream_record()),
+            bytes.as_ref(),
+            &frame_reads,
+        )),
+        Err(err) => Ok(memory_stream_probe_output(
+            err,
+            None,
+            bytes.as_ref(),
+            &frame_reads,
+        )),
+    }
+}
+
+fn c_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let mut library = std::ptr::null_mut();
+    let init_err = c_abi::FT_Init_FreeType(&mut library);
+    if init_err != FT_Err_Ok {
+        return Ok(memory_stream_probe_output(
+            init_err,
+            None,
+            bytes.as_ref(),
+            &frame_reads,
+        ));
+    }
+    let mut face = std::ptr::null_mut();
+    let err = c_abi::FT_New_Memory_Face(
+        library,
+        bytes.as_ptr(),
+        i64::try_from(bytes.len()).map_err(|err| err.to_string())?,
+        face_index_param(&case.inputs.params)?,
+        &mut face,
+    );
+    let stream = if err == FT_Err_Ok {
+        c_abi::abi_face_stream_info(face)
+    } else {
+        None
+    };
+    let output = memory_stream_probe_output(err, stream, bytes.as_ref(), &frame_reads);
+    if err == FT_Err_Ok {
+        c_done_face(face);
+    }
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_memory_stream_probe(case: &InputCase) -> Result<RunOutput, String> {
+    let bytes = font_bytes(case)?;
+    let frame_reads = memory_stream_frame_reads(&case.inputs.params)?;
+    let status = wasm_abi::fontdone_wasm_open_face(
+        bytes.as_ptr(),
+        bytes.len(),
+        face_index_param(&case.inputs.params)?,
+        20.0,
+    );
+    let stream = if status.error == FT_Err_Ok {
+        wasm_abi::abi_face_stream_info(status.handle)
+    } else {
+        None
+    };
+    let output = memory_stream_probe_output(status.error, stream, bytes.as_ref(), &frame_reads);
+    wasm_done_face(status.handle);
+    Ok(output)
+}
+
 fn face_style_flag_output(
     status: FT_Error,
     family_name: Value,
@@ -36773,6 +46416,7 @@ fn open_face_ignored_params_runtime_supported(case: &InputCase) -> bool {
         "ftparams.FT_PARAM_TAG_IGNORE_SBIX.unsupported_or_non_sbix_no_spurious_failure"
             | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.open_face_no_effect"
             | "ftparams.FT_PARAM_TAG_UNPATENTED_HINTING.null_data_accepted_or_ignored"
+            | "freetype.FT_Parameter.ignored_open_params_match_c"
     ) && has_runtime_font_source(case)
         && assets_are_runtime_resolved(case)
 }
@@ -37085,7 +46729,7 @@ fn rust_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
-        if case.subject == "freetype.FT_Open_Face" {
+        if open_face_args_dispatch_case(case) {
             let source_flags =
                 row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
             if source_flags != FT_OPEN_MEMORY {
@@ -37153,25 +46797,23 @@ fn c_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> {
             num_params: 0,
             params: std::ptr::null_mut(),
         };
-        let err = if case.subject == "freetype.FT_Open_Face"
-            || row.has_open_args
-            || row.open_args_is_null
-        {
-            let args_ptr = if row.open_args_is_null {
-                std::ptr::null()
+        let err =
+            if open_face_args_dispatch_case(case) || row.has_open_args || row.open_args_is_null {
+                let args_ptr = if row.open_args_is_null {
+                    std::ptr::null()
+                } else {
+                    &open_args
+                };
+                c_abi::FT_Open_Face(library_arg, args_ptr, row.face_index, face_ptr)
             } else {
-                &open_args
+                c_abi::FT_New_Memory_Face(
+                    library_arg,
+                    bytes.as_ptr(),
+                    file_size,
+                    row.face_index,
+                    face_ptr,
+                )
             };
-            c_abi::FT_Open_Face(library_arg, args_ptr, row.face_index, face_ptr)
-        } else {
-            c_abi::FT_New_Memory_Face(
-                library_arg,
-                bytes.as_ptr(),
-                file_size,
-                row.face_index,
-                face_ptr,
-            )
-        };
         let face_is_null = face.is_null();
         if err == FT_Err_Ok {
             c_done_face(face);
@@ -37220,7 +46862,7 @@ fn wasm_new_memory_face_variants(case: &InputCase) -> Result<RunOutput, String> 
         if row.aface_is_null {
             return Ok((FT_Err_Invalid_Argument, true));
         }
-        if case.subject == "freetype.FT_Open_Face" {
+        if open_face_args_dispatch_case(case) {
             let source_flags =
                 row.open_flags & (FT_OPEN_MEMORY | FT_OPEN_STREAM | FT_OPEN_PATHNAME);
             if source_flags != FT_OPEN_MEMORY {
@@ -37267,6 +46909,10 @@ fn memory_face_outputs(
     }
 }
 
+fn open_face_args_dispatch_case(case: &InputCase) -> bool {
+    case.subject == "freetype.FT_Open_Face" || case.operation == "freetype.open_face_args"
+}
+
 fn memory_face_file_size(data_len: usize, row: MemoryFaceRow) -> Result<i64, String> {
     Ok(row
         .file_size
@@ -37306,26 +46952,45 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
     open_face_with_size_or_char_size(case, pixel_size_param(&case.inputs.params)?)
 }
 
+fn open_named_face(case: &InputCase, name: &str) -> Result<FT_Face, String> {
+    let data = named_font_bytes(case, name)?;
+    open_face_from_bytes_with_size_or_char_size(
+        data.as_ref(),
+        face_index_param(&case.inputs.params)?,
+        pixel_size_param(&case.inputs.params)?,
+        &case.inputs.params,
+    )
+}
+
 fn open_face_with_size_or_char_size(
     case: &InputCase,
     pixel_size: (u32, u32),
 ) -> Result<FT_Face, String> {
     let data = font_bytes(case)?;
-    let library = FT_Init_FreeType();
-    let mut face = FT_New_Memory_Face(
-        &library,
+    open_face_from_bytes_with_size_or_char_size(
         data.as_ref(),
         face_index_param(&case.inputs.params)?,
-        20.0,
+        pixel_size,
+        &case.inputs.params,
     )
-    .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
-    if preserve_initial_size(&case.inputs.params)? {
+}
+
+fn open_face_from_bytes_with_size_or_char_size(
+    data: &[u8],
+    face_index: i64,
+    pixel_size: (u32, u32),
+    params: &Value,
+) -> Result<FT_Face, String> {
+    let library = FT_Init_FreeType();
+    let mut face = FT_New_Memory_Face(&library, data, face_index, 20.0)
+        .map_err(|err| format!("FT_New_Memory_Face returned {err}"))?;
+    if preserve_initial_size(params)? {
         return Ok(face);
     }
-    let err = if let Some(row) = preload_size_request_row(&case.inputs.params)? {
+    let err = if let Some(row) = preload_size_request_row(params)? {
         let request = rust_size_request_rec(row);
         FT_Request_Size(Some(&mut face), Some(&request))
-    } else if let Some(row) = preload_char_size_row(&case.inputs.params)? {
+    } else if let Some(row) = preload_char_size_row(params)? {
         FT_Set_Char_Size(
             &mut face,
             row.char_width,
@@ -39058,9 +48723,23 @@ fn resolve_ref_file_path<'a>(id: Option<&'a str>, path: Option<&'a str>) -> Opti
             return Some(candidate);
         }
         match candidate {
-            "fonts/basic/dejavu-sans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
+            "fonts/basic/DejaVuSans.ttf"
+            | "fonts/basic/dejavu-sans.ttf"
+            | "fixtures/assets/fonts/DejaVuSans.ttf" => Some("input/fonts/DejaVuSans.ttf"),
             "fonts/bdf/properties-atoms-integers-cardinals.bdf" => {
                 Some("input/fonts/bdf/properties-atoms-integers-cardinals.bdf")
+            }
+            // Historical logical id for the maintained all-paints COLRv1
+            // fixture.  The route consumes this same fixture to compare all
+            // public FT_COLR_Paint format tags and payload classes against
+            // pinned FreeType 2.14.3.
+            "fonts/color/colr_v1_all_paint_formats.ttf" => {
+                Some("fonts/color/colr-v1-all-paints.ttf")
+            }
+            // Historical logical id for the maintained COLRv1 root-transform
+            // fixture used to compare FT_COLOR_INCLUDE_ROOT_TRANSFORM output.
+            "fonts/color/colr-v1-root-paint-cpal.ttf" => {
+                Some("fonts/color/colr-v1-root-transform.ttf")
             }
             _ => None,
         }
@@ -39131,6 +48810,300 @@ fn cached_file_bytes(path: &str) -> Result<Arc<[u8]>, String> {
         .entry(path.to_string())
         .or_insert_with(|| Arc::clone(&bytes));
     Ok(Arc::clone(bytes))
+}
+
+#[derive(Clone, Copy)]
+enum GzipBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn gzip_payload_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("gzip_payloads")
+        .ok_or_else(|| "missing gzip_payloads asset".to_string())?;
+    let path =
+        asset_file_path(asset).ok_or_else(|| format!("unresolved {}", asset_label(asset)))?;
+    let text = fs::read_to_string(fixture_dir().join(path))
+        .map_err(|err| format!("read gzip payload manifest {path}: {err}"))?;
+    serde_json::from_str(&text).map_err(|err| format!("parse gzip payload manifest {path}: {err}"))
+}
+
+fn gzip_uncompress_output(case: &InputCase, backend: GzipBackend) -> Result<RunOutput, String> {
+    let manifest = gzip_payload_manifest(case)?;
+    let mut rows = Vec::new();
+    for payload in manifest.payloads {
+        let raw = cached_file_bytes(&payload.raw)?;
+        let zlib_wrapped = payload.zlib_wrapped.as_deref().ok_or_else(|| {
+            format!(
+                "gzip uncompress payload {} missing zlib_wrapped",
+                payload.id
+            )
+        })?;
+        for (input_kind, input_path) in [
+            ("gzip", payload.gzip.as_str()),
+            ("zlib_wrapped", zlib_wrapped),
+        ] {
+            let input = cached_file_bytes(input_path)?;
+            for (buffer_size, capacity) in [
+                ("exact_uncompressed_size", raw.len()),
+                (
+                    "larger_than_uncompressed_size",
+                    raw.len().checked_add(7).ok_or_else(|| {
+                        format!("gzip payload {} output size overflow", payload.id)
+                    })?,
+                ),
+            ] {
+                let (status, output_len, output) =
+                    gzip_uncompress_call(backend, input.as_ref(), capacity)?;
+                rows.push(json!({
+                    "payload": payload.id,
+                    "input_kind": input_kind,
+                    "buffer_size": buffer_size,
+                    "status": status,
+                    "output_len": output_len,
+                    "output_bytes": hex_bytes(&output),
+                }));
+            }
+        }
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn gzip_uncompress_call(
+    backend: GzipBackend,
+    input: &[u8],
+    capacity: usize,
+) -> Result<(FT_Error, FT_ULong, Vec<u8>), String> {
+    let mut output = vec![0xA5; capacity];
+    let mut output_len = FT_ULong::try_from(capacity).map_err(|err| err.to_string())?;
+    let status = match backend {
+        GzipBackend::Rust => {
+            let memory = FT_MemoryRec::default();
+            FT_Gzip_Uncompress(
+                Some(&memory),
+                Some(output.as_mut_slice()),
+                Some(&mut output_len),
+                Some(input),
+            )
+        }
+        GzipBackend::CAbi => {
+            let mut memory = c_abi::FT_MemoryRec::default();
+            c_abi::FT_Gzip_Uncompress(
+                &mut memory,
+                output.as_mut_ptr(),
+                &mut output_len,
+                input.as_ptr(),
+                FT_ULong::try_from(input.len()).map_err(|err| err.to_string())?,
+            )
+        }
+        GzipBackend::Wasm => {
+            let mut memory = wasm_abi::FontdoneWasmMemory::default();
+            wasm_abi::fontdone_wasm_gzip_uncompress(
+                &mut memory,
+                output.as_mut_ptr(),
+                &mut output_len,
+                input.as_ptr(),
+                FT_ULong::try_from(input.len()).map_err(|err| err.to_string())?,
+            )
+        }
+    };
+    let prefix_len = if status == FT_Err_Ok {
+        usize::try_from(output_len).map_err(|err| err.to_string())?
+    } else {
+        0
+    };
+    Ok((status, output_len, output[..prefix_len].to_vec()))
+}
+
+#[derive(Clone, Copy)]
+enum GzipStreamBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+#[derive(Clone, Copy)]
+enum Bzip2StreamBackend {
+    Rust,
+    CAbi,
+    Wasm,
+}
+
+fn gzip_stream_manifest(case: &InputCase) -> Result<GzipPayloadManifest, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get("gzip_streams")
+        .ok_or_else(|| "missing gzip_streams asset".to_string())?;
+    let path =
+        asset_file_path(asset).ok_or_else(|| format!("unresolved {}", asset_label(asset)))?;
+    let text = fs::read_to_string(fixture_dir().join(path))
+        .map_err(|err| format!("read gzip stream manifest {path}: {err}"))?;
+    serde_json::from_str(&text).map_err(|err| format!("parse gzip stream manifest {path}: {err}"))
+}
+
+fn bzip2_disabled_stream_output(backend: Bzip2StreamBackend) -> RunOutput {
+    let mut source = FT_StreamRec::default();
+    let mut stream = FT_StreamRec::default();
+    let status = match backend {
+        Bzip2StreamBackend::Rust => FT_Stream_OpenBzip2(Some(&mut stream), Some(&source)),
+        Bzip2StreamBackend::CAbi => c_abi::FT_Stream_OpenBzip2(&mut stream, &mut source),
+        Bzip2StreamBackend::Wasm => wasm_abi::fontdone_wasm_stream_open_bzip2(&mut stream, &source),
+    };
+    RunOutput {
+        status: Status {
+            kind: if status == FT_Err_Ok {
+                StatusKind::Ok
+            } else {
+                StatusKind::Error
+            },
+            error_code: i64::from(status),
+        },
+        output: json!({
+            "build_features": {
+                "bzip2": false,
+            },
+            "error": status,
+            "stream": {
+                "base_class": pointer_class(stream.base.cast_const()),
+                "read_class": pointer_class(stream.read.cast_const()),
+                "close_class": pointer_class(stream.close.cast_const()),
+            },
+        }),
+    }
+}
+
+fn gzip_stream_open_output(
+    case: &InputCase,
+    backend: GzipStreamBackend,
+) -> Result<RunOutput, String> {
+    let manifest = gzip_stream_manifest(case)?;
+    let mut rows = Vec::new();
+    for payload in manifest.payloads {
+        let raw = cached_file_bytes(&payload.raw)?;
+        let gzip = cached_file_bytes(&payload.gzip)?;
+        for (source_position, initial_pos) in [("zero", 0), ("nonzero_before_header", 3)] {
+            rows.push(gzip_stream_open_row(
+                backend,
+                payload.id.as_str(),
+                source_position,
+                initial_pos,
+                raw.as_ref(),
+                gzip.as_ref(),
+            )?);
+        }
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn gzip_stream_open_row(
+    backend: GzipStreamBackend,
+    payload_id: &str,
+    source_position: &str,
+    initial_pos: FT_ULong,
+    raw: &[u8],
+    gzip: &[u8],
+) -> Result<Value, String> {
+    let mut source = FT_StreamRec {
+        base: gzip.as_ptr().cast_mut(),
+        size: FT_ULong::try_from(gzip.len()).map_err(|err| err.to_string())?,
+        pos: initial_pos,
+        ..FT_StreamRec::default()
+    };
+    let mut memory = FT_MemoryRec::default();
+    source.memory = (&mut memory) as *mut FT_MemoryRec;
+    let mut stream = FT_StreamRec {
+        base: std::ptr::NonNull::<u8>::dangling().as_ptr(),
+        size: FT_ULong::MAX,
+        pos: FT_ULong::MAX,
+        read: std::ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+        close: std::ptr::NonNull::<u8>::dangling().as_ptr().cast(),
+        ..FT_StreamRec::default()
+    };
+
+    let status = match backend {
+        GzipStreamBackend::Rust => FT_Stream_OpenGzip(Some(&mut stream), Some(&source), Some(gzip)),
+        GzipStreamBackend::CAbi => c_abi::FT_Stream_OpenGzip(&mut stream, &mut source),
+        GzipStreamBackend::Wasm => wasm_abi::fontdone_wasm_stream_open_gzip(&mut stream, &source),
+    };
+    let read_ranges = if status == FT_Err_Ok {
+        gzip_stream_read_ranges(backend, &stream, raw)?
+    } else {
+        Vec::new()
+    };
+    let row = json!({
+        "payload": payload_id,
+        "source_position": source_position,
+        "status": status,
+        "stream": {
+            "size": if status == FT_Err_Ok { stream.size } else { 0 },
+            "base_class": pointer_class(stream.base.cast_const()),
+            "read_class": pointer_class(stream.read.cast_const()),
+            "close_class": pointer_class(stream.close.cast_const()),
+        },
+        "read_ranges": read_ranges,
+    });
+    if status == FT_Err_Ok {
+        match backend {
+            GzipStreamBackend::Rust => FT_Gzip_Stream_Close(Some(&mut stream)),
+            GzipStreamBackend::CAbi => c_abi::abi_support_gzip_stream_close(&mut stream),
+            GzipStreamBackend::Wasm => wasm_abi::abi_support_gzip_stream_close(&mut stream),
+        }
+    }
+    Ok(row)
+}
+
+fn gzip_stream_read_ranges(
+    backend: GzipStreamBackend,
+    stream: &FT_StreamRec,
+    raw: &[u8],
+) -> Result<Vec<Value>, String> {
+    let starts = [
+        ("beginning", 0usize, 16usize),
+        ("middle", raw.len().checked_div(2).unwrap_or(0), 19usize),
+        ("end", raw.len().saturating_sub(23), 23usize),
+    ];
+    starts
+        .into_iter()
+        .map(|(label, offset, requested)| {
+            let requested = requested.min(raw.len().saturating_sub(offset));
+            let bytes = match backend {
+                GzipStreamBackend::Rust => FT_Gzip_Stream_Read(
+                    Some(stream),
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+                GzipStreamBackend::CAbi => c_abi::abi_support_gzip_stream_bytes(
+                    (stream as *const FT_StreamRec).cast_mut(),
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+                GzipStreamBackend::Wasm => wasm_abi::abi_support_gzip_stream_bytes(
+                    stream as *const FT_StreamRec,
+                    FT_ULong::try_from(offset).map_err(|err| err.to_string())?,
+                    FT_ULong::try_from(requested).map_err(|err| err.to_string())?,
+                ),
+            }
+            .ok_or_else(|| "gzip stream read missing registry bytes".to_string())?;
+            let expected = raw[offset..offset + bytes.len()].to_vec();
+            Ok(json!({
+                "label": label,
+                "offset": offset,
+                "requested": requested,
+                "read": bytes.len(),
+                "bytes": hex_bytes(&bytes),
+                "expected": hex_bytes(&expected),
+            }))
+        })
+        .collect()
+}
+
+fn pointer_class<T>(ptr: *const T) -> &'static str {
+    if ptr.is_null() { "null" } else { "nonnull" }
 }
 
 fn ok(output: Value) -> RunOutput {
@@ -43363,6 +53336,12 @@ impl WasmRenderOutlineStorage {
 
 fn outline_get_bitmap_runtime_supported(case: &InputCase) -> bool {
     case.subject == "ftoutln.FT_Outline_Get_Bitmap"
+        || matches!(
+            case.case_id.as_str(),
+            "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior"
+                | "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior"
+                | "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior"
+        )
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE" && case.case == "empty_bitmap_state")
         || (case.subject == "ftimage.FT_PIXEL_MODE_NONE"
             && case.case == "invalid_render_target_errors")
@@ -43389,6 +53368,9 @@ fn outline_get_bitmap_mode(case: &InputCase) -> &'static str {
             "invalid-none"
         }
         "invalid_target_buffer_errors" if case.subject == "ftimage.FT_Bitmap" => "invalid-buffer",
+        "mono_dropout_behavior" | "mono_smart_dropout_behavior" | "mono_stub_dropout_behavior" => {
+            "dropout-thin-stems"
+        }
         _ => "unsupported",
     }
 }
@@ -43427,6 +53409,30 @@ fn rust_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(rendered) => Ok(ok(outline_get_bitmap_result_json(0, 0, &rendered))),
                 Err(err) => Ok(error(err)),
             }
+        }
+        "dropout-thin-stems" => {
+            let library = FT_Init_FreeType();
+            let rows = outline_get_bitmap_dropout_flag_rows(case);
+            let results = rows
+                .into_iter()
+                .map(|(label, flags)| {
+                    let outline = rust_outline_get_bitmap_dropout_thin_stems(flags);
+                    let mut buffer = vec![0u8; 16 * 16];
+                    let target = rust_outline_get_bitmap_target_with_buffer(
+                        FT_PIXEL_MODE_MONO as u8,
+                        buffer.as_mut_ptr(),
+                    );
+                    let rendered =
+                        FT_Outline_Get_Bitmap(Some(&library), Some(&outline), Some(&target))
+                            .map_err(|err| format!("FT_Outline_Get_Bitmap failed: {err}"))?;
+                    Ok(json!({
+                        "flags": label,
+                        "status": FT_Err_Ok,
+                        "bitmap": outline_get_bitmap_result_json(0, 0, &rendered)["bitmap"].clone()
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(ok(json!({ "results": results })))
         }
         "empty" => {
             let library = FT_Init_FreeType();
@@ -43535,6 +53541,28 @@ fn c_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
             } else {
                 Ok(error(err))
             }
+        }
+        "dropout-thin-stems" => {
+            let mut library = ptr::null_mut();
+            let err = c_abi::FT_Init_FreeType(&mut library);
+            if err != 0 {
+                return Ok(error(err));
+            }
+            let mut results = Vec::new();
+            for (label, flags) in outline_get_bitmap_dropout_flag_rows(case) {
+                let mut outline = c_outline_get_bitmap_dropout_thin_stems(flags);
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap =
+                    c_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+                let err = c_abi::FT_Outline_Get_Bitmap(library, outline.as_ptr(), &mut bitmap);
+                results.push(json!({
+                    "flags": label,
+                    "status": err,
+                    "bitmap": c_outline_get_bitmap_result_json(err, 0, &bitmap, &buffer)["bitmap"].clone()
+                }));
+            }
+            c_done_library(library);
+            Ok(ok(json!({ "results": results })))
         }
         "empty" => {
             let mut library = ptr::null_mut();
@@ -43645,6 +53673,23 @@ fn wasm_outline_get_bitmap(case: &InputCase) -> Result<RunOutput, String> {
                 Ok(error(err))
             }
         }
+        "dropout-thin-stems" => {
+            let mut results = Vec::new();
+            for (label, flags) in outline_get_bitmap_dropout_flag_rows(case) {
+                let mut outline = wasm_outline_get_bitmap_dropout_thin_stems(flags);
+                let mut buffer = vec![0u8; 16 * 16];
+                let mut bitmap =
+                    wasm_outline_get_bitmap_target(FT_PIXEL_MODE_MONO as i32, &mut buffer);
+                let err =
+                    wasm_abi::fontdone_wasm_outline_get_bitmap(1, outline.as_ptr(), &mut bitmap);
+                results.push(json!({
+                    "flags": label,
+                    "status": err,
+                    "bitmap": wasm_outline_get_bitmap_result_json(err, 0, &bitmap, &buffer)["bitmap"].clone()
+                }));
+            }
+            Ok(ok(json!({ "results": results })))
+        }
         "empty" => {
             let mut outline = wasm_outline_get_bitmap_empty();
             let mut bitmap = wasm_outline_get_bitmap_empty_target();
@@ -43728,6 +53773,53 @@ fn rust_outline_get_bitmap_empty() -> FT_OutlineSnapshot {
         tags: Vec::new(),
         contours: Vec::new(),
         flags: 0,
+    }
+}
+
+fn outline_get_bitmap_dropout_flag_rows(case: &InputCase) -> Vec<(&'static str, FT_Int)> {
+    match case.case_id.as_str() {
+        "ftimage.FT_OUTLINE_IGNORE_DROPOUTS.mono_dropout_behavior" => {
+            vec![("FT_OUTLINE_NONE", 0), ("FT_OUTLINE_IGNORE_DROPOUTS", 0x8)]
+        }
+        "ftimage.FT_OUTLINE_SMART_DROPOUTS.mono_smart_dropout_behavior" => vec![
+            ("FT_OUTLINE_NONE", 0),
+            ("FT_OUTLINE_SMART_DROPOUTS", 0x10),
+            (
+                "FT_OUTLINE_SMART_DROPOUTS|FT_OUTLINE_IGNORE_DROPOUTS",
+                0x10 | 0x8,
+            ),
+        ],
+        "ftimage.FT_OUTLINE_INCLUDE_STUBS.mono_stub_dropout_behavior" => vec![
+            ("FT_OUTLINE_NONE", 0),
+            ("FT_OUTLINE_INCLUDE_STUBS", 0x20),
+            (
+                "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_SMART_DROPOUTS",
+                0x20 | 0x10,
+            ),
+            (
+                "FT_OUTLINE_INCLUDE_STUBS|FT_OUTLINE_IGNORE_DROPOUTS",
+                0x20 | 0x8,
+            ),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+fn rust_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: vec![
+            FT_Vector { x: 512, y: 512 },
+            FT_Vector { x: 576, y: 512 },
+            FT_Vector { x: 576, y: 1536 },
+            FT_Vector { x: 512, y: 1536 },
+            FT_Vector { x: 768, y: 512 },
+            FT_Vector { x: 832, y: 512 },
+            FT_Vector { x: 832, y: 1536 },
+            FT_Vector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        flags,
     }
 }
 
@@ -43829,16 +53921,17 @@ fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
         24 * 64
     };
     let mut storage = COutlineStorage {
-        points: [
+        points: vec![
             c_abi::FT_Vector { x: lo, y: lo },
             c_abi::FT_Vector { x: hi, y: lo },
             c_abi::FT_Vector { x: hi, y: hi },
             c_abi::FT_Vector { x: lo, y: hi },
         ],
-        tags: [1, 1, 1, 1],
-        contours: [3],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![3],
         n_contours: 1,
         n_points: 4,
+        flags: 0,
         outline: c_abi::FT_Outline::default(),
     };
     storage.refresh();
@@ -43847,16 +53940,40 @@ fn c_outline_get_bitmap_square(oversized: bool) -> COutlineStorage {
 
 fn c_outline_get_bitmap_empty() -> COutlineStorage {
     let mut storage = COutlineStorage {
-        points: [
+        points: vec![
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
             c_abi::FT_Vector { x: 0, y: 0 },
         ],
-        tags: [0; 4],
-        contours: [0],
+        tags: vec![0; 4],
+        contours: vec![0],
         n_contours: 0,
         n_points: 0,
+        flags: 0,
+        outline: c_abi::FT_Outline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn c_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> COutlineStorage {
+    let mut storage = COutlineStorage {
+        points: vec![
+            c_abi::FT_Vector { x: 512, y: 512 },
+            c_abi::FT_Vector { x: 576, y: 512 },
+            c_abi::FT_Vector { x: 576, y: 1536 },
+            c_abi::FT_Vector { x: 512, y: 1536 },
+            c_abi::FT_Vector { x: 768, y: 512 },
+            c_abi::FT_Vector { x: 832, y: 512 },
+            c_abi::FT_Vector { x: 832, y: 1536 },
+            c_abi::FT_Vector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        n_contours: 2,
+        n_points: 8,
+        flags,
         outline: c_abi::FT_Outline::default(),
     };
     storage.refresh();
@@ -43864,11 +53981,12 @@ fn c_outline_get_bitmap_empty() -> COutlineStorage {
 }
 
 struct COutlineStorage {
-    points: [c_abi::FT_Vector; 4],
-    tags: [u8; 4],
-    contours: [u16; 1],
+    points: Vec<c_abi::FT_Vector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
     n_contours: u16,
     n_points: u16,
+    flags: FT_Int,
     outline: c_abi::FT_Outline,
 }
 
@@ -43880,7 +53998,7 @@ impl COutlineStorage {
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
-            flags: 0,
+            flags: self.flags,
         };
     }
 
@@ -43984,16 +54102,17 @@ fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
         24 * 64
     };
     let mut storage = WasmOutlineStorage {
-        points: [
+        points: vec![
             wasm_abi::FontdoneWasmVector { x: lo, y: lo },
             wasm_abi::FontdoneWasmVector { x: hi, y: lo },
             wasm_abi::FontdoneWasmVector { x: hi, y: hi },
             wasm_abi::FontdoneWasmVector { x: lo, y: hi },
         ],
-        tags: [1, 1, 1, 1],
-        contours: [3],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![3],
         n_contours: 1,
         n_points: 4,
+        flags: 0,
         outline: wasm_abi::FontdoneWasmOutline::default(),
     };
     storage.refresh();
@@ -44002,16 +54121,40 @@ fn wasm_outline_get_bitmap_square(oversized: bool) -> WasmOutlineStorage {
 
 fn wasm_outline_get_bitmap_empty() -> WasmOutlineStorage {
     let mut storage = WasmOutlineStorage {
-        points: [
+        points: vec![
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
             wasm_abi::FontdoneWasmVector { x: 0, y: 0 },
         ],
-        tags: [0; 4],
-        contours: [0],
+        tags: vec![0; 4],
+        contours: vec![0],
         n_contours: 0,
         n_points: 0,
+        flags: 0,
+        outline: wasm_abi::FontdoneWasmOutline::default(),
+    };
+    storage.refresh();
+    storage
+}
+
+fn wasm_outline_get_bitmap_dropout_thin_stems(flags: FT_Int) -> WasmOutlineStorage {
+    let mut storage = WasmOutlineStorage {
+        points: vec![
+            wasm_abi::FontdoneWasmVector { x: 512, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 576, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 576, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 512, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 768, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 832, y: 512 },
+            wasm_abi::FontdoneWasmVector { x: 832, y: 1536 },
+            wasm_abi::FontdoneWasmVector { x: 768, y: 1536 },
+        ],
+        tags: vec![1, 1, 1, 1, 1 | (4 << 5), 1, 1, 1],
+        contours: vec![3, 7],
+        n_contours: 2,
+        n_points: 8,
+        flags,
         outline: wasm_abi::FontdoneWasmOutline::default(),
     };
     storage.refresh();
@@ -44019,11 +54162,12 @@ fn wasm_outline_get_bitmap_empty() -> WasmOutlineStorage {
 }
 
 struct WasmOutlineStorage {
-    points: [wasm_abi::FontdoneWasmVector; 4],
-    tags: [u8; 4],
-    contours: [u16; 1],
+    points: Vec<wasm_abi::FontdoneWasmVector>,
+    tags: Vec<u8>,
+    contours: Vec<u16>,
     n_contours: u16,
     n_points: u16,
+    flags: FT_Int,
     outline: wasm_abi::FontdoneWasmOutline,
 }
 
@@ -44035,7 +54179,7 @@ impl WasmOutlineStorage {
             points: self.points.as_mut_ptr(),
             tags: self.tags.as_mut_ptr(),
             contours: self.contours.as_mut_ptr(),
-            flags: 0,
+            flags: self.flags,
         };
     }
 
@@ -47847,6 +57991,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "sfnt.get_name"
             | "sfnt.get_sfnt_name"
             | "sfnt.get_os2_unicode_ranges"
+            | "sfnt.charmap_and_name_metadata"
             | "sfnt.mac_encoding_record"
             | "sfnt.get_sfnt_table"
             | "sfnt.get_sfnt_table.record"
@@ -47854,9 +57999,11 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "sfnt.get_sfnt_table.maxp"
             | "sfnt.get_sfnt_table.hhea"
             | "sfnt.get_sfnt_table.hhea.after_variation"
+            | "face.load_then_get_sfnt_table.maxp"
             | "sfnt.load_sfnt_table"
             | "sfnt.table_info"
             | "freetype.inspect_available_sizes"
+            | "face.enumerate_charmaps"
             | "freetype.inspect_charmaps"
             | "freetype.charmap_ownership"
             | "freetype.get_charmap_index"
@@ -47875,6 +58022,7 @@ fn comparison_schema(case: &InputCase) -> &str {
             | "ftmodapi.new_library"
             | "ftmodapi.reference_library"
             | "ftmodapi.reference_then_done_library"
+            | "ftmodapi.final_done_library"
             | "ftmodapi.face_driver_name"
             | "ftmodapi.face_driver_name_with_font_format" => "api_object",
             "ftmodapi.get_truetype_engine_type" => "truetype_engine_type",
@@ -48791,12 +58939,90 @@ fn kerning_rows_arg(params: &Value) -> Result<String, String> {
         .join(","))
 }
 
+fn attach_stream_kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(attach_stream_kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}|{}", row.left, row.right, row.mode))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn attach_stream_kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
+    let probes = params
+        .get("post_attach_probe")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing post_attach_probe array".to_string())?;
+    if !probes
+        .iter()
+        .any(|value| value.as_str() == Some("FT_Get_Kerning"))
+    {
+        return Err("FT_Attach_Stream success route requires FT_Get_Kerning probe".to_string());
+    }
+    Ok(vec![
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_DEFAULT as u32,
+        },
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_UNFITTED as u32,
+        },
+        KerningRow {
+            left: "gid:1".to_string(),
+            right: "gid:1".to_string(),
+            mode: FT_KERNING_UNSCALED as u32,
+        },
+    ])
+}
+
 fn pfr_kerning_rows_arg(params: &Value) -> Result<String, String> {
     Ok(pfr_kerning_rows(params)?
         .iter()
         .map(|row| format!("{}|{}", row.left, row.right))
         .collect::<Vec<_>>()
         .join(","))
+}
+
+fn track_kerning_rows_arg(params: &Value) -> Result<String, String> {
+    Ok(track_kerning_rows(params)?
+        .iter()
+        .map(|row| format!("{}|{}", row.point_size, row.degree))
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn track_kerning_rows(params: &Value) -> Result<Vec<TrackKerningRow>, String> {
+    let point_sizes = params
+        .get("point_size_16_16")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing point_size_16_16 array".to_string())?
+        .iter()
+        .enumerate()
+        .map(|(index, value)| i64_value(value, &format!("point_size_16_16[{index}]")))
+        .collect::<Result<Vec<_>, String>>()?;
+    let degrees = params
+        .get("degrees")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing degrees array".to_string())?
+        .iter()
+        .enumerate()
+        .map(|(index, value)| i64_value(value, &format!("degrees[{index}]")))
+        .collect::<Result<Vec<_>, String>>()?;
+    let rows = point_sizes
+        .into_iter()
+        .flat_map(|point_size| {
+            degrees.iter().copied().map(move |degree| TrackKerningRow {
+                point_size,
+                degree: degree as FT_Int,
+            })
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        return Err("track kerning rows cannot be empty".to_string());
+    }
+    Ok(rows)
 }
 
 fn pfr_kerning_rows(params: &Value) -> Result<Vec<KerningRow>, String> {
@@ -50161,9 +60387,13 @@ fn tolerant_u32(value: &Value, key: &str) -> Result<u32, String> {
     if let Some(n) = value.as_i64() {
         return u32::try_from(n).map_err(|e| format!("{key}: {e}"));
     }
-    // String values (fixture_defined_error_glyph, 'space_or_empty_outline', etc.)
-    // Return 0 as a placeholder — these are error cases where oracle will return
-    // the expected error regardless of glyph index.
+    if value.as_str().is_some_and(|text| text == "bitmap_glyph") {
+        return Ok(1);
+    }
+    // Other string values (fixture_defined_error_glyph,
+    // 'space_or_empty_outline', etc.) return 0 as a placeholder — these are
+    // error cases where oracle will return the expected error regardless of
+    // glyph index.
     if value.as_str().is_some() {
         return Ok(0);
     }

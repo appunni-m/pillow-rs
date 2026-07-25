@@ -21,7 +21,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-root-paint-cpal.ttf",
+            "id": "fonts/color/colr_v1_composite_modes.ttf",
             "asset_kind": "font"
           }
         },
@@ -358,7 +358,7 @@
         "assets": {
           "font": {
             "kind": "ref",
-            "id": "fonts/color/colr-v1-all-paint-types-cpal.ttf",
+            "id": "fonts/color/colr_v1_composite_modes.ttf",
             "asset_kind": "font"
           }
         },

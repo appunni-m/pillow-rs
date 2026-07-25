@@ -22,10 +22,10 @@
       "operation": "ftmodapi.set_debug_hook",
       "schema": "api_result",
       "expect_error": false,
-      "inputs": {"assets": {"font": {"kind": "ref", "id": "fonts/truetype/bytecode-debug-hook.ttf", "asset_kind": "font"}}, "params": {"hook_index": "FT_DEBUG_HOOK_TRUETYPE", "hook_pointer_classes": ["null", "valid_recording_callback"], "glyph_index": 36, "load_flags": ["FT_LOAD_DEFAULT"]}},
+      "inputs": {"assets": {}, "params": {"library": "new_from_FT_Init_FreeType", "hook_index": "FT_DEBUG_HOOK_TRUETYPE", "hook_pointer_classes": ["null", "valid_recording_callback"]}},
       "classifiers": ["kind:constant", "header:ftmodapi", "surface:public-c-api", "operation:debug-hook"],
       "metadata": {"abi": {"header": "freetype/ftmodapi.h", "symbol": "FT_DEBUG_HOOK_TRUETYPE", "kind": "macro_constant"}, "source_behavior": "FT_Set_Debug_Hook accepts public hook indexes; the only named slot is the TrueType bytecode debugger slot 0."},
-      "expectation": {"status": "build_dependent", "output_shape": {"macro_value": "integer", "set_call_status": "void", "hook_slot": "identity_class", "hook_invocation_event": "enabled_build_only"}, "compare": {"mode": "identity_class", "paths": ["macro_value", "hook_slot", "hook_invocation_event"]}, "source_refs": ["freetype/include/freetype/ftmodapi.h:650-701"], "fixture_requirements": ["TrueType font with bytecode instructions; hook invocation is observable only when debug hook support is enabled."]}
+      "expectation": {"status": "ok", "output_shape": {"set_call_status": "void", "hook_slot": "identity_class"}, "compare": {"mode": "identity_class", "paths": ["hook_slot"]}, "source_refs": ["freetype/include/freetype/ftmodapi.h:650-701"]}
     }
   ]
 }

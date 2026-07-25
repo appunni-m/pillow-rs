@@ -3,6 +3,14 @@
   "subject": "freetype.FT_Open_Args",
   "manifest_cases": [
     "layout_matches_c",
+    "memory_source_success_matches_c",
+    "memory_source_error_variants_match_c",
+    "memory_source_negative_face_index_probe_matches_c",
+    "memory_source_out_of_range_face_index_matches_c",
+    "memory_source_short_sizes_match_c",
+    "memory_source_truncated_sfnt_size_matches_c",
+    "memory_source_optional_flags_noop_match_c",
+    "source_flag_error_matrix_matches_c",
     "open_face_consumes_args_like_c"
   ],
   "cases": [
@@ -60,6 +68,487 @@
             "offsets",
             "field_types",
             "import_compiles"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_success_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_success_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "face_index": 0,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_error_variants_match_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_error_variants_match_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "flags": []
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_STREAM"
+              ]
+            },
+            {
+              "args": "null"
+            },
+            {
+              "library": "null"
+            },
+            {
+              "aface": "null"
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_negative_face_index_probe_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_negative_face_index_probe_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": -1,
+          "variants": [
+            {
+              "face_index": -1,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_out_of_range_face_index_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_out_of_range_face_index_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 9999,
+          "variants": [
+            {
+              "face_index": 9999,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_short_sizes_match_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_short_sizes_match_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "file_size": 0,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            },
+            {
+              "file_size": 4,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            },
+            {
+              "file_size": 64,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_truncated_sfnt_size_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_truncated_sfnt_size_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "file_size": 1024,
+              "flags": [
+                "FT_OPEN_MEMORY"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.memory_source_optional_flags_noop_match_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "memory_source_optional_flags_noop_match_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_PARAMS"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_DRIVER"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_DRIVER",
+                "FT_OPEN_PARAMS"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.source_flag_error_matrix_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "source_flag_error_matrix_matches_c",
+      "operation": "freetype.open_face_args",
+      "schema": "api_result",
+      "expect_error": true,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "variants": [
+            {
+              "flags": [
+                "FT_OPEN_STREAM"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_PATHNAME"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_STREAM",
+                "FT_OPEN_PATHNAME"
+              ]
+            },
+            {
+              "flags": [
+                "FT_OPEN_MEMORY",
+                "FT_OPEN_STREAM",
+                "FT_OPEN_PATHNAME"
+              ]
+            }
+          ]
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact"
+      ],
+      "expectation": {
+        "status": "error",
+        "output_shape": {
+          "outputs": "array<face_index,file_size,status,error,opened,face_nullness>"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "status",
+            "error",
+            "outputs"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "freetype.FT_Open_Args.stream_source_success_matches_c",
+      "subject": "freetype.FT_Open_Args",
+      "case": "stream_source_success_matches_c",
+      "operation": "freetype.open_face_stream",
+      "schema": "api_result",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "open": "FT_Open_Face",
+          "open_flags": [
+            "FT_OPEN_STREAM"
+          ],
+          "face_index": 0,
+          "stream_kind": "custom_memory_stream",
+          "verify_client_stream_not_destroyed_by_done_face": true
+        }
+      },
+      "classifiers": [
+        "kind:record",
+        "header:freetype",
+        "runtime:public_record",
+        "route:exact",
+        "stream:external"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "status": "FT_Error",
+          "opened": "bool",
+          "face_flags": "FT_Long",
+          "bit_set": "bool",
+          "stream_close_calls": "u32",
+          "client_stream_alive_after_done_face": "bool"
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "return",
+            "status",
+            "opened",
+            "face_flags",
+            "bit_set",
+            "stream_close_calls",
+            "client_stream_alive_after_done_face"
           ]
         }
       }
