@@ -30,11 +30,14 @@ help:
 	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
 	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
-	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
-	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
+	@printf "  make imagingft-tests   Run ImagingFT public API parity tests\n"
+	@printf "  make imagingft-tests-release  Run ImagingFT public API parity tests (release)\n"
+	@printf "  make imagingft-tests-coverage  Run ImagingFT public API parity tests with coverage\n"
+	@printf "  make test-imagingft           Run legacy ImagingFT matrix parity tests\n"
+	@printf "  make test-imagingft-release   Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "\nFixtures:\n"
-	@printf "  make fixtures         Regenerate imagingft fixture matrix\n"
-	@printf "  make fixtures-check   Verify current fixtures reproduce byte-for-byte\n"
+	@printf "  make fixtures         Generate imagingft fixtures\n"
+	@printf "  make fixtures-check   Regenerate and validate imagingft fixtures\n"
 	@printf "  make fixtures-clean   Remove generated fixture outputs\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
@@ -57,7 +60,7 @@ build-release:
 	$(CARGO) build --release --locked
 
 .PHONY: test
-test: test-core test-imagingft
+test: test-core imagingft-tests
 
 .PHONY: test-core
 test-core:
@@ -112,15 +115,27 @@ test-apply-transparency-oracle:
 backend-support-matrix:
 	$(CARGO) run --quiet --all-features --example backend_support_matrix --locked
 
+.PHONY: imagingft-tests
+imagingft-tests:
+	$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
+
+.PHONY: imagingft-tests-release
+imagingft-tests-release:
+	$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
+
+.PHONY: imagingft-tests-coverage
+imagingft-tests-coverage:
+	bash ../scripts/coverage/run_imagingft_rust_coverage.sh
+
 .PHONY: test-imagingft
-test-imagingft: fixtures
-	$(PYTHON) scripts/build_imagingft_fixtures.py --check
-	$(CARGO) test --test imagingft_matrix_tests --locked -- --nocapture
+test-imagingft:
+	$(PYTHON) scripts/build_imagingft_fixtures.py
+	$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
 
 .PHONY: test-imagingft-release
-test-imagingft-release: fixtures
-	$(PYTHON) scripts/build_imagingft_fixtures.py --check
-	$(CARGO) test --release --test imagingft_matrix_tests --locked -- --nocapture
+test-imagingft-release: 
+	$(PYTHON) scripts/build_imagingft_fixtures.py
+	$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
 
 .PHONY: fixtures
 fixtures:

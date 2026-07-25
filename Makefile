@@ -71,13 +71,14 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
-	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs imagingft + fontdone unified parity\n"
+	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs ImagingFT + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
 	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
-	@printf "  $(CYAN)make pillow-rs-imagingft$(NC) Run imagingft matrix parity tests\n"
-	@printf "  $(CYAN)make pillow-rs-fixtures$(NC) Regenerate imagingft fixture matrix\n"
-	@printf "  $(CYAN)make pillow-rs-fixtures-check$(NC) Verify imagingft fixtures reproduce exactly\n"
+	@printf "  $(CYAN)make imagingft-tests$(NC)              Run ImagingFT public API parity tests\n"
+	@printf "  $(CYAN)make imagingft-tests-release$(NC)        Run ImagingFT public API parity tests (release)\n"
+	@printf "  $(CYAN)make pillow-rs-imagingft$(NC)           Run legacy ImagingFT matrix parity tests\n"
+	@printf "  $(CYAN)make pillow-rs-imagingft-release$(NC)  Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
 	@printf "  $(CYAN)make pillow-rs-ci$(NC)   Run pillow-rs CI sequence\n"
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
@@ -92,7 +93,6 @@ help: ## Show this help
 	@printf "  $(CYAN)make fontdone-fixtures$(NC) Regenerate FreeType fixture families\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
-	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
 	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
@@ -303,7 +303,7 @@ fromarray-descriptor-oracle: build-wasm-core ## Run exact Pillow fromarray descr
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
 .PHONY: parity
-parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdone unified parity
+parity: imagingft-tests fontdone-parity ## Run pillow-rs ImagingFT + fontdone unified parity
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
 .PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
@@ -318,9 +318,9 @@ parity: pillow-rs-imagingft fontdone-parity ## Run pillow-rs imagingft + fontdon
 .PHONY: freetype-fixtures freetype-ci freetype-clean
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
-.PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core pillow-rs-imagingft
+.PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: pillow-rs-imagingft-release pillow-rs-fixtures pillow-rs-fixtures-check
+.PHONY: imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -349,17 +349,17 @@ image-backend-feature-test: ## Verify disabled image codec feature forwarding
 pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
 
-pillow-rs-imagingft: ## Run imagingft matrix parity tests
-	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) test-imagingft
+imagingft-tests: ## Run ImagingFT public API parity tests
+	$(MAKE) -C $(CORE_SRC) imagingft-tests
 
-pillow-rs-imagingft-release: ## Run imagingft parity (release)
-	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) test-imagingft-release
+imagingft-tests-release: ## Run ImagingFT public API parity tests (release)
+	$(MAKE) -C $(CORE_SRC) imagingft-tests-release
 
-pillow-rs-fixtures: ## Regenerate imagingft fixture matrix
-	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) fixtures
+pillow-rs-imagingft: ## Run legacy ImagingFT matrix parity tests
+	$(MAKE) -C $(CORE_SRC) test-imagingft
 
-pillow-rs-fixtures-check: ## Verify imagingft fixtures reproduce byte-for-byte
-	$(MAKE) -C $(CORE_SRC) PYTHON=$(IMAGE_ORACLE_PYTHON) fixtures-check
+pillow-rs-imagingft-release: ## Run legacy ImagingFT matrix parity tests (release)
+	$(MAKE) -C $(CORE_SRC) test-imagingft-release
 
 pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
 	$(MAKE) -C $(CORE_SRC) fixtures-clean
@@ -466,7 +466,7 @@ freetype-ci: fontdone-ci
 freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures imagingft-fixtures image-backend-fixtures putdata-fixtures
+.PHONY: fixtures image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -474,9 +474,6 @@ freetype-clean: fontdone-clean
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
-
-imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
-	$(IMAGE_ORACLE_PYTHON) pillow-rs/scripts/build_imagingft_fixtures.py
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
@@ -580,6 +577,7 @@ lint: fmt clippy ## Run fmt + clippy
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
 .PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust coverage-transposed-font-rust
+.PHONY: coverage-imagingft-rust imagingft-tests-coverage
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -608,6 +606,12 @@ coverage-drawing-rust: ## Run ImageDraw parity and export Rust LLVM branch cover
 
 coverage-imagefont-getmask2-rust: ## Run ImageFont.getmask2 parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_imagefont_getmask2_rust_coverage.sh
+
+coverage-imagingft-rust: ## Run ImagingFT public API parity and export Rust LLVM branch coverage
+	bash scripts/coverage/run_imagingft_rust_coverage.sh
+
+imagingft-tests-coverage: ## Run ImagingFT public API parity via coverage and export Rust LLVM branch coverage
+	bash scripts/coverage/run_imagingft_rust_coverage.sh
 
 coverage-transposed-font-rust: ## Run TransposedFont parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_transposed_font_rust_coverage.sh
@@ -652,7 +656,7 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy pillow-rs-test-core pillow-rs-imagingft test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy pillow-rs-test-core imagingft-tests test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci fontdone-parity ## Full workspace CI plus FreeType parity
