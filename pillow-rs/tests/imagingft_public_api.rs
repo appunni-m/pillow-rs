@@ -120,7 +120,7 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
     Ok((r, g, b, a))
 }
 
-fn is_expected_error_case(case: &Value) -> bool {
+fn fixture_expects_error(case: &Value) -> bool {
     if let Some(expect_error) = case.get("expect_error").and_then(Value::as_bool) {
         return expect_error;
     }
@@ -303,7 +303,10 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
         "validate_transposed_length" => {
             let orientation = parse_orientation(&params["orientation"]);
             imagingft::validate_transposed_length(orientation)?;
-            let text = params.get("text").and_then(Value::as_str).unwrap_or("Hello");
+            let text = params
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or("Hello");
             Ok(ApiValue::Status {
                 status: "ok".to_string(),
                 length: Some(imagingft::getlength(font, text)),
@@ -456,7 +459,11 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
             compare_image_payload(&pixels, expected, case_id);
         }
         ApiValue::Status { status, length } => {
-            assert_eq!(status, expected["status"].as_str().expect("expected status"), "{case_id}");
+            assert_eq!(
+                status,
+                expected["status"].as_str().expect("expected status"),
+                "{case_id}"
+            );
             if let Some(expected_length) = expected.get("length").and_then(Value::as_f64) {
                 assert_eq!(
                     length.expect("status length should be present"),
@@ -564,7 +571,7 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
             for case in cases {
                 any_cases += 1;
                 let case_id = case["case_id"].as_str().unwrap_or("<missing case_id>");
-                let expect_error = is_expected_error_case(case);
+                let expect_error = fixture_expects_error(case);
                 let params = &case["inputs"]["params"];
                 let font = load_font(case);
                 if font.is_err() {
@@ -586,16 +593,16 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
                     (Ok(value), false) => {
                         let expected_has_error = expected.get("error").is_some();
                         assert!(
-                            expected_status != Some("error") || !expected_has_error,
-                            "{case_id}: fixture status requested an error path but operation returned success"
+                            !expected_has_error,
+                            "{case_id}: fixture status/error requested an error path but operation returned success"
                         );
                         compare_output(operation, value, expected, case_id);
                     }
                     (Err(error), true) => {
                         let expected_has_error = expected.get("error").is_some();
                         assert!(
-                            expected_status != Some("ok") || expected_has_error,
-                            "{case_id}: case expected to fail but fixture status is ok without error expectation object"
+                            expected_status == Some("error") || expected_has_error,
+                            "{case_id}: case expected to fail but fixture status was ok without expected.error"
                         );
                         assert_error_matches(case_id, &error, expected);
                     }
