@@ -18,6 +18,17 @@ pub(super) struct TrueTypeEngine {
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, PilError> {
+    if !(size > 0.0) {
+        return Err(PilError::ValueError(format!(
+            "font size must be greater than 0, not {}",
+            if size.fract() == 0.0 {
+                format!("{:.0}", size)
+            } else {
+                size.to_string()
+            }
+        )));
+    }
+
     let library = ffi::FT_Init_FreeType();
     let mut face = ffi::FT_New_Memory_Face(&library, &data, 0, size)
         .map_err(|e| PilError::ValueError(format!("FT_New_Memory_Face: error {e}")))?;

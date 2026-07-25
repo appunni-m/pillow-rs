@@ -224,8 +224,7 @@ fn load_font(case: &Value) -> Result<Font, PilError> {
         .unwrap_or(10.0) as f32;
 
     match kind {
-        "load_default" => Font::load_default(size)
-            .map_err(|e| PilError::ValueError(format!("load_default failed: {e}"))),
+        "load_default" => Font::load_default(size),
         "ref" => {
             let id = font
                 .get("id")
@@ -234,9 +233,8 @@ fn load_font(case: &Value) -> Result<Font, PilError> {
                     "font ref requires an id string".into(),
                 ))?;
             let data = fs::read(crate_fixture_dir().join(id))
-                .map_err(|e| PilError::ValueError(format!("font bytes read failed ({id}): {e}")))?;
+                .map_err(|e| PilError::ValueError(e.to_string()))?;
             Font::from_bytes(data, size)
-                .map_err(|e| PilError::ValueError(format!("font parse failed: {e}")))
         }
         other => Err(PilError::ValueError(format!(
             "unsupported imagingft fixture font kind: {other}"

@@ -11,22 +11,23 @@ Last updated: 2026-07-25 (Asia/Kolkata)
 - Test execution: `make -C pillow-rs imagingft-tests` (pass: 1 test, 0 failures)
 - Coverage command attempts:
   - `imagingft-tests-coverage` run id `5a4c51fb-b08f-46d0-a41b-082014cbc860` (artifact ingest failed because command registered with absolute artifact path `/target/...`)
-- `imagingft-tests-coverage` run id `e1fa0be0-ea3f-4c56-8d30-753c803cc60b` (previously registered variant, no longer used in current suite)
-  - `imagingft-tests-coverage-fixed` run id `393d8e0d-3c07-4334-97b7-fbf113398f1b` (passed, terminal)
-  - `imagingft-tests-coverage-fixed` run id `64f4f94b-81c0-49ad-af88-b0e93598d936` (fresh, terminal)
+  - `imagingft-tests-coverage-fixed` run id `64f4f94b-81c0-49ad-af88-b0e93598d936` (terminal pass)
+  - `imagingft-tests-coverage-fixed` run id `11f386e8-d68f-4033-99ef-d1b53fedd9d7` (terminal pass, after this refresh)
 - Coverage snapshots:
   - Previous: `23943940-275a-454d-b3a6-65c63320e42b`
-  - Latest: `0950457b-f6fb-4df4-b06f-328813bdd6ac`
+  - Previous in-context latest: `0950457b-f6fb-4df4-b06f-328813bdd6ac`
+  - Current: `caccec13-1bf6-426c-801b-75fc6e816c5b`
 
 ### Coverage delta (latest - previous)
-- `coverage_compare(view="overview", baseline=23943940-275a-454d-b3a6-65c63320e42b, current=0950457b-f6fb-4df4-b06f-328813bdd6ac)`
-  - No aggregate metric delta (all deltas 0).
+  - `coverage_query(view="summary", snapshot=0950457b-f6fb-4df4-b06f-328813bdd6ac)` -> `total_lines 17531 / covered 1402`
+  - `coverage_query(view="summary", snapshot=caccec13-1bf6-426c-801b-75fc6e816c5b)` -> `total_lines 17924 / covered 1715`
+  - Net aggregate move (local): `+393` covered lines, `+48` covered branches, `+33` covered functions.
 
 ## Test corpus coverage
 - Fixture files used: 17 files under `inputs/public-api`
-- Total cases: 45
+- Total cases: 48
 - Success rows: 41
-- Error rows: 4
+- Error rows: 7
 - Status coverage across all rows: all passed in runner
 
 ### Per-operation status matrix
@@ -39,7 +40,7 @@ Operation | Total | OK | Error | Result
 `getmask2` | 5 | 5 | 0 | pass
 `getmask2_with_start` | 5 | 5 | 0 | pass
 `getmetrics` | 1 | 1 | 0 | pass
-`getname` | 2 | 1 | 1 | pass (includes load-failure row)
+`getname` | 5 | 1 | 4 | pass (includes 4 load-failure variants)
 `has_variations` | 1 | 1 | 0 | pass
 `transposed_bbox` | 3 | 3 | 0 | pass
 `get_transposed_mask` | 4 | 3 | 1 | pass (includes invalid orientation row)
@@ -61,20 +62,20 @@ Operation | Total | OK | Error | Result
 
 ## Coverage MCP evidence
 - Suite: `imagingft`
-- Snapshot metrics:
-  - `total_lines: 17531`, `covered_lines: 1402` (`line_rate 0.07997`)
-  - `total_branches: 3074`, `covered_branches: 91` (`branch_rate 0.02960`)
-  - `total_functions: 1166`, `covered_functions: 108` (`function_rate 0.09262`)
-  - `total_regions: 30644`, `covered_regions: 2118` (`region_rate 0.06912`)
+Snapshot metrics:
+  - `total_lines: 17924`, `covered_lines: 1715` (`line_rate 0.09568`)
+  - `total_branches: 3150`, `covered_branches: 139` (`branch_rate 0.04413`)
+  - `total_functions: 1205`, `covered_functions: 141` (`function_rate 0.11701`)
+  - `total_regions: 31362`, `covered_regions: 2689` (`region_rate 0.08574`)
 - `pillow-rs/src/font/imagingft.rs` (file-level):
-  - `covered_lines 355/422`
-  - `covered_functions 37/41`
-  - `covered_branches 47/74`
-  - `coverage_query(view="file", snapshot=0950457b-f6fb-4df4-b06f-328813bdd6ac, file=pillow-rs/src/font/imagingft.rs)`
-    - uncovered lines: 60
-    - partial-branch lines: 18
-    - total relevant line gaps: 73
-    - gap ranges: 35, 36, 59, 127-129, 138, 145, 152-154, 163-165, 173, 193, 215, 220-221, 228, 373-374, 444-445, 461-462, 471-472, 474-475, 497-498, 502-503, 509-510, 514-515, 520-521, 524, 526-527, 534, 540, 544-554, 555-558, 560-563, 564, 565-567, 570-571, 576-577, 585, 592.
+  - `coverage_query(view="file", snapshot=caccec13-1bf6-426c-801b-75fc6e816c5b, file=pillow-rs/src/font/imagingft.rs)`
+    - `covered_lines 668/815`
+    - `covered_functions 70/80`
+    - `covered_branches 95/150`
+    - uncovered lines: 57
+    - partial-branch lines: 34
+    - total relevant line gaps: 82
+    - gap ranges: 35, 36, 46, 127, 137-140, 145, 152, 156, 163-165, 174, 176, 184, 193, 220, 226, 231, 373, 374, 384, 444, 455, 471-475, 497, 502, 503, 508, 509, 510-514, 520, 521, 524-526, 531, 535-537, 544-547, 550-554, 555-558, 559-563, 564, 565, 566-569, 570-572, 575-578, 585, 587, 588, 603
 
 ## Remaining explicit gaps
 - Imagingft public corpus is parity-green by row for the current fixture set, but imagingft implementation is not fully covered by this suite (`pillow-rs/src/font/imagingft.rs` still has uncovered lines/branches listed above).
