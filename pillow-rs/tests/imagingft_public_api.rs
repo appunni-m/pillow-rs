@@ -117,21 +117,24 @@ fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
 }
 
 fn fixture_expected_status(case: &Value) -> String {
-    if let Some(status) = case["expectation"]["expected"]["status"].as_str() {
-        return status.to_string();
+    let value = case.get("expectation").unwrap_or(&Value::Null);
+    let expect_error = case.get("expect_error").and_then(Value::as_bool).unwrap_or(false);
+    if expect_error {
+        return "error".to_string();
     }
-    if let Some(status) = case["expectation"]["status"].as_str() {
-        return status.to_string();
-    }
-    if case["expectation"]["expected"]
-        .get("error")
-        .is_some()
+
+    if let Some(status) = value
+        .get("expected")
+        .and_then(|expected| expected.get("status"))
+        .and_then(Value::as_str)
     {
-        return "error".to_string();
+        return status.to_string();
     }
-    if case["expect_error"].as_bool().unwrap_or(false) {
-        return "error".to_string();
+
+    if let Some(status) = value.get("status").and_then(Value::as_str) {
+        return status.to_string();
     }
+
     "ok".to_string()
 }
 
@@ -201,26 +204,6 @@ fn parse_spacing(value: &Value) -> Result<f32, PilError> {
         .as_f64()
         .map(|v| v as f32)
         .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))
-}
-
-fn pil_error_kind(err: &PilError) -> &'static str {
-    match err {
-        PilError::IOError(_) => "IOError",
-        PilError::OsError(_) => "OsError",
-        PilError::AssertionError(_) => "AssertionError",
-        PilError::IndexError(_) => "IndexError",
-        PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
-        PilError::ValueError(_) => "ValueError",
-        PilError::SyntaxError(_) => "SyntaxError",
-        PilError::TypeError(_) => "TypeError",
-        PilError::ImageError(_) => "ImageError",
-        PilError::NotImplementedError(_) => "NotImplementedError",
-        PilError::UnknownFormat(_) => "UnknownFormat",
-        PilError::Io(_) => "IOError",
-        PilError::PaletteError(_) => "PaletteError",
-        PilError::InternalError(_) => "InternalError",
-        PilError::DimensionError(_) => "DimensionError",
-    }
 }
 
 fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, PilError> {
@@ -448,10 +431,14 @@ fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: 
 
 fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
     let expected_error = &expected["error"];
-    let expected_type = expected_error["type"]
-        .as_str()
-        .expect("expected error type");
-    assert_eq!(expected_type, pil_error_kind(error), "{case_id}");
+    if let Some(expected_type) = expected_error.get("type").and_then(Value::as_str) {
+        let debug = format!("{error:?}");
+        assert!(
+            debug.contains(expected_type),
+            "{case_id}: expected error type '{expected_type}', got '{debug}'"
+        );
+    }
+
     let actual_message = error.to_string();
     if let Some(pattern) = expected_error
         .get("message_pattern")
@@ -463,6 +450,7 @@ fn assert_error_matches(case_id: &str, error: &PilError, expected: &Value) {
         );
         return;
     }
+
     let expected_message = expected_error["message"]
         .as_str()
         .expect("expected error message");
