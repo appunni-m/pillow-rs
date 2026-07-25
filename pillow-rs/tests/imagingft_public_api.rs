@@ -86,6 +86,12 @@ fn parse_text(value: &Value) -> Result<&str, PilError> {
         .ok_or_else(|| PilError::ValueError("text must be a string".into()))
 }
 
+fn required_field<'a>(object: &'a Value, field: &str) -> Result<&'a Value, PilError> {
+    object
+        .get(field)
+        .ok_or_else(|| PilError::ValueError(format!("missing field: {field}")))
+}
+
 fn parse_size_u32(value: &Value) -> Result<u32, PilError> {
     let value = value.as_u64().ok_or(PilError::ValueError(
         "size value must be an unsigned integer".into(),
@@ -240,20 +246,20 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
         }
         "getmetrics" => Ok(ApiValue::Metrics(imagingft::getmetrics(font))),
         "getlength" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             Ok(ApiValue::Length(imagingft::getlength(font, text)))
         }
         "has_variations" => Ok(ApiValue::Bool(imagingft::has_variations(font))),
         "getbbox" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             Ok(ApiValue::BBox(imagingft::getbbox(font, text)))
         }
         "getbbox_binary" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             Ok(ApiValue::BBox(imagingft::getbbox_binary(font, text)))
         }
         "getmask" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             let (width, height, pixels) = imagingft::getmask(font, text);
             Ok(ApiValue::Mask {
                 size: (width, height),
@@ -262,7 +268,7 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             })
         }
         "getmask2" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             let (width, height, pixels, offset) = imagingft::getmask2(font, text);
             Ok(ApiValue::MaskWithOffset {
                 size: (width, height),
@@ -272,8 +278,8 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             })
         }
         "getmask2_with_start" => {
-            let text = parse_text(&params["text"])?;
-            let start = parse_start(&params["start"])?;
+            let text = parse_text(required_field(params, "text")?)?;
+            let start = parse_start(required_field(params, "start")?)?;
             let (width, height, pixels, offset) = imagingft::getmask2_with_start(font, text, start);
             Ok(ApiValue::MaskWithOffset {
                 size: (width, height),
@@ -283,7 +289,7 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             })
         }
         "get_transposed_mask" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             let orientation = parse_orientation(&params["orientation"]);
             let (width, height, pixels) = imagingft::get_transposed_mask(font, text, orientation)?;
             Ok(ApiValue::Mask {
@@ -293,7 +299,7 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             })
         }
         "transposed_bbox" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             let orientation = parse_orientation(&params["orientation"]);
             Ok(ApiValue::BBox(imagingft::transposed_bbox(
                 imagingft::getbbox(font, text),
@@ -313,7 +319,7 @@ fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, Pi
             })
         }
         "draw_text" => {
-            let text = parse_text(&params["text"])?;
+            let text = parse_text(required_field(params, "text")?)?;
             let expected_width = parse_size_u32(&params["canvas_width"])?;
             let expected_height = parse_size_u32(&params["canvas_height"])?;
             let (x, y) = parse_xy(&params["xy"])?;
