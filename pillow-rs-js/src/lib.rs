@@ -43,6 +43,67 @@ pub struct Image {
 }
 
 #[wasm_bindgen]
+pub struct ArrayDescriptorLayout {
+    mode: String,
+    raw_mode: String,
+    width: usize,
+    height: usize,
+    dimensions: usize,
+    mode_reinterprets_dtype: bool,
+}
+
+#[wasm_bindgen]
+impl ArrayDescriptorLayout {
+    #[wasm_bindgen(getter)]
+    pub fn mode(&self) -> String {
+        self.mode.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = "rawMode")]
+    pub fn raw_mode(&self) -> String {
+        self.raw_mode.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    #[wasm_bindgen(getter, js_name = "modeReinterpretsDtype")]
+    pub fn mode_reinterprets_dtype(&self) -> bool {
+        self.mode_reinterprets_dtype
+    }
+}
+
+#[wasm_bindgen(js_name = "resolveArrayLayout")]
+pub fn resolve_array_layout(
+    shape: Vec<usize>,
+    typestr: &str,
+    mode: Option<String>,
+) -> Result<ArrayDescriptorLayout, JsValue> {
+    let layout = pillow_rs::ops::array::resolve_array_layout(&shape, typestr, mode.as_deref())
+        .map_err(err)?;
+    Ok(ArrayDescriptorLayout {
+        mode: layout.mode,
+        raw_mode: layout.raw_mode,
+        width: layout.width,
+        height: layout.height,
+        dimensions: layout.dimensions,
+        mode_reinterprets_dtype: layout.mode_reinterprets_dtype,
+    })
+}
+
+#[wasm_bindgen]
 impl Image {
     #[wasm_bindgen(constructor)]
     pub fn new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
@@ -810,16 +871,7 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         self.draw
-            .arc(
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                (r, g, b, a),
-                width.unwrap_or(1),
-            )
+            .arc(x0, y0, x1, y1, start, end, (r, g, b, a), width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "chord")]
@@ -844,17 +896,7 @@ impl ImageDraw {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .chord(
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                fill,
-                out,
-                width.unwrap_or(1),
-            )
+            .chord(x0, y0, x1, y1, start, end, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pieslice")]
@@ -879,17 +921,7 @@ impl ImageDraw {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .pieslice(
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                fill,
-                out,
-                width.unwrap_or(1),
-            )
+            .pieslice(x0, y0, x1, y1, start, end, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circle")]
@@ -911,14 +943,7 @@ impl ImageDraw {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .circle(
-                cx as i32,
-                cy as i32,
-                radius,
-                fill,
-                out,
-                width.unwrap_or(1),
-            )
+            .circle(cx as i32, cy as i32, radius, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "roundedRectangle")]
@@ -942,16 +967,7 @@ impl ImageDraw {
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .rounded_rectangle(
-                x0,
-                y0,
-                x1,
-                y1,
-                radius,
-                fill,
-                out,
-                width.unwrap_or(1),
-            )
+            .rounded_rectangle(x0, y0, x1, y1, radius, fill, out, width.unwrap_or(1))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]

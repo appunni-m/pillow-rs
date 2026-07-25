@@ -299,16 +299,13 @@ impl Image {
                 "Only 3 or 4 output channels are supported".into(),
             ));
         }
-        if !(2..=65).contains(&size.0)
-            || !(2..=65).contains(&size.1)
-            || !(2..=65).contains(&size.2)
+        if !(2..=65).contains(&size.0) || !(2..=65).contains(&size.1) || !(2..=65).contains(&size.2)
         {
             return Err(PilError::ValueError(
                 "Table size in any dimension should be from 2 to 65".into(),
             ));
         }
-        let expected_len =
-            size.0 as usize * size.1 as usize * size.2 as usize * channels as usize;
+        let expected_len = size.0 as usize * size.1 as usize * size.2 as usize * channels as usize;
         if table.len() != expected_len {
             return Err(PilError::ValueError(
                 "The table should have table_channels * size1D * size2D * size3D float items."

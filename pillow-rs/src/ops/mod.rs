@@ -6,6 +6,8 @@
 
 /// Analysis and statistics operations.
 pub mod analysis;
+/// Array-interface descriptor resolution.
+pub mod array;
 /// Pillow `ImageChops`-style channel arithmetic operations.
 pub mod chops;
 /// Pillow mode conversion operations.

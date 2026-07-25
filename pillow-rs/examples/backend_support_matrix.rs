@@ -21,7 +21,10 @@ fn main() {
             })
         })
         .collect();
-    let cpu = registry.values().filter(|entry| entry.cpu_fn.is_some()).count();
+    let cpu = registry
+        .values()
+        .filter(|entry| entry.cpu_fn.is_some())
+        .count();
     let simd_pool = registry
         .values()
         .filter(|entry| entry.simd_fn.is_some())
