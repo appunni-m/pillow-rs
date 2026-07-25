@@ -47,13 +47,12 @@ Date: 2026-07-25
 ## 4) Coverage notes
 
 - Test command: `make -C pillow-rs imagingft-tests`
-- Coverage command: `make -C pillow-rs imagingft-tests-coverage`
-- Script: `scripts/coverage/run_imagingft_rust_coverage.sh`
+- Coverage command: `make -C pillow-rs imagingft-tests` (fixture parity harness)
 - Coverage MCP command: `imagingft-tests-coverage-fixed` (id `258e7dec-226f-4b00-9336-04df6e8c67f2`)
-- Latest coverage run: `e95729f2-eefa-47e9-aefc-c448c198d256`
+- Latest coverage run: `80a2fd83-ae2f-4832-8875-b110f85add11` (status `passed`)
   - `counters`: `passed=1`, `failed=0`
   - `coverage status`: ingested
-  - `snapshot id`: `debda228-1dc3-49a1-979d-ecc39b368bd3`
+  - `snapshot id`: `f0ccd639-918d-43b9-a7a4-7f8865732652`
   - `branch`: `main`
 - Focused suite metrics (imagingft target):
   - `line_rate=0.07997`
