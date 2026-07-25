@@ -1,0 +1,169 @@
+{
+  "format_version": 1,
+  "oracle": {
+    "implementation": "Pillow",
+    "version": "12.2.0"
+  },
+  "cases": [
+    {
+      "id": "inferred_l",
+      "shape": [
+        2,
+        3
+      ],
+      "typestr": "|u1",
+      "mode": null,
+      "expected": {
+        "mode": "L",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "inferred_rgb",
+      "shape": [
+        2,
+        3,
+        3
+      ],
+      "typestr": "|u1",
+      "mode": null,
+      "expected": {
+        "mode": "RGB",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "inferred_rgba",
+      "shape": [
+        2,
+        3,
+        4
+      ],
+      "typestr": "|u1",
+      "mode": null,
+      "expected": {
+        "mode": "RGBA",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "inferred_i16_le",
+      "shape": [
+        2,
+        3
+      ],
+      "typestr": "<i2",
+      "mode": null,
+      "expected": {
+        "mode": "I",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "inferred_f32_be",
+      "shape": [
+        2,
+        3
+      ],
+      "typestr": ">f4",
+      "mode": null,
+      "expected": {
+        "mode": "F",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "explicit_palette",
+      "shape": [
+        2,
+        3
+      ],
+      "typestr": "|u1",
+      "mode": "P",
+      "expected": {
+        "mode": "P",
+        "size": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "one_dimensional",
+      "shape": [
+        5
+      ],
+      "typestr": "|u1",
+      "mode": null,
+      "expected": {
+        "mode": "L",
+        "size": [
+          1,
+          5
+        ]
+      }
+    },
+    {
+      "id": "unsupported_channels",
+      "shape": [
+        2,
+        3,
+        5
+      ],
+      "typestr": "|u1",
+      "mode": null,
+      "expected": {
+        "error": {
+          "type": "TypeError",
+          "message": "Cannot handle this data type: (1, 1, 5), |u1"
+        }
+      }
+    },
+    {
+      "id": "unsupported_typestr",
+      "shape": [
+        2,
+        3
+      ],
+      "typestr": "|u8",
+      "mode": null,
+      "expected": {
+        "error": {
+          "type": "TypeError",
+          "message": "Cannot handle this data type: (1, 1), |u8"
+        }
+      }
+    },
+    {
+      "id": "too_many_l_dimensions",
+      "shape": [
+        1,
+        2,
+        3
+      ],
+      "typestr": "|u1",
+      "mode": "L",
+      "expected": {
+        "error": {
+          "type": "ValueError",
+          "message": "Too many dimensions: 3 > 2."
+        }
+      }
+    }
+  ]
+}

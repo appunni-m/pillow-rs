@@ -28,6 +28,7 @@ help:
 	@printf "  make test-tobytes-oracle Run shared Pillow Image.tobytes oracle through Rust\n"
 	@printf "  make test-imagefont-getmask2-oracle Run shared Pillow ImageFont.getmask2 oracle through Rust\n"
 	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
+	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make test-imagingft   Run imagingft matrix parity tests\n"
 	@printf "  make test-imagingft-release  Run imagingft parity tests (release)\n"
@@ -82,6 +83,10 @@ test-imagefont-getmask2-oracle:
 .PHONY: test-transposed-font-oracle
 test-transposed-font-oracle:
 	$(CARGO) test --all-features --test transposed_font_oracle --locked -- --nocapture
+
+.PHONY: test-fromarray-descriptor-oracle
+test-fromarray-descriptor-oracle:
+	$(CARGO) test --all-features --test fromarray_descriptor_oracle --locked -- --nocapture
 
 .PHONY: test-color3dlut-oracle
 test-color3dlut-oracle:

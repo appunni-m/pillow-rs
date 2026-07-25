@@ -29,6 +29,7 @@
     "test:codecs": "node tests/codec_feature_matrix.mjs core && node tests/codec_feature_matrix.mjs extra",
     "test:color3dlut-oracle": "node tests/color3dlut_oracle.mjs",
     "test:eval-oracle": "node tests/eval_oracle.mjs",
+    "test:fromarray-descriptor-oracle": "node tests/fromarray_descriptor_oracle.mjs",
     "test:image-open-oracle": "node tests/image_open_oracle.mjs",
     "test:apply-transparency-oracle": "node tests/apply_transparency_oracle.mjs",
     "test:paste-oracle": "node tests/paste_oracle.mjs",

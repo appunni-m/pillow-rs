@@ -1293,6 +1293,24 @@ fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
     pillow_rs::font::imagingft::validate_transposed_length(orientation).map_err(map_error)
 }
 
+#[pyfunction]
+fn resolve_array_layout(
+    shape: Vec<usize>,
+    typestr: &str,
+    mode: Option<&str>,
+) -> PyResult<(String, String, usize, usize, usize, bool)> {
+    let layout =
+        pillow_rs::ops::array::resolve_array_layout(&shape, typestr, mode).map_err(map_error)?;
+    Ok((
+        layout.mode,
+        layout.raw_mode,
+        layout.width,
+        layout.height,
+        layout.dimensions,
+        layout.mode_reinterprets_dtype,
+    ))
+}
+
 /// Activate a compute backend. Returns true if the backend exists on this machine.
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
@@ -1443,6 +1461,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPilFont>()?;
     m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_array_layout, m)?)?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;

@@ -114,12 +114,7 @@ fn create_input(spec: &InputSpec, mode: &str) -> Image {
         .expect("reference image converts")
 }
 
-fn assert_expected_image(
-    base: &Path,
-    assertion: &OracleAssertion,
-    actual: &Image,
-    case_id: &str,
-) {
+fn assert_expected_image(base: &Path, assertion: &OracleAssertion, actual: &Image, case_id: &str) {
     let OracleAssertion::Image {
         reference,
         raw_kind,
@@ -134,7 +129,11 @@ fn assert_expected_image(
     let actual_bytes = actual.tobytes().expect("actual pixels materialize");
 
     if raw_kind.as_deref() == Some("image") {
-        assert_eq!(Some(actual_mode.as_str()), mode.as_deref(), "{case_id}: mode");
+        assert_eq!(
+            Some(actual_mode.as_str()),
+            mode.as_deref(),
+            "{case_id}: mode"
+        );
         assert_eq!(
             Some([actual_size.0, actual_size.1]),
             *size,

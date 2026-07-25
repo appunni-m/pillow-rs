@@ -1058,9 +1058,9 @@ fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize 
 
 fn color_lut_interpolate(a: i16, b: i16, shift: i32) -> i16 {
     const SHIFT_BITS: i32 = 15;
-    let value =
-        (i64::from(a) * i64::from((1 << SHIFT_BITS) - shift) + i64::from(b) * i64::from(shift))
-            >> SHIFT_BITS;
+    let value = (i64::from(a) * i64::from((1 << SHIFT_BITS) - shift)
+        + i64::from(b) * i64::from(shift))
+        >> SHIFT_BITS;
     value as i16
 }
 
@@ -1117,9 +1117,8 @@ pub fn op_color3dlut(
                 u32::from(px[1]) * scales[1],
                 u32::from(px[2]) * scales[2],
             ];
-            let shifts = indices.map(|index| {
-                ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32
-            });
+            let shifts =
+                indices.map(|index| ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32);
             let base = table_index_3d(
                 (indices[0] >> SCALE_BITS) as usize,
                 (indices[1] >> SCALE_BITS) as usize,
@@ -1129,11 +1128,8 @@ pub fn op_color3dlut(
             ) * ch;
 
             for c in 0..ch {
-                let left_left = color_lut_interpolate(
-                    prepared[base + c],
-                    prepared[base + ch + c],
-                    shifts[0],
-                );
+                let left_left =
+                    color_lut_interpolate(prepared[base + c], prepared[base + ch + c], shifts[0]);
                 let left_right = color_lut_interpolate(
                     prepared[base + sx * ch + c],
                     prepared[base + sx * ch + ch + c],
@@ -1152,9 +1148,9 @@ pub fn op_color3dlut(
                 );
                 let right = color_lut_interpolate(right_left, right_right, shifts[1]);
                 let result = color_lut_interpolate(left, right, shifts[2]);
-                out[out_idx + c] =
-                    ((i32::from(result) + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)
-                        .clamp(0, 255) as u8;
+                out[out_idx + c] = ((i32::from(result) + (1 << (PRECISION_BITS - 1)))
+                    >> PRECISION_BITS)
+                    .clamp(0, 255) as u8;
             }
             if ch == 3 {
                 out[out_idx + 3] = if source_mode.channels() == 4 {
