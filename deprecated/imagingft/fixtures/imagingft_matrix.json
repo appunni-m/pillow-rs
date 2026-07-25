@@ -1,0 +1,313 @@
+{
+  "fixture_family": "pillow-rs-imagingft",
+  "generator": "pillow-rs/scripts/build_imagingft_fixtures.py",
+  "oracle": "PIL.ImageFont.FreeTypeFont and PIL.ImageDraw text output",
+  "pillow_version": "12.2.0",
+  "pixel_matrix_min_passed": 21,
+  "rows": [
+    {
+      "expected": [
+        0,
+        4,
+        63,
+        23
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_hello_getbbox",
+      "operation": "getbbox",
+      "size": 20,
+      "status": "parity",
+      "text": "Hello"
+    },
+    {
+      "expected": 63.0,
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_hello_getlength",
+      "operation": "getlength",
+      "size": 20,
+      "status": "parity",
+      "text": "Hello"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_hello_getmask_l.bin",
+      "expected_sha256": "81c9b1812b4ef26f754b61fd8fa5cdcfe48b2a974b74b3f8ed40f584211ebadf",
+      "expected_size": [
+        63,
+        19
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_hello_getmask_l",
+      "mode": "L",
+      "operation": "getmask",
+      "size": 20,
+      "status": "parity",
+      "text": "Hello"
+    },
+    {
+      "expected_offset": [
+        0,
+        4
+      ],
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_hello_getmask2_l.bin",
+      "expected_sha256": "81c9b1812b4ef26f754b61fd8fa5cdcfe48b2a974b74b3f8ed40f584211ebadf",
+      "expected_size": [
+        63,
+        19
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_hello_getmask2_l",
+      "mode": "L",
+      "operation": "getmask2",
+      "size": 20,
+      "status": "parity",
+      "text": "Hello"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_hello_draw_text_rgba.bin",
+      "expected_sha256": "ec30b52ad1f14550b6f90b73c4e460814e54fbc543b92c23ca8215104679fb67",
+      "expected_size": [
+        96,
+        64
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_hello_draw_text_rgba",
+      "mode": "RGBA",
+      "operation": "draw_text",
+      "size": 20,
+      "status": "parity",
+      "text": "Hello"
+    },
+    {
+      "expected": [
+        0,
+        4,
+        28,
+        19
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_av_getbbox",
+      "operation": "getbbox",
+      "size": 20,
+      "status": "parity",
+      "text": "AV"
+    },
+    {
+      "expected": 28.0,
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_av_getlength",
+      "operation": "getlength",
+      "size": 20,
+      "status": "parity",
+      "text": "AV"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_av_getmask_l.bin",
+      "expected_sha256": "8ca2702c767587097482d558be3060d5411e6cbf365bd3b1bf2376198355a2c7",
+      "expected_size": [
+        28,
+        15
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_av_getmask_l",
+      "mode": "L",
+      "operation": "getmask",
+      "size": 20,
+      "status": "parity",
+      "text": "AV"
+    },
+    {
+      "expected_offset": [
+        0,
+        4
+      ],
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_av_getmask2_l.bin",
+      "expected_sha256": "8ca2702c767587097482d558be3060d5411e6cbf365bd3b1bf2376198355a2c7",
+      "expected_size": [
+        28,
+        15
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_av_getmask2_l",
+      "mode": "L",
+      "operation": "getmask2",
+      "size": 20,
+      "status": "parity",
+      "text": "AV"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_av_draw_text_rgba.bin",
+      "expected_sha256": "7e8a706428666960c80fdb9178a34142c9e3c0c9c438121bbf11bee1ec54286c",
+      "expected_size": [
+        96,
+        64
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_av_draw_text_rgba",
+      "mode": "RGBA",
+      "operation": "draw_text",
+      "size": 20,
+      "status": "parity",
+      "text": "AV"
+    },
+    {
+      "expected": [
+        -1,
+        4,
+        18,
+        23
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_jq_getbbox",
+      "operation": "getbbox",
+      "size": 20,
+      "status": "parity",
+      "text": "jQ"
+    },
+    {
+      "expected": 18.0,
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_jq_getlength",
+      "operation": "getlength",
+      "size": 20,
+      "status": "parity",
+      "text": "jQ"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_jq_getmask_l.bin",
+      "expected_sha256": "055799f9b39b18e674daafedb0c79cb17d2e751aa673ef9d9ec9aa813adfff73",
+      "expected_size": [
+        19,
+        19
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_jq_getmask_l",
+      "mode": "L",
+      "operation": "getmask",
+      "size": 20,
+      "status": "parity",
+      "text": "jQ"
+    },
+    {
+      "expected_offset": [
+        -1,
+        4
+      ],
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_jq_getmask2_l.bin",
+      "expected_sha256": "055799f9b39b18e674daafedb0c79cb17d2e751aa673ef9d9ec9aa813adfff73",
+      "expected_size": [
+        19,
+        19
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_jq_getmask2_l",
+      "mode": "L",
+      "operation": "getmask2",
+      "size": 20,
+      "status": "parity",
+      "text": "jQ"
+    },
+    {
+      "expected_raw": "outputs/imagingft/raws/dejavusans20_jq_draw_text_rgba.bin",
+      "expected_sha256": "e3ab1e9cc485c24d658e7d69815092f450d469e234c9ecbac614705c7b198618",
+      "expected_size": [
+        96,
+        64
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_jq_draw_text_rgba",
+      "mode": "RGBA",
+      "operation": "draw_text",
+      "size": 20,
+      "status": "parity",
+      "text": "jQ"
+    },
+    {
+      "expected": [
+        19,
+        5
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_getmetrics",
+      "operation": "getmetrics",
+      "size": 20,
+      "status": "parity",
+      "text": ""
+    },
+    {
+      "expected": [
+        "DejaVu Sans",
+        "Book"
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "id": "dejavusans20_getname",
+      "operation": "getname",
+      "size": 20,
+      "status": "parity",
+      "text": ""
+    },
+    {
+      "expected_sha256": "a6013a3d4aaea625b9a17a192c3f3a521af5c06bdfe1b827f379c251a28a4df7",
+      "expected_size": [
+        3,
+        5
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/fonts/native/dejavu-coverage.ttf",
+      "id": "dejavu-native_s7_u0021_pil122_getmask",
+      "mode": "L",
+      "operation": "getmask",
+      "size": 7,
+      "status": "pixel_matrix",
+      "text": "!"
+    },
+    {
+      "expected_offset": [
+        0,
+        2
+      ],
+      "expected_sha256": "a6013a3d4aaea625b9a17a192c3f3a521af5c06bdfe1b827f379c251a28a4df7",
+      "expected_size": [
+        3,
+        5
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/fonts/native/dejavu-coverage.ttf",
+      "id": "dejavu-native_s7_u0021_pil122_getmask2",
+      "mode": "L",
+      "operation": "getmask2",
+      "size": 7,
+      "status": "pixel_matrix",
+      "text": "!"
+    },
+    {
+      "expected_sha256": "d08b7daebf3243193a309b0b284ff32f0f7770ef87f8ca7c856d0aaecb869aac",
+      "expected_size": [
+        3,
+        5
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/fonts/native/dejavu-coverage.ttf",
+      "id": "dejavu-native_s7_u0022_pil122_getmask",
+      "mode": "L",
+      "operation": "getmask",
+      "size": 7,
+      "status": "pixel_matrix",
+      "text": "\""
+    },
+    {
+      "expected_offset": [
+        0,
+        2
+      ],
+      "expected_sha256": "d08b7daebf3243193a309b0b284ff32f0f7770ef87f8ca7c856d0aaecb869aac",
+      "expected_size": [
+        3,
+        5
+      ],
+      "font": "../pillow-rs-freetype/tests/fixtures/fonts/native/dejavu-coverage.ttf",
+      "id": "dejavu-native_s7_u0022_pil122_getmask2",
+      "mode": "L",
+      "operation": "getmask2",
+      "size": 7,
+      "status": "pixel_matrix",
+      "text": "\""
+    }
+  ]
+}
