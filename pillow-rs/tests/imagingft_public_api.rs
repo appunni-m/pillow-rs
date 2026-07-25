@@ -146,6 +146,26 @@ fn fixture_status(case: &Value) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
+const REQUIRED_PUBLIC_OPS: [&str; 13] = [
+    "getname",
+    "getmetrics",
+    "getlength",
+    "has_variations",
+    "getbbox",
+    "getbbox_binary",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "get_transposed_mask",
+    "transposed_bbox",
+    "validate_transposed_length",
+    "draw_text",
+];
+
+fn required_public_ops() -> BTreeSet<&'static str> {
+    REQUIRED_PUBLIC_OPS.iter().copied().collect()
+}
+
 fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
     let coords = value.as_array().ok_or(PilError::ValueError(
         "draw_text xy must be an array of two integers".into(),
@@ -742,4 +762,12 @@ fn imagingft_public_api_parity_matches_fixture_oracles() {
         !observed_ops.is_empty(),
         "imagingft public-api fixture corpus must include at least one operation"
     );
+
+    let required_ops = required_public_ops();
+    for op in required_ops {
+        assert!(
+            observed_ops.contains(op),
+            "required imagingft public surface '{op}' missing from fixture corpus"
+        );
+    }
 }
