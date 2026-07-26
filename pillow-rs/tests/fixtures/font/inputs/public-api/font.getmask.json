@@ -43,6 +43,46 @@
       }
     },
     {
+      "case_id": "font.getmask.ink_integer_ignored_l",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "L",
+          "ink": 123
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.ink_list_type_error",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "L",
+          "ink": [
+            1,
+            2,
+            3
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.dejavusans20_jq_getmask_l",
       "operation": "getmask",
       "inputs": {

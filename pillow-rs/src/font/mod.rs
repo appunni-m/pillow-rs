@@ -46,6 +46,16 @@ pub struct FontTextOptions {
     pub anchor: Option<String>,
     /// Pillow fractional rendering start.
     pub start: Option<(f64, f64)>,
+    /// Pillow foreground ink for mask rendering. Grayscale BASIC masks accept
+    /// the integer but render coverage bytes independent of its value.
+    pub ink: Option<i64>,
+    /// Whether Pillow-compatible variadic `getmask2` arguments were supplied.
+    /// The BASIC C path ignores them; this field preserves public signature
+    /// coverage without moving argument interpretation into tests.
+    pub has_args: bool,
+    /// Whether Pillow-compatible extra `getmask2` keyword arguments were
+    /// supplied. Unknown keywords are ignored by Pillow's public wrapper.
+    pub has_kwargs: bool,
 }
 
 /// Optional Pillow `FreeTypeFont.font_variant()` override arguments.

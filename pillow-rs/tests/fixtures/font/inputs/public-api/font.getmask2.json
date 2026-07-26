@@ -43,6 +43,76 @@
       }
     },
     {
+      "case_id": "font.getmask2.positional_args_ignored_after_start",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "args": [
+            "L",
+            null,
+            null,
+            null,
+            0,
+            null,
+            123,
+            null,
+            "ignored"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.extra_kwargs_ignored_without_stroke",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "L",
+          "kwargs": {
+            "stroke_filled": true,
+            "unknown": 1
+          }
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.ink_list_type_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "L",
+          "ink": [
+            1,
+            2,
+            3
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.dejavusans20_jq_getmask2_l",
       "operation": "getmask2",
       "inputs": {

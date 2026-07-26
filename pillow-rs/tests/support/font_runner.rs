@@ -240,6 +240,9 @@ fn has_text_options(params: &Value) -> bool {
         "stroke_width",
         "anchor",
         "start",
+        "ink",
+        "args",
+        "kwargs",
     ]
     .into_iter()
     .any(|field| params.get(field).is_some())
@@ -280,6 +283,16 @@ fn text_options(params: &Value) -> Result<FontTextOptions, PilError> {
             .get("start")
             .map(|value| pair_f64(value, "start"))
             .transpose()?,
+        ink: params
+            .get("ink")
+            .map(|value| {
+                value.as_i64().ok_or_else(|| {
+                    PilError::TypeError("an integer is required (got type list)".into())
+                })
+            })
+            .transpose()?,
+        has_args: params.get("args").is_some(),
+        has_kwargs: params.get("kwargs").is_some(),
     })
 }
 
