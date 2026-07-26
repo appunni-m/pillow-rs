@@ -908,7 +908,7 @@ Source: Coverage MCP snapshot `e3c79419-67ff-4b76-ac15-17cf0822a908`, `pillow-rs
 ## Remaining explicit gaps
 
 - Suite-level coverage is not complete by the 100% objective:
-  - Font public-api suite executes all 105 rows and reports zero parity mismatches.
+  - Font public-api suite executes all active input rows and reports zero parity mismatches.
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
@@ -971,7 +971,49 @@ Snapshot `a4f5d685-7317-448e-9e72-2c78998acf4e`:
   - functions: `57/64` (`89.06%`)
   - regions: `331/373` (`88.74%`)
 
-### Important coverage blocker
+### Updated Font + FreeType dependency coverage command
+
+- Added maintained coverage target:
+  - root: `make coverage-font-rust-with-freetype`
+  - crate-local: `make -C pillow-rs font-tests-coverage-with-freetype`
+  - script: `scripts/coverage/run_font_rust_with_freetype_coverage.sh`
+- Coverage MCP registration:
+  - command name: `font-tests-coverage-with-freetype`
+  - command id: `d760a486-ffe1-46ef-a34d-74850e8e424a`
+  - command: `make coverage-font-rust-with-freetype`
+  - artifact: `target/coverage/font-rust-with-freetype.json`
+  - suite: `font-with-freetype`
+- Coverage MCP run:
+  - run: `4117b91b-bf9b-4267-80e4-1837e01ab228`
+  - commit: `cc8a7e7920ded095d118dda84e59dba76c80cf51`
+  - result: passed, coverage ingested
+  - snapshot: `79d9799d-9ea2-4a17-a186-329af0c3bba6`
+- Active Font public-api corpus size at this point:
+  - `231` input-only rows across `20` input JSON files.
+
+Snapshot `79d9799d-9ea2-4a17-a186-329af0c3bba6`:
+
+- `pillow-rs/src/font/imagingft.rs`
+  - lines: `665/695` (`95.68%`)
+  - branches: `117/140` (`83.57%`)
+  - functions: `72/78` (`92.31%`)
+  - regions: `1041/1099` (`94.72%`)
+- `pillow-rs/src/font/mod.rs`
+  - lines: `191/191` (`100.00%`)
+  - functions: `41/41` (`100.00%`)
+  - regions: `251/253` (`99.21%`)
+- `pillow-rs-freetype/src/font.rs`
+  - lines: `1260/4747` (`26.54%`)
+  - branches: `153/702` (`21.79%`)
+  - functions: `118/392` (`30.10%`)
+  - regions: `1725/6728` (`25.64%`)
+- `pillow-rs-freetype/src/tt/sbit.rs`
+  - lines: `100/814` (`12.29%`)
+  - branches: `13/72` (`18.06%`)
+  - functions: `13/108` (`12.04%`)
+  - regions: `186/1269` (`14.66%`)
+
+### Prior coverage blocker resolved
 
 The approved Coverage MCP command `imagingft-tests-coverage-fixed` currently ignores `pillow-rs-freetype` in the llvm-cov report:
 
@@ -979,7 +1021,7 @@ The approved Coverage MCP command `imagingft-tests-coverage-fixed` currently ign
 --ignore-filename-regex='(^|/)(pillow-rs-freetype|target|\\.cargo|rustc)(/|$)'
 ```
 
-Therefore the CBLC/CBDT implementation fix is verified by live Pillow parity, but its new Rust implementation lines in `pillow-rs-freetype` are not measurable by the current MCP coverage command. A new/updated approved Coverage MCP registration is required before claiming 100% coverage for new code in the FreeType dependency.
+That old command remains useful as a compatibility view, but it is no longer the only available evidence. The new `font-tests-coverage-with-freetype` MCP command includes `pillow-rs-freetype`, so FreeType dependency lines are now measurable in Coverage MCP.
 
 ### Remaining non-100% causes after latest sweep
 
@@ -989,3 +1031,4 @@ Therefore the CBLC/CBDT implementation fix is verified by live Pillow parity, bu
   - `getmask`/`getmask2` `stroke_width` rendering;
   - rare FreeType glyph-load/render failure paths after successful face load;
   - defensive image-size/overflow/unsupported bitmap-mode guards that require a real Pillow-oracle input, not synthetic self-comparison.
+  - general `pillow-rs-freetype` stroker geometry remains partial; this blocks correct Pillow stroked text masks.
