@@ -43,6 +43,11 @@ Missing implementation / blocker:
   coverage. Adding fake empty/space-only stroke rows would cover the branch
   without testing the missing feature and would violate the oracle requirement.
 
+Current blocked public parameters:
+
+- `getmask.stroke_width`
+- `getmask2.stroke_width`
+
 Coverage MCP status:
 
 - Latest managed command: `font-tests-coverage-with-freetype`
