@@ -1,6 +1,55 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `e5482868c`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `7297fdd5b`
+
+## Current checkpoint: render-load fallback parity cleanup
+
+New commit:
+
+- `7297fdd5b` — removed the non-Pillow render-load fallback from
+  `imagingft.rs::mask_from_run_with_start`. Pillow's `_imagingft.c` render
+  path reports the `FT_Load_Glyph(... | FT_LOAD_RENDER)` error; it does not
+  retry the same glyph without render flags. The removed branch was uncovered
+  and not part of the intended public Font parity behavior.
+
+What this closes:
+
+- One uncovered implementation branch was deleted because it was not
+  Pillow-aligned public behavior. This improves coverage without adding fake
+  tests or weakening oracle comparison.
+- The live Pillow-oracle corpus still compares runtime-generated expected
+  output exactly; no expected output, hash, status, or error expectation was
+  added to input JSON.
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `343b31e0-d132-4456-aa55-67caa785613e`
+  - snapshot `6f0de13f-852d-4768-bfca-d8327671d359`
+  - commit `7297fdd5b19d0bbb0c14ec9cac8d3c72d0f32ba5`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `954/1036` (`92.08%`) | `185/238` (`77.73%`) | `95/110` (`86.36%`) | `1594/1740` (`91.61%`) |
+| `pillow-rs/src/font/mod.rs` | `258/282` (`91.49%`) | n/a | `57/64` (`89.06%`) | `331/373` (`88.74%`) |
+
+Remaining blocker to honest 100% region coverage:
+
+- Runtime blocker remains `getmask/getmask2(stroke_width != 0)`. Pillow
+  supports stroked glyph masks through native `_imagingft`/FreeType stroking,
+  but the current pure-Rust FreeType stroker path still does not render real
+  glyph contours exactly enough to enable this without lowering parity
+  standards.
+- Remaining `imagingft.rs` gaps are still FreeType error mappings, request-size
+  error/fallback branches, clipping/bitmap guard branches, name-table fallback
+  selection, and stroked mask rendering.
+- Remaining `font/mod.rs` reported gaps are source-map lines on public option
+  declarations/doc comments, not uncovered public method bodies.
 
 ## Current checkpoint: root Font API runner-reference gate
 
