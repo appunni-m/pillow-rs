@@ -290,17 +290,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `18eec865-798d-45b1-81c3-2a31e449adc5`
-- Snapshot: `6f38e1d4-a857-4a2d-a3bc-665650b9e52c`
+- Run: `6b7c077c-b337-4424-8d34-1e245ba7157e`
+- Snapshot: `584f273f-269a-46bd-bf3a-a1e522dda55d`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `0e2c4845bed7de829e16b21b38a1ad5f15588e9b`
+- Commit measured: `3722ab92e2a931f893684892fc74b170f151e62b`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `825/839` (`98.33%`) | `134/140` (`95.71%`) | `82/88` (`93.18%`) | `1305/1353` (`96.45%`) |
+| `pillow-rs/src/font/imagingft.rs` | `823/836` (`98.44%`) | `133/138` (`96.38%`) | `82/88` (`93.18%`) | `1303/1349` (`96.59%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -362,6 +362,11 @@ Latest Font wrapper movement:
   This keeps Result-based propagation intact while avoiding duplicate
   status-check branches at public `PIL.ImageFont` call sites that all use the
   same success/error contract.
+- Removed the redundant stroked zero-canvas early return. The stroked path now
+  follows the same allocation result through the shared paste routine, which
+  already no-ops for zero-sized output and returns the same `(width, height,
+  bytes)` payload. This removed an unreachable public-Font branch without
+  changing live Pillow oracle output.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
@@ -374,27 +379,31 @@ Latest Font wrapper movement:
   not reachable through honest public inputs unless the checked-in embedded
   default font bytes are corrupt.
 
-Remaining targeted gaps in `imagingft.rs`:
+Remaining targeted gaps in `imagingft.rs` from snapshot
+`584f273f-269a-46bd-bf3a-a1e522dda55d`:
 
-- `94-95`: generic unknown FreeType error fallback. No public Font fixture has
+- `91-92`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
   manufacturing invalid internal state. A sweep across the tracked Font assets
   and available FreeType fixture assets found only the already-mapped runtime
   errors: `code overflow`, `nested DEFS`, `too many instruction definitions`,
   and `too many function definitions`.
-- `set_variation_by_name`: `FT_Set_Named_Instance` error after a valid public name match.
+- `253`: `set_variation_by_name` error propagation from
+  `FT_Set_Named_Instance` after a valid public name match.
   Current tracked variable fonts accept all discovered named instances in the
   Pillow oracle; no deterministic public input has been found that matches a
   name and then fails only in the lower-level setter.
-- `set_variation_by_axes`: `FT_Set_Var_Design_Coordinates` error after variation-face
-  validation. Current tracked variable fonts accept empty, short, exact,
-  overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
-  malformed-font sweep can crash Pillow itself, so crash-only rows are not
-  admissible parity fixtures.
-- general visible non-zero `stroke_width`; partially routed through real
-  pure-Rust `FT_Glyph_Stroke` for maintained DejaVuSans `"A"` single-glyph and
-  multi-glyph rows plus the Pillow-compatible empty-text allocation path, with
-  broader visible glyph coverage still blocked on complete `FT_Glyph_Stroke`/
+- `271`: `set_variation_by_axes` error propagation from
+  `FT_Set_Var_Design_Coordinates` after variation-face validation. Current
+  tracked variable fonts accept empty, short, exact, overlong, and extreme
+  finite coordinate arrays in the Pillow oracle. A broad malformed-font sweep
+  can crash Pillow itself, so crash-only rows are not admissible parity
+  fixtures.
+- `796`, `826`, `829`, `831`, `928`, and `929`: general visible non-zero
+  `stroke_width`; partially routed through real pure-Rust `FT_Glyph_Stroke` for
+  maintained DejaVuSans `"A"` single-glyph and multi-glyph rows plus the
+  Pillow-compatible empty-text allocation path, with broader visible glyph
+  coverage still blocked on complete `FT_Glyph_Stroke`/
   `FT_Glyph_StrokeBorder` implementation.
 - stroked `.notdef` glyph and negative non-empty stroke rows. Pillow succeeds
   for inputs such as a missing Unicode scalar followed by `"A"` and for
