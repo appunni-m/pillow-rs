@@ -371,9 +371,12 @@ Latest Font wrapper movement:
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
   bbox allocation rule. The visible `L`-mode rows pass exact byte comparison.
-- A attempted `mode="1"` stroked row was rejected because the current lower
-  render route does not match Pillow's monochrome stroked output exactly; it is
-  not part of the active corpus.
+- A `font.getmask` `mode="1", stroke_width=1.5` probe for DejaVuSans `"A"` was
+  rejected because it exposed a real lower-level mismatch. Pillow returns an
+  `L` payload with size `19x21`; Rust's current mono route returns the same size
+  with thresholded bytes. A minimal grayscale render attempt kept the same size
+  but still produced different coverage bytes, so this remains a lower
+  stroker/raster route issue rather than a trustworthy Font adapter row.
 - The only remaining `font/mod.rs` uncovered region is
   `Font::load_default`'s `default_aileron::decode()?` error arm. That path is
   not reachable through honest public inputs unless the checked-in embedded
