@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "suite": "font.public-api",
+  "description": "Authoritative raw input corpus for Pillow Font vs Rust Font public API parity. This manifest intentionally contains no oracle outputs, expected hashes, expected errors, or status fields; the test harness generates all expectations from the live pinned Pillow oracle at runtime.",
+  "required_operations": [
+    "getname",
+    "getmetrics",
+    "getlength",
+    "has_variations",
+    "getbbox",
+    "getbbox_binary",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "get_transposed_mask",
+    "transposed_bbox",
+    "validate_transposed_length",
+    "draw_text",
+    "render_text_binary"
+  ],
+  "input_files": [
+    "font.get_transposed_mask.json",
+    "font.getbbox.json",
+    "font.getbbox_binary.json",
+    "font.getlength.json",
+    "font.getmask.json",
+    "font.getmask2.json",
+    "font.getmask2_with_start.json",
+    "font.getmetrics.json",
+    "font.getname.json",
+    "font.has_variations.json",
+    "font.layout_failure.json",
+    "font.load_failure.json",
+    "font.render_text.json",
+    "font.render_text_binary.json",
+    "font.transposed_bbox.json",
+    "font.unsupported_operation.json",
+    "font.validate_transposed_length.json"
+  ]
+}
