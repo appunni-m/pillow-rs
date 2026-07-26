@@ -1,4 +1,4 @@
-# Font Public-API Parity Status
+# PIL.ImageFont Public-API Parity Status
 
 Last updated: 2026-07-27 (Asia/Kolkata) after confirming the target is the
 full `PIL.ImageFont` module surface. `libraqm` shaping is the only explicit
@@ -35,17 +35,17 @@ module/class surfaces in scope:
 - `ImageFont.ImageFont`: `getbbox`, `getlength`, `getmask`
 - `ImageFont.TransposedFont`: `getbbox`, `getlength`, `getmask`
 - `ImageFont.FreeTypeFont`:
-- `font_variant`
-- `get_variation_axes`
-- `get_variation_names`
-- `getbbox`
-- `getlength`
-- `getmask`
-- `getmask2`
-- `getmetrics`
-- `getname`
-- `set_variation_by_axes`
-- `set_variation_by_name`
+  - `font_variant`
+  - `get_variation_axes`
+  - `get_variation_names`
+  - `getbbox`
+  - `getlength`
+  - `getmask`
+  - `getmask2`
+  - `getmetrics`
+  - `getname`
+  - `set_variation_by_axes`
+  - `set_variation_by_name`
 
 `font_manifest.yaml` now classifies the full active `PIL.ImageFont` surface,
 not only `FreeTypeFont`. Bitmap `ImageFont.ImageFont` rows execute through
@@ -53,6 +53,11 @@ not only `FreeTypeFont`. Bitmap `ImageFont.ImageFont` rows execute through
 `pillow_rs::ImageFont` handle and `_imagingft`-compatible path. The active test
 still compares every row against a live Pillow oracle at runtime; input JSON
 files contain only inputs.
+
+The target is not `_imagingft` and not `pillow-rs-freetype` by itself. Those are
+implementation routes used to reproduce the public `PIL.ImageFont` behavior.
+Coverage or parity at the lower layer is only trusted when it is connected back
+to an active `PIL.ImageFont` fixture or a documented ImageFont blocker.
 
 `libraqm` is the only explicit out-of-scope public behavior. Inputs using
 `direction`, `features`, or `language` remain in scope as error-parity rows:

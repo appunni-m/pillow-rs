@@ -91,6 +91,17 @@ const EXPECTED_OUT_OF_SCOPE: [&str; 1] = [
     "libraqm successful shaping; direction/features/language rows must match Pillow's no-libraqm errors",
 ];
 
+const EXPECTED_ORACLE_SCOPE: [(&str, &str); 5] = [
+    ("expected_runtime", "python_pillow_font"),
+    ("expected_path", "PIL.ImageFont"),
+    (
+        "native_core",
+        "PIL.ImageFont public module; PIL._imagingft is asserted only for FreeTypeFont-backed rows",
+    ),
+    ("rust_runtime", "pillow_rs::ImageFont"),
+    ("rust_contract", "Result-style status payload"),
+];
+
 const EXPECTED_IMAGEFONT_LAYOUT_MEMBERS: [&str; 2] = ["BASIC", "RAQM"];
 
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
@@ -273,6 +284,7 @@ fn load_manifest(root: &Path) -> FontManifest {
     let path = root.join("font_manifest.yaml");
     let text = fs::read_to_string(&path).expect("font public-api manifest must be readable");
     assert_manifest_has_no_embedded_expectations(&path, &text);
+    assert_manifest_oracle_scope(&path, &text);
     let input_dir = manifest_scalar(&text, "input_dir")
         .unwrap_or_else(|| panic!("{} must define input_dir", path.display()));
     let input_files = manifest_list(&text, "input_files");
@@ -319,6 +331,21 @@ fn load_manifest(root: &Path) -> FontManifest {
     }
 }
 
+fn assert_manifest_oracle_scope(path: &Path, text: &str) {
+    let oracle = manifest_section_scalars(text, "oracle");
+    for (key, expected) in EXPECTED_ORACLE_SCOPE {
+        let actual = oracle
+            .get(key)
+            .unwrap_or_else(|| panic!("{} oracle.{key} must be defined", path.display()));
+        assert_eq!(
+            actual,
+            expected,
+            "{} oracle.{key} must keep the parity target as PIL.ImageFont; FreeType/_imagingft is only an implementation path for FreeTypeFont-backed rows",
+            path.display()
+        );
+    }
+}
+
 fn manifest_scalar(text: &str, key: &str) -> Option<String> {
     text.lines().find_map(|line| {
         let trimmed = line.trim();
@@ -327,6 +354,38 @@ fn manifest_scalar(text: &str, key: &str) -> Option<String> {
             .map(|value| value.trim().trim_matches('"').to_owned())
             .filter(|value| !value.is_empty())
     })
+}
+
+fn manifest_section_scalars(text: &str, section: &str) -> BTreeMap<String, String> {
+    let mut values = BTreeMap::new();
+    let mut in_section = false;
+    for line in text.lines() {
+        let without_comment = line.split_once('#').map_or(line, |(line, _)| line);
+        if without_comment.trim().is_empty() {
+            continue;
+        }
+        let indent = without_comment
+            .chars()
+            .take_while(|character| *character == ' ')
+            .count();
+        let trimmed = without_comment.trim();
+        if trimmed == format!("{section}:") {
+            in_section = true;
+            continue;
+        }
+        if in_section && indent == 0 {
+            break;
+        }
+        if in_section && indent == 2 {
+            let (key, value) = trimmed
+                .split_once(':')
+                .unwrap_or_else(|| panic!("{section} scalar must be key/value: {trimmed}"));
+            let value = value.trim().trim_matches('"').to_owned();
+            assert!(!value.is_empty(), "{section}.{key} must not be empty");
+            values.insert(key.to_owned(), value);
+        }
+    }
+    values
 }
 
 fn manifest_list(text: &str, key: &str) -> BTreeSet<String> {
