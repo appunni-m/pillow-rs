@@ -64,6 +64,46 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
     "validate_transposed_length",
 ];
 
+const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
+    ("font_from_bytes", "truetype"),
+    ("font_get_variation_axes", "get_variation_axes"),
+    ("font_get_variation_names", "get_variation_names"),
+    ("font_get_transposed_mask", "get_transposed_mask"),
+    ("font_getbbox", "getbbox"),
+    ("font_getbbox_binary", "getbbox_binary"),
+    ("font_getbbox_binary_bytes", "getbbox_binary"),
+    ("font_getbbox_bytes", "getbbox"),
+    ("font_getbbox_bytes_with_options", "getbbox"),
+    ("font_getbbox_with_options", "getbbox"),
+    ("font_getlength", "getlength"),
+    ("font_getlength_bytes", "getlength"),
+    ("font_getlength_bytes_with_options", "getlength"),
+    ("font_getlength_with_options", "getlength"),
+    ("font_getmask", "getmask"),
+    ("font_getmask2", "getmask2"),
+    ("font_getmask2_bytes", "getmask2"),
+    ("font_getmask2_bytes_with_options", "getmask2"),
+    ("font_getmask2_bytes_with_start", "getmask2_with_start"),
+    ("font_getmask2_with_options", "getmask2"),
+    ("font_getmask2_with_start", "getmask2_with_start"),
+    ("font_getmask_bytes", "getmask"),
+    ("font_getmask_bytes_with_options", "getmask"),
+    ("font_getmask_with_options", "getmask"),
+    ("font_getmetrics", "getmetrics"),
+    ("font_getname", "getname"),
+    ("font_getname_optional", "getname"),
+    ("font_has_variations", "has_variations"),
+    ("font_load_default", "load_default"),
+    ("font_render_text_binary", "render_text_binary"),
+    ("font_set_variation_by_axes", "set_variation_by_axes"),
+    ("font_set_variation_by_name", "set_variation_by_name"),
+    ("font_size", "font_size"),
+    ("font_text_bbox", "text_bbox"),
+    ("font_text_bbox_bytes", "text_bbox"),
+    ("font_variant", "font_variant"),
+    ("font_variant_with_options", "font_variant"),
+];
+
 fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/font")
 }
@@ -461,6 +501,42 @@ fn assert_manifest_has_no_embedded_expectations(path: &Path, text: &str) {
     }
 }
 
+fn root_font_public_functions() -> BTreeSet<String> {
+    let lib_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+    let text = fs::read_to_string(&lib_rs).expect("src/lib.rs must be readable");
+    text.lines()
+        .filter_map(|line| line.trim_start().strip_prefix("pub fn font_"))
+        .map(|suffix| {
+            let name = suffix
+                .split_once('(')
+                .map(|(name, _)| name)
+                .unwrap_or_else(|| panic!("malformed root Font API line in {}", lib_rs.display()));
+            format!("font_{name}")
+        })
+        .collect()
+}
+
+fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
+    let observed = root_font_public_functions();
+    let expected = ROOT_FONT_API_TO_OPERATION
+        .iter()
+        .map(|(function, _)| (*function).to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        observed, expected,
+        "Font manifest test must explicitly map every root pillow_rs::font_* public function to a manifest operation"
+    );
+
+    let missing_operations = ROOT_FONT_API_TO_OPERATION
+        .iter()
+        .filter(|(_, operation)| !manifest.required_operations.contains(*operation))
+        .collect::<Vec<_>>();
+    assert!(
+        missing_operations.is_empty(),
+        "root pillow_rs::font_* functions map to operations missing from font_manifest.yaml required_operations: {missing_operations:?}"
+    );
+}
+
 fn assert_input_only_case(path: &Path, value: &Value) {
     match value {
         Value::Object(object) => {
@@ -734,6 +810,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     );
     assert_case_ids_are_unique(&cases);
     assert_referenced_assets_exist(&root, &cases);
+    assert_manifest_covers_root_font_api(&manifest);
 
     let pillow_methods = pillow_freetypefont_public_methods();
     let missing_pillow_methods = pillow_methods
