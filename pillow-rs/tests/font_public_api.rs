@@ -66,6 +66,14 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
 
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 2] = ["constructor", "variations"];
 
+const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
+    "font.constructor.",
+    "font.layout_failure.",
+    "font.load_failure.",
+    "font.unsupported_operation.",
+    "font.variations.",
+];
+
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
     [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
 
@@ -467,6 +475,25 @@ fn assert_case_ids_are_unique(cases: &[Value]) {
         duplicates.is_empty(),
         "font public-api case_id values must be unique: {duplicates:?}"
     );
+}
+
+fn assert_case_ids_match_operations(cases: &[Value]) {
+    for case in cases {
+        let case_id = case
+            .get("case_id")
+            .and_then(Value::as_str)
+            .expect("font public-api case_id must be a string");
+        let operation =
+            font_runner::operation(case).expect("font public-api operation must be a string");
+        let operation_prefix = format!("font.{operation}.");
+        let grouped = ALLOWED_CASE_ID_GROUP_PREFIXES
+            .iter()
+            .any(|prefix| case_id.starts_with(prefix));
+        assert!(
+            case_id.starts_with(&operation_prefix) || grouped,
+            "{case_id}: case_id prefix must match normalized operation `{operation}` or an explicit grouped fixture prefix"
+        );
+    }
 }
 
 fn assert_referenced_assets_exist(fixture_root: &Path, cases: &[Value]) {
@@ -942,6 +969,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
         "font public-api input corpus must not be empty"
     );
     assert_case_ids_are_unique(&cases);
+    assert_case_ids_match_operations(&cases);
     assert_referenced_assets_exist(&root, &cases);
     assert_manifest_covers_root_font_api(&manifest);
     assert_manifest_operations_have_runner_arms(&manifest);
