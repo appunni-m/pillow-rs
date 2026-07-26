@@ -77,6 +77,14 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
     [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
 
+const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 5] = [
+    "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",
+    "ftstroke.FT_Glyph_Stroke.destroy_original_option",
+    "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
+    "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
+    "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
+];
+
 const DEFAULT_PARAMETER_VALUE: &str = "<default>";
 
 const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 12] = [
@@ -1085,6 +1093,7 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
         "ftstroke.FT_Glyph_StrokeBorder.json",
         "ftstroke.FT_Glyph_StrokeBorder",
     );
+    assert_freetype_stroke_blocking_cases_are_exact();
 }
 
 fn freetype_interface_symbol<'a>(interface_map: &'a Value, symbol: &str) -> Option<&'a Value> {
@@ -1125,6 +1134,60 @@ fn assert_freetype_stroke_fixture_has_success_case(file_name: &str, subject: &st
         "{} must retain at least one success fixture for {subject}; otherwise Font stroke_width is blocked without a lower-level parity target",
         fixture_path.display()
     );
+}
+
+fn assert_freetype_stroke_blocking_cases_are_exact() {
+    let observed = [
+        "ftstroke.FT_Glyph_Stroke.json",
+        "ftstroke.FT_Glyph_StrokeBorder.json",
+    ]
+    .into_iter()
+    .flat_map(freetype_stroke_success_case_ids)
+    .collect::<BTreeSet<_>>();
+    let expected = EXPECTED_FREETYPE_STROKE_BLOCKING_CASES
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        observed, expected,
+        "Font stroke_width blockers must stay tied to the exact lower-level FreeType glyph-stroke success rows that currently need implementation"
+    );
+}
+
+fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../pillow-rs-freetype/tests/fixtures/inputs/public-api")
+        .join(file_name);
+    let fixture_text = fs::read_to_string(&fixture_path).unwrap_or_else(|err| {
+        panic!(
+            "{} must be readable to classify lower-level Font stroke blockers: {err}",
+            fixture_path.display()
+        )
+    });
+    let fixture: Value = serde_json::from_str(&fixture_text).unwrap_or_else(|err| {
+        panic!(
+            "{} must be valid JSON to classify lower-level Font stroke blockers: {err}",
+            fixture_path.display()
+        )
+    });
+    fixture
+        .get("cases")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("{} must contain cases", fixture_path.display()))
+        .iter()
+        .filter(|case| case.get("expect_error").and_then(Value::as_bool) == Some(false))
+        .map(|case| {
+            case.get("case_id")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} contains a non-error stroke case without case_id",
+                        fixture_path.display()
+                    )
+                })
+                .to_owned()
+        })
+        .collect()
 }
 
 fn documented_current_blocked_public_parameters(
