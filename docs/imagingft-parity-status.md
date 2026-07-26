@@ -1,6 +1,6 @@
 # ImagingFT Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
+Last updated: 2026-07-26 (Asia/Kolkata) — freetype-fixture gap sweep revalidated
 
 ## Scope
 
@@ -24,40 +24,42 @@ Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `eedccabf-4abe-45e6-a7c7-ca212cb0f23f` (first submission `submission_reused=false`)
+  - Latest run id: `2b8753bc-3b08-42e3-af13-1200a9c9afd0`
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `cdd83425-0fdc-4861-998c-73dfb9de9345` ingested with `target/coverage/imagingft/imagingft-rust.json`
-  - Search log checks (`FAILED`, `error:`, `panic`) returned no failure context; only the normal `0 failed` summary line matched.
+  - Diagnostics/ingest: `f0deee35-9822-4b8c-a132-d035c808169a` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Prior same-turn probe snapshots:
+    - `6b68edcf-1aa9-474f-8f85-9adb95291899`: freetype CFF/embedded-strike rows added; no region movement.
+    - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `imagingft.rs` moved to `1872/2338` regions.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
 ## Corpus state
 
 - Input files: `17` (`pillow-rs/tests/fixtures/imagingft/inputs/public-api/*.json`)
-- Total rows: `82`
-- Executed rows: `82/82`
+- Total rows: `105`
+- Executed rows: `105/105`
 - Required operation coverage check against case-set operations: no required manifest operations missing
 
 ## Required operation presence (fixture-defined)
 
 | Operation | OK | Error | Total |
 |---|---:|---:|---:|
-| `draw_text` | 5 | 0 | 5 |
+| `draw_text` | 6 | 0 | 6 |
 | `get_transposed_mask` | 9 | 1 | 10 |
-| `getbbox` | 5 | 2 | 7 |
-| `getbbox_binary` | 5 | 0 | 5 |
-| `getlength` | 4 | 0 | 4 |
-| `getmask` | 7 | 0 | 7 |
-| `getmask2` | 6 | 0 | 6 |
-| `getmask2_with_start` | 10 | 2 | 12 |
-| `getmetrics` | 1 | 0 | 1 |
-| `getname` | 1 | 5 | 6 |
-| `has_variations` | 1 | 0 | 1 |
-| `render_text_binary` | 5 | 0 | 5 |
+| `getbbox` | 7 | 2 | 9 |
+| `getbbox_binary` | 7 | 0 | 7 |
+| `getlength` | 6 | 0 | 6 |
+| `getmask` | 8 | 0 | 8 |
+| `getmask2` | 7 | 0 | 7 |
+| `getmask2_with_start` | 17 | 2 | 19 |
+| `getmetrics` | 3 | 0 | 3 |
+| `getname` | 3 | 5 | 8 |
+| `has_variations` | 3 | 0 | 3 |
+| `render_text_binary` | 6 | 0 | 6 |
 | `transposed_bbox` | 7 | 0 | 7 |
 | `unsupported_magic` | 0 | 1 | 1 |
-| `validate_transposed_length` | 4 | 1 | 5 |
+| `validate_transposed_length` | 3 | 2 | 5 |
 
-- Total success rows: `69`
+- Total success rows: `92`
 - Total error rows: `13`
 - Error rows are classified only from live oracle output; input JSON carries no expected output, pixel hash, or expected-error metadata.
 
@@ -87,21 +89,25 @@ Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
 
 ### `pillow-rs/src/font/imagingft.rs`
 
-- `covered_lines: 1048/1286` (`line_rate 0.8149300156`)
+- `covered_lines: 1050/1286` (`line_rate 0.8164852255`)
 - `covered_functions: 108/122` (`function_rate 0.8852459016`)
-- `covered_branches: 169/258` (`branch_rate 0.6550387597`)
-- `covered_regions: 1870/2338` (`region_rate 0.7998289136`)
+- `covered_branches: 172/258` (`branch_rate 0.6666666667`)
+- `covered_regions: 1873/2338` (`region_rate 0.8011120616`)
 - Gaps remain in non-error branches and layout branches not yet covered by this public-input subset.
 
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `cdd83425-0fdc-4861-998c-73dfb9de9345`
+- Current: `f0deee35-9822-4b8c-a132-d035c808169a`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
+- Same-turn movement from the previous committed imagingft snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`:
+  - `imagingft.rs` lines: `1048 -> 1050` (`+2`)
+  - branches: `169 -> 172` (`+3`)
+  - regions: `1870 -> 1873` (`+3`)
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `f0deee35-9822-4b8c-a132-d035c808169a`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
@@ -125,19 +131,35 @@ Source: Coverage MCP snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`, `pillow-rs
 - `draw_text` negative Y placement:
   - Added passing fixture: `imagingft.render_text.dejavusans20_negative_y_draw_text_rgba`, DejaVuSans.ttf, `size=20`, `text="Hello"`, `xy=[10, -4]`, RGBA canvas.
   - Purpose: validates Draw/text consumer clipping against the live oracle.
+- Freetype fixture corpus reuse:
+  - Added loadable CFF outline asset from `pillow-rs-freetype`: `input/fonts/pure-cff-cubic.otf`.
+  - Added loadable embedded-strike TTF asset from `pillow-rs-freetype`: `input/fonts/embedded-strike-color-or-sbit.ttf`.
+  - Added passing CFF scalar/bbox rows: `getname`, `getmetrics`, `getlength`, `getbbox`, `getbbox_binary`, `has_variations`.
+  - Added passing embedded-strike rows across scalar/bbox/mask/draw paths.
+  - Deliberately did not keep CFF rendering rows: `getmask.pure_cff_a` failed exact Pillow mask-byte parity with small antialias differences, so keeping it would violate the oracle standard.
+- Additional `getmask2_with_start` clipping rows:
+  - Added passing rows for moderate/heavy left clipping and top clipping:
+    - `dejavusans_left_clip_start`
+    - `dejavusans_full_first_glyph_left_clip_start`
+    - `dejavusans_top_clip_start`
+    - `dejavusans_left_top_clip_start`
+    - `dejavusans_heavy_left_clip_start`
+    - `dejavusans_heavy_top_clip_start`
+    - `dejavusans_almost_full_top_clip_start`
+  - Purpose: hit real partial/full glyph clipping branches through Pillow `font.getmask2(..., start=...)`, not synthetic Rust-only calls.
 - Coverage effect:
-  - These rows increased fixture parity coverage from `75` to `82` executed rows.
-  - After the clipping/Result fix, `pillow-rs/src/font/imagingft.rs` measured `1870/2338` covered regions (`79.98289136%`) on committed snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`.
+  - These rows increased fixture parity coverage from `82` to `105` executed rows.
+  - After the freetype/clipping sweep, `pillow-rs/src/font/imagingft.rs` measured `1873/2338` covered regions (`80.11120616%`) on snapshot `f0deee35-9822-4b8c-a132-d035c808169a`.
 
 ### Reverse-mapped unclosed branches
 
 | Source area | Lines | Public operation path | Current assessment |
 |---|---:|---|---|
 | TrueType load/request-size fallback and FT error mapping | 35-81 | font load before any operation | Only valid/missing/invalid-size rows are covered. Remaining FT error kinds need pathological font/size inputs or crafted font assets; do not fake these in Rust tests. |
-| Bitmap-font arms | 156-226, 246, 608-639 | all public methods on `Font::Bitmap` | Current fixture loader creates TrueType fonts only. These branches are implementation-visible but not covered by the current Pillow `_imagingft` TrueType public corpus. Need a real Pillow-compatible bitmap-font surface before parity rows can be trusted. |
+| Bitmap-font arms | 156-226, 246, 640-671 | all public methods on `Font::Bitmap` | Current fixture loader creates TrueType fonts only. PCF/WinFNT freetype fixtures are rejected by Pillow `_imagingft` before a native C `Font` object exists, so these branches are not coverable by the current oracle path. Need a real Pillow-compatible bitmap-font surface before parity rows can be trusted. |
 | Transpose helper source-map gaps | 127-129, 145 | `get_transposed_mask`, `transposed_bbox`, `validate_transposed_length` | Fixture rows cover all Pillow transpose constants plus `None`/missing orientation; remaining uncovered lines appear to be coverage/source mapping artifacts unless a new source-context query proves otherwise. |
 | Layout/load glyph failure inside text shaping/rendering | 373-374, 539-547 | `getlength`, `getbbox`, `getmask*` | Needs a real oracle input that makes FreeType load fail for a glyph after font load succeeds. No current repo font/input does this. |
-| `mask_from_run_with_start` clipping and sparse bitmap cases | 497-602 | `getmask`, `getmask2`, `getmask2_with_start`, `draw_text` | Negative vertical start is a confirmed mismatch. Other uncovered branches include zero-sized glyph bitmap, render fallback, canvas slice guard, empty bitmap coverage, and no-coverage pixels. Add only oracle-backed rows; do not synthesize self-comparison rows. |
+| `mask_from_run_with_start` clipping and sparse bitmap cases | 497-639 | `getmask`, `getmask2`, `getmask2_with_start`, `draw_text` | Additional oracle-backed start rows covered three more regions. Remaining uncovered branches include render fallback, zero-sized/absent glyph bitmap, defensive canvas slice guard, and bitmap coverage `None` handling. Add only oracle-backed rows; do not synthesize self-comparison rows. |
 | `bitmap_coverage` uncommon bitmap modes/pitch | 644-660 | `getmask*`, binary mask paths | Gray and mono coverage are partially exercised. Negative pitch and unsupported pixel mode are not reachable from current repo fonts through Pillow public APIs. Need a real oracle fixture asset before claiming coverage. |
 
 ### Hard blocker to 100% region by input rows only
@@ -157,7 +179,7 @@ Source: Coverage MCP snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`, `pillow-rs
 ## Remaining explicit gaps
 
 - Suite-level coverage is not complete by the 100% objective:
-  - ImagingFT public-api suite executes all 82 rows and reports zero parity mismatches.
+  - ImagingFT public-api suite executes all 105 rows and reports zero parity mismatches.
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
