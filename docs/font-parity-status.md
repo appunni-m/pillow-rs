@@ -1,7 +1,7 @@
 # Font Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
-coverage cleanup at commit `fc2dbe619`
+coverage cleanup at commit `548384188`
 
 ## Current checkpoint: Font manifest value coverage + mask-copy branch cleanup
 
@@ -15,6 +15,9 @@ New commits:
   `imagingft.rs::mask_from_run_with_start`. The remaining copy math still
   clips public Pillow inputs safely and was verified against the live Pillow
   oracle.
+- `548384188` — tightens the mask copy range further by using the already
+  computed canvas length for empty output and precomputing the vertical copy
+  bound before the row loop.
 
 Pillow comparison result:
 
@@ -35,16 +38,16 @@ Verification:
 - `make -C pillow-rs font-tests` — passed for both commits.
 - `make -C pillow-rs fmt` — passed after implementation cleanup.
 - Coverage MCP command `font-tests-coverage-with-freetype`
-  - run `0ec4ea36-3bc3-49b1-af50-cde71dab7f3e`
-  - snapshot `abb8c9b6-dc85-4e79-b89b-5eee1200b556`
-  - commit `fc2dbe61925a950271a7ca6f04da5423f952c144`
+  - run `eb650f98-d4e7-4337-894a-1c345738c561`
+  - snapshot `c37b7658-22e2-47e1-b4ad-2ae213a7321f`
+  - commit `5483841885b320e9bec3d6b45567a9a6df07f985`
   - status `passed`, coverage artifact ingested
 
 Target metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `670/692` (`96.82%`) | `113/126` (`89.68%`) | `74/80` (`92.50%`) | `1050/1099` (`95.54%`) |
+| `pillow-rs/src/font/imagingft.rs` | `671/692` (`96.97%`) | `113/124` (`91.13%`) | `74/80` (`92.50%`) | `1055/1103` (`95.65%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
 
 Remaining blockers/gaps:
