@@ -39,8 +39,8 @@ help:
 	@printf "  make test-imagingft           Run legacy ImagingFT matrix parity tests\n"
 	@printf "  make test-imagingft-release   Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "\nFixtures:\n"
-	@printf "  make fixtures         Generate imagingft fixtures\n"
-	@printf "  make fixtures-check   Regenerate and validate imagingft fixtures\n"
+	@printf "  make fixtures         Explain Font fixture generation policy\n"
+	@printf "  make fixtures-check   Validate Font public-api raw input fixtures\n"
 	@printf "  make fixtures-clean   Remove generated fixture outputs\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
@@ -153,7 +153,7 @@ fixtures:
 
 .PHONY: fixtures-check
 fixtures-check:
-	@! rg -n '"(expectation|expected|pixels_hex|sha256|raw_path)"' \
+	@! rg -n '"(error|expect_error|expectation|expected|hash|oracle|output|outputs|pixels_hex|raw_path|sha256|status)"' \
 		tests/fixtures/font/inputs/public-api
 
 .PHONY: fixtures-clean

@@ -11,23 +11,6 @@ use serde_json::Value;
 #[path = "support/font_runner.rs"]
 mod font_runner;
 
-const REQUIRED_PUBLIC_OPS: [&str; 14] = [
-    "getname",
-    "getmetrics",
-    "getlength",
-    "has_variations",
-    "getbbox",
-    "getbbox_binary",
-    "getmask",
-    "getmask2",
-    "getmask2_with_start",
-    "get_transposed_mask",
-    "transposed_bbox",
-    "validate_transposed_length",
-    "draw_text",
-    "render_text_binary",
-];
-
 const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
     "error",
     "expect_error",
@@ -37,6 +20,17 @@ const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
     "output",
     "outputs",
     "pixels_hex",
+    "status",
+];
+
+const FORBIDDEN_MANIFEST_KEYS: [&str; 8] = [
+    "error",
+    "expect_error",
+    "expected",
+    "hash",
+    "oracle",
+    "output",
+    "outputs",
     "status",
 ];
 
@@ -109,24 +103,65 @@ fn oracle_python() -> PathBuf {
     candidate
 }
 
-fn load_input_cases(directory: &Path) -> Vec<Value> {
-    let mut paths = fs::read_dir(directory)
+fn load_manifest(directory: &Path) -> Value {
+    let path = directory.join("manifest.json");
+    let manifest: Value = serde_json::from_slice(
+        &fs::read(&path).expect("font public-api manifest must be readable"),
+    )
+    .expect("font public-api manifest must be valid JSON");
+    assert_manifest_is_input_only(&path, &manifest);
+    manifest
+}
+
+fn manifest_strings<'a>(manifest: &'a Value, key: &str) -> BTreeSet<&'a str> {
+    manifest
+        .get(key)
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("font public-api manifest `{key}` must be an array"))
+        .iter()
+        .map(|value| {
+            value.as_str().unwrap_or_else(|| {
+                panic!("font public-api manifest `{key}` entries must be strings")
+            })
+        })
+        .collect()
+}
+
+fn load_input_cases(directory: &Path, manifest: &Value) -> Vec<Value> {
+    let manifest_files = manifest_strings(manifest, "input_files");
+    assert!(
+        !manifest_files.is_empty(),
+        "font public-api manifest input_files must not be empty"
+    );
+
+    let discovered_files = fs::read_dir(directory)
         .expect("public-api font input directory must be readable")
         .map(|entry| entry.expect("input entry must be readable").path())
-        .filter(|path| {
+        .filter_map(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("font.") && name.ends_with(".json"))
+                .filter(|name| name.starts_with("font.") && name.ends_with(".json"))
+                .map(str::to_owned)
         })
-        .collect::<Vec<_>>();
-    paths.sort();
+        .collect::<BTreeSet<_>>();
+
+    let manifest_owned = manifest_files
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        manifest_owned, discovered_files,
+        "font public-api manifest input_files must exactly match raw input JSON files"
+    );
 
     let mut cases = Vec::new();
-    for path in paths {
+    for file in manifest_files {
+        let path = directory.join(file);
         let document: Value = serde_json::from_slice(
             &fs::read(&path).expect("font public-api input must be readable"),
         )
         .expect("font public-api input must be valid JSON");
+        assert_input_only_case(&path, &document);
         let rows = document
             .get("cases")
             .and_then(Value::as_array)
@@ -147,6 +182,30 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
         }
     }
     cases
+}
+
+fn assert_manifest_is_input_only(path: &Path, value: &Value) {
+    match value {
+        Value::Object(object) => {
+            for key in object.keys() {
+                assert!(
+                    !FORBIDDEN_MANIFEST_KEYS.contains(&key.as_str()),
+                    "{} must not contain oracle/output key `{}`",
+                    path.display(),
+                    key
+                );
+            }
+            for child in object.values() {
+                assert_manifest_is_input_only(path, child);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                assert_manifest_is_input_only(path, child);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn assert_input_only_case(path: &Path, value: &Value) {
@@ -240,7 +299,9 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
 #[test]
 fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
-    let cases = load_input_cases(&root.join("inputs/public-api"));
+    let input_dir = root.join("inputs/public-api");
+    let manifest = load_manifest(&input_dir);
+    let cases = load_input_cases(&input_dir, &manifest);
     assert!(
         !cases.is_empty(),
         "font public-api input corpus must not be empty"
@@ -250,7 +311,8 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
         .iter()
         .map(|case| font_runner::operation(case).expect("case operation must be valid"))
         .collect::<BTreeSet<_>>();
-    let missing = REQUIRED_PUBLIC_OPS
+    let required_ops = manifest_strings(&manifest, "required_operations");
+    let missing = required_ops
         .into_iter()
         .filter(|operation| !observed.contains(*operation))
         .collect::<Vec<_>>();

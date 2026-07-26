@@ -4,7 +4,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ## Scope
 
-- Public surface source: `pillow-rs/tests/fixtures/font/inputs/public-api` (non-deprecated corpus only)
+- Public surface source: `pillow-rs/tests/fixtures/font/inputs/public-api/manifest.json` plus the raw input JSON files it lists (non-deprecated corpus only)
 - Target suite: `make -C pillow-rs font-tests`
 - Oracle: repo-local Pillow C path via `pillow-rs/scripts/font_oracle.py` and `.oracle-venv`
 - No deprecated `deprecated/imagingft/*` tests are used.
@@ -35,10 +35,12 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ## Corpus state
 
-- Input files: `17` (`pillow-rs/tests/fixtures/font/inputs/public-api/*.json`)
+- Input manifest: `pillow-rs/tests/fixtures/font/inputs/public-api/manifest.json`
+- Raw input files: `17` (`pillow-rs/tests/fixtures/font/inputs/public-api/font.*.json`)
 - Total rows: `105`
 - Executed rows: `105/105`
-- Required operation coverage check against case-set operations: no required manifest operations missing
+- Required operation coverage check is manifest-driven: no required manifest operations missing.
+- Input-only guard: active manifest and raw input documents must contain no oracle output, expected hash/raw path, expected error, or status fields; all output/error expectations are generated at runtime from the live Pillow Font oracle.
 
 ## Required operation presence (fixture-defined)
 
