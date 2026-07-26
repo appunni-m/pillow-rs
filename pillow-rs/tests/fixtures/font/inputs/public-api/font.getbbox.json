@@ -51,6 +51,23 @@
       }
     },
     {
+      "case_id": "font.getbbox.dejavusans20_j_getbbox_1",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "j",
+          "mode": "1"
+        }
+      }
+    },
+    {
       "case_id": "font.getbbox.empty_suite",
       "operation": "getbbox",
       "inputs": {

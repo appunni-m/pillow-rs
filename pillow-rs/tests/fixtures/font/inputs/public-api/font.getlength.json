@@ -51,6 +51,23 @@
       }
     },
     {
+      "case_id": "font.getlength.dejavusans20_m_getlength_1",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "m",
+          "mode": "1"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.empty_suite",
       "operation": "getlength",
       "inputs": {

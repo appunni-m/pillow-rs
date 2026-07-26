@@ -284,7 +284,7 @@ pub(crate) fn getlength_with_options(
     options: &FontTextOptions,
 ) -> Result<f32, PilError> {
     validate_basic_layout_options(options)?;
-    getlength(font, text)
+    Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
 }
 
 pub(crate) fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
@@ -297,7 +297,7 @@ pub(crate) fn getbbox_with_options(
     options: &FontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
     validate_basic_layout_options(options)?;
-    let bbox = getbbox(font, text)?;
+    let bbox = bbox_from_run_with_flags(font, text, text_load_flags(options))?;
     let (left, top, right, bottom) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
     let stroke = options.stroke_width;
     Ok((left - stroke, top - stroke, right + stroke, bottom + stroke))
@@ -358,17 +358,21 @@ pub(crate) fn getmask2_with_options(
             "stroked FreeTypeFont mask rendering is not implemented".into(),
         ));
     }
-    let load_flags = if options.mode.as_deref() == Some("1") {
-        TGT_MONO
-    } else {
-        TGT_NORM
-    };
+    let load_flags = text_load_flags(options);
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
     let start = options.start.unwrap_or((0.0, 0.0));
     let (width, height, pixels) = mask_from_run_with_start(font, text, load_flags, start)?;
     let bbox = bbox_from_run_with_flags(font, text, load_flags)?;
     let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
     Ok((width, height, pixels, (left as i32, top as i32)))
+}
+
+fn text_load_flags(options: &FontTextOptions) -> i32 {
+    if options.mode.as_deref() == Some("1") {
+        TGT_MONO
+    } else {
+        TGT_NORM
+    }
 }
 
 pub(crate) fn render_text(
@@ -522,15 +526,23 @@ fn ceil26(x: i64) -> i32 {
 }
 
 fn length_from_basic_layout(ttf: &Font, text: &str) -> Result<i32, PilError> {
+    length_from_basic_layout_with_flags(ttf, text, 0)
+}
+
+fn length_from_basic_layout_with_flags(
+    ttf: &Font,
+    text: &str,
+    load_flags: i32,
+) -> Result<i32, PilError> {
     let face = &ttf.engine.face;
     let mut total = 0i32;
     let mut prev: Option<u32> = None;
 
     for ch in text.chars() {
         let g = gid(face, ch);
-        // Pillow 12.2.0 `text_layout_fallback` uses `FT_LOAD_DEFAULT`.
+        // Pillow 12.2.0 `text_layout_fallback` uses the requested target mode.
         // Its hinted `horiAdvance` values are integral pixels for BASIC layout.
-        let slot = ffi::FT_Load_Glyph(face, g, 0).map_err(ft_error_to_pil)?;
+        let slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
         validate_advance_26_6(slot.advance.x)?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             total = total.saturating_add(basic_layout_kern(face, p, g));
