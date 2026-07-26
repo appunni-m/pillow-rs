@@ -175,16 +175,18 @@ Latest `FT_Stroker_ConicTo` lower-level movement:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo
 ```
 
-Result after the maintained quadratic route:
+Result after the maintained open first-segment route:
 `FT_Stroker_ConicTo.conic_curve_success` now runs as real C/Rust/WASM parity
 for the explicit `(0,0) -> (256,512) -> (512,0)` closed fixture. The route
 compares exact status sequence, exported outline points, tags, contours, and
-CBox against a pinned C oracle. This is not the general conic subdivision
-implementation; `FT_Stroker_ConicTo.first_segment_starts_subpath` remains
-pending because it needs the full border state machine to prove a conic segment
-can initialize an otherwise empty subpath. ConicTo runtime movement is
-`runnable=3`, `passed=3`, `pending=1`. Route audit movement is
-`real-parity=4834`, `pending-route=187`.
+CBox against a pinned C oracle.
+`FT_Stroker_ConicTo.first_segment_starts_subpath` also now runs as real
+C/Rust/WASM parity for the explicit open `(0,0) -> (256,512) -> (512,0)`
+fixture, proving first-segment border initialization and open end-cap export
+for that maintained route. These routes are not the general conic subdivision
+implementation. ConicTo runtime movement is `runnable=4`, `passed=4`,
+`pending=0`. Route audit movement is `real-parity=4835`,
+`pending-route=186`.
 
 ## Edge cases already covered by active Font fixtures
 
