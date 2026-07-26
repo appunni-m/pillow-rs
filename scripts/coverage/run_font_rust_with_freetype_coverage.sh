@@ -27,5 +27,31 @@ cargo +nightly llvm-cov --branch report \
     --ignore-filename-regex='(^|/)(target|\.cargo|rustc)(/|$)' \
     --output-path "$coverage_output"
 
+python3 - "$coverage_output" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+MAX_SIGNED_32 = 2_147_483_647
+
+
+def cap_coverage_counts(value):
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            if isinstance(item, int) and item > MAX_SIGNED_32:
+                value[index] = MAX_SIGNED_32
+            else:
+                cap_coverage_counts(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            cap_coverage_counts(item)
+
+
+path = Path(sys.argv[1])
+document = json.loads(path.read_text())
+cap_coverage_counts(document)
+path.write_text(json.dumps(document, separators=(",", ":")))
+PY
+
 printf 'Rust font coverage with FreeType dependency: %s\n' "$coverage_output"
 exit "$test_status"
