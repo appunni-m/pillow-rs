@@ -23,11 +23,17 @@ Generated inventory:
   - `example`: `25`
   - `bench`: `12`
 - Current generated classification counts:
-  - `ok_result`: `2,575`
-  - `likely_infallible`: `3,110`
-  - `parser_review`: `262`
-  - `review_non_result_fallible`: `98`
-  - `review_panic_path`: `74`
+  - `likely_infallible`: `2,804`
+  - `ok_result`: `2,589`
+  - `abi_status_code`: `349`
+  - `parser_review`: `207`
+  - `review_non_result_fallible`: `80`
+  - `review_panic_path`: `72`
+  - `pillow_clip_control_flow`: `5`
+  - `freetype_void_api_internal_status`: `4`
+  - `documented_invariant_panic`: `3`
+  - `freetype_sentinel_arithmetic`: `3`
+  - `freetype_default_value_control_flow`: `3`
 
 ## Current interpretation
 
@@ -38,6 +44,12 @@ The generated `classification` column is conservative:
 - `review_non_result_fallible`: non-`Result` function contains an obvious fallibility signal such as `unwrap`, `expect`, filesystem/process use, or checked arithmetic.
 - `review_panic_path`: non-`Result` function contains `panic!`, `todo!`, or `unimplemented!`.
 - `parser_review`: mechanical parser found a mixed signal that requires manual review.
+- `abi_status_code`: C/WASM ABI surface returns an explicit status code such as `FT_Error` or `FontdoneWasmStatus`; internal Rust helpers should still use `Result` unless they are direct boundary-status adapters.
+- `documented_invariant_panic`: the deliberately named `InfallibleExt::because` invariant mechanism; this is not a recoverable user/input error path and has no production call sites after the current audit.
+- `pillow_clip_control_flow`: Pillow drawing geometry helpers use checked arithmetic to clip/skip non-renderable coordinates, matching Pillow-style draw semantics instead of raising.
+- `freetype_sentinel_arithmetic`: FreeType-compatible fixed-point math returns C sentinel values for cases such as division by zero, preserving oracle behavior instead of surfacing Rust errors.
+- `freetype_void_api_internal_status`: helpers under a FreeType void API path use internal success/failure booleans because the public C-compatible caller intentionally ignores those failures while preserving metric side effects.
+- `freetype_default_value_control_flow`: FreeType-compatible variation/default helpers return default vectors or empty values for absent named instances/tables, preserving public oracle behavior.
 
 The generated `scope` column separates production code from integration tests,
 unit-test modules, examples, and benchmark crates. Production rows are the
@@ -86,6 +98,17 @@ been inspected and either:
 - The generated audit scanner now handles Rust character literals, preventing
   false panic/fs/unwrap attribution when a function contains characters such as
   `'"'` inside char literals.
+- Compute registry initialization now returns `Result` through the registry and
+  backend support path. Missing SIMD registration keys bubble as
+  `PilError::InternalError` instead of panicking through `expect`, while normal
+  unsupported operations still surface as `PilError::ValueError`.
+- Reviewed production non-`Result` fallibility signals have been split into
+  explicit compatibility buckets: ABI status-code functions, Pillow draw
+  clipping control flow, FreeType sentinel arithmetic, FreeType void-API
+  internal status, documented invariant panics, and FreeType default-value
+  control flow. Current production `review_panic_path` and
+  `review_non_result_fallible` counts are both `0`; remaining production
+  manual work is in `parser_review`.
 
 ## Next review queue
 

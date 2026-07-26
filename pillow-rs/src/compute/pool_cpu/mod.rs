@@ -21,7 +21,7 @@ impl BackendImpl for CpuPool {
         0
     }
 
-    fn supports(&self, op: &PipelineOp) -> bool {
+    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
         registry::cpu_supports(op)
     }
 

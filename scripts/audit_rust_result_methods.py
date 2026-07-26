@@ -126,10 +126,42 @@ def fallibility_signals(body: str) -> list[str]:
     return [name for name, needle in checks if needle in body]
 
 
-def classify(return_type: str, signals: list[str]) -> str:
+def classify(path: Path, name: str, return_type: str, signals: list[str]) -> str:
+    rel_path = path.relative_to(ROOT).as_posix()
     returns_result = "Result" in return_type
     if returns_result:
         return "ok_result"
+    if rel_path == "pillow-rs/src/infallible.rs" and name == "because":
+        return "documented_invariant_panic"
+    if return_type in {"FT_Error", "FontdoneWasmStatus"}:
+        return "abi_status_code"
+    if rel_path == "pillow-rs/src/compute/pool_cpu/ops/draw.rs" and name in {
+        "draw_ellipse_segments",
+        "draw_ellipse_on_canvas",
+        "draw_arc_on_canvas",
+        "draw_chord_on_canvas",
+        "draw_pieslice_on_canvas",
+    }:
+        return "pillow_clip_control_flow"
+    if rel_path == "pillow-rs-freetype/src/fixed.rs" and name in {
+        "ft_mul_div_long",
+        "ft_mul_div_no_round_long",
+        "ft_div_fix_long",
+    }:
+        return "freetype_sentinel_arithmetic"
+    if rel_path == "pillow-rs-freetype/src/api.rs" and name in {
+        "embolden_rendered_bitmap",
+        "embolden_8bit_positive_pitch_bitmap",
+        "convert_packed_gray_bitmap",
+        "embolden_mono_positive_pitch_bitmap",
+    }:
+        return "freetype_void_api_internal_status"
+    if rel_path == "pillow-rs-freetype/src/font.rs" and name in {
+        "type1_mm_weights_from_blends",
+        "normalized_variation_coords_for_named_instance",
+        "design_variation_coords_for_named_instance",
+    }:
+        return "freetype_default_value_control_flow"
     if not signals:
         return "likely_infallible"
     if any(signal in signals for signal in ["panic", "todo", "unimplemented"]):
@@ -204,7 +236,7 @@ def iter_functions(path: Path) -> list[FunctionRecord]:
                 return_type=return_type,
                 returns_result="Result" in return_type,
                 signals=signals,
-                classification=classify(return_type, signals),
+                classification=classify(path, match.group("name"), return_type, signals),
             )
         )
     return records

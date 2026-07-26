@@ -1070,13 +1070,12 @@ impl ImageFont {
         start_x: Option<f64>,
         start_y: Option<f64>,
     ) -> Result<ImageFontMask, JsValue> {
-        let (width, height, pixels, offset) =
-            pillow_rs::font::imagingft::getmask2_with_start(
-                &self.font,
-                text,
-                (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
-            )
-            .map_err(err)?;
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.font,
+            text,
+            (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
+        )
+        .map_err(err)?;
         Ok(ImageFontMask {
             width,
             height,
@@ -1641,16 +1640,22 @@ pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
 /// Activate a compute backend. Returns true if the backend exists.
 #[wasm_bindgen]
 pub fn enable_backend(name: &str) -> Result<bool, JsValue> {
-    let backend = pillow_rs::compute::Backend::parse(name)
-        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    let backend = pillow_rs::compute::Backend::parse(name).ok_or_else(|| {
+        err(pillow_rs::error::PilError::ValueError(format!(
+            "unknown backend: {name}"
+        )))
+    })?;
     pillow_rs::compute::enable_backend(backend).map_err(err)
 }
 
 /// Deactivate a compute backend. Returns true if it was active.
 #[wasm_bindgen]
 pub fn disable_backend(name: &str) -> Result<bool, JsValue> {
-    let backend = pillow_rs::compute::Backend::parse(name)
-        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    let backend = pillow_rs::compute::Backend::parse(name).ok_or_else(|| {
+        err(pillow_rs::error::PilError::ValueError(format!(
+            "unknown backend: {name}"
+        )))
+    })?;
     pillow_rs::compute::disable_backend(backend).map_err(err)
 }
 
@@ -1676,8 +1681,11 @@ pub fn active_backends() -> Result<Vec<String>, JsValue> {
 /// Check if a specific backend is active.
 #[wasm_bindgen]
 pub fn backend_enabled(name: &str) -> Result<bool, JsValue> {
-    let backend = pillow_rs::compute::Backend::parse(name)
-        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    let backend = pillow_rs::compute::Backend::parse(name).ok_or_else(|| {
+        err(pillow_rs::error::PilError::ValueError(format!(
+            "unknown backend: {name}"
+        )))
+    })?;
     pillow_rs::compute::backend_enabled(backend).map_err(err)
 }
 
