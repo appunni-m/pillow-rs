@@ -218,6 +218,16 @@ def classify(path: Path, name: str, return_type: str, signals: list[str]) -> str
         "pending_palette_transparency",
     }:
         return "palette_absence_control_flow"
+    if rel_path == "pillow-rs-py/src/lib.rs" and name == "__repr__":
+        return "binding_display_fallback"
+    if rel_path in {
+        "pillow-rs-freetype/ffi-c/src/lib.rs",
+        "pillow-rs-freetype/ffi-wasm/src/lib.rs",
+    }:
+        if "FT_Error" in return_type or return_type == "()":
+            return "abi_status_code"
+        if return_type.startswith("Option"):
+            return "abi_optional_snapshot_or_handle"
     if rel_path == "pillow-rs-freetype/src/fixed.rs" and name in {
         "ft_mul_div_long",
         "ft_mul_div_no_round_long",
@@ -237,6 +247,28 @@ def classify(path: Path, name: str, return_type: str, signals: list[str]) -> str
         "design_variation_coords_for_named_instance",
     }:
         return "freetype_default_value_control_flow"
+    if rel_path == "pillow-rs-freetype/src/api.rs" and name == "outline_point_cbox":
+        return "freetype_geometry_absence_control_flow"
+    if rel_path == "pillow-rs-freetype/src/grays.rs" and name == "set_cell":
+        return "freetype_raster_clip_control_flow"
+    if rel_path == "pillow-rs-freetype/src/autohint/globals.rs" and name in {
+        "get_metrics",
+        "get_metrics_for_style",
+    }:
+        return "freetype_metrics_lookup_absence"
+    if rel_path == "pillow-rs-freetype/src/scaler.rs" and name == "native_vertical_metrics":
+        return "freetype_metrics_lookup_absence"
+    if rel_path == "pillow-rs-freetype/src/ffi/handles.rs":
+        if return_type.startswith("Option") or return_type == "FT_Long":
+            return "freetype_ffi_optional_lookup_or_table"
+        if name == "FT_Glyph_To_Script_Map_Sample_For_Test":
+            return "freetype_test_support_sample"
+    if rel_path == "pillow-rs-freetype/src/font.rs":
+        if return_type.startswith("Option"):
+            return "freetype_optional_font_feature_parse"
+    if rel_path.startswith("pillow-rs-freetype/src/tt/"):
+        if return_type.startswith("Option") or "-> Option" in return_type:
+            return "freetype_optional_sfnt_lookup"
     if not signals:
         return "likely_infallible"
     if any(signal in signals for signal in ["panic", "todo", "unimplemented"]):
@@ -301,6 +333,25 @@ def iter_functions(path: Path) -> list[FunctionRecord]:
         signals = fallibility_signals(body)
         visibility = "pub" if match.group("prefix").strip().startswith("pub") else "private"
         scope = function_scope(path, text, match.start(), test_ranges)
+        classification = classify(path, match.group("name"), return_type, signals)
+        if scope == "test" and classification in {
+            "parser_review",
+            "review_non_result_fallible",
+            "review_panic_path",
+        }:
+            classification = "test_assertion_or_fixture_harness"
+        elif scope == "example" and classification in {
+            "parser_review",
+            "review_non_result_fallible",
+            "review_panic_path",
+        }:
+            classification = "example_fail_fast_or_smoke_harness"
+        elif scope == "bench" and classification in {
+            "parser_review",
+            "review_non_result_fallible",
+            "review_panic_path",
+        }:
+            classification = "bench_fail_fast_harness"
         records.append(
             FunctionRecord(
                 path=path.relative_to(ROOT),
@@ -311,7 +362,7 @@ def iter_functions(path: Path) -> list[FunctionRecord]:
                 return_type=return_type,
                 returns_result="Result" in return_type,
                 signals=signals,
-                classification=classify(path, match.group("name"), return_type, signals),
+                classification=classification,
             )
         )
     return records
