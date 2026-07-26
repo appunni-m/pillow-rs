@@ -209,11 +209,11 @@ implementation. ConicTo runtime movement is `runnable=4`, `passed=4`,
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `90a427d5-b68f-40b2-aa34-fc0030234ee0`
-- Snapshot: `af6f44d2-73aa-4020-b47b-b0242fd9a05f`
+- Run: `203aeeb7-cf3b-4a76-9cdd-03fb4d39be6d`
+- Snapshot: `90438af9-b907-45b4-9a1f-f7f5be2d0c77`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `cb634ebe25dd60c73cbcbd8ead1a5a2c0aae97e4`
+- Commit measured: `983670e44fa61f27daf1b32ffd697ad947a82de4`
 
 Target file metrics:
 
