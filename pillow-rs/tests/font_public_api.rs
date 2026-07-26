@@ -91,6 +91,8 @@ const EXPECTED_OUT_OF_SCOPE: [&str; 1] = [
     "libraqm successful shaping; direction/features/language rows must match Pillow's no-libraqm errors",
 ];
 
+const EXPECTED_IMAGEFONT_LAYOUT_MEMBERS: [&str; 2] = ["BASIC", "RAQM"];
+
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
 
 const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
@@ -128,7 +130,9 @@ const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
 
 const DEFAULT_PARAMETER_VALUE: &str = "<default>";
 
-const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 12] = [
+const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 14] = [
+    ("font_variant", "layout_engine", "BASIC"),
+    ("font_variant", "layout_engine", "RAQM"),
     ("getbbox", "mode", DEFAULT_PARAMETER_VALUE),
     ("getbbox", "mode", "1"),
     ("getbbox", "mode", "bad"),
@@ -969,6 +973,51 @@ fn pillow_imagefont_public_signatures() -> BTreeMap<String, BTreeSet<String>> {
         .collect()
 }
 
+fn pillow_imagefont_layout_members() -> BTreeSet<String> {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
+    let oracle = oracle_python();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let venv_root = repo_root.join(".oracle-venv");
+    let mut command = Command::new(oracle.as_os_str());
+    command
+        .arg(script)
+        .arg("--public-surface")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .env("VIRTUAL_ENV", venv_root)
+        .env("PYTHONNOUSERSITE", "1")
+        .env(
+            "PYTHONPATH",
+            env::join_paths(oracle_site_packages()).expect("valid PYTHONPATH join"),
+        );
+    let output = command
+        .output()
+        .expect("the pinned Pillow font oracle public-surface query must finish");
+    assert!(
+        output.status.success(),
+        "Pillow font oracle public-surface query failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let surface = serde_json::from_slice::<Value>(&output.stdout)
+        .expect("oracle public surface output must be JSON");
+    surface
+        .get("layout")
+        .and_then(Value::as_array)
+        .expect("oracle public surface must include ImageFont.Layout members")
+        .iter()
+        .map(|member| {
+            member
+                .as_str()
+                .expect("ImageFont.Layout member must be a string")
+                .to_owned()
+        })
+        .collect()
+}
+
 fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeSet<String>> {
     let mut observed = BTreeMap::new();
     for case in cases {
@@ -1082,6 +1131,11 @@ fn observed_public_parameter_values(
             let value = match required_parameter.as_str() {
                 "mode" => params
                     .get("mode")
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_PARAMETER_VALUE)
+                    .to_owned(),
+                "layout_engine" if operation == "font_variant" => params
+                    .get("variant_layout_engine")
                     .and_then(Value::as_str)
                     .unwrap_or(DEFAULT_PARAMETER_VALUE)
                     .to_owned(),
@@ -1483,6 +1537,15 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
 
     let pillow_methods = pillow_imagefont_public_methods();
     assert_manifest_operations_match_live_pillow_plus_repo_helpers(&manifest, &pillow_methods);
+    let pillow_layout_members = pillow_imagefont_layout_members();
+    let expected_layout_members = EXPECTED_IMAGEFONT_LAYOUT_MEMBERS
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        pillow_layout_members, expected_layout_members,
+        "live PIL.ImageFont.Layout members changed; update Font manifest coverage so only successful RAQM shaping remains out of scope"
+    );
     let missing_pillow_methods = pillow_methods
         .iter()
         .filter(|operation| !manifest.required_operations.contains(operation.as_str()))
