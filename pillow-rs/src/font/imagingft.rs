@@ -421,22 +421,18 @@ struct GlyphRun {
 }
 
 struct RunGlyph {
-    #[allow(dead_code)]
-    gid: u32,
     pen_before: i32,
     advance: i32,
     outline_cbox: ffi::FT_BBox,
-    #[allow(dead_code)]
-    bitmap: Option<ffi::FT_Bitmap>,
 }
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
-fn glyph_run(ttf: &Font, text: &str, load_flags: i32) -> Result<Option<GlyphRun>, PilError> {
+fn glyph_run(ttf: &Font, text: &str, load_flags: i32) -> Result<GlyphRun, PilError> {
     if text.is_empty() {
-        return Ok(Some(GlyphRun {
+        return Ok(GlyphRun {
             glyphs: vec![],
             max_pen: 0,
-        }));
+        });
     }
     let face = &ttf.engine.face;
     let mut pen = 0i32;
@@ -458,21 +454,19 @@ fn glyph_run(ttf: &Font, text: &str, load_flags: i32) -> Result<Option<GlyphRun>
         let adv = slot.metrics.horiAdvance as i32;
 
         out.push(RunGlyph {
-            gid: g,
             pen_before,
             advance: adv,
             outline_cbox: slot.outline_cbox,
-            bitmap: None, // no render
         });
 
         pen = pen.saturating_add(adv);
         max_pen = max_pen.max(pen);
         prev = Some(g);
     }
-    Ok(Some(GlyphRun {
+    Ok(GlyphRun {
         glyphs: out,
         max_pen,
-    }))
+    })
 }
 
 fn bbox_from_run(ttf: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
@@ -484,9 +478,7 @@ fn bbox_from_run_with_flags(
     text: &str,
     load_flags: i32,
 ) -> Result<(i32, i32, i32, i32), PilError> {
-    let Some(run) = glyph_run(ttf, text, load_flags)? else {
-        return Ok((0, 0, 0, 0));
-    };
+    let run = glyph_run(ttf, text, load_flags)?;
     if run.glyphs.is_empty() {
         return Ok((0, 0, 0, 0));
     }
