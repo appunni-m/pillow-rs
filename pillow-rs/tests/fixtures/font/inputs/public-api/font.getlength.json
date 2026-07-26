@@ -113,6 +113,42 @@
           "text": "AV"
         }
       }
+    },
+    {
+      "case_id": "font.getlength.features_without_raqm_error",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "features": [
+            "-kern"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getlength.language_without_raqm_error",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "language": "en"
+        }
+      }
     }
   ]
 }

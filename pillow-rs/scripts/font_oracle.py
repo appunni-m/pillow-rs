@@ -225,6 +225,13 @@ def binary_rgba(font: Any, text: str, fill: list[int], ImageFont: Any) -> dict[s
     return image_value(mask.size, "RGBA", bytes(rgba))
 
 
+def text_kwargs(params: dict[str, Any], include_stroke: bool = False) -> dict[str, Any]:
+    keys = ["mode", "direction", "features", "language", "anchor"]
+    if include_stroke:
+        keys.extend(["stroke_width", "ink", "start"])
+    return {key: params[key] for key in keys if key in params}
+
+
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
     operation = case["operation"].removeprefix("font.")
     params = case["inputs"]["params"]
@@ -242,7 +249,7 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
     if operation == "getmetrics":
         return {"type": "metrics", "value": list(font.getmetrics())}
     if operation == "getlength":
-        return {"type": "length", "value": font.getlength(text)}
+        return {"type": "length", "value": font.getlength(text, **text_kwargs(params))}
     if operation == "has_variations":
         return {"type": "bool", "value": has_variations(font)}
     if operation == "get_variation_axes":
@@ -268,17 +275,26 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         variant = font.font_variant(size=params.get("variant_size"))
         return font_descriptor(variant)
     if operation == "getbbox":
-        return {"type": "bbox", "value": list(font.getbbox(text))}
+        return {
+            "type": "bbox",
+            "value": list(font.getbbox(text, **text_kwargs(params, include_stroke=True))),
+        }
     if operation == "getbbox_binary":
         return {"type": "bbox", "value": binary_bbox(font, text)}
     if operation == "getmask":
         mask = font.getmask(text, mode="L")
         return image_value(mask.size, "L", bytes(mask))
     if operation == "getmask2":
-        mask, offset = font.getmask2(text, mode="L")
+        kwargs = text_kwargs(params, include_stroke=True)
+        if "mode" not in kwargs:
+            kwargs["mode"] = "L"
+        mask, offset = font.getmask2(text, **kwargs)
         return image_with_offset_value(mask.size, "L", bytes(mask), offset)
     if operation == "getmask2_with_start":
-        mask, offset = font.getmask2(text, mode="L", start=tuple(params["start"]))
+        kwargs = text_kwargs(params, include_stroke=True)
+        kwargs["mode"] = kwargs.get("mode", "L")
+        kwargs["start"] = tuple(params["start"])
+        mask, offset = font.getmask2(text, **kwargs)
         return image_with_offset_value(mask.size, "L", bytes(mask), offset)
     if operation == "get_transposed_mask":
         transposed = ImageFont.TransposedFont(font, orientation(params.get("orientation"), Image))

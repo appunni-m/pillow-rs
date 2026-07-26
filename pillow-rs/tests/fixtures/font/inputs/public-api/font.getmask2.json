@@ -241,6 +241,57 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "font.getmask2.anchor_middle_middle",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "mm"
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.mode_rgba_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.direction_without_raqm_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "direction": "rtl"
+        }
+      }
     }
   ]
 }

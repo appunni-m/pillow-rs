@@ -28,6 +28,28 @@ pub struct FontVariationAxis {
     pub name: Vec<u8>,
 }
 
+/// Optional Pillow `FreeTypeFont` text-layout/render arguments.
+#[derive(Clone, Default, PartialEq)]
+pub struct FontTextOptions {
+    /// Pillow `mode` argument. BASIC layout ignores most values, but `RGBA`
+    /// changes `getmask/getmask2` allocation behavior.
+    pub mode: Option<String>,
+    /// Pillow `direction` argument. Requires libraqm in Pillow.
+    pub direction: Option<String>,
+    /// Pillow OpenType feature list. Requires libraqm in Pillow.
+    pub features: Option<Vec<String>>,
+    /// Pillow language tag. Requires libraqm in Pillow.
+    pub language: Option<String>,
+    /// Pillow text stroke width in pixels.
+    pub stroke_width: f32,
+    /// Pillow two-character anchor code.
+    pub anchor: Option<String>,
+    /// Pillow ink value for RGBA rendering.
+    pub ink: i32,
+    /// Pillow fractional rendering start.
+    pub start: Option<(f64, f64)>,
+}
+
 impl Font {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
@@ -88,6 +110,15 @@ impl Font {
         imagingft::getlength(self, text)
     }
 
+    /// Return Pillow's public text length using optional layout arguments.
+    pub fn getlength_with_options(
+        &self,
+        text: &str,
+        options: &FontTextOptions,
+    ) -> Result<f32, PilError> {
+        imagingft::getlength_with_options(self, text, options)
+    }
+
     /// Return whether the font exposes variation axes.
     pub fn has_variations(&self) -> bool {
         imagingft::has_variations(self)
@@ -118,6 +149,15 @@ impl Font {
         imagingft::getbbox(self, text)
     }
 
+    /// Return Pillow's public text bounding box using optional layout arguments.
+    pub fn getbbox_with_options(
+        &self,
+        text: &str,
+        options: &FontTextOptions,
+    ) -> Result<(f32, f32, f32, f32), PilError> {
+        imagingft::getbbox_with_options(self, text, options)
+    }
+
     /// Return Pillow's public binary-mode text bounding box.
     #[cfg(feature = "test-api")]
     pub fn getbbox_binary(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
@@ -127,6 +167,15 @@ impl Font {
     /// Return Pillow's public `getmask2` mask and offset tuple.
     pub fn getmask2(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         imagingft::getmask2(self, text)
+    }
+
+    /// Return Pillow's public `getmask2` result using optional render arguments.
+    pub fn getmask2_with_options(
+        &self,
+        text: &str,
+        options: &FontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        imagingft::getmask2_with_options(self, text, options)
     }
 
     /// `getmask2` variant with Pillow's fractional start parameter.
@@ -175,5 +224,20 @@ pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilEr
 impl std::fmt::Debug for Font {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Font::FreeType({}px)", self.font_size())
+    }
+}
+
+impl std::fmt::Debug for FontTextOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FontTextOptions")
+            .field("mode", &self.mode)
+            .field("direction", &self.direction)
+            .field("features", &self.features)
+            .field("language", &self.language)
+            .field("stroke_width", &self.stroke_width)
+            .field("anchor", &self.anchor)
+            .field("ink", &self.ink)
+            .field("start", &self.start)
+            .finish()
     }
 }

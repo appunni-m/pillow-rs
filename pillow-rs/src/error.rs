@@ -42,6 +42,10 @@ pub enum PilError {
     #[error("{0}")]
     IndexError(String),
 
+    /// Mapping/key lookup failed, used for Pillow paths that raise `KeyError`.
+    #[error("{0}")]
+    KeyError(String),
+
     /// Input bytes could not be identified as a supported image format.
     #[error("cannot identify image file '{0}'")]
     UnidentifiedImageError(String),
