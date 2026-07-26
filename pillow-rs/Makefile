@@ -35,6 +35,7 @@ help:
 	@printf "  make font-tests        Run Font public API parity tests\n"
 	@printf "  make font-tests-release Run Font public API parity tests (release)\n"
 	@printf "  make font-tests-coverage Run Font public API parity tests with coverage\n"
+	@printf "  make font-tests-coverage-with-freetype Run Font public API parity tests with fontdone coverage\n"
 	@printf "  make imagingft-tests   Compatibility alias for font-tests\n"
 	@printf "  make test-imagingft           Run legacy ImagingFT matrix parity tests\n"
 	@printf "  make test-imagingft-release   Run legacy ImagingFT matrix parity tests (release)\n"
@@ -131,6 +132,10 @@ font-tests-release:
 .PHONY: font-tests-coverage
 font-tests-coverage:
 	bash ../scripts/coverage/run_font_rust_coverage.sh
+
+.PHONY: font-tests-coverage-with-freetype
+font-tests-coverage-with-freetype:
+	bash ../scripts/coverage/run_font_rust_with_freetype_coverage.sh
 
 .PHONY: imagingft-tests
 imagingft-tests: font-tests
