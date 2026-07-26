@@ -1,14 +1,19 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `3bf702906`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `d28250d93`
 
-## Current checkpoint: mask ink and variadic public options
+## Current checkpoint: Font public-signature edge sweep
 
-New commit:
+New commits:
 
 - `3bf702906` — covered Pillow `FreeTypeFont.getmask(..., ink=...)` and
   `FreeTypeFont.getmask2(..., *args, **kwargs)` public-signature behavior
   through input-only rows and the live repo-local Pillow oracle.
+- `f7e2cafbd` — fixed `font_variant(layout_engine=...)` parity. In the
+  repo-local no-raqm Pillow oracle, `RAQM` and unknown layout-engine values are
+  accepted and fall back to BASIC rather than erroring.
+- `d28250d93` — removed non-behavioral ignored-option bindings after the
+  fallback behavior was covered by live-oracle rows.
 
 What changed:
 
@@ -19,6 +24,8 @@ What changed:
   `stroke_width == 0`.
 - `font_manifest.yaml` now classifies `getmask.ink` plus `getmask2.ink`,
   `getmask2.args`, and `getmask2.kwargs` as covered.
+- `font_variant.layout_engine` is covered for BASIC, RAQM fallback, and an
+  unknown string accepted by Pillow's public wrapper in the no-raqm oracle.
 - Remaining manifest-level blocked public parameters:
   - `getmask`: `stroke_width`
   - `getmask2`: `stroke_width`
@@ -28,17 +35,17 @@ Verification:
 - `make -C pillow-rs font-tests` — passed
 - `make -C pillow-rs fmt` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `2774b7fb-f593-46b1-944b-bcf4f8ee5d81`
-  - snapshot `26ab5845-8e8a-4777-9a2c-b3e85dea5b10`
-  - commit `3bf70290624318b8cb463a7747460cfed90ac19b`
+  - run `9ade8c03-6906-44d3-987b-9ecb36690e81`
+  - snapshot `0e61d126-332f-460d-a1ef-dc8a217e1c3b`
+  - commit `d28250d933e539557f37477e4af12bc0b4f44c21`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `996/1088` (`91.54%`) | `192/248` (`77.42%`) | `98/113` (`86.73%`) | `1652/1808` (`91.37%`) |
-| `pillow-rs/src/font/mod.rs` | `179/203` (`88.18%`) | n/a | `42/49` (`85.71%`) | `217/259` (`83.78%`) |
+| `pillow-rs/src/font/imagingft.rs` | `955/1041` (`91.74%`) | `186/240` (`77.50%`) | `95/110` (`86.36%`) | `1595/1748` (`91.25%`) |
+| `pillow-rs/src/font/mod.rs` | `190/214` (`88.79%`) | n/a | `44/51` (`86.27%`) | `230/272` (`84.56%`) |
 
 Blocker:
 

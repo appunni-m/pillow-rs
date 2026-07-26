@@ -4,22 +4,22 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
-Latest measured checkpoint after mask option sweep:
+Latest measured checkpoint after public-signature edge sweep:
 
-- Commit: `3bf702906`
-- Coverage MCP run: `2774b7fb-f593-46b1-944b-bcf4f8ee5d81`
-- Snapshot: `26ab5845-8e8a-4777-9a2c-b3e85dea5b10`
+- Commit: `d28250d93`
+- Coverage MCP run: `9ade8c03-6906-44d3-987b-9ecb36690e81`
+- Snapshot: `0e61d126-332f-460d-a1ef-dc8a217e1c3b`
 - Command: `imagingft-tests-coverage-fixed`
 - Result: passed, ingested
 - `pillow-rs/src/font/imagingft.rs`:
-  - lines: `996/1088` (`91.54%`)
-  - branches: `192/248` (`77.42%`)
-  - functions: `98/113` (`86.73%`)
-  - regions: `1652/1808` (`91.37%`)
+  - lines: `955/1041` (`91.74%`)
+  - branches: `186/240` (`77.50%`)
+  - functions: `95/110` (`86.36%`)
+  - regions: `1595/1748` (`91.25%`)
 - `pillow-rs/src/font/mod.rs`:
-  - lines: `179/203` (`88.18%`)
-  - functions: `42/49` (`85.71%`)
-  - regions: `217/259` (`83.78%`)
+  - lines: `190/214` (`88.79%`)
+  - functions: `44/51` (`86.27%`)
+  - regions: `230/272` (`84.56%`)
 
 Latest manifest movement:
 
@@ -27,6 +27,9 @@ Latest manifest movement:
 - Covered `getmask2.ink`, `getmask2.args`, and `getmask2.kwargs` with
   live-oracle rows that pass real positional args and extra kwargs into
   Pillow's public `FreeTypeFont.getmask2`.
+- Fixed and covered `font_variant(layout_engine=...)` no-raqm behavior:
+  Pillow accepts RAQM and unknown strings and falls back to BASIC rather than
+  raising an error.
 - Remaining blocked public parameters are now only:
   - `getmask`: `stroke_width`
   - `getmask2`: `stroke_width`
