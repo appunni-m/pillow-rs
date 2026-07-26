@@ -269,11 +269,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `6ee0899a-3a5f-4dbf-b302-7965184e9b49`
-- Snapshot: `cd1ee75d-fd8a-4d84-81c5-3b1f67465481`
+- Run: `761395d2-8ca1-4b63-a5d1-714cf45866e2`
+- Snapshot: `2dec2cbd-4c79-41dd-85c4-0ee0a12645ac`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `4d0fa40e95dd19bbfcf3b28fe4589feb6a36fc1d`
+- Commit measured: `95b9c2d9e45dd8c5524309249f3af5c9633b324a`
 
 Target file metrics:
 
@@ -281,17 +281,19 @@ Target file metrics:
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
-| `pillow-rs/src/font/pilfont.rs` | `224/370` (`60.54%`) | `39/96` (`40.62%`) | `19/42` (`45.24%`) | `352/591` (`59.56%`) |
+| `pillow-rs/src/font/pilfont.rs` | `298/370` (`80.54%`) | `54/96` (`56.25%`) | `27/42` (`64.29%`) | `472/591` (`79.86%`) |
 
 Current full-module scope note:
 
 - The active test now includes bitmap `PIL.ImageFont.ImageFont` rows and
   repo-local `load`/`load_path` PILfont assets, so `pilfont.rs` is now part of
   the coverage target.
-- Coverage is not 100% yet for the full `PIL.ImageFont` target. The next
-  coverage work must add input-only rows for PILfont parser/image error paths,
-  PBM fallback paths, clipped/invalid glyph rectangles, and bitmap transpose
-  branches, then rerun Coverage MCP.
+- Coverage is not 100% yet for the full `PIL.ImageFont` target. Added rows for
+  repo-local PBM-backed PILfont loading/masking and zero-sized transposed masks
+  moved `pilfont.rs` regions from `352/591` (`59.56%`) to `472/591`
+  (`79.86%`). The next coverage work must add input-only rows for PILfont
+  parser/image error paths, clipped/invalid glyph rectangles, and remaining PBM
+  parser branches, then rerun Coverage MCP.
 
 Latest Font wrapper movement:
 
