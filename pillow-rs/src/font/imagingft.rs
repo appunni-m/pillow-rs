@@ -53,10 +53,7 @@ fn load_truetype_with_index(
         horiResolution: 0,
         vertResolution: 0,
     };
-    let size_error = ffi::FT_Request_Size(Some(&mut face), Some(&request));
-    if size_error != ffi::FT_Err_Ok {
-        return Err(ft_error_to_pil(size_error));
-    }
+    check_ft_error(ffi::FT_Request_Size(Some(&mut face), Some(&request)))?;
 
     let family_name = face.family_name.clone();
     let style_name = face.style_name.clone();
@@ -93,6 +90,14 @@ fn ft_error_to_pil(error: i32) -> PilError {
         x if x == ffi::FT_Err_Code_Overflow as i32 => PilError::OsError("code overflow".into()),
         x if x == ffi::FT_Err_Nested_DEFS as i32 => PilError::OsError("nested DEFS".into()),
         other => PilError::ValueError(format!("FreeType error {other}")),
+    }
+}
+
+fn check_ft_error(error: i32) -> Result<(), PilError> {
+    if error == ffi::FT_Err_Ok {
+        Ok(())
+    } else {
+        Err(ft_error_to_pil(error))
     }
 }
 
@@ -242,15 +247,13 @@ pub(crate) fn set_variation_by_name(font: &mut ImageFont, name: &[u8]) -> Result
             String::from_utf8_lossy(name)
         )));
     };
-    let error =
-        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), (index + 1) as ffi::FT_UInt);
-    if error == ffi::FT_Err_Ok {
-        refresh_engine_metadata(font);
-        font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
-        Ok(())
-    } else {
-        Err(ft_error_to_pil(error))
-    }
+    check_ft_error(ffi::FT_Set_Named_Instance(
+        Some(&mut font.engine.face),
+        (index + 1) as ffi::FT_UInt,
+    ))?;
+    refresh_engine_metadata(font);
+    font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
+    Ok(())
 }
 
 pub(crate) fn set_variation_by_axes(font: &mut ImageFont, axes: &[f32]) -> Result<(), PilError> {
@@ -261,17 +264,13 @@ pub(crate) fn set_variation_by_axes(font: &mut ImageFont, axes: &[f32]) -> Resul
         .iter()
         .map(|axis| pillow_axis_to_fixed(*axis))
         .collect::<Vec<_>>();
-    let error = ffi::FT_Set_Var_Design_Coordinates(
+    check_ft_error(ffi::FT_Set_Var_Design_Coordinates(
         Some(&mut font.engine.face),
         coords.len() as ffi::FT_UInt,
         Some(&coords),
-    );
-    if error == ffi::FT_Err_Ok {
-        refresh_engine_metadata(font);
-        Ok(())
-    } else {
-        Err(ft_error_to_pil(error))
-    }
+    ))?;
+    refresh_engine_metadata(font);
+    Ok(())
 }
 
 fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
