@@ -3206,6 +3206,25 @@ pub fn abi_support_stroker_parse_degenerate() -> bool {
         Some(&mut points_after_second),
         Some(&mut contours_after_second),
     );
+    let mixed = rust_ffi::FT_OutlineSnapshot {
+        points: vec![
+            rust_ffi::FT_Vector { x: 0, y: 0 },
+            rust_ffi::FT_Vector { x: 10, y: 0 },
+            rust_ffi::FT_Vector { x: 0, y: 0 },
+            rust_ffi::FT_Vector { x: 640, y: 0 },
+        ],
+        tags: vec![1, 1, 1, 1],
+        contours: vec![0, 1, 3],
+        flags: 0,
+    };
+    let third_error = rust_ffi::FT_Stroker_ParseOutline(stroker, Some(&mixed), 0);
+    let mut points_after_third = 99;
+    let mut contours_after_third = 99;
+    let third_counts_error = rust_ffi::FT_Stroker_GetCounts(
+        stroker,
+        Some(&mut points_after_third),
+        Some(&mut contours_after_third),
+    );
     rust_ffi::FT_Stroker_Done(stroker);
     first_error == rust_ffi::FT_Err_Ok
         && first_counts_error == rust_ffi::FT_Err_Ok
@@ -3215,6 +3234,10 @@ pub fn abi_support_stroker_parse_degenerate() -> bool {
         && second_counts_error == rust_ffi::FT_Err_Ok
         && points_after_second == 0
         && contours_after_second == 0
+        && third_error == rust_ffi::FT_Err_Ok
+        && third_counts_error == rust_ffi::FT_Err_Ok
+        && points_after_third == 18
+        && contours_after_third == 2
 }
 
 #[cfg(feature = "abi-test-support")]
