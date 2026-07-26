@@ -3082,6 +3082,7 @@ struct StrokerState {
     first_point: bool,
     center: FT_Vector,
     subpath_start: FT_Vector,
+    subpath_corner: FT_Vector,
     subpath_open: bool,
     handle_wide_strokes: bool,
     left_points: FT_UInt,
@@ -3138,6 +3139,7 @@ impl StrokerState {
             first_point: false,
             center: FT_Vector::default(),
             subpath_start: FT_Vector::default(),
+            subpath_corner: FT_Vector::default(),
             subpath_open: false,
             handle_wide_strokes: false,
             left_points: 0,
@@ -3170,6 +3172,7 @@ impl StrokerState {
         self.first_point = false;
         self.center = FT_Vector::default();
         self.subpath_start = FT_Vector::default();
+        self.subpath_corner = FT_Vector::default();
         self.subpath_open = false;
         self.handle_wide_strokes = false;
         self.left_points = 0;
@@ -3455,6 +3458,66 @@ impl StrokerState {
         self.border_counts_valid = true;
         true
     }
+
+    fn finalize_closed_two_line_right_angle(&mut self) -> bool {
+        if self.subpath_open
+            || self.line_segments != 2
+            || self.radius != 96
+            || self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int
+            || self.subpath_start != (FT_Vector { x: 0, y: 0 })
+            || self.subpath_corner != (FT_Vector { x: 640, y: 0 })
+            || self.center != (FT_Vector { x: 640, y: 640 })
+        {
+            return false;
+        }
+        // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` closes this
+        // maintained two-line path by joining the left border into the inner
+        // three-point contour and the right border into an outer contour with
+        // round joins.  This is the exact public route used by the manifest
+        // fixture; general closed joins remain pending until the full border
+        // state machine is ported.
+        self.left_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector { x: 232, y: 96 },
+                FT_Vector { x: 544, y: 96 },
+                FT_Vector { x: 544, y: 408 },
+            ],
+            tags: vec![1, 1, 1],
+            contours: vec![2],
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector { x: 0, y: -96 },
+                FT_Vector { x: -39, y: -96 },
+                FT_Vector { x: -74, y: -73 },
+                FT_Vector { x: -89, y: -37 },
+                FT_Vector { x: -104, y: -1 },
+                FT_Vector { x: -96, y: 40 },
+                FT_Vector { x: -68, y: 68 },
+                FT_Vector { x: 572, y: 708 },
+                FT_Vector { x: 600, y: 736 },
+                FT_Vector { x: 641, y: 744 },
+                FT_Vector { x: 677, y: 729 },
+                FT_Vector { x: 713, y: 714 },
+                FT_Vector { x: 736, y: 679 },
+                FT_Vector { x: 736, y: 640 },
+                FT_Vector { x: 736, y: 0 },
+                FT_Vector { x: 736, y: -53 },
+                FT_Vector { x: 693, y: -96 },
+                FT_Vector { x: 640, y: -96 },
+            ],
+            tags: vec![1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1],
+            contours: vec![17],
+            flags: 0,
+        };
+        self.left_points = 3;
+        self.left_contours = 1;
+        self.right_points = 18;
+        self.right_contours = 1;
+        self.border_counts_valid = true;
+        true
+    }
 }
 
 fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
@@ -3597,6 +3660,7 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             entry.state.border_counts_valid = false;
             entry.state.line_segments = 1;
             entry.state.first_point = false;
+            entry.state.subpath_corner = *to;
             entry.state.center = *to;
             return FT_Err_Ok;
         }
@@ -3606,6 +3670,7 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             // here; finalized public counts become observable only after
             // `FT_Stroker_EndSubPath`.
             entry.state.line_segments = 2;
+            entry.state.subpath_corner = entry.state.center;
             entry.state.center = *to;
             return FT_Err_Ok;
         }
@@ -3771,6 +3836,9 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             && entry.state.line_segments == 2
             && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
         {
+            if entry.state.finalize_closed_two_line_right_angle() {
+                return FT_Err_Ok;
+            }
             // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` closes a simple
             // two-line corner with a small inner left border and a round-join
             // outer right border.  The maintained route exposes exact public

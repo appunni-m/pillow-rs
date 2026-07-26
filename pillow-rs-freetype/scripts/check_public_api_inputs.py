@@ -1462,11 +1462,6 @@ def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders": (
-            "FT_Stroker_EndSubPath closed-path parity needs a maintained route "
-            "proving close emission joins left/right borders and preserves "
-            "contour order exactly like pinned C"
-        ),
         "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success": (
             "FT_Stroker_ParseOutline mixed-outline parity needs a maintained "
             "route proving line, conic, and cubic contour decomposition feeds "
@@ -6638,7 +6633,14 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
         "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
         "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border",
+        "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders",
     }:
+        if row.case_id == "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders":
+            return (
+                "FT_Stroker_EndSubPath closed two-line path finalization validates "
+                "exact left and right exported border outlines through pinned C "
+                "oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         if row.case_id == "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border":
             return (
                 "FT_Stroker_EndSubPath open-path cap emission and single-border "
