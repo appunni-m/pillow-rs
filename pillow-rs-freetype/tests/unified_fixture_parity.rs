@@ -25411,6 +25411,14 @@ fn is_stroker_cubic_success_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_CubicTo.cubic_curve_success"
 }
 
+fn is_stroker_cubic_first_segment_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath"
+}
+
+fn is_stroker_maintained_cubic_case(case: &InputCase) -> bool {
+    is_stroker_cubic_success_case(case) || is_stroker_cubic_first_segment_case(case)
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -26706,7 +26714,7 @@ fn stroker_cubic_success_output(
 }
 
 fn rust_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
-    if !is_stroker_cubic_success_case(case) {
+    if !is_stroker_maintained_cubic_case(case) {
         return Err(format!(
             "{} is not the maintained cubic route",
             case.case_id
@@ -26729,7 +26737,12 @@ fn rust_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
     let control1 = FT_Vector { x: 160, y: 640 };
     let control2 = FT_Vector { x: 480, y: 640 };
     let to = FT_Vector { x: 640, y: 0 };
-    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let open = if is_stroker_cubic_first_segment_case(case) {
+        1
+    } else {
+        0
+    };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), open);
     let cubic_error = if begin_error == FT_Err_Ok {
         FT_Stroker_CubicTo(stroker, Some(&control1), Some(&control2), Some(&to))
     } else {
@@ -26765,7 +26778,7 @@ fn rust_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn c_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
-    if !is_stroker_cubic_success_case(case) {
+    if !is_stroker_maintained_cubic_case(case) {
         return Err(format!(
             "{} is not the maintained cubic route",
             case.case_id
@@ -26793,7 +26806,12 @@ fn c_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
     let control1 = c_abi::FT_Vector { x: 160, y: 640 };
     let control2 = c_abi::FT_Vector { x: 480, y: 640 };
     let to = c_abi::FT_Vector { x: 640, y: 0 };
-    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let open = if is_stroker_cubic_first_segment_case(case) {
+        1
+    } else {
+        0
+    };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, open);
     let cubic_error = if begin_error == FT_Err_Ok {
         c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
     } else {
@@ -26842,13 +26860,18 @@ fn c_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn wasm_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
-    if !is_stroker_cubic_success_case(case) {
+    if !is_stroker_maintained_cubic_case(case) {
         return Err(format!(
             "{} is not the maintained cubic route",
             case.case_id
         ));
     }
-    if wasm_abi::abi_support_stroker_cubic_success() {
+    let supported = if is_stroker_cubic_first_segment_case(case) {
+        wasm_abi::abi_support_stroker_cubic_first_segment()
+    } else {
+        wasm_abi::abi_support_stroker_cubic_success()
+    };
+    if supported {
         rust_stroker_cubic_success(case)
     } else {
         Err("unsupported stroker cubic route".to_string())
@@ -31796,6 +31819,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.cubic_to" if is_stroker_cubic_success_case(case) => {
             Ok(vec!["--stroker-cubic-success".to_string()])
         }
+        "ftstroke.cubic_to" if is_stroker_cubic_first_segment_case(case) => {
+            Ok(vec!["--stroker-cubic-first-segment".to_string()])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -33395,6 +33421,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.cubic_to" if is_stroker_cubic_success_case(case) => {
             rust_stroker_cubic_success(case)
         }
+        "ftstroke.cubic_to" if is_stroker_cubic_first_segment_case(case) => {
+            rust_stroker_cubic_success(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -34581,6 +34610,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_conic_success(case)
         }
         "ftstroke.cubic_to" if is_stroker_cubic_success_case(case) => c_stroker_cubic_success(case),
+        "ftstroke.cubic_to" if is_stroker_cubic_first_segment_case(case) => {
+            c_stroker_cubic_success(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -35662,6 +35694,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_stroker_conic_success(case)
         }
         "ftstroke.cubic_to" if is_stroker_cubic_success_case(case) => {
+            wasm_stroker_cubic_success(case)
+        }
+        "ftstroke.cubic_to" if is_stroker_cubic_first_segment_case(case) => {
             wasm_stroker_cubic_success(case)
         }
         "ftstroke.open_path_geometry"

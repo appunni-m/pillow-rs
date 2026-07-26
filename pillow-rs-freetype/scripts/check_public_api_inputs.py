@@ -1315,11 +1315,6 @@ def ftstroke_curve_pending_reason(row: ConcreteInput) -> str | None:
             "point is treated as the same no-op or preserved-state case as "
             "pinned C"
         ),
-        "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath": (
-            "FT_Stroker_CubicTo first-segment parity needs a maintained route "
-            "proving a cubic segment can initialize an otherwise empty subpath "
-            "with the same border state and output geometry as pinned C"
-        ),
         "ftstroke.FT_Stroker_CubicTo.coincident_controls_and_end_noop": (
             "FT_Stroker_CubicTo coincident-control parity needs a maintained "
             "route proving both controls and end point equal to the current "
@@ -6582,6 +6577,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
     ):
         return (
             "FT_Stroker_CubicTo maintained cubic curve route validates exact "
+            "status sequence, exported outline points, tags, contours, and "
+            "CBox through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftstroke.cubic_to"
+        and row.case_id == "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath"
+    ):
+        return (
+            "FT_Stroker_CubicTo open first-segment route validates exact "
             "status sequence, exported outline points, tags, contours, and "
             "CBox through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )

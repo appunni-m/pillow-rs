@@ -1,7 +1,7 @@
 # Font Public-API Parity Status
 
 Last updated: 2026-07-27 (Asia/Kolkata) after maintained stroker CubicTo
-parity work.
+first-segment parity work.
 
 ## Oracle and fixture contract
 
@@ -194,14 +194,18 @@ Latest `FT_Stroker_CubicTo` lower-level movement:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo
 ```
 
-Result after the maintained cubic route:
+Result after the maintained cubic routes:
 `FT_Stroker_CubicTo.cubic_curve_success` now runs as real C/Rust/WASM parity
 for the explicit `(0,0) -> (160,640) -> (480,640) -> (640,0)` closed fixture.
 The route compares exact status sequence, exported outline points, tags,
-contours, and CBox against a pinned C oracle. This route is not the general
-cubic subdivision implementation. `FT_Stroker_CubicTo.first_segment_starts_subpath`
-remains pending. CubicTo runtime movement is `runnable=3`, `passed=3`,
-`pending=1`. Route audit movement is `real-parity=4836`, `pending-route=185`.
+contours, and CBox against a pinned C oracle.
+`FT_Stroker_CubicTo.first_segment_starts_subpath` also now runs as real
+C/Rust/WASM parity for the explicit open
+`(0,0) -> (160,640) -> (480,640) -> (640,0)` fixture, proving first-segment
+border initialization and open end-cap export for that maintained route. These
+routes are not the general cubic subdivision implementation. CubicTo runtime
+movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
+`real-parity=4837`, `pending-route=184`.
 
 ## Edge cases already covered by active Font fixtures
 
@@ -268,7 +272,7 @@ Latest blocker verification:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
 ```
 
-Result after the ConicTo movement: runnable rows still pass (`3/3`), and the
+Result after the CubicTo first-segment movement: runnable rows still pass (`3/3`), and the
 five glyph-stroke success rows remain pending. This confirms that adding active
 Font `stroke_width` rows now would create honest Pillow-vs-Rust failures rather
 than increasing trustworthy Font coverage.
