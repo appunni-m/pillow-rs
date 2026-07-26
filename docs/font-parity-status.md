@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `da320c5e-b734-40d4-8ffe-f3536ed8599b`
-- Snapshot: `871af3b8-9fba-443b-8db6-4471768d08af`
+- Run: `d26aa267-960b-43ff-8289-0a927796a5cb`
+- Snapshot: `62414887-bb3b-4a1a-86a6-ba0ac921fc6d`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `db2cd984c7119c8c1b02ebcdc3be1200daea5b50`
+- Commit measured: `3f78330e1efffb606aeede50dd67df529bf2dbb0`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `813/833` (`97.60%`) | `130/142` (`91.55%`) | `79/86` (`91.86%`) | `1277/1345` (`94.94%`) |
+| `pillow-rs/src/font/imagingft.rs` | `816/833` (`97.96%`) | `133/144` (`92.36%`) | `79/86` (`91.86%`) | `1290/1347` (`95.77%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -327,6 +327,14 @@ Latest Font wrapper movement:
   `font.getmask2.dejavusans24_a_stroke_1_5_l`, and public `start` success/error
   variants. Expected mask bytes and errors are generated only by the live
   Pillow oracle.
+- Added active input-only empty stroked text rows for
+  `font.getmask.dejavusans24_empty_stroke_1_5_l` and
+  `font.getmask2.dejavusans24_empty_stroke_1_5_l`. These are public
+  `PIL.ImageFont` inputs, not hardcoded expected outputs. The rows exposed and
+  fixed a real mismatch: Pillow allocates `ceil(stroke_width * 2)` and reports
+  `getmask2` offset `(-2, -2)` for `stroke_width=1.5`, while Rust previously
+  allocated `ceil(stroke_width) * 2` and rounded the negative top offset toward
+  zero.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
@@ -356,10 +364,11 @@ Remaining targeted gaps in `imagingft.rs`:
   overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
   malformed-font sweep can crash Pillow itself, so crash-only rows are not
   admissible parity fixtures.
-- general non-zero `stroke_width`; partially routed through real pure-Rust
-  `FT_Glyph_Stroke` for the maintained DejaVuSans `"A"` fixture, with broader
-  coverage still blocked on complete `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder`
-  implementation.
+- general visible non-zero `stroke_width`; partially routed through real
+  pure-Rust `FT_Glyph_Stroke` for the maintained DejaVuSans `"A"` fixture and
+  through the Pillow-compatible empty-text allocation path, with broader visible
+  glyph coverage still blocked on complete `FT_Glyph_Stroke`/
+  `FT_Glyph_StrokeBorder` implementation.
 
 Latest blocker verification:
 
@@ -386,6 +395,7 @@ remaining lower-level routes to become real parity.
 5. Rerun `make -C pillow-rs font-tests` and Coverage MCP
    `font-tests-coverage-with-freetype`.
 
-Do not add fake empty/space-only stroke rows to cover the branch. Pillow
-succeeds for visible glyph strokes, so the only trustworthy path to 100% region
-coverage is the lower-level stroker implementation.
+Do not add fake space-only stroke rows to cover branches. Empty stroked text is
+now covered because it is a distinct public `PIL.ImageFont` behavior and exposed
+a real size/offset mismatch. Remaining visible glyph stroke coverage must come
+from lower-level stroker implementation, not from synthetic fixture padding.
