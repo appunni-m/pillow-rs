@@ -6,7 +6,8 @@
 
 CARGO := cargo
 PYTHON := python3
-IMAGINGFT_ORACLE_PYTHON ?= $(abspath ../.oracle-venv/bin/python)
+FONT_ORACLE_PYTHON ?= $(abspath ../.oracle-venv/bin/python)
+IMAGINGFT_ORACLE_PYTHON ?= $(FONT_ORACLE_PYTHON)
 MANIFEST := ../manifest.yaml
 FIXTURES_DIR := ../tests/fixtures
 
@@ -31,9 +32,10 @@ help:
 	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
 	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
-	@printf "  make imagingft-tests   Run ImagingFT public API parity tests\n"
-	@printf "  make imagingft-tests-release  Run ImagingFT public API parity tests (release)\n"
-	@printf "  make imagingft-tests-coverage  Run ImagingFT public API parity tests with coverage\n"
+	@printf "  make font-tests        Run Font public API parity tests\n"
+	@printf "  make font-tests-release Run Font public API parity tests (release)\n"
+	@printf "  make font-tests-coverage Run Font public API parity tests with coverage\n"
+	@printf "  make imagingft-tests   Compatibility alias for font-tests\n"
 	@printf "  make test-imagingft           Run legacy ImagingFT matrix parity tests\n"
 	@printf "  make test-imagingft-release   Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "\nFixtures:\n"
@@ -61,7 +63,7 @@ build-release:
 	$(CARGO) build --release --locked
 
 .PHONY: test
-test: test-core imagingft-tests
+test: test-core font-tests
 
 .PHONY: test-core
 test-core:
@@ -116,34 +118,43 @@ test-apply-transparency-oracle:
 backend-support-matrix:
 	$(CARGO) run --quiet --all-features --example backend_support_matrix --locked
 
+.PHONY: font-tests
+font-tests:
+	FONT_ORACLE_PYTHON=$(FONT_ORACLE_PYTHON) \
+		$(CARGO) test --all-features --test font_public_api --locked -- --nocapture
+
+.PHONY: font-tests-release
+font-tests-release:
+	FONT_ORACLE_PYTHON=$(FONT_ORACLE_PYTHON) \
+		$(CARGO) test --release --all-features --test font_public_api --locked -- --nocapture
+
+.PHONY: font-tests-coverage
+font-tests-coverage:
+	bash ../scripts/coverage/run_font_rust_coverage.sh
+
 .PHONY: imagingft-tests
-imagingft-tests:
-	IMAGINGFT_ORACLE_PYTHON=$(IMAGINGFT_ORACLE_PYTHON) \
-		$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
+imagingft-tests: font-tests
 
 .PHONY: imagingft-tests-release
-imagingft-tests-release:
-	IMAGINGFT_ORACLE_PYTHON=$(IMAGINGFT_ORACLE_PYTHON) \
-		$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
+imagingft-tests-release: font-tests-release
 
 .PHONY: imagingft-tests-coverage
-imagingft-tests-coverage:
-	bash ../scripts/coverage/run_imagingft_rust_coverage.sh
+imagingft-tests-coverage: font-tests-coverage
 
 .PHONY: test-imagingft
-test-imagingft: imagingft-tests
+test-imagingft: font-tests
 
 .PHONY: test-imagingft-release
-test-imagingft-release: imagingft-tests-release
+test-imagingft-release: font-tests-release
 
 .PHONY: fixtures
 fixtures:
-	@printf "ImagingFT public-api fixtures are input-only and are not generated.\n"
+	@printf "Font public-api fixtures are input-only and are not generated.\n"
 
 .PHONY: fixtures-check
 fixtures-check:
 	@! rg -n '"(expectation|expected|pixels_hex|sha256|raw_path)"' \
-		tests/fixtures/imagingft/inputs/public-api
+		tests/fixtures/font/inputs/public-api
 
 .PHONY: fixtures-clean
 fixtures-clean:

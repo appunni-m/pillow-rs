@@ -1,4 +1,4 @@
-# ImagingFT 100% Region Coverage Plan
+# Font 100% Region Coverage Plan
 
 Last updated: 2026-07-26 (Asia/Kolkata)
 
@@ -33,19 +33,20 @@ Implemented in the current worktree:
 
 Verified gates:
 
-- `make -C pillow-rs imagingft-tests` passes after each committed batch.
-- Coverage MCP command `imagingft-tests-coverage-fixed` passed and ingested
+- `make -C pillow-rs font-tests` passes after each committed batch.
+- Coverage MCP command `imagingft-tests-coverage-fixed compatibility registration` passed and ingested
   after each committed batch.
 
 Coverage snapshots:
 
-| Commit | Snapshot | `imagingft.rs` regions | Branches | Notes |
+| Commit | Snapshot | `font/imagingft.rs` regions | Branches | Notes |
 |---|---|---:|---:|---|
 | `88504ef6e` | `e77930c8-41c2-4eb2-b943-4ce8ca2066cf` | `1873/2338` (`80.11%`) | `172/258` | pre-error-row baseline used for this execution |
 | `f0d02db78` | `b32d6e80-3e98-4e85-ade4-28b416790e97` | `1851/2294` (`80.69%`) | `174/260` | Result propagation changed denominator |
 | `a460c1e27` | `f1c881aa-ebc5-40ea-a8ba-371a8418f355` | `1800/2243` (`80.25%`) | `178/262` | bytecode error rows/fixes |
 | `550787522` | `d8402aae-43ae-469d-8efd-c01666ce5af8` | `1875/2330` (`80.47%`) | `181/266` | missing-name row/fix |
 | `9d0aad7e` + dirty worktree | `37d797ad-be62-4dc1-b1e3-46fac6547b03` | `1649/2009` (`82.08%`) | `160/224` | removed Rust-only bitmap path from imagingft ownership |
+| `978b6b403` + dirty worktree | `e3c79419-67ff-4b76-ac15-17cf0822a908` | `687/762` (`90.16%`) | `86/108` | active suite moved to Font public API; imagingft-named harness/fixtures deprecated |
 
 Current blocker to literal 100% region coverage:
 
@@ -58,7 +59,7 @@ Current blocker to literal 100% region coverage:
 
 Rejected during execution:
 
-- `name_table_bad_storage.ttf` was not kept in the imagingft public corpus.
+- `name_table_bad_storage.ttf` was not kept in the font public corpus.
   Live Pillow `_imagingft` loaded it, but the lower-level freetype manifest
   classifies the same asset as an `FT_Err_Name_Table_Missing` lane. Changing
   `fontdone` to accept it inside this task would risk weakening FreeType
@@ -85,16 +86,16 @@ The rule for every added case is strict:
 
 ## Current evidence baseline
 
-- Fixture suite: `make -C pillow-rs imagingft-tests`
-- Coverage MCP command: `imagingft-tests-coverage-fixed`
-- Latest measured source snapshot: `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`
-- Measured commit for source/fixtures: `1b6baf751e0073be461ca9433cb1bb54c0f09ac3`
+- Fixture suite: `make -C pillow-rs font-tests`
+- Coverage MCP command: `imagingft-tests-coverage-fixed` compatibility registration, currently executing `font-tests`
+- Latest measured source snapshot: `e3c79419-67ff-4b76-ac15-17cf0822a908`
+- Measured commit for source/fixtures: `978b6b4039aa72ebbf68e00ce016fd0533fec21c`
 - Current corpus: `105` rows across `17` input files
 - Current `pillow-rs/src/font/imagingft.rs` metrics:
-  - lines: `1050/1286` (`81.64852255%`)
-  - branches: `172/258` (`66.66666667%`)
-  - functions: `108/122` (`88.52459016%`)
-  - regions: `1873/2338` (`80.11120616%`)
+  - lines: `394/432` (`91.20370370%`)
+  - branches: `86/108` (`79.62962963%`)
+  - functions: `38/43` (`88.37209302%`)
+  - regions: `687/762` (`90.15748031%`)
 
 The current corpus already proves exact Pillow parity for these public
 operations:
@@ -143,7 +144,7 @@ Rejected proof attempt:
 
 ## Coverage gap taxonomy
 
-Coverage MCP now reports 68 remaining gap groups in `imagingft.rs`.
+Coverage MCP now reports 68 remaining gap groups in `font/imagingft.rs`.
 The line numbers below are from snapshot `37d797ad-be62-4dc1-b1e3-46fac6547b03`.
 
 | Gap bucket | Lines | Why uncovered | Route to cover |
@@ -167,7 +168,7 @@ are acceptable for parity; the third is forbidden.
 |---|---|---|
 | Synthetic input font/text through Pillow public API | Yes | Generated or hand-crafted font asset loaded by `ImageFont.truetype`; output still comes from live `_imagingft` at runtime. |
 | Synthetic C-backed fixture route | Yes, with new harness | A lower-level C oracle constructs the same FreeType/Pillow structure and Rust constructs the matching Rust structure; exact output/error is compared. |
-| Rust-only helper/unit path | No for parity | A test manually constructs Rust values, forces branches, and asserts local behavior without C/Pillow oracle. This may be useful for safety tests but must not count toward ImagingFT parity coverage. |
+| Rust-only helper/unit path | No for parity | A test manually constructs Rust values, forces branches, and asserts local behavior without C/Pillow oracle. This may be useful for safety tests but must not count toward Font parity coverage. |
 
 ## Exhaustive missing case plan
 
@@ -185,7 +186,7 @@ Current state:
 Needed inputs:
 
 - Copy `variable/named-instances.ttf` into
-  `pillow-rs/tests/fixtures/imagingft/input/fonts/`.
+  `pillow-rs/tests/fixtures/font/input/fonts/`.
 - Add rows:
   - `has_variations.variable_named_instances_true`
   - `getname.variable_named_instances`
@@ -374,7 +375,7 @@ Risk:
 
 Current state:
 
-- These branches were removed from `imagingft.rs`.
+- These branches were removed from `font/imagingft.rs`.
 - `Font::load_default(size)` remains FreeType-only, using Pillow’s embedded
   Aileron TTF subset.
 - Legacy PIL bitmap font behavior remains separate in `font::pilfont`.
@@ -501,8 +502,8 @@ Risk:
    - one BGRA/color;
    - one missing/sparse/unsupported candidate.
 5. After every batch:
-   - run `make -C pillow-rs imagingft-tests`;
-   - run Coverage MCP `imagingft-tests-coverage-fixed`;
+   - run `make -C pillow-rs font-tests`;
+   - run Coverage MCP `imagingft-tests-coverage-fixed compatibility registration`;
    - query `pillow-rs/src/font/imagingft.rs`;
    - keep only rows that exactly match the live oracle.
 6. Keep the removed bitmap ownership decision closed:
@@ -515,21 +516,21 @@ Risk:
 
 ## Acceptance checklist for eventual 100%
 
-- `make -C pillow-rs imagingft-tests` passes.
-- Coverage MCP `imagingft-tests-coverage-fixed` passes and ingests a snapshot.
+- `make -C pillow-rs font-tests` passes.
+- Coverage MCP `imagingft-tests-coverage-fixed compatibility registration` passes and ingests a snapshot.
 - `coverage_query(view="file", file_path="pillow-rs/src/font/imagingft.rs")`
   reports:
   - `covered_regions == total_regions`;
   - no remaining uncovered or partial branch ranges.
 - Every new fixture row is input-only and live-oracle-generated.
 - Every synthetic route has an equivalent C/Pillow oracle route.
-- Any code moved out of `imagingft.rs` is documented with why it is not part
+- Any code moved out of `font/imagingft.rs` is documented with why it is not part
   of Pillow `_imagingft.c` parity.
 
 ## Current blocker statement
 
 The direct public `_imagingft` fixture corpus alone cannot prove 100% region
-coverage for the current `imagingft.rs` file layout. The remaining regions
+coverage for the current `font/imagingft.rs` file layout. The remaining regions
 mix true `_imagingft.c` behavior, legacy Rust bitmap-font compatibility,
 FreeType defensive errors, and helper safety guards. Reaching 100% honestly
 requires either:
@@ -538,4 +539,4 @@ requires either:
 2. a new lower-level C-backed synthetic oracle harness for otherwise
    unreachable FreeType bitmap/glyph states; and/or
 3. refactoring non-`_imagingft.c` bitmap/safety logic out of the measured
-   `imagingft.rs` parity target.
+   `font/imagingft.rs` parity target.

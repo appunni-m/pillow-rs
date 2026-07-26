@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "operation": "getname",
+  "cases": [
+    {
+      "case_id": "font.load_failure.missing_font_asset",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/no_such_font.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_zero",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_negative_one",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": -1
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_negative_fraction",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": -5.5
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_too_large_argument",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 50000,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_too_large_pixel_size",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 100000,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.invalid_font_size_tiny_ppem",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 0.0001
+        }
+      }
+    }
+  ]
+}

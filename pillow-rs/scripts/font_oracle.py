@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute input-only imagingft cases against pinned Pillow at test runtime."""
+"""Execute input-only font cases against pinned Pillow at test runtime."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = REPO_ROOT.parent
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "imagingft"
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "font"
 REPO_ORACLE_VENV = WORKSPACE_ROOT / ".oracle-venv"
 
 
@@ -22,18 +22,18 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     venv_root = Path(os.environ.get("VIRTUAL_ENV", "")).resolve()
     if venv_root != REPO_ORACLE_VENV:
         raise RuntimeError(
-            f"imagingft oracle must run from repo-local oracle venv: VIRTUAL_ENV={venv_root}"
+            f"font oracle must run from repo-local oracle venv: VIRTUAL_ENV={venv_root}"
         )
 
     python_executable = Path(sys.executable)
     if python_executable != REPO_ORACLE_VENV / "bin" / "python":
         raise RuntimeError(
-            f"imagingft oracle must run from {REPO_ORACLE_VENV / 'bin' / 'python'}; got {python_executable}"
+            f"font oracle must run from {REPO_ORACLE_VENV / 'bin' / 'python'}; got {python_executable}"
         )
     pillow_path = Path(PIL.__file__).resolve() if PIL.__file__ else Path()
     if not str(pillow_path).startswith(str(REPO_ORACLE_VENV.resolve())):
         raise RuntimeError(
-            f"imagingft oracle must use Pillow from repo-local .oracle-venv site-packages; got {PIL.__file__}"
+            f"font oracle must use Pillow from repo-local .oracle-venv site-packages; got {PIL.__file__}"
         )
 
     from PIL import Image, ImageDraw, ImageFont
@@ -52,7 +52,7 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     core_file = Path(getattr(_imagingft, "__file__", "")).resolve()
     if not core_file.is_file() or core_file.suffix not in {".so", ".dylib", ".dll", ".pyd"}:
         raise RuntimeError(
-            f"imagingft oracle runtime mismatch: PIL._imagingft must be a native extension; got {core_file}"
+            f"font oracle runtime mismatch: PIL._imagingft must be a native extension; got {core_file}"
         )
 
     assert_python_calls_into_c_layer(ImageFont)
@@ -80,7 +80,7 @@ def assert_python_calls_into_c_layer(ImageFont: Any) -> None:
         source = inspect.getsource(getattr(ImageFont.FreeTypeFont, name))
         if not any(needle in source for needle in expected):
             raise RuntimeError(
-                f"imagingft oracle invariant broken: {target} is not"
+                f"font oracle invariant broken: {target} is not"
                 f" delegated to PIL._imagingft C layer"
             )
 
@@ -89,7 +89,7 @@ def assert_python_calls_into_c_layer(ImageFont: Any) -> None:
         source = inspect.getsource(getattr(getattr(ImageFont, cls_name), name))
         if not any(needle in source for needle in expected):
             raise RuntimeError(
-                f"imagingft oracle invariant broken: {target} is not"
+                f"font oracle invariant broken: {target} is not"
                 f" delegating correctly into Pillow font core path"
             )
 
@@ -97,11 +97,11 @@ def assert_python_calls_into_c_layer(ImageFont: Any) -> None:
 def ensure_c_font_path(font: Any) -> None:
     core_font = getattr(font, "font", None)
     if core_font is None:
-        raise RuntimeError("imagingft oracle requires an ImageFont object with a native core font")
+        raise RuntimeError("font oracle requires an ImageFont object with a native core font")
 
     if core_font.__class__.__name__ != "Font" or core_font.__class__.__module__ != "builtins":
         raise RuntimeError(
-            "imagingft oracle requires Pillow's native C Font object backend"
+            "font oracle requires Pillow's native C Font object backend"
         )
 
 
@@ -125,7 +125,7 @@ def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
         ensure_c_font_path(loaded)
         return loaded
 
-    raise ValueError(f"unsupported imagingft fixture font kind: {font['kind']}")
+    raise ValueError(f"unsupported font fixture font kind: {font['kind']}")
 
 
 def image_value(size: tuple[int, int], mode: str, pixels: bytes) -> dict[str, Any]:
@@ -182,7 +182,7 @@ def binary_rgba(font: Any, text: str, fill: list[int], ImageFont: Any) -> dict[s
 
 
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
-    operation = case["operation"].removeprefix("imagingft.")
+    operation = case["operation"].removeprefix("font.")
     params = case["inputs"]["params"]
     font = load_font(case, ImageFont)
     text = params.get("text")
@@ -230,7 +230,7 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         return image_value(image.size, image.mode, image.tobytes())
     if operation == "render_text_binary":
         return binary_rgba(font, text, params["fill"], ImageFont)
-    raise NotImplementedError(f"unsupported imagingft operation: {operation}")
+    raise NotImplementedError(f"unsupported font operation: {operation}")
 
 
 def outcome(case: dict[str, Any], modules: tuple[Any, Any, Any, Any]) -> dict[str, Any]:
@@ -249,7 +249,7 @@ def main() -> None:
 
     if not hasattr(_imagingft, "getfont"):
         raise RuntimeError(
-            "imagingft oracle requires PIL._imagingft C layer (_imagingft.getfont missing)"
+            "font oracle requires PIL._imagingft C layer (_imagingft.getfont missing)"
         )
 
     cases = json.load(sys.stdin)

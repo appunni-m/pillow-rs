@@ -1,14 +1,14 @@
-# ImagingFT Public-API Parity Status (Current Worktree)
+# Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — FreeType-only imagingft refactor measured
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ## Scope
 
-- Public surface source: `pillow-rs/tests/fixtures/imagingft/inputs/public-api` (non-deprecated corpus only)
-- Target suite: `make -C pillow-rs imagingft-tests`
-- Oracle: repo-local Pillow C path via `pillow-rs/scripts/imagingft_oracle.py` and `.oracle-venv`
+- Public surface source: `pillow-rs/tests/fixtures/font/inputs/public-api` (non-deprecated corpus only)
+- Target suite: `make -C pillow-rs font-tests`
+- Oracle: repo-local Pillow C path via `pillow-rs/scripts/font_oracle.py` and `.oracle-venv`
 - No deprecated `deprecated/imagingft/*` tests are used.
-- Current fixture/test implementation: `pillow-rs/tests/imagingft_public_api.rs` + `pillow-rs/tests/support/imagingft_runner.rs` using explicit `Result` paths.
+- Current fixture/test implementation: `pillow-rs/tests/font_public_api.rs` + `pillow-rs/tests/support/font_runner.rs` using explicit `Result` paths.
 - Oracle source-of-truth proof:
   - `.oracle-venv` is ignored by git at root via `.oracle-venv/`.
   - The oracle process validates it is running from `<repo>/.oracle-venv/bin/python` and imports `PIL` from that env only.
@@ -20,22 +20,22 @@ Last updated: 2026-07-26 (Asia/Kolkata) — FreeType-only imagingft refactor mea
 
 ## Acceptance checks
 
-- `make -C pillow-rs imagingft-tests`  
+- `make -C pillow-rs font-tests`  
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
-  - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Latest run id: `8af00029-4ba5-4268-87f7-c0cbc3395ec1`
+  - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed` compatibility registration, which now runs `make -C pillow-rs imagingft-tests -> font-tests`.
+  - Latest run id: `79e4bdfa-4a7a-43bf-aa8a-f064f178078c`
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `37d797ad-be62-4dc1-b1e3-46fac6547b03` ingested with `target/coverage/imagingft/imagingft-rust.json`
-  - Refactor impact: removed the Rust-only `Font::Bitmap`/`bitmap_font` path from `_imagingft` ownership. `pillow-rs/src/font/imagingft.rs` moved from snapshot `d8402aae-43ae-469d-8efd-c01666ce5af8` at `1875/2330` regions (`80.47%`) to `1649/2009` regions (`82.08%`). The denominator dropped by `321` regions because non-Pillow `_imagingft` bitmap code is gone.
+  - Diagnostics/ingest: `e3c79419-67ff-4b76-ac15-17cf0822a908` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Refactor impact: active tests now target `pillow-rs/tests/font_public_api.rs` and call the Rust `Font` public surface. The previous imagingft-named public harness, runner, oracle, and fixture tree are preserved under `pillow-rs/tests/deprecated/imagingft/current-public-api/`.
   - Prior same-turn probe snapshots:
     - `6b68edcf-1aa9-474f-8f85-9adb95291899`: freetype CFF/embedded-strike rows added; no region movement.
-    - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `imagingft.rs` moved to `1872/2338` regions.
+    - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `pillow-rs/src/font/imagingft.rs` moved to `1872/2338` regions.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
 ## Corpus state
 
-- Input files: `17` (`pillow-rs/tests/fixtures/imagingft/inputs/public-api/*.json`)
+- Input files: `17` (`pillow-rs/tests/fixtures/font/inputs/public-api/*.json`)
 - Total rows: `105`
 - Executed rows: `105/105`
 - Required operation coverage check against case-set operations: no required manifest operations missing
@@ -80,21 +80,28 @@ Last updated: 2026-07-26 (Asia/Kolkata) — FreeType-only imagingft refactor mea
 
 ## Coverage evidence
 
-### Suite summary (`imagingft`)
+### Suite summary (`imagingft` compatibility coverage suite)
 
 - Current artifact metrics (`target/coverage/imagingft/imagingft-rust.json`, latest run):
-  - `total_lines: 18806`, `covered_lines: 2048` (`line_rate 0.1089014144`)
-  - `total_branches: 3324`, `covered_branches: 209` (`branch_rate 0.0628760529`)
-  - `total_functions: 1312`, `covered_functions: 177` (`function_rate 0.1349085366`)
-  - `total_regions: 32789`, `covered_regions: 3245` (`region_rate 0.0989661167`)
+  - `total_lines: 17412`, `covered_lines: 1557` (`line_rate 0.0894210889`)
+  - `total_branches: 3048`, `covered_branches: 135` (`branch_rate 0.0442913386`)
+  - `total_functions: 1171`, `covered_functions: 127` (`function_rate 0.1084543126`)
+  - `total_regions: 30400`, `covered_regions: 2342` (`region_rate 0.0770394737`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
-- `covered_lines: 940/1118` (`line_rate 0.8407871199`)
-- `covered_functions: 100/115` (`function_rate 0.8695652174`)
-- `covered_branches: 160/224` (`branch_rate 0.7142857143`)
-- `covered_regions: 1649/2009` (`region_rate 0.8208063713`)
-- Gaps remain in FreeType load/error branches, transpose/source-map lines, glyph render fallback, clipping guards, and uncommon bitmap coverage modes. The previous Rust-only bitmap-font blocker has been removed from this file.
+- `covered_lines: 394/432` (`line_rate 0.9120370370`)
+- `covered_functions: 38/43` (`function_rate 0.8837209302`)
+- `covered_branches: 86/108` (`branch_rate 0.7962962963`)
+- `covered_regions: 687/762` (`region_rate 0.9015748031`)
+- Gaps remain in FreeType load/error branches, glyph render fallback, clipping guards, and uncommon bitmap coverage modes. The previous Rust-only bitmap-font blocker has been removed from this file.
+
+### `pillow-rs/src/font/mod.rs`
+
+- `covered_lines: 67/91` (`line_rate 0.7362637363`)
+- `covered_functions: 16/23` (`function_rate 0.6956521739`)
+- `covered_regions: 80/120` (`region_rate 0.6666666667`)
+- Remaining uncovered regions are public convenience wrappers such as `font_size`, `text_bbox`, non-Result `getmask`, non-Result `getname`, non-Result binary bbox/getmask2 wrappers, and `Debug`. The exact-result parity runner intentionally drives the `Result` variants for error truth.
 
 ### Coverage delta
 
@@ -102,13 +109,13 @@ Last updated: 2026-07-26 (Asia/Kolkata) — FreeType-only imagingft refactor mea
 - Current: `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 - Same-turn movement from the previous committed imagingft snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`:
-  - `imagingft.rs` lines: `1048 -> 1050` (`+2`)
+  - `font/imagingft.rs` lines: `1048 -> 1050` (`+2`)
   - branches: `169 -> 172` (`+3`)
   - regions: `1870 -> 1873` (`+3`)
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `e3c79419-67ff-4b76-ac15-17cf0822a908`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
@@ -157,7 +164,7 @@ Source: Coverage MCP snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`, `pillow-rs
 | Source area | Lines | Public operation path | Current assessment |
 |---|---:|---|---|
 | TrueType load/request-size fallback and FT error mapping | 35-81 | font load before any operation | Only valid/missing/invalid-size rows are covered. Remaining FT error kinds need pathological font/size inputs or crafted font assets; do not fake these in Rust tests. |
-| Removed Rust-only bitmap path | former `Font::Bitmap` arms and `shift_bitmap_mask` | not a Pillow `_imagingft` surface | Removed from `imagingft.rs`; legacy PIL bitmap fonts remain owned by `pillow-rs/src/font/pilfont.rs`. Do not reintroduce bitmap atlas behavior into `_imagingft` coverage. |
+| Removed Rust-only bitmap path | former `Font::Bitmap` arms and `shift_bitmap_mask` | not a Pillow `_imagingft` surface | Removed from `font/imagingft.rs`; legacy PIL bitmap fonts remain owned by `pillow-rs/src/font/pilfont.rs`. Do not reintroduce bitmap atlas behavior into `_imagingft` coverage. |
 | Transpose helper source-map gaps | 127-129, 145 | `get_transposed_mask`, `transposed_bbox`, `validate_transposed_length` | Fixture rows cover all Pillow transpose constants plus `None`/missing orientation; remaining uncovered lines appear to be coverage/source mapping artifacts unless a new source-context query proves otherwise. |
 | Layout/load glyph failure inside text shaping/rendering | 373-374, 539-547 | `getlength`, `getbbox`, `getmask*` | Needs a real oracle input that makes FreeType load fail for a glyph after font load succeeds. No current repo font/input does this. |
 | `mask_from_run_with_start` clipping and sparse bitmap cases | 497-639 | `getmask`, `getmask2`, `getmask2_with_start`, `draw_text` | Additional oracle-backed start rows covered three more regions. Remaining uncovered branches include render fallback, zero-sized/absent glyph bitmap, defensive canvas slice guard, and bitmap coverage `None` handling. Add only oracle-backed rows; do not synthesize self-comparison rows. |
@@ -165,7 +172,7 @@ Source: Coverage MCP snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`, `pillow-rs
 
 ### Current blocker to 100% region by input rows only
 
-100% region coverage inside `imagingft.rs` is not yet reached after the ownership refactor:
+100% region coverage inside `font/imagingft.rs` is not yet reached after the ownership refactor:
 
 - The old `Font::Bitmap` blocker is gone.
 - Several remaining FreeType fallback/error branches require real oracle inputs that make `FT_Load_Glyph`, render fallback, or `FT_Request_Size` fail after a face has loaded. The current public fixture schema cannot force those without mocking or self-comparing.
@@ -180,7 +187,7 @@ Source: Coverage MCP snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`, `pillow-rs
 ## Remaining explicit gaps
 
 - Suite-level coverage is not complete by the 100% objective:
-  - ImagingFT public-api suite executes all 105 rows and reports zero parity mismatches.
+  - Font public-api suite executes all 105 rows and reports zero parity mismatches.
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.

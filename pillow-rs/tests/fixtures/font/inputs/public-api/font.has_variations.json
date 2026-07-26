@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "operation": "has_variations",
+  "cases": [
+    {
+      "case_id": "font.has_variations.dejavusans20_hello_has_variations",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.has_variations.pure_cff",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.has_variations.embedded_strike",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.has_variations.variable_named_instances_true",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    }
+  ]
+}

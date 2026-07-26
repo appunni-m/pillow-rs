@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "operation": "get_transposed_mask",
+  "cases": [
+    {
+      "case_id": "font.get_transposed_mask.untransposed",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": null
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.rotate_90",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": "ROTATE_90"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.flip_left_right",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.empty_suite",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.missing_orientation_defaults",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.rotate_180",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_180"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.rotate_270",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_270"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.transpose",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSPOSE"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.transverse",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSVERSE"
+        }
+      }
+    },
+    {
+      "case_id": "font.get_transposed_mask.invalid_maxp_too_many_instruction_defs",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "orientation": null
+        }
+      }
+    }
+  ]
+}

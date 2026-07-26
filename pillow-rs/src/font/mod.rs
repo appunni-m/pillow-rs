@@ -47,6 +47,107 @@ impl Font {
     pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
         imagingft::getmask(self, text)
     }
+
+    /// Return Pillow's public `(family, style)` font name tuple.
+    pub fn getname(&self) -> (&str, &str) {
+        imagingft::getname(self)
+    }
+
+    /// Return Pillow's raw public name tuple, preserving missing face names.
+    pub fn getname_optional(&self) -> (Option<&str>, Option<&str>) {
+        imagingft::getname_optional(self)
+    }
+
+    /// Return Pillow's public ascent/descent metrics.
+    pub fn getmetrics(&self) -> (u32, u32) {
+        imagingft::getmetrics(self)
+    }
+
+    /// Return Pillow's public text length in pixels.
+    pub fn getlength(&self, text: &str) -> f32 {
+        imagingft::getlength(self, text)
+    }
+
+    /// Return whether the font exposes variation axes.
+    pub fn has_variations(&self) -> bool {
+        imagingft::has_variations(self)
+    }
+
+    /// Return Pillow's public text bounding box.
+    pub fn getbbox(&self, text: &str) -> (i32, i32, i32, i32) {
+        imagingft::getbbox(self, text)
+    }
+
+    /// Fallible variant of [`Font::getbbox`].
+    pub fn getbbox_result(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+        imagingft::getbbox_result(self, text)
+    }
+
+    /// Return Pillow's public binary-mode text bounding box.
+    pub fn getbbox_binary(&self, text: &str) -> (i32, i32, i32, i32) {
+        imagingft::getbbox_binary(self, text)
+    }
+
+    /// Fallible variant of [`Font::getbbox_binary`].
+    pub fn getbbox_binary_result(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+        imagingft::getbbox_binary_result(self, text)
+    }
+
+    /// Fallible variant of [`Font::getmask`].
+    pub fn getmask_result(&self, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+        imagingft::getmask_result(self, text)
+    }
+
+    /// Return Pillow's public `getmask2` mask and offset tuple.
+    pub fn getmask2(&self, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
+        imagingft::getmask2(self, text)
+    }
+
+    /// Fallible variant of [`Font::getmask2`].
+    pub fn getmask2_result(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        imagingft::getmask2_result(self, text)
+    }
+
+    /// Fallible `getmask2` variant with Pillow's fractional start parameter.
+    pub fn getmask2_with_start_result(
+        &self,
+        text: &str,
+        start: (f64, f64),
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        imagingft::getmask2_with_start_result(self, text, start)
+    }
+
+    /// Return a transposed Pillow-compatible grayscale text mask.
+    pub fn get_transposed_mask(
+        &self,
+        text: &str,
+        orientation: Option<&str>,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        imagingft::get_transposed_mask(self, text, orientation)
+    }
+
+    /// Return Pillow-compatible binary-mode RGBA text rendering.
+    pub fn render_text_binary_result(
+        &self,
+        text: &str,
+        fill: (u8, u8, u8, u8),
+        spacing: f32,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        imagingft::render_text_binary_result(self, text, fill, spacing)
+    }
+}
+
+/// Normalize a wrapped font bounding box using Pillow's `TransposedFont` rules.
+pub fn transposed_bbox(
+    bbox: (i32, i32, i32, i32),
+    orientation: Option<&str>,
+) -> (i32, i32, i32, i32) {
+    imagingft::transposed_bbox(bbox, orientation)
+}
+
+/// Validate whether Pillow defines text length for a transposed font.
+pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilError> {
+    imagingft::validate_transposed_length(orientation)
 }
 
 impl std::fmt::Debug for Font {
