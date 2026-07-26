@@ -694,7 +694,7 @@ fn mask_from_run_with_start(
         .checked_mul(hu)
         .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
     let mut canvas = vec![0u8; canvas_len];
-    if w == 0 || h == 0 {
+    if canvas_len == 0 {
         return Ok((w, h, canvas));
     }
 
@@ -754,11 +754,13 @@ fn mask_from_run_with_start(
         if source_y >= sy {
             continue;
         }
-        for row in source_y..sy {
+        let end_y = if dy >= 0 {
+            sy.min(hu.saturating_sub(dy as usize))
+        } else {
+            sy
+        };
+        for row in source_y..end_y {
             let target_y = dy + row as i32;
-            if target_y >= hu as i32 {
-                break;
-            }
             let dst = target_y as usize * wu + target_x;
             let dr = &mut canvas[dst..dst + cw];
             for (column, dc) in dr.iter_mut().enumerate() {
