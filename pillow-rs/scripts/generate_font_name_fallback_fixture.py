@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate a Font fixture with variation-name records outside en-US.
+"""Generate Font fixtures with variation-name fallback records.
 
 The source fixture has variation axis and instance names only as Windows
-Unicode/en-US records.  The generated fixture changes only those `name` table
-record language IDs from 0x0409 to 0x040c so Font parity tests exercise the
-Windows non-en-US fallback path without embedding expected oracle output.
+Unicode/en-US records.  The generated fixtures change only those `name` table
+records so Font parity tests exercise fallback paths without embedding expected
+oracle output.
 """
 
 from pathlib import Path
@@ -13,7 +13,8 @@ import struct
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tests/fixtures/font/input/fonts/variable-named-instances.ttf"
-TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-windows-fallback.ttf"
+WINDOWS_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-windows-fallback.ttf"
+PLATFORM1_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-platform1-fallback.ttf"
 
 
 def table(data: bytes, tag: bytes) -> tuple[int, int]:
@@ -44,16 +45,18 @@ def variation_name_ids(data: bytes) -> set[int]:
 
 
 def main() -> None:
-    data = bytearray(SOURCE.read_bytes())
-    ids = variation_name_ids(data)
-    name_offset, _ = table(data, b"name")
-    _, record_count, _ = struct.unpack_from(">HHH", data, name_offset)
+    source = SOURCE.read_bytes()
+    ids = variation_name_ids(source)
+
+    windows = bytearray(source)
+    name_offset, _ = table(windows, b"name")
+    _, record_count, _ = struct.unpack_from(">HHH", windows, name_offset)
 
     changed = 0
     for index in range(record_count):
         record_offset = name_offset + 6 + index * 12
         platform_id, encoding_id, language_id, name_id = struct.unpack_from(
-            ">HHHH", data, record_offset
+            ">HHHH", windows, record_offset
         )
         if (
             name_id in ids
@@ -61,14 +64,39 @@ def main() -> None:
             and encoding_id in {1, 10}
             and language_id == 0x0409
         ):
-            struct.pack_into(">H", data, record_offset + 4, 0x040C)
+            struct.pack_into(">H", windows, record_offset + 4, 0x040C)
             changed += 1
 
     if changed != len(ids):
         raise SystemExit(
-            f"expected to patch {len(ids)} variation name records, patched {changed}"
+            f"expected to patch {len(ids)} Windows fallback records, patched {changed}"
         )
-    TARGET.write_bytes(data)
+    WINDOWS_TARGET.write_bytes(windows)
+
+    platform1 = bytearray(source)
+    name_offset, _ = table(platform1, b"name")
+    _, record_count, _ = struct.unpack_from(">HHH", platform1, name_offset)
+
+    changed = 0
+    for index in range(record_count):
+        record_offset = name_offset + 6 + index * 12
+        platform_id, encoding_id, language_id, name_id = struct.unpack_from(
+            ">HHHH", platform1, record_offset
+        )
+        if (
+            name_id in ids
+            and platform_id == 3
+            and encoding_id in {1, 10}
+            and language_id == 0x0409
+        ):
+            struct.pack_into(">HHH", platform1, record_offset, 1, 0, 0)
+            changed += 1
+
+    if changed != len(ids):
+        raise SystemExit(
+            f"expected to patch {len(ids)} Platform 1 fallback records, patched {changed}"
+        )
+    PLATFORM1_TARGET.write_bytes(platform1)
 
 
 if __name__ == "__main__":
