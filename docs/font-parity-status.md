@@ -1,6 +1,7 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) at commit `4f4574bd1`
+Last updated: 2026-07-27 (Asia/Kolkata) after opened-outline stroker
+ParseOutline parity work.
 
 ## Oracle and fixture contract
 
@@ -87,6 +88,17 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
 
 Result: current runnable rows pass (`3/3`), and the five glyph-stroke success
 rows above remain pending lower-level routes.
+
+Additional lower-level blocker reduction:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ParseOutline
+```
+
+Result after this update: `FT_Stroker_ParseOutline.opened_outline_success`
+now runs as real C/Rust/WASM parity. ParseOutline runtime movement is
+`runnable=4`, `passed=4`, `pending=2`. Remaining ParseOutline pending rows are
+the mixed line/conic/cubic route and the broader degenerate-contour route.
 
 ## Edge cases already covered by active Font fixtures
 

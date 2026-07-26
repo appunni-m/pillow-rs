@@ -19862,6 +19862,93 @@ static int emit_stroker_parse_degenerate(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_parse_opened_outline_counts(const char* key,
+                                                      FT_Error status,
+                                                      FT_UInt points,
+                                                      FT_UInt contours) {
+    printf("\"%s\":{\"status\":%d,\"points\":%u,\"contours\":%u}",
+           key,
+           status,
+           points,
+           contours);
+}
+
+static int emit_stroker_parse_opened_outline(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int caps[3] = { FT_STROKER_LINECAP_BUTT, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINECAP_SQUARE };
+    const char* cap_names[3] = { "butt", "round", "square" };
+    for (int i = 0; i < 3; i++) {
+        FT_Stroker stroker = NULL;
+        FT_Error new_error = FT_Stroker_New(library, &stroker);
+        FT_Error parse_status = new_error;
+        FT_UInt left_points = 0;
+        FT_UInt left_contours = 0;
+        FT_UInt right_points = 0;
+        FT_UInt right_contours = 0;
+        FT_Error left_status = parse_status;
+        FT_Error right_status = parse_status;
+        FT_Vector exported_points[128] = {0};
+        unsigned char exported_tags[128] = {0};
+        unsigned short exported_contours[16] = {0};
+        FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+        if (!parse_status && stroker) {
+            FT_Stroker_Set(stroker, 96, caps[i], FT_STROKER_LINEJOIN_ROUND, 65536);
+            FT_Vector points[2] = { {0, 0}, {640, 0} };
+            unsigned char tags[2] = { FT_CURVE_TAG_ON, FT_CURVE_TAG_ON };
+            unsigned short contours[1] = { 1 };
+            FT_Outline outline = { 1, 2, points, tags, contours, 0 };
+            parse_status = FT_Stroker_ParseOutline(stroker, &outline, 1);
+        }
+        if (!parse_status) {
+            left_status = FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_LEFT,
+                &left_points,
+                &left_contours);
+            right_status = FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_RIGHT,
+                &right_points,
+                &right_contours);
+        }
+        if (!parse_status && !left_status && !right_status) {
+            FT_Stroker_Export(stroker, &exported);
+        }
+        if (i) printf(",");
+        printf("{\"cap\":\"%s\",\"parse_status\":%d,",
+               cap_names[i],
+               parse_status);
+        print_stroker_parse_opened_outline_counts("left_counts",
+                                                  left_status,
+                                                  left_points,
+                                                  left_contours);
+        printf(",");
+        print_stroker_parse_opened_outline_counts("right_counts",
+                                                  right_status,
+                                                  right_points,
+                                                  right_contours);
+        printf(",\"exported_outline\":");
+        print_stroker_outline_json(&exported);
+        printf("}");
+        if (stroker) FT_Stroker_Done(stroker);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_end_no_segment(int argc, char** argv) {
     (void)argv;
     if (argc != 2) return 2;
@@ -26197,6 +26284,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-parse-opened-outline")) {
+        return emit_stroker_parse_opened_outline(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-end-no-segment")) {
         return emit_stroker_end_no_segment(argc, argv);

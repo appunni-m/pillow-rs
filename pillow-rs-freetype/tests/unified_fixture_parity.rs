@@ -25431,6 +25431,10 @@ fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
 }
 
+fn is_stroker_parse_opened_outline_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_ParseOutline.opened_outline_success"
+}
+
 fn is_stroker_end_subpath_no_segment_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only"
 }
@@ -26407,6 +26411,196 @@ fn wasm_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
 
 fn stroker_parse_degenerate_output(rows: Vec<Value>) -> RunOutput {
     ok(json!({ "rows": rows }))
+}
+
+fn stroker_parse_opened_outline_output(
+    action: &str,
+    mut run_one: impl FnMut(&str) -> Result<Value, String>,
+) -> Result<RunOutput, String> {
+    let actions: &[&str] = if action == "all" {
+        &["butt", "round", "square"]
+    } else {
+        &[action]
+    };
+    let mut rows = Vec::new();
+    for action in actions {
+        rows.push(run_one(action)?);
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_opened_outline_case(case) {
+        return Err(format!(
+            "{} is not the maintained opened ParseOutline route",
+            case.case_id
+        ));
+    }
+    stroker_parse_opened_outline_output("all", |action| {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            return Ok(json!({"cap": stroker_cap_name(action), "parse_status": new_error}));
+        }
+        FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let outline = FT_OutlineSnapshot {
+            points: vec![FT_Vector { x: 0, y: 0 }, FT_Vector { x: 640, y: 0 }],
+            tags: vec![1, 1],
+            contours: vec![1],
+            flags: 0,
+        };
+        let parse_status = FT_Stroker_ParseOutline(stroker, Some(&outline), 1);
+        let mut left_points = 0;
+        let mut left_contours = 0;
+        let left_status = if parse_status == FT_Err_Ok {
+            FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                Some(&mut left_points),
+                Some(&mut left_contours),
+            )
+        } else {
+            parse_status
+        };
+        let mut right_points = 0;
+        let mut right_contours = 0;
+        let right_status = if parse_status == FT_Err_Ok {
+            FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_RIGHT as FT_Int,
+                Some(&mut right_points),
+                Some(&mut right_contours),
+            )
+        } else {
+            parse_status
+        };
+        let mut exported = FT_OutlineSnapshot::default();
+        if parse_status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+            FT_Stroker_Export(stroker, Some(&mut exported));
+        }
+        FT_Stroker_Done(stroker);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "parse_status": parse_status,
+            "left_counts": {"status": left_status, "points": left_points, "contours": left_contours},
+            "right_counts": {"status": right_status, "points": right_points, "contours": right_contours},
+            "exported_outline": outline_snapshot_json(&exported)
+        }))
+    })
+}
+
+fn c_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_opened_outline_case(case) {
+        return Err(format!(
+            "{} is not the maintained opened ParseOutline route",
+            case.case_id
+        ));
+    }
+    stroker_parse_opened_outline_output("all", |action| {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            return Ok(json!({"cap": stroker_cap_name(action), "parse_status": init_error}));
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            return Ok(json!({"cap": stroker_cap_name(action), "parse_status": new_error}));
+        }
+        c_abi::FT_Stroker_Set(
+            stroker,
+            96,
+            stroker_cap_value(action),
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+        let mut points = [
+            c_abi::FT_Vector { x: 0, y: 0 },
+            c_abi::FT_Vector { x: 640, y: 0 },
+        ];
+        let mut tags = [1u8, 1u8];
+        let mut contours = [1u16];
+        let mut outline = c_abi::FT_Outline {
+            n_contours: 1,
+            n_points: 2,
+            points: points.as_mut_ptr(),
+            tags: tags.as_mut_ptr(),
+            contours: contours.as_mut_ptr(),
+            flags: 0,
+        };
+        let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, &mut outline, 1);
+        let mut left_points = 0;
+        let mut left_contours = 0;
+        let left_status = if parse_status == FT_Err_Ok {
+            c_abi::FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_LEFT as FT_Int,
+                &mut left_points,
+                &mut left_contours,
+            )
+        } else {
+            parse_status
+        };
+        let mut right_points = 0;
+        let mut right_contours = 0;
+        let right_status = if parse_status == FT_Err_Ok {
+            c_abi::FT_Stroker_GetBorderCounts(
+                stroker,
+                FT_STROKER_BORDER_RIGHT as FT_Int,
+                &mut right_points,
+                &mut right_contours,
+            )
+        } else {
+            parse_status
+        };
+        let mut exported_points = [c_abi::FT_Vector::default(); 128];
+        let mut exported_tags = [0u8; 128];
+        let mut exported_contours = [0u16; 16];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        if parse_status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+            c_abi::FT_Stroker_Export(stroker, &mut exported);
+        }
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        Ok(json!({
+            "cap": stroker_cap_name(action),
+            "parse_status": parse_status,
+            "left_counts": {"status": left_status, "points": left_points, "contours": left_contours},
+            "right_counts": {"status": right_status, "points": right_points, "contours": right_contours},
+            "exported_outline": c_outline_arrays_json(
+                &exported,
+                &exported_points,
+                &exported_tags,
+                &exported_contours,
+            )
+        }))
+    })
+}
+
+fn wasm_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_opened_outline_case(case) {
+        return Err(format!(
+            "{} is not the maintained opened ParseOutline route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_parse_opened_outline() {
+        rust_stroker_parse_opened_outline(case)
+    } else {
+        Err("unsupported stroker opened ParseOutline route".to_string())
+    }
 }
 
 fn rust_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
@@ -30639,6 +30833,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_degenerate_curve_action(case)?.0.to_string(),
             ])
         }
+        "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
+            Ok(vec!["--stroker-parse-opened-outline".to_string()])
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             Ok(vec!["--stroker-parse-degenerate".to_string()])
         }
@@ -32182,6 +32379,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_stroker_degenerate_curve(case)
         }
+        "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
+            rust_stroker_parse_opened_outline(case)
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             rust_stroker_parse_degenerate(case)
         }
@@ -33352,6 +33552,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_stroker_degenerate_curve(case)
         }
+        "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
+            c_stroker_parse_opened_outline(case)
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             c_stroker_parse_degenerate(case)
         }
@@ -34412,6 +34615,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
             wasm_stroker_degenerate_curve(case)
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
+            wasm_stroker_parse_opened_outline(case)
         }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             wasm_stroker_parse_degenerate(case)
