@@ -1,6 +1,83 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `060d763c6`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `15e039a29`
+
+## Current checkpoint: Pillow Font comparison review
+
+New commits:
+
+- `cc62d84be` — added `FontTextOptions`, root API wrappers, exact `KeyError`
+  mapping, and input-only parity rows for Pillow text options.
+- `15e039a29` — removed non-parity debug/unused option exposure and added
+  anchor validation rows.
+
+Pillow `ImageFont.FreeTypeFont` public callable comparison against the
+repo-local `.oracle-venv` showed that the operation names are represented, but
+some method parameters were missing from Rust:
+
+| Pillow method | Existing operation | Newly covered in this checkpoint | Still missing/blocker |
+|---|---|---|---|
+| `getbbox(text, mode, direction, features, language, stroke_width, anchor)` | `getbbox` | `mode` ignored path, `direction` libraqm `KeyError`, valid `anchor`, invalid `anchor`, integer/fractional `stroke_width` bbox math | full libraqm layout if the oracle enables libraqm |
+| `getlength(text, mode, direction, features, language)` | `getlength` | `features` and `language` libraqm `KeyError`; non-error options still delegate to BASIC length | full libraqm layout if enabled |
+| `getmask2(text, mode, direction, features, language, stroke_width, anchor, ink, start)` | `getmask2` / `getmask2_with_start` | `anchor` offset parity, `mode="RGBA"` TypeError, `direction` libraqm `KeyError` | stroked mask pixel parity; RGBA embedded-color/ink rendering |
+| `getmask(...)` | `getmask` | not yet parameterized separately; `getmask` delegates to `getmask2` in Pillow | needs thin wrapper over the same option path |
+| `font_variant(font, size, index, encoding, layout_engine)` | `font_variant` | size override and same-size clone | alternate font source, face index, encoding, and layout engine override |
+
+New input-only rows are stored under
+`pillow-rs/tests/fixtures/font/inputs/public-api` and contain no expected
+outputs/errors:
+
+- `font.getbbox.anchor_middle_middle`
+- `font.getbbox.anchor_right_descender`
+- `font.getbbox.stroke_width_one`
+- `font.getbbox.stroke_width_half`
+- `font.getbbox.mode_ignored`
+- `font.getbbox.direction_without_raqm_error`
+- `font.getbbox.bad_anchor_error`
+- `font.getbbox.short_anchor_error`
+- `font.getbbox.bad_vertical_anchor_error`
+- `font.getlength.features_without_raqm_error`
+- `font.getlength.language_without_raqm_error`
+- `font.getmask2.anchor_middle_middle`
+- `font.getmask2.mode_rgba_error`
+- `font.getmask2.direction_without_raqm_error`
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed, `1` test, all manifest rows
+  compared against live Pillow oracle
+- `cargo check --workspace --all-targets --all-features --locked` — passed
+  with existing warning noise
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `200762a0-9e2e-4c9d-93ec-8cb7a8d4519e`
+  - snapshot `2010d398-5db4-479a-b747-91439a5d2160`
+  - commit `15e039a2975cf0771f11e059f57cf3ff80f6936a`
+  - status `passed`, coverage artifact ingested
+
+Current target coverage from snapshot
+`2010d398-5db4-479a-b747-91439a5d2160`:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `1006/1102` (`91.29%`) | `191/246` (`77.64%`) | `101/117` (`86.32%`) | `1660/1829` (`90.76%`) |
+| `pillow-rs/src/font/mod.rs` | `159/180` (`88.33%`) | n/a | `36/42` (`85.71%`) | `194/232` (`83.62%`) |
+
+The 100% objective is not met yet. Current blockers to reaching it only via
+Pillow-oracle fixture rows:
+
+- Stroked mask pixel parity is not implemented. Pillow renders stroked masks in
+  native `_imagingft` via `font.render(..., stroke_width, stroke_filled, ...)`;
+  Rust currently implements stroke bbox math only. Covering this honestly
+  requires implementing outline stroking/rendering, not an expected-value hack.
+- `getmask` is not separately parameterized yet, although Pillow implements it
+  as `getmask2(...)[0]`.
+- `font_variant` does not yet support alternate font bytes/path, face index,
+  encoding, or layout-engine override.
+- Remaining `imagingft.rs` coverage gaps include FreeType request-size error
+  variants, glyph render fallback, uncommon bitmap pitch/pixel modes, and name
+  table fallback branches. These require real font assets that drive Pillow and
+  Rust through the same public path; no mock/self-comparison row may count.
 
 ## Scope
 
