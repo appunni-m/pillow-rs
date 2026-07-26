@@ -25440,6 +25440,7 @@ fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
         case.case_id.as_str(),
         "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
             | "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped"
+            | "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin"
     )
 }
 
@@ -26729,6 +26730,37 @@ fn stroker_parse_degenerate_output(rows: Vec<Value>) -> RunOutput {
     ok(json!({ "rows": rows }))
 }
 
+fn stroker_parse_degenerate_labels(case: &InputCase) -> Result<&'static [&'static str], String> {
+    match case.case_id.as_str() {
+        "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin" => {
+            Ok(&["single_point_contour", "empty_outline"])
+        }
+        "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+        | "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped" => Ok(&[
+            "single_point_contour",
+            "empty_outline",
+            "mixed_degenerate_and_valid_contours",
+        ]),
+        _ => Err(format!(
+            "{} is not the maintained degenerate ParseOutline route",
+            case.case_id
+        )),
+    }
+}
+
+fn stroker_parse_degenerate_mode(case: &InputCase) -> Result<&'static str, String> {
+    if case.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin" {
+        Ok("no-segment")
+    } else if is_stroker_parse_degenerate_case(case) {
+        Ok("all")
+    } else {
+        Err(format!(
+            "{} is not the maintained degenerate ParseOutline route",
+            case.case_id
+        ))
+    }
+}
+
 fn stroker_parse_opened_outline_output(
     action: &str,
     mut run_one: impl FnMut(&str) -> Result<Value, String>,
@@ -26965,8 +26997,12 @@ fn rust_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> 
             },
         ),
     ];
+    let labels = stroker_parse_degenerate_labels(case)?;
     let mut rows = Vec::new();
     for (label, outline) in cases {
+        if !labels.contains(&label) {
+            continue;
+        }
         let parse_status = FT_Stroker_ParseOutline(stroker, Some(&outline), 0);
         let mut points = 99;
         let mut contours = 99;
@@ -27043,6 +27079,7 @@ fn c_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
         contours: mixed_contours.as_mut_ptr(),
         flags: 0,
     };
+    let labels = stroker_parse_degenerate_labels(case)?;
     for (label, outline) in [
         (
             "single_point_contour",
@@ -27054,6 +27091,9 @@ fn c_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
             &mut mixed as *mut c_abi::FT_Outline,
         ),
     ] {
+        if !labels.contains(&label) {
+            continue;
+        }
         let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, outline, 0);
         let mut points = 99;
         let mut contours = 99;
@@ -31205,9 +31245,10 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
             Ok(vec!["--stroker-parse-opened-outline".to_string()])
         }
-        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
-            Ok(vec!["--stroker-parse-degenerate".to_string()])
-        }
+        "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => Ok(vec![
+            "--stroker-parse-degenerate".to_string(),
+            stroker_parse_degenerate_mode(case)?.to_string(),
+        ]),
         "ftstroke.end_subpath" if is_stroker_end_subpath_no_segment_case(case) => {
             Ok(vec!["--stroker-end-no-segment".to_string()])
         }
