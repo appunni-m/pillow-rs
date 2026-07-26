@@ -50,7 +50,8 @@ impl Font {
 
     /// Return Pillow's public `(family, style)` font name tuple.
     pub fn getname(&self) -> (&str, &str) {
-        imagingft::getname(self)
+        let (family, style) = imagingft::getname_optional(self);
+        (family.unwrap_or("Unknown"), style.unwrap_or("Regular"))
     }
 
     /// Return Pillow's raw public name tuple, preserving missing face names.
