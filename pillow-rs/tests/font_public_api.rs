@@ -74,6 +74,19 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 33] = [
     "validate_transposed_length",
 ];
 
+const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 10] = [
+    "draw_text",
+    "font_size",
+    "get_transposed_mask",
+    "getbbox_binary",
+    "getmask2_with_start",
+    "has_variations",
+    "render_text_binary",
+    "text_bbox",
+    "transposed_bbox",
+    "validate_transposed_length",
+];
+
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
 
 const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
@@ -778,6 +791,31 @@ fn assert_manifest_operations_have_runner_arms(manifest: &FontManifest) {
     );
 }
 
+fn assert_manifest_operations_match_live_pillow_plus_repo_helpers(
+    manifest: &FontManifest,
+    pillow_operations: &BTreeSet<String>,
+) {
+    let helper_operations = EXPECTED_REPO_FONT_HELPER_OPERATIONS
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let overlap = pillow_operations
+        .intersection(&helper_operations)
+        .collect::<Vec<_>>();
+    assert!(
+        overlap.is_empty(),
+        "repo ImageFont helper operations must not duplicate live Pillow public operations: {overlap:?}"
+    );
+    let expected = pillow_operations
+        .union(&helper_operations)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        manifest.required_operations, expected,
+        "font_manifest.yaml required_operations must exactly equal live PIL.ImageFont public operations plus the explicit repo helper/consumer operations"
+    );
+}
+
 fn assert_input_only_case(path: &Path, value: &Value) {
     match value {
         Value::Object(object) => {
@@ -1429,6 +1467,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_operations_have_runner_arms(&manifest);
 
     let pillow_methods = pillow_imagefont_public_methods();
+    assert_manifest_operations_match_live_pillow_plus_repo_helpers(&manifest, &pillow_methods);
     let missing_pillow_methods = pillow_methods
         .iter()
         .filter(|operation| !manifest.required_operations.contains(operation.as_str()))
