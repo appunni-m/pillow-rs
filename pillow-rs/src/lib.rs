@@ -146,6 +146,7 @@ pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::Font;
 pub use crate::font::FontTextOptions;
+pub use crate::font::FontVariantOptions;
 pub use crate::font::FontVariationAxis;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
@@ -274,6 +275,14 @@ pub fn font_has_variations(font: &Font) -> bool {
 /// Create a Pillow-compatible variant font.
 pub fn font_variant(font: &Font, size: Option<f32>) -> Result<Font, PilError> {
     font.font_variant(size)
+}
+
+/// Create a Pillow-compatible variant font with public override arguments.
+pub fn font_variant_with_options(
+    font: &Font,
+    options: &FontVariantOptions,
+) -> Result<Font, PilError> {
+    font.font_variant_with_options(options)
 }
 
 /// Return Pillow's public variation-axis records.

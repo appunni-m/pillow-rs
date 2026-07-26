@@ -48,6 +48,22 @@ pub struct FontTextOptions {
     pub start: Option<(f64, f64)>,
 }
 
+/// Optional Pillow `FreeTypeFont.font_variant()` override arguments.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FontVariantOptions {
+    /// Replacement font bytes for Pillow's `font` argument.
+    pub font_bytes: Option<Vec<u8>>,
+    /// Replacement point size for Pillow's `size` argument.
+    pub size: Option<f32>,
+    /// Replacement face index for Pillow's `index` argument.
+    pub index: Option<usize>,
+    /// Pillow `encoding` argument. BASIC Unicode-compatible rows preserve this
+    /// for public signature parity while fontdone selects the Unicode charmap.
+    pub encoding: Option<String>,
+    /// Pillow `layout_engine` argument. Only BASIC layout is implemented.
+    pub layout_engine: Option<String>,
+}
+
 impl Font {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
@@ -71,6 +87,14 @@ impl Font {
     /// Create a variant copy of this FreeType font, overriding the size when provided.
     pub fn font_variant(&self, size: Option<f32>) -> Result<Self, PilError> {
         imagingft::font_variant(self, size)
+    }
+
+    /// Create a variant copy of this FreeType font with Pillow-style overrides.
+    pub fn font_variant_with_options(
+        &self,
+        options: &FontVariantOptions,
+    ) -> Result<Self, PilError> {
+        imagingft::font_variant_with_options(self, options)
     }
 
     /// Return the non-negative text mask extent for Pillow-style text layout.
