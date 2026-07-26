@@ -553,6 +553,22 @@
           "mode": "L"
         }
       }
+    },
+    {
+      "case_id": "font.getmask2.bytes_latin1_c3a9_default_mode",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9"
+        }
+      }
     }
   ]
 }

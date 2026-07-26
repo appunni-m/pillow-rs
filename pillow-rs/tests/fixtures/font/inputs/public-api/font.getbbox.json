@@ -448,6 +448,23 @@
           "text_bytes_hex": "c3a9"
         }
       }
+    },
+    {
+      "case_id": "font.getbbox.bytes_latin1_c3a9_anchor_middle",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9",
+          "anchor": "mm"
+        }
+      }
     }
   ]
 }

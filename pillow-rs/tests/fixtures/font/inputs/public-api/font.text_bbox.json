@@ -64,6 +64,22 @@
           "text": "jQ"
         }
       }
+    },
+    {
+      "case_id": "font.text_bbox.bytes_latin1_c3a9",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9"
+        }
+      }
     }
   ]
 }
