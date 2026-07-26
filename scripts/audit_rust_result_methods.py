@@ -108,7 +108,73 @@ def signature_return(text: str, fn_start: int, body_start: int) -> str:
     return signature.split("->", 1)[1].strip()
 
 
+def strip_non_code(text: str) -> str:
+    """Replace comments and string/char literals with spaces for signal scans."""
+    output: list[str] = []
+    in_line_comment = False
+    in_block_comment = 0
+    in_string = False
+    in_char = False
+    escaped = False
+    for i, c in enumerate(text):
+        n = text[i + 1] if i + 1 < len(text) else ""
+        if in_line_comment:
+            if c == "\n":
+                in_line_comment = False
+                output.append(c)
+            else:
+                output.append(" ")
+            continue
+        if in_block_comment:
+            if c == "/" and n == "*":
+                in_block_comment += 1
+                output.append(" ")
+            elif c == "*" and n == "/":
+                in_block_comment -= 1
+                output.append(" ")
+            else:
+                output.append("\n" if c == "\n" else " ")
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == '"':
+                in_string = False
+            output.append("\n" if c == "\n" else " ")
+            continue
+        if in_char:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == "'":
+                in_char = False
+            output.append(" ")
+            continue
+        if c == "/" and n == "/":
+            in_line_comment = True
+            output.append(" ")
+            continue
+        if c == "/" and n == "*":
+            in_block_comment += 1
+            output.append(" ")
+            continue
+        if c == '"':
+            in_string = True
+            output.append(" ")
+            continue
+        if c == "'":
+            in_char = True
+            output.append(" ")
+            continue
+        output.append(c)
+    return "".join(output)
+
+
 def fallibility_signals(body: str) -> list[str]:
+    body = strip_non_code(body)
     checks = [
         ("question_operator", "?"),
         ("unwrap", ".unwrap("),
@@ -143,6 +209,15 @@ def classify(path: Path, name: str, return_type: str, signals: list[str]) -> str
         "draw_pieslice_on_canvas",
     }:
         return "pillow_clip_control_flow"
+    if rel_path == "pillow-rs/src/compute/pool_cpu/ops/draw.rs" and name == "next":
+        return "iterator_exhaustion_control_flow"
+    if rel_path == "pillow-rs/src/font/imagingft.rs" and name == "bitmap_coverage":
+        return "font_bitmap_absence_control_flow"
+    if rel_path == "pillow-rs/src/image.rs" and name in {
+        "getpalette_rgba",
+        "pending_palette_transparency",
+    }:
+        return "palette_absence_control_flow"
     if rel_path == "pillow-rs-freetype/src/fixed.rs" and name in {
         "ft_mul_div_long",
         "ft_mul_div_no_round_long",
