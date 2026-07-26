@@ -282,7 +282,10 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
     if operation == "getbbox_binary":
         return {"type": "bbox", "value": binary_bbox(font, text)}
     if operation == "getmask":
-        mask = font.getmask(text, mode="L")
+        kwargs = text_kwargs(params, include_stroke=True)
+        if "mode" not in kwargs:
+            kwargs["mode"] = "L"
+        mask = font.getmask(text, **kwargs)
         return image_value(mask.size, "L", bytes(mask))
     if operation == "getmask2":
         kwargs = text_kwargs(params, include_stroke=True)
@@ -339,6 +342,15 @@ def main() -> None:
         raise RuntimeError(
             "font oracle requires PIL._imagingft C layer (_imagingft.getfont missing)"
         )
+
+    if len(sys.argv) == 2 and sys.argv[1] == "--public-methods":
+        public_methods = sorted(
+            name
+            for name, value in ImageFont.FreeTypeFont.__dict__.items()
+            if not name.startswith("_") and callable(value)
+        )
+        json.dump(public_methods, sys.stdout, separators=(",", ":"), sort_keys=True)
+        return
 
     cases = json.load(sys.stdin)
     results = {

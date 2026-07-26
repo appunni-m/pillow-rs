@@ -347,6 +347,41 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
     serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
 }
 
+fn pillow_freetypefont_public_methods() -> BTreeSet<String> {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
+    let oracle = oracle_python();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let venv_root = repo_root.join(".oracle-venv");
+    let mut command = Command::new(oracle.as_os_str());
+    command
+        .arg(script)
+        .arg("--public-methods")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .env("VIRTUAL_ENV", venv_root)
+        .env("PYTHONNOUSERSITE", "1")
+        .env(
+            "PYTHONPATH",
+            env::join_paths(oracle_site_packages()).expect("valid PYTHONPATH join"),
+        );
+    let output = command
+        .output()
+        .expect("the pinned Pillow font oracle method query must finish");
+    assert!(
+        output.status.success(),
+        "Pillow font oracle method query failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice::<Vec<String>>(&output.stdout)
+        .expect("oracle public method output must be a string list")
+        .into_iter()
+        .collect()
+}
+
 fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
     let expected_status = expected
         .get("status")
@@ -377,6 +412,16 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert!(
         !cases.is_empty(),
         "font public-api input corpus must not be empty"
+    );
+
+    let pillow_methods = pillow_freetypefont_public_methods();
+    let missing_pillow_methods = pillow_methods
+        .iter()
+        .filter(|operation| !manifest.required_operations.contains(operation.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        missing_pillow_methods.is_empty(),
+        "font_manifest.yaml required_operations must include every live Pillow FreeTypeFont public method: {missing_pillow_methods:?}"
     );
 
     let observed = cases

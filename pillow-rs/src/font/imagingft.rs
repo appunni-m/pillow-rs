@@ -288,6 +288,15 @@ pub(crate) fn getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), Pi
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
+pub(crate) fn getmask_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    let (width, height, pixels, _) = getmask2_with_options(font, text, options)?;
+    Ok((width, height, pixels))
+}
+
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
 pub(crate) fn getmask2(
     font: &Font,
