@@ -345,6 +345,38 @@
           "variant_layout_engine": "BASIC"
         }
       }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_raqm_falls_back_basic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "RAQM"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_unknown_string_accepted",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "UNKNOWN"
+        }
+      }
     }
   ]
 }
