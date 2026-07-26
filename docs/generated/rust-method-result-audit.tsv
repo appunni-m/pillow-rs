@@ -273,17 +273,17 @@ pillow-rs/src/compute/pool_gpu/mod.rs	642	dispatch_pass	private	()	false	likely_
 pillow-rs/src/compute/pool_gpu/mod.rs	676	readback_to_image	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,map_err,ok_or
 pillow-rs/src/compute/pool_gpu/mod.rs	751	execute_batch_impl	private	Result<(bool, u32, u32), PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_gpu/mod.rs	853	mode_code	private	u32	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	863	put_alpha_output	private	DynamicImage	false	review_non_result_fallible	expect
-pillow-rs/src/compute/pool_gpu/mod.rs	885	extract_second_image	private	Result<Option<DynamicImage>, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_gpu/mod.rs	935	extract_third_image	private	Result<Option<DynamicImage>, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_gpu/mod.rs	951	extract_auxiliary_images	private	Result<AuxiliaryImages, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_gpu/mod.rs	963	extract_lut	private	Option<[u32; 256]>	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	1002	op_output_dims	private	Option<(u32, u32)>	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	1072	ensure_init	private	Result<&'static GpuInner, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_gpu/mod.rs	1083	name	private	Backend	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	1087	priority	private	u8	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	1091	supports	private	bool	false	likely_infallible	
-pillow-rs/src/compute/pool_gpu/mod.rs	1095	execute_batch	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/pool_gpu/mod.rs	863	put_alpha_output	private	Result<DynamicImage, PilError>	true	ok_result	ok_or
+pillow-rs/src/compute/pool_gpu/mod.rs	886	extract_second_image	private	Result<Option<DynamicImage>, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_gpu/mod.rs	936	extract_third_image	private	Result<Option<DynamicImage>, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_gpu/mod.rs	952	extract_auxiliary_images	private	Result<AuxiliaryImages, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_gpu/mod.rs	964	extract_lut	private	Option<[u32; 256]>	false	likely_infallible	
+pillow-rs/src/compute/pool_gpu/mod.rs	1003	op_output_dims	private	Option<(u32, u32)>	false	likely_infallible	
+pillow-rs/src/compute/pool_gpu/mod.rs	1073	ensure_init	private	Result<&'static GpuInner, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_gpu/mod.rs	1084	name	private	Backend	false	likely_infallible	
+pillow-rs/src/compute/pool_gpu/mod.rs	1088	priority	private	u8	false	likely_infallible	
+pillow-rs/src/compute/pool_gpu/mod.rs	1092	supports	private	bool	false	likely_infallible	
+pillow-rs/src/compute/pool_gpu/mod.rs	1096	execute_batch	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,map_err
 pillow-rs/src/compute/pool_simd/mod.rs	28	normalize_palette_result	private	Result<DynamicImage, PilError>	true	ok_result	ok_or
 pillow-rs/src/compute/pool_simd/mod.rs	61	name	private	Backend	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/mod.rs	65	priority	private	u8	false	likely_infallible	

@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,594`
+  - `ok_result`: `2,595`
   - `likely_infallible`: `3,807`
   - `parser_review`: `304`
-  - `review_non_result_fallible`: `121`
+  - `review_non_result_fallible`: `120`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -64,6 +64,8 @@ been inspected and either:
 - SIMD palette normalization and CPU effects/geometry transform/rotate helpers
   now return `Result<_, PilError>` instead of panicking or silently returning
   fallback images on dimension/buffer reconstruction failures.
+- GPU putalpha output reconstruction now returns `Result<_, PilError>` instead
+  of using `expect` when converting the readback image into LA output.
 
 ## Next review queue
 
