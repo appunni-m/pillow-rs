@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `0bb991430`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `1f34bc130`
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
@@ -16,6 +16,12 @@ New commits:
   entering the pure-Rust font path.
 - `0bb991430` — added focused byte-text rows for the option and no-option
   byte paths so the new runtime code is covered by live Pillow oracle parity.
+- `34ff22d0b` — tightened manifest validation so fixture keys are canonicalized
+  to live Pillow public parameter names before they can prove parameter
+  coverage; removed unused `text` fixture noise from no-text operations.
+- `1f34bc130` — added a manifest gate that rejects active input rows for
+  parameters still marked `blocked`, so `stroke_width` cannot silently appear
+  in `getmask/getmask2` rows without being implemented and reclassified.
 
 Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
 repo-local oracle remains:
@@ -33,15 +39,18 @@ Newly covered edge cases:
   `getmask(mode="L")`, and `getmask2(mode="L")`.
 - No expected output or error payload is stored in input JSON; output is still
   generated at runtime from the repo-local Pillow native `_imagingft` oracle.
+- Manifest coverage is now validated against the live Pillow public signatures
+  using canonical parameter names, and blocked parameters must not appear in
+  active passing rows.
 
 Verification:
 
 - `make -C pillow-rs fmt` — passed
 - `make -C pillow-rs font-tests` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `f98e6c2a-2cbf-47c6-b4c7-8641cf1b7ec1`
-  - snapshot `5ff53889-c7ce-40dd-bb7f-311faffcd39f`
-  - commit `0bb991430ada5916b20ee2e1d318499aff66e863`
+  - run `524c34d3-4647-4d94-ad99-3223851ab732`
+  - snapshot `5e294d66-c1ea-4645-9718-acf938ce3256`
+  - commit `1f34bc130c5ab6d4d30ba4760f5a3a885ee69f50`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
