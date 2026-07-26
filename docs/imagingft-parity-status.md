@@ -5,7 +5,8 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 ## Scope
 - Public surface: `pillow-rs/tests/fixtures/imagingft/inputs/public-api` (non-deprecated corpus only)
 - Runner: `pillow-rs/tests/imagingft_public_api.rs`
-- Oracle source: live Pillow `_imagingft.c` behavior through `pillow-rs/scripts/imagingft_oracle.py`
+- Oracle source: live Pillow `_imagingft.c` behavior through `pillow-rs/scripts/imagingft_oracle.py`, executed via the repo-local `.oracle-venv`.
+- Oracle runtime policy: only a `.oracle-venv/bin/python` interpreter under this repository is accepted; global/interposed interpreters are ignored.
 
 ## Required evidence
 - `make -C pillow-rs imagingft-tests`
@@ -13,12 +14,12 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Coverage MCP flow
   - `project_context` checked and used to discover approved coverage commands.
   - Approved command run: `imagingft-tests-coverage` was superseded by approved fixed command due artifact-path ingest issue.
-  - `run_test`: `89a6e6ef-50a6-499c-9aa8-a47991d2ef80` (`imagingft-tests-coverage-fixed`)
-  - `get_run_data`: terminal, `coverage_ingest.status = ingested`, `snapshot_ids = ["47d58757-9d73-4fdb-a712-22465d467009"]`
-- `coverage_query` collected for snapshot `47d58757-9d73-4fdb-a712-22465d467009` with views: `summary`, `files`, `file` (for `pillow-rs/src/font/imagingft.rs`), `insights`.
+- `run_test`: `2e0b62cf-fe04-429c-b52c-7b750a153a5b` (`imagingft-tests-coverage-fixed`)
+- `get_run_data`: terminal, `coverage_ingest.status = ingested`, `snapshot_ids = ["99b3515a-34ef-49f0-a82a-4e746150d813"]`
+- `coverage_query` collected for snapshot `99b3515a-34ef-49f0-a82a-4e746150d813` with views: `summary`, `files`, `file` (for `pillow-rs/src/font/imagingft.rs`), `insights`.
 
 ## Commit under test
-- `e0fec67f9f7aed5ba29911d1e9f5d8cf288fd93c`
+- `149f41a8d23f2ae56e73e7400af52a21b89c2b26`
 
 ## Corpus state
 - Input files: 17 under `pillow-rs/tests/fixtures/imagingft/inputs/public-api`
@@ -53,22 +54,21 @@ Error kinds observed:
 - `NotImplementedError`: 1 (unsupported public operation)
 
 ## Coverage evidence snapshot
-### Suite-level (snapshot `47d58757-9d73-4fdb-a712-22465d467009`)
+### Suite-level (snapshot `99b3515a-34ef-49f0-a82a-4e746150d813`)
 - `total_lines: 17924`, `covered_lines: 1717` (`line_rate 0.09579`)
 - `total_branches: 3150`, `covered_branches: 141` (`branch_rate 0.04476`)
 - `total_functions: 1205`, `covered_functions: 141` (`function_rate 0.11701`)
 - `total_regions: 31362`, `covered_regions: 2692` (`region_rate 0.08584`)
 
-### File-level (`pillow-rs/src/font/imagingft.rs`, snapshot `47d58757-9d73-4fdb-a712-22465d467009`)
+### File-level (`pillow-rs/src/font/imagingft.rs`, snapshot `99b3515a-34ef-49f0-a82a-4e746150d813`)
 - `covered_lines: 669/815` (`line_rate 0.82086`)
 - `covered_functions: 70/80` (`function_rate 0.875`)
 - `covered_branches: 96/150` (`branch_rate 0.64`)
 - `covered_regions: 1198/1476` (`region_rate 0.81165`)
-- Uncovered lines remain: `146`
-- Uncovered branches remain: `54`
+- Uncovered line ranges returned by `coverage_query(view="file", file_path="pillow-rs/src/font/imagingft.rs")`: `uncovered_line_count: 57`, `partial_branch_line_count: 34`.
 
 ### Metrics delta vs prior imagingft snapshot (`5075479d-20fc-4f57-aaa3-92e5a8ff42ac`)
-- `covered_lines: 1715 -> 1717`
+- `covered_lines: 1715 -> 1717` (latest)
 - `covered_branches: 139 -> 141`
 - `covered_regions: 2689 -> 2692`
 - Overall suite coverage improved slightly, no regressions introduced.
