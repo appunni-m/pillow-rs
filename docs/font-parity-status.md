@@ -1,6 +1,6 @@
 # PIL.ImageFont Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after confirming the target is the
+Last updated: 2026-07-27 (Asia/Kolkata) after enforcing that the target is the
 full `PIL.ImageFont` module surface. `libraqm` shaping is the only explicit
 out-of-scope area; `ImageFont.FreeTypeFont`/`_imagingft` remains in scope
 because Pillow exposes it through `PIL.ImageFont`.
@@ -24,6 +24,10 @@ because Pillow exposes it through `PIL.ImageFont`.
 - Rust test results are compared against Pillow through `Result`-style
   status/value/error payloads. Success payloads include exact bytes; error
   payloads include kind and message.
+- `pillow-rs/tests/font_public_api.rs` now fails if the manifest oracle section
+  drifts away from `expected_path: PIL.ImageFont`, `rust_runtime:
+  pillow_rs::ImageFont`, or the rule that `_imagingft` is only an
+  implementation assertion for FreeTypeFont-backed rows.
 
 ## PIL.ImageFont public surface comparison
 
@@ -301,11 +305,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `ba5b948f-56f2-436c-ae01-6d9d32e1caa5`
-- Snapshot: `d8a11c57-a6bf-493a-8948-d2e41f412923`
+- Run: `ff6caf56-4474-4e1a-8b68-6ceaeaa73a69`
+- Snapshot: `a9da5619-11ab-46a7-8c0a-dc1727c99c70`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `d488aa06aa9470f6335f5642c6de0e353ce385f6`
+- Commit measured: `e066567873afbb829de69a1678df2aef54c8a159`
 
 Target file metrics:
 
