@@ -77,6 +77,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
 	@printf "  $(CYAN)make font-tests$(NC)                  Run Font public API parity tests\n"
 	@printf "  $(CYAN)make font-tests-release$(NC)          Run Font public API parity tests (release)\n"
+	@printf "  $(CYAN)make font-tests-coverage-with-freetype$(NC) Run Font parity coverage including fontdone\n"
 	@printf "  $(CYAN)make imagingft-tests$(NC)              Compatibility alias for font-tests\n"
 	@printf "  $(CYAN)make pillow-rs-imagingft$(NC)           Run legacy ImagingFT matrix parity tests\n"
 	@printf "  $(CYAN)make pillow-rs-imagingft-release$(NC)  Run legacy ImagingFT matrix parity tests (release)\n"
@@ -591,7 +592,7 @@ lint: fmt clippy ## Run fmt + clippy
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
 .PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust coverage-transposed-font-rust
-.PHONY: coverage-font-rust coverage-imagingft-rust font-tests-coverage imagingft-tests-coverage
+.PHONY: coverage-font-rust coverage-font-rust-with-freetype coverage-imagingft-rust font-tests-coverage font-tests-coverage-with-freetype imagingft-tests-coverage
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -624,11 +625,17 @@ coverage-imagefont-getmask2-rust: ## Run ImageFont.getmask2 parity and export Ru
 coverage-font-rust: ## Run Font public API parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_font_rust_coverage.sh
 
+coverage-font-rust-with-freetype: ## Run Font public API parity and export Rust LLVM branch coverage including fontdone
+	bash scripts/coverage/run_font_rust_with_freetype_coverage.sh
+
 coverage-imagingft-rust: ## Compatibility alias for Font public API Rust coverage
 	bash scripts/coverage/run_imagingft_rust_coverage.sh
 
 font-tests-coverage: ## Run Font public API parity via coverage and export Rust LLVM branch coverage
 	bash scripts/coverage/run_font_rust_coverage.sh
+
+font-tests-coverage-with-freetype: ## Run Font public API parity coverage including fontdone
+	bash scripts/coverage/run_font_rust_with_freetype_coverage.sh
 
 imagingft-tests-coverage: ## Compatibility alias for Font public API Rust coverage
 	bash scripts/coverage/run_imagingft_rust_coverage.sh
