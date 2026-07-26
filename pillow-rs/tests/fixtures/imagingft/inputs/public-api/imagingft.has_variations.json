@@ -1,19 +1,10 @@
 {
   "version": 1,
-  "subject": "imagingft.has_variations",
   "operation": "has_variations",
-  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [
-    "dejavusans20_hello_has_variations"
-  ],
   "cases": [
     {
       "case_id": "imagingft.has_variations.dejavusans20_hello_has_variations",
-      "subject": "imagingft.has_variations",
-      "case": "dejavusans20_hello_has_variations",
       "operation": "has_variations",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -25,24 +16,7 @@
           "size": 20,
           "text": "Hello"
         }
-      },
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "has_variations": "bool"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": ["has_variations"]
-        },
-        "oracle": "runtime-generated-from-pillow",
-        "expected": {
-          "has_variations": false
-        }
       }
     }
-  ],
-  "notes": [
-    "source:imagingft_matrix.json"
   ]
 }

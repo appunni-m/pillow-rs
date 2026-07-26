@@ -1,21 +1,10 @@
 {
   "version": 1,
-  "subject": "imagingft.transposed_bbox",
   "operation": "transposed_bbox",
-  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [
-    "untransposed",
-    "rotate_90",
-    "flip_left_right"
-  ],
   "cases": [
     {
       "case_id": "imagingft.transposed_bbox.untransposed",
-      "subject": "imagingft.transposed_bbox",
-      "case": "untransposed",
       "operation": "transposed_bbox",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -27,40 +16,11 @@
           "text": "Parity",
           "orientation": null
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "bbox"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "bbox": [
-            0,
-            0,
-            27,
-            10
-          ]
-        }
       }
     },
     {
       "case_id": "imagingft.transposed_bbox.rotate_90",
-      "subject": "imagingft.transposed_bbox",
-      "case": "rotate_90",
       "operation": "transposed_bbox",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -72,40 +32,11 @@
           "text": "Parity",
           "orientation": "ROTATE_90"
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "bbox"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "bbox": [
-            0,
-            0,
-            10,
-            27
-          ]
-        }
       }
     },
     {
       "case_id": "imagingft.transposed_bbox.flip_left_right",
-      "subject": "imagingft.transposed_bbox",
-      "case": "flip_left_right",
       "operation": "transposed_bbox",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -117,35 +48,7 @@
           "text": "Parity",
           "orientation": "FLIP_LEFT_RIGHT"
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "bbox"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "bbox": [
-            0,
-            0,
-            27,
-            10
-          ]
-        }
       }
     }
-  ],
-  "notes": [
-    "source:transposed_font.json"
   ]
 }

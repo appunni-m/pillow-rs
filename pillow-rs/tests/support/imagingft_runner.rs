@@ -70,15 +70,15 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "get_transposed_mask" => {
             let (width, height, pixels) =
-                imagingft::get_transposed_mask(&font, text(params)?, orientation(params))?;
+                imagingft::get_transposed_mask(&font, text(params)?, orientation(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(imagingft::transposed_bbox(
             imagingft::getbbox(&font, text(params)?),
-            orientation(params),
+            orientation(params)?,
         ))),
         "validate_transposed_length" => {
-            imagingft::validate_transposed_length(orientation(params))?;
+            imagingft::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
                 "value": imagingft::getlength(&font, text(params)?),
@@ -118,8 +118,35 @@ fn text(params: &Value) -> Result<&str, PilError> {
         .ok_or_else(|| PilError::TypeError("text must be a string".into()))
 }
 
-fn orientation(params: &Value) -> Option<&str> {
-    params.get("orientation").and_then(Value::as_str)
+fn orientation(params: &Value) -> Result<Option<&str>, PilError> {
+    let value = match params.get("orientation") {
+        Some(value) => value,
+        None => return Ok(None),
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(method) = value.as_str() else {
+        return Err(PilError::TypeError(
+            "'str' object cannot be interpreted as an integer".into(),
+        ));
+    };
+    if matches!(
+        method,
+        "FLIP_LEFT_RIGHT"
+            | "FLIP_TOP_BOTTOM"
+            | "ROTATE_90"
+            | "ROTATE_180"
+            | "ROTATE_270"
+            | "TRANSPOSE"
+            | "TRANSVERSE"
+    ) {
+        Ok(Some(method))
+    } else {
+        Err(PilError::TypeError(
+            "'str' object cannot be interpreted as an integer".into(),
+        ))
+    }
 }
 
 fn pair_f64(value: &Value, name: &str) -> Result<(f64, f64), PilError> {

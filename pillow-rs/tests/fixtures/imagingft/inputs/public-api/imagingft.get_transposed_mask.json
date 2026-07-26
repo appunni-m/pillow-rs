@@ -1,21 +1,10 @@
 {
   "version": 1,
-  "subject": "imagingft.get_transposed_mask",
   "operation": "get_transposed_mask",
-  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [
-    "untransposed",
-    "rotate_90",
-    "flip_left_right"
-  ],
   "cases": [
     {
       "case_id": "imagingft.get_transposed_mask.untransposed",
-      "subject": "imagingft.get_transposed_mask",
-      "case": "untransposed",
       "operation": "get_transposed_mask",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -27,45 +16,11 @@
           "text": "Parity",
           "orientation": null
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            27,
-            10
-          ],
-          "mode": "L",
-          "pixels_hex": "00f6c0bfc4350000000000000000002b690000780000000000000000f000002dcb00000000000000000000000000f00000000000000000f0000000ec2bc4d4710000f09f6e00f00081fcbacf24000edb0100f0000043bc973d12e60000f7470000f00000f00076740057890000f6c0c1b2200d6589f40000f4020000f00000f0001dc200a6300000f000000000b8651cf20000f0000000f00000f00000c01bc6000000f000000000ec0f24f90000f0000000f00000f2020069a97d000000f00000000082d5a6e90700f0000000f00000b5b40014fa240000000000000000000000000000000000000000000000001dbc0000000000000000000000000000000000000000000000004ecf31000000"
-        }
       }
     },
     {
       "case_id": "imagingft.get_transposed_mask.rotate_90",
-      "subject": "imagingft.get_transposed_mask",
-      "case": "rotate_90",
       "operation": "get_transposed_mask",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -77,45 +32,11 @@
           "text": "Parity",
           "orientation": "ROTATE_90"
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            10,
-            27
-          ],
-          "mode": "L",
-          "pixels_hex": "000001000000000000000000db8930000000000000000e57a6c67d24000000000000001ba9fabc3100002474c2c069141dcf0000cf761d000000004e0000ba00000002b4000078f0fcf0f0f0f2b5000000008100000000000000000000000000000000006900f0f0f0f0f0f000002b00000000000000000000006e0000000000000000009f470200000000000000f0f7f4f0f0f000000000000000000000000000000000000000070000000071e6f4f2f9e900000000d412891c24a600000000c43d65650fd5000000002b970db8ec82000035cbecbc200000000000c42d0043b20000000000bf000000c10000000000c0000000c00000000000f6f0f0f0f6f0f0f0000000000000000000000000"
-        }
       }
     },
     {
       "case_id": "imagingft.get_transposed_mask.flip_left_right",
-      "subject": "imagingft.get_transposed_mask",
-      "case": "flip_left_right",
       "operation": "get_transposed_mask",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -127,40 +48,23 @@
           "text": "Parity",
           "orientation": "FLIP_LEFT_RIGHT"
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "pixels": "hex"
+      }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.empty_suite",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
         },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            27,
-            10
-          ],
-          "mode": "L",
-          "pixels_hex": "00000000000000780000692b00000000000000000035c4bfc0f60000000000000000f000000000000000000000000000cb2d0000f00001db0e0024cfbafc8100f0006e9ff0000071d4c42bec000000f00000895700747600f00000f0000047f70000e6123d97bc430000f0000030a600c21d00f00000f0000002f40000f489650d20b2c1c0f6000000c61bc00000f00000f0000000f00000f21c65b800000000f00000007da9690002f20000f0000000f00000f9240fec00000000f000000024fa1400b4b50000f0000000f00007e9a6d58200000000f000000000bc1d0000000000000000000000000000000000000000000000000031cf4e000000000000000000000000000000000000000000"
+        "params": {
+          "size": 20,
+          "text": ""
         }
       }
     }
-  ],
-  "notes": [
-    "source:transposed_font.json"
   ]
 }

@@ -1,21 +1,10 @@
 {
   "version": 1,
-  "subject": "imagingft.getbbox_binary",
   "operation": "getbbox_binary",
-  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [
-    "dejavusans20_hello_getbbox_binary",
-    "dejavusans20_av_getbbox_binary",
-    "dejavusans20_jq_getbbox_binary"
-  ],
   "cases": [
     {
       "case_id": "imagingft.getbbox_binary.dejavusans20_hello_getbbox_binary",
-      "subject": "imagingft.getbbox_binary",
-      "case": "dejavusans20_hello_getbbox_binary",
       "operation": "getbbox_binary",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -27,29 +16,11 @@
           "size": 20,
           "text": "Hello"
         }
-      },
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": ["bbox"]
-        },
-        "oracle": "runtime-generated-from-pillow",
-        "expected": {
-          "bbox": [0, 4, 63, 23]
-        }
       }
     },
     {
       "case_id": "imagingft.getbbox_binary.dejavusans20_av_getbbox_binary",
-      "subject": "imagingft.getbbox_binary",
-      "case": "dejavusans20_av_getbbox_binary",
       "operation": "getbbox_binary",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -61,29 +32,11 @@
           "size": 20,
           "text": "AV"
         }
-      },
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": ["bbox"]
-        },
-        "oracle": "runtime-generated-from-pillow",
-        "expected": {
-          "bbox": [0, 4, 28, 19]
-        }
       }
     },
     {
       "case_id": "imagingft.getbbox_binary.dejavusans20_jq_getbbox_binary",
-      "subject": "imagingft.getbbox_binary",
-      "case": "dejavusans20_jq_getbbox_binary",
       "operation": "getbbox_binary",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -95,24 +48,23 @@
           "size": 20,
           "text": "jQ"
         }
-      },
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "bbox": "[i32;4]"
+      }
+    },
+    {
+      "case_id": "imagingft.getbbox_binary.empty_suite",
+      "operation": "getbbox_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
         },
-        "compare": {
-          "mode": "exact",
-          "paths": ["bbox"]
-        },
-        "oracle": "runtime-generated-from-pillow",
-        "expected": {
-          "bbox": [0, 4, 18, 23]
+        "params": {
+          "size": 20,
+          "text": ""
         }
       }
     }
-  ],
-  "notes": [
-    "source:imagingft_matrix.json"
   ]
 }

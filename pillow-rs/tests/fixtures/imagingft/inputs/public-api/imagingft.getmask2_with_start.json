@@ -1,23 +1,10 @@
 {
   "version": 1,
-  "subject": "imagingft.getmask2_with_start",
   "operation": "getmask2_with_start",
-  "oracle": "Pillow 12.2.0 + PIL.ImageFont.FreeTypeFont / _imagingft.c",
-  "manifest_cases": [
-    "baseline",
-    "integer_start",
-    "fractional_start",
-    "empty_suite1",
-    "unicode_suite1"
-  ],
   "cases": [
     {
       "case_id": "imagingft.getmask2_with_start.baseline",
-      "subject": "imagingft.getmask2_with_start",
-      "case": "baseline",
       "operation": "getmask2_with_start",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -33,51 +20,11 @@
           ],
           "size": 10.0
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "offset": "[i32;2]",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "offset",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            25,
-            8
-          ],
-          "mode": "L",
-          "offset": [
-            0,
-            2
-          ],
-          "pixels_hex": "00f000000000f00000000000000000f00000f000000000000000f000000000f00000000000000000f00000f000000000000000f000000000f00011a4bcc2360000f00000f00018b6c2b61800f000000000f0009c37001ed00000f00000f000a55d005da400f6c0c0c0c0f600e3c0c0c0db0300f00000f000e5070007e500f000000000f000e70800023e0000f00000f000e6070007e500f000000000f000ac59004bb70000f00000f000a55b005ba500f000000000f0001db7c1bd220000cb7900cb791ab7c2b719"
-        }
       }
     },
     {
       "case_id": "imagingft.getmask2_with_start.integer_start",
-      "subject": "imagingft.getmask2_with_start",
-      "case": "integer_start",
       "operation": "getmask2_with_start",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -93,51 +40,11 @@
           ],
           "size": 10.0
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "offset": "[i32;2]",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "offset",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            28,
-            12
-          ],
-          "mode": "L",
-          "offset": [
-            0,
-            2
-          ],
-          "pixels_hex": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f000000000f00000000000000000f00000f000000000000000000000f000000000f00000000000000000f00000f000000000000000000000f000000000f00011a4bcc2360000f00000f00018b6c2b61800000000f000000000f0009c37001ed00000f00000f000a55d005da400000000f6c0c0c0c0f600e3c0c0c0db0300f00000f000e5070007e500000000f000000000f000e70800023e0000f00000f000e6070007e500000000f000000000f000ac59004bb70000f00000f000a55b005ba500000000f000000000f0001db7c1bd220000cb7900cb791ab7c2b719"
-        }
       }
     },
     {
       "case_id": "imagingft.getmask2_with_start.fractional_start",
-      "subject": "imagingft.getmask2_with_start",
-      "case": "fractional_start",
       "operation": "getmask2_with_start",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -153,51 +60,11 @@
           ],
           "size": 10.0
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "offset": "[i32;2]",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "offset",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            26,
-            9
-          ],
-          "mode": "L",
-          "offset": [
-            0,
-            2
-          ],
-          "pixels_hex": "00000000000000000000000000000000000000000000000000000000f000000000f00000000000000000f00000f00000000000000000f000000000f00000000000000000f00000f00000000000000000f000000000f00011a4bcc2360000f00000f00018b6c2b6180000f000000000f0009c37001ed00000f00000f000a55d005da40000f6c0c0c0c0f600e3c0c0c0db0300f00000f000e5070007e50000f000000000f000e70800023e0000f00000f000e6070007e50000f000000000f000ac59004bb70000f00000f000a55b005ba50000f000000000f0001db7c1bd220000cb7900cb791ab7c2b719"
-        }
       }
     },
     {
       "case_id": "imagingft.getmask2_with_start.empty_suite1",
-      "subject": "imagingft.getmask2_with_start",
-      "case": "empty_suite1",
       "operation": "getmask2_with_start",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -213,51 +80,11 @@
           ],
           "size": 10.0
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "offset": "[i32;2]",
-          "pixels": "hex"
-        },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "offset",
-            "pixels"
-          ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            0,
-            0
-          ],
-          "mode": "L",
-          "offset": [
-            0,
-            0
-          ],
-          "pixels_hex": ""
-        }
       }
     },
     {
       "case_id": "imagingft.getmask2_with_start.unicode_suite1",
-      "subject": "imagingft.getmask2_with_start",
-      "case": "unicode_suite1",
       "operation": "getmask2_with_start",
-      "schema": "api_result",
-      "expect_error": false,
       "inputs": {
         "assets": {
           "font": {
@@ -266,53 +93,34 @@
           }
         },
         "params": {
-          "text": "\u00e9",
+          "text": "é",
           "start": [
             0.0,
             0.0
           ],
           "size": 10.0
         }
-      },
-      "classifiers": [
-        "surface:imagingft",
-        "coverage:public-endpoint",
-        "coverage:pixel-output"
-      ],
-      "expectation": {
-        "status": "ok",
-        "output_shape": {
-          "size": "[u32;2]",
-          "mode": "str",
-          "offset": "[i32;2]",
-          "pixels": "hex"
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.empty_suite2",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
         },
-        "compare": {
-          "mode": "exact",
-          "paths": [
-            "size",
-            "mode",
-            "offset",
-            "pixels"
+        "params": {
+          "size": 10.0,
+          "text": "",
+          "start": [
+            0.0,
+            0.0
           ]
-        },
-        "oracle": "Pillow 12.2.0",
-        "expected": {
-          "size": [
-            5,
-            7
-          ],
-          "mode": "L",
-          "offset": [
-            0,
-            3
-          ],
-          "pixels_hex": "ffb0acb1ffc9670063c7ac603848acac04b100acac65514dacc96e006ac7ffb1acb1ff"
         }
       }
     }
-  ],
-  "notes": [
-    "source:getmask2.json"
   ]
 }
