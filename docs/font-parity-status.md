@@ -1,5 +1,45 @@
 # Font Public-API Parity Status (Current Worktree)
 
+Last updated: 2026-07-26 (Asia/Kolkata) — dependency-inclusive Font coverage
+ingestion fixed at commit `f660bc90f`
+
+## Current checkpoint: dependency-inclusive Coverage MCP ingestion
+
+New commit:
+
+- `f660bc90f` — normalizes LLVM JSON hit-count magnitudes above signed 32-bit
+  max after `cargo llvm-cov` emits the report. This preserves zero/non-zero
+  coverage state while avoiding Coverage MCP CSV integer overflow on hot
+  lines such as `pillow-rs-freetype/src/tt/cmap.rs`.
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed before commit.
+- Coverage MCP command `font-tests-coverage-with-freetype`
+  - run `79b79906-b65a-44f1-b3b1-d4cd4a133a60`
+  - snapshot `6803f7bd-3335-4b53-a185-2f8b5ac9fdd5`
+  - commit `f660bc90f78577e64518d186704b96b4a14fa624`
+  - status `passed`, coverage artifact ingested
+
+Current target file metrics from snapshot
+`6803f7bd-3335-4b53-a185-2f8b5ac9fdd5`:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `666/695` (`95.83%`) | `118/140` (`84.29%`) | `72/78` (`92.31%`) | `1042/1099` (`94.81%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+
+Manifest gate status:
+
+- `font_public_api.rs` verifies that `font_manifest.yaml` includes every live
+  Pillow `ImageFont.FreeTypeFont` public method and classifies every live
+  public signature parameter.
+- Every parameter marked `covered` must appear in active input-only JSON rows.
+- Every parameter marked `blocked` must not appear in active rows.
+- Every manifest operation must have a runner arm, every required operation
+  must appear in input rows, and every root `pillow_rs::font_*` public API must
+  be referenced by the runner.
+
 Last updated: 2026-07-26 (Asia/Kolkata) — Pillow Font comparison review at
 commit `7cf439600`
 
