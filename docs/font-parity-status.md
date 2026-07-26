@@ -187,11 +187,11 @@ Route audit movement is `real-parity=4832`, `pending-route=189`.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `5a95b484-d517-4d87-9287-b8e2c0cd83a6`
-- Snapshot: `3c63fe0d-5725-473c-9f65-bddb3b1453f1`
+- Run: `1cd9776a-aa2f-42ab-8e2b-63fecab6ff22`
+- Snapshot: `4d6f50e7-75f6-4ea3-90de-be544b965c7c`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `d281b5858c2c251669c7e27b18f402a5e1447393`
+- Commit measured: `3144d07370c8557753577677581142cc37c22696`
 
 Target file metrics:
 
