@@ -2,6 +2,65 @@
 
 Last updated: 2026-07-26 (Asia/Kolkata)
 
+## Execution status update: 2026-07-26
+
+Implemented and committed during execution:
+
+- `77c64bb22` — added variable-font and SBIT oracle rows.
+- `f0d02db78` — added invalid-`maxp` runtime error rows; changed
+  imagingft mask/render/draw test-facing paths to preserve `Result` errors
+  instead of silently returning empty masks; mapped
+  `FT_Err_Too_Many_Instruction_Defs` to Pillow
+  `OSError("too many instruction definitions")`.
+- `a460c1e27` — added generated hinter fixtures for `code overflow` and
+  `nested DEFS`; fixed `fontdone` FDEF-index overflow classification to
+  return `FT_Err_Code_Overflow`, and preserved `FT_Err_Nested_DEFS`.
+- `550787522` — preserved missing SFNT face names as `None` through the
+  imagingft oracle runner while keeping existing binding `getname()` defaults
+  stable.
+
+Verified gates:
+
+- `make -C pillow-rs imagingft-tests` passes after each committed batch.
+- Coverage MCP command `imagingft-tests-coverage-fixed` passed and ingested
+  after each committed batch.
+
+Coverage snapshots:
+
+| Commit | Snapshot | `imagingft.rs` regions | Branches | Notes |
+|---|---|---:|---:|---|
+| `88504ef6e` | `e77930c8-41c2-4eb2-b943-4ce8ca2066cf` | `1873/2338` (`80.11%`) | `172/258` | pre-error-row baseline used for this execution |
+| `f0d02db78` | `b32d6e80-3e98-4e85-ade4-28b416790e97` | `1851/2294` (`80.69%`) | `174/260` | Result propagation changed denominator |
+| `a460c1e27` | `f1c881aa-ebc5-40ea-a8ba-371a8418f355` | `1800/2243` (`80.25%`) | `178/262` | bytecode error rows/fixes |
+| `550787522` | `d8402aae-43ae-469d-8efd-c01666ce5af8` | `1875/2330` (`80.47%`) | `181/266` | missing-name row/fix |
+
+Current blocker to literal 100% region coverage:
+
+- A substantial remaining region block is `Font::Bitmap` behavior inside
+  `pillow-rs/src/font/imagingft.rs`, including `shift_bitmap_mask`. The
+  current imagingft public-api loader intentionally exercises Pillow
+  `_imagingft`/`ImageFont.truetype`, which creates `Font::TrueType`, not this
+  Rust-only `Font::Bitmap` enum variant. Covering these lines with Rust-only
+  construction would violate the Pillow-oracle rule and would not count as
+  trusted parity.
+- Therefore, reaching literal 100% for this file under the current suite
+  requires one of these design changes:
+  1. move bitmap-font compatibility code out of `imagingft.rs` so the
+     `_imagingft` region target contains only oracle-reachable TrueType paths;
+  2. add a separate Pillow bitmap-font oracle route and classify it separately
+     from `_imagingft` TrueType parity;
+  3. exclude bitmap-only compatibility lines from the imagingft region target
+     with an explicit, reviewed coverage policy.
+
+Rejected during execution:
+
+- `name_table_bad_storage.ttf` was not kept in the imagingft public corpus.
+  Live Pillow `_imagingft` loaded it, but the lower-level freetype manifest
+  classifies the same asset as an `FT_Err_Name_Table_Missing` lane. Changing
+  `fontdone` to accept it inside this task would risk weakening FreeType
+  parity, so only `name_table_missing.ttf` was retained for the Pillow
+  `(None, None)` `getname()` behavior.
+
 ## Purpose
 
 This document is the working map to drive `pillow-rs/src/font/imagingft.rs`
