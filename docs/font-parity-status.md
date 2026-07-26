@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `c1b6148b-abdf-4fe3-ba9e-ee5e4636a52a`
-- Snapshot: `9f812cc7-fd39-4f27-a26e-69afa3c8196b`
+- Run: `8db0b7ec-f96c-4832-a976-86b7c8403c2d`
+- Snapshot: `73f9827d-93f3-400e-b78d-e4a7c28b630f`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `f1a08f04d964a3eadb7d01d59598eed0630e5031`
+- Commit measured: `2b2e6aa938c8803bed27fc19d284fe82ac265e63`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `822/837` (`98.21%`) | `137/146` (`93.84%`) | `80/86` (`93.02%`) | `1302/1351` (`96.37%`) |
+| `pillow-rs/src/font/imagingft.rs` | `824/838` (`98.33%`) | `136/144` (`94.44%`) | `81/87` (`93.10%`) | `1304/1352` (`96.45%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -345,6 +345,11 @@ Latest Font wrapper movement:
   `font.getmask2.dejavusans24_empty_negative_stroke_l`. Pillow raises
   `ValueError("bad image size")` for these public inputs; Rust previously
   clamped the empty negative allocation to a zero-size success.
+- Removed the unreachable Font-adapter `FT_Stroker_New` error branch from
+  `imagingft.rs`. The lower-level FreeType-compatible function still owns null
+  C-style argument validation; the safe `PIL.ImageFont` adapter always supplies
+  both the library and output handle, so that branch was not a recoverable
+  public Font error path.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
