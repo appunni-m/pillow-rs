@@ -66,6 +66,9 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
 
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 2] = ["constructor", "variations"];
 
+const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
+    [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
+
 const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
     ("font_from_bytes", "truetype"),
     ("font_get_variation_axes", "get_variation_axes"),
@@ -843,6 +846,24 @@ fn assert_manifest_covers_pillow_public_signatures(
     pillow_signatures: &BTreeMap<String, BTreeSet<String>>,
 ) {
     let observed_parameters = observed_public_method_parameters(cases);
+    let expected_blocked = EXPECTED_BLOCKED_PUBLIC_PARAMETERS
+        .into_iter()
+        .map(|(method, parameter)| (method.to_owned(), parameter.to_owned()))
+        .collect::<BTreeSet<_>>();
+    let actual_blocked = manifest
+        .public_method_parameters
+        .iter()
+        .flat_map(|(method, coverage)| {
+            coverage
+                .blocked
+                .iter()
+                .map(|parameter| (method.clone(), parameter.clone()))
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        actual_blocked, expected_blocked,
+        "font_manifest.yaml must not hide public Font parity gaps; update EXPECTED_BLOCKED_PUBLIC_PARAMETERS only with a documented implementation blocker"
+    );
     assert_eq!(
         manifest
             .public_method_parameters
