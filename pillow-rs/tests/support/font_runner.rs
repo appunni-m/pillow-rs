@@ -1,11 +1,6 @@
 use std::{fs, path::Path};
 
-use pillow_rs::{
-    draw::Draw,
-    error::PilError,
-    font::{self as font_api, Font},
-    image::Image,
-};
+use pillow_rs::{Draw, Font, Image, PilError};
 use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
@@ -72,12 +67,12 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 font.get_transposed_mask(text(params)?, orientation(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
-        "transposed_bbox" => Ok(bbox_value(font_api::transposed_bbox(
+        "transposed_bbox" => Ok(bbox_value(pillow_rs::transposed_bbox(
             font.getbbox(text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
-            font_api::validate_transposed_length(orientation(params)?)?;
+            pillow_rs::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
                 "value": font.getlength(text(params)?)?,

@@ -4,8 +4,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pillow_rs::image::Image;
-use pillow_rs::ops::module_fns;
+use pillow_rs::Image;
+
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -221,8 +221,8 @@ fn shared_eval_corpus_matches_pillow_exactly() {
                 .assert;
             let image = create_input(&base, &case.input, &case.mode);
             let lut: Vec<u8> = (0..=255u8).map(|value| value.saturating_add(10)).collect();
-            let actual =
-                module_fns::eval_replicated_for_image(&image, &lut).expect("Image.eval succeeds");
+            let actual = pillow_rs::image_eval_replicated_for_image(&image, &lut)
+                .expect("Image.eval succeeds");
             assert_expected(&base, assertion, &actual, &case.id);
         }
     }

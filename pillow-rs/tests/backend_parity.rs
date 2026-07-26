@@ -3,14 +3,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use pillow_rs::Backend;
+use pillow_rs::Draw;
+use pillow_rs::Font;
 use pillow_rs::Image;
-use pillow_rs::compute::{self, Backend};
-use pillow_rs::draw::Draw;
-use pillow_rs::error::PilError;
-use pillow_rs::font::Font;
-use pillow_rs::image::{PaletteTransparency, PutDataValue};
-use pillow_rs::ops::{chops, imageops, module_fns, paste::PasteSource};
-use pillow_rs::pipeline::PipelineOp;
+use pillow_rs::PaletteTransparency;
+use pillow_rs::PasteSource;
+use pillow_rs::PilError;
+use pillow_rs::PipelineOp;
+use pillow_rs::PutDataValue;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -554,7 +555,8 @@ fn backend_coverage_metadata_matches_every_exact_case() {
 #[test]
 fn effect_spread_registry_exposes_only_the_sequential_cpu_lane() {
     let op = PipelineOp::EffectSpread { distance: 0 };
-    let entry = compute::registry::registry()
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
+    let entry = registry
         .get("EffectSpread")
         .expect("EffectSpread must be registered");
 
@@ -564,10 +566,10 @@ fn effect_spread_registry_exposes_only_the_sequential_cpu_lane() {
             entry.simd_fn.is_some(),
             entry.gpu_shader,
             entry.gpu_source.is_some(),
-            compute::registry::cpu_supports(&op),
-            compute::registry::simd_supports(&op),
-            compute::registry::gpu_supports(&op),
-            compute::registry::map_op_to_gpu(&op).is_some(),
+            pillow_rs::backend_cpu_supports(&op).expect("CPU support predicate"),
+            pillow_rs::backend_simd_supports(&op).expect("SIMD support predicate"),
+            pillow_rs::backend_gpu_supports(&op).expect("GPU support predicate"),
+            pillow_rs::backend_map_op_to_gpu(&op).expect("GPU mapping predicate"),
         ),
         (true, false, None, false, true, false, false, false)
     );
@@ -580,7 +582,7 @@ fn forced_non_cpu_backends_reject_effect_spread_without_fallback() {
         (Backend::Gpu, "GPU: no native impl for EffectSpread"),
     ] {
         let image = Image::frombytes("L", (2, 1), &[17, 231]).expect("spread source");
-        let spread = module_fns::effect_spread(&image, 0)
+        let spread = pillow_rs::image_effect_spread(&image, 0)
             .expect("spread must queue")
             .use_backend(backend);
         let error = spread
@@ -597,7 +599,7 @@ fn forced_non_cpu_backends_reject_effect_spread_without_fallback() {
 
 #[test]
 fn paste_is_exact_on_every_declared_native_backend() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     for required in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
         assert!(
             available.contains(&required),
@@ -605,9 +607,8 @@ fn paste_is_exact_on_every_declared_native_backend() {
         );
     }
 
-    let entry = compute::registry::registry()
-        .get("Paste")
-        .expect("Paste must be registered");
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
+    let entry = registry.get("Paste").expect("Paste must be registered");
     assert!(
         entry.cpu_fn.is_some(),
         "Paste must have a CPU implementation"
@@ -894,7 +895,7 @@ fn gpu_auxiliary_failures_follow_operation_then_slot_order() {
 
 #[test]
 fn putalpha_and_core_sample_replacement_match_on_each_native_backend() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     for required in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
         assert!(
             available.contains(&required),
@@ -902,7 +903,7 @@ fn putalpha_and_core_sample_replacement_match_on_each_native_backend() {
         );
     }
 
-    let registry = compute::registry::registry();
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
     for (operation, shader) in [("PutAlpha", "put_alpha.wgsl"), ("PutData", "put_data.wgsl")] {
         let entry = registry
             .get(operation)
@@ -1492,9 +1493,8 @@ fn putalpha_and_core_sample_replacement_match_on_each_native_backend() {
 
 #[test]
 fn pa_draw_point_is_native_on_cpu_and_truthfully_rejected_elsewhere() {
-    let entry = compute::registry::registry()
-        .get("DrawPoint")
-        .expect("DrawPoint registration");
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
+    let entry = registry.get("DrawPoint").expect("DrawPoint registration");
     assert!(
         entry.cpu_fn.is_some(),
         "DrawPoint must have a CPU implementation"
@@ -1632,7 +1632,7 @@ fn indexed_bitmap_and_text_preserve_pillow_format_and_pending_transparency() {
 
 #[test]
 fn drawing_is_exact_and_backend_capabilities_are_truthful() {
-    let registry = compute::registry::registry();
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
     for case in manifest().draw_cases {
         let key = draw_registry_key(&case.operation);
         let entry = registry
@@ -1702,8 +1702,8 @@ fn drawing_is_exact_and_backend_capabilities_are_truthful() {
 
 #[test]
 fn indexed_ops_are_exact_on_every_declared_native_backend() {
-    let available = compute::available_backends();
-    let registry = compute::registry::registry();
+    let available = pillow_rs::available_backends();
+    let registry = pillow_rs::backend_support_registry().expect("backend support registry");
     for (key, shader) in [
         ("InvertChops", "invert_chops.wgsl"),
         ("RemapPalette", "remap_palette.wgsl"),
@@ -1747,7 +1747,7 @@ fn indexed_ops_are_exact_on_every_declared_native_backend() {
             "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
         );
 
-        let inverted = chops::invert(&source)
+        let inverted = pillow_rs::chops_invert(&source)
             .expect("invert P")
             .use_backend(selected);
         assert_eq!(inverted.mode().expect("invert mode"), "P");
@@ -1783,7 +1783,7 @@ fn indexed_ops_are_exact_on_every_declared_native_backend() {
         );
         assert_eq!(transformed.getpalette_trimmed(), Some(palette.to_vec()));
 
-        let composited = module_fns::composite(&source, &image2, &mask)
+        let composited = pillow_rs::image_composite(&source, &image2, &mask)
             .expect("composite P")
             .use_backend(selected);
         assert_eq!(composited.mode().expect("composite mode"), "P");
@@ -1801,7 +1801,7 @@ fn indexed_ops_are_exact_on_every_declared_native_backend() {
 
 #[test]
 fn indexed_affine_fill_and_raw_rgba_palette_match_pillow_12_2() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     let mut palette = vec![0; 30];
     palette[15..18].copy_from_slice(&[1, 2, 3]);
     palette[18..21].copy_from_slice(&[4, 5, 6]);
@@ -1968,7 +1968,7 @@ fn rgba_fast_octree_uses_pillow_float_bucket_average_at_4096_square() {
 
 #[test]
 fn composite_uses_image2_mode_canvas_and_palette_on_every_backend() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     let mask = Image::frombytes("L", (2, 1), &[0, 255]).expect("composite mask");
 
     let mut p1 = Image::frombytes("P", (2, 1), &[1, 2]).expect("P image1");
@@ -1992,21 +1992,21 @@ fn composite_uses_image2_mode_canvas_and_palette_on_every_backend() {
             "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
         );
 
-        let p_over_l = module_fns::composite(&p1, &l, &mask)
+        let p_over_l = pillow_rs::image_composite(&p1, &l, &mask)
             .expect("P over L")
             .use_backend(selected);
         assert_eq!(p_over_l.mode().expect("P over L mode"), "L");
         assert_eq!(p_over_l.tobytes().expect("P over L bytes"), [40, 124]);
         assert_eq!(p_over_l.getpalette_trimmed(), None);
 
-        let l_over_p = module_fns::composite(&l, &p2, &mask)
+        let l_over_p = pillow_rs::image_composite(&l, &p2, &mask)
             .expect("L over P")
             .use_backend(selected);
         assert_eq!(l_over_p.mode().expect("L over P mode"), "P");
         assert_eq!(l_over_p.tobytes().expect("L over P bytes"), [3, 180]);
         assert_eq!(l_over_p.getpalette_trimmed(), Some(p2_palette.clone()));
 
-        let p_over_rgb = module_fns::composite(&p1, &rgb, &mask)
+        let p_over_rgb = pillow_rs::image_composite(&p1, &rgb, &mask)
             .expect("P over RGB")
             .use_backend(selected);
         assert_eq!(p_over_rgb.mode().expect("P over RGB mode"), "RGB");
@@ -2016,14 +2016,14 @@ fn composite_uses_image2_mode_canvas_and_palette_on_every_backend() {
         );
         assert_eq!(p_over_rgb.getpalette_trimmed(), None);
 
-        let rgb_over_p = module_fns::composite(&rgb, &p2, &mask)
+        let rgb_over_p = pillow_rs::image_composite(&rgb, &p2, &mask)
             .expect("RGB over P")
             .use_backend(selected);
         assert_eq!(rgb_over_p.mode().expect("RGB over P mode"), "P");
         assert_eq!(rgb_over_p.tobytes().expect("RGB over P bytes"), [3, 32]);
         assert_eq!(rgb_over_p.getpalette_trimmed(), Some(p2_palette.clone()));
 
-        let large = module_fns::composite(&p1, &large_p2, &mask)
+        let large = pillow_rs::image_composite(&p1, &large_p2, &mask)
             .expect("larger image2 composite")
             .use_backend(selected);
         assert_eq!(large.mode().expect("larger image2 mode"), "P");
@@ -2037,7 +2037,7 @@ fn composite_uses_image2_mode_canvas_and_palette_on_every_backend() {
 
 #[test]
 fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     let image1 = Image::frombytes(
         "RGBA",
         (3, 1),
@@ -2071,7 +2071,7 @@ fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
             ("LA alpha", &la_mask),
             ("L luma", &l_mask),
         ] {
-            let composited = module_fns::composite(&image1, &image2, mask)
+            let composited = pillow_rs::image_composite(&image1, &image2, mask)
                 .unwrap_or_else(|error| panic!("{label} composite setup failed: {error}"))
                 .use_backend(selected);
             assert_eq!(composited.mode().expect("composite mode"), "RGBA");
@@ -2082,7 +2082,7 @@ fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
             );
         }
 
-        let mode1 = module_fns::composite(&image1, &image2, &mode1_mask)
+        let mode1 = pillow_rs::image_composite(&image1, &image2, &mode1_mask)
             .expect("1 mask composite")
             .use_backend(selected);
         assert_eq!(
@@ -2093,7 +2093,7 @@ fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
     }
 
     let invalid_mask = Image::frombytes("RGB", (3, 1), &[0; 9]).expect("invalid RGB mask");
-    match module_fns::composite(&image1, &image2, &invalid_mask) {
+    match pillow_rs::image_composite(&image1, &image2, &invalid_mask) {
         Err(PilError::ValueError(message)) => assert_eq!(message, "bad transparency mask"),
         other => panic!("RGB composite mask should fail exactly, got {other:?}"),
     }
@@ -2101,7 +2101,7 @@ fn composite_mask_band_and_rgba_output_match_pillow_on_every_backend() {
 
 #[test]
 fn backend_lock_reaches_nested_indexed_to_color_pipeline() {
-    let available = compute::available_backends();
+    let available = pillow_rs::available_backends();
     let mut source = Image::frombytes("P", (4, 1), &[0, 1, 2, 3]).expect("indexed source");
     source
         .putpalette(&[10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120], "RGB")
@@ -2113,7 +2113,7 @@ fn backend_lock_reaches_nested_indexed_to_color_pipeline() {
             "forced-backend parity requires {selected:?}; compiled backends: {available:?}"
         );
         let remapped = source.remap_palette(&[2, 0, 3]).expect("nested remap");
-        let locked = imageops::grayscale(&remapped)
+        let locked = pillow_rs::imageops_grayscale(&remapped)
             .expect("nested P to grayscale")
             .use_backend(selected);
         assert_eq!(locked.backend(), Some(selected));

@@ -554,6 +554,7 @@ mod tests {
     use super::DEFAULT_METRICS;
     use super::DEFAULT_METRICS_LEN;
     use super::PilFont;
+    use super::PilFontMode;
     use super::decode_base64;
 
     #[test]

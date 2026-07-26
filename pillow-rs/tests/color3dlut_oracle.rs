@@ -4,8 +4,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pillow_rs::error::PilError;
-use pillow_rs::image::Image;
+use pillow_rs::Image;
+use pillow_rs::PilError;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

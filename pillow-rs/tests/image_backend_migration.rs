@@ -4,9 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use image_slash_star::{ImageError, ImageFormat};
-use pillow_rs::compute::Backend;
-use pillow_rs::ops::{chops, imageops};
-use pillow_rs::pipeline::{PipelineOp, ResampleFilter};
+use pillow_rs::Backend;
+
+use pillow_rs::PipelineOp;
+use pillow_rs::ResampleFilter;
 use pillow_rs::{Image, PilError};
 use serde::Deserialize;
 
@@ -158,14 +159,16 @@ fn apply_operation(source: &Image, row: &OperationCase) -> Result<Image, PilErro
                 .as_deref()
                 .unwrap_or_else(|| panic!("{} missing method", row.id)),
         ),
-        "imageops_flip" => imageops::flip(source),
-        "imageops_mirror" => imageops::mirror(source),
-        "imageops_crop" => imageops::crop(source, required(parameters.border, row, "border")),
+        "imageops_flip" => pillow_rs::imageops_flip(source),
+        "imageops_mirror" => pillow_rs::imageops_mirror(source),
+        "imageops_crop" => {
+            pillow_rs::imageops_crop(source, required(parameters.border, row, "border"))
+        }
         "imagechops_offset" => {
             let [x, y] = required(parameters.offset, row, "offset");
-            chops::offset(source, x, y)
+            pillow_rs::chops_offset(source, x, y)
         }
-        "imagechops_duplicate" => Ok(chops::duplicate(source)),
+        "imagechops_duplicate" => Ok(source.copy()),
         "putpixel_index" => {
             let [x, y] = required(parameters.point, row, "point");
             let mut result = source.copy();

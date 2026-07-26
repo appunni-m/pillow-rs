@@ -47,6 +47,7 @@ macro_rules! par_rows {
         // AS PER DESIGN: par_chunks splits at row boundaries — each chunk is
         // one complete scanline. This ensures cache-friendly access and
         // correctness for row-independent operations.
+        use rayon::iter::IndexedParallelIterator;
         use rayon::iter::ParallelIterator;
         use rayon::slice::ParallelSlice;
         _data

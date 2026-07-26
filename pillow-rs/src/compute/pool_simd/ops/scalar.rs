@@ -2240,6 +2240,7 @@ pub fn crop_border(pixels: &[u32], w: u32, h: u32, mode: u32, border: u32) -> (V
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::{
         add, add_modulo, alpha_composite, autocontrast, blend, blend_module, box_blur, brightness,
         color_saturation, colorize, composite, composite_module, constant, contain, contrast,

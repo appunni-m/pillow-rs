@@ -1,6 +1,6 @@
 #![allow(missing_docs, unused_crate_dependencies)]
 
-use pillow_rs::font::{Font, imagingft};
+use pillow_rs::Font;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -60,7 +60,7 @@ fn getmask2_matches_independent_pillow_oracle() {
     assert_eq!(manifest.font.kind, "load_default");
 
     let font = Font::load_default(10.0).expect("pinned Pillow default font");
-    let actual_name = imagingft::getname(&font);
+    let actual_name = pillow_rs::font_getname(&font);
     assert_eq!(
         [actual_name.0, actual_name.1],
         [
@@ -72,7 +72,7 @@ fn getmask2_matches_independent_pillow_oracle() {
     for case in manifest.cases {
         let start = case.start.map_or((0.0, 0.0), |value| (value[0], value[1]));
         let (width, height, pixels, offset) =
-            imagingft::getmask2_with_start(&font, &case.text, start);
+            pillow_rs::font_getmask2_with_start(&font, &case.text, start);
         assert_eq!(case.expected.mode, "L", "{} mode", case.id);
         assert_eq!([width, height], case.expected.size, "{} size", case.id);
         assert_eq!(

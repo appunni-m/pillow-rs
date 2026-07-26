@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pillow_rs::image::Image;
+use pillow_rs::Image;
 use serde::Deserialize;
 
 const PILLOW_VERSION: &str = "12.2.0";

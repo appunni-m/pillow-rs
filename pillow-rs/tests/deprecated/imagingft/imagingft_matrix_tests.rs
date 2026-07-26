@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use pillow_rs::font::{Font, imagingft};
+use pillow_rs::Font;
 use pillow_rs::{Draw, Image};
 
 #[derive(Debug, Deserialize)]
@@ -207,7 +207,7 @@ fn compare_scalar(font: &Font, row: &Row) {
 fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
     match row.operation.as_str() {
         "getbbox" => {
-            let actual = imagingft::getbbox(font, &row.text);
+            let actual = pillow_rs::font_getbbox(font, &row.text);
             let expected: Vec<i32> =
                 serde_json::from_value(row.expected.clone()).expect("getbbox expected tuple");
             let expected = (expected[0], expected[1], expected[2], expected[3]);
@@ -219,7 +219,7 @@ fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             }
         }
         "getlength" => {
-            let actual = imagingft::getlength(font, &row.text);
+            let actual = pillow_rs::font_getlength(font, &row.text);
             let expected: f32 =
                 serde_json::from_value(row.expected.clone()).expect("getlength expected float");
             if actual != expected {
@@ -230,7 +230,7 @@ fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             }
         }
         "getmetrics" => {
-            let actual = imagingft::getmetrics(font);
+            let actual = pillow_rs::font_getmetrics(font);
             let expected: Vec<u32> =
                 serde_json::from_value(row.expected.clone()).expect("getmetrics expected tuple");
             let expected = (expected[0], expected[1]);
@@ -242,7 +242,7 @@ fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             }
         }
         "getname" => {
-            let actual = imagingft::getname(font);
+            let actual = pillow_rs::font_getname(font);
             let expected: Vec<String> =
                 serde_json::from_value(row.expected.clone()).expect("getname expected tuple");
             let expected = (expected[0].as_str(), expected[1].as_str());
@@ -261,11 +261,11 @@ fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
 fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
     let (actual_size, actual_offset, actual_raw) = match row.operation.as_str() {
         "getmask" => {
-            let (width, height, pixels) = imagingft::getmask(font, &row.text);
+            let (width, height, pixels) = pillow_rs::font_getmask(font, &row.text);
             (vec![width, height], Vec::new(), pixels)
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = imagingft::getmask2(font, &row.text);
+            let (width, height, pixels, offset) = pillow_rs::font_getmask2(font, &row.text);
             (vec![width, height], vec![offset.0, offset.1], pixels)
         }
         "draw_text" => {

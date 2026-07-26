@@ -99,6 +99,7 @@
 
 #[cfg(feature = "parallel")]
 use rayon as _;
+use std::collections::BTreeMap;
 
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE THESE MODULES:
@@ -166,12 +167,16 @@ pub use crate::error::PilError;
 pub use crate::font::Font;
 pub use crate::font::imagingft::get_transposed_mask as font_get_transposed_mask;
 pub use crate::font::imagingft::getbbox as font_getbbox;
+pub use crate::font::imagingft::getbbox_binary as font_getbbox_binary;
 pub use crate::font::imagingft::getlength as font_getlength;
 pub use crate::font::imagingft::getmask as font_getmask;
+pub use crate::font::imagingft::getmask2 as font_getmask2;
 pub use crate::font::imagingft::getmask2_with_start as font_getmask2_with_start;
 pub use crate::font::imagingft::getmetrics as font_getmetrics;
 pub use crate::font::imagingft::getname as font_getname;
+pub use crate::font::imagingft::getname_optional as font_getname_optional;
 pub use crate::font::imagingft::has_variations as font_has_variations;
+pub use crate::font::imagingft::render_text_binary as font_render_text_binary;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
@@ -238,5 +243,127 @@ pub use crate::ops::paste::PasteSource;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
+pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
 pub use crate::pixel_format::PixelFormat;
+
+/// Public backend capability summary for one registered operation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BackendSupportEntry {
+    /// CPU implementation marker.
+    pub cpu_fn: Option<()>,
+    /// SIMD-pool implementation marker.
+    pub simd_fn: Option<()>,
+    /// GPU shader name when the operation has a shader.
+    pub gpu_shader: Option<&'static str>,
+    /// GPU shader source marker.
+    pub gpu_source: Option<()>,
+}
+
+/// Returns the backend capability registry as explicit public summary data.
+pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSupportEntry>, PilError> {
+    Ok(crate::compute::registry::registry()?
+        .iter()
+        .map(|(name, entry)| {
+            (
+                *name,
+                BackendSupportEntry {
+                    cpu_fn: entry.cpu_fn.map(|_| ()),
+                    simd_fn: entry.simd_fn.map(|_| ()),
+                    gpu_shader: entry.gpu_shader,
+                    gpu_source: entry.gpu_source.map(|_| ()),
+                },
+            )
+        })
+        .collect())
+}
+
+/// Returns whether CPU declares support for a pipeline operation.
+pub fn backend_cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    crate::compute::registry::cpu_supports(op)
+}
+
+/// Returns whether SIMD declares support for a pipeline operation.
+pub fn backend_simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    crate::compute::registry::simd_supports(op)
+}
+
+/// Returns whether GPU declares support for a pipeline operation.
+pub fn backend_gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    crate::compute::registry::gpu_supports(op)
+}
+
+/// Returns whether a pipeline operation maps to a GPU operation descriptor.
+pub fn backend_map_op_to_gpu(op: &PipelineOp) -> Result<bool, PilError> {
+    Ok(crate::compute::registry::map_op_to_gpu(op)?.is_some())
+}
+
+/// Returns the backend support matrix as deterministic pretty JSON.
+pub fn backend_support_matrix_json() -> Result<String, PilError> {
+    let registry = backend_support_registry()?;
+    let operations = registry
+        .iter()
+        .map(|(name, entry)| {
+            format!(
+                "{{\"operation\":\"{name}\",\"cpu\":{},\"simd_pool\":{},\"gpu_shader\":{}}}",
+                entry.cpu_fn.is_some(),
+                entry.simd_fn.is_some(),
+                entry.gpu_shader.is_some()
+            )
+        })
+        .collect::<Vec<_>>();
+    let cpu = registry
+        .values()
+        .filter(|entry| entry.cpu_fn.is_some())
+        .count();
+    let simd_pool = registry
+        .values()
+        .filter(|entry| entry.simd_fn.is_some())
+        .count();
+    let gpu_shader = registry
+        .values()
+        .filter(|entry| entry.gpu_shader.is_some())
+        .count();
+    let cpu_without_simd = registry
+        .iter()
+        .filter_map(|(name, entry)| {
+            (entry.cpu_fn.is_some() && entry.simd_fn.is_none()).then_some(*name)
+        })
+        .collect::<Vec<_>>();
+
+    let cpu_without_simd_json = cpu_without_simd
+        .iter()
+        .map(|name| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let operations_json = operations
+        .iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join(",\n    ");
+
+    Ok(format!(
+        concat!(
+            "{{\n",
+            "  \"totals\": {{\n",
+            "    \"operations\": {operations},\n",
+            "    \"cpu\": {cpu},\n",
+            "    \"simd_pool\": {simd_pool},\n",
+            "    \"gpu_shader\": {gpu_shader},\n",
+            "    \"cpu_without_simd\": {cpu_without_simd_len}\n",
+            "  }},\n",
+            "  \"cpu_without_simd\": [{cpu_without_simd_json}],\n",
+            "  \"operations\": [\n",
+            "    {operations_json}\n",
+            "  ]\n",
+            "}}"
+        ),
+        operations = registry.len(),
+        cpu = cpu,
+        simd_pool = simd_pool,
+        gpu_shader = gpu_shader,
+        cpu_without_simd_len = cpu_without_simd.len(),
+        cpu_without_simd_json = cpu_without_simd_json,
+        operations_json = operations_json
+    ))
+}
