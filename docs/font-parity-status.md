@@ -48,6 +48,10 @@ Missing implementation / blocker:
   `pillow-rs-freetype/tests/data/interface_map.json`. If those endpoints become
   available, the Font parity test will require removing the manifest blocker
   and adding live oracle-backed stroke rows.
+- The same Font guard also requires the lower-level FreeType fixture corpus to
+  retain success fixtures for `ftstroke.FT_Glyph_Stroke` and
+  `ftstroke.FT_Glyph_StrokeBorder`, so this blocker is tied to an executable
+  parity target rather than an undocumented TODO.
 - I did not add `stroke_width` fixture rows as active cases because Pillow
   succeeds for visible glyph strokes and Rust still errors. Adding those rows
   before the stroker exists would create known failing parity rows, not 100%
