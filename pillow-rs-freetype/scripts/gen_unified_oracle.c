@@ -19615,6 +19615,61 @@ static int emit_stroker_closed_line_geometry(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_first_segment(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND,
+        FT_STROKER_LINEJOIN_ROUND,
+        65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector to = { 640, 0 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 1);
+    FT_Error line_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &to);
+    FT_Error end_error = line_error ? line_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt point_count = 0;
+    FT_UInt contour_count = 0;
+    FT_Error counts_error = end_error ? end_error : FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+    FT_Vector points[128] = {0};
+    unsigned char tags[128] = {0};
+    unsigned short contours[16] = {0};
+    FT_Outline exported = {0, 0, points, tags, contours, 0};
+    if (!counts_error) {
+        FT_Stroker_Export(stroker, &exported);
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(end_error);
+    printf(",\"output\":{\"status_sequence\":[%d,%d,%d],",
+           begin_error,
+           line_error,
+           end_error);
+    printf("\"exported_outline\":");
+    print_stroker_outline_json(&exported);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
     if (argc != 3) return 2;
     const char* action = argv[2];
@@ -26400,6 +26455,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-closed-line-geometry")) {
         return emit_stroker_closed_line_geometry(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-first-segment")) {
+        return emit_stroker_first_segment(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
