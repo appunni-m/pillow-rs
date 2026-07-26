@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `060d763c6`
 
 ## Scope
 
@@ -22,49 +22,69 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 - `make -C pillow-rs font-tests`  
   Result: `1` passed, `0` failed
+- `cargo check --workspace --all-targets --all-features --locked`  
+  Result: passed; existing warning noise only
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed` compatibility registration, which now runs `make -C pillow-rs imagingft-tests -> font-tests`.
-  - Latest run id: `79e4bdfa-4a7a-43bf-aa8a-f064f178078c`
+  - Latest run id: `8f07704f-98e8-4677-ba61-d523d946203a`
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `e3c79419-67ff-4b76-ac15-17cf0822a908` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: snapshot `48f1c0ae-b25a-4c55-bc08-017de9b90a1e` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Refactor impact: active tests now target `pillow-rs/tests/font_public_api.rs` and call the Rust `Font` public surface. The previous imagingft-named deprecated harness, runner, oracle, and fixture tree have been deleted.
-  - Prior same-turn probe snapshots:
-    - `6b68edcf-1aa9-474f-8f85-9adb95291899`: freetype CFF/embedded-strike rows added; no region movement.
-    - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `pillow-rs/src/font/imagingft.rs` moved to `1872/2338` regions.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
 ## Corpus state
 
 - Input manifest: `pillow-rs/tests/fixtures/font/font_manifest.yaml`
-- Raw input files: `17` (`pillow-rs/tests/fixtures/font/inputs/public-api/font.*.json`)
-- Total rows: `105`
-- Executed rows: `105/105`
+- Raw input files: `20` (`pillow-rs/tests/fixtures/font/inputs/public-api/font.*.json`)
+- Total rows: `154`
+- Executed rows: `154/154`
 - Required operation coverage check is manifest-driven: no required manifest operations missing.
+- Pillow `FreeTypeFont` public methods now represented in the manifest/corpus:
+  - `font_variant`
+  - `get_variation_axes`
+  - `get_variation_names`
+  - `getbbox`
+  - `getlength`
+  - `getmask`
+  - `getmask2`
+  - `getmetrics`
+  - `getname`
+  - `set_variation_by_axes`
+  - `set_variation_by_name`
+- Additional Rust/helper fixture operations remain classified because they validate constructor, draw, transposed, binary-mode, and Result/error paths used by the public Font consumer surface.
 - Input-only guard: active manifest and raw input documents must contain no oracle output, expected hash/raw path, expected error, or status fields; all output/error expectations are generated at runtime from the live Python Pillow Font oracle and compared to Rust `Result`-style status payloads.
 - Error handling: the active Font parity runner uses Result-returning Rust public APIs (`getbbox`, `getlength`, `getmask`, `getmask2`, render variants) and serializes only the resulting `Ok`/`Err` payload at the test boundary. The Font public surface no longer exposes separate `_result` fallback variants for these operations.
 
 ## Required operation presence (fixture-defined)
 
-| Operation | OK | Error | Total |
-|---|---:|---:|---:|
-| `draw_text` | 6 | 0 | 6 |
-| `get_transposed_mask` | 9 | 1 | 10 |
-| `getbbox` | 7 | 2 | 9 |
-| `getbbox_binary` | 7 | 0 | 7 |
-| `getlength` | 6 | 0 | 6 |
-| `getmask` | 8 | 0 | 8 |
-| `getmask2` | 7 | 0 | 7 |
-| `getmask2_with_start` | 17 | 2 | 19 |
-| `getmetrics` | 3 | 0 | 3 |
-| `getname` | 3 | 5 | 8 |
-| `has_variations` | 3 | 0 | 3 |
-| `render_text_binary` | 6 | 0 | 6 |
-| `transposed_bbox` | 7 | 0 | 7 |
-| `unsupported_magic` | 0 | 1 | 1 |
-| `validate_transposed_length` | 3 | 2 | 5 |
+| Operation | Input rows |
+|---|---:|
+| `draw_text` | 7 |
+| `font_size` | 2 |
+| `font_variant` | 2 |
+| `get_transposed_mask` | 11 |
+| `get_variation_axes` | 2 |
+| `get_variation_names` | 2 |
+| `getbbox` | 13 |
+| `getbbox_binary` | 8 |
+| `getlength` | 7 |
+| `getmask` | 11 |
+| `getmask2` | 12 |
+| `getmask2_with_start` | 19 |
+| `getmetrics` | 4 |
+| `getname` | 10 |
+| `has_variations` | 4 |
+| `load_default` | 2 |
+| `render_text_binary` | 9 |
+| `set_variation_by_axes` | 5 |
+| `set_variation_by_name` | 5 |
+| `text_bbox` | 4 |
+| `transposed_bbox` | 7 |
+| `truetype` | 2 |
+| `unsupported_magic` | 1 |
+| `validate_transposed_length` | 5 |
 
-- Total success rows: `92`
-- Total error rows: `13`
+- Total rows in the current input corpus: `154`. Success/error counts are generated at runtime by the oracle; do not store them in input JSON.
 - Error rows are classified only from live oracle output; input JSON carries no expected output, pixel hash, or expected-error metadata.
 
 ## Error-category matrix (oracle-defined)
@@ -85,31 +105,31 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ### Suite summary (`imagingft` compatibility coverage suite)
 
-- Current Coverage MCP snapshot: `b32145da-5c19-4af1-afd0-f0d4d5adca61`
-  - Run: `c4d112ab-4fda-430f-aa16-bddb95a24519`
-  - Commit: `5d53f106786e96887bde7fb47f2b2d2849e52003`
+- Current Coverage MCP snapshot: `48f1c0ae-b25a-4c55-bc08-017de9b90a1e`
+  - Run: `8f07704f-98e8-4677-ba61-d523d946203a`
+  - Commit: `060d763c65d86528be7a245f70ef3d124e2a50f2`
   - Command: `imagingft-tests-coverage-fixed`
   - Result: passed, ingested
-  - Suite totals: `total_lines: 25929`, `covered_lines: 2519` (`line_rate 0.0971499094`)
-  - Suite totals: `total_branches: 4566`, `covered_branches: 225` (`branch_rate 0.0492772668`)
-  - Suite totals: `total_functions: 1801`, `covered_functions: 203` (`function_rate 0.1127151582`)
-  - Suite totals: `total_regions: 45426`, `covered_regions: 3953` (`region_rate 0.0870206490`)
+  - Suite totals: `total_lines: 26199`, `covered_lines: 2773` (`line_rate 0.1058437345`)
+  - Suite totals: `total_branches: 4618`, `covered_branches: 260` (`branch_rate 0.0563014292`)
+  - Suite totals: `total_functions: 1846`, `covered_functions: 242` (`function_rate 0.1310942579`)
+  - Suite totals: `total_regions: 45824`, `covered_regions: 4315` (`region_rate 0.0941646299`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
-- `covered_lines: 677/732` (`line_rate 0.9248633880`)
-- `covered_functions: 65/71` (`function_rate 0.9154929577`)
-- `covered_branches: 148/184` (`branch_rate 0.8043478261`)
-- `covered_regions: 1183/1294` (`region_rate 0.9142194745`)
-- Gaps remain in FreeType load/error branches, glyph render fallback, clipping guards, and uncommon bitmap coverage modes. The previous Rust-only bitmap-font blocker has been removed from this file.
-- Manifest completeness is now enforced in `pillow-rs/tests/font_public_api.rs`: `font_manifest.yaml` must exactly enumerate the current implemented Font public parity surface and every input operation must be classified as required or negative.
+- `covered_lines: 925/1012` (`line_rate 0.9140316206`)
+- `covered_functions: 97/113` (`function_rate 0.8584070796`)
+- `covered_branches: 182/236` (`branch_rate 0.7711864407`)
+- `covered_regions: 1556/1717` (`region_rate 0.9062317997`)
+- Manifest completeness is enforced in `pillow-rs/tests/font_public_api.rs`: `font_manifest.yaml` must exactly enumerate the Font public parity operation set and every input operation must be classified as required or negative.
+- Remaining gaps are not hidden: FreeType load/request-size error sub-branches, glyph render fallback, clipping guard branches, uncommon bitmap coverage modes, and fallback name-decoding branches remain uncovered.
 
 ### `pillow-rs/src/font/mod.rs`
 
-- `covered_lines: 67/91` (`line_rate 0.7362637363`)
-- `covered_functions: 16/23` (`function_rate 0.6956521739`)
-- `covered_regions: 80/120` (`region_rate 0.6666666667`)
-- Remaining uncovered regions are public convenience wrappers such as `font_size`, `text_bbox`, non-Result `getmask`, non-Result `getname`, non-Result binary bbox/getmask2 wrappers, and `Debug`. The exact-result parity runner intentionally drives the `Result` variants for error truth.
+- `covered_lines: 131/146` (`line_rate 0.8972602740`)
+- `covered_functions: 32/36` (`function_rate 0.8888888889`)
+- `covered_regions: 170/202` (`region_rate 0.8415841584`)
+- Remaining uncovered regions are source-map/doc/debug/convenience wrapper regions; parity rows execute through the public Font surface and Result-returning APIs.
 
 ### Coverage delta
 
