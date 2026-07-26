@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `d28250d93`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `45a654881`
 
 ## Current checkpoint: Font public-signature edge sweep
 
@@ -14,6 +14,10 @@ New commits:
   accepted and fall back to BASIC rather than erroring.
 - `d28250d93` — removed non-behavioral ignored-option bindings after the
   fallback behavior was covered by live-oracle rows.
+- `f09c2c2db` — added input-only `start` clipping/error rows for
+  `getmask/getmask2`.
+- `45a654881` — removed a one-use private constant and an unreachable
+  bitmap-pitch conversion failure branch; no public behavior changed.
 
 What changed:
 
@@ -35,16 +39,16 @@ Verification:
 - `make -C pillow-rs font-tests` — passed
 - `make -C pillow-rs fmt` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `9ade8c03-6906-44d3-987b-9ecb36690e81`
-  - snapshot `0e61d126-332f-460d-a1ef-dc8a217e1c3b`
-  - commit `d28250d933e539557f37477e4af12bc0b4f44c21`
+  - run `f7c271cc-063f-452a-8f1f-b7f851e1c6f0`
+  - snapshot `7da02b92-d1bf-436d-b0b2-a137e4f11539`
+  - commit `45a65488175057ef7bdf2feb0f2026c1ae96dc6c`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `955/1041` (`91.74%`) | `186/240` (`77.50%`) | `95/110` (`86.36%`) | `1595/1748` (`91.25%`) |
+| `pillow-rs/src/font/imagingft.rs` | `955/1040` (`91.83%`) | `185/238` (`77.73%`) | `95/110` (`86.36%`) | `1594/1746` (`91.29%`) |
 | `pillow-rs/src/font/mod.rs` | `190/214` (`88.79%`) | n/a | `44/51` (`86.27%`) | `230/272` (`84.56%`) |
 
 Blocker:

@@ -4,18 +4,19 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
-Latest measured checkpoint after public-signature edge sweep:
+Latest measured checkpoint after public-signature edge sweep and private
+coverage-noise simplification:
 
-- Commit: `d28250d93`
-- Coverage MCP run: `9ade8c03-6906-44d3-987b-9ecb36690e81`
-- Snapshot: `0e61d126-332f-460d-a1ef-dc8a217e1c3b`
+- Commit: `45a654881`
+- Coverage MCP run: `f7c271cc-063f-452a-8f1f-b7f851e1c6f0`
+- Snapshot: `7da02b92-d1bf-436d-b0b2-a137e4f11539`
 - Command: `imagingft-tests-coverage-fixed`
 - Result: passed, ingested
 - `pillow-rs/src/font/imagingft.rs`:
-  - lines: `955/1041` (`91.74%`)
-  - branches: `186/240` (`77.50%`)
+  - lines: `955/1040` (`91.83%`)
+  - branches: `185/238` (`77.73%`)
   - functions: `95/110` (`86.36%`)
-  - regions: `1595/1748` (`91.25%`)
+  - regions: `1594/1746` (`91.29%`)
 - `pillow-rs/src/font/mod.rs`:
   - lines: `190/214` (`88.79%`)
   - functions: `44/51` (`86.27%`)
@@ -30,6 +31,12 @@ Latest manifest movement:
 - Fixed and covered `font_variant(layout_engine=...)` no-raqm behavior:
   Pillow accepts RAQM and unknown strings and falls back to BASIC rather than
   raising an error.
+- Added input-only `start` clipping/error rows for `getmask/getmask2`. These
+  preserve independent Pillow edge cases, though LLVM region totals did not
+  move because the relevant branches were already represented or normalized.
+- Removed two private non-behavioral coverage-noise branches: a one-use
+  advance-limit constant and an unreachable bitmap-pitch conversion failure
+  path on the supported target.
 - Remaining blocked public parameters are now only:
   - `getmask`: `stroke_width`
   - `getmask2`: `stroke_width`
