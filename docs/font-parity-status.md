@@ -29,6 +29,11 @@ Missing implementation / blocker:
   `self.font.render(...)`; the Rust side currently returns
   `NotImplementedError` for non-zero `stroke_width` in
   `imagingft.rs::getmask2_with_options`.
+- The pinned Pillow `11.3.0` native `_imagingft.c::font_render` path uses
+  `FT_LOAD_NO_BITMAP` for stroke rendering, creates an `FT_Stroker`, calls
+  `FT_Get_Glyph`, then `FT_Glyph_Stroke` or `FT_Glyph_StrokeBorder`, and
+  finally calls `FT_Glyph_To_Bitmap` before copying the bitmap into the target
+  image.
 - This cannot be fixed honestly in the Font adapter alone. The existing
   pure-Rust FreeType stroker in `pillow-rs-freetype/src/ffi/handles.rs` is not
   a complete glyph stroker: `FT_Stroker_ParseOutline` documents that real
@@ -37,6 +42,12 @@ Missing implementation / blocker:
   Pillow parity for visible stroked glyph masks requires completing real
   FreeType-compatible stroker geometry/export and then rendering the stroked
   outline through the same bitmap composition path as Pillow.
+- `pillow-rs/tests/font_public_api.rs` now ties these public Font blockers to
+  the lower-level FreeType gap by requiring `FT_Glyph_Stroke` and
+  `FT_Glyph_StrokeBorder` to remain explicitly unsupported in
+  `pillow-rs-freetype/tests/data/interface_map.json`. If those endpoints become
+  available, the Font parity test will require removing the manifest blocker
+  and adding live oracle-backed stroke rows.
 - I did not add `stroke_width` fixture rows as active cases because Pillow
   succeeds for visible glyph strokes and Rust still errors. Adding those rows
   before the stroker exists would create known failing parity rows, not 100%
