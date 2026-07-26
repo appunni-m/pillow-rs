@@ -786,40 +786,8 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
             }
         }
         ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied().unwrap_or(0),
-        ffi::FT_PIXEL_MODE_GRAY2 => bitmap
-            .buffer
-            .get(row_start + column / 4)
-            .map_or(0, |byte| (byte >> (6 - 2 * (column & 3))) & 0x03),
-        ffi::FT_PIXEL_MODE_GRAY4 => bitmap.buffer.get(row_start + column / 2).map_or(0, |byte| {
-            if column & 1 == 0 {
-                byte >> 4
-            } else {
-                byte & 0x0F
-            }
-        }),
-        ffi::FT_PIXEL_MODE_BGRA => {
-            let Some(start) = row_start.checked_add(column.saturating_mul(4)) else {
-                return 0;
-            };
-            bitmap
-                .buffer
-                .get(start..start.saturating_add(4))
-                .map_or(0, gray_for_premultiplied_srgb_bgra)
-        }
         _ => 0,
     }
-}
-
-fn gray_for_premultiplied_srgb_bgra(bgra: &[u8]) -> u8 {
-    let alpha = u32::from(bgra[3]);
-    if alpha == 0 {
-        return 0;
-    }
-    let luminance = (4731u32 * u32::from(bgra[0]) * u32::from(bgra[0])
-        + 46868u32 * u32::from(bgra[1]) * u32::from(bgra[1])
-        + 13937u32 * u32::from(bgra[2]) * u32::from(bgra[2]))
-        >> 16;
-    alpha.wrapping_sub(luminance / alpha) as u8
 }
 
 fn refresh_engine_metadata(font: &mut Font) {
