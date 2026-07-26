@@ -1586,7 +1586,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyclass(name = "ImageFont", unsendable)]
 pub struct PyFont {
-    inner: pillow_rs::Font,
+    inner: pillow_rs::ImageFont,
 }
 
 #[pymethods]
@@ -1596,13 +1596,13 @@ impl PyFont {
         let data = std::fs::read(fp).map_err(|e| {
             pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", e))
         })?;
-        let font = pillow_rs::Font::from_bytes(data, size as f32).map_err(map_error)?;
+        let font = pillow_rs::ImageFont::from_bytes(data, size as f32).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
     #[staticmethod]
     fn truetype_from_bytes(data: Vec<u8>, size: f64) -> PyResult<Self> {
-        let font = pillow_rs::Font::from_bytes(data, size as f32).map_err(map_error)?;
+        let font = pillow_rs::ImageFont::from_bytes(data, size as f32).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
@@ -1610,7 +1610,7 @@ impl PyFont {
     #[pyo3(signature = (size=None))]
     fn load_default(size: Option<f32>) -> PyResult<Self> {
         let sz = size.unwrap_or(10.0);
-        let font = pillow_rs::Font::load_default(sz).map_err(map_error)?;
+        let font = pillow_rs::ImageFont::load_default(sz).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
@@ -2278,7 +2278,7 @@ impl PyDraw {
         let bbox = match font {
             Some(f) => pillow_rs::font_getbbox(&f.borrow().inner, text).map_err(map_error)?,
             None => {
-                let font = pillow_rs::Font::load_default(10.0).map_err(map_error)?;
+                let font = pillow_rs::ImageFont::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font_getbbox(&font, text).map_err(map_error)?
             }
         };
@@ -2291,7 +2291,7 @@ impl PyDraw {
         let w = match font {
             Some(f) => pillow_rs::font_getlength(&f.borrow().inner, text).map_err(map_error)?,
             None => {
-                let font = pillow_rs::Font::load_default(10.0).map_err(map_error)?;
+                let font = pillow_rs::ImageFont::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font_getlength(&font, text).map_err(map_error)?
             }
         };
@@ -2309,10 +2309,10 @@ impl PyDraw {
         align: &str,
     ) -> PyResult<(i32, i32, i32, i32)> {
         let default_font;
-        let f: &pillow_rs::Font = if let Some(f) = font {
+        let f: &pillow_rs::ImageFont = if let Some(f) = font {
             &f.borrow().inner
         } else {
-            default_font = pillow_rs::Font::load_default(10.0).map_err(map_error)?;
+            default_font = pillow_rs::ImageFont::load_default(10.0).map_err(map_error)?;
             &default_font
         };
         let lines: Vec<&str> = text.split('\n').collect();

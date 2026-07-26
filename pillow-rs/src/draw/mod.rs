@@ -1029,13 +1029,13 @@ impl Draw {
         x: i32,
         y: i32,
         text: &str,
-        font: &crate::font::Font,
+        font: &crate::font::ImageFont,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         let mode = self.effective_mode();
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
 
-        // Font rendering always uses alpha=255 so glyph coverage is preserved.
+        // ImageFont rendering always uses alpha=255 so glyph coverage is preserved.
         // Mode-specific alpha handling (e.g., LA alpha=0 for int fills) is done
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);

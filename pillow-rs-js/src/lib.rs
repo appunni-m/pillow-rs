@@ -1007,11 +1007,11 @@ impl ImageDraw {
 }
 
 // ── ImageFont ────────────────────────────────────────────────────
-use pillow_rs::Font;
+use pillow_rs::ImageFont;
 
 #[wasm_bindgen]
 pub struct ImageFont {
-    font: Font,
+    font: ImageFont,
 }
 
 #[wasm_bindgen]
@@ -1055,7 +1055,7 @@ impl ImageFontMask {
 impl ImageFont {
     #[wasm_bindgen(constructor)]
     pub fn new(data: Vec<u8>, size: f32) -> Result<ImageFont, JsValue> {
-        Font::from_bytes(data, size)
+        ImageFont::from_bytes(data, size)
             .map(|f| ImageFont { font: f })
             .map_err(err)
     }
@@ -1385,7 +1385,7 @@ impl ImageFont {
     }
     #[wasm_bindgen(js_name = "loadDefault")]
     pub fn load_default() -> Result<ImageFont, JsValue> {
-        Font::load_default(10.0)
+        ImageFont::load_default(10.0)
             .map(|font| ImageFont { font })
             .map_err(err)
     }

@@ -2,13 +2,13 @@
 //!
 //! The decoded payload is byte-for-byte identical to the font embedded in
 //! Pillow 12.2.0 `src/PIL/ImageFont.py::load_default`. Pillow opens it with
-//! `layout_engine=Layout.BASIC`; `Font::load_default` does the same through the
+//! `layout_engine=Layout.BASIC`; `ImageFont::load_default` does the same through the
 //! pure-Rust `fontdone` path.
 //!
 //! Decoded length: 12,676 bytes.
 //! Decoded SHA-256: 69853909b940023570964e29cffe30da95aea8de3627736b5cd15ab30143169f.
 //! Source: <https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageFont.py>
-//! Font license: `default_aileron.LICENSE.txt`.
+//! ImageFont license: `default_aileron.LICENSE.txt`.
 
 use crate::error::PilError;
 
