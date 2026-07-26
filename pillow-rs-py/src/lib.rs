@@ -110,11 +110,10 @@ fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<P
 #[pymethods]
 impl PyImage {
     #[new]
-    fn py_new() -> Self {
+    fn py_new() -> PyResult<Self> {
         // Default 1x1 RGB image for compatibility
-        let img = RsImage::new(1, 1, "RGB", (0, 0, 0, 0))
-            .expect("Default 1x1 RGB image creation should never fail");
-        PyImage { inner: img }
+        let img = RsImage::new(1, 1, "RGB", (0, 0, 0, 0)).map_err(map_error)?;
+        Ok(PyImage { inner: img })
     }
 
     #[classmethod]

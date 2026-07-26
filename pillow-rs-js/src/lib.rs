@@ -2062,20 +2062,15 @@ pub fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[wasm_bindgen(js_name = "statFromList")]
-pub fn stat_from_list(data: Vec<f64>) -> JsValue {
+pub fn stat_from_list(data: Vec<f64>) -> Result<JsValue, JsValue> {
     let (count, sum, mean, min, max) = image::stat_from_list(&data);
     let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("count"), &JsValue::from_f64(count))
-        .expect("internal invariant");
-    js_sys::Reflect::set(&obj, &JsValue::from_str("sum"), &JsValue::from_f64(sum))
-        .expect("internal invariant");
-    js_sys::Reflect::set(&obj, &JsValue::from_str("mean"), &JsValue::from_f64(mean))
-        .expect("internal invariant");
-    js_sys::Reflect::set(&obj, &JsValue::from_str("min"), &JsValue::from_f64(min))
-        .expect("internal invariant");
-    js_sys::Reflect::set(&obj, &JsValue::from_str("max"), &JsValue::from_f64(max))
-        .expect("internal invariant");
-    obj.into()
+    js_sys::Reflect::set(&obj, &JsValue::from_str("count"), &JsValue::from_f64(count))?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("sum"), &JsValue::from_f64(sum))?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("mean"), &JsValue::from_f64(mean))?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("min"), &JsValue::from_f64(min))?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("max"), &JsValue::from_f64(max))?;
+    Ok(obj.into())
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2083,14 +2078,16 @@ pub fn stat_from_list(data: Vec<f64>) -> JsValue {
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[wasm_bindgen(js_name = "outlineCurve")]
-pub fn outline_curve(points: Vec<f64>, steps: i32) -> Vec<i32> {
-    let pts = draw::outline_curve_points(&points, steps.try_into().expect("internal invariant"));
+pub fn outline_curve(points: Vec<f64>, steps: i32) -> Result<Vec<i32>, JsValue> {
+    let steps = u32::try_from(steps)
+        .map_err(|_| JsValue::from_str("steps must be greater than or equal to 0"))?;
+    let pts = draw::outline_curve_points(&points, steps);
     let mut flat = Vec::with_capacity(pts.len() * 2);
     for (x, y) in pts {
         flat.push(x);
         flat.push(y);
     }
-    flat
+    Ok(flat)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
