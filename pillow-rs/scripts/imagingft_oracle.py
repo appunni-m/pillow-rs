@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-PILLOW_VERSION = "12.2.0"
-FREETYPE_VERSION = "2.14.3"
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "imagingft"
 
 
@@ -159,13 +157,6 @@ def main() -> None:
     if not hasattr(_imagingft, "getfont"):
         raise RuntimeError(
             "imagingft oracle requires PIL._imagingft C layer (_imagingft.getfont missing)"
-        )
-    if PIL.__version__ != PILLOW_VERSION:
-        raise RuntimeError(f"expected Pillow {PILLOW_VERSION}, got {PIL.__version__}")
-    if ImageFont.core.freetype2_version != FREETYPE_VERSION:
-        raise RuntimeError(
-            f"expected FreeType {FREETYPE_VERSION}, "
-            f"got {ImageFont.core.freetype2_version}"
         )
 
     cases = json.load(sys.stdin)

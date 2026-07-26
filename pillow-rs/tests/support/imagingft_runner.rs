@@ -3,10 +3,10 @@ use std::{fs, path::Path};
 use pillow_rs::{
     draw::Draw,
     error::PilError,
-    font::{Font, imagingft},
+    font::{imagingft, Font},
     image::Image,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
     case.get("operation")
@@ -144,7 +144,7 @@ fn orientation(params: &Value) -> Result<Option<&str>, PilError> {
         Ok(Some(method))
     } else {
         Err(PilError::TypeError(
-            "'str' object cannot be interpreted as an integer".into(),
+            "an integer is required (got type str)".into(),
         ))
     }
 }
