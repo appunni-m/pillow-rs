@@ -87,6 +87,10 @@ const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 10] = [
     "validate_transposed_length",
 ];
 
+const EXPECTED_OUT_OF_SCOPE: [&str; 1] = [
+    "libraqm successful shaping; direction/features/language rows must match Pillow's no-libraqm errors",
+];
+
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
 
 const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
@@ -256,6 +260,7 @@ fn load_manifest(root: &Path) -> FontManifest {
         .unwrap_or_else(|| panic!("{} must define input_dir", path.display()));
     let input_files = manifest_list(&text, "input_files");
     let negative_operations = manifest_list(&text, "negative_operations");
+    let out_of_scope = manifest_list(&text, "out_of_scope");
     let public_method_parameters = manifest_nested_list_map(&text, "public_method_parameters");
     let required_operations = manifest_list(&text, "required_operations");
     let expected_operations = EXPECTED_FONT_PUBLIC_OPERATIONS
@@ -276,6 +281,16 @@ fn load_manifest(root: &Path) -> FontManifest {
     assert!(
         !required_operations.is_empty(),
         "{} required_operations must not be empty",
+        path.display()
+    );
+    let expected_out_of_scope = EXPECTED_OUT_OF_SCOPE
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        out_of_scope,
+        expected_out_of_scope,
+        "{} out_of_scope must be exact; libraqm successful shaping is the only excluded PIL.ImageFont behavior",
         path.display()
     );
     FontManifest {

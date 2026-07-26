@@ -63,12 +63,15 @@ The active test now enforces `font_manifest.yaml.required_operations` as the
 exact union of live `PIL.ImageFont` public operations reported by the pinned
 oracle and the explicit repo helper/consumer operations maintained around that
 surface. This prevents hidden manifest drift in either direction.
+It also enforces the manifest `out_of_scope` list exactly: the only permitted
+exclusion is successful libraqm shaping; `direction`, `features`, and
+`language` no-libraqm error rows remain active parity rows.
 
 The repo also keeps additional public test operations around this surface:
-`font_size`, `text_bbox`, `getbbox_binary`, `get_transposed_mask`,
-`transposed_bbox`, `validate_transposed_length`, `draw_text`, and
-`render_text_binary`. These are repo public helpers/consumers that exercise the
-same `PIL.ImageFont` behavior.
+`font_size`, `text_bbox`, `getbbox_binary`, `getmask2_with_start`,
+`get_transposed_mask`, `has_variations`, `transposed_bbox`,
+`validate_transposed_length`, `draw_text`, and `render_text_binary`. These are
+repo public helpers/consumers that exercise the same `PIL.ImageFont` behavior.
 
 Current blocked public parameters:
 
