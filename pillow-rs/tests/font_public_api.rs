@@ -64,6 +64,8 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
     "validate_transposed_length",
 ];
 
+const ALLOWED_FONT_INPUT_GROUPS: [&str; 2] = ["constructor", "variations"];
+
 const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
     ("font_from_bytes", "truetype"),
     ("font_get_variation_axes", "get_variation_axes"),
@@ -345,7 +347,7 @@ fn manifest_nested_list_map(text: &str, section: &str) -> BTreeMap<String, Param
     values
 }
 
-fn load_input_cases(directory: &Path, manifest_files: &BTreeSet<String>) -> Vec<Value> {
+fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
     let discovered_files = fs::read_dir(directory)
         .expect("public-api font input directory must be readable")
         .map(|entry| entry.expect("input entry must be readable").path())
@@ -358,17 +360,24 @@ fn load_input_cases(directory: &Path, manifest_files: &BTreeSet<String>) -> Vec<
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        *manifest_files, discovered_files,
+        manifest.input_files, discovered_files,
         "font public-api manifest input_files must exactly match raw input JSON files"
     );
 
+    let allowed_document_operations = manifest
+        .required_operations
+        .union(&manifest.negative_operations)
+        .cloned()
+        .chain(ALLOWED_FONT_INPUT_GROUPS.into_iter().map(str::to_owned))
+        .collect::<BTreeSet<_>>();
     let mut cases = Vec::new();
-    for file in manifest_files {
+    for file in &manifest.input_files {
         let path = directory.join(file.as_str());
         let document: Value = serde_json::from_slice(
             &fs::read(&path).expect("font public-api input must be readable"),
         )
         .expect("font public-api input must be valid JSON");
+        assert_input_document_envelope(&path, &document, &allowed_document_operations);
         assert_input_only_case(&path, &document);
         let rows = document
             .get("cases")
@@ -390,6 +399,53 @@ fn load_input_cases(directory: &Path, manifest_files: &BTreeSet<String>) -> Vec<
         }
     }
     cases
+}
+
+fn normalize_font_operation(operation: &str) -> &str {
+    operation.strip_prefix("font.").unwrap_or(operation)
+}
+
+fn assert_input_document_envelope(
+    path: &Path,
+    document: &Value,
+    allowed_document_operations: &BTreeSet<String>,
+) {
+    let object = document
+        .as_object()
+        .unwrap_or_else(|| panic!("{} must be a JSON object", path.display()));
+    let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    let required_keys = BTreeSet::from(["cases", "operation", "version"]);
+    assert_eq!(
+        keys,
+        required_keys,
+        "{} must contain only version, operation, and cases",
+        path.display()
+    );
+    assert_eq!(
+        document.get("version").and_then(Value::as_i64),
+        Some(1),
+        "{} must use version 1",
+        path.display()
+    );
+    let operation = document
+        .get("operation")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("{} operation must be a string", path.display()));
+    let operation = normalize_font_operation(operation);
+    assert!(
+        allowed_document_operations.contains(operation),
+        "{} top-level operation/group `{operation}` must be listed in required_operations, negative_operations, or the explicit grouped-file allow-list",
+        path.display()
+    );
+    let cases = document
+        .get("cases")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("{} cases must be an array", path.display()));
+    assert!(
+        !cases.is_empty(),
+        "{} cases must not be empty",
+        path.display()
+    );
 }
 
 fn assert_case_ids_are_unique(cases: &[Value]) {
@@ -859,7 +915,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
     let manifest = load_manifest(&root);
     let input_dir = root.join(&manifest.input_dir);
-    let cases = load_input_cases(&input_dir, &manifest.input_files);
+    let cases = load_input_cases(&input_dir, &manifest);
     assert!(
         !cases.is_empty(),
         "font public-api input corpus must not be empty"
