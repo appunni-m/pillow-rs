@@ -77,6 +77,23 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
     [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
 
+const DEFAULT_PARAMETER_VALUE: &str = "<default>";
+
+const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 12] = [
+    ("getbbox", "mode", DEFAULT_PARAMETER_VALUE),
+    ("getbbox", "mode", "1"),
+    ("getbbox", "mode", "bad"),
+    ("getlength", "mode", DEFAULT_PARAMETER_VALUE),
+    ("getlength", "mode", "1"),
+    ("getlength", "mode", "bad"),
+    ("getmask", "mode", DEFAULT_PARAMETER_VALUE),
+    ("getmask", "mode", "1"),
+    ("getmask", "mode", "RGBA"),
+    ("getmask2", "mode", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "mode", "1"),
+    ("getmask2", "mode", "RGBA"),
+];
+
 const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
     ("font_from_bytes", "truetype"),
     ("font_get_variation_axes", "get_variation_axes"),
@@ -915,6 +932,72 @@ fn canonical_pillow_parameter(operation: &str, fixture_key: &str) -> Option<Stri
     Some(parameter.to_owned())
 }
 
+fn observed_public_parameter_values(
+    cases: &[Value],
+) -> BTreeMap<(String, String), BTreeSet<String>> {
+    let required_keys = REQUIRED_PUBLIC_PARAMETER_VALUES
+        .into_iter()
+        .map(|(operation, parameter, _)| (operation.to_owned(), parameter.to_owned()))
+        .collect::<BTreeSet<_>>();
+    let mut observed = BTreeMap::new();
+
+    for case in cases {
+        let operation = font_runner::operation(case).expect("case operation must be valid");
+        let Some(params) = case
+            .get("inputs")
+            .and_then(|inputs| inputs.get("params"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+
+        for (required_operation, required_parameter) in &required_keys {
+            if operation != required_operation {
+                continue;
+            }
+            let value = match required_parameter.as_str() {
+                "mode" => params
+                    .get("mode")
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_PARAMETER_VALUE)
+                    .to_owned(),
+                other => panic!("unsupported required public value-coverage parameter: {other}"),
+            };
+            observed
+                .entry((required_operation.clone(), required_parameter.clone()))
+                .or_insert_with(BTreeSet::new)
+                .insert(value);
+        }
+    }
+
+    observed
+}
+
+fn assert_manifest_covers_required_public_parameter_values(
+    manifest: &FontManifest,
+    cases: &[Value],
+) {
+    let observed_values = observed_public_parameter_values(cases);
+
+    for (operation, parameter, required_value) in REQUIRED_PUBLIC_PARAMETER_VALUES {
+        let coverage = manifest
+            .public_method_parameters
+            .get(operation)
+            .unwrap_or_else(|| panic!("{operation}: missing public_method_parameters entry"));
+        assert!(
+            coverage.covered.contains(parameter),
+            "{operation}.{parameter}: required value coverage is only valid for parameters marked covered in font_manifest.yaml"
+        );
+
+        let key = (operation.to_owned(), parameter.to_owned());
+        let observed = observed_values.get(&key).cloned().unwrap_or_default();
+        assert!(
+            observed.contains(required_value),
+            "{operation}.{parameter}: font_manifest.yaml marks parameter covered but active input rows do not exercise required value `{required_value}`; observed values: {observed:?}"
+        );
+    }
+}
+
 fn assert_manifest_covers_pillow_public_signatures(
     manifest: &FontManifest,
     cases: &[Value],
@@ -1034,6 +1117,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     );
     let pillow_signatures = pillow_freetypefont_public_signatures();
     assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
+    assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
 
     let observed = cases
         .iter()
