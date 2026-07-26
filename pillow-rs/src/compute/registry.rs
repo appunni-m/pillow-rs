@@ -82,15 +82,17 @@ macro_rules! gpu_entry {
     };
 }
 
-static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
+static REGISTRY: OnceLock<Result<HashMap<&'static str, OpEntry>, PilError>> = OnceLock::new();
 
 /// Returns the global operation registry keyed by [`variant_key`].
-pub fn registry() -> &'static HashMap<&'static str, OpEntry> {
-    REGISTRY.get_or_init(|| {
+pub fn registry() -> Result<&'static HashMap<&'static str, OpEntry>, PilError> {
+    match REGISTRY.get_or_init(|| {
         let mut m = HashMap::new();
-        register_all(&mut m);
-        m
-    })
+        register_all(&mut m).map(|()| m)
+    }) {
+        Ok(registry) => Ok(registry),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 // ── GPU op types ──────────────────────────────────────────────────────────────
@@ -413,24 +415,24 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
 }
 
 /// Returns whether the CPU backend has an implementation for `op`.
-pub fn cpu_supports(op: &PipelineOp) -> bool {
-    registry()
+pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    Ok(registry()?
         .get(variant_key(op))
-        .is_some_and(|e| e.cpu_fn.is_some())
+        .is_some_and(|e| e.cpu_fn.is_some()))
 }
 
 /// Returns whether the GPU backend has an implementation for `op`.
-pub fn gpu_supports(op: &PipelineOp) -> bool {
-    registry()
+pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    Ok(registry()?
         .get(variant_key(op))
-        .is_some_and(|e| e.gpu_shader.is_some())
+        .is_some_and(|e| e.gpu_shader.is_some()))
 }
 
 /// Returns whether the SIMD backend has an implementation for `op`.
-pub fn simd_supports(op: &PipelineOp) -> bool {
-    registry()
+pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    Ok(registry()?
         .get(variant_key(op))
-        .is_some_and(|e| e.simd_fn.is_some())
+        .is_some_and(|e| e.simd_fn.is_some()))
 }
 
 /// Executes one operation on the scalar CPU backend.
@@ -445,7 +447,7 @@ pub fn execute_cpu(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let key = variant_key(op);
-    let entry = registry()
+    let entry = registry()?
         .get(key)
         .ok_or_else(|| PilError::ValueError(format!("CPU: unknown op {}", key)))?;
     let f = entry
@@ -455,17 +457,17 @@ pub fn execute_cpu(
 }
 
 /// Returns the registered GPU shader file name for `op`.
-pub fn gpu_shader_name(op: &PipelineOp) -> Option<&'static str> {
-    registry().get(variant_key(op)).and_then(|e| e.gpu_shader)
+pub fn gpu_shader_name(op: &PipelineOp) -> Result<Option<&'static str>, PilError> {
+    Ok(registry()?.get(variant_key(op)).and_then(|e| e.gpu_shader))
 }
 
 /// Returns embedded WGSL source for a registered variant key.
-pub fn gpu_shader_source_for_key(key: &str) -> Option<&'static str> {
-    registry().get(key).and_then(|e| e.gpu_source)
+pub fn gpu_shader_source_for_key(key: &str) -> Result<Option<&'static str>, PilError> {
+    Ok(registry()?.get(key).and_then(|e| e.gpu_source))
 }
 
 /// Returns embedded WGSL source for the GPU implementation of `op`.
-pub fn gpu_shader_source(op: &PipelineOp) -> Option<&'static str> {
+pub fn gpu_shader_source(op: &PipelineOp) -> Result<Option<&'static str>, PilError> {
     gpu_shader_source_for_key(variant_key(op))
 }
 
@@ -559,13 +561,17 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
 }
 
 /// Returns a shader descriptor when `op` is GPU-supported.
-pub fn map_op_to_gpu(op: &PipelineOp) -> Option<GpuOp> {
-    let _id = op_id(op)?;
-    let shader = gpu_shader_name(op)?;
-    Some(GpuOp {
+pub fn map_op_to_gpu(op: &PipelineOp) -> Result<Option<GpuOp>, PilError> {
+    let Some(_id) = op_id(op) else {
+        return Ok(None);
+    };
+    let Some(shader) = gpu_shader_name(op)? else {
+        return Ok(None);
+    };
+    Ok(Some(GpuOp {
         variant_name: variant_key(op),
         shader,
-    })
+    }))
 }
 
 /// Extracts GPU shader parameter words from a pipeline operation.
@@ -927,7 +933,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
 // ── Registration table ───────────────────────────────────────────────────
 
-fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
+fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {
     use crate::compute::pool_cpu::ops::chops::{
         op_chops_add, op_chops_add_modulo, op_chops_blend, op_chops_composite, op_chops_constant,
         op_chops_darker, op_chops_difference, op_chops_duplicate, op_chops_hard_light,
@@ -2443,400 +2449,108 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     // Register SIMD-accelerated functions for all backed scalar ops.
     // The simd_fn slot is added alongside existing cpu_fn + gpu_shader.
 
-    fn simd_set(e: &mut OpEntry, f: SimdOpFn) {
-        e.simd_fn = Some(f);
+    fn simd_set(
+        entries: &mut HashMap<&'static str, OpEntry>,
+        key: &'static str,
+        f: SimdOpFn,
+    ) -> Result<(), PilError> {
+        let entry = entries
+            .get_mut(key)
+            .ok_or_else(|| PilError::InternalError(format!("SIMD key not registered: {key}")))?;
+        entry.simd_fn = Some(f);
+        Ok(())
     }
 
     // Section A: Simple single-image ops
-    simd_set(
-        m.get_mut("Invert")
-            .expect("SIMD key not registered: Invert"),
-        adapters::simd_invert,
-    );
-    simd_set(
-        m.get_mut("Grayscale")
-            .expect("SIMD key not registered: Grayscale"),
-        adapters::simd_grayscale,
-    );
-    simd_set(
-        m.get_mut("Duplicate")
-            .expect("SIMD key not registered: Duplicate"),
-        adapters::simd_duplicate,
-    );
-    simd_set(
-        m.get_mut("InvertChops")
-            .expect("SIMD key not registered: InvertChops"),
-        adapters::simd_invert_chops,
-    );
+    simd_set(m, "Invert", adapters::simd_invert)?;
+    simd_set(m, "Grayscale", adapters::simd_grayscale)?;
+    simd_set(m, "Duplicate", adapters::simd_duplicate)?;
+    simd_set(m, "InvertChops", adapters::simd_invert_chops)?;
 
     // Section B: Single-image with params
-    simd_set(
-        m.get_mut("Solarize")
-            .expect("SIMD key not registered: Solarize"),
-        adapters::simd_solarize,
-    );
-    simd_set(
-        m.get_mut("Posterize")
-            .expect("SIMD key not registered: Posterize"),
-        adapters::simd_posterize,
-    );
-    simd_set(
-        m.get_mut("Brightness")
-            .expect("SIMD key not registered: Brightness"),
-        adapters::simd_brightness,
-    );
-    simd_set(
-        m.get_mut("Contrast")
-            .expect("SIMD key not registered: Contrast"),
-        adapters::simd_contrast,
-    );
-    simd_set(
-        m.get_mut("ColorSaturation")
-            .expect("SIMD key not registered: ColorSaturation"),
-        adapters::simd_color_saturation,
-    );
-    simd_set(
-        m.get_mut("Sharpness")
-            .expect("SIMD key not registered: Sharpness"),
-        adapters::simd_sharpness,
-    );
-    simd_set(
-        m.get_mut("Colorize")
-            .expect("SIMD key not registered: Colorize"),
-        adapters::simd_colorize,
-    );
-    simd_set(
-        m.get_mut("Constant")
-            .expect("SIMD key not registered: Constant"),
-        adapters::simd_constant,
-    );
-    simd_set(
-        m.get_mut("Offset")
-            .expect("SIMD key not registered: Offset"),
-        adapters::simd_offset,
-    );
+    simd_set(m, "Solarize", adapters::simd_solarize)?;
+    simd_set(m, "Posterize", adapters::simd_posterize)?;
+    simd_set(m, "Brightness", adapters::simd_brightness)?;
+    simd_set(m, "Contrast", adapters::simd_contrast)?;
+    simd_set(m, "ColorSaturation", adapters::simd_color_saturation)?;
+    simd_set(m, "Sharpness", adapters::simd_sharpness)?;
+    simd_set(m, "Colorize", adapters::simd_colorize)?;
+    simd_set(m, "Constant", adapters::simd_constant)?;
+    simd_set(m, "Offset", adapters::simd_offset)?;
 
     // Section C: Spatial single-image
-    simd_set(
-        m.get_mut("Flip").expect("SIMD key not registered: Flip"),
-        adapters::simd_flip,
-    );
-    simd_set(
-        m.get_mut("Mirror")
-            .expect("SIMD key not registered: Mirror"),
-        adapters::simd_mirror,
-    );
-    simd_set(
-        m.get_mut("Equalize")
-            .expect("SIMD key not registered: Equalize"),
-        adapters::simd_equalize,
-    );
-    simd_set(
-        m.get_mut("Autocontrast")
-            .expect("SIMD key not registered: Autocontrast"),
-        adapters::simd_autocontrast,
-    );
+    simd_set(m, "Flip", adapters::simd_flip)?;
+    simd_set(m, "Mirror", adapters::simd_mirror)?;
+    simd_set(m, "Equalize", adapters::simd_equalize)?;
+    simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
     // Section D: Filter/window ops
-    simd_set(
-        m.get_mut("MedianFilter")
-            .expect("SIMD key not registered: MedianFilter"),
-        adapters::simd_median_filter,
-    );
-    simd_set(
-        m.get_mut("MaxFilter")
-            .expect("SIMD key not registered: MaxFilter"),
-        adapters::simd_max_filter,
-    );
-    simd_set(
-        m.get_mut("MinFilter")
-            .expect("SIMD key not registered: MinFilter"),
-        adapters::simd_min_filter,
-    );
-    simd_set(
-        m.get_mut("RankFilter")
-            .expect("SIMD key not registered: RankFilter"),
-        adapters::simd_rank_filter,
-    );
-    simd_set(
-        m.get_mut("Filter3x3")
-            .expect("SIMD key not registered: Filter3x3"),
-        adapters::simd_filter_3x3,
-    );
-    simd_set(
-        m.get_mut("Filter5x5")
-            .expect("SIMD key not registered: Filter5x5"),
-        adapters::simd_filter_5x5,
-    );
-    simd_set(
-        m.get_mut("BoxBlur")
-            .expect("SIMD key not registered: BoxBlur"),
-        adapters::simd_box_blur,
-    );
-    simd_set(
-        m.get_mut("GaussianBlur")
-            .expect("SIMD key not registered: GaussianBlur"),
-        adapters::simd_gaussian_blur,
-    );
-    simd_set(
-        m.get_mut("Quantize")
-            .expect("SIMD key not registered: Quantize"),
-        adapters::simd_quantize,
-    );
+    simd_set(m, "MedianFilter", adapters::simd_median_filter)?;
+    simd_set(m, "MaxFilter", adapters::simd_max_filter)?;
+    simd_set(m, "MinFilter", adapters::simd_min_filter)?;
+    simd_set(m, "RankFilter", adapters::simd_rank_filter)?;
+    simd_set(m, "Filter3x3", adapters::simd_filter_3x3)?;
+    simd_set(m, "Filter5x5", adapters::simd_filter_5x5)?;
+    simd_set(m, "BoxBlur", adapters::simd_box_blur)?;
+    simd_set(m, "GaussianBlur", adapters::simd_gaussian_blur)?;
+    simd_set(m, "Quantize", adapters::simd_quantize)?;
 
     // Section E: Dual-image per-pixel ops
-    simd_set(
-        m.get_mut("Add").expect("SIMD key not registered: Add"),
-        adapters::simd_add,
-    );
-    simd_set(
-        m.get_mut("Subtract")
-            .expect("SIMD key not registered: Subtract"),
-        adapters::simd_subtract,
-    );
-    simd_set(
-        m.get_mut("Multiply")
-            .expect("SIMD key not registered: Multiply"),
-        adapters::simd_multiply,
-    );
-    simd_set(
-        m.get_mut("Screen")
-            .expect("SIMD key not registered: Screen"),
-        adapters::simd_screen,
-    );
-    simd_set(
-        m.get_mut("Darker")
-            .expect("SIMD key not registered: Darker"),
-        adapters::simd_darker,
-    );
-    simd_set(
-        m.get_mut("Lighter")
-            .expect("SIMD key not registered: Lighter"),
-        adapters::simd_lighter,
-    );
-    simd_set(
-        m.get_mut("Difference")
-            .expect("SIMD key not registered: Difference"),
-        adapters::simd_difference,
-    );
-    simd_set(
-        m.get_mut("AddModulo")
-            .expect("SIMD key not registered: AddModulo"),
-        adapters::simd_add_modulo,
-    );
-    simd_set(
-        m.get_mut("SubtractModulo")
-            .expect("SIMD key not registered: SubtractModulo"),
-        adapters::simd_subtract_modulo,
-    );
-    simd_set(
-        m.get_mut("LogicalAnd")
-            .expect("SIMD key not registered: LogicalAnd"),
-        adapters::simd_logical_and,
-    );
-    simd_set(
-        m.get_mut("LogicalOr")
-            .expect("SIMD key not registered: LogicalOr"),
-        adapters::simd_logical_or,
-    );
-    simd_set(
-        m.get_mut("LogicalXor")
-            .expect("SIMD key not registered: LogicalXor"),
-        adapters::simd_logical_xor,
-    );
-    simd_set(
-        m.get_mut("Overlay")
-            .expect("SIMD key not registered: Overlay"),
-        adapters::simd_overlay,
-    );
-    simd_set(
-        m.get_mut("HardLight")
-            .expect("SIMD key not registered: HardLight"),
-        adapters::simd_hard_light,
-    );
-    simd_set(
-        m.get_mut("SoftLight")
-            .expect("SIMD key not registered: SoftLight"),
-        adapters::simd_soft_light,
-    );
-    simd_set(
-        m.get_mut("Blend").expect("SIMD key not registered: Blend"),
-        adapters::simd_blend,
-    );
-    simd_set(
-        m.get_mut("BlendModule")
-            .expect("SIMD key not registered: BlendModule"),
-        adapters::simd_blend_module,
-    );
-    simd_set(
-        m.get_mut("Composite")
-            .expect("SIMD key not registered: Composite"),
-        adapters::simd_composite,
-    );
-    simd_set(
-        m.get_mut("CompositeModule")
-            .expect("SIMD key not registered: CompositeModule"),
-        adapters::simd_composite_module,
-    );
+    simd_set(m, "Add", adapters::simd_add)?;
+    simd_set(m, "Subtract", adapters::simd_subtract)?;
+    simd_set(m, "Multiply", adapters::simd_multiply)?;
+    simd_set(m, "Screen", adapters::simd_screen)?;
+    simd_set(m, "Darker", adapters::simd_darker)?;
+    simd_set(m, "Lighter", adapters::simd_lighter)?;
+    simd_set(m, "Difference", adapters::simd_difference)?;
+    simd_set(m, "AddModulo", adapters::simd_add_modulo)?;
+    simd_set(m, "SubtractModulo", adapters::simd_subtract_modulo)?;
+    simd_set(m, "LogicalAnd", adapters::simd_logical_and)?;
+    simd_set(m, "LogicalOr", adapters::simd_logical_or)?;
+    simd_set(m, "LogicalXor", adapters::simd_logical_xor)?;
+    simd_set(m, "Overlay", adapters::simd_overlay)?;
+    simd_set(m, "HardLight", adapters::simd_hard_light)?;
+    simd_set(m, "SoftLight", adapters::simd_soft_light)?;
+    simd_set(m, "Blend", adapters::simd_blend)?;
+    simd_set(m, "BlendModule", adapters::simd_blend_module)?;
+    simd_set(m, "Composite", adapters::simd_composite)?;
+    simd_set(m, "CompositeModule", adapters::simd_composite_module)?;
 
     // Section F: Ops that change dimensions
-    simd_set(
-        m.get_mut("Transpose")
-            .expect("SIMD key not registered: Transpose"),
-        adapters::simd_transpose,
-    );
-    simd_set(
-        m.get_mut("Resize")
-            .expect("SIMD key not registered: Resize"),
-        adapters::simd_resize,
-    );
-    simd_set(
-        m.get_mut("Thumbnail")
-            .expect("SIMD key not registered: Thumbnail"),
-        adapters::simd_thumbnail,
-    );
-    simd_set(
-        m.get_mut("Contain")
-            .expect("SIMD key not registered: Contain"),
-        adapters::simd_contain,
-    );
-    simd_set(
-        m.get_mut("Cover").expect("SIMD key not registered: Cover"),
-        adapters::simd_cover,
-    );
-    simd_set(
-        m.get_mut("Fit").expect("SIMD key not registered: Fit"),
-        adapters::simd_fit,
-    );
-    simd_set(
-        m.get_mut("Scale").expect("SIMD key not registered: Scale"),
-        adapters::simd_scale,
-    );
-    simd_set(
-        m.get_mut("Pad").expect("SIMD key not registered: Pad"),
-        adapters::simd_pad,
-    );
-    simd_set(
-        m.get_mut("Expand")
-            .expect("SIMD key not registered: Expand"),
-        adapters::simd_expand,
-    );
-    simd_set(
-        m.get_mut("CropBorder")
-            .expect("SIMD key not registered: CropBorder"),
-        adapters::simd_crop_border,
-    );
-    simd_set(
-        m.get_mut("Crop").expect("SIMD key not registered: Crop"),
-        adapters::simd_crop,
-    );
-    simd_set(
-        m.get_mut("Rotate")
-            .expect("SIMD key not registered: Rotate"),
-        adapters::simd_rotate,
-    );
-    simd_set(
-        m.get_mut("Reduce")
-            .expect("SIMD key not registered: Reduce"),
-        adapters::simd_reduce,
-    );
-    simd_set(
-        m.get_mut("Convert")
-            .expect("SIMD key not registered: Convert"),
-        adapters::simd_convert,
-    );
-    simd_set(
-        m.get_mut("RemapPalette")
-            .expect("SIMD key not registered: RemapPalette"),
-        adapters::simd_remap_palette,
-    );
-    simd_set(
-        m.get_mut("Transform")
-            .expect("SIMD key not registered: Transform"),
-        adapters::simd_transform,
-    );
+    simd_set(m, "Transpose", adapters::simd_transpose)?;
+    simd_set(m, "Resize", adapters::simd_resize)?;
+    simd_set(m, "Thumbnail", adapters::simd_thumbnail)?;
+    simd_set(m, "Contain", adapters::simd_contain)?;
+    simd_set(m, "Cover", adapters::simd_cover)?;
+    simd_set(m, "Fit", adapters::simd_fit)?;
+    simd_set(m, "Scale", adapters::simd_scale)?;
+    simd_set(m, "Pad", adapters::simd_pad)?;
+    simd_set(m, "Expand", adapters::simd_expand)?;
+    simd_set(m, "CropBorder", adapters::simd_crop_border)?;
+    simd_set(m, "Crop", adapters::simd_crop)?;
+    simd_set(m, "Rotate", adapters::simd_rotate)?;
+    simd_set(m, "Reduce", adapters::simd_reduce)?;
+    simd_set(m, "Convert", adapters::simd_convert)?;
+    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
+    simd_set(m, "Transform", adapters::simd_transform)?;
 
     // Section G: Special/mutating ops
-    simd_set(
-        m.get_mut("PutPixel")
-            .expect("SIMD key not registered: PutPixel"),
-        adapters::simd_put_pixel,
-    );
-    simd_set(
-        m.get_mut("PutData")
-            .expect("SIMD key not registered: PutData"),
-        adapters::simd_put_data,
-    );
-    simd_set(
-        m.get_mut("PutAlpha")
-            .expect("SIMD key not registered: PutAlpha"),
-        adapters::simd_put_alpha,
-    );
-    simd_set(
-        m.get_mut("Eval").expect("SIMD key not registered: Eval"),
-        adapters::simd_eval,
-    );
-    simd_set(
-        m.get_mut("PointOp")
-            .expect("SIMD key not registered: PointOp"),
-        adapters::simd_point_op,
-    );
-    simd_set(
-        m.get_mut("Paste").expect("SIMD key not registered: Paste"),
-        adapters::simd_paste,
-    );
-    simd_set(
-        m.get_mut("AlphaComposite")
-            .expect("SIMD key not registered: AlphaComposite"),
-        adapters::simd_alpha_composite,
-    );
-    simd_set(
-        m.get_mut("Merge").expect("SIMD key not registered: Merge"),
-        adapters::simd_merge,
-    );
+    simd_set(m, "PutPixel", adapters::simd_put_pixel)?;
+    simd_set(m, "PutData", adapters::simd_put_data)?;
+    simd_set(m, "PutAlpha", adapters::simd_put_alpha)?;
+    simd_set(m, "Eval", adapters::simd_eval)?;
+    simd_set(m, "PointOp", adapters::simd_point_op)?;
+    simd_set(m, "Paste", adapters::simd_paste)?;
+    simd_set(m, "AlphaComposite", adapters::simd_alpha_composite)?;
+    simd_set(m, "Merge", adapters::simd_merge)?;
     // ── Additional SIMD wirings (GPU ops missing SIMD) ──
-    simd_set(
-        m.get_mut("Autocontrast")
-            .expect("SIMD key not registered: Autocontrast"),
-        adapters::simd_autocontrast,
-    );
-    simd_set(
-        m.get_mut("BlendModule")
-            .expect("SIMD key not registered: BlendModule"),
-        adapters::simd_blend_module,
-    );
-    simd_set(
-        m.get_mut("CompositeModule")
-            .expect("SIMD key not registered: CompositeModule"),
-        adapters::simd_composite_module,
-    );
-    simd_set(
-        m.get_mut("ColorSaturation")
-            .expect("SIMD key not registered: ColorSaturation"),
-        adapters::simd_color_saturation,
-    );
-    simd_set(
-        m.get_mut("GaussianBlur")
-            .expect("SIMD key not registered: GaussianBlur"),
-        adapters::simd_gaussian_blur,
-    );
-    simd_set(
-        m.get_mut("InvertChops")
-            .expect("SIMD key not registered: InvertChops"),
-        adapters::simd_invert_chops,
-    );
-    simd_set(
-        m.get_mut("MedianFilter")
-            .expect("SIMD key not registered: MedianFilter"),
-        adapters::simd_median_filter,
-    );
-    simd_set(
-        m.get_mut("RemapPalette")
-            .expect("SIMD key not registered: RemapPalette"),
-        adapters::simd_remap_palette,
-    );
-    simd_set(
-        m.get_mut("SubtractModulo")
-            .expect("SIMD key not registered: SubtractModulo"),
-        adapters::simd_subtract_modulo,
-    );
+    simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
+    simd_set(m, "BlendModule", adapters::simd_blend_module)?;
+    simd_set(m, "CompositeModule", adapters::simd_composite_module)?;
+    simd_set(m, "ColorSaturation", adapters::simd_color_saturation)?;
+    simd_set(m, "GaussianBlur", adapters::simd_gaussian_blur)?;
+    simd_set(m, "InvertChops", adapters::simd_invert_chops)?;
+    simd_set(m, "MedianFilter", adapters::simd_median_filter)?;
+    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
+    simd_set(m, "SubtractModulo", adapters::simd_subtract_modulo)?;
+    Ok(())
 }

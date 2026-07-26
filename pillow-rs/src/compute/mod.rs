@@ -68,7 +68,7 @@ pub trait BackendImpl: Send + Sync {
     /// Returns backend preference. Larger values are selected first.
     fn priority(&self) -> u8; // higher = preferred
     /// Returns whether this backend can execute one pipeline operation.
-    fn supports(&self, op: &PipelineOp) -> bool;
+    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError>;
     /// Executes a sequence of operations against one image buffer.
     fn execute_batch(
         &self,
@@ -199,8 +199,17 @@ pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Result<Backend, P
     }
     let active_set = active_lock()?;
     for pool in pools() {
-        if active_set.contains(&pool.name()) && ops.iter().all(|op| pool.supports(op)) {
-            return Ok(pool.name());
+        if active_set.contains(&pool.name()) {
+            let mut supports_all = true;
+            for op in ops {
+                if !pool.supports(op)? {
+                    supports_all = false;
+                    break;
+                }
+            }
+            if supports_all {
+                return Ok(pool.name());
+            }
         }
     }
     Ok(Backend::Cpu) // universal fallback
@@ -222,7 +231,10 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
         .iter()
         .find(|pool| pool.name() == backend)
         .ok_or_else(|| PilError::ValueError(format!("Backend {:?} not available", backend)))?;
-    if let Some(op) = ops.iter().find(|op| !pool.supports(op)) {
+    for op in ops {
+        if pool.supports(op)? {
+            continue;
+        }
         let name = match backend {
             Backend::Cpu => "CPU",
             Backend::Gpu => "GPU",

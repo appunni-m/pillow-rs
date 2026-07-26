@@ -293,7 +293,7 @@ impl GpuInner {
         // Pre-compile all GPU shaders from the unified registry.
         // Shaders that fail validation are silently skipped.
         let mut pipelines = HashMap::new();
-        for (&key, entry) in registry::registry().iter() {
+        for (&key, entry) in registry::registry()?.iter() {
             if let Some(source) = entry.gpu_source {
                 gpu_log!("[GPU] compiling shader: {}", key);
                 if let Some(pipeline) = Self::build_pipeline(&device, key, source) {
@@ -1089,7 +1089,7 @@ impl BackendImpl for GpuPool {
         100
     }
 
-    fn supports(&self, op: &PipelineOp) -> bool {
+    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
         registry::gpu_supports(op)
     }
 

@@ -1611,13 +1611,12 @@ impl PyFont {
         text: &str,
         start: Option<(f64, f64)>,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) =
-            pillow_rs::font::imagingft::getmask2_with_start(
-                &self.inner,
-                text,
-                start.unwrap_or((0.0, 0.0)),
-            )
-            .map_err(map_error)?;
+        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
+            &self.inner,
+            text,
+            start.unwrap_or((0.0, 0.0)),
+        )
+        .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }
@@ -2222,8 +2221,9 @@ impl PyDraw {
         font: Option<&Bound<'_, PyFont>>,
     ) -> PyResult<(i32, i32, i32, i32)> {
         let bbox = match font {
-            Some(f) => pillow_rs::font::imagingft::getbbox(&f.borrow().inner, text)
-                .map_err(map_error)?,
+            Some(f) => {
+                pillow_rs::font::imagingft::getbbox(&f.borrow().inner, text).map_err(map_error)?
+            }
             None => {
                 let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getbbox(&font, text).map_err(map_error)?
@@ -2236,8 +2236,9 @@ impl PyDraw {
     #[pyo3(signature = (text, font=None))]
     fn textlength(&mut self, text: &str, font: Option<&Bound<'_, PyFont>>) -> PyResult<f64> {
         let w = match font {
-            Some(f) => pillow_rs::font::imagingft::getlength(&f.borrow().inner, text)
-                .map_err(map_error)?,
+            Some(f) => {
+                pillow_rs::font::imagingft::getlength(&f.borrow().inner, text).map_err(map_error)?
+            }
             None => {
                 let font = pillow_rs::font::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font::imagingft::getlength(&font, text).map_err(map_error)?
@@ -2274,8 +2275,10 @@ impl PyDraw {
         // Pillow ImageText.Text::_split advances by the bottom of "A"'s
         // FreeType bbox, then unions each line's full bbox. Using only mask
         // width/height here loses the ascender bearing (and italic overhang).
-        let line_height =
-            spacing + pillow_rs::font::imagingft::getbbox(f, "A").map_err(map_error)?.3;
+        let line_height = spacing
+            + pillow_rs::font::imagingft::getbbox(f, "A")
+                .map_err(map_error)?
+                .3;
         let widths: Vec<f32> = lines
             .iter()
             .map(|line| pillow_rs::font::imagingft::getlength(f, line))
@@ -2315,8 +2318,7 @@ impl PyDraw {
 
 impl PyDraw {
     fn draw_get_image(&self) -> PyResult<pillow_rs::image::Image> {
-        self.draw.image_clone()
-            .map_err(map_error)
+        self.draw.image_clone().map_err(map_error)
     }
 
     /// Parse a draw color, using the image mode to determine byte representation.

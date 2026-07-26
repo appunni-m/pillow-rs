@@ -66,7 +66,7 @@ impl BackendImpl for SimdPool {
         50 // Above CPU (0), below GPU (100)
     }
 
-    fn supports(&self, op: &PipelineOp) -> bool {
+    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
         registry::simd_supports(op)
     }
 
@@ -88,7 +88,7 @@ impl BackendImpl for SimdPool {
         let mut current = img.clone();
         for op in ops {
             let key = registry::variant_key(op);
-            let entry = registry::registry()
+            let entry = registry::registry()?
                 .get(key)
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: unknown op {}", key)))?;
             let f = entry
