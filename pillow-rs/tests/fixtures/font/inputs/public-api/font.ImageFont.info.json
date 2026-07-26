@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "operation": "ImageFont.info",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.info.default_bitmap",
+      "operation": "ImageFont.info",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {}
+      }
+    },
+    {
+      "case_id": "font.ImageFont.info.file_bitmap",
+      "operation": "ImageFont.info",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    }
+  ]
+}

@@ -279,6 +279,7 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         font = load_bitmap_imagefont(case, ImageFont)
         return {"type": "pilfont", "mode": font.getmask("").mode}
     if operation in {
+        "ImageFont.info",
         "ImageFont.getbbox",
         "ImageFont.getlength",
         "ImageFont.getmask",
@@ -288,6 +289,8 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
     }:
         font = load_bitmap_imagefont(case, ImageFont)
         text = text_value(params)
+        if operation == "ImageFont.info":
+            return {"type": "info", "value": [line.hex() for line in font.info]}
         if operation.startswith("TransposedFont."):
             font = ImageFont.TransposedFont(
                 font, orientation(params.get("orientation"), Image)
@@ -439,6 +442,7 @@ def public_signatures(ImageFont: Any) -> dict[str, list[str]]:
         "load_default_imagefont": [],
         "load_default": ["size"],
         "truetype": ["font", "size", "index", "encoding", "layout_engine"],
+        "ImageFont.info": [],
     }
     signatures.update(public_class_signatures(ImageFont.ImageFont, "ImageFont."))
     signatures.update(public_class_signatures(ImageFont.FreeTypeFont))

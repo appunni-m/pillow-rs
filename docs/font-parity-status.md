@@ -269,11 +269,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `8d9de0fb-2b03-4253-92f4-cc63abc47f8c`
-- Snapshot: `99c81d91-b9cd-4cff-b10e-4feb1413e9d0`
+- Run: `26c35bfc-36a6-4b29-9c86-4978e5ccb26a`
+- Snapshot: `7c098242-f87d-4f6f-b688-65af80d47050`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `79adb63cd5d646d59e99d48b94091d4b8f6ebe44`
+- Commit measured: `9fe822b6ebe75e3cd6b9198a76461bbe61e8dfdb`
 
 Target file metrics:
 
@@ -281,7 +281,7 @@ Target file metrics:
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
-| `pillow-rs/src/font/pilfont.rs` | `341/381` (`89.50%`) | `71/96` (`73.96%`) | `29/42` (`69.05%`) | `518/596` (`86.91%`) |
+| `pillow-rs/src/font/pilfont.rs` | `344/381` (`90.29%`) | `71/96` (`73.96%`) | `30/42` (`71.43%`) | `521/596` (`87.42%`) |
 
 Current full-module scope note:
 
@@ -290,12 +290,13 @@ Current full-module scope note:
   the coverage target.
 - Coverage is not 100% yet for the full `PIL.ImageFont` target. Added rows for
   repo-local PBM-backed PILfont loading/masking, zero-sized transposed masks,
-  valid `P1` PBM, L-mode glyph images, clipped PILfont metrics, and matching
-  malformed PBM loader errors moved `pilfont.rs` regions from `352/591`
-  (`59.56%`) to `518/596` (`86.91%`). The next coverage work must handle the
-  remaining public-reachable PBM/image-load errors exactly and decide whether
-  root-public `PilFont` raw constructor helpers remain in scope or should become
-  implementation details for the `PIL.ImageFont` target.
+  valid `P1` PBM, L-mode glyph images, clipped PILfont metrics, public
+  `ImageFont.info`, and matching malformed PBM loader errors moved
+  `pilfont.rs` regions from `352/591` (`59.56%`) to `521/596` (`87.42%`).
+  The next coverage work must handle the remaining public-reachable
+  PBM/image-load errors exactly and decide whether root-public `PilFont` raw
+  constructor helpers remain in scope or should become implementation details
+  for the `PIL.ImageFont` target.
 
 Latest Font wrapper movement:
 

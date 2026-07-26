@@ -37,6 +37,13 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let font = load_pilfont(case, fixture_root)?;
             return Ok(json!({"type": "pilfont", "mode": font.mode().as_str()}));
         }
+        "ImageFont.info" => {
+            let font = load_pilfont(case, fixture_root)?;
+            return Ok(json!({
+                "type": "info",
+                "value": font.info().iter().map(|line| hex(line)).collect::<Vec<_>>(),
+            }));
+        }
         "ImageFont.getbbox" => {
             let font = load_pilfont(case, fixture_root)?;
             let (width, height) = match text_bytes(params)? {
