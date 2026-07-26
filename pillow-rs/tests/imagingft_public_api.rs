@@ -33,14 +33,46 @@ fn fixture_root() -> PathBuf {
 }
 
 fn oracle_python() -> PathBuf {
-    let path = std::env::var_os("IMAGINGFT_ORACLE_PYTHON")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../.oracle-venv/bin/python")
-        });
-    assert!(path.exists(), "repo-local IMAGINGFT_ORACLE_PYTHON must exist: {path:?}");
-    path
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for imagingft tests must be discoverable");
+    let repo_python = repo_root.join(".oracle-venv/bin/python");
+
+    if let Some(env_path) = std::env::var_os("IMAGINGFT_ORACLE_PYTHON") {
+        let env_path = PathBuf::from(env_path);
+        let raw = env_path.to_string_lossy();
+        if raw.contains(".oracle-venv")
+            && raw.starts_with(&*repo_root.to_string_lossy())
+            && env_path.ends_with("bin/python")
+            && env_path.exists()
+        {
+            return env_path;
+        }
+    }
+
+    let path = repo_python;
+    let canonical = path
+        .canonicalize()
+        .unwrap_or_else(|_| panic!("repo-local IMAGINGFT_ORACLE_PYTHON must exist: {path:?}"));
+    assert!(
+        path.to_string_lossy().contains(".oracle-venv"),
+        "IMAGINGFT_ORACLE_PYTHON must point into this repo .oracle-venv"
+    );
+    assert!(
+        path.to_string_lossy()
+            .starts_with(&*repo_root.to_string_lossy()),
+        "IMAGINGFT_ORACLE_PYTHON must be repo-local: {canonical:?}"
+    );
+    assert!(
+        canonical.ends_with("bin/python"),
+        "IMAGINGFT_ORACLE_PYTHON must be a venv python executable: {canonical:?}"
+    );
+    assert!(
+        canonical.exists(),
+        "repo-local IMAGINGFT_ORACLE_PYTHON must exist: {canonical:?}"
+    );
+    canonical
 }
 
 fn load_input_cases(directory: &Path) -> Vec<Value> {
