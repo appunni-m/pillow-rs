@@ -106,7 +106,7 @@ pillow-rs/src/compute/pool_cpu/ops/chops.rs	283	op_chops_offset	pub	DynamicImage
 pillow-rs/src/compute/pool_cpu/ops/chops.rs	297	op_chops_blend	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/chops.rs	329	op_chops_composite	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/chops.rs	363	op_chops_duplicate	pub	DynamicImage	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/chops.rs	367	op_chops_invert	pub	DynamicImage	false	review_non_result_fallible	expect
+pillow-rs/src/compute/pool_cpu/ops/chops.rs	367	op_chops_invert	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_cpu/ops/color.rs	17	op_convert	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/color.rs	190	op_quantize	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/compute/pool_cpu/ops/color.rs	219	op_remap_palette	pub	Result<DynamicImage, PilError>	true	ok_result	
@@ -459,22 +459,22 @@ pillow-rs/src/compute/pool_simd/ops/scalar.rs	3973	convert	pub	(Vec<u32>, u32, u
 pillow-rs/src/compute/registry.rs	61	cpu_only	private	Self	false	likely_infallible	
 pillow-rs/src/compute/registry.rs	88	registry	pub	&'static HashMap<&'static str, OpEntry>	false	likely_infallible	
 pillow-rs/src/compute/registry.rs	294	gpu_registry_inner	private	&'static std::sync::Mutex<Vec<OpDef>>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	302	build_registry	pub	()	false	review_non_result_fallible	expect
-pillow-rs/src/compute/registry.rs	308	get_registry	pub	Vec<OpDef>	false	review_non_result_fallible	expect
-pillow-rs/src/compute/registry.rs	318	variant_key	pub	&'static str	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	410	cpu_supports	pub	bool	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	417	gpu_supports	pub	bool	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	424	simd_supports	pub	bool	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	436	execute_cpu	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
-pillow-rs/src/compute/registry.rs	452	gpu_shader_name	pub	Option<&'static str>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	457	gpu_shader_source_for_key	pub	Option<&'static str>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	462	gpu_shader_source	pub	Option<&'static str>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	470	op_id	pub	Option<OpId>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	556	map_op_to_gpu	pub	Option<GpuOp>	false	parser_review	question_operator
-pillow-rs/src/compute/registry.rs	570	extract_params	pub	Vec<u32>	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	924	register_all	private	()	false	parser_review	expect,result_ctor
-pillow-rs/src/compute/registry.rs	2438	slot	private	()	false	likely_infallible	
-pillow-rs/src/compute/registry.rs	2440	simd_set	private	()	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	302	build_registry	pub	Result<(), PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/registry.rs	311	get_registry	pub	Result<Vec<OpDef>, PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/registry.rs	324	variant_key	pub	&'static str	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	416	cpu_supports	pub	bool	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	423	gpu_supports	pub	bool	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	430	simd_supports	pub	bool	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	442	execute_cpu	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/compute/registry.rs	458	gpu_shader_name	pub	Option<&'static str>	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	463	gpu_shader_source_for_key	pub	Option<&'static str>	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	468	gpu_shader_source	pub	Option<&'static str>	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	476	op_id	pub	Option<OpId>	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	562	map_op_to_gpu	pub	Option<GpuOp>	false	parser_review	question_operator
+pillow-rs/src/compute/registry.rs	576	extract_params	pub	Vec<u32>	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	930	register_all	private	()	false	parser_review	expect,result_ctor
+pillow-rs/src/compute/registry.rs	2444	slot	private	()	false	likely_infallible	
+pillow-rs/src/compute/registry.rs	2446	simd_set	private	()	false	likely_infallible	
 pillow-rs/src/draw/mod.rs	32	new	pub	Self	false	likely_infallible	
 pillow-rs/src/draw/mod.rs	45	effective_mode	private	String	false	likely_infallible	
 pillow-rs/src/draw/mod.rs	53	mode	pub	Option<&str>	false	likely_infallible	

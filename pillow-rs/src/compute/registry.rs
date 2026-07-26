@@ -299,14 +299,20 @@ fn gpu_registry_inner() -> &'static std::sync::Mutex<Vec<OpDef>> {
 ///
 /// This registry is separate from the CPU/SIMD operation map. It is used by GPU
 /// setup and validation paths that need [`OpDef`] metadata.
-pub fn build_registry(defs: Vec<OpDef>) {
-    let mut r = gpu_registry_inner().lock().expect("mutex poisoned");
+pub fn build_registry(defs: Vec<OpDef>) -> Result<(), PilError> {
+    let mut r = gpu_registry_inner()
+        .lock()
+        .map_err(|_| PilError::InternalError("GPU registry mutex poisoned".to_string()))?;
     *r = defs;
+    Ok(())
 }
 
 /// Returns all registered GPU operation definitions.
-pub fn get_registry() -> Vec<OpDef> {
-    gpu_registry_inner().lock().expect("mutex poisoned").clone()
+pub fn get_registry() -> Result<Vec<OpDef>, PilError> {
+    Ok(gpu_registry_inner()
+        .lock()
+        .map_err(|_| PilError::InternalError("GPU registry mutex poisoned".to_string()))?
+        .clone())
 }
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
@@ -1838,7 +1844,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::InvertChops) {
-                    Ok(op_chops_invert(img))
+                    op_chops_invert(img)
                 } else {
                     Err(PilError::ValueError("expected InvertChops op".into()))
                 }

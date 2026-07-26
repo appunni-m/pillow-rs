@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,583`
+  - `ok_result`: `2,586`
   - `likely_infallible`: `3,808`
   - `parser_review`: `307`
-  - `review_non_result_fallible`: `128`
+  - `review_non_result_fallible`: `125`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -56,6 +56,8 @@ been inspected and either:
   `get_pixel_mut`, `put_pixel`, `new`, `from_pixel`, and `from_fn` remain
   compatibility panic APIs and must be migrated call-by-call where callers can
   bubble `ImageResult`.
+- CPU ImageChops invert and auxiliary GPU registry helpers now return
+  `Result<_, PilError>` instead of panicking on buffer shape or mutex poisoning.
 
 ## Next review queue
 
