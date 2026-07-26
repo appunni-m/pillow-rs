@@ -207,11 +207,11 @@ can initialize an otherwise empty subpath. ConicTo runtime movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `9b1273b4-f9eb-41d8-9c79-eba82957488b`
-- Snapshot: `5d0f75e7-dd0e-45db-a8f0-5fe2799a54a7`
+- Run: `709c2233-577d-41c2-afe0-ebadfc025804`
+- Snapshot: `fcf69668-46f7-46f4-a1a9-05fc3cb803e3`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `e364c231310d703848d5f766a055fdb4423c81d3`
+- Commit measured: `7271a78c3ee1dbdec0a3cbf67f976822e4fbac36`
 
 Target file metrics:
 
@@ -233,6 +233,17 @@ Remaining targeted gaps in `imagingft.rs`:
   only after applying public coordinates.
 - `366-367`: non-zero `stroke_width`; blocked on real pure-Rust
   `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` implementation.
+
+Latest blocker verification:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
+```
+
+Result after the ConicTo movement: runnable rows still pass (`3/3`), and the
+five glyph-stroke success rows remain pending. This confirms that adding active
+Font `stroke_width` rows now would create honest Pillow-vs-Rust failures rather
+than increasing trustworthy Font coverage.
 
 ## Required next implementation sequence
 
