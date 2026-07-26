@@ -927,6 +927,7 @@ fn canonical_pillow_parameter(operation: &str, fixture_key: &str) -> Option<Stri
         "variant_index" if operation == "font_variant" => "index",
         "variant_encoding" if operation == "font_variant" => "encoding",
         "variant_layout_engine" if operation == "font_variant" => "layout_engine",
+        "name_bytes_hex" if operation == "set_variation_by_name" => "name",
         "repeat_count" if operation == "set_variation_by_name" => return None,
         other => other,
     };

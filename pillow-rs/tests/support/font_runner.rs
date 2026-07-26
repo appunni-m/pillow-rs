@@ -75,11 +75,9 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .collect::<Vec<_>>(),
         })),
         "set_variation_by_name" => {
-            let name = required(params, "name")?
-                .as_str()
-                .ok_or_else(|| PilError::TypeError("name must be a string".into()))?;
+            let name = variation_name(params)?;
             for _ in 0..repeat_count(params)? {
-                pillow_rs::font_set_variation_by_name(&mut font, name.as_bytes())?;
+                pillow_rs::font_set_variation_by_name(&mut font, &name)?;
             }
             Ok(json!({
                 "type": "font_after_variation",
@@ -195,6 +193,19 @@ fn text_bytes(params: &Value) -> Result<Option<Vec<u8>>, PilError> {
                 .and_then(hex_to_bytes)
         })
         .transpose()
+}
+
+fn variation_name(params: &Value) -> Result<Vec<u8>, PilError> {
+    if let Some(value) = params.get("name_bytes_hex") {
+        return value
+            .as_str()
+            .ok_or_else(|| PilError::TypeError("name_bytes_hex must be a string".into()))
+            .and_then(hex_to_bytes);
+    }
+    required(params, "name")?
+        .as_str()
+        .map(|value| value.as_bytes().to_vec())
+        .ok_or_else(|| PilError::TypeError("name must be a string".into()))
 }
 
 fn repeat_count(params: &Value) -> Result<usize, PilError> {

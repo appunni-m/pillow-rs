@@ -253,7 +253,7 @@ pub(crate) fn set_variation_by_axes(font: &mut Font, axes: &[f32]) -> Result<(),
     }
     let coords = axes
         .iter()
-        .map(|axis| (axis * 65536.0) as ffi::FT_Fixed)
+        .map(|axis| pillow_axis_to_fixed(*axis))
         .collect::<Vec<_>>();
     let error = ffi::FT_Set_Var_Design_Coordinates(
         Some(&mut font.engine.face),
@@ -266,6 +266,22 @@ pub(crate) fn set_variation_by_axes(font: &mut Font, axes: &[f32]) -> Result<(),
     } else {
         Err(ft_error_to_pil(error))
     }
+}
+
+fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
+    let scaled = f64::from(axis) * 65536.0;
+    let fixed = if scaled > ffi::FT_Long::MAX as f64 {
+        i32::MIN
+    } else if scaled < ffi::FT_Long::MIN as f64 {
+        i32::MIN
+    } else if scaled > f64::from(i32::MAX) {
+        i32::MAX
+    } else if scaled < f64::from(i32::MIN) {
+        i32::MIN
+    } else {
+        scaled as i32
+    };
+    fixed as ffi::FT_Fixed
 }
 
 pub(crate) fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
