@@ -912,3 +912,80 @@ Source: Coverage MCP snapshot `e3c79419-67ff-4b76-ac15-17cf0822a908`, `pillow-rs
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
+
+## Current status — 2026-07-26
+
+### Pillow Font comparison / manifest completeness
+
+- Active oracle is still live repo-local Pillow `PIL.ImageFont.FreeTypeFont` via `pillow-rs/scripts/font_oracle.py`; fixture JSON remains input-only.
+- `pillow-rs/tests/font_public_api.rs` enforces, at runtime:
+  - no expected outputs/status/hash/error fields in active input JSON;
+  - `font_manifest.yaml.required_operations` includes every live Pillow `FreeTypeFont` public method exposed by the oracle;
+  - `font_manifest.yaml.public_method_parameters` classifies every live Pillow public parameter;
+  - active input rows exercise every parameter marked covered;
+  - active input rows do not exercise params still marked blocked.
+- Current intentionally blocked Pillow public params:
+  - `getmask.stroke_width`
+  - `getmask2.stroke_width`
+- These are real missing implementation areas, not test omissions. Pillow renders stroked masks; Rust currently returns `NotImplementedError` for non-zero stroke width.
+
+### Newly added real parity rows / fixes
+
+- Commit `73cea8371` (`font: reject unsupported CBLC strike sizes`)
+  - Added input-only fixture row `font.getmask2.cblc_cbdt_invalid_pixel_size`.
+  - Added fixture asset `input/fonts/sbit-cblc-cbdt-gray-format1.ttf` copied from the maintained `pillow-rs-freetype` fixture corpus.
+  - Fixed Rust FreeType-compatible behavior for CBLC/CBDT strike-size mismatch: unsupported requested ppem now returns `invalid pixel size`, matching the live Pillow oracle.
+- Commit `edc29b651` (`font: cover variant zero size error`)
+  - Added input-only fixture row `font.variations.font_variant.zero_size_error`.
+  - Confirms `Font.font_variant(size=0)` propagates the constructor error through the Rust Result path exactly like Pillow.
+
+### Verification
+
+- Local maintained target:
+  - `make -C pillow-rs fmt`
+  - `make -C pillow-rs font-tests`
+  - Result: passed.
+- Coverage MCP:
+  - Run `4075fdaf-6261-4119-aac2-c7b138683b0d`
+    - Commit `73cea8371957f5972d0a0173c2b58ee5d158f303`
+    - Command `imagingft-tests-coverage-fixed`
+    - Result passed, coverage ingested
+    - Snapshot `90ee8a0e-1c43-4b70-8412-25470a6f57c7`
+  - Run `e90945b2-0df1-45ff-a4ff-976a5452b6dd`
+    - Commit `edc29b6519687a6c080f2d3f1417162c7b9ef83a`
+    - Command `imagingft-tests-coverage-fixed`
+    - Result passed, coverage ingested
+    - Snapshot `a4f5d685-7317-448e-9e72-2c78998acf4e`
+
+### Latest targeted coverage snapshot
+
+Snapshot `a4f5d685-7317-448e-9e72-2c78998acf4e`:
+
+- `pillow-rs/src/font/imagingft.rs`
+  - lines: `971/1036` (`93.73%`)
+  - branches: `194/238` (`81.51%`)
+  - functions: `99/110` (`90.00%`)
+  - regions: `1612/1740` (`92.64%`)
+- `pillow-rs/src/font/mod.rs`
+  - lines: `258/282` (`91.49%`)
+  - functions: `57/64` (`89.06%`)
+  - regions: `331/373` (`88.74%`)
+
+### Important coverage blocker
+
+The approved Coverage MCP command `imagingft-tests-coverage-fixed` currently ignores `pillow-rs-freetype` in the llvm-cov report:
+
+```text
+--ignore-filename-regex='(^|/)(pillow-rs-freetype|target|\\.cargo|rustc)(/|$)'
+```
+
+Therefore the CBLC/CBDT implementation fix is verified by live Pillow parity, but its new Rust implementation lines in `pillow-rs-freetype` are not measurable by the current MCP coverage command. A new/updated approved Coverage MCP registration is required before claiming 100% coverage for new code in the FreeType dependency.
+
+### Remaining non-100% causes after latest sweep
+
+- Some `font_variant_with_options` lines reported as uncovered are source-map artifacts: exact-line query shows the function body hit 199 times while signature/closing-brace lines remain zero-hit.
+- Real unclosed branches remain:
+  - internal `FT_Set_Named_Instance` / `FT_Set_Var_Design_Coordinates` error-return paths after variation support is detected;
+  - `getmask`/`getmask2` `stroke_width` rendering;
+  - rare FreeType glyph-load/render failure paths after successful face load;
+  - defensive image-size/overflow/unsupported bitmap-mode guards that require a real Pillow-oracle input, not synthetic self-comparison.
