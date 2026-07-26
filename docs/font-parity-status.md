@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `61e475ab3`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `dcb8a73c6`
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
@@ -26,6 +26,11 @@ New commits:
   `pillow_rs::font_*` functions from `src/lib.rs` and requires every one to
   map to a `font_manifest.yaml` operation. A new root Font endpoint now fails
   the parity test unless it is explicitly accounted for by the manifest.
+- `dcb8a73c6` — added a runner-arm gate that extracts the explicit public
+  operation arms from `tests/support/font_runner.rs` and requires them to match
+  `font_manifest.yaml.required_operations` exactly. A manifest operation can no
+  longer go stale without a runner implementation, and a runner operation can
+  no longer bypass the manifest.
 
 Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
 repo-local oracle remains:
@@ -49,15 +54,18 @@ Newly covered edge cases:
 - Root `pillow_rs::font_*` public functions are now validated against the
   manifest operation list, closing the previous gap where a Rust root wrapper
   could exist without manifest coverage.
+- Manifest operations are now validated against explicit runner operation
+  arms, closing the stale-manifest/stale-runner gap before live oracle
+  execution starts.
 
 Verification:
 
 - `make -C pillow-rs fmt` — passed
 - `make -C pillow-rs font-tests` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `2f336024-8cf7-4234-a4fe-7e0721419934`
-  - snapshot `e76a8d2f-e177-4a63-a858-c0593179d22e`
-  - commit `61e475ab347e0bc9b09d2b4d7d94222257397f05`
+  - run `33ec914c-c310-43ea-b85e-b51b297d5c31`
+  - snapshot `673db3fe-cb16-44c9-9336-28eeb6d5465f`
+  - commit `dcb8a73c6acf2791ea38dadec2afcd444b08e32e`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
