@@ -24,9 +24,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — freetype-fixture gap sweep revalidat
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Latest run id: `2b8753bc-3b08-42e3-af13-1200a9c9afd0`
+  - Latest run id: `8ffb1a4f-93e5-4c3c-868a-a1ad99278148`
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `f0deee35-9822-4b8c-a132-d035c808169a` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Prior same-turn probe snapshots:
     - `6b68edcf-1aa9-474f-8f85-9adb95291899`: freetype CFF/embedded-strike rows added; no region movement.
     - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `imagingft.rs` moved to `1872/2338` regions.
@@ -98,7 +98,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — freetype-fixture gap sweep revalidat
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `f0deee35-9822-4b8c-a132-d035c808169a`
+- Current: `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 - Same-turn movement from the previous committed imagingft snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`:
   - `imagingft.rs` lines: `1048 -> 1050` (`+2`)
@@ -107,7 +107,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — freetype-fixture gap sweep revalidat
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `f0deee35-9822-4b8c-a132-d035c808169a`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
@@ -149,7 +149,7 @@ Source: Coverage MCP snapshot `f0deee35-9822-4b8c-a132-d035c808169a`, `pillow-rs
   - Purpose: hit real partial/full glyph clipping branches through Pillow `font.getmask2(..., start=...)`, not synthetic Rust-only calls.
 - Coverage effect:
   - These rows increased fixture parity coverage from `82` to `105` executed rows.
-  - After the freetype/clipping sweep, `pillow-rs/src/font/imagingft.rs` measured `1873/2338` covered regions (`80.11120616%`) on snapshot `f0deee35-9822-4b8c-a132-d035c808169a`.
+  - After the freetype/clipping sweep, `pillow-rs/src/font/imagingft.rs` measured `1873/2338` covered regions (`80.11120616%`) on snapshot `906f7d20-a3fd-4e57-a0e7-d36c336bb7c6`.
 
 ### Reverse-mapped unclosed branches
 
