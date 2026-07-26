@@ -55,11 +55,29 @@ pub struct PilFont {
     glyphs: [Glyph; GLYPH_COUNT],
     bitmap: Vec<u8>,
     bitmap_width: u32,
-    bitmap_height: u32,
     ysize: i32,
     baseline: i32,
     mode: PilFontMode,
     info: Vec<Vec<u8>>,
+    render_error: Option<PilError>,
+}
+
+/// Glyph-image state used by Pillow PILfont loading.
+#[derive(Debug, Clone)]
+pub enum PilFontGlyphImage {
+    /// Fully decoded glyph bitmap.
+    Image(Image),
+    /// Glyph image opened successfully, but rendering non-empty text raises.
+    DeferredRenderError {
+        /// Native bitmap mode.
+        mode: PilFontMode,
+        /// Bitmap width in pixels.
+        width: u32,
+        /// Bitmap height in pixels.
+        height: u32,
+        /// Pillow-compatible rendering error.
+        error: PilError,
+    },
 }
 
 /// A rendered PILfont mask with one byte per pixel.
@@ -82,7 +100,7 @@ impl PilFontMask {
     /// [`PilFontMask::pixels`] remains expanded like Pillow's `ImagingCore`
     /// sequence.
     pub fn to_image(&self) -> Result<Image, PilError> {
-        if self.width == 0 || self.height == 0 {
+        if self.width == 0 {
             return Image::new(self.width, self.height, self.mode.as_str(), (0, 0, 0, 0));
         }
 
@@ -120,15 +138,37 @@ impl PilFont {
     /// [`PilError::SyntaxError`] for a non-PILfont header, or
     /// [`PilError::ValueError`] for a truncated descriptor table.
     pub fn from_pilfont_data(data: &[u8], image: Image) -> Result<Self, PilError> {
-        let mode = match image.mode()?.as_str() {
-            "1" => PilFontMode::One,
-            "L" => PilFontMode::Luma,
-            _ => return Err(PilError::TypeError("invalid font image mode".into())),
+        Self::from_pilfont_glyph_data(data, PilFontGlyphImage::Image(image))
+    }
+
+    /// Parses a PILfont metrics payload and Pillow-compatible glyph image state.
+    pub fn from_pilfont_glyph_data(
+        data: &[u8],
+        glyph_image: PilFontGlyphImage,
+    ) -> Result<Self, PilError> {
+        let (mode, bitmap_width, bitmap_height, bitmap, render_error) = match glyph_image {
+            PilFontGlyphImage::Image(image) => {
+                let mode = match image.mode()?.as_str() {
+                    "1" => PilFontMode::One,
+                    "L" => PilFontMode::Luma,
+                    _ => return Err(PilError::TypeError("invalid font image mode".into())),
+                };
+                let bitmap = image.materialize()?.to_luma8();
+                let (bitmap_width, bitmap_height) = bitmap.dimensions();
+                (mode, bitmap_width, bitmap_height, bitmap.into_raw(), None)
+            }
+            PilFontGlyphImage::DeferredRenderError {
+                mode,
+                width,
+                height,
+                error,
+            } => {
+                let dims = CheckedDims::new(width, height, 1)?;
+                (mode, width, height, dims.alloc_buffer(), Some(error))
+            }
         };
         let (info, metrics) = parse_metrics_file(data)?;
 
-        let bitmap = image.materialize()?.to_luma8();
-        let (bitmap_width, bitmap_height) = bitmap.dimensions();
         let bitmap_width_i32 = i32::try_from(bitmap_width)
             .map_err(|_| PilError::DimensionError("PILfont bitmap width exceeds i32".into()))?;
         let bitmap_height_i32 = i32::try_from(bitmap_height)
@@ -179,27 +219,27 @@ impl PilFont {
 
         Ok(Self {
             glyphs,
-            bitmap: bitmap.into_raw(),
+            bitmap,
             bitmap_width,
-            bitmap_height,
             ysize: y1 - y0,
             baseline: -y0,
             mode,
             info,
+            render_error,
         })
     }
 
-    /// Opens encoded PNG, GIF, or PBM glyph-image bytes.
+    /// Opens encoded PNG, GIF, or PBM glyph-image bytes for PILfont loading.
     ///
     /// PBM `P1` and `P4` are decoded locally because the workspace codec does
     /// not otherwise expose Netpbm. Pillow-generated `.pbm` files commonly
     /// contain PNG bytes and are detected by header before this fallback.
-    pub fn open_glyph_image(data: Vec<u8>) -> Result<Image, PilError> {
+    pub fn open_pilfont_glyph_image(data: Vec<u8>) -> Result<PilFontGlyphImage, PilError> {
         match Image::open_bytes(data.clone()) {
-            Ok(image) => Ok(image),
+            Ok(image) => Ok(PilFontGlyphImage::Image(image)),
             Err(original_error) => {
                 if data.starts_with(b"P1") || data.starts_with(b"P4") {
-                    decode_pbm(&data)
+                    decode_pbm_for_pilfont(&data)
                 } else {
                     Err(original_error)
                 }
@@ -217,9 +257,9 @@ impl PilFont {
     /// - PNG bytes: 1,273; SHA-256
     ///   `afdc82adb778486c71c5cc9c6f88623b3c7e5044e80ff7b32d973663eff31ed0`
     pub fn load_default() -> Result<Self, PilError> {
-        Self::from_pilfont_data(
+        Self::from_pilfont_glyph_data(
             DEFAULT_METRICS,
-            Self::open_glyph_image(DEFAULT_BITMAP.to_vec())?,
+            Self::open_pilfont_glyph_image(DEFAULT_BITMAP.to_vec())?,
         )
     }
 
@@ -245,13 +285,22 @@ impl PilFont {
             .map_err(|_| PilError::ValueError("PILfont text width is negative".into()))?;
         let height = u32::try_from(self.ysize)
             .map_err(|_| PilError::ValueError("PILfont height is negative".into()))?;
-        if width == 0 || height == 0 {
+        if width == 0 {
             return Ok(PilFontMask {
                 width,
                 height,
                 mode: self.mode,
                 pixels: Vec::new(),
             });
+        }
+        if height == 0 {
+            return Err(PilError::SystemError(
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                    .into(),
+            ));
+        }
+        if let Some(error) = &self.render_error {
+            return Err(error.clone());
         }
 
         let dims = CheckedDims::new(width, height, 1)?;
@@ -299,12 +348,16 @@ impl PilFont {
         let source_width = glyph.sx1 - glyph.sx0;
         let source_height = glyph.sy1 - glyph.sy0;
         if source_width < 0 || source_height < 0 {
-            return Err(PilError::ValueError(
-                "PILfont glyph source rectangle is invalid".into(),
+            return Err(PilError::SystemError(
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                    .into(),
             ));
         }
         if glyph.dx1 - glyph.dx0 != source_width || glyph.dy1 - glyph.dy0 != source_height {
-            return Err(PilError::ValueError("images do not match".into()));
+            return Err(PilError::SystemError(
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                    .into(),
+            ));
         }
 
         let destination_x = pen_x + glyph.dx0;
@@ -313,21 +366,16 @@ impl PilFont {
             for source_x_offset in 0..source_width {
                 let x = destination_x + source_x_offset;
                 let y = destination_y + source_y_offset;
-                if x < 0 || y < 0 || x >= output.width as i32 || y >= output.height as i32 {
+                if x < 0 || x >= output.width as i32 {
                     continue;
                 }
 
                 let source_x = glyph.sx0 + source_x_offset;
                 let source_y = glyph.sy0 + source_y_offset;
-                let value = if source_x >= 0
-                    && source_y >= 0
-                    && source_x < self.bitmap_width as i32
-                    && source_y < self.bitmap_height as i32
-                {
-                    self.bitmap[source_y as usize * self.bitmap_width as usize + source_x as usize]
-                } else {
-                    0
-                };
+                // Pillow's `_font_new`-equivalent clipping above guarantees
+                // these source coordinates are inside the glyph bitmap.
+                let value =
+                    self.bitmap[source_y as usize * self.bitmap_width as usize + source_x as usize];
                 pixels[y as usize * output.row_stride() + x as usize] = value;
             }
         }
@@ -371,7 +419,7 @@ fn signed_be(record: &[u8], offset: usize) -> i32 {
     i16::from_be_bytes([record[offset], record[offset + 1]]) as i32
 }
 
-fn decode_pbm(data: &[u8]) -> Result<Image, PilError> {
+fn decode_pbm_for_pilfont(data: &[u8]) -> Result<PilFontGlyphImage, PilError> {
     let mut tokens = PbmTokens::new(data);
     let magic = tokens
         .next()
@@ -402,28 +450,37 @@ fn decode_pbm(data: &[u8]) -> Result<Image, PilError> {
                         )));
                     }
                     None => {
-                        return Err(PilError::IOError(
-                            "image file is truncated (0 bytes not processed)".into(),
-                        ));
+                        return Err(PilError::ValueError("not enough image data".into()));
                     }
                 }
             }
         }
         b"P4" => {
             let raster = tokens.binary_raster()?;
-            if raster.len() < packed_len {
+            if raster.bytes.len() < packed_len {
+                if raster.had_crlf_separator {
+                    return Ok(PilFontGlyphImage::DeferredRenderError {
+                        mode: PilFontMode::One,
+                        width,
+                        height,
+                        error: PilError::SystemError(
+                            "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                                .into(),
+                        ),
+                    });
+                }
                 return Err(PilError::IOError(
                     "image file is truncated (0 bytes not processed)".into(),
                 ));
             }
-            for (output, input) in packed.iter_mut().zip(raster) {
+            for (output, input) in packed.iter_mut().zip(raster.bytes) {
                 // Netpbm uses 1 for black; Pillow mode "1" uses 0 for black.
                 *output = !input;
             }
         }
         _ => return Err(PilError::ValueError("unsupported PBM format".into())),
     }
-    Image::frombytes("1", (width, height), &packed)
+    Image::frombytes("1", (width, height), &packed).map(PilFontGlyphImage::Image)
 }
 
 fn parse_pbm_dimension(token: Option<&[u8]>, name: &str) -> Result<u32, PilError> {
@@ -443,6 +500,11 @@ struct PbmTokens<'a> {
     position: usize,
 }
 
+struct PbmRaster<'a> {
+    bytes: &'a [u8],
+    had_crlf_separator: bool,
+}
+
 impl<'a> PbmTokens<'a> {
     fn new(data: &'a [u8]) -> Self {
         Self { data, position: 0 }
@@ -460,7 +522,7 @@ impl<'a> PbmTokens<'a> {
         (self.position > start).then(|| &self.data[start..self.position])
     }
 
-    fn binary_raster(&mut self) -> Result<&'a [u8], PilError> {
+    fn binary_raster(&mut self) -> Result<PbmRaster<'a>, PilError> {
         let Some(&separator) = self.data.get(self.position) else {
             return Err(PilError::IOError(
                 "image file is truncated (0 bytes not processed)".into(),
@@ -470,10 +532,14 @@ impl<'a> PbmTokens<'a> {
             return Err(PilError::ValueError("invalid PBM raster separator".into()));
         }
         self.position += 1;
-        if separator == b'\r' && self.data.get(self.position) == Some(&b'\n') {
+        let had_crlf_separator = separator == b'\r' && self.data.get(self.position) == Some(&b'\n');
+        if had_crlf_separator {
             self.position += 1;
         }
-        Ok(&self.data[self.position..])
+        Ok(PbmRaster {
+            bytes: &self.data[self.position..],
+            had_crlf_separator,
+        })
     }
 
     fn skip_spacing(&mut self) {

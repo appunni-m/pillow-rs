@@ -1,8 +1,9 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after expanding the target from
-`ImageFont.FreeTypeFont` to the full `PIL.ImageFont` module surface except
-libraqm-specific shaping.
+Last updated: 2026-07-27 (Asia/Kolkata) after confirming the target is the
+full `PIL.ImageFont` module surface. `libraqm` shaping is the only explicit
+out-of-scope area; `ImageFont.FreeTypeFont`/`_imagingft` remains in scope
+because Pillow exposes it through `PIL.ImageFont`.
 
 ## Oracle and fixture contract
 
@@ -269,11 +270,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `ab51e2d6-b10c-430e-bf90-c239a2a6a7cd`
-- Snapshot: `f2bf96ee-e8f4-4f24-8706-5bd0505a9e72`
+- Run: `2f9f1c18-cba3-4fae-9797-bd4c1c350691`
+- Snapshot: `45cf50af-ef87-4335-876b-122953f144a7`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `f69f1beaae1a7dd74b0726e76f804bd26bf5692a`
+- Commit measured: `d9ebd43a32a3f23f854d22bc9fc8c03c6813690c`
 
 Target file metrics:
 
@@ -281,25 +282,25 @@ Target file metrics:
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
-| `pillow-rs/src/font/pilfont.rs` | `307/328` (`93.60%`) | `62/80` (`77.50%`) | `28/38` (`73.68%`) | `455/505` (`90.10%`) |
+| `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
 Current full-module scope note:
 
 - The active test now includes bitmap `PIL.ImageFont.ImageFont` rows and
   repo-local `load`/`load_path` PILfont assets, so `pilfont.rs` is now part of
   the coverage target.
-- Coverage is not 100% yet for the full `PIL.ImageFont` target. Added rows for
-  repo-local PBM-backed PILfont loading/masking, zero-sized transposed masks,
-  valid `P1` PBM, L-mode glyph images, clipped PILfont metrics, public
-  `ImageFont.info`, and matching malformed PBM loader errors moved
-  invalid PNG glyph-image discovery, no-newline metrics errors, invalid
-  glyph-image mode mapping, and removal of unreachable embedded-asset base64
-  decoding moved `pilfont.rs` regions from `352/591` (`59.56%`) to `455/505`
-  (`90.10%`).
-  The next coverage work must handle the remaining public-reachable
-  PBM/image-load errors exactly and decide whether root-public `PilFont` raw
-  constructor helpers remain in scope or should become implementation details
-  for the `PIL.ImageFont` target.
+- Coverage is not 100% yet for the full `PIL.ImageFont` target because
+  `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps.
+- `pilfont.rs` now has no uncovered executable lines and no partial branches in
+  the active Font coverage snapshot. Its branch coverage is `70/70`
+  (`100.00%`). The remaining function/region deltas are LLVM function/region
+  accounting with no line-level gaps reported by Coverage MCP.
+- PILfont rows now include repo-local PNG, GIF/PBM discovery behavior, valid
+  `P1` and `P4` PBM, CRLF P4 raster separator behavior, CRLF short-raster lazy
+  loader semantics, L-mode glyph images, clipped PILfont metrics, public
+  `ImageFont.info`, malformed metrics/header cases, invalid glyph-image mode
+  mapping, PBM tokenizer failures, truncated raster failures, and
+  Pillow-matching `SystemError` render failures.
 
 Latest Font wrapper movement:
 
@@ -314,22 +315,22 @@ Latest Font wrapper movement:
 
 Remaining targeted gaps in `imagingft.rs`:
 
-- `90-91`: generic unknown FreeType error fallback. No public Font fixture has
+- `94-95`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
   manufacturing invalid internal state. A sweep across the tracked Font assets
   and available FreeType fixture assets found only the already-mapped runtime
   errors: `code overflow`, `nested DEFS`, `too many instruction definitions`,
   and `too many function definitions`.
-- `241,246`: `FT_Set_Named_Instance` error after a valid public name match.
+- `247,252`: `FT_Set_Named_Instance` error after a valid public name match.
   Current tracked variable fonts accept all discovered named instances in the
   Pillow oracle; no deterministic public input has been found that matches a
   name and then fails only in the lower-level setter.
-- `263,267`: `FT_Set_Var_Design_Coordinates` error after variation-face
+- `269,273`: `FT_Set_Var_Design_Coordinates` error after variation-face
   validation. Current tracked variable fonts accept empty, short, exact,
   overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
   malformed-font sweep can crash Pillow itself, so crash-only rows are not
   admissible parity fixtures.
-- `366-367`: non-zero `stroke_width`; blocked on real pure-Rust
+- `375-376`: non-zero `stroke_width`; blocked on real pure-Rust
   `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` implementation.
 
 Latest blocker verification:

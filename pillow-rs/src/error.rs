@@ -62,6 +62,10 @@ pub enum PilError {
     #[error("{0}")]
     TypeError(String),
 
+    /// Pillow-style internal system error surfaced by legacy C extension paths.
+    #[error("{0}")]
+    SystemError(String),
+
     /// Error propagated from the underlying image buffer or codec crate.
     #[error("image processing error: {0}")]
     ImageError(#[from] image_slash_star::ImageError),

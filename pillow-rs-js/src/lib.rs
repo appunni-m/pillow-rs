@@ -24,6 +24,7 @@ fn err(e: pillow_rs::PilError) -> JsValue {
         pillow_rs::PilError::KeyError(_) => "KeyError",
         pillow_rs::PilError::ValueError(_) => "ValueError",
         pillow_rs::PilError::TypeError(_) => "TypeError",
+        pillow_rs::PilError::SystemError(_) => "SystemError",
         pillow_rs::PilError::SyntaxError(_) => "SyntaxError",
         pillow_rs::PilError::NotImplementedError(_) => "NotImplementedError",
         pillow_rs::PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
