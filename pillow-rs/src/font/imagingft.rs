@@ -51,13 +51,7 @@ fn load_truetype_with_index(data: Vec<u8>, size: f32, face_index: usize) -> Resu
     };
     let size_error = ffi::FT_Request_Size(Some(&mut face), Some(&request));
     if size_error != ffi::FT_Err_Ok {
-        let message = match size_error {
-            x if x == ffi::FT_Err_Invalid_Argument as i32 => "invalid argument",
-            x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => "invalid pixel size",
-            x if x == ffi::FT_Err_Invalid_PPem as i32 => "invalid ppem value",
-            _ => "FT_Request_Size failed",
-        };
-        return Err(PilError::OsError(message.into()));
+        return Err(ft_error_to_pil(size_error));
     }
 
     let family_name = face.family_name.clone();
@@ -85,7 +79,7 @@ fn ft_error_to_pil(error: i32) -> PilError {
         x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => {
             PilError::OsError("invalid pixel size".into())
         }
-        x if x == ffi::FT_Err_Invalid_PPem as i32 => PilError::OsError("invalid ppem".into()),
+        x if x == ffi::FT_Err_Invalid_PPem as i32 => PilError::OsError("invalid ppem value".into()),
         x if x == ffi::FT_Err_Too_Many_Instruction_Defs as i32 => {
             PilError::OsError("too many instruction definitions".into())
         }
