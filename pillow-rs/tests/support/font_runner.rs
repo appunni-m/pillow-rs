@@ -127,7 +127,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getbbox_binary" => Ok(bbox_value(font.getbbox_binary(text(params)?)?)),
         "getmask" => {
-            let (width, height, pixels) = font.getmask(text(params)?)?;
+            let (width, height, pixels) = if has_text_options(params) {
+                pillow_rs::font_getmask_with_options(&font, text(params)?, &text_options(params)?)?
+            } else {
+                font.getmask(text(params)?)?
+            };
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {

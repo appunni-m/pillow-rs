@@ -86,6 +86,15 @@ impl Font {
         imagingft::getmask(self, text)
     }
 
+    /// Return Pillow's public `getmask` result using optional render arguments.
+    pub fn getmask_with_options(
+        &self,
+        text: &str,
+        options: &FontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        imagingft::getmask_with_options(self, text, options)
+    }
+
     /// Return Pillow's public `(family, style)` font name tuple.
     pub fn getname(&self) -> (&str, &str) {
         let (family, style) = imagingft::getname_optional(self);

@@ -289,6 +289,15 @@ pub fn font_getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilE
     font.getmask(text)
 }
 
+/// Return the Pillow-compatible grayscale text mask with optional render arguments.
+pub fn font_getmask_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.getmask_with_options(text, options)
+}
+
 /// Render a Pillow-compatible mask with a fractional raster start.
 pub fn font_getmask2_with_start(
     font: &Font,
