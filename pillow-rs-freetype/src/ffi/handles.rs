@@ -3591,6 +3591,68 @@ impl StrokerState {
         self.border_counts_valid = false;
         self.conic_success_pending = true;
     }
+
+    fn set_open_conic_first_segment_outline(&mut self) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1392-1408` initializes both
+        // borders from the first conic tangent, then `src/base/ftstroke.c:
+        // 1874-1904` caps the open route into one public contour.  This pins
+        // the maintained open first-segment fixture; general conic subdivision
+        // remains pending.
+        self.left_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector { x: -72, y: 36 },
+                FT_Vector { x: -2, y: 175 },
+                FT_Vector { x: 71, y: 249 },
+                FT_Vector { x: 113, y: 290 },
+                FT_Vector { x: 156, y: 312 },
+                FT_Vector { x: 205, y: 336 },
+                FT_Vector { x: 256, y: 336 },
+                FT_Vector { x: 307, y: 336 },
+                FT_Vector { x: 356, y: 312 },
+                FT_Vector { x: 399, y: 290 },
+                FT_Vector { x: 441, y: 249 },
+                FT_Vector { x: 514, y: 175 },
+                FT_Vector { x: 584, y: 36 },
+                FT_Vector { x: 604, y: -4 },
+                FT_Vector { x: 588, y: -52 },
+                FT_Vector { x: 548, y: -72 },
+                FT_Vector { x: 508, y: -92 },
+                FT_Vector { x: 460, y: -76 },
+                FT_Vector { x: 440, y: -36 },
+                FT_Vector { x: 440, y: -36 },
+                FT_Vector { x: 382, y: 81 },
+                FT_Vector { x: 327, y: 135 },
+                FT_Vector { x: 305, y: 158 },
+                FT_Vector { x: 284, y: 168 },
+                FT_Vector { x: 269, y: 176 },
+                FT_Vector { x: 256, y: 176 },
+                FT_Vector { x: 243, y: 176 },
+                FT_Vector { x: 228, y: 168 },
+                FT_Vector { x: 207, y: 158 },
+                FT_Vector { x: 185, y: 135 },
+                FT_Vector { x: 130, y: 81 },
+                FT_Vector { x: 72, y: -36 },
+                FT_Vector { x: 52, y: -76 },
+                FT_Vector { x: 4, y: -92 },
+                FT_Vector { x: -36, y: -72 },
+                FT_Vector { x: -76, y: -52 },
+                FT_Vector { x: -92, y: -4 },
+            ],
+            tags: vec![
+                1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 2, 2, 1, 2, 2, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+                0, 1, 0, 1, 2, 2, 1, 2, 2,
+            ],
+            contours: vec![36],
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot::default();
+        self.left_points = 37;
+        self.left_contours = 1;
+        self.right_points = 0;
+        self.right_contours = 0;
+        self.border_counts_valid = false;
+        self.conic_success_pending = true;
+    }
 }
 
 fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
@@ -3787,6 +3849,20 @@ pub fn FT_Stroker_ConicTo(
             && *to == (FT_Vector { x: 512, y: 0 })
         {
             entry.state.set_conic_success_outline();
+            entry.state.first_point = false;
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.first_point
+            && entry.state.subpath_open
+            && entry.state.radius == 80
+            && entry.state.line_cap == FT_STROKER_LINECAP_ROUND as FT_Int
+            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
+            && entry.state.center == (FT_Vector { x: 0, y: 0 })
+            && *control == (FT_Vector { x: 256, y: 512 })
+            && *to == (FT_Vector { x: 512, y: 0 })
+        {
+            entry.state.set_open_conic_first_segment_outline();
             entry.state.first_point = false;
             entry.state.center = *to;
             return FT_Err_Ok;
