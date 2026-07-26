@@ -406,7 +406,7 @@ Latest Font wrapper movement:
   default font bytes are corrupt.
 
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`584f273f-269a-46bd-bf3a-a1e522dda55d`:
+`26e19999-69ff-499e-8a39-28d1a51abb93`:
 
 - `91-92`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
@@ -418,13 +418,17 @@ Remaining targeted gaps in `imagingft.rs` from snapshot
   `FT_Set_Named_Instance` after a valid public name match.
   Current tracked variable fonts accept all discovered named instances in the
   Pillow oracle; no deterministic public input has been found that matches a
-  name and then fails only in the lower-level setter.
+  name and then fails only in the lower-level setter. A 2026-07-27 isolated
+  subprocess sweep across 62 tracked Font/FreeType variable assets found no
+  structured Pillow setter errors for valid names; the only candidates were
+  Pillow segfaults on malformed variable-name fonts, which are not admissible
+  active oracle fixtures.
 - `271`: `set_variation_by_axes` error propagation from
   `FT_Set_Var_Design_Coordinates` after variation-face validation. Current
   tracked variable fonts accept empty, short, exact, overlong, and extreme
-  finite coordinate arrays in the Pillow oracle. A broad malformed-font sweep
-  can crash Pillow itself, so crash-only rows are not admissible parity
-  fixtures.
+  finite coordinate arrays in the Pillow oracle. The 62-font isolated sweep
+  likewise found no structured Pillow axes-setter errors; crash-only malformed
+  rows remain excluded from the active corpus.
 - `796`, `826`, `829`, `831`, `928`, and `929`: general visible non-zero
   `stroke_width`; partially routed through real pure-Rust `FT_Glyph_Stroke` for
   maintained DejaVuSans `"A"` single-glyph and multi-glyph rows plus the
