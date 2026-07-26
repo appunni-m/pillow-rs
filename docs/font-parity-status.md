@@ -165,11 +165,11 @@ state/export coverage separate from the closed finalized line route.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `ced676b0-0143-4b24-8bdf-601e158907d4`
-- Snapshot: `8c62e90d-c4e8-4892-872a-2bd7ed28b05f`
+- Run: `43bd4c58-e3e7-4227-9098-747135e7986f`
+- Snapshot: `f01f8763-eaf1-4473-afe7-b172fa48784a`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `d20d1f3009805f5027910ca933a7b27901bdc557`
+- Commit measured: `e406f7de5ee9988e0902381e338afadf1cf4c14c`
 
 Target file metrics:
 
