@@ -3,7 +3,7 @@
   "operation": "draw_text",
   "cases": [
     {
-      "case_id": "font.render_text.dejavusans20_hello_draw_text_rgba",
+      "case_id": "font.draw_text.dejavusans20_hello_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -32,7 +32,7 @@
       }
     },
     {
-      "case_id": "font.render_text.dejavusans20_av_draw_text_rgba",
+      "case_id": "font.draw_text.dejavusans20_av_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -61,7 +61,7 @@
       }
     },
     {
-      "case_id": "font.render_text.dejavusans20_jq_draw_text_rgba",
+      "case_id": "font.draw_text.dejavusans20_jq_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -90,7 +90,7 @@
       }
     },
     {
-      "case_id": "font.render_text.dejavusans20_empty_draw_text_rgba",
+      "case_id": "font.draw_text.dejavusans20_empty_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -119,7 +119,7 @@
       }
     },
     {
-      "case_id": "font.render_text.dejavusans20_negative_y_draw_text_rgba",
+      "case_id": "font.draw_text.dejavusans20_negative_y_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -148,7 +148,7 @@
       }
     },
     {
-      "case_id": "font.render_text.embedded_strike_a_draw_text_rgba",
+      "case_id": "font.draw_text.embedded_strike_a_draw_text_rgba",
       "operation": "draw_text",
       "inputs": {
         "assets": {
@@ -177,7 +177,7 @@
       }
     },
     {
-      "case_id": "font.render_text.invalid_maxp_too_many_instruction_defs",
+      "case_id": "font.draw_text.invalid_maxp_too_many_instruction_defs",
       "operation": "draw_text",
       "inputs": {
         "assets": {
