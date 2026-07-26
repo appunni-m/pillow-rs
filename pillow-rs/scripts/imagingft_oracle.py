@@ -8,14 +8,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import PIL
-from PIL import Image, ImageDraw, ImageFont
-import PIL._imagingft as _imagingft
-
-
 PILLOW_VERSION = "12.2.0"
 FREETYPE_VERSION = "2.14.3"
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "imagingft"
+
+
+def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
+    import PIL
+    from PIL import Image, ImageDraw, ImageFont
+    import PIL._imagingft as _imagingft  # type: ignore
+
+    return PIL, _imagingft, Image, ImageDraw, ImageFont
 
 
 def image_value(size: tuple[int, int], mode: str, pixels: bytes) -> dict[str, Any]:
@@ -39,7 +42,7 @@ def image_with_offset_value(
     }
 
 
-def orientation(value: str | None) -> Image.Transpose | str | None:
+def orientation(value: str | None, Image: Any) -> Any:
     if value is None:
         return None
     if value in Image.Transpose.__members__:
@@ -47,7 +50,7 @@ def orientation(value: str | None) -> Image.Transpose | str | None:
     return value
 
 
-def load_font(case: dict[str, Any]) -> ImageFont.FreeTypeFont:
+def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
     inputs = case["inputs"]
     params = inputs["params"]
     font = inputs["assets"]["font"]
@@ -63,7 +66,7 @@ def load_font(case: dict[str, Any]) -> ImageFont.FreeTypeFont:
     raise ValueError(f"unsupported imagingft fixture font kind: {font['kind']}")
 
 
-def has_variations(font: ImageFont.FreeTypeFont) -> bool:
+def has_variations(font: Any) -> bool:
     try:
         font.get_variation_axes()
     except OSError:
@@ -71,14 +74,12 @@ def has_variations(font: ImageFont.FreeTypeFont) -> bool:
     return True
 
 
-def binary_bbox(font: ImageFont.FreeTypeFont, text: str) -> list[int]:
+def binary_bbox(font: Any, text: str) -> list[int]:
     size, offset = font.font.getsize(text, "1", None, None, None, None)
     return [offset[0], offset[1], offset[0] + size[0], offset[1] + size[1]]
 
 
-def binary_rgba(
-    font: ImageFont.FreeTypeFont, text: str, fill: list[int]
-) -> dict[str, Any]:
+def binary_rgba(font: Any, text: str, fill: list[int], ImageFont: Any) -> dict[str, Any]:
     mask = font.getmask(text, mode="1")
     rgba = bytearray(len(mask) * 4)
     for index, coverage in enumerate(bytes(mask)):
@@ -89,10 +90,10 @@ def binary_rgba(
     return image_value(mask.size, "RGBA", bytes(rgba))
 
 
-def execute(case: dict[str, Any]) -> dict[str, Any]:
+def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
     operation = case["operation"].removeprefix("imagingft.")
     params = case["inputs"]["params"]
-    font = load_font(case)
+    font = load_font(case, ImageFont)
     text = params.get("text")
 
     if operation == "getname":
@@ -117,20 +118,14 @@ def execute(case: dict[str, Any]) -> dict[str, Any]:
         mask, offset = font.getmask2(text, mode="L", start=tuple(params["start"]))
         return image_with_offset_value(mask.size, "L", bytes(mask), offset)
     if operation == "get_transposed_mask":
-        transposed = ImageFont.TransposedFont(
-            font, orientation(params.get("orientation"))
-        )
+        transposed = ImageFont.TransposedFont(font, orientation(params.get("orientation"), Image))
         mask = transposed.getmask(text, mode="L")
         return image_value(mask.size, "L", bytes(mask))
     if operation == "transposed_bbox":
-        transposed = ImageFont.TransposedFont(
-            font, orientation(params.get("orientation"))
-        )
+        transposed = ImageFont.TransposedFont(font, orientation(params.get("orientation"), Image))
         return {"type": "bbox", "value": list(transposed.getbbox(text))}
     if operation == "validate_transposed_length":
-        transposed = ImageFont.TransposedFont(
-            font, orientation(params.get("orientation"))
-        )
+        transposed = ImageFont.TransposedFont(font, orientation(params.get("orientation"), Image))
         return {"type": "length", "value": transposed.getlength(text)}
     if operation == "draw_text":
         image = Image.new(
@@ -143,14 +138,15 @@ def execute(case: dict[str, Any]) -> dict[str, Any]:
         )
         return image_value(image.size, image.mode, image.tobytes())
     if operation == "render_text_binary":
-        return binary_rgba(font, text, params["fill"])
+        return binary_rgba(font, text, params["fill"], ImageFont)
     raise NotImplementedError(f"unsupported imagingft operation: {operation}")
 
 
-def outcome(case: dict[str, Any]) -> dict[str, Any]:
+def outcome(case: dict[str, Any], modules: tuple[Any, Any, Any, Any]) -> dict[str, Any]:
+    _, _, Image, ImageDraw, ImageFont = modules
     try:
-        return {"status": "ok", "value": execute(case)}
-    except Exception as error:
+        return {"status": "ok", "value": execute(case, Image, ImageDraw, ImageFont)}
+    except Exception as error:  # noqa: BLE001
         return {
             "status": "error",
             "error": {"kind": type(error).__name__, "message": str(error)},
@@ -158,6 +154,8 @@ def outcome(case: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
+    PIL, _imagingft, Image, ImageDraw, ImageFont = load_pillow()
+
     if not hasattr(_imagingft, "getfont"):
         raise RuntimeError(
             "imagingft oracle requires PIL._imagingft C layer (_imagingft.getfont missing)"
@@ -169,8 +167,12 @@ def main() -> None:
             f"expected FreeType {FREETYPE_VERSION}, "
             f"got {ImageFont.core.freetype2_version}"
         )
+
     cases = json.load(sys.stdin)
-    results = {case["case_id"]: outcome(case) for case in cases}
+    results = {
+        case["case_id"]: outcome(case, (PIL, _imagingft, Image, ImageDraw, ImageFont))
+        for case in cases
+    }
     json.dump(results, sys.stdout, separators=(",", ":"), sort_keys=True)
 
 

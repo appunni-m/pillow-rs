@@ -33,14 +33,14 @@ fn fixture_root() -> PathBuf {
 }
 
 fn oracle_python() -> PathBuf {
-    std::env::var_os("IMAGINGFT_ORACLE_PYTHON")
+    let path = std::env::var_os("IMAGINGFT_ORACLE_PYTHON")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../.oracle-venv/bin/python")
-        })
-        .canonicalize()
-        .expect("repo-local or configured IMAGINGFT_ORACLE_PYTHON must resolve")
+        });
+    assert!(path.exists(), "repo-local IMAGINGFT_ORACLE_PYTHON must exist: {path:?}");
+    path
 }
 
 fn load_input_cases(directory: &Path) -> Vec<Value> {
