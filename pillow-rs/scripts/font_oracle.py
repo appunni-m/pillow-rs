@@ -281,7 +281,9 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         return variation_names_value(font)
     if operation == "set_variation_by_name":
         name = params["name"]
-        font.set_variation_by_name(name)
+        repeat_count = params.get("repeat_count", 1)
+        for _ in range(repeat_count):
+            font.set_variation_by_name(name)
         return {
             "type": "font_after_variation",
             "name": list(font.getname()),

@@ -1,5 +1,66 @@
 # Font Public-API Parity Status (Current Worktree)
 
+Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font repeat-variation edge
+and invariant cleanup at commit `63bdf4fdc` + current working diff
+
+## Current checkpoint: repeat-name variation edge + private invariant cleanup
+
+New working-tree changes:
+
+- Added the input-only row
+  `font.variations.set_variation_by_name.repeat_same_name`. This covers
+  Pillow's explicit `FreeTypeFont.set_variation_by_name()` same-name repeat
+  behavior without storing expected output in JSON; both Pillow and Rust call
+  the public setter twice at runtime and compare the resulting status/value.
+- Updated `font_oracle.py` and `font_runner.rs` to interpret `repeat_count` as
+  test-flow input for `set_variation_by_name`, not as a Pillow public
+  signature parameter.
+- Simplified private `imagingft.rs` defensive branches that are unreachable
+  after the public Font path has already produced a valid mask:
+  RGBA packing now derives length from the mask vector, advance overflow uses
+  one absolute-threshold predicate, bad-image-size checks are named per
+  dimension, right-edge clipping allows an empty no-op copy, and the bitmap
+  reader asserts the BASIC Font invariant that rendered masks arrive as MONO
+  or GRAY.
+
+Pillow comparison result:
+
+- Live pinned Pillow is `11.3.0`; `FreeTypeFont` public methods remain exactly
+  `font_variant`, `get_variation_axes`, `get_variation_names`, `getbbox`,
+  `getlength`, `getmask`, `getmask2`, `getmetrics`, `getname`,
+  `set_variation_by_axes`, and `set_variation_by_name`.
+- The active manifest still classifies every live public signature parameter.
+  The only blocked public parameters remain `getmask.stroke_width` and
+  `getmask2.stroke_width`.
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed.
+- `make -C pillow-rs fmt` — passed, including public API boundary check.
+- Coverage MCP command `font-tests-coverage-with-freetype`
+  - run `000b69f9-7c37-43e8-9e48-53cbb0646231`
+  - snapshot `e55d0431-a112-482c-a922-c39363ead846`
+  - status `passed`, coverage artifact ingested
+
+Target metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `670/684` (`97.95%`) | `108/112` (`96.43%`) | `74/80` (`92.50%`) | `1054/1092` (`96.52%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+
+Remaining blockers/gaps:
+
+- `getmask/getmask2(stroke_width != 0)` remains the real public parity blocker.
+  Pillow succeeds for visible glyph strokes through `_imagingft`/FreeType
+  stroking. The Rust adapter cannot honestly close this with fixtures or
+  dilation; it needs exact pure-Rust stroke-outline/render integration.
+- The remaining non-stroke lines are defensive FreeType error fallbacks:
+  unknown `ft_error_to_pil`, `FT_Set_Named_Instance` failure after a valid name
+  lookup, and `FT_Set_Var_Design_Coordinates` failure after a variation-face
+  check. I have not found a current public Font input that reaches those
+  fallbacks without manufacturing an invalid internal state.
+
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
 coverage cleanup at commit `412524313`
 
