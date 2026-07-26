@@ -24,9 +24,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `6ab7aeb8-78ae-446d-9ed4-d3cc8d73c5e1` (first submission `submission_reused=false`)
+  - Run id: `eedccabf-4abe-45e6-a7c7-ca212cb0f23f` (first submission `submission_reused=false`)
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `72fe69d2-cd78-427c-9eab-1e988fe3c243` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `cdd83425-0fdc-4861-998c-73dfb9de9345` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Search log checks (`FAILED`, `error:`, `panic`) returned no failure context; only the normal `0 failed` summary line matched.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
@@ -80,28 +80,28 @@ Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
 ### Suite summary (`imagingft`)
 
 - Current artifact metrics (`target/coverage/imagingft/imagingft-rust.json`, latest run):
-  - `total_lines: 18520`, `covered_lines: 1792` (`line_rate 0.0967602592`)
-  - `total_branches: 3266`, `covered_branches: 154` (`branch_rate 0.0471524801`)
-  - `total_functions: 1274`, `covered_functions: 146` (`function_rate 0.1145996860`)
-  - `total_regions: 32288`, `covered_regions: 2813` (`region_rate 0.0871221506`)
+  - `total_lines: 18953`, `covered_lines: 2150` (`line_rate 0.1134385058`)
+  - `total_branches: 3358`, `covered_branches: 218` (`branch_rate 0.0649195950`)
+  - `total_functions: 1313`, `covered_functions: 183` (`function_rate 0.1393754760`)
+  - `total_regions: 33078`, `covered_regions: 3455` (`region_rate 0.1044500877`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
-- `covered_lines: 690/853` (`line_rate 0.808909855`)
-- `covered_functions: 71/83` (`function_rate 0.8554216867`)
-- `covered_branches: 105/166` (`branch_rate 0.6325301205`)
-- `covered_regions: 1228/1548` (`region_rate 0.7932816537`)
+- `covered_lines: 1048/1286` (`line_rate 0.8149300156`)
+- `covered_functions: 108/122` (`function_rate 0.8852459016`)
+- `covered_branches: 169/258` (`branch_rate 0.6550387597`)
+- `covered_regions: 1870/2338` (`region_rate 0.7998289136`)
 - Gaps remain in non-error branches and layout branches not yet covered by this public-input subset.
 
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`
+- Current: `cdd83425-0fdc-4861-998c-73dfb9de9345`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
@@ -127,7 +127,7 @@ Source: Coverage MCP snapshot `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`, `pillow-rs
   - Purpose: validates Draw/text consumer clipping against the live oracle.
 - Coverage effect:
   - These rows increased fixture parity coverage from `75` to `82` executed rows.
-  - After the clipping/Result fix, `pillow-rs/src/font/imagingft.rs` measured `1761/2178` covered regions (`80.85399449%`) on snapshot `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`.
+  - After the clipping/Result fix, `pillow-rs/src/font/imagingft.rs` measured `1870/2338` covered regions (`79.98289136%`) on committed snapshot `cdd83425-0fdc-4861-998c-73dfb9de9345`.
 
 ### Reverse-mapped unclosed branches
 
