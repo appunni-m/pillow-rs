@@ -87,7 +87,7 @@ impl ImageFont {
     /// TrueType constructor is used here so default fonts and caller-supplied
     /// fonts share the same pure-Rust `fontdone` pipeline.
     pub fn load_default(size: f32) -> Result<Self, PilError> {
-        Self::from_bytes(default_aileron::decode()?, size)
+        Self::from_bytes(default_aileron::decode(), size)
     }
 
     /// Return the requested Pillow point size for this FreeType font.
