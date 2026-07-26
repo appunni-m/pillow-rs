@@ -696,13 +696,7 @@ fn mask_from_run_with_start(
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
 
-        let slot = match ffi::FT_Load_Glyph(face, g, RDR | load_flags) {
-            Ok(s) => s,
-            Err(_) => match ffi::FT_Load_Glyph(face, g, load_flags) {
-                Ok(s) => s,
-                Err(error) => return Err(ft_error_to_pil(error)),
-            },
-        };
+        let slot = ffi::FT_Load_Glyph(face, g, RDR | load_flags).map_err(ft_error_to_pil)?;
 
         let px = round26(pen);
         x_min = x_min.min(px + slot.bitmap_left as i32);
