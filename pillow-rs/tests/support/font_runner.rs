@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use pillow_rs::{Draw, Font, FontVariationAxis, Image, PilError};
+use pillow_rs::{Draw, Font, FontTextOptions, FontVariationAxis, Image, PilError};
 use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
@@ -53,7 +53,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": font.getlength(text(params)?)?,
+            "value": if has_text_options(params) {
+                pillow_rs::font_getlength_with_options(&font, text(params)?, &text_options(params)?)?
+            } else {
+                pillow_rs::font_getlength(&font, text(params)?)?
+            },
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
@@ -110,14 +114,28 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .transpose()?;
             font_descriptor(&font.font_variant(size)?)
         }
-        "getbbox" => Ok(bbox_value(font.getbbox(text(params)?)?)),
+        "getbbox" => {
+            if has_text_options(params) {
+                Ok(bbox_float_value(pillow_rs::font_getbbox_with_options(
+                    &font,
+                    text(params)?,
+                    &text_options(params)?,
+                )?))
+            } else {
+                Ok(bbox_value(font.getbbox(text(params)?)?))
+            }
+        }
         "getbbox_binary" => Ok(bbox_value(font.getbbox_binary(text(params)?)?)),
         "getmask" => {
             let (width, height, pixels) = font.getmask(text(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = font.getmask2(text(params)?)?;
+            let (width, height, pixels, offset) = if has_text_options(params) {
+                pillow_rs::font_getmask2_with_options(&font, text(params)?, &text_options(params)?)?
+            } else {
+                font.getmask2(text(params)?)?
+            };
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
@@ -202,6 +220,79 @@ fn orientation(params: &Value) -> Result<Option<&str>, PilError> {
         Err(PilError::TypeError(
             "an integer is required (got type str)".into(),
         ))
+    }
+}
+
+fn has_text_options(params: &Value) -> bool {
+    [
+        "mode",
+        "direction",
+        "features",
+        "language",
+        "stroke_width",
+        "anchor",
+        "ink",
+        "start",
+    ]
+    .into_iter()
+    .any(|field| params.get(field).is_some())
+}
+
+fn text_options(params: &Value) -> Result<FontTextOptions, PilError> {
+    Ok(FontTextOptions {
+        mode: optional_string(params, "mode")?,
+        direction: optional_string(params, "direction")?,
+        features: match params.get("features") {
+            Some(Value::Null) | None => None,
+            Some(value) => Some(
+                value
+                    .as_array()
+                    .ok_or_else(|| PilError::TypeError("features must be a list".into()))?
+                    .iter()
+                    .map(|item| {
+                        item.as_str()
+                            .map(str::to_owned)
+                            .ok_or_else(|| PilError::TypeError("feature must be a string".into()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        },
+        language: optional_string(params, "language")?,
+        stroke_width: params
+            .get("stroke_width")
+            .map(|value| {
+                value
+                    .as_f64()
+                    .map(|value| value as f32)
+                    .ok_or_else(|| PilError::TypeError("stroke_width must be a number".into()))
+            })
+            .transpose()?
+            .unwrap_or(0.0),
+        anchor: optional_string(params, "anchor")?,
+        ink: params
+            .get("ink")
+            .map(|value| {
+                value
+                    .as_i64()
+                    .and_then(|value| i32::try_from(value).ok())
+                    .ok_or_else(|| PilError::TypeError("ink must be an integer".into()))
+            })
+            .transpose()?
+            .unwrap_or(0),
+        start: params
+            .get("start")
+            .map(|value| pair_f64(value, "start"))
+            .transpose()?,
+    })
+}
+
+fn optional_string(params: &Value, field: &str) -> Result<Option<String>, PilError> {
+    match params.get(field) {
+        Some(Value::Null) | None => Ok(None),
+        Some(value) => value
+            .as_str()
+            .map(|value| Some(value.to_owned()))
+            .ok_or_else(|| PilError::TypeError(format!("{field} must be a string"))),
     }
 }
 
@@ -337,6 +428,26 @@ fn bbox_value((left, top, right, bottom): (i32, i32, i32, i32)) -> Value {
     json!({"type": "bbox", "value": [left, top, right, bottom]})
 }
 
+fn bbox_float_value((left, top, right, bottom): (f32, f32, f32, f32)) -> Value {
+    json!({
+        "type": "bbox",
+        "value": [
+            json_number(left),
+            json_number(top),
+            json_number(right),
+            json_number(bottom),
+        ],
+    })
+}
+
+fn json_number(value: f32) -> Value {
+    if value.fract() == 0.0 {
+        json!(value as i32)
+    } else {
+        json!(value)
+    }
+}
+
 fn image_value(width: u32, height: u32, mode: &str, pixels: &[u8]) -> Value {
     json!({
         "type": "image",
@@ -378,6 +489,7 @@ fn error_kind(error: &PilError) -> &'static str {
         PilError::OsError(_) => "OSError",
         PilError::AssertionError(_) => "AssertionError",
         PilError::IndexError(_) => "IndexError",
+        PilError::KeyError(_) => "KeyError",
         PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
         PilError::ValueError(_) | PilError::DimensionError(_) => "ValueError",
         PilError::SyntaxError(_) => "SyntaxError",

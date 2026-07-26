@@ -145,6 +145,7 @@ pub use crate::draw::Draw;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::Font;
+pub use crate::font::FontTextOptions;
 pub use crate::font::FontVariationAxis;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
@@ -230,6 +231,15 @@ pub fn font_getlength(font: &Font, text: &str) -> Result<f32, PilError> {
     font.getlength(text)
 }
 
+/// Return Pillow's public text length with optional layout arguments.
+pub fn font_getlength_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<f32, PilError> {
+    font.getlength_with_options(text, options)
+}
+
 /// Return whether the font exposes variation axes.
 pub fn font_has_variations(font: &Font) -> bool {
     font.has_variations()
@@ -265,6 +275,15 @@ pub fn font_getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), Pil
     font.getbbox(text)
 }
 
+/// Return Pillow's public text bounding box with optional layout arguments.
+pub fn font_getbbox_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    font.getbbox_with_options(text, options)
+}
+
 /// Return the Pillow-compatible grayscale text mask.
 pub fn font_getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask(text)
@@ -277,6 +296,15 @@ pub fn font_getmask2_with_start(
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.getmask2_with_start(text, start)
+}
+
+/// Render a Pillow-compatible mask with optional render arguments.
+pub fn font_getmask2_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_with_options(text, options)
 }
 
 /// Render a font mask and apply Pillow's optional transpose operation.

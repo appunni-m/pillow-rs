@@ -4,7 +4,7 @@
 //! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
 //! (4,097/4,097 unified parity).
 
-use super::{Font, FontVariationAxis};
+use super::{Font, FontTextOptions, FontVariationAxis};
 use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
@@ -255,8 +255,29 @@ pub(crate) fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
+pub(crate) fn getlength_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<f32, PilError> {
+    validate_basic_layout_options(options)?;
+    getlength(font, text)
+}
+
 pub(crate) fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run(font, text)
+}
+
+pub(crate) fn getbbox_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    validate_basic_layout_options(options)?;
+    let bbox = getbbox(font, text)?;
+    let (left, top, right, bottom) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
+    let stroke = options.stroke_width;
+    Ok((left - stroke, top - stroke, right + stroke, bottom + stroke))
 }
 
 pub(crate) fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
@@ -289,6 +310,29 @@ pub(crate) fn getmask2_with_start(
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
+pub(crate) fn getmask2_with_options(
+    font: &Font,
+    text: &str,
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    validate_basic_layout_options(options)?;
+    if options.mode.as_deref() == Some("RGBA") {
+        return Err(PilError::TypeError(
+            "'tuple' object cannot be interpreted as an integer".into(),
+        ));
+    }
+    if options.stroke_width != 0.0 {
+        return Err(PilError::NotImplementedError(
+            "stroked FreeTypeFont mask rendering is not implemented".into(),
+        ));
+    }
+    let start = options.start.unwrap_or((0.0, 0.0));
+    let (width, height, pixels) = mask_from_run_with_start(font, text, TGT_NORM, start)?;
+    let bbox = getbbox(font, text)?;
+    let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
+    Ok((width, height, pixels, (left as i32, top as i32)))
+}
+
 pub(crate) fn render_text(
     font: &Font,
     text: &str,
@@ -309,6 +353,69 @@ pub(crate) fn render_text_binary(
         mask_from_run_with_start(font, text, TGT_MONO, (0.0, 0.0))?,
         fill,
     )
+}
+
+fn validate_basic_layout_options(options: &FontTextOptions) -> Result<(), PilError> {
+    if options.direction.is_some()
+        || options
+            .features
+            .as_ref()
+            .is_some_and(|features| !features.is_empty())
+        || options.language.is_some()
+    {
+        return Err(PilError::KeyError(
+            "'setting text direction, language or font features is not supported without libraqm'"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+fn anchored_bbox(
+    font: &Font,
+    (left, top, right, bottom): (i32, i32, i32, i32),
+    anchor: Option<&str>,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    let Some(anchor) = anchor else {
+        return Ok((left as f32, top as f32, right as f32, bottom as f32));
+    };
+    if anchor.len() != 2 {
+        return Err(PilError::ValueError(
+            "bad anchor specified: ".to_owned() + anchor,
+        ));
+    }
+    let width = right - left;
+    let ascent = pixel(font.engine.metrics.ascender);
+    let descent = -pixel(font.engine.metrics.descender);
+    let x_shift = match anchor.as_bytes()[0] {
+        b'l' => 0,
+        b'm' => -((width + 1) / 2),
+        b'r' => -width,
+        _ => {
+            return Err(PilError::ValueError(
+                "bad anchor specified: ".to_owned() + anchor,
+            ));
+        }
+    };
+    let y_shift = match anchor.as_bytes()[1] {
+        b'a' => 0,
+        b't' => -top,
+        b'm' => -((ascent + descent) / 2),
+        b's' => -ascent,
+        b'b' => -bottom,
+        b'd' => -(ascent + descent),
+        _ => {
+            return Err(PilError::ValueError(
+                "bad anchor specified: ".to_owned() + anchor,
+            ));
+        }
+    };
+    Ok((
+        (left + x_shift) as f32,
+        (top + y_shift) as f32,
+        (right + x_shift) as f32,
+        (bottom + y_shift) as f32,
+    ))
 }
 
 fn pack_rgba(
