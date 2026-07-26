@@ -1030,6 +1030,24 @@ Snapshot `79d9799d-9ea2-4a17-a186-329af0c3bba6`:
   - `pillow-rs/src/font/imagingft.rs` regions: `1041/1099` (`94.72%`)
   - `pillow-rs/src/font/mod.rs` regions: `251/253` (`99.21%`)
 
+### Trailing-space no-bitmap branch
+
+- Commit `1d6fc561f` (`font: cover trailing space mask row`)
+  - Added input-only row `font.getmask2.dejavusans20_trailing_space`.
+  - Purpose: keep the mask canvas non-empty via `A` while exercising a trailing space glyph that returns no rendered bitmap.
+  - This is a real Pillow-oracle row, not a stored expected-output row.
+- Coverage MCP run:
+  - run: `1b574de0-a581-464b-b4dc-528a490c94e7`
+  - commit: `1d6fc561f161be7270c31b1737891813230d40de`
+  - result: passed, coverage ingested
+  - snapshot: `7bc854da-dd33-4696-b24c-501a5f8aeda8`
+- Snapshot `7bc854da-dd33-4696-b24c-501a5f8aeda8` movement:
+  - `pillow-rs/src/font/imagingft.rs` regions: `1042/1099` (`94.81%`)
+  - branches: `118/140` (`84.29%`)
+  - exact-line evidence: line `719` (`bitmap == None` continue path) hit once.
+- Active Font public-api corpus size after this row:
+  - `232` input-only rows across `20` input JSON files.
+
 ### Prior coverage blocker resolved
 
 The approved Coverage MCP command `imagingft-tests-coverage-fixed` currently ignores `pillow-rs-freetype` in the llvm-cov report:
