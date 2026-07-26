@@ -1,80 +1,93 @@
-# ImagingFT Public-API Parity Status
+# ImagingFT Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Scope
-- Public surface: `pillow-rs/tests/fixtures/imagingft/inputs/public-api` (non-deprecated corpus only)
-- Active suite: `make -C pillow-rs imagingft-tests`
-- Oracle source: repo-local Pillow `_imagingft` via `pillow-rs/scripts/imagingft_oracle.py` using `.oracle-venv` enforcement.
+
+- Public surface source: `pillow-rs/tests/fixtures/imagingft/inputs/public-api` (non-deprecated corpus only)
+- Target suite: `make -C pillow-rs imagingft-tests`
+- Oracle: repo-local Pillow C path via `pillow-rs/scripts/imagingft_oracle.py` and `.oracle-venv`
+- No deprecated `deprecated/imagingft/*` tests are used.
 
 ## Acceptance checks
-- `make -C pillow-rs imagingft-tests`
-  - Result: `1` passed, `0` failed
-- Coverage MCP flow (required sequence)
-  - `project_context` consulted and latest approved command discovered: `imagingft-tests-coverage-fixed` (`258e7dec-226f-4b00-9336-04df6e8c67f2`)
-  - `run_test` submitted: `03b80396-ecad-4a5c-9e2e-5ed3e083747f`
-  - `get_run_data` terminal status: `passed`, `counters:{passed:1,failed:0}`, `coverage_ingest.status=ingested`
-  - Snapshot: `18d74bbe-2ba5-4556-886d-b86b19f3d40d`
 
-## Fixture corpus state
-- Input files: `17` under `pillow-rs/tests/fixtures/imagingft/inputs/public-api`
-- Total rows: `56`
-- Oracle+Rust comparison: `56/56` rows executed and parity-checked
+- `make -C pillow-rs imagingft-tests`  
+  Result: `1` passed, `0` failed
+- Coverage MCP sequence:
+  - `project_context` consulted
+  - `run_test` executed on `imagingft-tests-coverage-fixed` (`258e7dec-226f-4b00-9336-04df6e8c67f2`)
+  - `run_test` result: terminal `passed`, `counters:{passed:1, failed:0}`
+  - `coverage_ingest.status=ingested`
+  - `snapshot_ids=["5817fe8b-7e59-4315-82b3-fb3829feb7ec"]`
 
-## Per-operation parity matrix (rows are fixture-defined expectations)
-| Operation | Status | OK | Error |
-|---|---|---:|---:|
-| `draw_text` | pass | 4 | 0 |
-| `get_transposed_mask` | pass | 4 | 1 |
-| `getbbox` | pass | 4 | 0 |
-| `getbbox_binary` | pass | 4 | 0 |
-| `getlength` | pass | 4 | 0 |
-| `getmask` | pass | 6 | 0 |
-| `getmask2` | pass | 5 | 0 |
-| `getmask2_with_start` | pass | 6 | 0 |
-| `getmetrics` | pass | 1 | 0 |
-| `getname` | pass | 1 | 4 |
-| `has_variations` | pass | 1 | 0 |
-| `render_text_binary` | pass | 4 | 0 |
-| `transposed_bbox` | pass | 3 | 0 |
-| `unsupported_magic` | pass | 0 | 1 |
-| `validate_transposed_length` | pass | 2 | 1 |
+## Corpus state
 
-Global totals: `49` success rows, `7` error rows. No parity failures in fixture corpus at this revision.
+- Input files: `17` (`pillow-rs/tests/fixtures/imagingft/inputs/public-api/*.json`)
+- Total rows: `58`
+- Executed rows: `58/58`
+- Required operation coverage check against case-set operations: no required-manifest operations missing
 
-### Error-category matrix (from fixture expectations validated against live `_imagingft` oracle)
-- `TypeError`: 1
-  - `an integer is required (got type str)`
-- `ValueError`: 5
-  - `font size must be greater than 0, not -1`
-  - `font size must be greater than 0, not -5.5`
-  - `font size must be greater than 0, not 0`
-  - `text length is undefined for text rotated by 90 or 270 degrees`
-- `OSError`: 1
-  - `cannot open resource`
-- `NotImplementedError`: 1
-  - `unsupported imagingft operation: unsupported_magic`
+## Required operation presence (fixture-defined)
+
+| Operation | OK | Error | Total |
+|---|---:|---:|---:|
+| `draw_text` | 4 | 0 | 4 |
+| `get_transposed_mask` | 4 | 1 | 5 |
+| `getbbox` | 4 | 2 | 6 |
+| `getbbox_binary` | 4 | 0 | 4 |
+| `getlength` | 4 | 0 | 4 |
+| `getmask` | 6 | 0 | 6 |
+| `getmask2` | 5 | 0 | 5 |
+| `getmask2_with_start` | 6 | 0 | 6 |
+| `getmetrics` | 1 | 0 | 1 |
+| `getname` | 1 | 4 | 5 |
+| `has_variations` | 1 | 0 | 1 |
+| `render_text_binary` | 4 | 0 | 4 |
+| `transposed_bbox` | 3 | 0 | 3 |
+| `unsupported_magic` | 0 | 1 | 1 |
+| `validate_transposed_length` | 2 | 1 | 3 |
+
+- Total success rows: `49`
+- Total error rows: `9`
+- `expect_error` rows always resolve to `error` on Rust and match oracle status/category/message.
+
+## Error-category matrix (oracle-defined)
+
+- `TypeError: an integer is required (got type str)` — `1`
+- `ValueError: font size must be greater than 0, not 0` — `1`
+- `ValueError: font size must be greater than 0, not -1` — `1`
+- `ValueError: font size must be greater than 0, not -5.5` — `1`
+- `ValueError: text length is undefined for text rotated by 90 or 270 degrees` — `1`
+- `OSError: cannot open resource` — `1`
+- `OSError: invalid argument` — `1`
+- `OSError: invalid pixel size` — `1`
+- `NotImplementedError: unsupported imagingft operation: unsupported_magic` — `1`
 
 ## Coverage evidence
-### Suite-level (`imagingft`)
-- Snapshot: `18d74bbe-2ba5-4556-886d-b86b19f3d40d` (commit `1516723f2023e531d9751a739d5125c81ff9c20b`)
-- `total_lines: 17924`, `covered_lines: 1717` (`line_rate 0.09579`)
-- `total_branches: 3150`, `covered_branches: 141` (`branch_rate 0.04476`)
-- `total_functions: 1205`, `covered_functions: 141` (`function_rate 0.11701`)
-- `total_regions: 31362`, `covered_regions: 2692` (`region_rate 0.08584`)
 
-### File-level (`pillow-rs/src/font/imagingft.rs`)
-- `covered_lines: 669/815` (`line_rate 0.82086`)
-- `covered_functions: 70/80` (`function_rate 0.875`)
-- `covered_branches: 96/150` (`branch_rate 0.64`)
-- `covered_regions: 1198/1476` (`region_rate 0.81165`)
-- Open gaps remain: `uncovered_line_count: 57`, `partial_branch_line_count: 34`
+### Suite summary (`imagingft`)
+
+- Current snapshot: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
+- `total_lines: 17962`, `covered_lines: 1736` (`line_rate 0.09664848012470771`)
+- `total_branches: 3166`, `covered_branches: 147` (`branch_rate 0.04643082754264056`)
+- `total_functions: 1208`, `covered_functions: 142` (`function_rate 0.11754966887417219`)
+- `total_regions: 31434`, `covered_regions: 2717` (`region_rate 0.08643507030603804`)
+
+### `pillow-rs/src/font/imagingft.rs`
+
+- `covered_lines: 688/853` (`line_rate 0.8065650644783119`)
+- `covered_functions: 71/83` (`function_rate 0.8554216867469879`)
+- `covered_branches: 102/166` (`branch_rate 0.6144578313253012`)
+- `covered_regions: 1223/1548` (`region_rate 0.7900516795865633`)
+- Gaps: `uncovered_line_count: 80`, `partial_branch_line_count: 41`, `uncovered_function_line_count: 0`
 
 ### Coverage delta
-- Baseline compared: `b343b0f3-7e31-4ea1-a3e6-a1b066b26f56` (previous commit snapshot on `main`)
-- Delta: no metric movement for the suite or for `pillow-rs/src/font/imagingft.rs` in this re-run (same counters and same gap list)
 
-## Remaining gaps
-- No parity gaps in fixture rows.
-- Coverage is not complete for truth-surface confidence under Coverage MCP standards because imagingft-specific lanes still have unhit lines/branches in `pillow-rs/src/font/imagingft.rs`.
-- 100% region/branch/line coverage target is still unmet: `pillow-rs/src/font/imagingft.rs` still has `uncovered_line_count: 57` and `partial_branch_line_count: 34` at snapshot `18d74bbe-2ba5-4556-886d-b86b19f3d40d`.
+- Baseline checked: `9353fd3a-561e-4039-9eff-cf503dfe3396` (same branch, same commit)
+- Net movement vs baseline: no metric movement observed in suite totals or `pillow-rs/src/font/imagingft.rs` for this run.
+
+## Remaining explicit gaps
+
+- Suite is not coverage-complete by objective definition:
+  - imagingft-targeted test only executes the imagingft public-api row set, so unrelated modules remain largely unexecuted.
+  - Imagingft core file still has uncovered lines/branches, so end-state is **not 100% parity-coverage complete**.
