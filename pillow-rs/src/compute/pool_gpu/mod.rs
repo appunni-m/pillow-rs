@@ -860,7 +860,7 @@ fn mode_code(img: &DynamicImage) -> u32 {
     }
 }
 
-fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> DynamicImage {
+fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImage, PilError> {
     if matches!(
         mode,
         PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA
@@ -871,12 +871,13 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> DynamicImage {
             .pixels()
             .flat_map(|pixel| [pixel[0], pixel[3]])
             .collect();
-        DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, samples)
-                .expect("GPU putalpha dimensions already validated"),
-        )
+        image_slash_star::GrayAlphaImage::from_raw(w, h, samples)
+            .map(DynamicImage::ImageLumaA8)
+            .ok_or_else(|| {
+                PilError::InternalError("GPU putalpha buffer shape mismatch".to_string())
+            })
     } else {
-        DynamicImage::ImageRgba8(result.to_rgba8())
+        Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
     }
 }
 
@@ -1162,7 +1163,7 @@ impl BackendImpl for GpuPool {
             }
         }
         if let Some(mode) = put_alpha_mode {
-            return Ok(put_alpha_output(result, mode));
+            return put_alpha_output(result, mode);
         }
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
