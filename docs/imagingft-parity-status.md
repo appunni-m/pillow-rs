@@ -24,9 +24,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `fb8e8ea3-5eb0-45fd-a154-b0000141e264` (first submission `submission_reused=false`)
+  - Run id: `6ab7aeb8-78ae-446d-9ed4-d3cc8d73c5e1` (first submission `submission_reused=false`)
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `336566bc-dcfe-44fa-acae-f3ce563fbf8c` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `72fe69d2-cd78-427c-9eab-1e988fe3c243` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Search log checks (`FAILED`, `error:`, `panic`) returned no failure context; only the normal `0 failed` summary line matched.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
@@ -95,12 +95,12 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `336566bc-dcfe-44fa-acae-f3ce563fbf8c`
+- Current: `72fe69d2-cd78-427c-9eab-1e988fe3c243`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `336566bc-dcfe-44fa-acae-f3ce563fbf8c`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `72fe69d2-cd78-427c-9eab-1e988fe3c243`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
