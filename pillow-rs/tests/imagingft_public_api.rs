@@ -127,10 +127,10 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
                 .as_object()
                 .expect("each imagingft public-api case must be an object");
             let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-            assert_eq!(
-                keys,
-                BTreeSet::from(["case_id", "inputs", "operation"]),
-                "{} must contain input fields only",
+            let required_keys = BTreeSet::from(["case_id", "inputs", "operation"]);
+            assert!(
+                keys == required_keys,
+                "{} must contain only case_id, inputs, and operation",
                 path.display()
             );
             cases.push(case.clone());
@@ -152,18 +152,13 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .env_clear()
         .env("VIRTUAL_ENV", venv_root);
-    let mut python_paths = env::var_os("PYTHONPATH")
-        .as_deref()
-        .map(|path| env::split_paths(path).collect::<Vec<_>>())
-        .unwrap_or_default();
-    python_paths.extend(oracle_site_packages());
-    if !python_paths.is_empty() {
-        command.env(
-            "PYTHONPATH",
-            env::join_paths(python_paths).expect("valid PYTHONPATH join"),
-        );
-    }
+    command.env("PYTHONNOUSERSITE", "1");
+    command.env(
+        "PYTHONPATH",
+        env::join_paths(oracle_site_packages()).expect("valid PYTHONPATH join"),
+    );
     let mut child = command
         .spawn()
         .expect("the pinned Pillow imagingft oracle must start");
@@ -195,6 +190,7 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("{case_id}: missing status in rust payload"));
+
     assert_eq!(
         expected_status, actual_status,
         "{case_id}: status mismatch between rust and live oracle"

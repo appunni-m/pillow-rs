@@ -7,6 +7,7 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Runner: `pillow-rs/tests/imagingft_public_api.rs`
 - Oracle source: live Pillow `_imagingft` behavior via `pillow-rs/scripts/imagingft_oracle.py`
 - Oracle runtime policy: only `.oracle-venv/bin/python` in this repository is accepted (`IMAGINGFT_ORACLE_PYTHON` must point to `.../.oracle-venv/bin/python` when set).
+- Python layer used for oracle calls is the Pillow Python API (`ImageFont`), which initializes and delegates to the C extension (`_imagingft`) in this environment (`core.getfont` is present and used by Font loading).
 
 ## Acceptance evidence
 - `make -C pillow-rs imagingft-tests`:
@@ -15,8 +16,8 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Coverage MCP flow (required toolchain):
   - `project_context` consulted to discover approved commands.
   - Approved command used: `imagingft-tests-coverage-fixed`.
-  - `run_test` submitted: `d298fdb8-de2d-4c87-9b67-95a0779a5f04`
-  - `get_run_data` terminal: `status=passed`, `coverage_ingest.status=ingested`, `snapshot_ids=["0be1660a-cca5-4920-8442-f86bb6530757"]`
+  - `run_test` submitted: `5a18ab67-e3bc-4b16-bfc7-ceb837cb4e37`
+  - `get_run_data` terminal: `status=passed`, `coverage_ingest.status=ingested`, `snapshot_ids=["90b5621b-eab0-4da5-bedc-c10d12a0d876"]`
 
 ## Corpus state
 - Input files: 17 under `pillow-rs/tests/fixtures/imagingft/inputs/public-api`
@@ -55,7 +56,7 @@ Global: 49 success rows, 7 error rows (no parity mismatches in the suite).
   - Message: `unsupported imagingft operation: unsupported_magic`
 
 ## Coverage evidence snapshot
-### Suite-level (`0be1660a-cca5-4920-8442-f86bb6530757`)
+### Suite-level (`90b5621b-eab0-4da5-bedc-c10d12a0d876`)
 - Command artifact: `target/coverage/imagingft/imagingft-rust.json` (suite: `imagingft`, format: `llvm-json`)
 - `total_lines: 17924`, `covered_lines: 1717` (`line_rate 0.09579`)
 - `total_branches: 3150`, `covered_branches: 141` (`branch_rate 0.04476`)
