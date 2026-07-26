@@ -518,6 +518,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- run_apply_transparency_rust_coverage.sh
 |   |   |-- run_drawing_rust_coverage.sh
 |   |   |-- run_font_rust_coverage.sh
+|   |   |-- run_font_rust_with_freetype_coverage.sh
 |   |   |-- run_image_backend_rust_coverage.sh
 |   |   |-- run_image_open_rust_coverage.sh
 |   |   |-- run_imagingft_rust_coverage.sh
