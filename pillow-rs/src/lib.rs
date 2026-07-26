@@ -11,13 +11,13 @@
 //! Core modules do not depend on Python or JavaScript runtime types. Public
 //! functions model Pillow behavior where practical, but their contracts are
 //! expressed in Rust terms: [`Image`] values, [`image_slash_star::DynamicImage`]
-//! buffers, [`Font`] values, [`PixelFormat`] modes, and [`PilError`] failures.
+//! buffers, [`Font`] values, and [`PilError`] failures.
 //!
 //! # Allocation Safety
 //!
-//! Image allocation paths must validate dimensions through [`CheckedDims`].
-//! This prevents zero-sized images, integer overflow, and accidental
-//! attacker-controlled large allocations before a pixel buffer is created.
+//! Image allocation paths validate dimensions before allocating. This prevents
+//! zero-sized images, integer overflow, and accidental attacker-controlled large
+//! allocations before a pixel buffer is created.
 //!
 //! # Modes And Layout
 //!
@@ -66,20 +66,10 @@
 //! assert_eq!(gray.tobytes().unwrap().len(), 4);
 //! ```
 //!
-//! # Allocating Buffers Safely
-//!
-//! ```
-//! use pillow_rs::{CheckedDims, PixelFormat};
-//!
-//! let dims = CheckedDims::new(16, 16, PixelFormat::RGBA.channels()).unwrap();
-//! let pixels = dims.alloc_buffer();
-//! assert_eq!(pixels.len(), 16 * 16 * 4);
-//! ```
-
 // AS PER DESIGN — DO NOT REMOVE:
 //   These allows are explicitly deferred. pillow-rs must eventually:
 //   1. Replace unwrap() with expect() explaining invariants
-//   2. Either use InfallibleExt::because() or Result propagation
+//   2. Prefer Result propagation for recoverable failures
 //   3. Replace .map().unwrap_or() with .map_or()
 //   4. Remove redundant clones
 //   5. Replace manual loop indexing with iter()/enumerate()
@@ -95,6 +85,7 @@
 
 #[cfg(feature = "parallel")]
 use rayon as _;
+#[cfg(feature = "test-api")]
 use std::collections::BTreeMap;
 
 // ============================================================================
@@ -104,7 +95,6 @@ use std::collections::BTreeMap;
 //   by CI and creates entire classes of bugs.
 //
 //   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
-//   - pixel_format:  Named enum replacing bare 0/1/2/3 mode codes
 //   - par:           Approved parallelization macros (no raw rayon; native default)
 //   - image_utils:   Canonical buffer conversion (no duplicate copies)
 //   - compute::op_def: Declarative op registration (no parallel match arms)
@@ -128,8 +118,6 @@ mod format;
 mod image;
 /// Shared helpers for converting between image buffers and modes.
 mod image_utils;
-/// Helpers for documenting and handling operations that are logically infallible.
-mod infallible;
 /// Reusable image operation implementations.
 mod ops;
 #[cfg(feature = "parallel")]
@@ -140,10 +128,6 @@ mod par;
 /// See [`pipeline::PipelineOp`] for the operation descriptor carried through
 /// lazy image pipelines.
 mod pipeline;
-/// Named pixel-format metadata used instead of bare mode integers.
-mod pixel_format;
-
-pub use crate::checked_dims::CheckedDims;
 pub use crate::color::getcolor;
 pub use crate::color::palette_getcolor;
 pub use crate::color::palette_getcolor_append;
@@ -163,16 +147,12 @@ pub use crate::error::PilError;
 pub use crate::font::Font;
 pub use crate::font::imagingft::get_transposed_mask as font_get_transposed_mask;
 pub use crate::font::imagingft::getbbox as font_getbbox;
-pub use crate::font::imagingft::getbbox_binary as font_getbbox_binary;
 pub use crate::font::imagingft::getlength as font_getlength;
 pub use crate::font::imagingft::getmask as font_getmask;
-pub use crate::font::imagingft::getmask2 as font_getmask2;
 pub use crate::font::imagingft::getmask2_with_start as font_getmask2_with_start;
 pub use crate::font::imagingft::getmetrics as font_getmetrics;
 pub use crate::font::imagingft::getname as font_getname;
-pub use crate::font::imagingft::getname_optional as font_getname_optional;
 pub use crate::font::imagingft::has_variations as font_has_variations;
-pub use crate::font::imagingft::render_text_binary as font_render_text_binary;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
@@ -184,7 +164,6 @@ pub use crate::image::PutDataValue;
 pub use crate::image::StatResult;
 pub use crate::image::StatValue;
 pub use crate::image::stat_from_list;
-pub use crate::infallible::InfallibleExt;
 pub use crate::ops::array::ArrayLayout;
 pub use crate::ops::array::resolve_array_layout;
 pub use crate::ops::chops::add as chops_add;
@@ -239,11 +218,12 @@ pub use crate::ops::paste::PasteSource;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
+#[cfg(feature = "test-api")]
 pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
-pub use crate::pixel_format::PixelFormat;
 
 /// Public backend capability summary for one registered operation.
+#[cfg(feature = "test-api")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackendSupportEntry {
     /// CPU implementation marker.
@@ -257,6 +237,7 @@ pub struct BackendSupportEntry {
 }
 
 /// Returns the backend capability registry as explicit public summary data.
+#[cfg(feature = "test-api")]
 pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSupportEntry>, PilError> {
     Ok(crate::compute::registry::registry()?
         .iter()
@@ -275,26 +256,31 @@ pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSuppor
 }
 
 /// Returns whether CPU declares support for a pipeline operation.
+#[cfg(feature = "test-api")]
 pub fn backend_cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     crate::compute::registry::cpu_supports(op)
 }
 
 /// Returns whether SIMD declares support for a pipeline operation.
+#[cfg(feature = "test-api")]
 pub fn backend_simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
     crate::compute::registry::simd_supports(op)
 }
 
 /// Returns whether GPU declares support for a pipeline operation.
+#[cfg(feature = "test-api")]
 pub fn backend_gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     crate::compute::registry::gpu_supports(op)
 }
 
 /// Returns whether a pipeline operation maps to a GPU operation descriptor.
+#[cfg(feature = "test-api")]
 pub fn backend_map_op_to_gpu(op: &PipelineOp) -> Result<bool, PilError> {
     Ok(crate::compute::registry::map_op_to_gpu(op)?.is_some())
 }
 
 /// Returns the backend support matrix as deterministic pretty JSON.
+#[cfg(feature = "test-api")]
 pub fn backend_support_matrix_json() -> Result<String, PilError> {
     let registry = backend_support_registry()?;
     let operations = registry

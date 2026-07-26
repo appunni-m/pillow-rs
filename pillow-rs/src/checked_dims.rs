@@ -20,8 +20,8 @@
 //   CI enforces: no bare `(w * h) as usize` in production code
 //   (see scripts/check_checked_dims.sh).
 //
-//   To increase the max pixel limit: use CheckedDims::set_max_pixels() —
-//   matching PIL's `Image.MAX_IMAGE_PIXELS` behavior.
+//   The process-wide max pixel limit matches PIL's `Image.MAX_IMAGE_PIXELS`
+//   behavior.
 // ============================================================================
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -53,7 +53,7 @@ static MAX_PIXELS: AtomicU64 = AtomicU64::new(DEFAULT_MAX_PIXELS);
 /// # Invariants
 ///
 /// - `width`, `height`, and `channels` are non-zero.
-/// - `width * height` fits in `u64` and is below [`CheckedDims::max_pixels`].
+/// - `width * height` fits in `u64` and is below the configured max-pixel limit.
 /// - `width * height * channels` fits in `u64`.
 #[derive(Debug, Clone, Copy)]
 pub struct CheckedDims {
@@ -89,8 +89,8 @@ impl CheckedDims {
     /// # Errors
     ///
     /// Returns [`PilError::DimensionError`] if a dimension is zero, if the
-    /// pixel count overflows, if the pixel count exceeds
-    /// [`CheckedDims::max_pixels`], or if the byte count overflows.
+    /// pixel count overflows, if the pixel count exceeds the configured
+    /// max-pixel limit, or if the byte count overflows.
     pub fn new(width: u32, height: u32, channels: u8) -> Result<Self, PilError> {
         Self::new_with_limit(width, height, channels, MAX_PIXELS.load(Ordering::Relaxed))
     }
@@ -184,31 +184,6 @@ impl CheckedDims {
     #[inline]
     pub fn alloc_buffer(&self) -> Vec<u8> {
         vec![0u8; self.total_bytes]
-    }
-
-    /// Allocates a pixel buffer and fills every byte with `value`.
-    #[inline]
-    pub fn alloc_buffer_fill(&self, value: u8) -> Vec<u8> {
-        vec![value; self.total_bytes]
-    }
-
-    // ── Global limit control (matching PIL's Image.MAX_IMAGE_PIXELS) ──
-
-    /// Returns the current global maximum pixel limit.
-    ///
-    /// [`CheckedDims::new`] rejects images whose pixel count exceeds this
-    /// value.
-    pub fn max_pixels() -> u64 {
-        MAX_PIXELS.load(Ordering::Relaxed)
-    }
-
-    /// Overrides the global maximum pixel limit.
-    ///
-    /// Pass `Some(limit)` to set a pixel-count cap. Pass `None` to remove the
-    /// cap by setting it to `u64::MAX`; this should only be used by callers that
-    /// already control their input image sizes.
-    pub fn set_max_pixels(limit: Option<u64>) {
-        MAX_PIXELS.store(limit.unwrap_or(u64::MAX), Ordering::Relaxed);
     }
 }
 

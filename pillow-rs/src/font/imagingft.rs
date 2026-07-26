@@ -99,8 +99,8 @@ pub fn getname(font: &Font) -> (&str, &str) {
     )
 }
 
-/// Return Pillow's raw `_imagingft` name tuple, preserving missing names.
-pub fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
+#[cfg(feature = "test-api")]
+pub(crate) fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
     (
         font.engine.family_name.as_deref(),
         font.engine.style_name.as_deref(),
@@ -185,8 +185,7 @@ pub fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError
     bbox_from_run(font, text)
 }
 
-/// Return the bbox produced by Pillow's `fontmode="1"` FreeType load target.
-pub fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub(crate) fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
@@ -222,7 +221,7 @@ pub fn render_text(
     pack_rgba(getmask(font, text)?, fill)
 }
 
-pub fn render_text_binary(
+pub(crate) fn render_text_binary(
     font: &Font,
     text: &str,
     fill: (u8, u8, u8, u8),

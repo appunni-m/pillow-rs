@@ -64,7 +64,6 @@ The generated `classification` column is conservative:
 - `parser_review`: mechanical parser found a mixed signal that requires manual review.
 - `abi_status_code`: C/WASM ABI surface returns an explicit status code such as `FT_Error` or `FontdoneWasmStatus`; internal Rust helpers should still use `Result` unless they are direct boundary-status adapters.
 - `abi_optional_snapshot_or_handle`: C/WASM ABI inspection helpers and nullable handle lookups use `Option` to model absent handles, absent snapshots, or unsupported optional ABI data.
-- `documented_invariant_panic`: the deliberately named `InfallibleExt::because` invariant mechanism; this is not a recoverable user/input error path and has no production call sites after the current audit.
 - `binding_display_fallback`: binding display/debug helpers intentionally format fallback strings instead of raising while constructing `repr`.
 - `pillow_clip_control_flow`: Pillow drawing geometry helpers use checked arithmetic to clip/skip non-renderable coordinates, matching Pillow-style draw semantics instead of raising.
 - `iterator_exhaustion_control_flow`: `Option` is used to represent iterator exhaustion, not an error.

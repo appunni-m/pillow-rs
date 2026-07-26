@@ -89,11 +89,11 @@ grep_banned \
     'ImageLuma8.*from_raw|ImageRgb8.*from_raw|ImageRgba8.*from_raw|ImageLumaA8.*from_raw' \
     "→ Use image_utils::raw_bytes_to_image() — see pillow-rs/src/image_utils.rs"
 
-# Fix 8: No bare mode integer comparisons — must use PixelFormat methods
+# Fix 8: No bare mode integer comparisons — must use named mode helpers
 grep_banned \
-    "PixelFormat — no bare mode ints" \
+    "mode helpers — no bare mode ints" \
     'has_gb = mode [>=]|has_a = mode [=|!]=' \
-    "→ Use PixelFormat::has_alpha()/.channels() — see pillow-rs/src/pixel_format.rs"
+    "→ Use a named mode helper instead of comparing encoded integers directly"
 
 # Fix 9: No Result<_, String> error types
 grep_banned \

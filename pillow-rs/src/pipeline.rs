@@ -792,7 +792,7 @@ pub enum TransformMethod {
 /// Pillow image mode used by pipeline operations.
 ///
 /// This enum carries mode intent through the pipeline before conversion to a
-/// concrete [`crate::PixelFormat`] or image-buffer representation.
+/// concrete image-buffer representation.
 #[derive(Debug, Clone)]
 pub enum ColorMode {
     /// 8-bit luma.

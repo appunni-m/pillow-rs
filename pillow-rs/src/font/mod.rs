@@ -54,6 +54,7 @@ impl Font {
     }
 
     /// Return Pillow's raw public name tuple, preserving missing face names.
+    #[cfg(feature = "test-api")]
     pub fn getname_optional(&self) -> (Option<&str>, Option<&str>) {
         imagingft::getname_optional(self)
     }
@@ -79,6 +80,7 @@ impl Font {
     }
 
     /// Return Pillow's public binary-mode text bounding box.
+    #[cfg(feature = "test-api")]
     pub fn getbbox_binary(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
         imagingft::getbbox_binary(self, text)
     }
@@ -107,6 +109,7 @@ impl Font {
     }
 
     /// Return Pillow-compatible binary-mode RGBA text rendering.
+    #[cfg(feature = "test-api")]
     pub fn render_text_binary(
         &self,
         text: &str,
