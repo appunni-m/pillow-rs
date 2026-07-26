@@ -150,7 +150,25 @@ def test_cfg_ranges(text: str) -> list[tuple[int, int]]:
     return ranges
 
 
-def function_scope(text: str, fn_start: int, test_ranges: list[tuple[int, int]]) -> str:
+def file_scope(path: Path) -> str | None:
+    parts = path.relative_to(ROOT).parts
+    if "tests" in parts:
+        return "test"
+    if "examples" in parts:
+        return "example"
+    if "bench-rust" in parts:
+        return "bench"
+    return None
+
+
+def function_scope(
+    path: Path,
+    text: str,
+    fn_start: int,
+    test_ranges: list[tuple[int, int]],
+) -> str:
+    if scope := file_scope(path):
+        return scope
     if any(start <= fn_start <= end for start, end in test_ranges):
         return "test"
     prefix = text[max(0, fn_start - 256) : fn_start]
@@ -175,7 +193,7 @@ def iter_functions(path: Path) -> list[FunctionRecord]:
         return_type = signature_return(text, match.start(), brace if brace != -1 else body_end)
         signals = fallibility_signals(body)
         visibility = "pub" if match.group("prefix").strip().startswith("pub") else "private"
-        scope = function_scope(text, match.start(), test_ranges)
+        scope = function_scope(path, text, match.start(), test_ranges)
         records.append(
             FunctionRecord(
                 path=path.relative_to(ROOT),

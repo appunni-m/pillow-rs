@@ -18,8 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated scope counts:
-  - `production`: `6,574`
-  - `test`: `337`
+  - `production`: `3,946`
+  - `test`: `2,928`
+  - `example`: `25`
+  - `bench`: `12`
 - Current generated classification counts:
   - `ok_result`: `2,598`
   - `likely_infallible`: `3,811`
@@ -37,10 +39,10 @@ The generated `classification` column is conservative:
 - `review_panic_path`: non-`Result` function contains `panic!`, `todo!`, or `unimplemented!`.
 - `parser_review`: mechanical parser found a mixed signal that requires manual review.
 
-The generated `scope` column separates production code from functions inside
-`#[cfg(test)]` modules or direct Rust test functions. Production rows are the
-primary migration queue; test rows can keep `unwrap`/`expect` when they assert
-test setup invariants.
+The generated `scope` column separates production code from integration tests,
+unit-test modules, examples, and benchmark crates. Production rows are the
+primary migration queue; test/example/bench rows can keep `unwrap`/`expect`
+when they assert setup invariants or fail-fast executable setup.
 
 This file is the queue driver. A row is only considered fixed after source has
 been inspected and either:
