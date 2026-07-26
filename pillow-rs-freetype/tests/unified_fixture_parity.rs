@@ -25428,7 +25428,11 @@ fn is_stroker_reset_counts_case(case: &InputCase) -> bool {
 }
 
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
-    case.case_id == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+            | "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped"
+    )
 }
 
 fn is_stroker_parse_opened_outline_case(case: &InputCase) -> bool {
@@ -26634,6 +26638,20 @@ fn rust_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> 
             },
         ),
         ("empty_outline", FT_OutlineSnapshot::default()),
+        (
+            "mixed_degenerate_and_valid_contours",
+            FT_OutlineSnapshot {
+                points: vec![
+                    FT_Vector { x: 0, y: 0 },
+                    FT_Vector { x: 10, y: 0 },
+                    FT_Vector { x: 0, y: 0 },
+                    FT_Vector { x: 640, y: 0 },
+                ],
+                tags: vec![1, 1, 1, 1],
+                contours: vec![0, 1, 3],
+                flags: 0,
+            },
+        ),
     ];
     let mut rows = Vec::new();
     for (label, outline) in cases {
@@ -26641,11 +26659,18 @@ fn rust_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> 
         let mut points = 99;
         let mut contours = 99;
         let counts_status = FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours));
+        let mut exported = FT_OutlineSnapshot::default();
+        if parse_status == FT_Err_Ok && counts_status == FT_Err_Ok {
+            FT_Stroker_Export(stroker, Some(&mut exported));
+        }
         rows.push(json!({
             "case": label,
             "parse_status": parse_status,
             "counts_status": counts_status,
-            "counts_after": {"points": points, "contours": contours}
+            "counts_after": {"points": points, "contours": contours},
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": outline_snapshot_json(&exported)
         }));
     }
     FT_Stroker_Done(stroker);
@@ -26690,22 +26715,61 @@ fn c_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> {
         flags: 0,
     };
     let mut empty = c_abi::FT_Outline::default();
+    let mut mixed_points = [
+        c_abi::FT_Vector { x: 0, y: 0 },
+        c_abi::FT_Vector { x: 10, y: 0 },
+        c_abi::FT_Vector { x: 0, y: 0 },
+        c_abi::FT_Vector { x: 640, y: 0 },
+    ];
+    let mut mixed_tags = [1u8, 1u8, 1u8, 1u8];
+    let mut mixed_contours = [0u16, 1u16, 3u16];
+    let mut mixed = c_abi::FT_Outline {
+        n_contours: 3,
+        n_points: 4,
+        points: mixed_points.as_mut_ptr(),
+        tags: mixed_tags.as_mut_ptr(),
+        contours: mixed_contours.as_mut_ptr(),
+        flags: 0,
+    };
     for (label, outline) in [
         (
             "single_point_contour",
             &mut single as *mut c_abi::FT_Outline,
         ),
         ("empty_outline", &mut empty as *mut c_abi::FT_Outline),
+        (
+            "mixed_degenerate_and_valid_contours",
+            &mut mixed as *mut c_abi::FT_Outline,
+        ),
     ] {
         let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, outline, 0);
         let mut points = 99;
         let mut contours = 99;
         let counts_status = c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours);
+        let mut exported_points = [c_abi::FT_Vector::default(); 64];
+        let mut exported_tags = [0u8; 64];
+        let mut exported_contours = [0u16; 16];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        if parse_status == FT_Err_Ok && counts_status == FT_Err_Ok {
+            c_abi::FT_Stroker_Export(stroker, &mut exported);
+        }
         rows.push(json!({
             "case": label,
             "parse_status": parse_status,
             "counts_status": counts_status,
-            "counts_after": {"points": points, "contours": contours}
+            "counts_after": {"points": points, "contours": contours},
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": c_outline_arrays_json(
+                &exported,
+                &exported_points,
+                &exported_tags,
+                &exported_contours,
+            )
         }));
     }
     c_abi::FT_Stroker_Done(stroker);
@@ -26721,20 +26785,7 @@ fn wasm_stroker_parse_degenerate(case: &InputCase) -> Result<RunOutput, String> 
         ));
     }
     if wasm_abi::abi_support_stroker_parse_degenerate() {
-        Ok(stroker_parse_degenerate_output(vec![
-            json!({
-                "case": "single_point_contour",
-                "parse_status": FT_Err_Ok,
-                "counts_status": FT_Err_Ok,
-                "counts_after": {"points": 0, "contours": 0}
-            }),
-            json!({
-                "case": "empty_outline",
-                "parse_status": FT_Err_Ok,
-                "counts_status": FT_Err_Ok,
-                "counts_after": {"points": 0, "contours": 0}
-            }),
-        ]))
+        rust_stroker_parse_degenerate(case)
     } else {
         Err("unsupported stroker degenerate ParseOutline route".to_string())
     }

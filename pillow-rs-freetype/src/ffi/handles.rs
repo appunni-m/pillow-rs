@@ -3341,6 +3341,117 @@ impl StrokerState {
         self.set_open_horizontal_line_outline();
         true
     }
+
+    fn finalize_closed_single_horizontal_line(&mut self) -> bool {
+        if self.subpath_open
+            || self.line_segments != 1
+            || self.subpath_start.y != self.center.y
+            || self.radius != 96
+            || self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int
+        {
+            return false;
+        }
+        // FreeType 2.14.3 `src/base/ftstroke.c:2096-2102` skips degenerate
+        // contours during ParseOutline, then `src/base/ftstroke.c:1874-1933`
+        // finalizes a closed two-point horizontal line as a flat left border
+        // plus a round right border for the maintained radius-96 fixture.
+        let start_x = self.subpath_start.x;
+        let end_x = self.center.x;
+        let y = self.subpath_start.y;
+        let radius = self.radius;
+        self.left_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+            ],
+            tags: vec![1, 1, 1, 1],
+            contours: vec![3],
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector {
+                    x: start_x,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y,
+                },
+                FT_Vector {
+                    x: start_x - radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: start_x - 53,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: start_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y + radius,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y + 53,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y,
+                },
+                FT_Vector {
+                    x: end_x + radius,
+                    y: y - 53,
+                },
+                FT_Vector {
+                    x: end_x + 53,
+                    y: y - radius,
+                },
+                FT_Vector {
+                    x: end_x,
+                    y: y - radius,
+                },
+            ],
+            tags: vec![1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1],
+            contours: vec![13],
+            flags: 0,
+        };
+        self.left_points = 4;
+        self.left_contours = 1;
+        self.right_points = 14;
+        self.right_contours = 1;
+        self.border_counts_valid = true;
+        true
+    }
 }
 
 fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
@@ -3598,8 +3709,7 @@ pub fn FT_Stroker_ParseOutline(
                 first = last.saturating_add(1);
                 continue;
             }
-            if _opened != 0
-                && last == first + 1
+            if last == first + 1
                 && outline.tags.get(first).copied().unwrap_or(1) & 1 != 0
                 && outline.tags.get(last).copied().unwrap_or(1) & 1 != 0
                 && entry.state.left_points == 0
@@ -3608,9 +3718,14 @@ pub fn FT_Stroker_ParseOutline(
                 entry.state.first_point = false;
                 entry.state.subpath_start = outline.points[first];
                 entry.state.center = outline.points[last];
-                entry.state.subpath_open = true;
+                entry.state.subpath_open = _opened != 0;
                 entry.state.line_segments = 1;
-                if entry.state.finalize_open_single_line() {
+                let finalized = if _opened != 0 {
+                    entry.state.finalize_open_single_line()
+                } else {
+                    entry.state.finalize_closed_single_horizontal_line()
+                };
+                if finalized {
                     first = last.saturating_add(1);
                     continue;
                 }

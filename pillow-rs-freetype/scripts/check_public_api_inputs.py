@@ -1730,10 +1730,14 @@ def ftstroke_parse_degenerate_real_parity_reason(row: ConcreteInput) -> str | No
     if (
         row.operation == "ftstroke.parse_outline"
         and row.case_id
-        == "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop"
+        in {
+            "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop",
+            "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped",
+        }
     ):
         return (
-            "FT_Stroker_ParseOutline empty and single-point contour no-op "
+            "FT_Stroker_ParseOutline empty, single-point, and mixed "
+            "degenerate-plus-valid contour behavior "
             "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; "
             "full parse/finalization/export geometry remains pending"
         )

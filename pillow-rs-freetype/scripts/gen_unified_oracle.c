@@ -19794,11 +19794,31 @@ static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
                                                FT_UInt points,
-                                               FT_UInt contours) {
+                                               FT_UInt contours,
+                                               FT_Outline* exported) {
     printf("{\"case\":\"%s\",", label);
     printf("\"parse_status\":%d,", parse_status);
     printf("\"counts_status\":%d,", counts_status);
-    printf("\"counts_after\":{\"points\":%u,\"contours\":%u}}", points, contours);
+    printf("\"counts_after\":{\"points\":%u,\"contours\":%u},", points, contours);
+    printf("\"point_count\":%u,\"contour_count\":%u,", points, contours);
+    printf("\"exported_outline\":{");
+    printf("\"n_points\":%d,\"n_contours\":%d,", exported->n_points, exported->n_contours);
+    printf("\"points\":[");
+    for (short index = 0; index < exported->n_points; index++) {
+        if (index) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}", exported->points[index].x, exported->points[index].y);
+    }
+    printf("],\"tags\":[");
+    for (short index = 0; index < exported->n_points; index++) {
+        if (index) printf(",");
+        printf("%u", (unsigned char)exported->tags[index]);
+    }
+    printf("],\"contours\":[");
+    for (short index = 0; index < exported->n_contours; index++) {
+        if (index) printf(",");
+        printf("%u", (unsigned int)exported->contours[index]);
+    }
+    printf("],\"flags\":%d}}", exported->flags);
 }
 
 static int emit_stroker_parse_degenerate(int argc, char** argv) {
@@ -19831,16 +19851,51 @@ static int emit_stroker_parse_degenerate(int argc, char** argv) {
     unsigned short contour = 0;
     FT_Outline single = { 1, 1, &point, &tag, &contour, 0 };
     FT_Outline empty = { 0, 0, NULL, NULL, NULL, 0 };
+    FT_Vector mixed_points[] = { { 0, 0 }, { 10, 0 }, { 0, 0 }, { 640, 0 } };
+    unsigned char mixed_tags[] = {
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON,
+        FT_CURVE_TAG_ON
+    };
+    unsigned short mixed_contours[] = { 0, 1, 3 };
+    FT_Outline mixed = { 3, 4, mixed_points, mixed_tags, mixed_contours, 0 };
 
     FT_Error single_parse = FT_Stroker_ParseOutline(stroker, &single, 0);
     FT_UInt single_points = 99;
     FT_UInt single_contours = 99;
     FT_Error single_counts = FT_Stroker_GetCounts(stroker, &single_points, &single_contours);
+    FT_Vector single_export_points[64];
+    unsigned char single_export_tags[64];
+    unsigned short single_export_contours[16];
+    FT_Outline single_export = { 0, 0, single_export_points, single_export_tags, single_export_contours, 0 };
+    if (!single_parse && !single_counts) {
+        FT_Stroker_Export(stroker, &single_export);
+    }
 
     FT_Error empty_parse = FT_Stroker_ParseOutline(stroker, &empty, 0);
     FT_UInt empty_points = 99;
     FT_UInt empty_contours = 99;
     FT_Error empty_counts = FT_Stroker_GetCounts(stroker, &empty_points, &empty_contours);
+    FT_Vector empty_export_points[64];
+    unsigned char empty_export_tags[64];
+    unsigned short empty_export_contours[16];
+    FT_Outline empty_export = { 0, 0, empty_export_points, empty_export_tags, empty_export_contours, 0 };
+    if (!empty_parse && !empty_counts) {
+        FT_Stroker_Export(stroker, &empty_export);
+    }
+
+    FT_Error mixed_parse = FT_Stroker_ParseOutline(stroker, &mixed, 0);
+    FT_UInt mixed_points_count = 99;
+    FT_UInt mixed_contours_count = 99;
+    FT_Error mixed_counts = FT_Stroker_GetCounts(stroker, &mixed_points_count, &mixed_contours_count);
+    FT_Vector mixed_export_points[64];
+    unsigned char mixed_export_tags[64];
+    unsigned short mixed_export_contours[16];
+    FT_Outline mixed_export = { 0, 0, mixed_export_points, mixed_export_tags, mixed_export_contours, 0 };
+    if (!mixed_parse && !mixed_counts) {
+        FT_Stroker_Export(stroker, &mixed_export);
+    }
 
     FT_Stroker_Done(stroker);
     printf("{");
@@ -19850,13 +19905,22 @@ static int emit_stroker_parse_degenerate(int argc, char** argv) {
                                        single_parse,
                                        single_counts,
                                        single_points,
-                                       single_contours);
+                                       single_contours,
+                                       &single_export);
     printf(",");
     print_stroker_parse_degenerate_row("empty_outline",
                                        empty_parse,
                                        empty_counts,
                                        empty_points,
-                                       empty_contours);
+                                       empty_contours,
+                                       &empty_export);
+    printf(",");
+    print_stroker_parse_degenerate_row("mixed_degenerate_and_valid_contours",
+                                       mixed_parse,
+                                       mixed_counts,
+                                       mixed_points_count,
+                                       mixed_contours_count,
+                                       &mixed_export);
     printf("]}}\n");
     FT_Done_FreeType(library);
     return 0;
