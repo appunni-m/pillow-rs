@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `8c6d496ab`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `cc3d1dd9a`
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
@@ -36,6 +36,10 @@ New commits:
   `cases`; use version `1`; have non-empty cases; and classify its top-level
   operation as a required operation, negative operation, or explicitly allowed
   grouped file.
+- `cc3d1dd9a` — pinned the exact allowed blocked public parameters to
+  `getmask.stroke_width` and `getmask2.stroke_width`. Any additional blocked
+  public parameter now fails the manifest test unless the expected-blocker list
+  is deliberately changed with documentation.
 
 Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
 repo-local oracle remains:
@@ -64,15 +68,17 @@ Newly covered edge cases:
   execution starts.
 - Public-api input files now have a validated envelope, preventing stale or
   unclassified grouped files from entering the corpus.
+- The manifest can no longer hide new public parity blockers: only the two
+  known stroked-mask parameters may remain blocked.
 
 Verification:
 
 - `make -C pillow-rs fmt` — passed
 - `make -C pillow-rs font-tests` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `417dbff8-d96c-452b-8b2a-322311bf9014`
-  - snapshot `27465c6d-6faa-435f-9cd3-18fc263ab051`
-  - commit `8c6d496ab336e9343f35441744e0cdf1eee61889`
+  - run `1a2b6f51-da9d-45a4-9fc8-f70254f9090e`
+  - snapshot `542eb179-e55f-45c3-9981-8b9aaa3750bf`
+  - commit `cc3d1dd9a494cf6f9f4b8a3727f1fe77b79a27c6`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
