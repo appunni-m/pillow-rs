@@ -71,7 +71,9 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, Pi
 
 fn ft_error_to_pil(error: i32) -> PilError {
     match error {
-        x if x == ffi::FT_Err_Invalid_Argument as i32 => PilError::OsError("invalid argument".into()),
+        x if x == ffi::FT_Err_Invalid_Argument as i32 => {
+            PilError::OsError("invalid argument".into())
+        }
         x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => {
             PilError::OsError("invalid pixel size".into())
         }
@@ -198,8 +200,7 @@ pub fn getbbox_result(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), P
 /// Return the bbox produced by Pillow's `fontmode="1"` FreeType load target.
 pub fn getbbox_binary(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     match font {
-        Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO)
-            .unwrap_or((0, 0, 0, 0)),
+        Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO).unwrap_or((0, 0, 0, 0)),
         Font::Bitmap(b) => {
             let (w, h) = b.text_bbox(text);
             (0, 0, w as i32, h as i32)
@@ -207,10 +208,7 @@ pub fn getbbox_binary(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     }
 }
 
-pub fn getbbox_binary_result(
-    font: &Font,
-    text: &str,
-) -> Result<(i32, i32, i32, i32), PilError> {
+pub fn getbbox_binary_result(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     match font {
         Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO),
         Font::Bitmap(b) => {
@@ -232,6 +230,14 @@ pub fn getmask2(font: &Font, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
     getmask2_with_start(font, text, (0.0, 0.0))
 }
 
+/// Fallible variant of [`getmask2`] that preserves Pillow error results.
+pub fn getmask2_result(
+    font: &Font,
+    text: &str,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    getmask2_with_start_result(font, text, (0.0, 0.0))
+}
+
 /// Render a Pillow-compatible mask with a fractional raster start.
 ///
 /// Pillow applies `start` to the mask canvas and glyph origin while leaving
@@ -241,12 +247,21 @@ pub fn getmask2_with_start(
     text: &str,
     start: (f64, f64),
 ) -> (u32, u32, Vec<u8>, (i32, i32)) {
+    getmask2_with_start_result(font, text, start).unwrap_or((0, 0, vec![], (0, 0)))
+}
+
+/// Fallible variant of [`getmask2_with_start`] that preserves Pillow errors.
+pub fn getmask2_with_start_result(
+    font: &Font,
+    text: &str,
+    start: (f64, f64),
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     let (width, height, pixels) = match font {
-        Font::TrueType(t) => mask_from_run_with_start(t, text, TGT_NORM, start),
+        Font::TrueType(t) => mask_from_run_with_start(t, text, TGT_NORM, start)?,
         Font::Bitmap(b) => shift_bitmap_mask(b.getmask(text), start),
     };
     let bbox = getbbox(font, text);
-    (width, height, pixels, (bbox.0, bbox.1))
+    Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
 pub fn render_text(
@@ -483,7 +498,7 @@ fn mask_from_run_with_flags(
     text: &str,
     load_flags: i32,
 ) -> (u32, u32, Vec<u8>) {
-    mask_from_run_with_start(ttf, text, load_flags, (0.0, 0.0))
+    mask_from_run_with_start(ttf, text, load_flags, (0.0, 0.0)).unwrap_or((0, 0, vec![]))
 }
 
 fn mask_from_run_with_start(
@@ -491,9 +506,9 @@ fn mask_from_run_with_start(
     text: &str,
     load_flags: i32,
     start: (f64, f64),
-) -> (u32, u32, Vec<u8>) {
+) -> Result<(u32, u32, Vec<u8>), PilError> {
     if text.is_empty() {
-        return (0, 0, vec![]);
+        return Ok((0, 0, vec![]));
     }
     // Pillow 12.2.0 `_imagingft.c` uses FT_LOAD_TARGET_MONO consistently
     // during BASIC layout, bbox calculation, and both render passes for
@@ -504,13 +519,20 @@ fn mask_from_run_with_start(
     // mask by ceil(start), then rounds the shifted 26.6 pen origin.
     let start_width = start.0.ceil() as i32;
     let start_height = start.1.ceil() as i32;
-    let w = (bbox.2 - bbox.0).saturating_add(start_width).max(0) as u32;
-    let h = (bbox.3 - bbox.1).saturating_add(start_height).max(0) as u32;
+    let base_w = bbox.2 - bbox.0;
+    let base_h = bbox.3 - bbox.1;
+    let adjusted_w = base_w.saturating_add(start_width);
+    let adjusted_h = base_h.saturating_add(start_height);
+    if (base_w > 0 && adjusted_w <= 0) || (base_h > 0 && adjusted_h <= 0) {
+        return Err(PilError::ValueError("bad image size".into()));
+    }
+    let w = adjusted_w.max(0) as u32;
+    let h = adjusted_h.max(0) as u32;
     let wu = w as usize;
     let hu = h as usize;
     let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
     if w == 0 || h == 0 {
-        return (w, h, canvas);
+        return Ok((w, h, canvas));
     }
 
     let face = &ttf.engine.face;
@@ -574,24 +596,34 @@ fn mask_from_run_with_start(
         let py = pixel(i64::from(y_origin));
         let dx = px + *bitmap_left;
         let dy = -(py + *bitmap_top);
-        if dx < 0 || dy < 0 {
+        if dx >= wu as i32 || dy >= hu as i32 {
             continue;
         }
-        let dx = dx as usize;
-        let dy = dy as usize;
-        if dx >= wu || dy >= hu {
+        let source_x = if dx < 0 { (-dx) as usize } else { 0 };
+        let target_x = dx.max(0) as usize;
+        if source_x >= sx {
             continue;
         }
-        let cw = sx.min(wu - dx);
-        let ch = sy.min(hu - dy);
-        for row in 0..sy {
-            if row >= ch {
+        let cw = (sx - source_x).min(wu - target_x);
+        if cw == 0 {
+            continue;
+        }
+        let source_y = if dy < 0 { (-dy) as usize } else { 0 };
+        if source_y >= sy {
+            continue;
+        }
+        for row in source_y..sy {
+            let target_y = dy + row as i32;
+            if target_y < 0 {
+                continue;
+            }
+            if target_y >= hu as i32 {
                 break;
             }
-            let dst = (dy + row) * wu + dx;
+            let dst = target_y as usize * wu + target_x;
             if let Some(dr) = canvas.get_mut(dst..dst + cw) {
                 for (column, dc) in dr.iter_mut().enumerate() {
-                    let Some(sc) = bitmap_coverage(bm, row, column) else {
+                    let Some(sc) = bitmap_coverage(bm, row, source_x + column) else {
                         continue;
                     };
                     if sc > 0 {
@@ -602,7 +634,7 @@ fn mask_from_run_with_start(
             }
         }
     }
-    (w, h, canvas)
+    Ok((w, h, canvas))
 }
 
 fn shift_bitmap_mask(

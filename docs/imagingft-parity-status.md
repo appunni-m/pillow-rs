@@ -1,6 +1,6 @@
 # ImagingFT Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
+Last updated: 2026-07-26 (Asia/Kolkata) — start/clipping gap sweep revalidated
 
 ## Scope
 
@@ -33,8 +33,8 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
 ## Corpus state
 
 - Input files: `17` (`pillow-rs/tests/fixtures/imagingft/inputs/public-api/*.json`)
-- Total rows: `77`
-- Executed rows: `77/77`
+- Total rows: `82`
+- Executed rows: `82/82`
 - Required operation coverage check against case-set operations: no required manifest operations missing
 
 ## Required operation presence (fixture-defined)
@@ -48,17 +48,17 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
 | `getlength` | 4 | 0 | 4 |
 | `getmask` | 7 | 0 | 7 |
 | `getmask2` | 6 | 0 | 6 |
-| `getmask2_with_start` | 8 | 0 | 8 |
+| `getmask2_with_start` | 10 | 2 | 12 |
 | `getmetrics` | 1 | 0 | 1 |
 | `getname` | 1 | 5 | 6 |
 | `has_variations` | 1 | 0 | 1 |
-| `render_text_binary` | 4 | 0 | 4 |
+| `render_text_binary` | 5 | 0 | 5 |
 | `transposed_bbox` | 7 | 0 | 7 |
 | `unsupported_magic` | 0 | 1 | 1 |
 | `validate_transposed_length` | 4 | 1 | 5 |
 
-- Total success rows: `66`
-- Total error rows: `11`
+- Total success rows: `69`
+- Total error rows: `13`
 - Error rows are classified only from live oracle output; input JSON carries no expected output, pixel hash, or expected-error metadata.
 
 ## Error-category matrix (oracle-defined)
@@ -68,6 +68,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
 - `ValueError: font size must be greater than 0, not -1` — `1`
 - `ValueError: font size must be greater than 0, not -5.5` — `1`
 - `ValueError: text length is undefined for text rotated by 90 or 270 degrees` — `2`
+- `ValueError: bad image size` — `2`
 - `OSError: cannot open resource` — `1`
 - `OSError: invalid argument` — `1`
 - `OSError: invalid pixel size` — `1`
@@ -95,37 +96,38 @@ Last updated: 2026-07-26 (Asia/Kolkata) — reverse-mapped gap sweep revalidated
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `72fe69d2-cd78-427c-9eab-1e988fe3c243`
+- Current: `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`
 - Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 
 ## Reverse-mapped gap sweep
 
-Source: Coverage MCP snapshot `72fe69d2-cd78-427c-9eab-1e988fe3c243`, `pillow-rs/src/font/imagingft.rs`.
+Source: Coverage MCP snapshot `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`, `pillow-rs/src/font/imagingft.rs`.
 
 ### Confirmed parity gaps
 
-- `getmask2_with_start` negative vertical start:
-  - Tried input: DejaVuSans.ttf, `size=20`, `text="Hello"`, `start=[0.0, -0.5]`.
-  - Result: Pillow oracle and Rust both returned `ok` with matching `size=[63,19]`, `offset=[0,4]`, and `mode="L"`, but `pixels_hex` differed.
-  - Reverse map: `mask_from_run_with_start`, especially origin/clipping branches around lines 497-602 (`start_height`, `y_origin`, `dy < 0`, row clipping, and destination placement).
-  - Status: not added to the passing corpus; keep as a fix target.
-- `getmask2_with_start` combined negative fractional start:
-  - Tried input: DejaVuSans.ttf, `size=20`, `text="Hello"`, `start=[-1.25, -0.5]`.
-  - Result: Pillow oracle and Rust both returned `ok` with matching `size=[62,19]`, `offset=[0,4]`, and `mode="L"`, but `pixels_hex` differed.
-  - Reverse map: same `mask_from_run_with_start` origin/clipping path; negative X alone passed, so the currently confirmed mismatch is tied to vertical negative start handling, not horizontal negative start alone.
-  - Status: not added to the passing corpus; keep as a fix target.
+- Previous `getmask2_with_start` negative vertical start mismatch is fixed:
+  - Added passing fixture: `imagingft.getmask2_with_start.dejavusans_negative_y_start`, DejaVuSans.ttf, `size=20`, `text="Hello"`, `start=[0.0, -0.5]`.
+  - Added passing fixture: `imagingft.getmask2_with_start.dejavusans_negative_xy_fractional_start`, DejaVuSans.ttf, `size=20`, `text="Hello"`, `start=[-1.25, -0.5]`.
+  - First divergence: Pillow clips glyph bitmaps with negative `xx`/`yy`; Rust skipped the whole glyph when `dx < 0 || dy < 0`.
+  - C reference: Pillow 12.2.0 `src/_imagingft.c::font_render_impl`, the glyph render loop clips `x0/x1` and only draws rows where `yy >= 0 && yy < im->ysize`.
+- Previous `getmask2_with_start` collapsed-width error mismatch is fixed:
+  - Added passing error fixtures: `imagingft.getmask2_with_start.dejavusans_bad_image_size_negative_width` and `imagingft.getmask2_with_start.dejavusans_bad_image_size_negative_height`.
+  - Pillow oracle returns `ValueError: bad image size`; Rust now returns the same error through the Result path instead of a successful empty mask.
 
 ### Missing public parity scenarios now added
 
 - `getmask2_with_start` negative horizontal start:
   - Added passing fixture: `imagingft.getmask2_with_start.dejavusans_negative_x_start`, DejaVuSans.ttf, `size=20`, `text="Hello"`, `start=[-1.25, 0.0]`.
   - Purpose: validates left-side clipping/origin behavior against the live oracle without stored expected output.
+- `render_text_binary` space-only mask:
+  - Added passing fixture: `imagingft.render_text_binary.space_zero_height`, DejaVuSans.ttf, `size=20`, `text=" "`.
+  - Purpose: validates the `pack_rgba` zero-height path with width greater than zero.
 - `draw_text` negative Y placement:
   - Added passing fixture: `imagingft.render_text.dejavusans20_negative_y_draw_text_rgba`, DejaVuSans.ttf, `size=20`, `text="Hello"`, `xy=[10, -4]`, RGBA canvas.
   - Purpose: validates Draw/text consumer clipping against the live oracle.
 - Coverage effect:
-  - These rows increased fixture parity coverage from `75` to `77` executed rows.
-  - Coverage MCP metrics did not move (`imagingft.rs` remains `1228/1548` regions), so they are compatibility confidence rows, not coverage-closing rows.
+  - These rows increased fixture parity coverage from `75` to `82` executed rows.
+  - After the clipping/Result fix, `pillow-rs/src/font/imagingft.rs` measured `1761/2178` covered regions (`80.85399449%`) on snapshot `4a6baaf4-46cd-4a4b-b28d-dfaa83f837a3`.
 
 ### Reverse-mapped unclosed branches
 
@@ -138,18 +140,24 @@ Source: Coverage MCP snapshot `72fe69d2-cd78-427c-9eab-1e988fe3c243`, `pillow-rs
 | `mask_from_run_with_start` clipping and sparse bitmap cases | 497-602 | `getmask`, `getmask2`, `getmask2_with_start`, `draw_text` | Negative vertical start is a confirmed mismatch. Other uncovered branches include zero-sized glyph bitmap, render fallback, canvas slice guard, empty bitmap coverage, and no-coverage pixels. Add only oracle-backed rows; do not synthesize self-comparison rows. |
 | `bitmap_coverage` uncommon bitmap modes/pitch | 644-660 | `getmask*`, binary mask paths | Gray and mono coverage are partially exercised. Negative pitch and unsupported pixel mode are not reachable from current repo fonts through Pillow public APIs. Need a real oracle fixture asset before claiming coverage. |
 
-### Next targeted probes
+### Hard blocker to 100% region by input rows only
 
-- Fix and then add the two negative vertical start rows above.
+100% region coverage inside `imagingft.rs` cannot be reached honestly with only the current Pillow `_imagingft` public TrueType input corpus:
+
+- `Font::Bitmap` arms are in `imagingft.rs`, but Pillow `_imagingft` oracle cases necessarily load native C `Font` objects through `ImageFont.truetype`/`load_default(size)`, not bitmap fonts.
+- Several FreeType fallback/error branches require synthetic internal `FT_Load_Glyph` or unsupported bitmap-mode failures after a face has already loaded. The current public fixture schema cannot force those without mocking or self-comparing.
+- Overflow guards such as `pack_rgba` allocation overflow cannot be produced by a practical oracle image allocation without causing the oracle itself to fail outside a useful parity comparison.
+
+### Next targeted probes / implementation tasks
+
 - Search for a repo font/text pair that makes FreeType return glyph-load failure after successful face load; if found, add it as an error/success row from oracle output only.
 - Establish whether Pillow exposes a bitmap font object through the same public surface. If not, either remove `Font::Bitmap` from the imagingft public parity target or create a separate, clearly named bitmap-font parity target.
+- Consider moving bitmap-only behavior out of `imagingft.rs` if `imagingft.rs` is intended to mean Pillow `_imagingft.c` TrueType parity only; otherwise 100% region coverage for this file requires a separate bitmap oracle, not `_imagingft.c`.
 
 ## Remaining explicit gaps
 
 - Suite-level coverage is not complete by the 100% objective:
-  - ImagingFT public-api suite executes all 77 rows and reports zero parity mismatches.
+  - ImagingFT public-api suite executes all 82 rows and reports zero parity mismatches.
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
-- Sweep finding:
-  - Tried `getmask2_with_start` cases with DejaVuSans `text="Hello"` and negative vertical starts (`start=[0.0, -0.5]`, `start=[-1.25, -0.5]`) exposed real Pillow/Rust pixel mismatches and were not added to the passing corpus. This is a concrete next implementation gap in the start/clipping path.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.

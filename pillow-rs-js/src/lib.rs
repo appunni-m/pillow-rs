@@ -1070,19 +1070,21 @@ impl ImageFont {
         text: &str,
         start_x: Option<f64>,
         start_y: Option<f64>,
-    ) -> ImageFontMask {
-        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
-            &self.font,
-            text,
-            (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
-        );
-        ImageFontMask {
+    ) -> Result<ImageFontMask, JsValue> {
+        let (width, height, pixels, offset) =
+            pillow_rs::font::imagingft::getmask2_with_start_result(
+                &self.font,
+                text,
+                (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
+            )
+            .map_err(err)?;
+        Ok(ImageFontMask {
             width,
             height,
             offset_x: offset.0,
             offset_y: offset.1,
             pixels,
-        }
+        })
     }
 
     #[wasm_bindgen(js_name = "getname")]
