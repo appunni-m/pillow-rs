@@ -13,6 +13,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
   - `.oracle-venv` is ignored by git at root via `.oracle-venv/`.
   - The oracle process validates it is running from `<repo>/.oracle-venv/bin/python` and imports `PIL` from that env only.
   - Bootstrap checks assert `ImageFont.core` resolves to `PIL._imagingft`, that `PIL._imagingft` is a native extension module (shared object), and that loaded fonts expose a `builtins.Font` core object (`font.font`) for C-layer execution.
+  - Additional runtime guard now inspects `PIL.ImageFont.FreeTypeFont` source in the oracle venv and requires the tested methods (`getmask`, `getmask2`, `getbbox`, `getlength`, `getname`) to delegate through the C core (`self.font...`) so the oracle remains a thin Python veneer over `_imagingft`, not custom logic.
   - This gives the strict chain: fixtures -> Python oracle -> `PIL._imagingft` C extension -> `Font` core object, no custom Python logic.
 
 ## Acceptance checks
