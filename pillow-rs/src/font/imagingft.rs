@@ -774,7 +774,11 @@ fn stroked_mask_from_run_with_start(
     stroke_width: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     if text.is_empty() {
-        let side = (stroke_width * 2.0).ceil().max(0.0) as u32;
+        let side = (stroke_width * 2.0).ceil() as i32;
+        if side < 0 {
+            return Err(PilError::ValueError("bad image size".into()));
+        }
+        let side = side as u32;
         return Ok((side, side, vec![0; side.saturating_mul(side) as usize]));
     }
 
