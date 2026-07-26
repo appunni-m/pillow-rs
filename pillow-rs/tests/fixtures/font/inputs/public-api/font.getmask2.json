@@ -313,6 +313,26 @@
       }
     },
     {
+      "case_id": "font.getmask2.cblc_cbdt_invalid_pixel_size",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-cblc-cbdt-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.invalid_maxp_too_many_instruction_defs",
       "operation": "getmask2",
       "inputs": {
