@@ -3047,6 +3047,92 @@ pub fn abi_support_stroker_first_segment() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_closed_end_subpath() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        96,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line1_error = if begin_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_error = if line2_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_error = rust_ffi::FT_Stroker_GetBorderCounts(
+        stroker,
+        rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut left = rust_ffi::FT_OutlineSnapshot::default();
+    let mut right = rust_ffi::FT_OutlineSnapshot::default();
+    if end_error == rust_ffi::FT_Err_Ok
+        && left_error == rust_ffi::FT_Err_Ok
+        && right_error == rust_ffi::FT_Err_Ok
+    {
+        rust_ffi::FT_Stroker_ExportBorder(
+            stroker,
+            rust_ffi::FT_STROKER_BORDER_LEFT as FT_Int,
+            Some(&mut left),
+        );
+        rust_ffi::FT_Stroker_ExportBorder(
+            stroker,
+            rust_ffi::FT_STROKER_BORDER_RIGHT as FT_Int,
+            Some(&mut right),
+        );
+    }
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && line1_error == rust_ffi::FT_Err_Ok
+        && line2_error == rust_ffi::FT_Err_Ok
+        && end_error == rust_ffi::FT_Err_Ok
+        && left_error == rust_ffi::FT_Err_Ok
+        && right_error == rust_ffi::FT_Err_Ok
+        && left_points == 3
+        && left_contours == 1
+        && right_points == 18
+        && right_contours == 1
+        && left.points.len() == 3
+        && left.contours == vec![2]
+        && right.points.len() == 18
+        && right.contours == vec![17]
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_parse_opened_outline() -> bool {
     for action in [1, 2, 3] {
         let library = rust_ffi::FT_Init_FreeType();

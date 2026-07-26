@@ -19670,6 +19670,86 @@ static int emit_stroker_first_segment(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_closed_end_subpath(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND,
+        FT_STROKER_LINEJOIN_ROUND,
+        65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector p1 = { 640, 0 };
+    FT_Vector p2 = { 640, 640 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error line1_error = begin_error ? begin_error : FT_Stroker_LineTo(stroker, &p1);
+    FT_Error line2_error = line1_error ? line1_error : FT_Stroker_LineTo(stroker, &p2);
+    FT_Error end_status = line2_error ? line2_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt left_points = 99;
+    FT_UInt left_contours = 99;
+    FT_Error left_status = end_status ? end_status : FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT,
+        &left_points,
+        &left_contours);
+    FT_UInt right_points = 99;
+    FT_UInt right_contours = 99;
+    FT_Error right_status = end_status ? end_status : FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT,
+        &right_points,
+        &right_contours);
+    FT_Vector left_raw_points[64] = {0};
+    unsigned char left_raw_tags[64] = {0};
+    unsigned short left_raw_contours[8] = {0};
+    FT_Outline left = {0, 0, left_raw_points, left_raw_tags, left_raw_contours, 0};
+    FT_Vector right_raw_points[64] = {0};
+    unsigned char right_raw_tags[64] = {0};
+    unsigned short right_raw_contours[8] = {0};
+    FT_Outline right = {0, 0, right_raw_points, right_raw_tags, right_raw_contours, 0};
+    if (!end_status && !left_status && !right_status) {
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &left);
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT, &right);
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(end_status);
+    printf(",\"output\":{\"end_status\":%d,", end_status);
+    printf("\"left_counts\":{\"status\":%d,\"points\":%u,\"contours\":%u},",
+           left_status,
+           left_points,
+           left_contours);
+    printf("\"right_counts\":{\"status\":%d,\"points\":%u,\"contours\":%u},",
+           right_status,
+           right_points,
+           right_contours);
+    printf("\"left_outline\":");
+    print_stroker_outline_json(&left);
+    printf(",\"right_outline\":");
+    print_stroker_outline_json(&right);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
     if (argc != 4) return 2;
     const char* action = argv[2];
@@ -26463,6 +26543,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-first-segment")) {
         return emit_stroker_first_segment(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-closed-end-subpath")) {
+        return emit_stroker_closed_end_subpath(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);

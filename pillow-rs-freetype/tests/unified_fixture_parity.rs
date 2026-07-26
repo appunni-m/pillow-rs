@@ -25391,6 +25391,10 @@ fn is_stroker_first_segment_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath"
 }
 
+fn is_stroker_closed_end_subpath_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -26267,6 +26271,231 @@ fn wasm_stroker_simple_line_counts(case: &InputCase) -> Result<RunOutput, String
         ))
     } else {
         Err("unsupported stroker simple line-count route".to_string())
+    }
+}
+
+fn stroker_closed_end_subpath_output(
+    end_status: FT_Error,
+    left_status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_status: FT_Error,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    left_outline: Value,
+    right_outline: Value,
+) -> RunOutput {
+    ok(json!({
+        "end_status": end_status,
+        "left_counts": {"status": left_status, "points": left_points, "contours": left_contours},
+        "right_counts": {"status": right_status, "points": right_points, "contours": right_contours},
+        "left_outline": left_outline,
+        "right_outline": right_outline
+    }))
+}
+
+fn rust_stroker_closed_end_subpath(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_closed_end_subpath_case(case) {
+        return Err(format!(
+            "{} is not the maintained closed EndSubPath route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let p1 = FT_Vector { x: 640, y: 0 };
+    let p2 = FT_Vector { x: 640, y: 640 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let line1_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p1))
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&p2))
+    } else {
+        line1_error
+    };
+    let end_status = if line2_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_status = if end_status == FT_Err_Ok {
+        FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_LEFT as FT_Int,
+            Some(&mut left_points),
+            Some(&mut left_contours),
+        )
+    } else {
+        end_status
+    };
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_status = if end_status == FT_Err_Ok {
+        FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_RIGHT as FT_Int,
+            Some(&mut right_points),
+            Some(&mut right_contours),
+        )
+    } else {
+        end_status
+    };
+    let mut left = FT_OutlineSnapshot::default();
+    let mut right = FT_OutlineSnapshot::default();
+    if end_status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, Some(&mut left));
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, Some(&mut right));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_closed_end_subpath_output(
+        end_status,
+        left_status,
+        left_points,
+        left_contours,
+        right_status,
+        right_points,
+        right_contours,
+        outline_snapshot_json(&left),
+        outline_snapshot_json(&right),
+    ))
+}
+
+fn c_stroker_closed_end_subpath(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_closed_end_subpath_case(case) {
+        return Err(format!(
+            "{} is not the maintained closed EndSubPath route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let p2 = c_abi::FT_Vector { x: 640, y: 640 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let line1_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p1)
+    } else {
+        begin_error
+    };
+    let line2_error = if line1_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &p2)
+    } else {
+        line1_error
+    };
+    let end_status = if line2_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line2_error
+    };
+    let mut left_points = 99;
+    let mut left_contours = 99;
+    let left_status = if end_status == FT_Err_Ok {
+        c_abi::FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_LEFT as FT_Int,
+            &mut left_points,
+            &mut left_contours,
+        )
+    } else {
+        end_status
+    };
+    let mut right_points = 99;
+    let mut right_contours = 99;
+    let right_status = if end_status == FT_Err_Ok {
+        c_abi::FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_RIGHT as FT_Int,
+            &mut right_points,
+            &mut right_contours,
+        )
+    } else {
+        end_status
+    };
+    let mut left_raw_points = [c_abi::FT_Vector::default(); 64];
+    let mut left_raw_tags = [0u8; 64];
+    let mut left_raw_contours = [0u16; 8];
+    let mut left = c_empty_outline(
+        &mut left_raw_points,
+        &mut left_raw_tags,
+        &mut left_raw_contours,
+    );
+    let mut right_raw_points = [c_abi::FT_Vector::default(); 64];
+    let mut right_raw_tags = [0u8; 64];
+    let mut right_raw_contours = [0u16; 8];
+    let mut right = c_empty_outline(
+        &mut right_raw_points,
+        &mut right_raw_tags,
+        &mut right_raw_contours,
+    );
+    if end_status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+        c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, &mut left);
+        c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_RIGHT as FT_Int, &mut right);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_closed_end_subpath_output(
+        end_status,
+        left_status,
+        left_points,
+        left_contours,
+        right_status,
+        right_points,
+        right_contours,
+        c_outline_arrays_json(&left, &left_raw_points, &left_raw_tags, &left_raw_contours),
+        c_outline_arrays_json(
+            &right,
+            &right_raw_points,
+            &right_raw_tags,
+            &right_raw_contours,
+        ),
+    ))
+}
+
+fn wasm_stroker_closed_end_subpath(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_closed_end_subpath_case(case) {
+        return Err(format!(
+            "{} is not the maintained closed EndSubPath route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_closed_end_subpath() {
+        rust_stroker_closed_end_subpath(case)
+    } else {
+        Err("unsupported stroker closed EndSubPath route".to_string())
     }
 }
 
@@ -31199,6 +31428,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
             Ok(vec!["--stroker-first-segment".to_string()])
         }
+        "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
+            Ok(vec!["--stroker-closed-end-subpath".to_string()])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -32786,6 +33018,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
             rust_stroker_first_segment(case)
         }
+        "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
+            rust_stroker_closed_end_subpath(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -33964,6 +34199,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_closed_line_geometry(case)
         }
         "ftstroke.line_to" if is_stroker_first_segment_case(case) => c_stroker_first_segment(case),
+        "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
+            c_stroker_closed_end_subpath(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -35034,6 +35272,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
             wasm_stroker_first_segment(case)
+        }
+        "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
+            wasm_stroker_closed_end_subpath(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
