@@ -22,6 +22,7 @@
 //! will later use only one or two channels.
 
 use crate::checked_dims::CheckedDims;
+use crate::error::PilError;
 use image_slash_star::{ColorType, DynamicImage, RgbImage};
 
 /// Maps a `image-slash-star` color type to the nearest Pillow mode string.
@@ -80,7 +81,7 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
 /// `image` crate's sRGB luminance weights. The returned image has the same
 /// dimensions as `img` and one byte per pixel.
-pub fn pil_grayscale(img: &DynamicImage) -> image_slash_star::GrayImage {
+pub fn pil_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
     pil_grayscale_inner(img, true)
 }
 
@@ -89,15 +90,17 @@ pub fn pil_grayscale(img: &DynamicImage) -> image_slash_star::GrayImage {
 /// `Image.convert("1")` uses the BT.601 coefficients without the rounding bias
 /// used by `"L"` conversion. The returned buffer is still an 8-bit grayscale
 /// image; callers perform the final binary thresholding step.
-pub fn pil_grayscale_truncate(img: &DynamicImage) -> image_slash_star::GrayImage {
+pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
     pil_grayscale_inner(img, false)
 }
 
-fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image_slash_star::GrayImage {
+fn pil_grayscale_inner(
+    img: &DynamicImage,
+    round: bool,
+) -> Result<image_slash_star::GrayImage, PilError> {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let dims = CheckedDims::new(w, h, 1)
-        .expect("pil_grayscale: image already validated, dimensions must be valid");
+    let dims = CheckedDims::new(w, h, 1)?;
     let rgb_data = rgb.as_raw().as_slice();
 
     // PIL-identical 16-bit fixed-point BT.601:
@@ -115,18 +118,18 @@ fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image_slash_star::Gra
         i += 3;
     }
 
-    image_slash_star::GrayImage::from_raw(w, h, gray).expect("pil_grayscale buffer mismatch")
+    image_slash_star::GrayImage::from_raw(w, h, gray)
+        .ok_or_else(|| PilError::InternalError("pil_grayscale buffer mismatch".to_string()))
 }
 
 /// Converts a CMYK image to Pillow-compatible grayscale.
 ///
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
-pub fn cmyk_to_grayscale(img: &DynamicImage) -> image_slash_star::GrayImage {
+pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let dims = CheckedDims::new(w, h, 1)
-        .expect("cmyk_to_grayscale: image already validated, dimensions must be valid");
+    let dims = CheckedDims::new(w, h, 1)?;
     let mut gray = dims.alloc_buffer();
     for (i, p) in rgba.pixels().enumerate() {
         let c = p[0] as u32;
@@ -139,7 +142,8 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> image_slash_star::GrayImage {
         let b = (nk as i32 - muldiv255(y_, nk) as i32).clamp(0, 255) as u8;
         gray[i] = rgb_to_luma_u8(r, g, b);
     }
-    image_slash_star::GrayImage::from_raw(w, h, gray).expect("cmyk_to_grayscale buffer mismatch")
+    image_slash_star::GrayImage::from_raw(w, h, gray)
+        .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
 
 /// Resolves `Image.new` color input into core RGBA storage.
@@ -348,15 +352,17 @@ pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
 ///
 /// The luma channel uses [`pil_grayscale`]. The alpha channel is set to fully
 /// opaque (`255`) for every pixel.
-pub fn pil_grayscale_alpha(img: &DynamicImage) -> image_slash_star::GrayAlphaImage {
-    let gray = pil_grayscale(img);
+pub fn pil_grayscale_alpha(
+    img: &DynamicImage,
+) -> Result<image_slash_star::GrayAlphaImage, PilError> {
+    let gray = pil_grayscale(img)?;
     let (w, h) = gray.dimensions();
     let mut ga = image_slash_star::GrayAlphaImage::new(w, h);
     for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
         gap[0] = gp[0];
         gap[1] = 255;
     }
-    ga
+    Ok(ga)
 }
 
 // ── Non-standard mode conversions ──

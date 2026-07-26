@@ -111,15 +111,15 @@ impl Image {
                 // For mode "L" etc., derive from the RGB result.
                 let result = if mode == "L" || mode == "LA" {
                     if mode == "L" {
-                        DynamicImage::ImageLuma8(color::pil_grayscale(&converted))
+                        DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
                     } else {
-                        DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted))
+                        DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted)?)
                     }
                 } else if mode == "RGBA" {
                     DynamicImage::ImageRgba8(converted.to_rgba8())
                 } else if mode == "1" {
                     // PIL: convert("1") uses truncated grayscale then threshold at 128
-                    let gray = color::pil_grayscale_truncate(&converted);
+                    let gray = color::pil_grayscale_truncate(&converted)?;
                     let (w, h) = gray.dimensions();
                     let mut out = image_slash_star::GrayImage::new(w, h);
                     for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
@@ -142,16 +142,16 @@ impl Image {
             // Use truncated grayscale (PIL uses integer truncation, not rounding)
             let gray = if let Some(src_mode) = self.explicit_mode() {
                 if src_mode == "CMYK" {
-                    crate::color::cmyk_to_grayscale(&img)
+                    crate::color::cmyk_to_grayscale(&img)?
                 } else if is_nonstandard_mode(src_mode) {
                     let rgb = crate::color::convert_from_nonstandard(src_mode, &img, None)
                         .unwrap_or_else(|| img.to_rgb8().into());
-                    crate::color::pil_grayscale_truncate(&rgb)
+                    crate::color::pil_grayscale_truncate(&rgb)?
                 } else {
-                    crate::color::pil_grayscale_truncate(&img)
+                    crate::color::pil_grayscale_truncate(&img)?
                 }
             } else {
-                crate::color::pil_grayscale_truncate(&img)
+                crate::color::pil_grayscale_truncate(&img)?
             };
             let (w, h) = gray.dimensions();
             let mut out = image_slash_star::GrayImage::new(w, h);

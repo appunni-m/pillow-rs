@@ -1000,12 +1000,12 @@ impl ImageDraw {
         self.draw.bitmap(x, y, &bitmap.inner, fill).map_err(err)
     }
     #[wasm_bindgen(getter)]
-    pub fn image(&self) -> Image {
+    pub fn image(&self) -> Result<Image, JsValue> {
         // Core image_clone() already handles mode preservation
         // (RGB→RGB, RGBA→RGBA, L→L, etc.)
-        Image {
-            inner: self.draw.image_clone(),
-        }
+        Ok(Image {
+            inner: self.draw.image_clone().map_err(err)?,
+        })
     }
 }
 

@@ -56,22 +56,24 @@ pub fn raw_bytes_to_image(
     // arms correspond exactly to the image crate's DynamicImage variants.
     // Channels is validated to be 1-4 by CheckedDims (zero rejected above).
     Ok(match channels {
-        1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(width, height, pixel_data)
-                .expect("CheckedDims guarantees buf.len() == w*h*ch for ch=1"),
-        ),
+        1 => DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, pixel_data).ok_or_else(
+            || PilError::InternalError("raw_bytes_to_image: L buffer shape mismatch".to_string()),
+        )?),
         2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(width, height, pixel_data)
-                .expect("CheckedDims guarantees buf.len() == w*h*ch for ch=2"),
+            GrayAlphaImage::from_raw(width, height, pixel_data).ok_or_else(|| {
+                PilError::InternalError("raw_bytes_to_image: LA buffer shape mismatch".to_string())
+            })?,
         ),
-        3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(width, height, pixel_data)
-                .expect("CheckedDims guarantees buf.len() == w*h*ch for ch=3"),
-        ),
-        4 => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(width, height, pixel_data)
-                .expect("CheckedDims guarantees buf.len() == w*h*ch for ch=4"),
-        ),
+        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, pixel_data).ok_or_else(
+            || PilError::InternalError("raw_bytes_to_image: RGB buffer shape mismatch".to_string()),
+        )?),
+        4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(width, height, pixel_data).ok_or_else(
+            || {
+                PilError::InternalError(
+                    "raw_bytes_to_image: RGBA buffer shape mismatch".to_string(),
+                )
+            },
+        )?),
         _ => {
             // CheckedDims validates channels ∈ [1,4], so this is unreachable.
             unreachable!("CheckedDims guarantees channels ∈ [1,4]");
@@ -84,31 +86,46 @@ pub fn raw_bytes_to_image(
 /// Use this only when `data` came from [`CheckedDims::alloc_buffer`] or an
 /// equivalent checked path. Debug builds assert that the byte length still
 /// matches [`CheckedDims::total_bytes`].
-pub fn raw_bytes_to_image_trusted(dims: CheckedDims, data: Vec<u8>) -> DynamicImage {
-    debug_assert_eq!(
-        data.len(),
-        dims.total_bytes(),
-        "Trusted buffer size mismatch: expected {}, got {}",
-        dims.total_bytes(),
-        data.len()
-    );
+pub fn raw_bytes_to_image_trusted(
+    dims: CheckedDims,
+    data: Vec<u8>,
+) -> Result<DynamicImage, PilError> {
+    if data.len() != dims.total_bytes() {
+        return Err(PilError::InternalError(format!(
+            "trusted buffer size mismatch: expected {}, got {}",
+            dims.total_bytes(),
+            data.len()
+        )));
+    }
     match dims.channels {
-        1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(dims.width, dims.height, data)
-                .expect("CheckedDims guarantees correct size for ch=1"),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(dims.width, dims.height, data)
-                .expect("CheckedDims guarantees correct size for ch=2"),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(dims.width, dims.height, data)
-                .expect("CheckedDims guarantees correct size for ch=3"),
-        ),
-        4 => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(dims.width, dims.height, data)
-                .expect("CheckedDims guarantees correct size for ch=4"),
-        ),
+        1 => GrayImage::from_raw(dims.width, dims.height, data)
+            .map(DynamicImage::ImageLuma8)
+            .ok_or_else(|| {
+                PilError::InternalError(
+                    "raw_bytes_to_image_trusted: L buffer shape mismatch".to_string(),
+                )
+            }),
+        2 => GrayAlphaImage::from_raw(dims.width, dims.height, data)
+            .map(DynamicImage::ImageLumaA8)
+            .ok_or_else(|| {
+                PilError::InternalError(
+                    "raw_bytes_to_image_trusted: LA buffer shape mismatch".to_string(),
+                )
+            }),
+        3 => RgbImage::from_raw(dims.width, dims.height, data)
+            .map(DynamicImage::ImageRgb8)
+            .ok_or_else(|| {
+                PilError::InternalError(
+                    "raw_bytes_to_image_trusted: RGB buffer shape mismatch".to_string(),
+                )
+            }),
+        4 => RgbaImage::from_raw(dims.width, dims.height, data)
+            .map(DynamicImage::ImageRgba8)
+            .ok_or_else(|| {
+                PilError::InternalError(
+                    "raw_bytes_to_image_trusted: RGBA buffer shape mismatch".to_string(),
+                )
+            }),
         _ => unreachable!("CheckedDims guarantees channels ∈ [1,4]"),
     }
 }
@@ -142,7 +159,7 @@ mod tests {
     fn trusted_path_matches_validated() {
         let dims = CheckedDims::new(10, 20, 3).unwrap();
         let data = dims.alloc_buffer();
-        let img = raw_bytes_to_image_trusted(dims, data);
+        let img = raw_bytes_to_image_trusted(dims, data).unwrap();
         assert_eq!(img.width(), 10);
         assert_eq!(img.height(), 20);
     }
