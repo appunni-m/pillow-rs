@@ -33,6 +33,21 @@
       }
     },
     {
+      "case_id": "font.variations.get_variation_axes.platform1_fallback",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
       "case_id": "font.variations.get_variation_axes.non_variable_error",
       "operation": "get_variation_axes",
       "inputs": {
@@ -70,6 +85,21 @@
           "font": {
             "kind": "ref",
             "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.platform1_fallback",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
           }
         },
         "params": {
