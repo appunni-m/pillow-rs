@@ -207,18 +207,29 @@ can initialize an otherwise empty subpath. ConicTo runtime movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `709c2233-577d-41c2-afe0-ebadfc025804`
-- Snapshot: `fcf69668-46f7-46f4-a1a9-05fc3cb803e3`
+- Run: `90a427d5-b68f-40b2-aa34-fc0030234ee0`
+- Snapshot: `af6f44d2-73aa-4020-b47b-b0242fd9a05f`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `7271a78c3ee1dbdec0a3cbf67f976822e4fbac36`
+- Commit measured: `cb634ebe25dd60c73cbcbd8ead1a5a2c0aae97e4`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `684/697` (`98.13%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
-| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
+
+Latest Font wrapper movement:
+
+- Added `font.text_bbox.invalid_maxp_too_many_instruction_defs` as an
+  input-only row. The expected error is generated at runtime by the pinned
+  Pillow oracle.
+- This covers `Font::text_bbox`'s `getbbox?` error propagation region.
+- The only remaining `font/mod.rs` uncovered region is
+  `Font::load_default`'s `default_aileron::decode()?` error arm. That path is
+  not reachable through honest public inputs unless the checked-in embedded
+  default font bytes are corrupt.
 
 Remaining targeted gaps in `imagingft.rs`:
 
