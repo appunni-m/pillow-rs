@@ -201,6 +201,46 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2.hinter_code_overflow",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-fdef-index-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2.hinter_nested_defs",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-nested-fdef.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }

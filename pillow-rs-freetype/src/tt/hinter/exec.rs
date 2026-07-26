@@ -661,9 +661,11 @@ impl ExecContext {
         }
         let func_index = func_num as usize;
         if func_index >= self.functions.len() {
-            return Err(FontError::InvalidOutline(
-                "bytecode: too many function definitions".into(),
-            ));
+            // FreeType `ttinterp.c` rejects an FDEF index beyond the fixed
+            // definition record array before scanning a body and reports
+            // `FT_Err_Code_Overflow`; exceeding the declared maxFunctionDefs
+            // budget below remains `Too_Many_Function_Defs`.
+            return Err(FontError::CodeOverflow);
         }
         let redefining = self.functions[func_index].is_some();
         if !redefining {

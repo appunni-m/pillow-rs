@@ -84,6 +84,8 @@ fn ft_error_to_pil(error: i32) -> PilError {
         x if x == ffi::FT_Err_Too_Many_Function_Defs as i32 => {
             PilError::OsError("too many function definitions".into())
         }
+        x if x == ffi::FT_Err_Code_Overflow as i32 => PilError::OsError("code overflow".into()),
+        x if x == ffi::FT_Err_Nested_DEFS as i32 => PilError::OsError("nested DEFS".into()),
         other => PilError::ValueError(format!("FreeType error {other}")),
     }
 }
