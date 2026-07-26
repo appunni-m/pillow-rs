@@ -70,7 +70,8 @@ pub struct FontVariantOptions {
     /// Pillow `encoding` argument. BASIC Unicode-compatible rows preserve this
     /// for public signature parity while fontdone selects the Unicode charmap.
     pub encoding: Option<String>,
-    /// Pillow `layout_engine` argument. Only BASIC layout is implemented.
+    /// Pillow `layout_engine` argument. In the no-raqm oracle configuration,
+    /// Pillow accepts this argument and falls back to BASIC layout.
     pub layout_engine: Option<String>,
 }
 
