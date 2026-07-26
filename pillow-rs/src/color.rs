@@ -458,7 +458,8 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// The input is RGBA storage interpreted as little-endian `i32` pixels.
 /// Output uses Pillow's scaling formula: `L = (I + 32768) / 256`, clamped to a
 /// byte.
-pub fn i32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
+#[allow(dead_code)]
+pub(crate) fn i32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let mut gray = image_slash_star::GrayImage::new(w, h);
@@ -474,7 +475,8 @@ pub fn i32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
 ///
 /// The input is RGBA storage interpreted as little-endian `f32` pixels. Output
 /// clamps each value to `0..=255` and truncates to a byte.
-pub fn f32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
+#[allow(dead_code)]
+pub(crate) fn f32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let mut gray = image_slash_star::GrayImage::new(w, h);

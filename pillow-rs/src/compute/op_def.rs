@@ -252,7 +252,12 @@ macro_rules! define_op {
 // AS PER DESIGN — DO NOT REMOVE: Tests validate macro behavior.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::OpEntry;
+    use super::get_op;
+    use super::is_registered;
+    use super::register_op;
+    use super::registered_keys;
+    use crate::PilError;
 
     #[test]
     fn register_and_retrieve() -> Result<(), PilError> {

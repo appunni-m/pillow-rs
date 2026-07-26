@@ -62,7 +62,7 @@ impl Backend {
 /// Backends advertise operation support before execution so the router can keep
 /// a pipeline on one backend. Implementations should return errors instead of
 /// panicking when runtime resources are unavailable.
-pub trait BackendImpl: Send + Sync {
+pub(crate) trait BackendImpl: Send + Sync {
     /// Returns the backend identity used for routing and enable/disable state.
     fn name(&self) -> Backend;
     /// Returns backend preference. Larger values are selected first.
@@ -84,20 +84,23 @@ pub trait BackendImpl: Send + Sync {
 // backend_op: BackendOp trait for per-backend capability detection
 // op_def:     define_op! macro — single-definition op registration
 /// Per-backend capability trait used by operation descriptors.
-pub mod backend_op;
+#[allow(dead_code)]
+pub(crate) mod backend_op;
 /// Macro-backed operation registration helpers.
-pub mod op_def;
+#[allow(dead_code)]
+pub(crate) mod op_def;
 
 mod pool_cpu;
 #[cfg(feature = "gpu")]
 mod pool_gpu;
 mod pool_simd;
-pub mod registry;
+#[allow(dead_code)]
+pub(crate) mod registry;
 
-pub use pool_cpu::CpuPool;
+pub(crate) use pool_cpu::CpuPool;
 #[cfg(feature = "gpu")]
-pub use pool_gpu::GpuPool;
-pub use pool_simd::SimdPool;
+pub(crate) use pool_gpu::GpuPool;
+pub(crate) use pool_simd::SimdPool;
 
 // ── Backend activation ─────────────────────────────────────────────────────
 

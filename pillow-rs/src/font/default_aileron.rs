@@ -93,7 +93,8 @@ fn decode_digit(byte: u8) -> Option<u8> {
 mod tests {
     use sha2::{Digest, Sha256};
 
-    use super::*;
+    use super::DECODED_LEN;
+    use super::decode;
 
     #[test]
     fn embedded_payload_matches_pillow_12_2_0() {

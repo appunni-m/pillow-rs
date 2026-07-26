@@ -47,7 +47,8 @@ macro_rules! par_rows {
         // AS PER DESIGN: par_chunks splits at row boundaries — each chunk is
         // one complete scanline. This ensures cache-friendly access and
         // correctness for row-independent operations.
-        use rayon::prelude::*;
+        use rayon::iter::ParallelIterator;
+        use rayon::slice::ParallelSlice;
         _data
             .par_chunks(_stride)
             .take(_height)
@@ -84,7 +85,8 @@ macro_rules! par_rows {
 macro_rules! par_pixels {
     ($data:expr, $width:expr, $height:expr, $stride:expr,
      |$idx:ident, $x:ident, $y:ident| $body:block) => {{
-        use rayon::prelude::*;
+        use rayon::iter::IntoParallelIterator;
+        use rayon::iter::ParallelIterator;
         let _data: &[u8] = $data;
         let _width: usize = $width;
         let _height: usize = $height;
@@ -112,7 +114,8 @@ macro_rules! par_pixels {
 macro_rules! par_tiles {
     ($data:expr, $width:expr, $height:expr, $tile_w:expr, $tile_h:expr,
      |$tile:ident, $tx:ident, $ty:ident| $body:block) => {{
-        use rayon::prelude::*;
+        use rayon::iter::IntoParallelRefIterator;
+        use rayon::iter::ParallelIterator;
         let _width: usize = $width;
         let _height: usize = $height;
         let _tile_w: usize = $tile_w;

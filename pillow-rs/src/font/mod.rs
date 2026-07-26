@@ -140,7 +140,8 @@ impl std::fmt::Debug for Font {
 mod tests {
     use sha2::{Digest, Sha256};
 
-    use super::*;
+    use super::Font;
+    use super::imagingft;
 
     #[test]
     fn load_default_uses_pillow_aileron_through_truetype() {
