@@ -537,10 +537,8 @@ fn length_from_basic_layout(ttf: &Font, text: &str) -> Result<i32, PilError> {
     Ok(total)
 }
 
-const MAX_ADVANCE_26_6_EXCLUSIVE: i64 = 0x8000 * 64;
-
 fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
-    if advance >= MAX_ADVANCE_26_6_EXCLUSIVE || advance <= -MAX_ADVANCE_26_6_EXCLUSIVE {
+    if advance >= 0x8000 * 64 || advance <= -(0x8000 * 64) {
         Err(PilError::OsError("invalid argument".into()))
     } else {
         Ok(())
@@ -775,9 +773,7 @@ fn mask_from_run_with_start(
 
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
     let rows = bitmap.rows as usize;
-    let Ok(pitch) = usize::try_from(bitmap.pitch.unsigned_abs()) else {
-        return 0;
-    };
+    let pitch = bitmap.pitch.unsigned_abs() as usize;
     let storage_row = if bitmap.pitch < 0 {
         let Some(storage_row) = rows.checked_sub(row + 1) else {
             return 0;
