@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `1f34bc130`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `61e475ab3`
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
@@ -22,6 +22,10 @@ New commits:
 - `1f34bc130` — added a manifest gate that rejects active input rows for
   parameters still marked `blocked`, so `stroke_width` cannot silently appear
   in `getmask/getmask2` rows without being implemented and reclassified.
+- `61e475ab3` — added a root API gate that extracts public
+  `pillow_rs::font_*` functions from `src/lib.rs` and requires every one to
+  map to a `font_manifest.yaml` operation. A new root Font endpoint now fails
+  the parity test unless it is explicitly accounted for by the manifest.
 
 Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
 repo-local oracle remains:
@@ -42,15 +46,18 @@ Newly covered edge cases:
 - Manifest coverage is now validated against the live Pillow public signatures
   using canonical parameter names, and blocked parameters must not appear in
   active passing rows.
+- Root `pillow_rs::font_*` public functions are now validated against the
+  manifest operation list, closing the previous gap where a Rust root wrapper
+  could exist without manifest coverage.
 
 Verification:
 
 - `make -C pillow-rs fmt` — passed
 - `make -C pillow-rs font-tests` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `524c34d3-4647-4d94-ad99-3223851ab732`
-  - snapshot `5e294d66-c1ea-4645-9718-acf938ce3256`
-  - commit `1f34bc130c5ab6d4d30ba4760f5a3a885ee69f50`
+  - run `2f336024-8cf7-4234-a4fe-7e0721419934`
+  - snapshot `e76a8d2f-e177-4a63-a858-c0593179d22e`
+  - commit `61e475ab347e0bc9b09d2b4d7d94222257397f05`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
