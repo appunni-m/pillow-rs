@@ -1,6 +1,52 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `1b5701b1c`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `3bf702906`
+
+## Current checkpoint: mask ink and variadic public options
+
+New commit:
+
+- `3bf702906` — covered Pillow `FreeTypeFont.getmask(..., ink=...)` and
+  `FreeTypeFont.getmask2(..., *args, **kwargs)` public-signature behavior
+  through input-only rows and the live repo-local Pillow oracle.
+
+What changed:
+
+- `getmask` now covers integer `ink` parity for `L` masks and the exact
+  Pillow `TypeError` for JSON list input passed as `ink`.
+- `getmask2` now covers real positional variadic arguments after `start` and
+  ignored extra keyword arguments such as `stroke_filled`/unknown keys when
+  `stroke_width == 0`.
+- `font_manifest.yaml` now classifies `getmask.ink` plus `getmask2.ink`,
+  `getmask2.args`, and `getmask2.kwargs` as covered.
+- Remaining manifest-level blocked public parameters:
+  - `getmask`: `stroke_width`
+  - `getmask2`: `stroke_width`
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed
+- `make -C pillow-rs fmt` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `2774b7fb-f593-46b1-944b-bcf4f8ee5d81`
+  - snapshot `26ab5845-8e8a-4777-9a2c-b3e85dea5b10`
+  - commit `3bf70290624318b8cb463a7747460cfed90ac19b`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `996/1088` (`91.54%`) | `192/248` (`77.42%`) | `98/113` (`86.73%`) | `1652/1808` (`91.37%`) |
+| `pillow-rs/src/font/mod.rs` | `179/203` (`88.18%`) | n/a | `42/49` (`85.71%`) | `217/259` (`83.78%`) |
+
+Blocker:
+
+- 100% region coverage is still not achieved. The remaining public Font
+  implementation blocker is stroked mask rendering for
+  `getmask/getmask2(stroke_width != 0)`. Pillow supports it through the native
+  `_imagingft` render path; Rust still returns `NotImplementedError` until the
+  pure-Rust FreeType stroker path can render real glyph contours exactly.
 
 ## Current checkpoint: manifest public-signature gate
 

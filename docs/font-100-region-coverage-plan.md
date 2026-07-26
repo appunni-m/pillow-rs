@@ -4,6 +4,43 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
+Latest measured checkpoint after mask option sweep:
+
+- Commit: `3bf702906`
+- Coverage MCP run: `2774b7fb-f593-46b1-944b-bcf4f8ee5d81`
+- Snapshot: `26ab5845-8e8a-4777-9a2c-b3e85dea5b10`
+- Command: `imagingft-tests-coverage-fixed`
+- Result: passed, ingested
+- `pillow-rs/src/font/imagingft.rs`:
+  - lines: `996/1088` (`91.54%`)
+  - branches: `192/248` (`77.42%`)
+  - functions: `98/113` (`86.73%`)
+  - regions: `1652/1808` (`91.37%`)
+- `pillow-rs/src/font/mod.rs`:
+  - lines: `179/203` (`88.18%`)
+  - functions: `42/49` (`85.71%`)
+  - regions: `217/259` (`83.78%`)
+
+Latest manifest movement:
+
+- Covered `getmask.ink` with both integer-accepted and JSON-list error rows.
+- Covered `getmask2.ink`, `getmask2.args`, and `getmask2.kwargs` with
+  live-oracle rows that pass real positional args and extra kwargs into
+  Pillow's public `FreeTypeFont.getmask2`.
+- Remaining blocked public parameters are now only:
+  - `getmask`: `stroke_width`
+  - `getmask2`: `stroke_width`
+
+Current blocker to literal 100%:
+
+- Stroked `getmask/getmask2` is still the public implementation blocker.
+  Input-only rows cannot be honestly added for `stroke_width != 0` until Rust
+  can render Pillow-equivalent stroked glyph masks instead of returning
+  `NotImplementedError`.
+- Remaining uncovered regions outside the public stroke blocker are defensive
+  FreeType/bitmap/fallback paths that still need real oracle-driving assets or
+  code simplification after proving they are unreachable.
+
 Latest measured checkpoint:
 
 - Commit: `1b5701b1c`
