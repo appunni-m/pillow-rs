@@ -19671,8 +19671,9 @@ static int emit_stroker_first_segment(int argc, char** argv) {
 }
 
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
-    if (argc != 3) return 2;
+    if (argc != 4) return 2;
     const char* action = argv[2];
+    FT_Fixed radius = (FT_Fixed)strtol(argv[3], NULL, 10);
     FT_Library library = NULL;
     FT_Error init_error = FT_Init_FreeType(&library);
     if (init_error) {
@@ -19696,7 +19697,7 @@ static int emit_stroker_open_line_geometry(int argc, char** argv) {
         FT_Error new_error = FT_Stroker_New(library, &stroker);
         FT_Error status = new_error;
         if (!status) {
-            FT_Stroker_Set(stroker, 96, caps[i], FT_STROKER_LINEJOIN_ROUND, 65536);
+            FT_Stroker_Set(stroker, radius, caps[i], FT_STROKER_LINEJOIN_ROUND, 65536);
             FT_Vector start = { 0, 0 };
             FT_Vector to = { 640, 0 };
             status = FT_Stroker_BeginSubPath(stroker, &start, 1);
@@ -26463,7 +26464,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 2 && streq(argv[1], "--stroker-first-segment")) {
         return emit_stroker_first_segment(argc, argv);
     }
-    if (argc == 3 && streq(argv[1], "--stroker-open-line-geometry")) {
+    if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {

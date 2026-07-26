@@ -25397,6 +25397,7 @@ fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, S
         "ftstroke.FT_STROKER_LINECAP_ROUND.round_cap_open_line_geometry" => Ok("round"),
         "ftstroke.FT_STROKER_LINECAP_SQUARE.square_cap_open_line_geometry" => Ok("square"),
         "ftstroke.FT_Stroker_LineCap.open_path_cap_geometry"
+        | "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border"
         | "ftstroke.FT_STROKER_BORDER_LEFT.left_border_export_geometry"
         | "ftstroke.FT_STROKER_BORDER_RIGHT.right_border_export_geometry"
         | "ftstroke.FT_StrokerBorder.border_selection_runtime_shape"
@@ -25407,6 +25408,14 @@ fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, S
             "{} is not a maintained open-line stroker geometry route",
             case.case_id
         )),
+    }
+}
+
+fn stroker_open_line_geometry_radius(case: &InputCase) -> FT_Fixed {
+    if case.case_id == "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border" {
+        128
+    } else {
+        96
     }
 }
 
@@ -25595,6 +25604,7 @@ fn stroker_open_line_geometry_output(
 
 fn rust_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
     let action = stroker_open_line_geometry_action(case)?;
+    let radius = stroker_open_line_geometry_radius(case);
     stroker_open_line_geometry_output(action, |action| {
         let library = FT_Init_FreeType();
         let mut stroker = ptr::null_mut();
@@ -25604,7 +25614,7 @@ fn rust_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String
         }
         FT_Stroker_Set(
             stroker,
-            96,
+            radius,
             stroker_cap_value(action),
             FT_STROKER_LINEJOIN_ROUND as FT_Int,
             65_536,
@@ -25683,6 +25693,7 @@ fn c_empty_outline<'a>(
 
 fn c_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
     let action = stroker_open_line_geometry_action(case)?;
+    let radius = stroker_open_line_geometry_radius(case);
     stroker_open_line_geometry_output(action, |action| {
         let mut library = ptr::null_mut();
         let init_error = c_abi::FT_Init_FreeType(&mut library);
@@ -25697,7 +25708,7 @@ fn c_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
         }
         c_abi::FT_Stroker_Set(
             stroker,
-            96,
+            radius,
             stroker_cap_value(action),
             FT_STROKER_LINEJOIN_ROUND as FT_Int,
             65_536,
@@ -25757,15 +25768,19 @@ fn c_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
 
 fn wasm_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String> {
     let action = stroker_open_line_geometry_action(case)?;
-    if wasm_abi::abi_support_stroker_open_line_geometry(if action == "all" {
-        0
-    } else if action == "butt" {
-        1
-    } else if action == "round" {
-        2
-    } else {
-        3
-    }) {
+    let radius = stroker_open_line_geometry_radius(case);
+    if wasm_abi::abi_support_stroker_open_line_geometry(
+        if action == "all" {
+            0
+        } else if action == "butt" {
+            1
+        } else if action == "round" {
+            2
+        } else {
+            3
+        },
+        radius,
+    ) {
         rust_stroker_open_line_geometry(case)
     } else {
         Err(format!(
@@ -31185,6 +31200,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(vec!["--stroker-first-segment".to_string()])
         }
         "ftstroke.open_path_geometry"
+        | "ftstroke.end_subpath"
         | "ftstroke.export_border"
         | "ftstroke.export"
         | "ftstroke.join_geometry_alias"
@@ -31193,6 +31209,7 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             Ok(vec![
                 "--stroker-open-line-geometry".to_string(),
                 stroker_open_line_geometry_action(case)?.to_string(),
+                stroker_open_line_geometry_radius(case).to_string(),
             ])
         }
         "ftstroke.line_to" if is_stroker_simple_line_counts_case(case) => {
@@ -32770,6 +32787,7 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             rust_stroker_first_segment(case)
         }
         "ftstroke.open_path_geometry"
+        | "ftstroke.end_subpath"
         | "ftstroke.export_border"
         | "ftstroke.export"
         | "ftstroke.join_geometry_alias"
@@ -33947,6 +33965,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.line_to" if is_stroker_first_segment_case(case) => c_stroker_first_segment(case),
         "ftstroke.open_path_geometry"
+        | "ftstroke.end_subpath"
         | "ftstroke.export_border"
         | "ftstroke.export"
         | "ftstroke.join_geometry_alias"
@@ -35017,6 +35036,7 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             wasm_stroker_first_segment(case)
         }
         "ftstroke.open_path_geometry"
+        | "ftstroke.end_subpath"
         | "ftstroke.export_border"
         | "ftstroke.export"
         | "ftstroke.join_geometry_alias"
