@@ -67,7 +67,7 @@ impl<T, E: std::fmt::Debug> InfallibleExt for Result<T, E> {
 // AS PER DESIGN — DO NOT REMOVE: Tests validate behavior.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::InfallibleExt;
 
     #[test]
     fn option_because_success() {

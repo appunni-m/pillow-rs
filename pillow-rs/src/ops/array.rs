@@ -229,7 +229,8 @@ fn format_typekey_shape(shape_tail: &[usize]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::ArrayLayout;
+    use super::resolve_array_layout;
 
     #[test]
     fn resolves_scalar_and_color_type_keys() {

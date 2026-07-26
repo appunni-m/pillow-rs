@@ -39,7 +39,3 @@ pub mod transform;
 pub mod transpose;
 /// Shared operation helper functions.
 pub mod utils;
-
-// Re-export types needed by binding layers
-pub use paste::PasteSource;
-pub use resize::parse_resample;

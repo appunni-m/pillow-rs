@@ -124,7 +124,8 @@ impl TryFrom<ColorMode> for PixelFormat {
 // AS PER DESIGN — DO NOT REMOVE: Tests validate encoding stability.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::PixelFormat;
+    use crate::pipeline::ColorMode;
 
     #[test]
     fn discriminants_are_stable() {

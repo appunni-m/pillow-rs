@@ -419,7 +419,8 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::exif_get_orientation;
+    use super::exif_remove_orientation;
 
     #[test]
     fn test_exif_get_orientation_empty() {

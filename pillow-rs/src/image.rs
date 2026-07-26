@@ -3218,7 +3218,8 @@ pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
 /// # Errors
 ///
 /// Returns [`PilError`] from the CPU registry implementation.
-pub fn execute_op(
+#[allow(dead_code)]
+pub(crate) fn execute_op(
     img: &DynamicImage,
     op: &PipelineOp,
     explicit_mode: Option<&str>,

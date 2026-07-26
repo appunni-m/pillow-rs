@@ -173,6 +173,7 @@ fmt-fix:
 
 .PHONY: clippy
 clippy:
+	python3 ../scripts/check_public_api_boundary.py
 	$(CARGO) clippy --all-targets --all-features --locked -- -D warnings
 
 .PHONY: lint

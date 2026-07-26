@@ -215,7 +215,8 @@ impl CheckedDims {
 // AS PER DESIGN — DO NOT REMOVE: Tests validate overflow behavior.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::CheckedDims;
+    use super::DEFAULT_MAX_PIXELS;
 
     #[test]
     fn valid_dimensions() {

@@ -90,7 +90,8 @@ pub fn flatten_pixel_list(values: &[i32]) -> Result<Vec<u8>, PilError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::align_row_to_32;
+    use super::flatten_pixel_list;
 
     #[test]
     fn test_align_row_to_32_no_padding() {

@@ -31,7 +31,8 @@ use crate::error::PilError;
 /// Returns [`PilError::DimensionError`] if dimensions or byte counts are
 /// invalid, and [`PilError::ValueError`] if `data` is too short for the declared
 /// shape.
-pub fn raw_bytes_to_image(
+#[allow(dead_code)]
+pub(crate) fn raw_bytes_to_image(
     width: u32,
     height: u32,
     channels: u8,
@@ -86,7 +87,8 @@ pub fn raw_bytes_to_image(
 /// Use this only when `data` came from [`CheckedDims::alloc_buffer`] or an
 /// equivalent checked path. Debug builds assert that the byte length still
 /// matches [`CheckedDims::total_bytes`].
-pub fn raw_bytes_to_image_trusted(
+#[allow(dead_code)]
+pub(crate) fn raw_bytes_to_image_trusted(
     dims: CheckedDims,
     data: Vec<u8>,
 ) -> Result<DynamicImage, PilError> {
@@ -133,7 +135,9 @@ pub fn raw_bytes_to_image_trusted(
 // AS PER DESIGN — DO NOT REMOVE: Tests validate correctness.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::raw_bytes_to_image;
+    use super::raw_bytes_to_image_trusted;
+    use crate::CheckedDims;
 
     #[test]
     fn valid_rgba_image() {

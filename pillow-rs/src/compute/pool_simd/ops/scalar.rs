@@ -2240,7 +2240,17 @@ pub fn crop_border(pixels: &[u32], w: u32, h: u32, mode: u32, border: u32) -> (V
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        add, add_modulo, alpha_composite, autocontrast, blend, blend_module, box_blur, brightness,
+        color_saturation, colorize, composite, composite_module, constant, contain, contrast,
+        convert, cover, crop, crop_border, darker, difference, duplicate, equalize, eval, expand,
+        filter_3x3, filter_5x5, fit, flip, gaussian_blur, grayscale, hard_light, invert,
+        invert_chops, lighter, logical_and, logical_or, logical_xor, max_filter, median_filter,
+        merge, min_filter, mirror, multiply, offset, overlay, pad, paste, point_op, posterize,
+        put_alpha, put_data, put_pixel, quantize, rank_filter, reduce, remap_palette, resize,
+        rotate, scale, screen, sharpness, soft_light, solarize, subtract, subtract_modulo,
+        thumbnail, transform, transpose,
+    };
 
     /// Helper: create a packed u32 pixel from RGBA bytes.
     fn p(r: u8, g: u8, b: u8, a: u8) -> u32 {

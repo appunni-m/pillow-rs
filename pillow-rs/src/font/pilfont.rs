@@ -549,7 +549,12 @@ impl<'a> PbmTokens<'a> {
 mod tests {
     use sha2::{Digest, Sha256};
 
-    use super::*;
+    use super::DEFAULT_BITMAP;
+    use super::DEFAULT_BITMAP_LEN;
+    use super::DEFAULT_METRICS;
+    use super::DEFAULT_METRICS_LEN;
+    use super::PilFont;
+    use super::decode_base64;
 
     #[test]
     fn embedded_courb08_matches_pillow_12_2_0() {

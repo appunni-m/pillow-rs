@@ -214,7 +214,8 @@ pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 }
 
 /// Duplicate an image.
-pub fn duplicate(image: &Image) -> Image {
+#[allow(dead_code)]
+pub(crate) fn duplicate(image: &Image) -> Image {
     image.copy()
 }
 
