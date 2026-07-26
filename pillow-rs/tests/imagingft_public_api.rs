@@ -76,14 +76,17 @@ fn oracle_python() -> PathBuf {
 
     let candidate = if let Some(env_path) = std::env::var_os("IMAGINGFT_ORACLE_PYTHON") {
         let path = PathBuf::from(env_path);
-        if path.starts_with(&repo_root)
-            && path.ends_with(".oracle-venv/bin/python")
-            && path.exists()
-        {
-            path
-        } else {
-            expected.clone()
+        if !path.exists() {
+            panic!("IMAGINGFT_ORACLE_PYTHON does not exist: {path:?}");
         }
+        if !path.starts_with(&repo_root)
+            || !path.ends_with(".oracle-venv/bin/python")
+        {
+            panic!(
+                "IMAGINGFT_ORACLE_PYTHON must point to .oracle-venv/bin/python: {path:?}"
+            );
+        }
+        path
     } else {
         expected.clone()
     };
