@@ -52,6 +52,17 @@ Missing implementation / blocker:
   retain success fixtures for `ftstroke.FT_Glyph_Stroke` and
   `ftstroke.FT_Glyph_StrokeBorder`, so this blocker is tied to an executable
   parity target rather than an undocumented TODO.
+- The guard pins the exact five lower-level success rows that must become real
+  before Font `stroke_width` can move from `blocked` to `covered`:
+  `ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success`,
+  `ftstroke.FT_Glyph_Stroke.destroy_original_option`,
+  `ftstroke.FT_Glyph_StrokeBorder.outside_border_success`,
+  `ftstroke.FT_Glyph_StrokeBorder.inside_border_success`, and
+  `ftstroke.FT_Glyph_StrokeBorder.destroy_original_option`.
+- Latest narrow FreeType check:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`
+  passed the current runnable rows (`3/3`) and reported those five glyph-stroke
+  success/destroy rows as pending lower-level routes.
 - I did not add `stroke_width` fixture rows as active cases because Pillow
   succeeds for visible glyph strokes and Rust still errors. Adding those rows
   before the stroker exists would create known failing parity rows, not 100%
