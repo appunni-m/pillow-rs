@@ -22,8 +22,6 @@ This applies at least to:
 - `Draw`
 - `PilError`
 - `Font`
-- `InfallibleExt` while it is still re-exported
-- `PixelFormat`
 
 The real rule should be:
 

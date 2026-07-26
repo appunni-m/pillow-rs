@@ -137,7 +137,7 @@ pub(crate) fn raw_bytes_to_image_trusted(
 mod tests {
     use super::raw_bytes_to_image;
     use super::raw_bytes_to_image_trusted;
-    use crate::CheckedDims;
+    use crate::checked_dims::CheckedDims;
 
     #[test]
     fn valid_rgba_image() {

@@ -284,7 +284,6 @@ generated reports, build outputs, and package installs.
 |       |-- format.rs
 |       |-- image.rs
 |       |-- image_utils.rs
-|       |-- infallible.rs
 |       |-- lib.rs
 |       |-- ops/
 |       |   |-- analysis.rs
@@ -311,8 +310,7 @@ generated reports, build outputs, and package installs.
 |       |   |-- transpose.rs
 |       |   `-- utils.rs
 |       |-- par.rs
-|       |-- pipeline.rs
-|       `-- pixel_format.rs
+|       `-- pipeline.rs
 |-- pillow-rs-freetype/
 |   |-- AGENTS.md
 |   |-- CONTRIBUTING.md
@@ -506,6 +504,7 @@ generated reports, build outputs, and package installs.
 |   |   `-- compare_benchmarks.py
 |   |-- build_and_test.sh
 |   |-- check_bindings.py
+|   |-- check_public_api_boundary.py
 |   |-- check_repo_map.py
 |   |-- ci_coverage.sh
 |   |-- compare_font_coverage.sh

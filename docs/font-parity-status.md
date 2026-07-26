@@ -27,7 +27,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
   - Latest run id: `79e4bdfa-4a7a-43bf-aa8a-f064f178078c`
   - Terminal status: `passed`, `1` passed, `0` failed
   - Diagnostics/ingest: `e3c79419-67ff-4b76-ac15-17cf0822a908` ingested with `target/coverage/imagingft/imagingft-rust.json`
-  - Refactor impact: active tests now target `pillow-rs/tests/font_public_api.rs` and call the Rust `Font` public surface. The previous imagingft-named public harness, runner, oracle, and fixture tree are preserved under `pillow-rs/tests/deprecated/imagingft/current-public-api/`.
+  - Refactor impact: active tests now target `pillow-rs/tests/font_public_api.rs` and call the Rust `Font` public surface. The previous imagingft-named deprecated harness, runner, oracle, and fixture tree have been deleted.
   - Prior same-turn probe snapshots:
     - `6b68edcf-1aa9-474f-8f85-9adb95291899`: freetype CFF/embedded-strike rows added; no region movement.
     - `68db7f03-2c6e-4099-a17d-d0736f537be6`: moderate clipping rows added; `pillow-rs/src/font/imagingft.rs` moved to `1872/2338` regions.

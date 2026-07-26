@@ -30,6 +30,23 @@ image-webp = ["image-slash-star/webp"]
 image-ico = ["image-slash-star/ico"]
 image-avif = ["image-slash-star/avif"]
 wasm-wide-font-internals = ["fontdone/wasm-wide-internals"]
+test-api = []
+
+[[example]]
+name = "backend_support_matrix"
+required-features = ["test-api"]
+
+[[test]]
+name = "backend_parity"
+required-features = ["test-api"]
+
+[[test]]
+name = "font_public_api"
+required-features = ["test-api"]
+
+[[test]]
+name = "image_backend_migration"
+required-features = ["test-api"]
 
 [dependencies]
 image-slash-star = { path = "../../image-slash-star", default-features = false }
