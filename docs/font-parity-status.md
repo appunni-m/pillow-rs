@@ -1,6 +1,79 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `974c16d5e`
+Last updated: 2026-07-26 (Asia/Kolkata) — Pillow Font comparison review at
+commit `7cf439600`
+
+## Current checkpoint: Pillow Font public-surface review and SBIT input audit
+
+New commits:
+
+- `09359e630` — temporarily added five maintained freetype SBIT fixtures as
+  public Font `getmask2` rows.
+- `7cf439600` — removed those rows again after managed coverage proved they
+  were coverage-neutral in the Font harness.
+
+Comparison result:
+
+- Live Pillow `ImageFont.FreeTypeFont` public methods in the pinned oracle are
+  `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `getmask2`,
+  `font_variant`, `get_variation_names`, `set_variation_by_name`,
+  `get_variation_axes`, and `set_variation_by_axes`.
+- `font_manifest.yaml` and `font_public_api.rs` already enumerate those public
+  methods and signatures exactly, plus the project wrapper operations
+  (`load_default`, `truetype`, `font_size`, transposed-font helpers,
+  `draw_text`, and binary render helpers).
+- The active JSON corpus remains input-only. No expected output, expected
+  error, pixel hash, status, or oracle payload is embedded in the input files.
+- The Rust harness compares full `Result`-style status/value/error payloads
+  against the live Pillow oracle generated at runtime through the repo-local
+  `.oracle-venv`.
+
+SBIT audit:
+
+- Candidate rows were copied from maintained `pillow-rs-freetype` fixture
+  assets and were accepted by Pillow through public `FreeTypeFont.getmask2`.
+- Managed Coverage MCP run:
+  - command: `font-tests-coverage-with-freetype`
+  - run: `ca8f32ec-75c4-4c16-b7a5-d33085d9ea59`
+  - snapshot: `f32256f3-c373-4049-bb79-90a3541450a0`
+  - status: passed and ingested
+- The rows did not move measured coverage:
+  - `pillow-rs/src/font/imagingft.rs` stayed at `1042/1099` regions
+    (`94.81%`)
+  - `pillow-rs-freetype/src/tt/sbit.rs` stayed at `186/1269` regions
+    (`14.66%`)
+- Because they were coverage-neutral duplicate public Font inputs, they were
+  removed instead of growing the corpus.
+
+Implementation blocker:
+
+- The remaining real public Font implementation gap is
+  `getmask/getmask2(stroke_width != 0)` for visible glyphs.
+- Pillow’s Python layer passes `stroke_width` into native `_imagingft.c`
+  rendering. Exact parity therefore requires real FreeType outline stroking.
+- The current pure-Rust `fontdone` stroker is intentionally limited to
+  count/no-op/small-route parity and returns unimplemented for general glyph
+  outline geometry. Implementing visible-glyph stroke in `imagingft.rs` on top
+  of that would either fail or become an approximation. That would violate the
+  current Pillow-oracle rule.
+- Blank/whitespace stroke rows were also reviewed. Pillow can produce expanded
+  blank masks for those cases, but the manifest gate correctly treats
+  `stroke_width` as a whole public parameter. Adding only blank stroke cases
+  would falsely classify the parameter as covered while visible glyph stroke
+  remains unsupported, so no such partial rows were added.
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed after removing the coverage-neutral
+  rows.
+- Coverage dashboard: <http://localhost:59471/>
+
+Remaining target to reach honest 100% region coverage:
+
+- Implement full pure-Rust FreeType stroker geometry in `pillow-rs-freetype`
+  first, then remove `stroke_width` from `EXPECTED_BLOCKED_PUBLIC_PARAMETERS`,
+  move it from blocked to covered in `font_manifest.yaml`, and add input-only
+  visible-glyph `getmask`/`getmask2` stroke rows against the live Pillow oracle.
 
 ## Current checkpoint: FreeType too-many-function-defs error coverage
 
