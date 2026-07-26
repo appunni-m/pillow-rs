@@ -1,6 +1,6 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after opened-outline stroker
+Last updated: 2026-07-27 (Asia/Kolkata) after degenerate-contour stroker
 ParseOutline parity work.
 
 ## Oracle and fixture contract
@@ -67,10 +67,11 @@ The Rust Font adapter cannot honestly close this gap alone. The dependency is
 the pure-Rust FreeType stroker implementation in
 `pillow-rs-freetype/src/ffi/handles.rs`. Its current
 `FT_Stroker_ParseOutline` route is intentionally limited to empty/single-point
-contours and returns `FT_Err_Unimplemented_Feature` for normal multi-point glyph
-outlines. Visible stroked glyph masks require completing real
-FreeType-compatible stroker geometry/export and then wiring that route into
-`pillow-rs/src/font/imagingft.rs`.
+contours, opened two-point horizontal lines, and a closed horizontal line after
+degenerate contour skipping. It still returns `FT_Err_Unimplemented_Feature` for
+normal line/conic/cubic glyph outlines. Visible stroked glyph masks require
+completing real FreeType-compatible stroker geometry/export and then wiring that
+route into `pillow-rs/src/font/imagingft.rs`.
 
 The Font test pins this blocker to lower-level FreeType success rows:
 
@@ -95,10 +96,11 @@ Additional lower-level blocker reduction:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ParseOutline
 ```
 
-Result after this update: `FT_Stroker_ParseOutline.opened_outline_success`
-now runs as real C/Rust/WASM parity. ParseOutline runtime movement is
-`runnable=4`, `passed=4`, `pending=2`. Remaining ParseOutline pending rows are
-the mixed line/conic/cubic route and the broader degenerate-contour route.
+Result after this update: `FT_Stroker_ParseOutline.opened_outline_success` and
+`FT_Stroker_ParseOutline.degenerate_contours_skipped` now run as real
+C/Rust/WASM parity. ParseOutline runtime movement is `runnable=5`, `passed=5`,
+`pending=1`. The remaining ParseOutline pending row is the mixed
+line/conic/cubic route.
 
 ## Edge cases already covered by active Font fixtures
 
@@ -121,11 +123,11 @@ the mixed line/conic/cubic route and the broader degenerate-contour route.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `697e12a8-f26c-44df-8a16-c28ec46480d6`
-- Snapshot: `63a81df6-2889-4753-85e5-6a8e8f039a09`
+- Run: `3b836daf-468d-4694-b4f1-c595c3eb2dfe`
+- Snapshot: `88699ed9-5ada-4be0-a4a2-642f9491a4aa`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `202d437bf4efd5634b026008fa2709cbaaaa268d`
+- Commit measured: `0e7341f82ab12a1aadbb165df15845490e7b3526`
 
 Target file metrics:
 
