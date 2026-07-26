@@ -155,6 +155,8 @@ fixtures:
 fixtures-check:
 	@! rg -n '"(error|expect_error|expectation|expected|hash|oracle|output|outputs|pixels_hex|raw_path|sha256|status)"' \
 		tests/fixtures/font/inputs/public-api
+	@! rg -n '^[[:space:]]*(error|expect_error|expectation|expected|hash|output|outputs|pixels_hex|raw_path|sha256|status):' \
+		tests/fixtures/font/font_manifest.yaml
 
 .PHONY: fixtures-clean
 fixtures-clean:
