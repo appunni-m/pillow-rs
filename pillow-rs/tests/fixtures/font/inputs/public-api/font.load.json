@@ -153,6 +153,21 @@
       }
     },
     {
+      "case_id": "font.load.invalid_png_glyph_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_png_glyph.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
       "case_id": "font.load.invalid_header_error",
       "operation": "load",
       "inputs": {
@@ -175,6 +190,21 @@
           "font": {
             "kind": "pilfont_ref",
             "id": "input/pilfont/truncated_metrics.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.no_newline_metrics_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/no_newline_metrics.pil"
           }
         },
         "params": {
