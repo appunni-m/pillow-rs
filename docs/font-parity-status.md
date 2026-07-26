@@ -1,5 +1,43 @@
 # Font Public-API Parity Status (Current Worktree)
 
+Last updated: 2026-07-26 (Asia/Kolkata) — binary layout mode parity at commit
+`d6acbe1ce`
+
+## Current checkpoint: `getbbox/getlength(mode="1")` public parity
+
+New commit:
+
+- `d6acbe1ce` — routes Pillow layout APIs through binary target flags when
+  `FontTextOptions.mode == "1"`. Before this change, `getbbox` and
+  `getlength` option paths ignored binary mode even though Pillow's BASIC
+  `_imagingft` path can change hinted advances and bounding boxes in mode `1`.
+
+Fixture updates:
+
+- Added input-only rows:
+  - `font.getbbox.dejavusans20_j_getbbox_1`
+  - `font.getlength.dejavusans20_m_getlength_1`
+- These rows were chosen because live Pillow reports different values in
+  binary mode (`j` bbox left changes, `m` length changes), so they are not
+  duplicate coverage of normal mode.
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed.
+- `make -C pillow-rs fmt` — passed.
+- Coverage MCP command `font-tests-coverage-with-freetype`
+  - run `866463de-17de-4e8d-9ad6-61410a70cd3e`
+  - snapshot `4ecb7576-402f-461c-ad53-d0c7396d9bbc`
+  - commit `d6acbe1ce94715dc32617d9a4eaa3f61bb2d38a1`
+  - status `passed`, coverage artifact ingested
+
+Target metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `679/708` (`95.90%`) | `120/142` (`84.51%`) | `74/80` (`92.50%`) | `1062/1120` (`94.82%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+
 Last updated: 2026-07-26 (Asia/Kolkata) — binary mask mode parity at commit
 `183c35c4c`
 
