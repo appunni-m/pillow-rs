@@ -25395,6 +25395,10 @@ fn is_stroker_closed_end_subpath_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_EndSubPath.closed_subpath_closes_two_borders"
 }
 
+fn is_stroker_conic_success_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_ConicTo.conic_curve_success"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -26496,6 +26500,172 @@ fn wasm_stroker_closed_end_subpath(case: &InputCase) -> Result<RunOutput, String
         rust_stroker_closed_end_subpath(case)
     } else {
         Err("unsupported stroker closed EndSubPath route".to_string())
+    }
+}
+
+fn stroker_conic_success_output(
+    status: FT_Error,
+    status_sequence: [FT_Error; 3],
+    point_count: FT_UInt,
+    contour_count: FT_UInt,
+    exported_outline: Value,
+    cbox: Value,
+) -> RunOutput {
+    ok(json!({
+        "status": status,
+        "status_sequence": status_sequence,
+        "point_count": point_count,
+        "contour_count": contour_count,
+        "exported_outline": exported_outline,
+        "cbox": cbox
+    }))
+}
+
+fn rust_stroker_conic_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_conic_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained conic success route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        80,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let control = FT_Vector { x: 256, y: 512 };
+    let to = FT_Vector { x: 512, y: 0 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let conic_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_ConicTo(stroker, Some(&control), Some(&to))
+    } else {
+        begin_error
+    };
+    let end_error = if conic_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        conic_error
+    };
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+    } else {
+        end_error
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    let mut cbox = FT_BBox::default();
+    if counts_error == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+        FT_Outline_Get_CBox(Some(&exported), Some(&mut cbox));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_conic_success_output(
+        counts_error,
+        [begin_error, conic_error, end_error],
+        point_count,
+        contour_count,
+        outline_snapshot_json(&exported),
+        bbox_json(bbox_from_rust_bbox(cbox)),
+    ))
+}
+
+fn c_stroker_conic_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_conic_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained conic success route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        80,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let control = c_abi::FT_Vector { x: 256, y: 512 };
+    let to = c_abi::FT_Vector { x: 512, y: 0 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    let conic_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+    } else {
+        begin_error
+    };
+    let end_error = if conic_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        conic_error
+    };
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+    } else {
+        end_error
+    };
+    let mut exported_points = [c_abi::FT_Vector::default(); 128];
+    let mut exported_tags = [0u8; 128];
+    let mut exported_contours = [0u16; 16];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    let mut cbox = c_abi::FT_BBox::default();
+    if counts_error == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+        c_abi::FT_Outline_Get_CBox(&exported, &mut cbox);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_conic_success_output(
+        counts_error,
+        [begin_error, conic_error, end_error],
+        point_count,
+        contour_count,
+        c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        ),
+        bbox_json(bbox_from_c_bbox(cbox)),
+    ))
+}
+
+fn wasm_stroker_conic_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_conic_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained conic success route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_conic_success() {
+        rust_stroker_conic_success(case)
+    } else {
+        Err("unsupported stroker conic success route".to_string())
     }
 }
 
@@ -31431,6 +31601,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
             Ok(vec!["--stroker-closed-end-subpath".to_string()])
         }
+        "ftstroke.conic_to" if is_stroker_conic_success_case(case) => {
+            Ok(vec!["--stroker-conic-success".to_string()])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -33021,6 +33194,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
             rust_stroker_closed_end_subpath(case)
         }
+        "ftstroke.conic_to" if is_stroker_conic_success_case(case) => {
+            rust_stroker_conic_success(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -34202,6 +34378,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
             c_stroker_closed_end_subpath(case)
         }
+        "ftstroke.conic_to" if is_stroker_conic_success_case(case) => c_stroker_conic_success(case),
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -35275,6 +35452,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.end_subpath" if is_stroker_closed_end_subpath_case(case) => {
             wasm_stroker_closed_end_subpath(case)
+        }
+        "ftstroke.conic_to" if is_stroker_conic_success_case(case) => {
+            wasm_stroker_conic_success(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"

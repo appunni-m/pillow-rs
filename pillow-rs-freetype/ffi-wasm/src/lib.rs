@@ -3133,6 +3133,59 @@ pub fn abi_support_stroker_closed_end_subpath() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_conic_success() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        80,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let control = rust_ffi::FT_Vector { x: 256, y: 512 };
+    let to = rust_ffi::FT_Vector { x: 512, y: 0 };
+    let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+    let conic_error = if begin_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_ConicTo(stroker, Some(&control), Some(&to))
+    } else {
+        begin_error
+    };
+    let end_error = if conic_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        conic_error
+    };
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if end_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+    } else {
+        end_error
+    };
+    let mut exported = rust_ffi::FT_OutlineSnapshot::default();
+    if counts_error == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    rust_ffi::FT_Stroker_Done(stroker);
+    begin_error == rust_ffi::FT_Err_Ok
+        && conic_error == rust_ffi::FT_Err_Ok
+        && end_error == rust_ffi::FT_Err_Ok
+        && counts_error == rust_ffi::FT_Err_Ok
+        && point_count == 40
+        && contour_count == 2
+        && exported.points.len() == 40
+        && exported.contours == vec![24, 39]
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_parse_opened_outline() -> bool {
     for action in [1, 2, 3] {
         let library = rust_ffi::FT_Init_FreeType();
