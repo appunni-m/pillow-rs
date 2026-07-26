@@ -5,9 +5,9 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 ## Scope
 - Public surface: `pillow-rs/tests/fixtures/imagingft/inputs/public-api` (non-deprecated corpus only)
 - Runner: `pillow-rs/tests/imagingft_public_api.rs`
-- Oracle source: live Pillow `_imagingft` behavior via `pillow-rs/scripts/imagingft_oracle.py`
-- Oracle runtime policy: only `.oracle-venv/bin/python` in this repository is accepted (`IMAGINGFT_ORACLE_PYTHON` must point to `.../.oracle-venv/bin/python` when set).
-- Python layer used for oracle calls is the Pillow Python API (`ImageFont`), which initializes and delegates to the C extension (`_imagingft`) in this environment (`core.getfont` is present and used by Font loading).
+- Oracle source: live Pillow `_imagingft` behavior via `pillow-rs/scripts/imagingft_oracle.py`.
+- Oracle runtime policy: only repo-local `.oracle-venv/bin/python` is accepted (`IMAGINGFT_ORACLE_PYTHON` must resolve to `.../.oracle-venv/bin/python` when set).
+- Python oracle now asserts that `PIL.ImageFont.core` is `_imagingft`, and that each loaded `ImageFont` object has a native core `font` payload (`builtins.Font`).
 
 ## Acceptance evidence
 - `make -C pillow-rs imagingft-tests`:

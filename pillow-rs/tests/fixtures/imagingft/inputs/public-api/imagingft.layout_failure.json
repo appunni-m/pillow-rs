@@ -4,6 +4,7 @@
   "cases": [
     {
       "case_id": "imagingft.get_transposed_mask.invalid_orientation_error",
+      "expect_error": true,
       "operation": "imagingft.get_transposed_mask",
       "inputs": {
         "assets": {

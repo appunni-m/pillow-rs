@@ -4,6 +4,7 @@
   "cases": [
     {
       "case_id": "imagingft.load_failure.missing_font_asset",
+      "expect_error": true,
       "operation": "getname",
       "inputs": {
         "assets": {
@@ -19,6 +20,7 @@
     },
     {
       "case_id": "imagingft.load_failure.invalid_font_size_zero",
+      "expect_error": true,
       "operation": "getname",
       "inputs": {
         "assets": {
@@ -34,6 +36,7 @@
     },
     {
       "case_id": "imagingft.load_failure.invalid_font_size_negative_one",
+      "expect_error": true,
       "operation": "getname",
       "inputs": {
         "assets": {
@@ -49,6 +52,7 @@
     },
     {
       "case_id": "imagingft.load_failure.invalid_font_size_negative_fraction",
+      "expect_error": true,
       "operation": "getname",
       "inputs": {
         "assets": {

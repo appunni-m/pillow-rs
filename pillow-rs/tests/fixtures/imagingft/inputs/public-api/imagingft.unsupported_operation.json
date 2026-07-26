@@ -4,6 +4,7 @@
   "cases": [
     {
       "case_id": "imagingft.unsupported_operation.unsupported_magic",
+      "expect_error": true,
       "operation": "imagingft.unsupported_magic",
       "inputs": {
         "assets": {
