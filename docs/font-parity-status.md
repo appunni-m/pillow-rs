@@ -59,6 +59,11 @@ files contain only inputs.
 they must match Pillow's no-libraqm `KeyError`/message behavior rather than
 being skipped.
 
+The active test now enforces `font_manifest.yaml.required_operations` as the
+exact union of live `PIL.ImageFont` public operations reported by the pinned
+oracle and the explicit repo helper/consumer operations maintained around that
+surface. This prevents hidden manifest drift in either direction.
+
 The repo also keeps additional public test operations around this surface:
 `font_size`, `text_bbox`, `getbbox_binary`, `get_transposed_mask`,
 `transposed_bbox`, `validate_transposed_length`, `draw_text`, and
@@ -282,11 +287,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `419cffa6-3136-4ec1-8193-3e7abcec015d`
-- Snapshot: `4719c3de-5317-4790-8b27-52ac05eba086`
+- Run: `0dc28227-1855-4225-8eb8-f5cc3e1dc212`
+- Snapshot: `edc5ce30-a8a2-4c82-aa16-964c9366e4be`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `19617be339dbbc5b8ee40b80f7154bda321c024d`
+- Commit measured: `1268f4175e1e6535b889db11e35a45e5d77fa5c4`
 
 Target file metrics:
 
