@@ -121,11 +121,11 @@ the mixed line/conic/cubic route and the broader degenerate-contour route.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `3dde3988-2131-4cb3-a11f-15e97d3aadfd`
-- Snapshot: `268d1137-086d-4413-bc29-880efdce4d2e`
+- Run: `697e12a8-f26c-44df-8a16-c28ec46480d6`
+- Snapshot: `63a81df6-2889-4753-85e5-6a8e8f039a09`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `4f4574bd13666f00d39db19ec23b41f07d454c2a`
+- Commit measured: `202d437bf4efd5634b026008fa2709cbaaaa268d`
 
 Target file metrics:
 
