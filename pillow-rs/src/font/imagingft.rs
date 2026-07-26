@@ -178,7 +178,12 @@ pub fn has_variations(font: &Font) -> bool {
 }
 
 pub fn getlength(font: &Font, text: &str) -> f32 {
-    length_from_basic_layout(font, text).map_or(0.0, |v| v as f32 / 64.0)
+    getlength_result(font, text).unwrap_or(0.0)
+}
+
+/// Fallible variant of [`getlength`] that preserves Pillow error results.
+pub fn getlength_result(font: &Font, text: &str) -> Result<f32, PilError> {
+    Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
 pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
@@ -349,7 +354,7 @@ fn ceil26(x: i64) -> i32 {
     (((x + 63) & -64) >> 6) as i32
 }
 
-fn length_from_basic_layout(ttf: &Font, text: &str) -> Option<i32> {
+fn length_from_basic_layout(ttf: &Font, text: &str) -> Result<i32, PilError> {
     let face = &ttf.engine.face;
     let mut total = 0i32;
     let mut prev: Option<u32> = None;
@@ -358,7 +363,8 @@ fn length_from_basic_layout(ttf: &Font, text: &str) -> Option<i32> {
         let g = gid(face, ch);
         // Pillow 12.2.0 `text_layout_fallback` uses `FT_LOAD_DEFAULT`.
         // Its hinted `horiAdvance` values are integral pixels for BASIC layout.
-        let slot = ffi::FT_Load_Glyph(face, g, 0).ok()?;
+        let slot = ffi::FT_Load_Glyph(face, g, 0).map_err(ft_error_to_pil)?;
+        validate_advance_26_6(slot.advance.x)?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             total = total.saturating_add(basic_layout_kern(face, p, g));
         }
@@ -366,7 +372,7 @@ fn length_from_basic_layout(ttf: &Font, text: &str) -> Option<i32> {
         prev = Some(g);
     }
 
-    Some(total)
+    Ok(total)
 }
 
 const MAX_ADVANCE_26_6_EXCLUSIVE: i64 = 0x8000 * 64;
