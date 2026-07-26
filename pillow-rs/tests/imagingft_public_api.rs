@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    env, fs,
     io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -32,47 +32,72 @@ fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imagingft")
 }
 
+fn oracle_site_packages() -> Vec<PathBuf> {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for imagingft tests must be discoverable");
+    let lib_dir = repo_root.join(".oracle-venv/lib");
+    if !lib_dir.exists() {
+        return vec![];
+    }
+
+    let mut paths = Vec::new();
+    let entries = match fs::read_dir(lib_dir) {
+        Ok(entries) => entries,
+        Err(_) => return vec![],
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !name.starts_with("python"))
+        {
+            continue;
+        }
+        let site = path.join("site-packages");
+        if site.is_dir() {
+            paths.push(site);
+        }
+    }
+    paths
+}
+
 fn oracle_python() -> PathBuf {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .canonicalize()
         .expect("repo root for imagingft tests must be discoverable");
-    let repo_python = repo_root.join(".oracle-venv/bin/python");
+    let repo_python = repo_root
+        .join(".oracle-venv/bin/python")
+        .canonicalize()
+        .unwrap_or_else(|_| {
+            panic!(
+                "repo-local IMAGINGFT_ORACLE_PYTHON missing: {repo_root:?}/.oracle-venv/bin/python"
+            )
+        });
 
     if let Some(env_path) = std::env::var_os("IMAGINGFT_ORACLE_PYTHON") {
-        let env_path = PathBuf::from(env_path);
-        let raw = env_path.to_string_lossy();
-        if raw.contains(".oracle-venv")
-            && raw.starts_with(&*repo_root.to_string_lossy())
-            && env_path.ends_with("bin/python")
-            && env_path.exists()
-        {
-            return env_path;
-        }
+        let canonical = PathBuf::from(env_path)
+            .canonicalize()
+            .unwrap_or_else(|_| panic!("IMAGINGFT_ORACLE_PYTHON must be a valid executable path"));
+        assert_eq!(
+            canonical, repo_python,
+            "IMAGINGFT_ORACLE_PYTHON must point to repo-local .oracle-venv/bin/python: {canonical:?}"
+        );
+        return canonical;
     }
 
     let path = repo_python;
-    let canonical = path
-        .canonicalize()
-        .unwrap_or_else(|_| panic!("repo-local IMAGINGFT_ORACLE_PYTHON must exist: {path:?}"));
     assert!(
-        path.to_string_lossy().contains(".oracle-venv"),
-        "IMAGINGFT_ORACLE_PYTHON must point into this repo .oracle-venv"
+        path.ends_with("bin/python"),
+        "IMAGINGFT_ORACLE_PYTHON must be a venv python executable: {path:?}"
     );
-    assert!(
-        path.to_string_lossy()
-            .starts_with(&*repo_root.to_string_lossy()),
-        "IMAGINGFT_ORACLE_PYTHON must be repo-local: {canonical:?}"
-    );
-    assert!(
-        canonical.ends_with("bin/python"),
-        "IMAGINGFT_ORACLE_PYTHON must be a venv python executable: {canonical:?}"
-    );
-    assert!(
-        canonical.exists(),
-        "repo-local IMAGINGFT_ORACLE_PYTHON must exist: {canonical:?}"
-    );
-    canonical
+    path
 }
 
 fn load_input_cases(directory: &Path) -> Vec<Value> {
@@ -116,11 +141,30 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
 
 fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/imagingft_oracle.py");
-    let mut child = Command::new(oracle_python())
+    let oracle = oracle_python();
+    let venv_root = oracle
+        .parent()
+        .and_then(Path::parent)
+        .expect("imagingft oracle python must live under .oracle-venv/bin");
+    let mut command = Command::new(oracle.as_os_str());
+    command
         .arg(script)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .env("VIRTUAL_ENV", venv_root);
+    let mut python_paths = env::var_os("PYTHONPATH")
+        .as_deref()
+        .map(|path| env::split_paths(path).collect::<Vec<_>>())
+        .unwrap_or_default();
+    python_paths.extend(oracle_site_packages());
+    if !python_paths.is_empty() {
+        command.env(
+            "PYTHONPATH",
+            env::join_paths(python_paths).expect("valid PYTHONPATH join"),
+        );
+    }
+    let mut child = command
         .spawn()
         .expect("the pinned Pillow imagingft oracle must start");
 
@@ -140,6 +184,58 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
+}
+
+fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
+    let expected_status = expected
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("{case_id}: missing status in oracle payload"));
+    let actual_status = actual
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("{case_id}: missing status in rust payload"));
+    assert_eq!(
+        expected_status, actual_status,
+        "{case_id}: status mismatch between rust and live oracle"
+    );
+
+    if expected_status == "error" {
+        let expected_error = expected
+            .get("error")
+            .expect("oracle error payload must include error");
+        let actual_error = actual
+            .get("error")
+            .expect("rust error payload must include error");
+        let expected_kind = expected_error
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{case_id}: oracle error missing kind"));
+        let actual_kind = actual_error
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{case_id}: rust error missing kind"));
+        assert_eq!(expected_kind, actual_kind, "{case_id}: error kind mismatch");
+
+        let expected_message = expected_error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{case_id}: oracle error missing message"));
+        let actual_message = actual_error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{case_id}: rust error missing message"));
+        assert_eq!(
+            expected_message, actual_message,
+            "{case_id}: error message mismatch"
+        );
+        return;
+    }
+
+    assert_eq!(
+        expected, actual,
+        "{case_id}: Rust result differs from live Pillow/_imagingft oracle"
+    );
 }
 
 #[test]
@@ -177,9 +273,6 @@ fn every_input_matches_the_live_pillow_imagingft_oracle_exactly() {
             .get(case_id)
             .unwrap_or_else(|| panic!("{case_id}: live Pillow oracle result missing"));
         let actual = imagingft_runner::run(case, &root);
-        assert_eq!(
-            &actual, expected,
-            "{case_id}: Rust result differs from live Pillow/_imagingft oracle"
-        );
+        assert_exact_oracle_match(case_id, expected, &actual);
     }
 }
