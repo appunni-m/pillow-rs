@@ -117,6 +117,35 @@
           "mode": "RGBA"
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text.dejavusans20_negative_y_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [
+            10,
+            -4
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
     }
   ]
 }
