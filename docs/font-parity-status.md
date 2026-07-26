@@ -75,9 +75,12 @@ surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 exclusion is successful libraqm shaping; `direction`, `features`, and
 `language` no-libraqm error rows remain active parity rows.
-For those no-libraqm rows, the verifier now requires the concrete public values
-used by the corpus: `direction="rtl"`, `language="en"`, `features=[]`, and
-`features=["-kern"]` where the Pillow surface accepts them.
+For covered public parameters, the verifier now requires 73 concrete values
+from the active corpus. This includes no-libraqm values
+(`direction="rtl"`, `language="en"`, `features=[]`, and
+`features=["-kern"]` where accepted) plus the currently exercised
+`stroke_width`, `anchor`, `start`, `ink`, `args`, `kwargs`, and
+`font_variant(layout_engine)` values.
 The test also queries the live `PIL.ImageFont.Layout` enum and requires exactly
 `BASIC` and `RAQM`; active `font_variant` rows must exercise both values while
 successful RAQM shaping remains the only layout behavior outside the target.
@@ -392,6 +395,11 @@ Latest Font wrapper movement:
   with thresholded bytes. A minimal grayscale render attempt kept the same size
   but still produced different coverage bytes, so this remains a lower
   stroker/raster route issue rather than a trustworthy Font adapter row.
+- A `font.getmask2` `text="A\uFFFF", stroke_width=1.5` probe was also rejected.
+  Pillow succeeds, while Rust currently returns an error when the stroked run
+  crosses from a valid DejaVuSans glyph into the missing-glyph route. This would
+  cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
+  active fixture until the lower-level missing-glyph stroke path matches Pillow.
 - The only remaining `font/mod.rs` uncovered region is
   `Font::load_default`'s `default_aileron::decode()?` error arm. That path is
   not reachable through honest public inputs unless the checked-in embedded
