@@ -1,6 +1,8 @@
 use std::{fs, path::Path};
 
-use pillow_rs::{Draw, Font, FontTextOptions, FontVariationAxis, Image, PilError};
+use pillow_rs::{
+    Draw, Font, FontTextOptions, FontVariantOptions, FontVariationAxis, Image, PilError,
+};
 use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
@@ -104,16 +106,12 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             }))
         }
         "font_variant" => {
-            let size = params
-                .get("variant_size")
-                .map(|value| {
-                    value
-                        .as_f64()
-                        .map(|value| value as f32)
-                        .ok_or_else(|| PilError::TypeError("variant_size must be a number".into()))
-                })
-                .transpose()?;
-            font_descriptor(&pillow_rs::font_variant(&font, size)?)
+            let options = font_variant_options(case, fixture_root, params)?;
+            if uses_font_variant_options(params, case) {
+                font_descriptor(&pillow_rs::font_variant_with_options(&font, &options)?)
+            } else {
+                font_descriptor(&pillow_rs::font_variant(&font, options.size)?)
+            }
         }
         "getbbox" => {
             if has_text_options(params) {
@@ -282,6 +280,61 @@ fn text_options(params: &Value) -> Result<FontTextOptions, PilError> {
             .get("start")
             .map(|value| pair_f64(value, "start"))
             .transpose()?,
+    })
+}
+
+fn uses_font_variant_options(params: &Value, case: &Value) -> bool {
+    params.get("variant_index").is_some()
+        || params.get("variant_encoding").is_some()
+        || params.get("variant_layout_engine").is_some()
+        || case
+            .get("inputs")
+            .and_then(|inputs| inputs.get("assets"))
+            .and_then(|assets| assets.get("variant_font"))
+            .is_some()
+}
+
+fn font_variant_options(
+    case: &Value,
+    fixture_root: &Path,
+    params: &Value,
+) -> Result<FontVariantOptions, PilError> {
+    let font_bytes = case
+        .get("inputs")
+        .and_then(|inputs| inputs.get("assets"))
+        .and_then(|assets| assets.get("variant_font"))
+        .map(|font| {
+            let id = required(font, "id")?
+                .as_str()
+                .ok_or_else(|| PilError::TypeError("variant font id must be a string".into()))?;
+            fs::read(fixture_root.join(id))
+                .map_err(|_| PilError::OsError("cannot open resource".into()))
+        })
+        .transpose()?;
+    let size = params
+        .get("variant_size")
+        .map(|value| {
+            value
+                .as_f64()
+                .map(|value| value as f32)
+                .ok_or_else(|| PilError::TypeError("variant_size must be a number".into()))
+        })
+        .transpose()?;
+    let index = params
+        .get("variant_index")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| PilError::TypeError("variant_index must be an integer".into()))
+        })
+        .transpose()?;
+    Ok(FontVariantOptions {
+        font_bytes,
+        size,
+        index,
+        encoding: optional_string(params, "variant_encoding")?,
+        layout_engine: optional_string(params, "variant_layout_engine")?,
     })
 }
 

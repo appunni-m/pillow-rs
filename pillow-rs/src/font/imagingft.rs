@@ -4,7 +4,7 @@
 //! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
 //! (4,097/4,097 unified parity).
 
-use super::{Font, FontTextOptions, FontVariationAxis};
+use super::{Font, FontTextOptions, FontVariantOptions, FontVariationAxis};
 use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
@@ -12,6 +12,7 @@ use fontdone::{ffi, tt};
 pub(super) struct TrueTypeEngine {
     face: ffi::FT_Face,
     font_bytes: Vec<u8>,
+    face_index: usize,
     pub(super) size_pt: f32,
     family_name: Option<String>,
     style_name: Option<String>,
@@ -19,6 +20,10 @@ pub(super) struct TrueTypeEngine {
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<Font, PilError> {
+    load_truetype_with_index(data, size, 0)
+}
+
+fn load_truetype_with_index(data: Vec<u8>, size: f32, face_index: usize) -> Result<Font, PilError> {
     if !(size > 0.0) {
         return Err(PilError::ValueError(format!(
             "font size must be greater than 0, not {}",
@@ -31,7 +36,7 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<Font, PilError> 
     }
 
     let library = ffi::FT_Init_FreeType();
-    let mut face = ffi::FT_New_Memory_Face(&library, &data, 0, size)
+    let mut face = ffi::FT_New_Memory_Face(&library, &data, face_index as ffi::FT_Long, size)
         .map_err(|e| PilError::ValueError(format!("FT_New_Memory_Face: error {e}")))?;
 
     // Pillow _imagingft.c:getfont requests nominal size with width/height
@@ -63,6 +68,7 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<Font, PilError> 
         engine: TrueTypeEngine {
             face,
             font_bytes: data,
+            face_index,
             size_pt: size,
             family_name,
             style_name,
@@ -172,9 +178,34 @@ pub(crate) fn has_variations(font: &Font) -> bool {
 }
 
 pub(crate) fn font_variant(font: &Font, size: Option<f32>) -> Result<Font, PilError> {
-    load_truetype(
-        font.engine.font_bytes.clone(),
-        size.unwrap_or(font.engine.size_pt),
+    font_variant_with_options(
+        font,
+        &FontVariantOptions {
+            size,
+            ..FontVariantOptions::default()
+        },
+    )
+}
+
+pub(crate) fn font_variant_with_options(
+    font: &Font,
+    options: &FontVariantOptions,
+) -> Result<Font, PilError> {
+    if let Some(layout_engine) = options.layout_engine.as_deref() {
+        if !matches!(layout_engine, "BASIC" | "0") {
+            return Err(PilError::ValueError(
+                "only BASIC FreeTypeFont layout_engine is implemented".into(),
+            ));
+        }
+    }
+    let _encoding = options.encoding.as_deref();
+    load_truetype_with_index(
+        options
+            .font_bytes
+            .clone()
+            .unwrap_or_else(|| font.engine.font_bytes.clone()),
+        options.size.unwrap_or(font.engine.size_pt),
+        options.index.unwrap_or(font.engine.face_index),
     )
 }
 

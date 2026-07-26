@@ -157,6 +157,14 @@ def orientation(value: str | None, Image: Any) -> Any:
     return value
 
 
+def layout_engine(value: str | None, ImageFont: Any) -> Any:
+    if value is None:
+        return None
+    if value in ImageFont.Layout.__members__:
+        return ImageFont.Layout[value]
+    return value
+
+
 def has_variations(font: Any) -> bool:
     try:
         font.get_variation_axes()
@@ -272,7 +280,19 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
             "length": font.getlength(text),
         }
     if operation == "font_variant":
-        variant = font.font_variant(size=params.get("variant_size"))
+        kwargs: dict[str, Any] = {"size": params.get("variant_size")}
+        variant_font = case["inputs"].get("assets", {}).get("variant_font")
+        if variant_font is not None:
+            kwargs["font"] = FIXTURE_ROOT / variant_font["id"]
+        if "variant_index" in params:
+            kwargs["index"] = params["variant_index"]
+        if "variant_encoding" in params:
+            kwargs["encoding"] = params["variant_encoding"]
+        if "variant_layout_engine" in params:
+            kwargs["layout_engine"] = layout_engine(
+                params["variant_layout_engine"], ImageFont
+            )
+        variant = font.font_variant(**kwargs)
         return font_descriptor(variant)
     if operation == "getbbox":
         return {

@@ -539,6 +539,36 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
                 .or_insert_with(BTreeSet::new)
                 .insert("size".to_owned());
         }
+        if operation == "font_variant" && params.contains_key("variant_index") {
+            observed
+                .entry(operation.to_owned())
+                .or_insert_with(BTreeSet::new)
+                .insert("index".to_owned());
+        }
+        if operation == "font_variant" && params.contains_key("variant_encoding") {
+            observed
+                .entry(operation.to_owned())
+                .or_insert_with(BTreeSet::new)
+                .insert("encoding".to_owned());
+        }
+        if operation == "font_variant" && params.contains_key("variant_layout_engine") {
+            observed
+                .entry(operation.to_owned())
+                .or_insert_with(BTreeSet::new)
+                .insert("layout_engine".to_owned());
+        }
+        if operation == "font_variant"
+            && case
+                .get("inputs")
+                .and_then(|inputs| inputs.get("assets"))
+                .and_then(|assets| assets.get("variant_font"))
+                .is_some()
+        {
+            observed
+                .entry(operation.to_owned())
+                .or_insert_with(BTreeSet::new)
+                .insert("font".to_owned());
+        }
     }
     observed
 }

@@ -37,12 +37,12 @@ negative_operations:
 public_method_parameters:
   font_variant:
     covered:
-      - size
-    blocked:
       - font
+      - size
       - index
       - encoding
       - layout_engine
+    blocked: []
   get_variation_axes:
     covered: []
     blocked: []

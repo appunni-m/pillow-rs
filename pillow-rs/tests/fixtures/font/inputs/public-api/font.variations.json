@@ -262,6 +262,73 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.variations.font_variant.alternate_font",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          },
+          "variant_font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.index_zero",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_index": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.encoding_unic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_encoding": "unic"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_basic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "BASIC"
+        }
+      }
     }
   ]
 }
