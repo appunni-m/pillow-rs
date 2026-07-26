@@ -66,6 +66,9 @@ surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 exclusion is successful libraqm shaping; `direction`, `features`, and
 `language` no-libraqm error rows remain active parity rows.
+For those no-libraqm rows, the verifier now requires the concrete public values
+used by the corpus: `direction="rtl"`, `language="en"`, `features=[]`, and
+`features=["-kern"]` where the Pillow surface accepts them.
 The test also queries the live `PIL.ImageFont.Layout` enum and requires exactly
 `BASIC` and `RAQM`; active `font_variant` rows must exercise both values while
 successful RAQM shaping remains the only layout behavior outside the target.
@@ -293,11 +296,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `5678cf31-df81-4999-8a27-fc749cbc58e3`
-- Snapshot: `7b58a45b-b049-47b9-99af-5652105be437`
+- Run: `ba5b948f-56f2-436c-ae01-6d9d32e1caa5`
+- Snapshot: `d8a11c57-a6bf-493a-8948-d2e41f412923`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `24b1e8cd49721258e36aac0b3b499dc04d0d4206`
+- Commit measured: `d488aa06aa9470f6335f5642c6de0e353ce385f6`
 
 Target file metrics:
 
