@@ -595,6 +595,13 @@ struct RunGlyph {
     outline_cbox: ffi::FT_BBox,
 }
 
+struct RenderedBitmap {
+    pen_before: i32,
+    bitmap_left: i32,
+    bitmap_top: i32,
+    bitmap: ffi::FT_Bitmap,
+}
+
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
 fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, PilError> {
     if text.is_empty() {
@@ -723,7 +730,7 @@ fn mask_from_run_with_start(
     let face = &ttf.engine.face;
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
-    let mut rendered: Vec<(i32, i32, i32, Option<ffi::FT_Bitmap>)> = Vec::new();
+    let mut rendered = Vec::new();
     let mut x_min = 0;
     let mut y_max = 0;
 
@@ -740,57 +747,21 @@ fn mask_from_run_with_start(
         let px = round26(pen);
         x_min = x_min.min(px + slot.bitmap_left as i32);
         y_max = y_max.max(slot.bitmap_top as i32);
-        rendered.push((
-            pen,
-            slot.bitmap_left as i32,
-            slot.bitmap_top as i32,
-            slot.bitmap,
-        ));
+        if let Some(bitmap) = slot.bitmap {
+            rendered.push(RenderedBitmap {
+                pen_before: pen,
+                bitmap_left: slot.bitmap_left as i32,
+                bitmap_top: slot.bitmap_top as i32,
+                bitmap,
+            });
+        }
         pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
         prev = Some(g);
     }
 
     let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
     let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
-
-    for (pen_before, bitmap_left, bitmap_top, bitmap) in &rendered {
-        let Some(bm) = bitmap else {
-            continue;
-        };
-        let sx = bm.width as usize;
-        let sy = bm.rows as usize;
-        let px = pixel(i64::from(x_origin.saturating_add(*pen_before)));
-        let py = pixel(i64::from(y_origin));
-        let dx = px + *bitmap_left;
-        let dy = -(py + *bitmap_top);
-        let source_x = if dx < 0 { (-dx) as usize } else { 0 };
-        let target_x = (dx.max(0) as usize).min(wu);
-        if source_x >= sx {
-            continue;
-        }
-        let cw = (sx - source_x).min(wu.saturating_sub(target_x));
-        let source_y = if dy < 0 { (-dy) as usize } else { 0 };
-        if source_y >= sy {
-            continue;
-        }
-        let end_y = if dy >= 0 {
-            sy.min(hu.saturating_sub(dy as usize))
-        } else {
-            sy
-        };
-        for row in source_y..end_y {
-            let target_y = dy + row as i32;
-            let dst = target_y as usize * wu + target_x;
-            let dr = &mut canvas[dst..dst + cw];
-            for (column, dc) in dr.iter_mut().enumerate() {
-                let sc = bitmap_coverage(bm, row, source_x + column);
-                if sc > 0 {
-                    let under = crate::color::muldiv255(u32::from(*dc), u32::from(255 - sc));
-                    *dc = sc.saturating_add(under as u8);
-                }
-            }
-        }
-    }
+    paste_rendered_bitmaps(&rendered, &mut canvas, w, h, x_origin, y_origin);
     Ok((w, h, canvas))
 }
 
@@ -810,7 +781,7 @@ fn stroked_mask_from_run_with_start(
     let face = &ttf.engine.face;
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
-    let mut rendered: Vec<(i32, i32, i32, ffi::FT_Bitmap)> = Vec::new();
+    let mut rendered = Vec::new();
     let mut x_min = 0;
     let mut x_max = 0;
     let mut y_min = 0;
@@ -829,12 +800,12 @@ fn stroked_mask_from_run_with_start(
         x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
         y_min = y_min.min(bitmap_glyph.top as i32 - bitmap_glyph.bitmap.rows as i32);
         y_max = y_max.max(bitmap_glyph.top as i32);
-        rendered.push((
-            pen,
-            bitmap_glyph.left as i32,
-            bitmap_glyph.top as i32,
-            bitmap_glyph.bitmap,
-        ));
+        rendered.push(RenderedBitmap {
+            pen_before: pen,
+            bitmap_left: bitmap_glyph.left as i32,
+            bitmap_top: bitmap_glyph.top as i32,
+            bitmap: bitmap_glyph.bitmap,
+        });
 
         pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
         prev = Some(g);
@@ -881,14 +852,30 @@ fn stroked_mask_from_run_with_start(
 
     let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
     let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
+    paste_rendered_bitmaps(&rendered, &mut canvas, w, h, x_origin, y_origin);
+    Ok((w, h, canvas))
+}
 
-    for (pen_before, bitmap_left, bitmap_top, bitmap) in &rendered {
+fn paste_rendered_bitmaps(
+    rendered: &[RenderedBitmap],
+    canvas: &mut [u8],
+    w: u32,
+    h: u32,
+    x_origin: i32,
+    y_origin: i32,
+) {
+    let wu = w as usize;
+    let hu = h as usize;
+    for rendered_bitmap in rendered {
+        let bitmap = &rendered_bitmap.bitmap;
         let sx = bitmap.width as usize;
         let sy = bitmap.rows as usize;
-        let px = pixel(i64::from(x_origin.saturating_add(*pen_before)));
+        let px = pixel(i64::from(
+            x_origin.saturating_add(rendered_bitmap.pen_before),
+        ));
         let py = pixel(i64::from(y_origin));
-        let dx = px + *bitmap_left;
-        let dy = -(py + *bitmap_top);
+        let dx = px + rendered_bitmap.bitmap_left;
+        let dy = -(py + rendered_bitmap.bitmap_top);
         let source_x = if dx < 0 { (-dx) as usize } else { 0 };
         let target_x = (dx.max(0) as usize).min(wu);
         if source_x >= sx {
@@ -917,7 +904,6 @@ fn stroked_mask_from_run_with_start(
             }
         }
     }
-    Ok((w, h, canvas))
 }
 
 fn stroked_bitmap_glyph(

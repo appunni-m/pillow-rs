@@ -16,8 +16,11 @@ because Pillow exposes it through `PIL.ImageFont`.
 - Expected results are generated at test runtime by
   `pillow-rs/scripts/font_oracle.py` using the repo-local
   `.oracle-venv/bin/python`.
-- The oracle asserts that `PIL.ImageFont.core` is `_imagingft` and that
-  `PIL._imagingft` is a native extension before producing results.
+- The oracle target is the public `PIL.ImageFont` module. For
+  `ImageFont.FreeTypeFont` rows, the oracle additionally asserts that
+  `PIL.ImageFont.core` is `_imagingft` and that `PIL._imagingft` is a native
+  extension before producing results. Bitmap `ImageFont.ImageFont` rows stay on
+  Pillow's Python/PILfont path.
 - Rust test results are compared against Pillow through `Result`-style
   status/value/error payloads. Success payloads include exact bytes; error
   payloads include kind and message.
@@ -46,10 +49,15 @@ module/class surfaces in scope:
 
 `font_manifest.yaml` now classifies the full active `PIL.ImageFont` surface,
 not only `FreeTypeFont`. Bitmap `ImageFont.ImageFont` rows execute through
-`pillow-rs/src/font/pilfont.rs`; FreeType rows execute through the renamed
-`pillow_rs::ImageFont` handle and `_imagingft`-compatible path. The active
-test still compares every row against a live Pillow oracle at runtime; input
-JSON files contain only inputs.
+`pillow-rs/src/font/pilfont.rs`; FreeType rows execute through the
+`pillow_rs::ImageFont` handle and `_imagingft`-compatible path. The active test
+still compares every row against a live Pillow oracle at runtime; input JSON
+files contain only inputs.
+
+`libraqm` is the only explicit out-of-scope public behavior. Inputs using
+`direction`, `features`, or `language` remain in scope as error-parity rows:
+they must match Pillow's no-libraqm `KeyError`/message behavior rather than
+being skipped.
 
 The repo also keeps additional public test operations around this surface:
 `font_size`, `text_bbox`, `getbbox_binary`, `get_transposed_mask`,
