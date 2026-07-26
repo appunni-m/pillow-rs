@@ -1,27 +1,33 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font repeat-variation edge
-and invariant cleanup at commit `63bdf4fdc` + current working diff
+Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font variation conversion
+edges at commit `6808ec78` + current working diff
 
-## Current checkpoint: repeat-name variation edge + private invariant cleanup
+## Current checkpoint: variation-name bytes and C fixed-coordinate conversion
 
 New working-tree changes:
 
-- Added the input-only row
-  `font.variations.set_variation_by_name.repeat_same_name`. This covers
-  Pillow's explicit `FreeTypeFont.set_variation_by_name()` same-name repeat
-  behavior without storing expected output in JSON; both Pillow and Rust call
-  the public setter twice at runtime and compare the resulting status/value.
+- Added input-only rows for additional public `FreeTypeFont` variation edges:
+  `font.variations.set_variation_by_name.thin_bytes`,
+  `font.variations.set_variation_by_axes.huge_coordinate`,
+  `font.variations.set_variation_by_axes.large_coordinate`,
+  `font.variations.set_variation_by_axes.negative_huge_coordinate`,
+  `font.variations.set_variation_by_axes.below_fixed_min_coordinate`,
+  `font.variations.get_variation_axes.fvar_axis_size_short_error`, and
+  `font.variations.get_variation_names.fvar_instance_array_short_error`.
+  The malformed `fvar` fonts are copied from maintained `pillow-rs-freetype`
+  fixtures into the Font fixture asset root so the public Font oracle can
+  reference them directly.
 - Updated `font_oracle.py` and `font_runner.rs` to interpret `repeat_count` as
-  test-flow input for `set_variation_by_name`, not as a Pillow public
-  signature parameter.
-- Simplified private `imagingft.rs` defensive branches that are unreachable
-  after the public Font path has already produced a valid mask:
-  RGBA packing now derives length from the mask vector, advance overflow uses
-  one absolute-threshold predicate, bad-image-size checks are named per
-  dimension, right-edge clipping allows an empty no-op copy, and the bitmap
-  reader asserts the BASIC Font invariant that rendered masks arrive as MONO
-  or GRAY.
+  test-flow input and `name_bytes_hex` as a byte-valued public `name` input for
+  `set_variation_by_name`. Both remain input-only; expected output/error
+  payloads are generated at runtime by Pillow.
+- Fixed `imagingft.rs::set_variation_by_axes` conversion at the public Font
+  boundary. Pillow's C wrapper accepts Python floats, converts to FreeType
+  16.16 fixed coordinates through platform C integer behavior, and then
+  FreeType clamps to axis limits. Rust now matches the observed C behavior for
+  ordinary values, values beyond 32-bit fixed range, and values beyond platform
+  `FT_Long` range before entering the pure-Rust FreeType core.
 
 Pillow comparison result:
 
@@ -38,15 +44,15 @@ Verification:
 - `make -C pillow-rs font-tests` — passed.
 - `make -C pillow-rs fmt` — passed, including public API boundary check.
 - Coverage MCP command `font-tests-coverage-with-freetype`
-  - run `000b69f9-7c37-43e8-9e48-53cbb0646231`
-  - snapshot `e55d0431-a112-482c-a922-c39363ead846`
+  - run `08eea829-536e-487c-afb8-03fd944c6e9c`
+  - snapshot `8dd0417c-ebeb-4c70-9dd4-b2f4a7a979c7`
   - status `passed`, coverage artifact ingested
 
 Target metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `670/684` (`97.95%`) | `108/112` (`96.43%`) | `74/80` (`92.50%`) | `1054/1092` (`96.52%`) |
+| `pillow-rs/src/font/imagingft.rs` | `684/697` (`98.13%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
 
 Remaining blockers/gaps:
