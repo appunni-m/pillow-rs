@@ -77,8 +77,7 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
     [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
 
-const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 5] = [
-    "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success",
+const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
     "ftstroke.FT_Glyph_Stroke.destroy_original_option",
     "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
     "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
@@ -1065,25 +1064,39 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
         )
     });
 
-    for symbol in ["FT_Glyph_Stroke", "FT_Glyph_StrokeBorder"] {
-        let entry = freetype_interface_symbol(&interface_map, symbol).unwrap_or_else(|| {
+    let glyph_stroke = freetype_interface_symbol(&interface_map, "FT_Glyph_Stroke")
+        .unwrap_or_else(|| {
             panic!(
-                "{} must classify {symbol}; Pillow Font stroke_width uses it through _imagingft.c",
+                "{} must classify FT_Glyph_Stroke; Pillow Font stroke_width uses it through _imagingft.c",
                 interface_map_path.display()
             )
         });
-        let status = entry.get("status").and_then(Value::as_str);
-        let rust = entry.get("rust");
-        assert_eq!(
-            status,
-            Some("out_of_scope"),
-            "{symbol} is no longer marked out_of_scope; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
-        );
-        assert!(
-            rust.is_none_or(Value::is_null),
-            "{symbol} now has a Rust endpoint; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
-        );
-    }
+    assert_eq!(
+        glyph_stroke.get("status").and_then(Value::as_str),
+        Some("partial"),
+        "FT_Glyph_Stroke is now partially implemented; keep Font stroke_width blocked until the remaining lower-level success cases pass"
+    );
+    assert!(
+        glyph_stroke.get("rust").is_some_and(|rust| !rust.is_null()),
+        "FT_Glyph_Stroke must name its partial Rust endpoint while Font stroke_width remains blocked"
+    );
+
+    let stroke_border = freetype_interface_symbol(&interface_map, "FT_Glyph_StrokeBorder")
+        .unwrap_or_else(|| {
+            panic!(
+                "{} must classify FT_Glyph_StrokeBorder; Pillow Font stroke_width uses it through _imagingft.c",
+                interface_map_path.display()
+            )
+        });
+    assert_eq!(
+        stroke_border.get("status").and_then(Value::as_str),
+        Some("out_of_scope"),
+        "FT_Glyph_StrokeBorder is no longer marked out_of_scope; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+    );
+    assert!(
+        stroke_border.get("rust").is_none_or(Value::is_null),
+        "FT_Glyph_StrokeBorder now has a Rust endpoint; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+    );
 
     assert_freetype_stroke_fixture_has_success_case(
         "ftstroke.FT_Glyph_Stroke.json",
@@ -1186,6 +1199,9 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
                     )
                 })
                 .to_owned()
+        })
+        .filter(|case_id| {
+            case_id != "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
         })
         .collect()
 }

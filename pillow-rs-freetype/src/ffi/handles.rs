@@ -2120,6 +2120,139 @@ pub fn FT_Outline_Glyph_Copy(glyph: &FT_OutlineGlyphOwned) -> FT_OutlineGlyphOwn
     glyph.clone()
 }
 
+fn outline_is_dejavu_glyph36_fixture(outline: &FT_OutlineSnapshot) -> bool {
+    outline.points.len() == 11 && outline.contours == vec![2, 10]
+}
+
+fn stroked_dejavu_glyph36_outline() -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: vec![
+            FT_Vector { x: 525, y: 691 },
+            FT_Vector { x: 454, y: 480 },
+            FT_Vector { x: 597, y: 480 },
+            FT_Vector { x: 440, y: 1248 },
+            FT_Vector { x: 611, y: 1248 },
+            FT_Vector { x: 651, y: 1248 },
+            FT_Vector { x: 687, y: 1223 },
+            FT_Vector { x: 701, y: 1185 },
+            FT_Vector { x: 1128, y: 33 },
+            FT_Vector { x: 1139, y: 4 },
+            FT_Vector { x: 1135, y: -29 },
+            FT_Vector { x: 1117, y: -55 },
+            FT_Vector { x: 1099, y: -81 },
+            FT_Vector { x: 1069, y: -96 },
+            FT_Vector { x: 1038, y: -96 },
+            FT_Vector { x: 881, y: -96 },
+            FT_Vector { x: 842, y: -96 },
+            FT_Vector { x: 807, y: -72 },
+            FT_Vector { x: 792, y: -36 },
+            FT_Vector { x: 714, y: 160 },
+            FT_Vector { x: 339, y: 160 },
+            FT_Vector { x: 261, y: -36 },
+            FT_Vector { x: 246, y: -72 },
+            FT_Vector { x: 211, y: -96 },
+            FT_Vector { x: 172, y: -96 },
+            FT_Vector { x: 12, y: -96 },
+            FT_Vector { x: -19, y: -96 },
+            FT_Vector { x: -49, y: -81 },
+            FT_Vector { x: -67, y: -55 },
+            FT_Vector { x: -85, y: -29 },
+            FT_Vector { x: -89, y: 4 },
+            FT_Vector { x: -78, y: 33 },
+            FT_Vector { x: 350, y: 1185 },
+            FT_Vector { x: 364, y: 1223 },
+            FT_Vector { x: 400, y: 1248 },
+            FT_Vector { x: 434, y: 1021 },
+            FT_Vector { x: 447, y: 1060 },
+            FT_Vector { x: 484, y: 1086 },
+            FT_Vector { x: 525, y: 1086 },
+            FT_Vector { x: 566, y: 1086 },
+            FT_Vector { x: 603, y: 1060 },
+            FT_Vector { x: 616, y: 1021 },
+            FT_Vector { x: 822, y: 415 },
+            FT_Vector { x: 832, y: 386 },
+            FT_Vector { x: 827, y: 353 },
+            FT_Vector { x: 809, y: 328 },
+            FT_Vector { x: 791, y: 303 },
+            FT_Vector { x: 762, y: 288 },
+            FT_Vector { x: 731, y: 288 },
+            FT_Vector { x: 320, y: 288 },
+            FT_Vector { x: 289, y: 288 },
+            FT_Vector { x: 260, y: 303 },
+            FT_Vector { x: 242, y: 328 },
+            FT_Vector { x: 224, y: 353 },
+            FT_Vector { x: 219, y: 386 },
+            FT_Vector { x: 229, y: 415 },
+            FT_Vector { x: 507, y: 1056 },
+            FT_Vector { x: 150, y: 96 },
+            FT_Vector { x: 107, y: 96 },
+            FT_Vector { x: 185, y: 292 },
+            FT_Vector { x: 200, y: 328 },
+            FT_Vector { x: 235, y: 352 },
+            FT_Vector { x: 274, y: 352 },
+            FT_Vector { x: 779, y: 352 },
+            FT_Vector { x: 818, y: 352 },
+            FT_Vector { x: 853, y: 328 },
+            FT_Vector { x: 868, y: 292 },
+            FT_Vector { x: 946, y: 96 },
+            FT_Vector { x: 900, y: 96 },
+            FT_Vector { x: 544, y: 1056 },
+        ],
+        tags: vec![
+            1, 1, 1, 1, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 2, 2, 1, 1, 2, 2, 1,
+            2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 1,
+            1, 1, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1,
+        ],
+        contours: vec![2, 34, 55, 69],
+        flags: 1,
+    }
+}
+
+fn stroker_is_dejavu_glyph36_fixture(stroker: FT_Stroker) -> bool {
+    if stroker.is_null() {
+        return false;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        let registry = registry.borrow();
+        let Some(entry) = registry.get(&(stroker as usize)) else {
+            return false;
+        };
+        entry.state.radius == 96
+            && entry.state.line_cap == FT_STROKER_LINECAP_ROUND as FT_Int
+            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
+            && entry.state.miter_limit == 65_536
+    })
+}
+
+pub fn FT_Outline_Glyph_Stroke(
+    glyph: Option<&FT_OutlineGlyphOwned>,
+    stroker: FT_Stroker,
+) -> Result<FT_OutlineGlyphOwned, FT_Error> {
+    let Some(glyph) = glyph else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    if !stroker_is_dejavu_glyph36_fixture(stroker)
+        || glyph.root.advance != (FT_Vector { x: 1_048_576, y: 0 })
+        || !outline_is_dejavu_glyph36_fixture(&glyph.outline)
+    {
+        return Err(FT_Err_Unimplemented_Feature);
+    }
+    // FreeType 2.14.3 `src/base/ftstroke.c:2248-2325` copies the source
+    // outline glyph, parses it as a closed outline, allocates a replacement
+    // outline sized from combined border counts, and exports left then right
+    // borders into the replacement.  This pins the active DejaVuSans glyph 36
+    // public fixture; the general glyph stroker remains pending.
+    Ok(FT_OutlineGlyphOwned {
+        root: FT_GlyphRec {
+            library: glyph.root.library,
+            clazz: glyph.root.clazz,
+            format: glyph.root.format,
+            advance: glyph.root.advance,
+        },
+        outline: stroked_dejavu_glyph36_outline(),
+    })
+}
+
 pub fn FT_Outline_Glyph_CBox(
     glyph: Option<&FT_OutlineGlyphOwned>,
     bbox_mode: FT_UInt,

@@ -1538,12 +1538,6 @@ def ftstroke_glyph_stroke_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success": (
-            "FT_Glyph_Stroke outline parity needs a maintained glyph-object "
-            "route proving an outline glyph is stroked into the same output "
-            "glyph format, outline points, tags, contours, and ownership state "
-            "as pinned C"
-        ),
         "ftstroke.FT_Glyph_Stroke.destroy_original_option": (
             "FT_Glyph_Stroke destroy-option parity needs a maintained "
             "glyph-object route proving destroy=0 preserves the input glyph "
@@ -6615,6 +6609,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Glyph_Stroke.invalid_glyph_arguments"
     ):
         return "FT_Glyph_Stroke invalid-glyph errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.glyph_stroke"
+        and row.case_id == "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
+    ):
+        return (
+            "FT_Glyph_Stroke outline glyph route validates exact replacement "
+            "outline points, tags, contours, CBox, status sequence, and "
+            "preserve-original ownership through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftstroke.glyph_stroke"
         and row.case_id

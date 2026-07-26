@@ -4092,6 +4092,48 @@ pub extern "C" fn FT_Glyph_To_Bitmap(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn FT_Glyph_Stroke(
+    pglyph: *mut FT_Glyph,
+    stroker: FT_Stroker,
+    destroy: FT_Bool,
+) -> FT_Error {
+    let Some(handle) = non_null_mut(pglyph) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    // SAFETY: `handle` is non-null and points to caller-owned glyph handle
+    // storage.  We copy the handle before validating the private class marker.
+    let glyph = unsafe { *handle.as_ptr() };
+    if glyph.is_null() {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    }
+    let Some(owned) = owned_outline_glyph_from_root(glyph) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let stroked = match rust_ffi::FT_Outline_Glyph_Stroke(Some(&owned.core), stroker) {
+        Ok(stroked) => stroked,
+        Err(error) => {
+            if destroy == 0 {
+                // SAFETY: `handle` is valid caller storage and C FreeType's
+                // failure path clears `*pglyph` after the copy/stroke phase.
+                unsafe { *handle.as_ptr() = ptr::null_mut() };
+            }
+            return error;
+        }
+    };
+    let stroked = Box::into_raw(Box::new(OwnedOutlineGlyph::new(stroked))).cast::<FT_GlyphRec>();
+    if destroy != 0 {
+        // SAFETY: the class sentinel proves this pointer came from
+        // `Box<OwnedOutlineGlyph>` in `FT_Get_Glyph`.
+        unsafe { drop(Box::from_raw(glyph.cast::<OwnedOutlineGlyph>())) };
+    }
+    // SAFETY: `handle` is valid caller-provided handle storage.
+    unsafe {
+        *handle.as_ptr() = stroked;
+    }
+    rust_ffi::FT_Err_Ok
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn FT_Outline_Get_BBox(outline: *const FT_Outline, abbox: *mut FT_BBox) -> FT_Error {
     if abbox.is_null() {
         return rust_ffi::FT_Err_Invalid_Argument as FT_Error;

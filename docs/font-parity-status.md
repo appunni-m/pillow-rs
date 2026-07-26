@@ -73,9 +73,9 @@ normal line/conic/cubic glyph outlines. Visible stroked glyph masks require
 completing real FreeType-compatible stroker geometry/export and then wiring that
 route into `pillow-rs/src/font/imagingft.rs`.
 
-The Font test pins this blocker to lower-level FreeType success rows:
+The Font test pins this blocker to the remaining lower-level FreeType success
+rows:
 
-- `ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success`
 - `ftstroke.FT_Glyph_Stroke.destroy_original_option`
 - `ftstroke.FT_Glyph_StrokeBorder.outside_border_success`
 - `ftstroke.FT_Glyph_StrokeBorder.inside_border_success`
@@ -87,8 +87,15 @@ Latest narrow lower-level check:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
 ```
 
-Result: current runnable rows pass (`3/3`), and the five glyph-stroke success
-rows above remain pending lower-level routes.
+Result after this update:
+`FT_Glyph_Stroke.outline_glyph_stroked_success` now runs as real
+C/Rust/WASM parity for the explicit DejaVuSans glyph 36 fixture at 24px with
+radius-96 round stroke. The route compares the replacement outline points,
+tags, contours, CBox, status sequence, and preserve-original ownership against
+the pinned C oracle. It is not the general glyph stroker implementation.
+Current runnable rows pass (`4/4`), and the four success rows above remain
+pending lower-level routes. Route audit movement is `real-parity=4838`,
+`pending-route=183`.
 
 Additional lower-level blocker reduction:
 
@@ -272,10 +279,11 @@ Latest blocker verification:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
 ```
 
-Result after the CubicTo first-segment movement: runnable rows still pass (`3/3`), and the
-five glyph-stroke success rows remain pending. This confirms that adding active
-Font `stroke_width` rows now would create honest Pillow-vs-Rust failures rather
-than increasing trustworthy Font coverage.
+Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
+runnable rows pass (`4/4`), and the four remaining glyph-stroke success rows
+remain pending. This confirms that adding active Font `stroke_width` rows now
+would still create honest Pillow-vs-Rust failures rather than increasing
+trustworthy Font coverage.
 
 ## Required next implementation sequence
 
