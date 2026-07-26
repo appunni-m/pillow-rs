@@ -64,11 +64,20 @@ Remaining targeted gaps from Coverage MCP snapshot
   has been found that reaches an unknown FreeType error without manufacturing
   invalid internal state.
 - `imagingft.rs:241,246` — `FT_Set_Named_Instance` failure after a valid name
-  lookup; public Pillow short-circuits repeated names and missing names before
-  this path.
+  lookup. This is not a removable local defensive branch: the underlying
+  `pillow-rs-freetype` implementation reloads/reparses the same font with
+  named-instance face-index bits after the public name has already matched.
+  A malformed variable font can therefore fail only at this post-validation
+  setter stage. Public Pillow short-circuits repeated names and missing names
+  before this path, so a real fixture needs a valid visible instance name plus
+  a reload-time failure.
 - `imagingft.rs:263,267` — `FT_Set_Var_Design_Coordinates` failure after
-  variation-face validation; current public malformed-font rows hit Pillow's
-  visible `invalid argument` surface before this post-validation setter failure.
+  variation-face validation. This also is not a removable local defensive
+  branch: `pillow-rs-freetype` reloads/reparses the face after applying public
+  design coordinates. Current public malformed-font rows hit Pillow's visible
+  `invalid argument` surface before this post-validation setter failure, so a
+  real fixture needs a variable face accepted at load/axis-discovery time but
+  rejected only after applying explicit coordinates.
 - `imagingft.rs:366-367` — real `stroke_width != 0` mask rendering path,
   blocked on complete pure-Rust FreeType stroker support.
 
