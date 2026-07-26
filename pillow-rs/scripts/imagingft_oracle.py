@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "imagingft"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = REPO_ROOT.parent
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "imagingft"
+REPO_ORACLE_VENV = WORKSPACE_ROOT / ".oracle-venv"
 
 
 def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
@@ -16,19 +19,20 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     import os
 
     venv_root = Path(os.environ.get("VIRTUAL_ENV", "")).resolve()
-    if not venv_root.name == ".oracle-venv":
+    if venv_root != REPO_ORACLE_VENV:
         raise RuntimeError(
-            f"imagingft oracle must run from repo-local .oracle-venv python: VIRTUAL_ENV={venv_root}"
+            f"imagingft oracle must run from repo-local oracle venv: VIRTUAL_ENV={venv_root}"
         )
 
     python_executable = Path(sys.executable)
-    if ".oracle-venv" not in str(python_executable):
+    if python_executable != REPO_ORACLE_VENV / "bin" / "python":
         raise RuntimeError(
-            f"imagingft oracle must run from the repo-local .oracle-venv python: {python_executable}"
+            f"imagingft oracle must run from {REPO_ORACLE_VENV / 'bin' / 'python'}; got {python_executable}"
         )
-    if not PIL.__file__ or ".oracle-venv" not in str(Path(PIL.__file__).resolve()):
+    pillow_path = Path(PIL.__file__).resolve() if PIL.__file__ else Path()
+    if not str(pillow_path).startswith(str(REPO_ORACLE_VENV.resolve())):
         raise RuntimeError(
-            f"imagingft oracle must use Pillow from repo-local .oracle-venv site-packages: {PIL.__file__}"
+            f"imagingft oracle must use Pillow from repo-local .oracle-venv site-packages; got {PIL.__file__}"
         )
 
     from PIL import Image, ImageDraw, ImageFont
