@@ -623,6 +623,41 @@ fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
     );
 }
 
+fn runner_root_font_api_references() -> BTreeSet<String> {
+    let runner = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/support/font_runner.rs");
+    let text = fs::read_to_string(&runner).expect("font runner must be readable");
+    let marker = "pillow_rs::font_";
+    let mut references = BTreeSet::new();
+
+    for line in text.lines() {
+        let mut rest = line;
+        while let Some(index) = rest.find(marker) {
+            let suffix = &rest[index + "pillow_rs::".len()..];
+            let name = suffix
+                .chars()
+                .take_while(|character| character.is_ascii_alphanumeric() || *character == '_')
+                .collect::<String>();
+            references.insert(name);
+            rest = &suffix[marker.len() - "pillow_rs::".len()..];
+        }
+    }
+
+    assert!(
+        !references.is_empty(),
+        "font runner must call root pillow_rs::font_* APIs directly"
+    );
+    references
+}
+
+fn assert_runner_exercises_root_font_api() {
+    let root_functions = root_font_public_functions();
+    let runner_references = runner_root_font_api_references();
+    assert_eq!(
+        runner_references, root_functions,
+        "font_public_api runner must reference every root pillow_rs::font_* function exactly; otherwise the manifest may map an API that no fixture can execute"
+    );
+}
+
 fn runner_public_operations() -> BTreeSet<String> {
     let runner = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/support/font_runner.rs");
     let text = fs::read_to_string(&runner).expect("font runner must be readable");
@@ -972,6 +1007,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_case_ids_match_operations(&cases);
     assert_referenced_assets_exist(&root, &cases);
     assert_manifest_covers_root_font_api(&manifest);
+    assert_runner_exercises_root_font_api();
     assert_manifest_operations_have_runner_arms(&manifest);
 
     let pillow_methods = pillow_freetypefont_public_methods();
