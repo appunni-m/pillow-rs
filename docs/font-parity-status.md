@@ -123,11 +123,11 @@ line/conic/cubic route.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `3b836daf-468d-4694-b4f1-c595c3eb2dfe`
-- Snapshot: `88699ed9-5ada-4be0-a4a2-642f9491a4aa`
+- Run: `ced676b0-0143-4b24-8bdf-601e158907d4`
+- Snapshot: `8c62e90d-c4e8-4892-872a-2bd7ed28b05f`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `0e7341f82ab12a1aadbb165df15845490e7b3526`
+- Commit measured: `d20d1f3009805f5027910ca933a7b27901bdc557`
 
 Target file metrics:
 
