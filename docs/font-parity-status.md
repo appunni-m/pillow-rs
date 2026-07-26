@@ -1,7 +1,7 @@
 # Font Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
-stroke implementation blocker at commit `1a8c274f1`
+stroke implementation blocker at commit `559e784e7`
 
 ## Current checkpoint: live Pillow Font surface comparison
 
@@ -66,8 +66,8 @@ Current blocked public parameters:
 Coverage MCP status:
 
 - Latest managed command: `font-tests-coverage-with-freetype`
-- run `74047d9a-2343-4a08-b914-58aba955a198`
-- snapshot `d6dd16be-55e1-41c7-add9-c3b9eacbea17`
+- run `b68cac57-91f3-4be7-a314-284c865b3621`
+- snapshot `7d7b19cd-b86b-49cc-bc65-3b35df341499`
 - status `passed`, coverage artifact ingested
 
 Target metrics:
@@ -78,7 +78,7 @@ Target metrics:
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
 
 Remaining targeted gaps from Coverage MCP snapshot
-`d6dd16be-55e1-41c7-add9-c3b9eacbea17`:
+`7d7b19cd-b86b-49cc-bc65-3b35df341499`:
 
 - `imagingft.rs:90-91` — generic FreeType error fallback; no public Font input
   has been found that reaches an unknown FreeType error without manufacturing
