@@ -269,11 +269,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `4dbbd40b-1d6f-4ed9-950d-4a94d0baf595`
-- Snapshot: `35fa5a5a-8b86-4349-b809-60f9346f881d`
+- Run: `a267a8af-3150-47f0-befb-918d27dedce2`
+- Snapshot: `608a8f41-7f1b-47a1-9624-038373f1e905`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `720599d20a44aa2c5e1cc0fc95a5dcca8fc5fbbf`
+- Commit measured: `9627505bb796d6b1cf6045fe4d8de8e585dc1cf7`
 
 Target file metrics:
 
@@ -281,7 +281,7 @@ Target file metrics:
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
-| `pillow-rs/src/font/pilfont.rs` | `346/381` (`90.81%`) | `73/96` (`76.04%`) | `30/42` (`71.43%`) | `523/596` (`87.75%`) |
+| `pillow-rs/src/font/pilfont.rs` | `347/381` (`91.08%`) | `73/96` (`76.04%`) | `30/42` (`71.43%`) | `524/596` (`87.92%`) |
 
 Current full-module scope note:
 
@@ -292,8 +292,9 @@ Current full-module scope note:
   repo-local PBM-backed PILfont loading/masking, zero-sized transposed masks,
   valid `P1` PBM, L-mode glyph images, clipped PILfont metrics, public
   `ImageFont.info`, and matching malformed PBM loader errors moved
-  invalid PNG glyph-image discovery, and no-newline metrics errors moved
-  `pilfont.rs` regions from `352/591` (`59.56%`) to `523/596` (`87.75%`).
+  invalid PNG glyph-image discovery, no-newline metrics errors, and invalid
+  glyph-image mode mapping moved `pilfont.rs` regions from `352/591`
+  (`59.56%`) to `524/596` (`87.92%`).
   The next coverage work must handle the remaining public-reachable
   PBM/image-load errors exactly and decide whether root-public `PilFont` raw
   constructor helpers remain in scope or should become implementation details

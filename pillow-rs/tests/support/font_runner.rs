@@ -649,13 +649,17 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
             let metrics = fs::read(&metrics_path).map_err(|error| {
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;
-            let image = load_pilfont_glyph_image(&metrics_path)?;
-            PilFont::from_pilfont_data(&metrics, image).or_else(|error| match error {
-                PilError::TypeError(message) if message == "invalid font image mode" => {
-                    Err(cannot_find_glyph_data_error(&metrics_path))
+            match load_pilfont_glyph_image(&metrics_path)? {
+                GlyphImageCandidate::Valid(image) => PilFont::from_pilfont_data(&metrics, image),
+                GlyphImageCandidate::InvalidMode(image) => {
+                    PilFont::from_pilfont_data(&metrics, image).or_else(|error| match error {
+                        PilError::TypeError(message) if message == "invalid font image mode" => {
+                            Err(cannot_find_glyph_data_error(&metrics_path))
+                        }
+                        other => Err(other),
+                    })
                 }
-                other => Err(other),
-            })
+            }
         }
         other => Err(PilError::ValueError(format!(
             "unsupported bitmap ImageFont asset kind: {other}"
@@ -663,8 +667,13 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
     }
 }
 
-fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<Image, PilError> {
-    let mut last_image: Option<Image> = None;
+enum GlyphImageCandidate {
+    Valid(Image),
+    InvalidMode(Image),
+}
+
+fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<GlyphImageCandidate, PilError> {
+    let mut last_invalid_mode_image: Option<Image> = None;
     for extension in ["png", "gif", "pbm"] {
         let bitmap_path = metrics_path.with_extension(extension);
         let Ok(bitmap) = fs::read(&bitmap_path) else {
@@ -677,11 +686,13 @@ fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<Image, PilError> {
         };
         let mode = image.mode()?;
         if matches!(mode.as_str(), "1" | "L") {
-            return Ok(image);
+            return Ok(GlyphImageCandidate::Valid(image));
         }
-        last_image = Some(image);
+        last_invalid_mode_image = Some(image);
     }
-    let _ = last_image;
+    if let Some(image) = last_invalid_mode_image {
+        return Ok(GlyphImageCandidate::InvalidMode(image));
+    }
     Err(cannot_find_glyph_data_error(metrics_path))
 }
 
