@@ -4,6 +4,37 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
+Current committed checkpoint:
+
+- `e7db8f817` — added Pillow `FreeTypeFont` variation public APIs to the
+  root Rust API plus thin Python/JS delegations and manifest-driven parity rows
+  for `font_variant`, `get_variation_axes`, `get_variation_names`,
+  `set_variation_by_axes`, and `set_variation_by_name`.
+- `060d763c6` — expanded variation mutation rows and fixed public style-name
+  refresh after `set_variation_by_name`; Pillow reports the selected named
+  instance as the public style name.
+
+Latest Coverage MCP snapshot:
+
+- Run: `8f07704f-98e8-4677-ba61-d523d946203a`
+- Snapshot: `48f1c0ae-b25a-4c55-bc08-017de9b90a1e`
+- Commit: `060d763c65d86528be7a245f70ef3d124e2a50f2`
+- `pillow-rs/src/font/imagingft.rs`:
+  - lines: `925/1012` (`91.40316206%`)
+  - branches: `182/236` (`77.11864407%`)
+  - functions: `97/113` (`85.84070796%`)
+  - regions: `1556/1717` (`90.62317997%`)
+- `pillow-rs/src/font/mod.rs`:
+  - lines: `131/146` (`89.72602740%`)
+  - functions: `32/36` (`88.88888889%`)
+  - regions: `170/202` (`84.15841584%`)
+- Current corpus: `154` input-only rows across `20` files.
+- The manifest now includes every inspected Pillow `FreeTypeFont` public method
+  from the repo-local oracle (`font_variant`, variation getters/setters,
+  metrics/name/layout/mask methods) plus classified helper/consumer operations
+  needed for constructor, transposed, binary, draw, and Result/error parity.
+- Literal 100% region coverage is still not achieved.
+
 Implemented and committed during execution:
 
 - `77c64bb22` — added variable-font and SBIT oracle rows.
