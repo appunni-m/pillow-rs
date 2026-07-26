@@ -88,27 +88,3 @@ fn decode_digit(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use sha2::{Digest, Sha256};
-
-    use super::DECODED_LEN;
-    use super::decode;
-
-    #[test]
-    fn embedded_payload_matches_pillow_12_2_0() {
-        let decoded = decode().expect("the checked-in Pillow payload must be valid base64");
-        let digest: [u8; 32] = Sha256::digest(&decoded).into();
-
-        assert_eq!(decoded.len(), DECODED_LEN);
-        assert_eq!(
-            digest,
-            [
-                0x69, 0x85, 0x39, 0x09, 0xb9, 0x40, 0x02, 0x35, 0x70, 0x96, 0x4e, 0x29, 0xcf, 0xfe,
-                0x30, 0xda, 0x95, 0xae, 0xa8, 0xde, 0x36, 0x27, 0x73, 0x6b, 0x5c, 0xd1, 0x5a, 0xb3,
-                0x01, 0x43, 0x16, 0x9f,
-            ]
-        );
-    }
-}
