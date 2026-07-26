@@ -12,8 +12,8 @@ use fontdone::ffi;
 pub(super) struct TrueTypeEngine {
     face: ffi::FT_Face,
     pub(super) size_pt: f32,
-    family_name: String,
-    style_name: String,
+    family_name: Option<String>,
+    style_name: Option<String>,
     metrics: ffi::FT_Size_Metrics,
 }
 
@@ -54,8 +54,8 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, Pi
         return Err(PilError::OsError(message.into()));
     }
 
-    let family_name = face.family_name.clone().unwrap_or_else(|| "Unknown".into());
-    let style_name = face.style_name.clone().unwrap_or_else(|| "Regular".into());
+    let family_name = face.family_name.clone();
+    let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
 
     Ok(TrueTypeFont {
@@ -94,8 +94,22 @@ fn ft_error_to_pil(error: i32) -> PilError {
 
 pub fn getname(font: &Font) -> (&str, &str) {
     match font {
-        Font::TrueType(t) => (t.engine.family_name.as_str(), t.engine.style_name.as_str()),
+        Font::TrueType(t) => (
+            t.engine.family_name.as_deref().unwrap_or("Unknown"),
+            t.engine.style_name.as_deref().unwrap_or("Regular"),
+        ),
         Font::Bitmap(_) => ("Aileron", "Regular"),
+    }
+}
+
+/// Return Pillow's raw `_imagingft` name tuple, preserving missing names.
+pub fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
+    match font {
+        Font::TrueType(t) => (
+            t.engine.family_name.as_deref(),
+            t.engine.style_name.as_deref(),
+        ),
+        Font::Bitmap(_) => (Some("Aileron"), Some("Regular")),
     }
 }
 
