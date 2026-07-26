@@ -72,30 +72,31 @@ fn oracle_python() -> PathBuf {
         .join("..")
         .canonicalize()
         .expect("repo root for imagingft tests must be discoverable");
-    let repo_python = repo_root
-        .join(".oracle-venv/bin/python")
-        .canonicalize()
-        .unwrap_or_else(|_| {
-            panic!(
-                "repo-local IMAGINGFT_ORACLE_PYTHON missing: {repo_root:?}/.oracle-venv/bin/python"
-            )
-        });
+    let repo_python = repo_root.join(".oracle-venv/bin/python");
+    if !repo_python.exists() {
+        panic!(
+            "repo-local IMAGINGFT_ORACLE_PYTHON missing: {repo_root:?}/.oracle-venv/bin/python"
+        );
+    }
 
     if let Some(env_path) = std::env::var_os("IMAGINGFT_ORACLE_PYTHON") {
-        let canonical = PathBuf::from(env_path)
-            .canonicalize()
-            .unwrap_or_else(|_| panic!("IMAGINGFT_ORACLE_PYTHON must be a valid executable path"));
-        assert_eq!(
-            canonical, repo_python,
-            "IMAGINGFT_ORACLE_PYTHON must point to repo-local .oracle-venv/bin/python: {canonical:?}"
+        let candidate = PathBuf::from(env_path);
+        assert!(
+            candidate
+                .to_string_lossy()
+                .ends_with(".oracle-venv/bin/python"),
+            "IMAGINGFT_ORACLE_PYTHON must point to a .oracle-venv/bin/python executable: {candidate:?}"
         );
-        return canonical;
+        if candidate.exists() {
+            return candidate;
+        }
+        panic!("IMAGINGFT_ORACLE_PYTHON does not exist: {candidate:?}");
     }
 
     let path = repo_python;
     assert!(
-        path.ends_with("bin/python"),
-        "IMAGINGFT_ORACLE_PYTHON must be a venv python executable: {path:?}"
+        path.ends_with(".oracle-venv/bin/python"),
+        "IMAGINGFT_ORACLE_PYTHON must be the repo-local .oracle-venv binary: {path:?}"
     );
     path
 }
@@ -147,10 +148,11 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
 fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/imagingft_oracle.py");
     let oracle = oracle_python();
-    let venv_root = oracle
-        .parent()
-        .and_then(Path::parent)
-        .expect("imagingft oracle python must live under .oracle-venv/bin");
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for imagingft tests must be discoverable");
+    let venv_root = repo_root.join(".oracle-venv");
     let mut command = Command::new(oracle.as_os_str());
     command
         .arg(script)
