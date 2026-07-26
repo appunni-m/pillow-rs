@@ -141,15 +141,28 @@ const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
 
 const DEFAULT_PARAMETER_VALUE: &str = "<default>";
 
-const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 27] = [
+const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("font_variant", "layout_engine", "BASIC"),
     ("font_variant", "layout_engine", "RAQM"),
+    ("getbbox", "anchor", DEFAULT_PARAMETER_VALUE),
+    ("getbbox", "anchor", "a"),
+    ("getbbox", "anchor", "la"),
+    ("getbbox", "anchor", "lb"),
+    ("getbbox", "anchor", "ls"),
+    ("getbbox", "anchor", "lt"),
+    ("getbbox", "anchor", "lx"),
+    ("getbbox", "anchor", "mm"),
+    ("getbbox", "anchor", "rd"),
+    ("getbbox", "anchor", "xy"),
     ("getbbox", "direction", "rtl"),
     ("getbbox", "features", "[]"),
     ("getbbox", "language", "en"),
     ("getbbox", "mode", DEFAULT_PARAMETER_VALUE),
     ("getbbox", "mode", "1"),
     ("getbbox", "mode", "bad"),
+    ("getbbox", "stroke_width", DEFAULT_PARAMETER_VALUE),
+    ("getbbox", "stroke_width", "0.5"),
+    ("getbbox", "stroke_width", "1"),
     ("getlength", "direction", "rtl"),
     ("getlength", "features", "[]"),
     ("getlength", "features", "[\"-kern\"]"),
@@ -157,18 +170,51 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 27] = [
     ("getlength", "mode", DEFAULT_PARAMETER_VALUE),
     ("getlength", "mode", "1"),
     ("getlength", "mode", "bad"),
+    ("getmask", "anchor", DEFAULT_PARAMETER_VALUE),
+    ("getmask", "anchor", "mm"),
     ("getmask", "direction", "rtl"),
     ("getmask", "features", "[]"),
+    ("getmask", "ink", DEFAULT_PARAMETER_VALUE),
+    ("getmask", "ink", "123"),
+    ("getmask", "ink", "[1,2,3]"),
     ("getmask", "language", "en"),
     ("getmask", "mode", DEFAULT_PARAMETER_VALUE),
     ("getmask", "mode", "1"),
     ("getmask", "mode", "RGBA"),
+    ("getmask", "start", DEFAULT_PARAMETER_VALUE),
+    ("getmask", "start", "[-10,0]"),
+    ("getmask", "start", "[-100,0]"),
+    ("getmask", "start", "[0,-10]"),
+    ("getmask", "start", "[0.0,0.0]"),
+    ("getmask", "start", "[1.25,2.5]"),
+    ("getmask", "stroke_width", DEFAULT_PARAMETER_VALUE),
+    ("getmask", "stroke_width", "-1.5"),
+    ("getmask", "stroke_width", "1.5"),
+    ("getmask2", "anchor", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "anchor", "mm"),
+    ("getmask2", "args", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "args", "[\"L\",null,null,null,0,null,123,null,\"ignored\"]"),
     ("getmask2", "direction", "rtl"),
     ("getmask2", "features", "[]"),
+    ("getmask2", "ink", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "ink", "[1,2,3]"),
+    ("getmask2", "kwargs", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "kwargs", "{\"stroke_filled\":true,\"unknown\":1}"),
     ("getmask2", "language", "en"),
     ("getmask2", "mode", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "mode", "1"),
     ("getmask2", "mode", "RGBA"),
+    ("getmask2", "start", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "start", "[-10,0]"),
+    ("getmask2", "start", "[0,-10]"),
+    ("getmask2", "start", "[-100.0,0.0]"),
+    ("getmask2", "start", "[0.0,-100.0]"),
+    ("getmask2", "start", "[0.0,0.0]"),
+    ("getmask2", "start", "[1.25,2.5]"),
+    ("getmask2", "start", "[100.0,0.0]"),
+    ("getmask2", "stroke_width", DEFAULT_PARAMETER_VALUE),
+    ("getmask2", "stroke_width", "-1.5"),
+    ("getmask2", "stroke_width", "1.5"),
 ];
 
 const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
@@ -1181,8 +1227,8 @@ fn observed_public_parameter_values(
     cases: &[Value],
 ) -> BTreeMap<(String, String), BTreeSet<String>> {
     let required_keys = REQUIRED_PUBLIC_PARAMETER_VALUES
-        .into_iter()
-        .map(|(operation, parameter, _)| (operation.to_owned(), parameter.to_owned()))
+        .iter()
+        .map(|&(operation, parameter, _)| (operation.to_owned(), parameter.to_owned()))
         .collect::<BTreeSet<_>>();
     let mut observed = BTreeMap::new();
 
@@ -1206,11 +1252,18 @@ fn observed_public_parameter_values(
                     .and_then(Value::as_str)
                     .unwrap_or(DEFAULT_PARAMETER_VALUE)
                     .to_owned(),
-                "direction" | "language" => params
+                "anchor" | "direction" | "language" => params
                     .get(required_parameter)
                     .and_then(Value::as_str)
                     .unwrap_or(DEFAULT_PARAMETER_VALUE)
                     .to_owned(),
+                "args" | "ink" | "kwargs" | "start" | "stroke_width" => params
+                    .get(required_parameter)
+                    .map(|value| {
+                        serde_json::to_string(value)
+                            .expect("font parameter value must serialize for coverage")
+                    })
+                    .unwrap_or_else(|| DEFAULT_PARAMETER_VALUE.to_owned()),
                 "features" => params
                     .get("features")
                     .map(|value| {
@@ -1241,7 +1294,7 @@ fn assert_manifest_covers_required_public_parameter_values(
 ) {
     let observed_values = observed_public_parameter_values(cases);
 
-    for (operation, parameter, required_value) in REQUIRED_PUBLIC_PARAMETER_VALUES {
+    for &(operation, parameter, required_value) in REQUIRED_PUBLIC_PARAMETER_VALUES {
         let coverage = manifest
             .public_method_parameters
             .get(operation)
