@@ -66,6 +66,19 @@ Verification:
 
 - `make -C pillow-rs font-tests` — passed after removing the coverage-neutral
   rows.
+- Final managed core-only Coverage MCP fallback:
+  - command: `imagingft-tests-coverage-fixed`
+  - run: `6ad98f1d-80c3-4c7c-8ef5-71b8b07890bd`
+  - snapshot: `7efe5f41-e119-438d-a257-019f61456052`
+  - commit: `b028309d1d0b85bb14167512bcf962b58c5b1478`
+  - status: passed and ingested
+  - `pillow-rs/src/font/imagingft.rs`: `1613/1740` regions (`92.70%`)
+- Final managed `font-tests-coverage-with-freetype` run on commit
+  `b028309d1d0b85bb14167512bcf962b58c5b1478` passed tests but Coverage MCP
+  ingestion failed before snapshot creation because the LLVM report contained
+  hit count `2415258384` for `pillow-rs-freetype/src/tt/cmap.rs`, which
+  overflowed Coverage MCP's CSV `INTEGER` conversion. This is an ingestion
+  blocker, not a test failure.
 - Coverage dashboard: <http://localhost:59471/>
 
 Remaining target to reach honest 100% region coverage:
