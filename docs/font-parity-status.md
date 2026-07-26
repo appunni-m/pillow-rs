@@ -1,7 +1,7 @@
 # Font Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
-coverage cleanup at commit `976b01a7b`
+coverage cleanup at commit `412524313`
 
 ## Current checkpoint: Font manifest value coverage + mask-copy branch cleanup
 
@@ -21,6 +21,10 @@ New commits:
 - `976b01a7b` — unifies `FT_Request_Size` failures through the same
   `ft_error_to_pil` mapper used by glyph load and variation setter failures,
   preserving the live Pillow oracle message for invalid ppem.
+- `412524313` — reverts an attempted packed-gray/BGRA bitmap coverage helper
+  after Coverage MCP proved that the new code was not exercised by the active
+  Font public corpus. Keeping unhit helper code would move away from the 100%
+  coverage goal.
 
 Pillow comparison result:
 
@@ -41,9 +45,9 @@ Verification:
 - `make -C pillow-rs font-tests` — passed for both commits.
 - `make -C pillow-rs fmt` — passed after implementation cleanup.
 - Coverage MCP command `font-tests-coverage-with-freetype`
-  - run `a2ce4ba5-4f89-4187-8b00-10684461949b`
-  - snapshot `a1aab733-c25c-4237-bc87-1568283f3db7`
-  - commit `976b01a7bab5db4a3e9b3f554c8fdfbc2aa19dbc`
+  - run `d811c1ad-c95a-4e66-8155-5c8cff72851f`
+  - snapshot `9c48dc00-ebcd-437b-9a05-bd07c4d95226`
+  - commit `41252431335f3d6e1e641cd3e122cceef4e38247`
   - status `passed`, coverage artifact ingested
 
 Target metrics:
