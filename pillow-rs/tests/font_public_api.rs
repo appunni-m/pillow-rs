@@ -130,18 +130,31 @@ const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
 
 const DEFAULT_PARAMETER_VALUE: &str = "<default>";
 
-const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 14] = [
+const REQUIRED_PUBLIC_PARAMETER_VALUES: [(&str, &str, &str); 27] = [
     ("font_variant", "layout_engine", "BASIC"),
     ("font_variant", "layout_engine", "RAQM"),
+    ("getbbox", "direction", "rtl"),
+    ("getbbox", "features", "[]"),
+    ("getbbox", "language", "en"),
     ("getbbox", "mode", DEFAULT_PARAMETER_VALUE),
     ("getbbox", "mode", "1"),
     ("getbbox", "mode", "bad"),
+    ("getlength", "direction", "rtl"),
+    ("getlength", "features", "[]"),
+    ("getlength", "features", "[\"-kern\"]"),
+    ("getlength", "language", "en"),
     ("getlength", "mode", DEFAULT_PARAMETER_VALUE),
     ("getlength", "mode", "1"),
     ("getlength", "mode", "bad"),
+    ("getmask", "direction", "rtl"),
+    ("getmask", "features", "[]"),
+    ("getmask", "language", "en"),
     ("getmask", "mode", DEFAULT_PARAMETER_VALUE),
     ("getmask", "mode", "1"),
     ("getmask", "mode", "RGBA"),
+    ("getmask2", "direction", "rtl"),
+    ("getmask2", "features", "[]"),
+    ("getmask2", "language", "en"),
     ("getmask2", "mode", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "mode", "1"),
     ("getmask2", "mode", "RGBA"),
@@ -1134,6 +1147,18 @@ fn observed_public_parameter_values(
                     .and_then(Value::as_str)
                     .unwrap_or(DEFAULT_PARAMETER_VALUE)
                     .to_owned(),
+                "direction" | "language" => params
+                    .get(required_parameter)
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_PARAMETER_VALUE)
+                    .to_owned(),
+                "features" => params
+                    .get("features")
+                    .map(|value| {
+                        serde_json::to_string(value)
+                            .expect("font feature-list value must serialize for coverage")
+                    })
+                    .unwrap_or_else(|| DEFAULT_PARAMETER_VALUE.to_owned()),
                 "layout_engine" if operation == "font_variant" => params
                     .get("variant_layout_engine")
                     .and_then(Value::as_str)
