@@ -28,6 +28,18 @@ const REQUIRED_PUBLIC_OPS: [&str; 14] = [
     "render_text_binary",
 ];
 
+const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
+    "error",
+    "expect_error",
+    "expected",
+    "hash",
+    "oracle",
+    "output",
+    "outputs",
+    "pixels_hex",
+    "status",
+];
+
 fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imagingft")
 }
@@ -134,10 +146,35 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
                 "{} must contain only case_id, inputs, and operation",
                 path.display()
             );
+            assert_input_only_case(&path, case);
             cases.push(case.clone());
         }
     }
     cases
+}
+
+fn assert_input_only_case(path: &Path, value: &Value) {
+    match value {
+        Value::Object(object) => {
+            for key in object.keys() {
+                assert!(
+                    !FORBIDDEN_INPUT_KEYS.contains(&key.as_str()),
+                    "{} must be input-only; forbidden oracle/output key `{}` found",
+                    path.display(),
+                    key
+                );
+            }
+            for child in object.values() {
+                assert_input_only_case(path, child);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                assert_input_only_case(path, child);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
