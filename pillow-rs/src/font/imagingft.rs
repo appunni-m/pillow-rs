@@ -43,8 +43,15 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, Pi
         horiResolution: 0,
         vertResolution: 0,
     };
-    if ffi::FT_Request_Size(Some(&mut face), Some(&request)) != ffi::FT_Err_Ok {
-        return Err(PilError::ValueError("FT_Request_Size failed".into()));
+    let size_error = ffi::FT_Request_Size(Some(&mut face), Some(&request));
+    if size_error != ffi::FT_Err_Ok {
+        let message = match size_error {
+            x if x == ffi::FT_Err_Invalid_Argument as i32 => "invalid argument",
+            x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => "invalid pixel size",
+            x if x == ffi::FT_Err_Invalid_PPem as i32 => "invalid ppem",
+            _ => "FT_Request_Size failed",
+        };
+        return Err(PilError::OsError(message.into()));
     }
 
     let family_name = face.family_name.clone().unwrap_or_else(|| "Unknown".into());
@@ -60,6 +67,17 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, Pi
             metrics,
         },
     })
+}
+
+fn ft_error_to_pil(error: i32) -> PilError {
+    match error {
+        x if x == ffi::FT_Err_Invalid_Argument as i32 => PilError::OsError("invalid argument".into()),
+        x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => {
+            PilError::OsError("invalid pixel size".into())
+        }
+        x if x == ffi::FT_Err_Invalid_PPem as i32 => PilError::OsError("invalid ppem".into()),
+        other => PilError::ValueError(format!("FreeType error {other}")),
+    }
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -159,7 +177,7 @@ pub fn getlength(font: &Font, text: &str) -> f32 {
 
 pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     match font {
-        Font::TrueType(t) => bbox_from_run(t, text),
+        Font::TrueType(t) => bbox_from_run(t, text).unwrap_or((0, 0, 0, 0)),
         Font::Bitmap(b) => {
             let (w, h) = b.text_bbox(text);
             (0, 0, w as i32, h as i32)
@@ -167,13 +185,37 @@ pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     }
 }
 
+pub fn getbbox_result(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+    match font {
+        Font::TrueType(t) => bbox_from_run(t, text),
+        Font::Bitmap(b) => {
+            let (w, h) = b.text_bbox(text);
+            Ok((0, 0, w as i32, h as i32))
+        }
+    }
+}
+
 /// Return the bbox produced by Pillow's `fontmode="1"` FreeType load target.
 pub fn getbbox_binary(font: &Font, text: &str) -> (i32, i32, i32, i32) {
+    match font {
+        Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO)
+            .unwrap_or((0, 0, 0, 0)),
+        Font::Bitmap(b) => {
+            let (w, h) = b.text_bbox(text);
+            (0, 0, w as i32, h as i32)
+        }
+    }
+}
+
+pub fn getbbox_binary_result(
+    font: &Font,
+    text: &str,
+) -> Result<(i32, i32, i32, i32), PilError> {
     match font {
         Font::TrueType(t) => bbox_from_run_with_flags(t, text, TGT_MONO),
         Font::Bitmap(b) => {
             let (w, h) = b.text_bbox(text);
-            (0, 0, w as i32, h as i32)
+            Ok((0, 0, w as i32, h as i32))
         }
     }
 }
@@ -311,6 +353,16 @@ fn length_from_basic_layout(ttf: &TrueTypeFont, text: &str) -> Option<i32> {
     Some(total)
 }
 
+const MAX_ADVANCE_26_6_EXCLUSIVE: i64 = 0x8000 * 64;
+
+fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
+    if advance >= MAX_ADVANCE_26_6_EXCLUSIVE || advance <= -MAX_ADVANCE_26_6_EXCLUSIVE {
+        Err(PilError::OsError("invalid argument".into()))
+    } else {
+        Ok(())
+    }
+}
+
 // ── Glyph run (no render, for metrics/advance/bbox) ─────────────────
 
 struct GlyphRun {
@@ -329,12 +381,16 @@ struct RunGlyph {
 }
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
-fn glyph_run(ttf: &TrueTypeFont, text: &str, load_flags: i32) -> Option<GlyphRun> {
+fn glyph_run(
+    ttf: &TrueTypeFont,
+    text: &str,
+    load_flags: i32,
+) -> Result<Option<GlyphRun>, PilError> {
     if text.is_empty() {
-        return Some(GlyphRun {
+        return Ok(Some(GlyphRun {
             glyphs: vec![],
             max_pen: 0,
-        });
+        }));
     }
     let face = &ttf.engine.face;
     let mut pen = 0i32;
@@ -346,7 +402,8 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str, load_flags: i32) -> Option<GlyphRun
         let g = gid(face, ch);
         // Match Pillow's BASIC layout order: load the current glyph first,
         // then adjust the preceding advance with pixel-rounded kerning.
-        let slot = ffi::FT_Load_Glyph(face, g, load_flags).ok()?;
+        let slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
+        validate_advance_26_6(slot.advance.x)?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
@@ -366,13 +423,13 @@ fn glyph_run(ttf: &TrueTypeFont, text: &str, load_flags: i32) -> Option<GlyphRun
         max_pen = max_pen.max(pen);
         prev = Some(g);
     }
-    Some(GlyphRun {
+    Ok(Some(GlyphRun {
         glyphs: out,
         max_pen,
-    })
+    }))
 }
 
-fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
+fn bbox_from_run(ttf: &TrueTypeFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run_with_flags(ttf, text, TGT_NORM)
 }
 
@@ -380,12 +437,12 @@ fn bbox_from_run_with_flags(
     ttf: &TrueTypeFont,
     text: &str,
     load_flags: i32,
-) -> (i32, i32, i32, i32) {
-    let Some(run) = glyph_run(ttf, text, load_flags) else {
-        return (0, 0, 0, 0);
+) -> Result<(i32, i32, i32, i32), PilError> {
+    let Some(run) = glyph_run(ttf, text, load_flags)? else {
+        return Ok((0, 0, 0, 0));
     };
     if run.glyphs.is_empty() {
-        return (0, 0, 0, 0);
+        return Ok((0, 0, 0, 0));
     }
 
     let mut x_min = 0;
@@ -412,7 +469,7 @@ fn bbox_from_run_with_flags(
 
     x_max = x_max.max(round26(run.max_pen));
     let y_anchor = pixel(ttf.engine.metrics.ascender);
-    (x_min, y_anchor - y_max, x_max, y_anchor - y_min)
+    Ok((x_min, y_anchor - y_max, x_max, y_anchor - y_min))
 }
 
 // ── Mask render ──────────────────────────────────────────────────────
@@ -442,7 +499,7 @@ fn mask_from_run_with_start(
     // during BASIC layout, bbox calculation, and both render passes for
     // `fontmode="1"`. Thresholding the normal grayscale mask is not
     // equivalent: monochrome hinting changes advances and glyph geometry.
-    let bbox = bbox_from_run_with_flags(ttf, text, load_flags);
+    let bbox = bbox_from_run_with_flags(ttf, text, load_flags).unwrap_or((0, 0, 0, 0));
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` expands the allocated
     // mask by ceil(start), then rounds the shifted 26.6 pen origin.
     let start_width = start.0.ceil() as i32;

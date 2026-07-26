@@ -52,8 +52,10 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             "type": "bool",
             "value": imagingft::has_variations(&font),
         })),
-        "getbbox" => Ok(bbox_value(imagingft::getbbox(&font, text(params)?))),
-        "getbbox_binary" => Ok(bbox_value(imagingft::getbbox_binary(&font, text(params)?))),
+        "getbbox" => Ok(bbox_value(imagingft::getbbox_result(&font, text(params)?)?)),
+        "getbbox_binary" => Ok(bbox_value(
+            imagingft::getbbox_binary_result(&font, text(params)?)?,
+        )),
         "getmask" => {
             let (width, height, pixels) = imagingft::getmask(&font, text(params)?);
             Ok(image_value(width, height, "L", &pixels))

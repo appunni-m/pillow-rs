@@ -65,6 +65,40 @@
           "size": -5.5
         }
       }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_too_large_argument",
+      "expect_error": true,
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 50000,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_too_large_pixel_size",
+      "expect_error": true,
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 100000,
+          "text": "Hello"
+        }
+      }
     }
   ]
 }
