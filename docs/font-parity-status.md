@@ -274,11 +274,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `b99095e7-5495-4ea7-a914-3acab1658548`
-- Snapshot: `02ee2a8e-e1d0-4218-8c15-39cfe53e009d`
+- Run: `c11491dc-758f-4b40-b0d7-959f6b27e255`
+- Snapshot: `5776c2cf-ae72-4650-8376-901db6f19f25`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `a13c26aa3a29bb73be17cbe0c4fdac988f796dc3`
+- Commit measured: `f0d39fd260123a3b86371c542dce7ed2af0b38a2`
 
 Target file metrics:
 
