@@ -21,9 +21,11 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Coverage evidence:
   - Local coverage command: `make -C pillow-rs imagingft-tests-coverage`
   - Test result from command output: `1` passed, `0` failed
-  - Coverage artifact: `target/coverage/imagingft-rust.json`
-  - Coverage MCP run entry observed: `.coverage-mcp/runs/8176266a-0ff4-42da-a364-f24688e4f701`
-  - Prior MCP snapshot still linked in worktree: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
+  - MCP-managed run: `9d7bdbda-5c15-4eda-9a6b-50889a9a945b`
+  - Coverage MCP run command: `imagingft-tests-coverage-fixed`
+  - Coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
+  - Snapshot id: `8c36e664-1acd-4dba-a52b-f31098913e95`
+  - Prior suite snapshot for comparison: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
 
 ## Corpus state
 
@@ -73,7 +75,7 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ### Suite summary (`imagingft`)
 
-- Current artifact metrics (`target/coverage/imagingft-rust.json`, latest run):
+- Current artifact metrics (`target/coverage/imagingft/imagingft-rust.json`, latest run):
   - `total_lines: 17962`, `covered_lines: 1736` (`line_rate 0.09664848012470771`)
   - `total_branches: 3166`, `covered_branches: 147` (`branch_rate 0.04643082754264056`)
   - `total_functions: 1208`, `covered_functions: 142` (`function_rate 0.11754966887417219`)
@@ -92,8 +94,8 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ### Coverage delta
 
-- Baseline checked: `9353fd3a-561e-4039-9eff-cf503dfe3396` (same branch, same commit)
-- Net movement vs baseline: no measured suite-level or imagingft-file-level metric improvement versus the previous recorded baseline.
+- Baseline checked: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
+- Net movement vs baseline: no measured suite-level or imagingft-file-level metric improvement (`all metrics unchanged`).
 
 ## Remaining explicit gaps
 
