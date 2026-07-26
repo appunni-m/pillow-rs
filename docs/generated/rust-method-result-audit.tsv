@@ -72,14 +72,14 @@ pillow-rs/src/compute/mod.rs	184	available_backends	pub	Vec<Backend>	false	likel
 pillow-rs/src/compute/mod.rs	196	route	pub	Result<Backend, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/mod.rs	220	validate_backend_support	pub	Result<(), PilError>	true	ok_result	question_operator,ok_or,result_ctor
 pillow-rs/src/compute/mod.rs	248	execute_batch	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
-pillow-rs/src/compute/op_def.rs	78	registry	private	&'static Mutex<HashMap<&'static str, OpEntry>>	false	likely_infallible	
-pillow-rs/src/compute/op_def.rs	89	register_op	pub	()	false	review_panic_path	panic
-pillow-rs/src/compute/op_def.rs	106	get_op	pub	Option<OpEntry>	false	likely_infallible	
-pillow-rs/src/compute/op_def.rs	118	registered_keys	pub	Vec<&'static str>	false	likely_infallible	
-pillow-rs/src/compute/op_def.rs	131	is_registered	pub	bool	false	likely_infallible	
-pillow-rs/src/compute/op_def.rs	267	register_and_retrieve	private	()	false	review_non_result_fallible	unwrap
-pillow-rs/src/compute/op_def.rs	286	registered_keys_includes_test_key	private	()	false	likely_infallible	
-pillow-rs/src/compute/op_def.rs	302	duplicate_key_panics	private	()	false	likely_infallible	
+pillow-rs/src/compute/op_def.rs	79	registry	private	&'static Mutex<HashMap<&'static str, OpEntry>>	false	likely_infallible	
+pillow-rs/src/compute/op_def.rs	91	register_op	pub	Result<(), PilError>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs/src/compute/op_def.rs	106	get_op	pub	Result<Option<OpEntry>, PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/op_def.rs	115	registered_keys	pub	Result<Vec<&'static str>, PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/op_def.rs	125	is_registered	pub	Result<bool, PilError>	true	ok_result	question_operator,map_err
+pillow-rs/src/compute/op_def.rs	258	register_and_retrieve	private	Result<(), PilError>	true	ok_result	question_operator,unwrap
+pillow-rs/src/compute/op_def.rs	278	registered_keys_includes_test_key	private	Result<(), PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/op_def.rs	294	duplicate_key_returns_error	private	Result<(), PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/compute/pool_cpu/mod.rs	16	name	private	Backend	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/mod.rs	20	priority	private	u8	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/mod.rs	24	supports	private	bool	false	likely_infallible	

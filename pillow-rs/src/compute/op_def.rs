@@ -40,6 +40,7 @@
 //   macro. (see scripts/check_op_registration.sh).
 // ============================================================================
 
+use crate::error::PilError;
 use image_slash_star::DynamicImage;
 
 /// Registered backend functions for one operation key.
@@ -83,59 +84,49 @@ fn registry() -> &'static Mutex<HashMap<&'static str, OpEntry>> {
 ///
 /// This is called by the `define_op!` macro for each operation key.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics when an operation key is registered more than once.
-pub fn register_op(key: &'static str, entry: OpEntry) {
-    let mut map = registry().lock().unwrap_or_else(|poisoned| {
-        // AS PER DESIGN: Recover from poisoned mutex (e.g., panic in test).
-        // In production, this should never happen.
-        log::warn!("OP_REGISTRY mutex was poisoned; recovering");
-        poisoned.into_inner()
-    });
+/// Returns [`PilError::InternalError`] when the registry mutex is poisoned or
+/// an operation key is registered more than once.
+pub fn register_op(key: &'static str, entry: OpEntry) -> Result<(), PilError> {
+    let mut map = registry()
+        .lock()
+        .map_err(|_| PilError::InternalError("operation registry mutex poisoned".to_string()))?;
     if map.contains_key(key) {
-        panic!(
+        return Err(PilError::InternalError(format!(
             "define_op!: duplicate operation key '{}' — each op must have a unique key",
             key
-        );
+        )));
     }
     map.insert(key, entry);
+    Ok(())
 }
 
 /// Looks up an operation entry by registry key.
-pub fn get_op(key: &str) -> Option<OpEntry> {
-    registry()
+pub fn get_op(key: &str) -> Result<Option<OpEntry>, PilError> {
+    Ok(registry()
         .lock()
-        .unwrap_or_else(|e| {
-            log::warn!("OP_REGISTRY mutex poisoned in get_op; recovering");
-            e.into_inner()
-        })
+        .map_err(|_| PilError::InternalError("operation registry mutex poisoned".to_string()))?
         .get(key)
-        .cloned()
+        .cloned())
 }
 
 /// Returns all registered operation keys.
-pub fn registered_keys() -> Vec<&'static str> {
-    registry()
+pub fn registered_keys() -> Result<Vec<&'static str>, PilError> {
+    Ok(registry()
         .lock()
-        .unwrap_or_else(|e| {
-            log::warn!("OP_REGISTRY mutex poisoned in registered_keys; recovering");
-            e.into_inner()
-        })
+        .map_err(|_| PilError::InternalError("operation registry mutex poisoned".to_string()))?
         .keys()
         .copied()
-        .collect()
+        .collect())
 }
 
 /// Returns whether an operation key is registered.
-pub fn is_registered(key: &str) -> bool {
-    registry()
+pub fn is_registered(key: &str) -> Result<bool, PilError> {
+    Ok(registry()
         .lock()
-        .unwrap_or_else(|e| {
-            log::warn!("OP_REGISTRY mutex poisoned in is_registered; recovering");
-            e.into_inner()
-        })
-        .contains_key(key)
+        .map_err(|_| PilError::InternalError("operation registry mutex poisoned".to_string()))?
+        .contains_key(key))
 }
 
 // ============================================================================
@@ -165,7 +156,7 @@ macro_rules! define_op {
         // AS PER DESIGN: Registration happens at program startup via
         // the init function. The closure extracts PipelineOp fields
         // and delegates to the CPU implementation.
-        $crate::compute::op_def::register_op(
+        let _ = $crate::compute::op_def::register_op(
             $key,
             $crate::compute::op_def::OpEntry {
                 cpu_fn: Some(|img, mode, ints, floats| {
@@ -201,7 +192,7 @@ macro_rules! define_op {
             gpu: $gpu_shader:literal,
         }
     ) => {
-        $crate::compute::op_def::register_op(
+        let _ = $crate::compute::op_def::register_op(
             $key,
             $crate::compute::op_def::OpEntry {
                 cpu_fn: Some(|img, mode, ints, floats| {
@@ -231,7 +222,7 @@ macro_rules! define_op {
             simd: |$simg:ident, $smode:ident $(, $sfname:ident)*| $simd_body:expr,
         }
     ) => {
-        $crate::compute::op_def::register_op(
+        let _ = $crate::compute::op_def::register_op(
             $key,
             $crate::compute::op_def::OpEntry {
                 cpu_fn: Some(|img, mode, ints, floats| {
@@ -264,7 +255,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn register_and_retrieve() {
+    fn register_and_retrieve() -> Result<(), PilError> {
         // Use a test-specific key to avoid conflicts
         let test_key = "__test_register_and_retrieve__";
         register_op(
@@ -274,16 +265,17 @@ mod tests {
                 gpu_shader: None,
                 simd_fn: None,
             },
-        );
-        assert!(is_registered(test_key));
-        let entry = get_op(test_key).unwrap();
+        )?;
+        assert!(is_registered(test_key)?);
+        let entry = get_op(test_key)?.unwrap();
         assert!(entry.cpu_fn.is_none());
         assert!(entry.gpu_shader.is_none());
         assert!(entry.simd_fn.is_none());
+        Ok(())
     }
 
     #[test]
-    fn registered_keys_includes_test_key() {
+    fn registered_keys_includes_test_key() -> Result<(), PilError> {
         let test_key = "__test_registered_keys__";
         register_op(
             test_key,
@@ -292,24 +284,30 @@ mod tests {
                 gpu_shader: None,
                 simd_fn: None,
             },
-        );
-        let keys = registered_keys();
+        )?;
+        let keys = registered_keys()?;
         assert!(keys.contains(&test_key));
+        Ok(())
     }
 
     #[test]
-    #[should_panic(expected = "duplicate operation key")]
-    fn duplicate_key_panics() {
-        // AS PER DESIGN: Use unique key per test run to avoid poison across tests
+    fn duplicate_key_returns_error() -> Result<(), PilError> {
         let dup_key = Box::leak(format!("__test_dup_{}__", std::process::id()).into_boxed_str());
         let entry = OpEntry {
             cpu_fn: None,
             gpu_shader: None,
             simd_fn: None,
         };
-        register_op(dup_key, entry.clone());
-        // AS PER DESIGN: Mutex may be poisoned by the panic — the #[should_panic]
-        // attribute expects this. Subsequent tests should use unique keys.
-        register_op(dup_key, entry); // should panic
+        register_op(dup_key, entry.clone())?;
+        let err = match register_op(dup_key, entry) {
+            Ok(()) => {
+                return Err(PilError::InternalError(
+                    "duplicate key registration unexpectedly succeeded".to_string(),
+                ));
+            }
+            Err(err) => err,
+        };
+        assert!(err.to_string().contains("duplicate operation key"));
+        Ok(())
     }
 }
