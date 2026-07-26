@@ -1071,7 +1071,7 @@ impl ImageFont {
         start_y: Option<f64>,
     ) -> Result<ImageFontMask, JsValue> {
         let (width, height, pixels, offset) =
-            pillow_rs::font::imagingft::getmask2_with_start_result(
+            pillow_rs::font::imagingft::getmask2_with_start(
                 &self.font,
                 text,
                 (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
@@ -1120,7 +1120,7 @@ impl ImageFont {
         orientation: Option<String>,
     ) -> Result<Vec<i32>, JsValue> {
         let bbox = pillow_rs::font::imagingft::transposed_bbox(
-            pillow_rs::font::imagingft::getbbox_result(&self.font, text).map_err(err)?,
+            pillow_rs::font::imagingft::getbbox(&self.font, text).map_err(err)?,
             orientation.as_deref(),
         );
         Ok(vec![bbox.0, bbox.1, bbox.2, bbox.3])
@@ -1134,17 +1134,17 @@ impl ImageFont {
     ) -> Result<f32, JsValue> {
         pillow_rs::font::imagingft::validate_transposed_length(orientation.as_deref())
             .map_err(err)?;
-        pillow_rs::font::imagingft::getlength_result(&self.font, text).map_err(err)
+        pillow_rs::font::imagingft::getlength(&self.font, text).map_err(err)
     }
 
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Result<Vec<u32>, JsValue> {
-        let (w, h) = self.font.text_bbox_result(text).map_err(err)?;
+        let (w, h) = self.font.text_bbox(text).map_err(err)?;
         Ok(vec![w, h])
     }
     #[wasm_bindgen(js_name = "getmask")]
     pub fn getmask(&self, text: &str) -> Result<Vec<u8>, JsValue> {
-        let (w, h, data) = self.font.getmask_result(text).map_err(err)?;
+        let (w, h, data) = self.font.getmask(text).map_err(err)?;
         let mut result = vec![
             w as u8,
             (w >> 8) as u8,

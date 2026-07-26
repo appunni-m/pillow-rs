@@ -41,7 +41,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 - Executed rows: `105/105`
 - Required operation coverage check is manifest-driven: no required manifest operations missing.
 - Input-only guard: active manifest and raw input documents must contain no oracle output, expected hash/raw path, expected error, or status fields; all output/error expectations are generated at runtime from the live Python Pillow Font oracle and compared to Rust `Result`-style status payloads.
-- Error handling: the active Font parity runner uses fallible Rust APIs (`getbbox_result`, `getlength_result`, `getmask_result`, `getmask2*_result`, render/result variants) and serializes only the resulting `Ok`/`Err` payload at the test boundary. Non-Result convenience methods remain only for compatibility and are not used as trusted parity comparisons.
+- Error handling: the active Font parity runner uses Result-returning Rust public APIs (`getbbox`, `getlength`, `getmask`, `getmask2`, render variants) and serializes only the resulting `Ok`/`Err` payload at the test boundary. The Font public surface no longer exposes separate `_result` fallback variants for these operations.
 
 ## Required operation presence (fixture-defined)
 

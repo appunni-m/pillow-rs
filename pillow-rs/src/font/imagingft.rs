@@ -154,7 +154,7 @@ pub fn get_transposed_mask(
     text: &str,
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    let (width, height, pixels) = getmask_result(font, text)?;
+    let (width, height, pixels) = getmask(font, text)?;
     let image = Image::from_luma_mask(width, height, pixels)?;
     let transformed = if let Some(method) = orientation {
         image.transpose(method)?
@@ -177,52 +177,26 @@ pub fn has_variations(font: &Font) -> bool {
     font.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
 }
 
-pub fn getlength(font: &Font, text: &str) -> f32 {
-    getlength_result(font, text).unwrap_or(0.0)
-}
-
-/// Fallible variant of [`getlength`] that preserves Pillow error results.
-pub fn getlength_result(font: &Font, text: &str) -> Result<f32, PilError> {
+pub fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
-pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
-    bbox_from_run(font, text).unwrap_or((0, 0, 0, 0))
-}
-
-pub fn getbbox_result(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run(font, text)
 }
 
 /// Return the bbox produced by Pillow's `fontmode="1"` FreeType load target.
-pub fn getbbox_binary(font: &Font, text: &str) -> (i32, i32, i32, i32) {
-    bbox_from_run_with_flags(font, text, TGT_MONO).unwrap_or((0, 0, 0, 0))
-}
-
-pub fn getbbox_binary_result(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
-pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
-    getmask_result(font, text).unwrap_or((0, 0, vec![]))
-}
-
-/// Fallible variant of [`getmask`] that preserves Pillow error results.
-pub fn getmask_result(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+pub fn getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
-pub fn getmask2(font: &Font, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
+pub fn getmask2(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     getmask2_with_start(font, text, (0.0, 0.0))
-}
-
-/// Fallible variant of [`getmask2`] that preserves Pillow error results.
-pub fn getmask2_result(
-    font: &Font,
-    text: &str,
-) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-    getmask2_with_start_result(font, text, (0.0, 0.0))
 }
 
 /// Render a Pillow-compatible mask with a fractional raster start.
@@ -233,18 +207,9 @@ pub fn getmask2_with_start(
     font: &Font,
     text: &str,
     start: (f64, f64),
-) -> (u32, u32, Vec<u8>, (i32, i32)) {
-    getmask2_with_start_result(font, text, start).unwrap_or((0, 0, vec![], (0, 0)))
-}
-
-/// Fallible variant of [`getmask2_with_start`] that preserves Pillow errors.
-pub fn getmask2_with_start_result(
-    font: &Font,
-    text: &str,
-    start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     let (width, height, pixels) = mask_from_run_with_start(font, text, TGT_NORM, start)?;
-    let bbox = getbbox(font, text);
+    let bbox = getbbox(font, text)?;
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
@@ -253,31 +218,11 @@ pub fn render_text(
     text: &str,
     fill: (u8, u8, u8, u8),
     _spacing: f32,
-) -> (u32, u32, Vec<u8>) {
-    render_text_result(font, text, fill, _spacing).unwrap_or((0, 0, vec![]))
-}
-
-/// Fallible variant of [`render_text`] that preserves Pillow error results.
-pub fn render_text_result(
-    font: &Font,
-    text: &str,
-    fill: (u8, u8, u8, u8),
-    _spacing: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    Ok(pack_rgba(getmask_result(font, text)?, fill))
+    Ok(pack_rgba(getmask(font, text)?, fill))
 }
 
 pub fn render_text_binary(
-    font: &Font,
-    text: &str,
-    fill: (u8, u8, u8, u8),
-    spacing: f32,
-) -> (u32, u32, Vec<u8>) {
-    render_text_binary_result(font, text, fill, spacing).unwrap_or((0, 0, vec![]))
-}
-
-/// Fallible variant of [`render_text_binary`] that preserves Pillow error results.
-pub fn render_text_binary_result(
     font: &Font,
     text: &str,
     fill: (u8, u8, u8, u8),
