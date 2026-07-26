@@ -247,7 +247,7 @@ fn draw_text(font: &Font, params: &Value) -> Result<Value, PilError> {
         Some(mode.to_string()),
     );
     draw.text(x, y, text(params)?, font, fill(params)?)?;
-    let pixels = draw.image_clone().tobytes()?;
+    let pixels = draw.image_clone()?.tobytes()?;
     Ok(image_value(width, height, mode, &pixels))
 }
 

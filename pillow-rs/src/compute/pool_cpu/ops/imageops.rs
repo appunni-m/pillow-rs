@@ -191,7 +191,7 @@ pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, Pi
 
 /// Grayscale: convert to L-mode using PIL's BT.601 formula.
 pub fn op_grayscale(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    Ok(DynamicImage::ImageLuma8(pil_grayscale(img)))
+    Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?))
 }
 
 /// Colorize: map grayscale values to a two-color gradient.

@@ -705,7 +705,7 @@ impl Draw {
     /// Standard modes are converted from the internal RGBA drawing canvas back
     /// to their original layout. `P` mode attempts palette-index restoration
     /// using the carried palette.
-    pub fn image_clone(&self) -> Image {
+    pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
         let source_format = img.source_format();
         let info = img.image_info();
@@ -717,11 +717,11 @@ impl Draw {
                         let converted = match orig.as_str() {
                             "RGB" => DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
                             "L" => {
-                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded))
+                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded)?)
                             }
                             "1" => {
                                 // No dither: just threshold at 128 (matching PIL's fill behavior)
-                                let gray = crate::color::pil_grayscale_truncate(&img_loaded);
+                                let gray = crate::color::pil_grayscale_truncate(&img_loaded)?;
                                 let (w, h) = gray.dimensions();
                                 let mut out = image_slash_star::GrayImage::new(w, h);
                                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
@@ -733,7 +733,7 @@ impl Draw {
                                 // Use alpha from the RGBA image directly (PIL int fill
                                 // writes A=0, which comes from fill=(*,*,*,0) in our
                                 // draw pipeline, preserving the RGBA alpha channel)
-                                let gray = crate::color::pil_grayscale(&img_loaded);
+                                let gray = crate::color::pil_grayscale(&img_loaded)?;
                                 let (w, h) = gray.dimensions();
                                 let mut ga = image_slash_star::GrayAlphaImage::new(w, h);
                                 let rgba = img_loaded.to_rgba8();
@@ -770,7 +770,7 @@ impl Draw {
                                     // Pillow keeps format/info on its in-place
                                     // ImageDraw mutation; retain that provenance
                                     // when restoring our indexed representation.
-                                    return Image::Paletted(crate::image::PalettedData {
+                                    return Ok(Image::Paletted(crate::image::PalettedData {
                                         indices,
                                         palette,
                                         palette_alpha: self
@@ -780,23 +780,26 @@ impl Draw {
                                         source_format,
                                         info,
                                         materialized: crate::image::materialization_cache(),
-                                    });
+                                    }));
                                 }
                                 // Fallback: grayscale approximation
-                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded))
+                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded)?)
                             }
                             "CMYK" => {
                                 // Identity: RGBA pixel values ARE CMYK pixel values
                                 // (C→R, M→G, Y→B, K→A). Just tag the buffer as CMYK.
-                                return Image::from_dynamic(img_loaded, Some("CMYK".to_string()));
+                                return Ok(Image::from_dynamic(
+                                    img_loaded,
+                                    Some("CMYK".to_string()),
+                                ));
                             }
                             "RGBA" => {
                                 // Identity: RGBA pixel values stay RGBA.
                                 // Tag with explicit mode so mode() always reports "RGBA".
-                                return Image::from_dynamic(
+                                return Ok(Image::from_dynamic(
                                     DynamicImage::ImageRgba8(img_loaded.to_rgba8()),
                                     Some("RGBA".to_string()),
-                                );
+                                ));
                             }
                             _ => img_loaded,
                         };
@@ -805,12 +808,12 @@ impl Draw {
                             "1" => Some("1".to_string()),
                             _ => None,
                         };
-                        return Image::from_dynamic(converted, explicit);
+                        return Ok(Image::from_dynamic(converted, explicit));
                     }
                 }
             }
         }
-        img
+        Ok(img)
     }
 
     /// Draws an arc along an ellipse boundary.

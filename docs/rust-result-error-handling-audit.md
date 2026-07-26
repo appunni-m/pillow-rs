@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,903`
 - Current generated classification counts:
-  - `ok_result`: `2,558`
-  - `likely_infallible`: `3,822`
+  - `ok_result`: `2,568`
+  - `likely_infallible`: `3,815`
   - `parser_review`: `307`
-  - `review_non_result_fallible`: `129`
+  - `review_non_result_fallible`: `126`
   - `review_panic_path`: `87`
 
 ## Current interpretation
@@ -48,6 +48,7 @@ been inspected and either:
 - JS exported `outlineCurve` now returns `Result<Vec<i32>, JsValue>` and rejects negative `steps` instead of panicking on integer conversion.
 - PyO3 `PyImage` default constructor now returns `PyResult<Self>` and maps core construction errors instead of `expect`.
 - Compute backend activation, inspection, and routing now return `Result<_, PilError>` and report poisoned global backend state as `PilError::InternalError`; Python/JS bindings bubble those errors.
+- Raw byte image construction and Pillow grayscale conversion helpers now return `Result<_, PilError>` instead of using `expect` for buffer shape mismatches; Draw image restoration now returns `Result` and bindings bubble failures.
 
 ## Next review queue
 
@@ -57,7 +58,5 @@ without boundary translation loss.
 
 Highest-priority current production rows include:
 
-- `pillow-rs/src/color.rs`: grayscale conversion helpers use `expect` on dimension/buffer invariants.
 - `pillow-rs/src/compute/op_def.rs`: duplicate op registration panics.
-- `pillow-rs/src/image_utils.rs`: `raw_bytes_to_image_trusted` uses `expect`.
 - `pillow-rs-image/src/types/buffer.rs`: indexed pixel accessors panic on out-of-bounds access.

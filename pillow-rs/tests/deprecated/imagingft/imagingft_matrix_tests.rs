@@ -281,7 +281,10 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
                     id: row.id.clone(),
                     reason: format!("draw failed: {err}"),
                 })?;
-            let actual = draw.image_clone();
+            let actual = draw.image_clone().map_err(|err| PixelFailure {
+                id: row.id.clone(),
+                reason: format!("image clone failed: {err}"),
+            })?;
             let size = actual.size().map_err(|err| PixelFailure {
                 id: row.id.clone(),
                 reason: format!("size failed: {err}"),

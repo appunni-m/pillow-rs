@@ -2305,17 +2305,18 @@ impl PyDraw {
     }
 
     #[getter]
-    fn image(&self) -> PyImage {
+    fn image(&self) -> PyResult<PyImage> {
         // Return a copy of the current image state
-        PyImage {
-            inner: self.draw_get_image(),
-        }
+        Ok(PyImage {
+            inner: self.draw_get_image()?,
+        })
     }
 }
 
 impl PyDraw {
-    fn draw_get_image(&self) -> pillow_rs::image::Image {
+    fn draw_get_image(&self) -> PyResult<pillow_rs::image::Image> {
         self.draw.image_clone()
+            .map_err(map_error)
     }
 
     /// Parse a draw color, using the image mode to determine byte representation.

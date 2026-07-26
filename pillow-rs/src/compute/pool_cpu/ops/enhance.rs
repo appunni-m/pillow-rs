@@ -41,7 +41,7 @@ pub fn op_enhance_contrast(
         // PIL: convert to L (via RGB), compute rounded mean, create uniform gray CMYK,
         // then blend: degenerate * (1-factor) + original * factor
         // PIL's degenerate for CMYK: C=0, M=0, Y=0, K=255-mean (NOT mean on all channels)
-        let gray = pil_grayscale(img);
+        let gray = pil_grayscale(img)?;
         let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
         let n = pixels.len() as u64;
         let mean = if n > 0 {
@@ -65,7 +65,7 @@ pub fn op_enhance_contrast(
     }
     // PIL: convert to L, compute rounded mean, create uniform gray degenerate,
     // then blend: degenerate * (1-factor) + original * factor
-    let gray = pil_grayscale(img);
+    let gray = pil_grayscale(img)?;
     let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
     let n = pixels.len() as u64;
     let mean = if n > 0 {
@@ -130,7 +130,7 @@ pub fn op_enhance_color_saturation(
         return Ok(DynamicImage::ImageRgba8(out));
     }
     // Use PIL's rounded grayscale conversion (to_luma8 truncates)
-    let gray = pil_grayscale(img);
+    let gray = pil_grayscale(img)?;
     let mut rgb = img.to_rgb8();
     let f = factor;
     for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {

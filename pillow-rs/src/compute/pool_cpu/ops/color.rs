@@ -22,9 +22,9 @@ pub fn op_convert(
     palette: Option<&[u8]>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
-        ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img))),
+        ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
         ColorMode::LA => {
-            let gray = pil_grayscale(img);
+            let gray = pil_grayscale(img)?;
             let (w, h) = gray.dimensions();
             let mut ga = image_slash_star::GrayAlphaImage::new(w, h);
             for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
@@ -58,9 +58,9 @@ pub fn op_convert(
             // while convert("L") uses ROUNDED grayscale.
             // CMYK mode: proper CMYK→RGB→L conversion before thresholding.
             let gray = if explicit_mode == Some("CMYK") {
-                crate::color::cmyk_to_grayscale(img)
+                crate::color::cmyk_to_grayscale(img)?
             } else {
-                pil_grayscale_truncate(img)
+                pil_grayscale_truncate(img)?
             };
             let (w, h) = gray.dimensions();
             let mut out = image_slash_star::GrayImage::new(w, h);
