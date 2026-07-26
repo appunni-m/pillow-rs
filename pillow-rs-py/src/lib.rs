@@ -1619,11 +1619,13 @@ impl PyFont {
         text: &str,
         start: Option<(f64, f64)>,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) = pillow_rs::font::imagingft::getmask2_with_start(
-            &self.inner,
-            text,
-            start.unwrap_or((0.0, 0.0)),
-        );
+        let (width, height, pixels, offset) =
+            pillow_rs::font::imagingft::getmask2_with_start_result(
+                &self.inner,
+                text,
+                start.unwrap_or((0.0, 0.0)),
+            )
+            .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }

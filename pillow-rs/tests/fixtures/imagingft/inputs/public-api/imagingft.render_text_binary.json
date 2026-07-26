@@ -93,6 +93,29 @@
           "spacing": 0.0
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.space_zero_height",
+      "operation": "render_text_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " ",
+          "fill": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "spacing": 0.0
+        }
+      }
     }
   ]
 }

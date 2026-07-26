@@ -91,12 +91,8 @@ fn oracle_python() -> PathBuf {
         if !path.exists() {
             panic!("IMAGINGFT_ORACLE_PYTHON does not exist: {path:?}");
         }
-        if !path.starts_with(&repo_root)
-            || !path.ends_with(".oracle-venv/bin/python")
-        {
-            panic!(
-                "IMAGINGFT_ORACLE_PYTHON must point to .oracle-venv/bin/python: {path:?}"
-            );
+        if !path.starts_with(&repo_root) || !path.ends_with(".oracle-venv/bin/python") {
+            panic!("IMAGINGFT_ORACLE_PYTHON must point to .oracle-venv/bin/python: {path:?}");
         }
         path
     } else {

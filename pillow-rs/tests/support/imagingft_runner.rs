@@ -3,10 +3,10 @@ use std::{fs, path::Path};
 use pillow_rs::{
     draw::Draw,
     error::PilError,
-    font::{imagingft, Font},
+    font::{Font, imagingft},
     image::Image,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
     case.get("operation")
@@ -53,21 +53,22 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             "value": imagingft::has_variations(&font),
         })),
         "getbbox" => Ok(bbox_value(imagingft::getbbox_result(&font, text(params)?)?)),
-        "getbbox_binary" => Ok(bbox_value(
-            imagingft::getbbox_binary_result(&font, text(params)?)?,
-        )),
+        "getbbox_binary" => Ok(bbox_value(imagingft::getbbox_binary_result(
+            &font,
+            text(params)?,
+        )?)),
         "getmask" => {
             let (width, height, pixels) = imagingft::getmask(&font, text(params)?);
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = imagingft::getmask2(&font, text(params)?);
+            let (width, height, pixels, offset) = imagingft::getmask2_result(&font, text(params)?)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
             let (width, height, pixels, offset) =
-                imagingft::getmask2_with_start(&font, text(params)?, start);
+                imagingft::getmask2_with_start_result(&font, text(params)?, start)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {

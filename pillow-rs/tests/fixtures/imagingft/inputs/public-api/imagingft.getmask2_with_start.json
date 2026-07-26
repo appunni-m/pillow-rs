@@ -161,6 +161,86 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_negative_y_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            -0.5
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_negative_xy_fractional_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -1.25,
+            -0.5
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_bad_image_size_negative_width",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -1000.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_bad_image_size_negative_height",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            -1000.0
+          ]
+        }
+      }
     }
   ]
 }
