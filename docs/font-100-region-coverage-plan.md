@@ -4,6 +4,44 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
+Latest measured checkpoint:
+
+- Commit: `a32242993`
+- Coverage MCP run: `e3d92d05-0f5b-4a5b-b931-3ac0143469c3`
+- Snapshot: `33c1bfe0-3025-4996-9348-90a7682386b0`
+- Command: `imagingft-tests-coverage-fixed`
+- Result: passed, ingested
+- `pillow-rs/src/font/imagingft.rs`:
+  - lines: `1020/1112` (`91.73%`)
+  - branches: `194/250` (`77.60%`)
+  - functions: `103/119` (`86.55%`)
+  - regions: `1684/1849` (`91.08%`)
+- `pillow-rs/src/font/mod.rs`:
+  - lines: `172/196` (`87.76%`)
+  - functions: `39/46` (`84.78%`)
+  - regions: `209/251` (`83.27%`)
+
+Latest added cases/fixes:
+
+- Routed the Font parity runner through explicit root `pillow_rs::font_*`
+  functions where available, matching the single-root-public-API boundary.
+- Added anchor rows for `lt`, `la`, `ls`, and `lb`.
+- Added `getmask2` option-path `start` row.
+- Added empty `features` row for `getlength`; this found a real mismatch and
+  Rust now matches Pillow by treating any supplied `features` list, including
+  `[]`, as libraqm-gated.
+
+Current blocker to literal 100%:
+
+- Stroked `getmask/getmask2` is missing. Pillow supports
+  `stroke_width != 0`; Rust currently returns `NotImplementedError`. The next
+  implementation task is to integrate the pure-Rust FreeType stroker path into
+  `pillow-rs/src/font/imagingft.rs`, then add input-only `getmask/getmask2`
+  stroked rows and rerun Coverage MCP.
+- Remaining non-stroke uncovered regions are defensive FreeType/bitmap/error
+  branches that must be driven by real Pillow oracle assets or removed as dead
+  code if proven unreachable.
+
 Latest checkpoint after Pillow Font comparison review:
 
 - `15e039a29` is the current measured commit.
