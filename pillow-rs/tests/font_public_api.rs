@@ -845,7 +845,7 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
     serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
 }
 
-fn pillow_freetypefont_public_methods() -> BTreeSet<String> {
+fn pillow_imagefont_public_methods() -> BTreeSet<String> {
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
     let oracle = oracle_python();
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -880,7 +880,7 @@ fn pillow_freetypefont_public_methods() -> BTreeSet<String> {
         .collect()
 }
 
-fn pillow_freetypefont_public_signatures() -> BTreeMap<String, BTreeSet<String>> {
+fn pillow_imagefont_public_signatures() -> BTreeMap<String, BTreeSet<String>> {
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
     let oracle = oracle_python();
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1350,7 +1350,7 @@ fn assert_manifest_covers_pillow_public_signatures(
             .keys()
             .collect::<BTreeSet<_>>(),
         pillow_signatures.keys().collect::<BTreeSet<_>>(),
-        "font_manifest.yaml public_method_parameters must enumerate every live Pillow FreeTypeFont public method exactly"
+        "font_manifest.yaml public_method_parameters must enumerate every live Pillow ImageFont public method exactly"
     );
     for (method, pillow_parameters) in pillow_signatures {
         let coverage = manifest
@@ -1428,16 +1428,16 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_runner_exercises_root_font_api();
     assert_manifest_operations_have_runner_arms(&manifest);
 
-    let pillow_methods = pillow_freetypefont_public_methods();
+    let pillow_methods = pillow_imagefont_public_methods();
     let missing_pillow_methods = pillow_methods
         .iter()
         .filter(|operation| !manifest.required_operations.contains(operation.as_str()))
         .collect::<Vec<_>>();
     assert!(
         missing_pillow_methods.is_empty(),
-        "font_manifest.yaml required_operations must include every live Pillow FreeTypeFont public method: {missing_pillow_methods:?}"
+        "font_manifest.yaml required_operations must include every live Pillow ImageFont public method: {missing_pillow_methods:?}"
     );
-    let pillow_signatures = pillow_freetypefont_public_signatures();
+    let pillow_signatures = pillow_imagefont_public_signatures();
     assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();

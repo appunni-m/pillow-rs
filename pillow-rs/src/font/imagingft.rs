@@ -385,7 +385,8 @@ pub(crate) fn getmask2_with_options(
     let left = left - options.stroke_width;
     let top = top - options.stroke_width;
     let offset = if options.stroke_width != 0.0 {
-        (left.floor() as i32, top.ceil() as i32)
+        let top = if top < 0.0 { top.floor() } else { top.ceil() };
+        (left.floor() as i32, top as i32)
     } else {
         (left as i32, top as i32)
     };
@@ -773,8 +774,7 @@ fn stroked_mask_from_run_with_start(
     stroke_width: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     if text.is_empty() {
-        let stroke = stroke_width.ceil().max(0.0) as u32;
-        let side = stroke.saturating_mul(2);
+        let side = (stroke_width * 2.0).ceil().max(0.0) as u32;
         return Ok((side, side, vec![0; side.saturating_mul(side) as usize]));
     }
 
