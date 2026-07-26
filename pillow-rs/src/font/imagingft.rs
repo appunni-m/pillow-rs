@@ -78,6 +78,12 @@ fn ft_error_to_pil(error: i32) -> PilError {
             PilError::OsError("invalid pixel size".into())
         }
         x if x == ffi::FT_Err_Invalid_PPem as i32 => PilError::OsError("invalid ppem".into()),
+        x if x == ffi::FT_Err_Too_Many_Instruction_Defs as i32 => {
+            PilError::OsError("too many instruction definitions".into())
+        }
+        x if x == ffi::FT_Err_Too_Many_Function_Defs as i32 => {
+            PilError::OsError("too many function definitions".into())
+        }
         other => PilError::ValueError(format!("FreeType error {other}")),
     }
 }
@@ -138,7 +144,7 @@ pub fn get_transposed_mask(
     text: &str,
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    let (width, height, pixels) = getmask(font, text);
+    let (width, height, pixels) = getmask_result(font, text)?;
     let image = Image::from_luma_mask(width, height, pixels)?;
     let transformed = if let Some(method) = orientation {
         image.transpose(method)?
@@ -219,9 +225,14 @@ pub fn getbbox_binary_result(font: &Font, text: &str) -> Result<(i32, i32, i32, 
 }
 
 pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
+    getmask_result(font, text).unwrap_or((0, 0, vec![]))
+}
+
+/// Fallible variant of [`getmask`] that preserves Pillow error results.
+pub fn getmask_result(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     match font {
-        Font::TrueType(t) => mask_from_run(t, text),
-        Font::Bitmap(b) => b.getmask(text),
+        Font::TrueType(t) => mask_from_run_with_start(t, text, TGT_NORM, (0.0, 0.0)),
+        Font::Bitmap(b) => Ok(b.getmask(text)),
     }
 }
 
@@ -270,17 +281,41 @@ pub fn render_text(
     fill: (u8, u8, u8, u8),
     _spacing: f32,
 ) -> (u32, u32, Vec<u8>) {
-    pack_rgba(getmask(font, text), fill)
+    render_text_result(font, text, fill, _spacing).unwrap_or((0, 0, vec![]))
 }
+
+/// Fallible variant of [`render_text`] that preserves Pillow error results.
+pub fn render_text_result(
+    font: &Font,
+    text: &str,
+    fill: (u8, u8, u8, u8),
+    _spacing: f32,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    Ok(pack_rgba(getmask_result(font, text)?, fill))
+}
+
 pub fn render_text_binary(
     font: &Font,
     text: &str,
     fill: (u8, u8, u8, u8),
     spacing: f32,
 ) -> (u32, u32, Vec<u8>) {
+    render_text_binary_result(font, text, fill, spacing).unwrap_or((0, 0, vec![]))
+}
+
+/// Fallible variant of [`render_text_binary`] that preserves Pillow error results.
+pub fn render_text_binary_result(
+    font: &Font,
+    text: &str,
+    fill: (u8, u8, u8, u8),
+    spacing: f32,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
     match font {
-        Font::TrueType(t) => pack_rgba(mask_from_run_with_flags(t, text, TGT_MONO), fill),
-        Font::Bitmap(b) => b.render_text_binary(text, fill, spacing),
+        Font::TrueType(t) => Ok(pack_rgba(
+            mask_from_run_with_start(t, text, TGT_MONO, (0.0, 0.0))?,
+            fill,
+        )),
+        Font::Bitmap(b) => Ok(b.render_text_binary(text, fill, spacing)),
     }
 }
 
@@ -489,18 +524,6 @@ fn bbox_from_run_with_flags(
 
 // ── Mask render ──────────────────────────────────────────────────────
 
-fn mask_from_run(ttf: &TrueTypeFont, text: &str) -> (u32, u32, Vec<u8>) {
-    mask_from_run_with_flags(ttf, text, TGT_NORM)
-}
-
-fn mask_from_run_with_flags(
-    ttf: &TrueTypeFont,
-    text: &str,
-    load_flags: i32,
-) -> (u32, u32, Vec<u8>) {
-    mask_from_run_with_start(ttf, text, load_flags, (0.0, 0.0)).unwrap_or((0, 0, vec![]))
-}
-
 fn mask_from_run_with_start(
     ttf: &TrueTypeFont,
     text: &str,
@@ -514,7 +537,7 @@ fn mask_from_run_with_start(
     // during BASIC layout, bbox calculation, and both render passes for
     // `fontmode="1"`. Thresholding the normal grayscale mask is not
     // equivalent: monochrome hinting changes advances and glyph geometry.
-    let bbox = bbox_from_run_with_flags(ttf, text, load_flags).unwrap_or((0, 0, 0, 0));
+    let bbox = bbox_from_run_with_flags(ttf, text, load_flags)?;
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` expands the allocated
     // mask by ceil(start), then rounds the shifted 26.6 pen origin.
     let start_width = start.0.ceil() as i32;
@@ -545,13 +568,7 @@ fn mask_from_run_with_start(
     for ch in text.chars() {
         let g = gid(face, ch);
         // Pillow's layout pass obtains the hinted advance before rendering.
-        let layout_slot = match ffi::FT_Load_Glyph(face, g, load_flags) {
-            Ok(slot) => slot,
-            Err(_) => {
-                prev = None;
-                continue;
-            }
-        };
+        let layout_slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
@@ -560,10 +577,7 @@ fn mask_from_run_with_start(
             Ok(s) => s,
             Err(_) => match ffi::FT_Load_Glyph(face, g, load_flags) {
                 Ok(s) => s,
-                Err(_) => {
-                    prev = None;
-                    continue;
-                }
+                Err(error) => return Err(ft_error_to_pil(error)),
             },
         };
 
