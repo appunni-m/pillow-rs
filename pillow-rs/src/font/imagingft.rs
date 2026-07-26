@@ -372,18 +372,24 @@ pub(crate) fn getmask2_with_options(
             "'tuple' object cannot be interpreted as an integer".into(),
         ));
     }
-    if options.stroke_width != 0.0 {
-        return Err(PilError::NotImplementedError(
-            "stroked FreeTypeFont mask rendering is not implemented".into(),
-        ));
-    }
     let load_flags = text_load_flags(options);
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
     let start = options.start.unwrap_or((0.0, 0.0));
-    let (width, height, pixels) = mask_from_run_with_start(font, text, load_flags, start)?;
+    let (width, height, pixels) = if options.stroke_width != 0.0 {
+        stroked_mask_from_run_with_start(font, text, load_flags, start, options.stroke_width)?
+    } else {
+        mask_from_run_with_start(font, text, load_flags, start)?
+    };
     let bbox = bbox_from_run_with_flags(font, text, load_flags)?;
     let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
-    Ok((width, height, pixels, (left as i32, top as i32)))
+    let left = left - options.stroke_width;
+    let top = top - options.stroke_width;
+    let offset = if options.stroke_width != 0.0 {
+        (left.floor() as i32, top.ceil() as i32)
+    } else {
+        (left as i32, top as i32)
+    };
+    Ok((width, height, pixels, offset))
 }
 
 fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
@@ -786,6 +792,163 @@ fn mask_from_run_with_start(
         }
     }
     Ok((w, h, canvas))
+}
+
+fn stroked_mask_from_run_with_start(
+    ttf: &ImageFont,
+    text: &str,
+    load_flags: i32,
+    start: (f64, f64),
+    stroke_width: f32,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    if text.is_empty() {
+        let stroke = stroke_width.ceil().max(0.0) as u32;
+        let side = stroke.saturating_mul(2);
+        return Ok((side, side, vec![0; side.saturating_mul(side) as usize]));
+    }
+
+    let face = &ttf.engine.face;
+    let mut pen = 0i32;
+    let mut prev: Option<u32> = None;
+    let mut rendered: Vec<(i32, i32, i32, ffi::FT_Bitmap)> = Vec::new();
+    let mut x_min = 0;
+    let mut x_max = 0;
+    let mut y_min = 0;
+    let mut y_max = 0;
+
+    for ch in text.chars() {
+        let g = gid(face, ch);
+        let layout_slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
+        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
+            pen = pen.saturating_add(basic_layout_kern(face, p, g));
+        }
+
+        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, load_flags, stroke_width)?;
+        let px = round26(pen);
+        x_min = x_min.min(px + bitmap_glyph.left as i32);
+        x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
+        y_min = y_min.min(bitmap_glyph.top as i32 - bitmap_glyph.bitmap.rows as i32);
+        y_max = y_max.max(bitmap_glyph.top as i32);
+        rendered.push((
+            pen,
+            bitmap_glyph.left as i32,
+            bitmap_glyph.top as i32,
+            bitmap_glyph.bitmap,
+        ));
+
+        pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
+        prev = Some(g);
+    }
+
+    let bbox = bbox_from_run_with_flags(ttf, text, load_flags)?;
+    let expected_w = ((bbox.2 - bbox.0) as f32 + stroke_width * 2.0)
+        .ceil()
+        .max(0.0) as i32;
+    let expected_h = ((bbox.3 - bbox.1) as f32 + stroke_width * 2.0)
+        .ceil()
+        .max(0.0) as i32;
+    let actual_w = x_max - x_min;
+    let actual_h = y_max - y_min;
+    if expected_w < actual_w {
+        x_max -= actual_w - expected_w;
+    }
+    if expected_h < actual_h {
+        y_max -= actual_h - expected_h;
+    }
+
+    let start_width = start.0.ceil() as i32;
+    let start_height = start.1.ceil() as i32;
+    let base_w = x_max - x_min;
+    let base_h = y_max - y_min;
+    let adjusted_w = base_w.saturating_add(start_width);
+    let adjusted_h = base_h.saturating_add(start_height);
+    if positive_dimension_collapsed(base_w, adjusted_w)
+        || positive_dimension_collapsed(base_h, adjusted_h)
+    {
+        return Err(PilError::ValueError("bad image size".into()));
+    }
+    let w = adjusted_w.max(0) as u32;
+    let h = adjusted_h.max(0) as u32;
+    let wu = w as usize;
+    let hu = h as usize;
+    let canvas_len = wu
+        .checked_mul(hu)
+        .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
+    let mut canvas = vec![0u8; canvas_len];
+    if canvas_len == 0 {
+        return Ok((w, h, canvas));
+    }
+
+    let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
+    let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
+
+    for (pen_before, bitmap_left, bitmap_top, bitmap) in &rendered {
+        let sx = bitmap.width as usize;
+        let sy = bitmap.rows as usize;
+        let px = pixel(i64::from(x_origin.saturating_add(*pen_before)));
+        let py = pixel(i64::from(y_origin));
+        let dx = px + *bitmap_left;
+        let dy = -(py + *bitmap_top);
+        let source_x = if dx < 0 { (-dx) as usize } else { 0 };
+        let target_x = (dx.max(0) as usize).min(wu);
+        if source_x >= sx {
+            continue;
+        }
+        let cw = (sx - source_x).min(wu.saturating_sub(target_x));
+        let source_y = if dy < 0 { (-dy) as usize } else { 0 };
+        if source_y >= sy {
+            continue;
+        }
+        let end_y = if dy >= 0 {
+            sy.min(hu.saturating_sub(dy as usize))
+        } else {
+            sy
+        };
+        for row in source_y..end_y {
+            let target_y = dy + row as i32;
+            let dst = target_y as usize * wu + target_x;
+            let dr = &mut canvas[dst..dst + cw];
+            for (column, dc) in dr.iter_mut().enumerate() {
+                let sc = bitmap_coverage(bitmap, row, source_x + column);
+                if sc > 0 {
+                    let under = crate::color::muldiv255(u32::from(*dc), u32::from(255 - sc));
+                    *dc = sc.saturating_add(under as u8);
+                }
+            }
+        }
+    }
+    Ok((w, h, canvas))
+}
+
+fn stroked_bitmap_glyph(
+    slot: &ffi::FT_GlyphSlot,
+    load_flags: i32,
+    stroke_width: f32,
+) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
+    let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
+    let library = ffi::FT_Init_FreeType();
+    let mut stroker = std::ptr::null_mut();
+    let error = ffi::FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if error != ffi::FT_Err_Ok {
+        return Err(ft_error_to_pil(error));
+    }
+    let radius = (stroke_width * 64.0).round() as ffi::FT_Fixed;
+    ffi::FT_Stroker_Set(
+        stroker,
+        radius,
+        ffi::FT_STROKER_LINECAP_ROUND as ffi::FT_Int,
+        ffi::FT_STROKER_LINEJOIN_ROUND as ffi::FT_Int,
+        65_536,
+    );
+    let stroked = ffi::FT_Outline_Glyph_Stroke(Some(&outline), stroker).map_err(ft_error_to_pil);
+    ffi::FT_Stroker_Done(stroker);
+    let stroked = stroked?;
+    let render_mode = if load_flags & TGT_MONO != 0 {
+        ffi::FT_RENDER_MODE_MONO
+    } else {
+        ffi::FT_RENDER_MODE_NORMAL
+    };
+    ffi::FT_Outline_Glyph_To_Bitmap(&stroked, render_mode).map_err(ft_error_to_pil)
 }
 
 fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {

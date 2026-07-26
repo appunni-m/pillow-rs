@@ -80,6 +80,90 @@
       }
     },
     {
+      "case_id": "font.getmask2.dejavusans24_a_stroke_1_5_l",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.dejavusans24_a_stroke_start_x_bad_size",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            -100.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.dejavusans24_a_stroke_start_y_bad_size",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            -100.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.dejavusans24_a_stroke_start_positive",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            100.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.positional_args_ignored_after_start",
       "operation": "getmask2",
       "inputs": {
