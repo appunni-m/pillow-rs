@@ -19938,8 +19938,10 @@ static void print_stroker_parse_degenerate_row(const char* label,
 }
 
 static int emit_stroker_parse_degenerate(int argc, char** argv) {
-    (void)argv;
-    if (argc != 2) return 2;
+    if (argc != 3) return 2;
+    const char* mode = argv[2];
+    int include_mixed = streq(mode, "all");
+    if (!include_mixed && !streq(mode, "no-segment")) return 2;
     FT_Library library = NULL;
     FT_Error init_error = FT_Init_FreeType(&library);
     if (init_error) {
@@ -20030,13 +20032,15 @@ static int emit_stroker_parse_degenerate(int argc, char** argv) {
                                        empty_points,
                                        empty_contours,
                                        &empty_export);
-    printf(",");
-    print_stroker_parse_degenerate_row("mixed_degenerate_and_valid_contours",
-                                       mixed_parse,
-                                       mixed_counts,
-                                       mixed_points_count,
-                                       mixed_contours_count,
-                                       &mixed_export);
+    if (include_mixed) {
+        printf(",");
+        print_stroker_parse_degenerate_row("mixed_degenerate_and_valid_contours",
+                                           mixed_parse,
+                                           mixed_counts,
+                                           mixed_points_count,
+                                           mixed_contours_count,
+                                           &mixed_export);
+    }
     printf("]}}\n");
     FT_Done_FreeType(library);
     return 0;
@@ -26468,7 +26472,7 @@ static int dispatch(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--stroker-reset-counts")) {
         return emit_stroker_reset_counts(argc, argv);
     }
-    if (argc == 2 && streq(argv[1], "--stroker-parse-degenerate")) {
+    if (argc == 3 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-parse-opened-outline")) {

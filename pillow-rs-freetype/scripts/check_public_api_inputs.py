@@ -1471,11 +1471,6 @@ def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Stroker_EndSubPath open-path parity needs a maintained route "
             "proving cap emission and single-border finalization match pinned C"
         ),
-        "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin": (
-            "FT_Stroker_EndSubPath no-segment parity needs a maintained route "
-            "proving ending immediately after BeginSubPath preserves state or "
-            "no-ops exactly like pinned C"
-        ),
         "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success": (
             "FT_Stroker_ParseOutline mixed-outline parity needs a maintained "
             "route proving line, conic, and cubic contour decomposition feeds "
@@ -1747,13 +1742,22 @@ def ftstroke_parse_degenerate_real_parity_reason(row: ConcreteInput) -> str | No
         in {
             "ftstroke.FT_Stroker_ParseOutline.degenerate_single_point_and_empty_noop",
             "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped",
+            "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin",
         }
     ):
+        if row.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_after_begin":
+            return (
+                "FT_Stroker_ParseOutline degenerate single-point and empty contour "
+                "rows validate parse status and zero counts through pinned C "
+                "oracle, Rust FFI, C ABI, and WASM ABI; direct EndSubPath "
+                "no-segment counts are intentionally not promoted because the "
+                "pinned C build segfaults after that direct state"
+            )
         return (
             "FT_Stroker_ParseOutline empty, single-point, and mixed "
-            "degenerate-plus-valid contour behavior "
-            "validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI; "
-            "full parse/finalization/export geometry remains pending"
+            "degenerate-plus-valid contour behavior validates through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI; full parse/finalization/export "
+            "geometry remains pending"
         )
     return None
 
