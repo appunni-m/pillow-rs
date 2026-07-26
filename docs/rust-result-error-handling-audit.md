@@ -16,18 +16,18 @@ python3 scripts/audit_rust_result_methods.py
 Generated inventory:
 
 - `docs/generated/rust-method-result-audit.tsv`
-- Current generated rows: `6,911`
+- Current generated rows: `6,119`
 - Current generated scope counts:
-  - `production`: `3,946`
-  - `test`: `2,928`
+  - `production`: `3,324`
+  - `test`: `2,758`
   - `example`: `25`
   - `bench`: `12`
 - Current generated classification counts:
-  - `ok_result`: `2,598`
-  - `likely_infallible`: `3,811`
-  - `parser_review`: `303`
-  - `review_non_result_fallible`: `117`
-  - `review_panic_path`: `82`
+  - `ok_result`: `2,575`
+  - `likely_infallible`: `3,110`
+  - `parser_review`: `262`
+  - `review_non_result_fallible`: `98`
+  - `review_panic_path`: `74`
 
 ## Current interpretation
 
@@ -60,12 +60,9 @@ been inspected and either:
 - Compute backend activation, inspection, and routing now return `Result<_, PilError>` and report poisoned global backend state as `PilError::InternalError`; Python/JS bindings bubble those errors.
 - Raw byte image construction and Pillow grayscale conversion helpers now return `Result<_, PilError>` instead of using `expect` for buffer shape mismatches; Draw image restoration now returns `Result` and bindings bubble failures.
 - Legacy compute operation registration helpers now return `Result<_, PilError>` for duplicate keys and poisoned registry state; tests assert the structured error instead of `#[should_panic]`.
-- `pillow-rs-image` image buffers now expose checked Result-based APIs:
-  `try_get_pixel`, `try_get_pixel_mut`, `try_put_pixel`, `try_new`,
-  `try_from_pixel`, and `try_from_fn`. Standard `Index`, `get_pixel`,
-  `get_pixel_mut`, `put_pixel`, `new`, `from_pixel`, and `from_fn` remain
-  compatibility panic APIs and must be migrated call-by-call where callers can
-  bubble `ImageResult`.
+- The historical `pillow-rs-image` crate was removed from this repository after
+  codec ownership moved to the sibling `image-slash-star` package, so its
+  methods are no longer part of this repository's Rust method audit.
 - CPU ImageChops invert and auxiliary GPU registry helpers now return
   `Result<_, PilError>` instead of panicking on buffer shape or mutex poisoning.
 - SIMD dynamic-image reconstruction helpers now return `Result<_, PilError>`;
@@ -96,9 +93,6 @@ Start with public, non-test rows classified as `review_non_result_fallible` or
 `review_panic_path`, then private helpers in the same module so errors bubble
 without boundary translation loss.
 
-Highest-priority current production rows include:
-
-- `pillow-rs-image/src/types/buffer.rs`: migrate internal callers from
-  compatibility panic APIs to the new `try_*` APIs where their surrounding
-  signatures can bubble `ImageResult`; leave trait `Index`/`IndexMut` as
-  documented panic semantics.
+Highest-priority current production rows are the remaining `scope=production`
+rows in `docs/generated/rust-method-result-audit.tsv` classified as
+`review_non_result_fallible` or `review_panic_path`.

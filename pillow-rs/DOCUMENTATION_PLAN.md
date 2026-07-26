@@ -163,7 +163,7 @@ Example:
 //! Pillow-compatible color parsing and color-space conversion.
 //!
 //! This module accepts Pillow mode strings such as `"RGB"` and `"L"` and
-//! returns Rust primitives or `pillow-rs-image` buffers. It does not inspect
+//! returns Rust primitives or `image-slash-star` buffers. It does not inspect
 //! Python objects or file paths; binding crates perform that conversion before
 //! calling into core.
 ```

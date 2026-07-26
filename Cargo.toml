@@ -7,7 +7,6 @@ members = [
     "pillow-rs-freetype/ffi-c",
     "pillow-rs-freetype/ffi-wasm",
 ]
-exclude = ["pillow-rs-image"]
 resolver = "2"
 
 [workspace.package]
