@@ -43394,7 +43394,9 @@ fn assert_font_convenience_helpers_agree(
                     case.case_id
                 )
             })?;
-        let actual = font.getlength(text);
+        let actual = font
+            .getlength(text)
+            .map_err(|err| format!("{} Font::getlength failed: {err}", case.case_id))?;
         let expected = expected_advance as f32 / 64.0;
         if (actual - expected).abs() > 0.001 {
             return Err(format!(

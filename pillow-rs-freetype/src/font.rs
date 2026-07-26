@@ -3807,8 +3807,8 @@ impl Font {
     ///
     /// FreeType does not apply pair kerning as part of `FT_Load_Glyph`; callers
     /// that need legacy `kern` table adjustment can use [`Self::getkerning`].
-    pub fn getlength(&self, text: &str) -> f32 {
-        self.layout_advance(text) as f32 / 64.0
+    pub fn getlength(&self, text: &str) -> Result<f32, FontError> {
+        Ok(self.layout_advance(text)? as f32 / 64.0)
     }
 
     /// Return scaled legacy `kern` table adjustment for a Unicode pair in 26.6 pixels.
@@ -4679,16 +4679,13 @@ impl Font {
         )
     }
 
-    fn layout_advance(&self, text: &str) -> i32 {
-        text.chars().fold(0, |total, ch| {
+    fn layout_advance(&self, text: &str) -> Result<i32, FontError> {
+        text.chars().try_fold(0, |total, ch| {
             let glyph = self.char_index(ch as u32);
             if glyph == 0 {
-                return total;
+                return Ok(total);
             }
-            match self.glyph_metrics_for_index_default(glyph) {
-                Ok(metrics) => total + metrics.hori_advance,
-                Err(_) => total,
-            }
+            Ok(total + self.glyph_metrics_for_index_default(glyph)?.hori_advance)
         })
     }
 
@@ -6182,8 +6179,8 @@ mod tests {
     #[test]
     fn getlength_reports_glyph_slot_advance_without_implicit_kerning() {
         let font = test_font();
-        let single = font.getlength("A");
-        let text = font.getlength("AA");
+        let single = font.getlength("A").unwrap();
+        let text = font.getlength("AA").unwrap();
 
         assert!(text > single);
         assert_eq!(text, single * 2.0);
