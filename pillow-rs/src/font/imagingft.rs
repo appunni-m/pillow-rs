@@ -737,22 +737,16 @@ fn mask_from_run_with_start(
         };
         let sx = bm.width as usize;
         let sy = bm.rows as usize;
-        if sx == 0 || sy == 0 {
-            continue;
-        }
         let px = pixel(i64::from(x_origin.saturating_add(*pen_before)));
         let py = pixel(i64::from(y_origin));
         let dx = px + *bitmap_left;
         let dy = -(py + *bitmap_top);
-        if dx >= wu as i32 || dy >= hu as i32 {
-            continue;
-        }
         let source_x = if dx < 0 { (-dx) as usize } else { 0 };
         let target_x = dx.max(0) as usize;
         if source_x >= sx {
             continue;
         }
-        let cw = (sx - source_x).min(wu - target_x);
+        let cw = (sx - source_x).min(wu.saturating_sub(target_x));
         if cw == 0 {
             continue;
         }
@@ -762,9 +756,6 @@ fn mask_from_run_with_start(
         }
         for row in source_y..sy {
             let target_y = dy + row as i32;
-            if target_y < 0 {
-                continue;
-            }
             if target_y >= hu as i32 {
                 break;
             }
@@ -783,19 +774,8 @@ fn mask_from_run_with_start(
 }
 
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
-    let rows = bitmap.rows as usize;
     let pitch = bitmap.pitch.unsigned_abs() as usize;
-    let storage_row = if bitmap.pitch < 0 {
-        let Some(storage_row) = rows.checked_sub(row + 1) else {
-            return 0;
-        };
-        storage_row
-    } else {
-        row
-    };
-    let Some(row_start) = storage_row.checked_mul(pitch) else {
-        return 0;
-    };
+    let row_start = row * pitch;
     match bitmap.pixel_mode {
         ffi::FT_PIXEL_MODE_MONO => {
             let byte = bitmap
