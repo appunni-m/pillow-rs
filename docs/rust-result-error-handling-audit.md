@@ -23,17 +23,20 @@ Generated inventory:
   - `example`: `25`
   - `bench`: `12`
 - Current generated classification counts:
-  - `likely_infallible`: `2,804`
+  - `likely_infallible`: `2,818`
   - `ok_result`: `2,589`
   - `abi_status_code`: `349`
-  - `parser_review`: `207`
-  - `review_non_result_fallible`: `80`
+  - `parser_review`: `181`
+  - `review_non_result_fallible`: `86`
   - `review_panic_path`: `72`
   - `pillow_clip_control_flow`: `5`
   - `freetype_void_api_internal_status`: `4`
+  - `iterator_exhaustion_control_flow`: `3`
   - `documented_invariant_panic`: `3`
   - `freetype_sentinel_arithmetic`: `3`
   - `freetype_default_value_control_flow`: `3`
+  - `palette_absence_control_flow`: `2`
+  - `font_bitmap_absence_control_flow`: `1`
 
 ## Current interpretation
 
@@ -47,6 +50,9 @@ The generated `classification` column is conservative:
 - `abi_status_code`: C/WASM ABI surface returns an explicit status code such as `FT_Error` or `FontdoneWasmStatus`; internal Rust helpers should still use `Result` unless they are direct boundary-status adapters.
 - `documented_invariant_panic`: the deliberately named `InfallibleExt::because` invariant mechanism; this is not a recoverable user/input error path and has no production call sites after the current audit.
 - `pillow_clip_control_flow`: Pillow drawing geometry helpers use checked arithmetic to clip/skip non-renderable coordinates, matching Pillow-style draw semantics instead of raising.
+- `iterator_exhaustion_control_flow`: `Option` is used to represent iterator exhaustion, not an error.
+- `palette_absence_control_flow`: `Option` is used for Pillow-compatible palette/transparency absence.
+- `font_bitmap_absence_control_flow`: `Option` is used while reading bitmap coverage for out-of-bounds pixels or unsupported bitmap modes that should be skipped.
 - `freetype_sentinel_arithmetic`: FreeType-compatible fixed-point math returns C sentinel values for cases such as division by zero, preserving oracle behavior instead of surfacing Rust errors.
 - `freetype_void_api_internal_status`: helpers under a FreeType void API path use internal success/failure booleans because the public C-compatible caller intentionally ignores those failures while preserving metric side effects.
 - `freetype_default_value_control_flow`: FreeType-compatible variation/default helpers return default vectors or empty values for absent named instances/tables, preserving public oracle behavior.
@@ -109,6 +115,13 @@ been inspected and either:
   control flow. Current production `review_panic_path` and
   `review_non_result_fallible` counts are both `0`; remaining production
   manual work is in `parser_review`.
+- The generated audit scanner now strips comments and string/character
+  literals before fallibility signal detection. This prevents documentation
+  text, error messages, and character constants from being counted as executable
+  `?`, `panic!`, `expect`, or status-construction paths.
+- Core `pillow-rs/src` production parser-review rows are now classified:
+  Pillow draw iterator exhaustion, imagingft bitmap-coverage absence, and
+  palette/transparency absence are tracked as reviewed `Option` control flow.
 
 ## Next review queue
 

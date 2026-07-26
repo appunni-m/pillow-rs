@@ -121,9 +121,9 @@ pillow-rs/src/compute/pool_cpu/ops/draw.rs	91	draw_line_on_canvas	private	produc
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	149	draw_rect_on_canvas	private	production	()	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	216	new	private	production	Self	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	243	delta	private	production	i128	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/draw.rs	247	next	private	production	Option<(i32, i32)>	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/draw.rs	247	next	private	production	Option<(i32, i32)>	false	iterator_exhaustion_control_flow	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	295	new	private	production	Self	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/draw.rs	325	next	private	production	Option<(i32, i32, i32)>	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/draw.rs	325	next	private	production	Option<(i32, i32, i32)>	false	iterator_exhaustion_control_flow	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	380	draw_hline	private	production	()	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	396	draw_ellipse_segments	private	production	()	false	pillow_clip_control_flow	checked_arithmetic
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	431	draw_ellipse_on_canvas	private	production	()	false	pillow_clip_control_flow	checked_arithmetic
@@ -141,7 +141,7 @@ pillow-rs/src/compute/pool_cpu/ops/draw.rs	582	union_intervals	private	productio
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	597	intersect_intervals	private	production	Vec<(i32, i32)>	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	611	clip_intervals	private	production	Vec<(i32, i32)>	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	654	new	private	production	Self	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/draw.rs	662	next	private	production	Option<(i32, i32, i32)>	false	parser_review	question_operator
+pillow-rs/src/compute/pool_cpu/ops/draw.rs	662	next	private	production	Option<(i32, i32, i32)>	false	iterator_exhaustion_control_flow	question_operator
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	673	normalize_angles	private	production	(f32, f32)	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	691	clip	private	production	ClipNode	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/draw.rs	695	and	private	production	ClipNode	false	likely_infallible	
@@ -179,7 +179,7 @@ pillow-rs/src/compute/pool_cpu/ops/effects.rs	495	composite_mask	private	product
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	508	composite_blend	private	production	u8	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	516	op_composite_module	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	629	op_eval	pub	production	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	669	op_effect_noise	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	669	op_effect_noise	pub	production	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	713	op_point	pub	production	Result<DynamicImage, PilError>	true	ok_result	result_ctor
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	755	transform_affine_generic	private	production	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	846	op_transform	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
@@ -549,7 +549,7 @@ pillow-rs/src/font/imagingft.rs	358	glyph_run	private	production	Result<Option<G
 pillow-rs/src/font/imagingft.rs	402	bbox_from_run	private	production	Result<(i32, i32, i32, i32), PilError>	true	ok_result	
 pillow-rs/src/font/imagingft.rs	406	bbox_from_run_with_flags	private	production	Result<(i32, i32, i32, i32), PilError>	true	ok_result	question_operator
 pillow-rs/src/font/imagingft.rs	447	mask_from_run_with_start	private	production	Result<(u32, u32, Vec<u8>), PilError>	true	ok_result	question_operator,checked_arithmetic,map_err,ok_or,result_ctor
-pillow-rs/src/font/imagingft.rs	577	bitmap_coverage	private	production	Option<u8>	false	parser_review	question_operator,checked_arithmetic
+pillow-rs/src/font/imagingft.rs	577	bitmap_coverage	private	production	Option<u8>	false	font_bitmap_absence_control_flow	question_operator,checked_arithmetic
 pillow-rs/src/font/mod.rs	20	from_bytes	pub	production	Result<Self, PilError>	true	ok_result	
 pillow-rs/src/font/mod.rs	29	load_default	pub	production	Result<Self, PilError>	true	ok_result	question_operator
 pillow-rs/src/font/mod.rs	34	font_size	pub	production	f32	false	likely_infallible	
@@ -644,9 +644,9 @@ pillow-rs/src/image.rs	1761	palette_alpha	pub	production	Option<Vec<u8>>	false	l
 pillow-rs/src/image.rs	1777	image_info	pub	production	Option<ImageInfo>	false	likely_infallible	
 pillow-rs/src/image.rs	1786	source_format	pub	production	Option<ImageFormat>	false	likely_infallible	
 pillow-rs/src/image.rs	1799	getpalette_trimmed	pub	production	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs/src/image.rs	1805	getpalette_rgba	pub	production	Option<Vec<u8>>	false	parser_review	question_operator
+pillow-rs/src/image.rs	1805	getpalette_rgba	pub	production	Option<Vec<u8>>	false	palette_absence_control_flow	question_operator
 pillow-rs/src/image.rs	1833	putpalette	pub	production	Result<(), PilError>	true	ok_result	question_operator,result_ctor
-pillow-rs/src/image.rs	1874	pending_palette_transparency	pub	production	Option<PaletteTransparency>	false	parser_review	question_operator
+pillow-rs/src/image.rs	1874	pending_palette_transparency	pub	production	Option<PaletteTransparency>	false	palette_absence_control_flow	question_operator
 pillow-rs/src/image.rs	1903	palette_mode	pub	production	Option<&'static str>	false	likely_infallible	
 pillow-rs/src/image.rs	1917	has_transparency_data	pub	production	bool	false	likely_infallible	
 pillow-rs/src/image.rs	1942	apply_transparency	pub	production	Result<(), PilError>	true	ok_result	question_operator
@@ -683,7 +683,7 @@ pillow-rs/src/image.rs	2802	remap_palette	pub	production	Result<Image, PilError>
 pillow-rs/src/image.rs	2811	remap_palette_with_source	pub	production	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/image.rs	2900	image_from_materialized	private	production	Result<Image, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/image.rs	2941	map_codec_error	private	production	PilError	false	likely_infallible	
-pillow-rs/src/image.rs	2949	decoded_to_dynamic	private	production	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/image.rs	2949	decoded_to_dynamic	private	production	Result<DynamicImage, PilError>	true	ok_result	ok_or
 pillow-rs/src/image.rs	2986	padded_palette	private	production	Vec<u8>	false	likely_infallible	
 pillow-rs/src/image.rs	2992	split_palette_data	private	production	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	result_ctor
 pillow-rs/src/image.rs	3018	expand_palette	private	production	DynamicImage	false	likely_infallible	
@@ -712,7 +712,7 @@ pillow-rs/src/image_utils.rs	153	zero_dimension_rejected	private	test	()	false	l
 pillow-rs/src/image_utils.rs	159	trusted_path_matches_validated	private	test	()	false	review_non_result_fallible	unwrap
 pillow-rs/src/infallible.rs	29	because	private	production	Self::Output; } impl<T> InfallibleExt for Option<T>	false	documented_invariant_panic	
 pillow-rs/src/infallible.rs	36	because	private	production	T	false	documented_invariant_panic	panic
-pillow-rs/src/infallible.rs	53	because	private	production	T	false	documented_invariant_panic	question_operator,panic,result_ctor
+pillow-rs/src/infallible.rs	53	because	private	production	T	false	documented_invariant_panic	panic,result_ctor
 pillow-rs/src/infallible.rs	73	option_because_success	private	test	()	false	likely_infallible	
 pillow-rs/src/infallible.rs	80	option_because_panics_with_message	private	test	()	false	likely_infallible	
 pillow-rs/src/infallible.rs	86	result_because_success	private	test	()	false	likely_infallible	
@@ -830,7 +830,7 @@ pillow-rs/src/ops/pil_resize.rs	169	round_up	pub	production	f64	false	likely_inf
 pillow-rs/src/ops/pil_resize.rs	178	precompute_coeffs_f64	pub	production	f64, support: f64, ) -> FilterCoeffsF64	false	likely_infallible	
 pillow-rs/src/ops/pil_resize.rs	231	precompute_coeffs	pub	production	f64, support: f64, ) -> FilterCoeffs	false	likely_infallible	
 pillow-rs/src/ops/pil_resize.rs	245	precompute_coeffs_boxed	pub	production	f64, support: f64, ) -> FilterCoeffs	false	likely_infallible	
-pillow-rs/src/ops/pil_resize.rs	325	_precompute_coeffs_impl	private	production	f64, support: f64, ) -> FilterCoeffs	false	parser_review	question_operator
+pillow-rs/src/ops/pil_resize.rs	325	_precompute_coeffs_impl	private	production	f64, support: f64, ) -> FilterCoeffs	false	likely_infallible	
 pillow-rs/src/ops/pil_resize.rs	415	premultiply_alpha	private	production	DynamicImage	false	likely_infallible	
 pillow-rs/src/ops/pil_resize.rs	439	unpremultiply_alpha	private	production	DynamicImage	false	likely_infallible	
 pillow-rs/src/ops/pil_resize.rs	473	horizontal_pass_row	private	production	()	false	likely_infallible	
@@ -932,7 +932,7 @@ pillow-rs/tests/backend_parity.rs	204	backend	private	test	Backend	false	review_
 pillow-rs/tests/backend_parity.rs	208	paste_source	private	test	PasteSource	false	review_panic_path	expect,panic
 pillow-rs/tests/backend_parity.rs	248	assert_image	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/backend_parity.rs	273	assert_exact_samples	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	282	error_kind	private	test	&'static str	false	review_panic_path	question_operator,panic
+pillow-rs/tests/backend_parity.rs	282	error_kind	private	test	&'static str	false	review_panic_path	panic
 pillow-rs/tests/backend_parity.rs	290	assert_value_error	private	test	()	false	likely_infallible	
 pillow-rs/tests/backend_parity.rs	295	byte	private	test	u8	false	review_non_result_fallible	expect
 pillow-rs/tests/backend_parity.rs	302	color	private	test	(u8, u8, u8, u8)	false	review_panic_path	expect,panic
@@ -942,41 +942,41 @@ pillow-rs/tests/backend_parity.rs	471	draw_registry_key	private	test	&'static st
 pillow-rs/tests/backend_parity.rs	488	pillow_oracle_is_version_pinned	private	test	()	false	likely_infallible	
 pillow-rs/tests/backend_parity.rs	496	backend_coverage_metadata_matches_every_exact_case	private	test	()	false	likely_infallible	
 pillow-rs/tests/backend_parity.rs	555	effect_spread_registry_exposes_only_the_sequential_cpu_lane	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	577	forced_non_cpu_backends_reject_effect_spread_without_fallback	private	test	()	false	parser_review	question_operator,expect
-pillow-rs/tests/backend_parity.rs	599	paste_is_exact_on_every_declared_native_backend	private	test	()	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/backend_parity.rs	577	forced_non_cpu_backends_reject_effect_spread_without_fallback	private	test	()	false	review_non_result_fallible	expect
+pillow-rs/tests/backend_parity.rs	599	paste_is_exact_on_every_declared_native_backend	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/backend_parity.rs	677	paste_is_exact_on_portable_cpu_backend	private	test	()	false	review_panic_path	panic
 pillow-rs/tests/backend_parity.rs	712	paste_validation_matches_exact_pillow_errors	private	test	()	false	review_panic_path	panic
 pillow-rs/tests/backend_parity.rs	737	gpu_paste_propagates_nested_auxiliary_errors_before_dispatch	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	791	forced_unsupported_backend_wins_before_source_decode	private	test	()	false	parser_review	question_operator,expect
+pillow-rs/tests/backend_parity.rs	791	forced_unsupported_backend_wins_before_source_decode	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/backend_parity.rs	838	gpu_auxiliary_failures_follow_operation_then_slot_order	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	896	putalpha_and_core_sample_replacement_match_on_each_native_backend	private	test	()	false	review_panic_path	question_operator,expect,panic
-pillow-rs/tests/backend_parity.rs	1494	pa_draw_point_is_native_on_cpu_and_truthfully_rejected_elsewhere	private	test	()	false	parser_review	question_operator,expect
+pillow-rs/tests/backend_parity.rs	896	putalpha_and_core_sample_replacement_match_on_each_native_backend	private	test	()	false	review_panic_path	expect,panic
+pillow-rs/tests/backend_parity.rs	1494	pa_draw_point_is_native_on_cpu_and_truthfully_rejected_elsewhere	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/backend_parity.rs	1535	indexed_bitmap_and_text_preserve_pillow_format_and_pending_transparency	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/backend_parity.rs	1634	drawing_is_exact_and_backend_capabilities_are_truthful	private	test	()	false	review_panic_path	panic
-pillow-rs/tests/backend_parity.rs	1704	indexed_ops_are_exact_on_every_declared_native_backend	private	test	()	false	review_panic_path	question_operator,expect,panic
-pillow-rs/tests/backend_parity.rs	1803	indexed_affine_fill_and_raw_rgba_palette_match_pillow_12_2	private	test	()	false	parser_review	question_operator,expect
+pillow-rs/tests/backend_parity.rs	1704	indexed_ops_are_exact_on_every_declared_native_backend	private	test	()	false	review_panic_path	expect,panic
+pillow-rs/tests/backend_parity.rs	1803	indexed_affine_fill_and_raw_rgba_palette_match_pillow_12_2	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/backend_parity.rs	1874	rgba_fast_octree_retains_exact_pillow_12_2_palette_alpha	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	1903	quantize_color_bounds_and_single_color_match_pillow_12_2	private	test	()	false	review_panic_path	question_operator,expect,panic,result_ctor
+pillow-rs/tests/backend_parity.rs	1903	quantize_color_bounds_and_single_color_match_pillow_12_2	private	test	()	false	review_panic_path	expect,panic,result_ctor
 pillow-rs/tests/backend_parity.rs	1947	rgba_fast_octree_uses_pillow_float_bucket_average_at_4096_square	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/backend_parity.rs	1970	composite_uses_image2_mode_canvas_and_palette_on_every_backend	private	test	()	false	parser_review	question_operator,expect
-pillow-rs/tests/backend_parity.rs	2039	composite_mask_band_and_rgba_output_match_pillow_on_every_backend	private	test	()	false	review_panic_path	question_operator,expect,panic,result_ctor
-pillow-rs/tests/backend_parity.rs	2103	backend_lock_reaches_nested_indexed_to_color_pipeline	private	test	()	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/backend_parity.rs	1970	composite_uses_image2_mode_canvas_and_palette_on_every_backend	private	test	()	false	review_non_result_fallible	expect
+pillow-rs/tests/backend_parity.rs	2039	composite_mask_band_and_rgba_output_match_pillow_on_every_backend	private	test	()	false	review_panic_path	expect,panic,result_ctor
+pillow-rs/tests/backend_parity.rs	2103	backend_lock_reaches_nested_indexed_to_color_pipeline	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/backend_parity.rs	2137	apply_transparency_preserves_indices_and_commits_palette_alpha	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/color3dlut_oracle.rs	43	dimensions	private	test	(u32, u32, u32)	false	likely_infallible	
 pillow-rs/tests/color3dlut_oracle.rs	80	repo_root	private	test	PathBuf	false	review_non_result_fallible	expect
 pillow-rs/tests/color3dlut_oracle.rs	87	identity_table	private	test	Vec<f64>	false	likely_infallible	
 pillow-rs/tests/color3dlut_oracle.rs	105	create_input	private	test	Image	false	review_non_result_fallible	expect
 pillow-rs/tests/color3dlut_oracle.rs	117	assert_expected_image	private	test	()	false	review_panic_path	expect,panic
-pillow-rs/tests/color3dlut_oracle.rs	171	assert_expected_error	private	test	()	false	review_panic_path	question_operator,panic
+pillow-rs/tests/color3dlut_oracle.rs	171	assert_expected_error	private	test	()	false	review_panic_path	panic
 pillow-rs/tests/color3dlut_oracle.rs	184	shared_color3dlut_corpus_matches_pillow_exactly	private	test	()	false	parser_review	expect,result_ctor
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	43	fixture_root	private	test	PathBuf	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	47	oracle_site_packages	private	test	Vec<PathBuf>	false	parser_review	expect,result_ctor
-pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	82	oracle_python	private	test	PathBuf	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	82	oracle_python	private	test	PathBuf	false	review_panic_path	expect,panic
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	112	load_input_cases	private	test	Vec<Value>	false	review_non_result_fallible	expect
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	152	assert_input_only_case	private	test	()	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	176	run_oracle	private	test	BTreeMap<String, Value>	false	review_non_result_fallible	expect,command_spawn
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	219	assert_exact_oracle_match	private	test	()	false	review_panic_path	panic
-pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	241	every_input_matches_the_live_pillow_imagingft_oracle_exactly	private	test	()	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_public_api.rs	241	every_input_matches_the_live_pillow_imagingft_oracle_exactly	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_runner.rs	11	operation	pub	test	Result<&str, PilError>	true	ok_result	ok_or
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_runner.rs	18	run	pub	test	Value	false	parser_review	result_ctor
 pillow-rs/tests/deprecated/imagingft/current-public-api/imagingft_runner.rs	31	try_run	private	test	Result<Value, PilError>	true	ok_result	question_operator,ok_or,result_ctor
@@ -1001,22 +1001,22 @@ pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	69	from_row	priva
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	83	font_for	private	test	&Font	false	review_non_result_fallible	expect
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	95	manifest_dir	private	test	PathBuf	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	99	fixture_dir	private	test	PathBuf	false	likely_infallible	
-pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	103	read_matrix	private	test	Matrix	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	103	read_matrix	private	test	Matrix	false	review_panic_path	expect,panic
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	110	load_font	private	test	Font	false	review_panic_path	panic
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	118	sha256_hex	private	test	String	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	125	read_expected_raw	private	test	Vec<u8>	false	review_panic_path	panic
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	130	assert_matrix_provenance	private	test	()	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	188	assert_raw_file_matches_hash	private	test	()	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	201	compare_scalar	private	test	()	false	review_panic_path	panic,result_ctor
-pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	207	compare_scalar_result	private	test	Result<(), PixelFailure>	true	ok_result	question_operator,expect,panic,result_ctor
+pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	207	compare_scalar_result	private	test	Result<(), PixelFailure>	true	ok_result	expect,panic,result_ctor
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	261	compare_pixel	private	test	Result<(), PixelFailure>	true	ok_result	question_operator,map_err,result_ctor
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	358	compare_row	private	test	Result<(), PixelFailure>	true	ok_result	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	365	assert_required_rows_exist	private	test	()	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	394	imagingft_fixture_provenance_is_reproducible	private	test	()	false	likely_infallible	
 pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	404	imagingft_scalar_rows_match_pil_12_2_0	private	test	()	false	likely_infallible	
-pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	419	imagingft_fixture_contains_no_incomplete_rows	private	test	()	false	parser_review	question_operator
-pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	434	imagingft_large_pixel_matrix_has_all_pil_12_2_0_matches	private	test	()	false	parser_review	question_operator,result_ctor
-pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	471	imagingft_all_fixture_rows_match_pil_12_2_0	private	test	()	false	parser_review	question_operator,result_ctor
+pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	419	imagingft_fixture_contains_no_incomplete_rows	private	test	()	false	likely_infallible	
+pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	434	imagingft_large_pixel_matrix_has_all_pil_12_2_0_matches	private	test	()	false	parser_review	result_ctor
+pillow-rs/tests/deprecated/imagingft/imagingft_matrix_tests.rs	471	imagingft_all_fixture_rows_match_pil_12_2_0	private	test	()	false	parser_review	result_ctor
 pillow-rs/tests/deprecated/imagingft/transposed_font_oracle.rs	56	decode_hex	private	test	Vec<u8>	false	review_non_result_fallible	expect
 pillow-rs/tests/deprecated/imagingft/transposed_font_oracle.rs	68	transposed_font_matches_independent_pillow_oracle	private	test	()	false	review_panic_path	expect,panic,result_ctor
 pillow-rs/tests/eval_oracle.rs	62	repo_root	private	test	PathBuf	false	review_non_result_fallible	expect
@@ -1026,7 +1026,7 @@ pillow-rs/tests/eval_oracle.rs	137	assert_expected	private	test	()	false	review_
 pillow-rs/tests/eval_oracle.rs	197	shared_eval_corpus_matches_pillow_exactly	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/font_public_api.rs	33	fixture_root	private	test	PathBuf	false	likely_infallible	
 pillow-rs/tests/font_public_api.rs	37	oracle_site_packages	private	test	Vec<PathBuf>	false	parser_review	expect,result_ctor
-pillow-rs/tests/font_public_api.rs	72	oracle_python	private	test	PathBuf	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/font_public_api.rs	72	oracle_python	private	test	PathBuf	false	review_panic_path	expect,panic
 pillow-rs/tests/font_public_api.rs	102	load_manifest	private	test	FontManifest	false	review_panic_path	expect,panic
 pillow-rs/tests/font_public_api.rs	127	manifest_scalar	private	test	Option<String>	false	likely_infallible	
 pillow-rs/tests/font_public_api.rs	137	manifest_list	private	test	BTreeSet<String>	false	review_non_result_fallible	expect
@@ -1035,7 +1035,7 @@ pillow-rs/tests/font_public_api.rs	216	assert_manifest_has_no_embedded_expectati
 pillow-rs/tests/font_public_api.rs	244	assert_input_only_case	private	test	()	false	likely_infallible	
 pillow-rs/tests/font_public_api.rs	268	run_oracle	private	test	BTreeMap<String, Value>	false	review_non_result_fallible	expect,command_spawn
 pillow-rs/tests/font_public_api.rs	311	assert_exact_oracle_match	private	test	()	false	review_panic_path	panic
-pillow-rs/tests/font_public_api.rs	333	every_input_matches_the_live_pillow_font_oracle_exactly	private	test	()	false	review_panic_path	question_operator,expect,panic
+pillow-rs/tests/font_public_api.rs	333	every_input_matches_the_live_pillow_font_oracle_exactly	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/fromarray_descriptor_oracle.rs	43	descriptor_resolution_matches_pillow_oracle	private	test	()	false	review_panic_path	expect,panic,result_ctor
 pillow-rs/tests/image_backend_migration.rs	104	fixture_root	private	test	PathBuf	false	likely_infallible	
 pillow-rs/tests/image_backend_migration.rs	108	manifest	private	test	Manifest	false	review_non_result_fallible	expect
@@ -1050,12 +1050,12 @@ pillow-rs/tests/image_backend_migration.rs	263	pipeline_verify_never_publishes_s
 pillow-rs/tests/image_backend_migration.rs	296	loaded_paletted_reads_share_one_index_view	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/image_backend_migration.rs	330	manifest_open_bytes_auto_detects_and_preserves_state_across_load	private	test	()	false	review_panic_path	expect,panic
 pillow-rs/tests/image_backend_migration.rs	480	manifest_byte_open_owns_one_stable_snapshot_and_validates_hints	private	test	()	false	review_non_result_fallible	expect
-pillow-rs/tests/image_backend_migration.rs	507	manifest_error_rows_preserve_structured_failures	private	test	()	false	review_panic_path	question_operator,panic
+pillow-rs/tests/image_backend_migration.rs	507	manifest_error_rows_preserve_structured_failures	private	test	()	false	review_panic_path	panic
 pillow-rs/tests/image_backend_migration.rs	560	pillow_oracle_rows_prove_palette_safe_operations_exactly	private	test	()	false	review_panic_path	expect,panic
-pillow-rs/tests/image_backend_migration.rs	687	pillow_oracle_rows_prove_palette_operation_errors_exactly	private	test	()	false	review_panic_path	question_operator,panic
+pillow-rs/tests/image_backend_migration.rs	687	pillow_oracle_rows_prove_palette_operation_errors_exactly	private	test	()	false	review_panic_path	panic
 pillow-rs/tests/image_feature_gates.rs	24	fixture_root	private	test	PathBuf	false	likely_infallible	
 pillow-rs/tests/image_feature_gates.rs	28	enabled	private	test	bool	false	review_panic_path	panic
-pillow-rs/tests/image_feature_gates.rs	43	disabled_codec_rows_preserve_backend_feature_errors	private	test	()	false	parser_review	question_operator,expect
+pillow-rs/tests/image_feature_gates.rs	43	disabled_codec_rows_preserve_backend_feature_errors	private	test	()	false	review_non_result_fallible	expect
 pillow-rs/tests/image_open_oracle.rs	46	repo_root	private	test	PathBuf	false	review_non_result_fallible	expect
 pillow-rs/tests/image_open_oracle.rs	53	decode_hex	private	test	Vec<u8>	false	review_non_result_fallible	expect
 pillow-rs/tests/image_open_oracle.rs	69	shared_image_open_corpus_matches_pillow_exactly	private	test	()	false	review_panic_path	expect,panic
@@ -1107,7 +1107,7 @@ pillow-rs-freetype/examples/bench_ops.rs	276	pack_mask_into	private	example	()	f
 pillow-rs-freetype/examples/bench_ops.rs	285	sha256_hex	private	example	String	false	likely_infallible	
 pillow-rs-freetype/examples/bench_ops.rs	292	json_escape	private	example	String	false	likely_infallible	
 pillow-rs-freetype/examples/debug_glyph.rs	14	sha256	private	example	String	false	likely_infallible	
-pillow-rs-freetype/examples/debug_glyph.rs	21	main	private	example	()	false	parser_review	question_operator,unwrap,command_spawn
+pillow-rs-freetype/examples/debug_glyph.rs	21	main	private	example	()	false	review_non_result_fallible	unwrap,command_spawn
 pillow-rs-freetype/examples/trace_glyph.rs	9	main	private	example	()	false	review_panic_path	expect,panic
 pillow-rs-freetype/examples/trace_glyph.rs	295	pixel_size_from_points	private	example	u32	false	review_non_result_fallible	expect
 pillow-rs-freetype/ffi-c/src/lib.rs	49	abi_support_owned_mm_var_count	pub	production	usize	false	likely_infallible	
@@ -1857,7 +1857,7 @@ pillow-rs-freetype/src/autohint/latin.rs	1042	sort_pos	private	production	()	fal
 pillow-rs-freetype/src/autohint/latin.rs	1059	sort_and_quantize_widths	pub	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1122	metrics_init_widths	pub	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1219	extract_widths	private	production	(usize, [AfWidth; AF_LATIN_MAX_WIDTHS])	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	1259	metrics_init_blues_impl	pub	production	()	false	parser_review	result_ctor
+pillow-rs-freetype/src/autohint/latin.rs	1259	metrics_init_blues_impl	pub	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1773	metrics_scale_dim	pub	production	(i32, i32)	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1912	compute_blue_edges	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1993	base_glyph_blues	private	production	(Option<AfLatinBlue>, Option<AfLatinBlue>)	false	likely_infallible	
@@ -1889,19 +1889,19 @@ pillow-rs-freetype/src/autohint/latin.rs	2496	align_bottom_tilde	private	product
 pillow-rs-freetype/src/autohint/latin.rs	2507	apply_tilde_stretch_alignment	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	2538	vertical_separation_accent_height_limit	private	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	2561	vertical_separation_adjustments	private	production	()	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	2773	apply_hints	pub	production	ApplyHintsMetrics	false	parser_review	question_operator
-pillow-rs-freetype/src/autohint/latin.rs	3138	compute_segments	pub	production	()	false	parser_review	question_operator
+pillow-rs-freetype/src/autohint/latin.rs	2773	apply_hints	pub	production	ApplyHintsMetrics	false	likely_infallible	
+pillow-rs-freetype/src/autohint/latin.rs	3138	compute_segments	pub	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3491	abs_dir	private	production	Direction	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3508	compute_edges	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3791	link_segments	pub	production	()	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	3795	link_segments_inner	private	production	()	false	parser_review	question_operator
+pillow-rs-freetype/src/autohint/latin.rs	3795	link_segments_inner	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3936	snap_width	private	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3967	align_linked_edge	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	3995	align_serif_edge	private	production	()	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	4012	compute_stem_width	private	production	i32	false	parser_review	question_operator
+pillow-rs-freetype/src/autohint/latin.rs	4012	compute_stem_width	private	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	4217	dump_edge_phase	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	4230	dump_edge_phase	private	production	()	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	4238	hint_edges	private	production	()	false	parser_review	question_operator
+pillow-rs-freetype/src/autohint/latin.rs	4238	hint_edges	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	4824	align_edge_points	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	4868	align_strong_points	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	4976	iup_shift	private	production	()	false	likely_infallible	
@@ -2373,7 +2373,7 @@ pillow-rs-freetype/src/fixed.rs	98	ft_floor_fix_long	pub	production	i64	false	li
 pillow-rs-freetype/src/fixed.rs	108	ft_mul_div	pub	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/fixed.rs	117	ft_mul_div_no_round	pub	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/fixed.rs	131	ft_mul_fix	pub	production	i32	false	likely_infallible	
-pillow-rs-freetype/src/fixed.rs	144	ft_div_fix	pub	production	i32	false	parser_review	question_operator
+pillow-rs-freetype/src/fixed.rs	144	ft_div_fix	pub	production	i32	false	likely_infallible	
 pillow-rs-freetype/src/fixed.rs	160	ft_round_fix	pub	production	i64	false	likely_infallible	
 pillow-rs-freetype/src/fixed.rs	169	ft_ceil_fix	pub	production	i64	false	likely_infallible	
 pillow-rs-freetype/src/fixed.rs	178	ft_floor_fix	pub	production	i64	false	likely_infallible	
@@ -2699,7 +2699,7 @@ pillow-rs-freetype/src/grays.rs	1090	write_span	private	production	()	false	like
 pillow-rs-freetype/src/grays.rs	1119	record_gray_span	private	production	()	false	likely_infallible	
 pillow-rs-freetype/src/grays.rs	1140	curve_tag	private	production	u8	false	likely_infallible	
 pillow-rs-freetype/src/grays.rs	1149	curve_tag_at	private	production	u8	false	likely_infallible	
-pillow-rs-freetype/src/lib.rs	4	main	private	production	Result<(), Box<dyn std::error::Error>>	true	ok_result	question_operator,fs_io
+pillow-rs-freetype/src/lib.rs	4	main	private	production	Result<(), Box<dyn std::error::Error>>	true	ok_result	
 pillow-rs-freetype/src/outline.rs	49	is_empty	pub	production	bool	false	likely_infallible	
 pillow-rs-freetype/src/render.rs	34	for_outline	private	production	Self	false	likely_infallible	
 pillow-rs-freetype/src/render.rs	44	low	private	production	Self	false	likely_infallible	
@@ -3137,8 +3137,8 @@ pillow-rs-freetype/src/tt/name.rs	381	find_postscript_name	private	production	Op
 pillow-rs-freetype/src/tt/name.rs	416	decode_win_postscript	private	production	Option<String>	false	likely_infallible	
 pillow-rs-freetype/src/tt/name.rs	429	decode_apple_postscript	private	production	Option<String>	false	likely_infallible	
 pillow-rs-freetype/src/tt/name.rs	439	is_postscript_name_byte	private	production	bool	false	likely_infallible	
-pillow-rs-freetype/src/tt/name.rs	447	decode_utf16be_bytes	private	production	String	false	parser_review	question_operator
-pillow-rs-freetype/src/tt/name.rs	466	decode_mac_roman_bytes	private	production	String	false	parser_review	question_operator
+pillow-rs-freetype/src/tt/name.rs	447	decode_utf16be_bytes	private	production	String	false	likely_infallible	
+pillow-rs-freetype/src/tt/name.rs	466	decode_mac_roman_bytes	private	production	String	false	likely_infallible	
 pillow-rs-freetype/src/tt/os2.rs	95	use_typo_metrics	pub	production	bool	false	likely_infallible	
 pillow-rs-freetype/src/tt/os2.rs	100	is_wws_only	pub	production	bool	false	likely_infallible	
 pillow-rs-freetype/src/tt/os2.rs	105	fs_selection	pub	production	u16	false	likely_infallible	
@@ -3195,10 +3195,10 @@ pillow-rs-freetype/src/tt/vmtx.rs	48	parse_vmtx	pub	production	Result<VmtxTable,
 pillow-rs-freetype/tests/direct_ft_compare.rs	26	sha256	private	test	String	false	likely_infallible	
 pillow-rs-freetype/tests/direct_ft_compare.rs	33	font_key	private	test	u64	false	likely_infallible	
 pillow-rs-freetype/tests/direct_ft_compare.rs	43	get_ft_ref	private	test	Option<CachedEntry>	false	parser_review	question_operator,unwrap,command_spawn
-pillow-rs-freetype/tests/direct_ft_compare.rs	93	test_direct_ft_comparison	private	test	()	false	review_panic_path	question_operator,unwrap,panic,result_ctor
+pillow-rs-freetype/tests/direct_ft_compare.rs	93	test_direct_ft_comparison	private	test	()	false	review_panic_path	unwrap,panic,result_ctor
 pillow-rs-freetype/tests/pipe_trace.rs	14	sha256	private	test	String	false	likely_infallible	
 pillow-rs-freetype/tests/pipe_trace.rs	24	trace_one_glyph	private	test	()	false	review_non_result_fallible	unwrap,fs_io
-pillow-rs-freetype/tests/pipe_trace.rs	121	dump_render_mode_glyph	private	test	()	false	review_panic_path	question_operator,unwrap,panic,fs_io
+pillow-rs-freetype/tests/pipe_trace.rs	121	dump_render_mode_glyph	private	test	()	false	review_panic_path	unwrap,panic,fs_io
 pillow-rs-freetype/tests/support/generated_constant_lookup.rs	7	constant_to_i64	private	test	Option<i64> where T: TryInto<i64>,	false	likely_infallible	
 pillow-rs-freetype/tests/support/generated_constant_lookup.rs	14	generated_rust_constant	pub	test	Option<i64>	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	55	debug_hook_a	private	test	FT_Error	false	abi_status_code	
@@ -3217,7 +3217,7 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	391	duration_ns	private	test	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	396	unified_fixture_parity	private	test	()	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	432	assert_unified_fixture_cases_match_runtime_c_oracle	private	test	()	false	review_panic_path	panic,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	606	assert_unified_inputs_use_explicit_model	private	test	()	false	likely_infallible	
-pillow-rs-freetype/tests/unified_fixture_parity.rs	650	assert_explicit_runtime_filter_matched	private	test	()	false	parser_review	question_operator
+pillow-rs-freetype/tests/unified_fixture_parity.rs	650	assert_explicit_runtime_filter_matched	private	test	()	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	663	flag_value	private	test	Result<i32, String>	true	ok_result	question_operator,map_err
 pillow-rs-freetype/tests/unified_fixture_parity.rs	677	validation_flags_param	private	test	Result<FT_UInt, String>	true	ok_result	question_operator,map_err
 pillow-rs-freetype/tests/unified_fixture_parity.rs	685	build_dependent_runtime_reason	private	test	Option<&'static str>	false	likely_infallible	
@@ -4301,8 +4301,8 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	26933	operation_filter	privat
 pillow-rs-freetype/tests/unified_fixture_parity.rs	26937	case_limit	private	test	Option<usize>	false	review_panic_path	panic
 pillow-rs-freetype/tests/unified_fixture_parity.rs	26947	case_matches_filter	private	test	bool	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	26953	operation_matches_filter	private	test	bool	false	likely_infallible	
-pillow-rs-freetype/tests/unified_fixture_parity.rs	26957	assert_manifest_cases_cover_fixture_inputs	private	test	()	false	review_non_result_fallible	checked_arithmetic
-pillow-rs-freetype/tests/unified_fixture_parity.rs	26988	assert_manifest_font_variability_cases_cover_declared_fixture_folder	private	test	()	false	parser_review	question_operator,checked_arithmetic
+pillow-rs-freetype/tests/unified_fixture_parity.rs	26957	assert_manifest_cases_cover_fixture_inputs	private	test	()	false	likely_infallible	
+pillow-rs-freetype/tests/unified_fixture_parity.rs	26988	assert_manifest_font_variability_cases_cover_declared_fixture_folder	private	test	()	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	27065	report_explicit_input_cases	private	test	()	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	27084	has_case	private	test	bool	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	27091	manifest_dir	private	test	PathBuf	false	likely_infallible	
@@ -4413,8 +4413,8 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	35588	ft_int_value	private	te
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35593	wasm_load_glyph_for_inspection	private	test	Result<FT_Error, String>	true	ok_result	question_operator
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35613	wasm_glyph_metrics_json	private	test	Result<Value, String>	true	ok_result	question_operator,ok_or
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35619	rust_outline_operation	private	test	Result<RunOutput, String>	true	ok_result	question_operator,result_ctor
-pillow-rs-freetype/tests/unified_fixture_parity.rs	35640	rust_outline_operation_cbox	private	test	Result<FT_BBox, String>	true	ok_result	question_operator,result_ctor
-pillow-rs-freetype/tests/unified_fixture_parity.rs	35658	rust_outline_operation_bbox	private	test	Result<FT_BBox, String>	true	ok_result	question_operator,result_ctor
+pillow-rs-freetype/tests/unified_fixture_parity.rs	35640	rust_outline_operation_cbox	private	test	Result<FT_BBox, String>	true	ok_result	result_ctor
+pillow-rs-freetype/tests/unified_fixture_parity.rs	35658	rust_outline_operation_bbox	private	test	Result<FT_BBox, String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35679	c_outline_operation	private	test	Result<RunOutput, String>	true	ok_result	question_operator,ok_or
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35700	c_outline_operation_bbox	private	test	Result<c_abi::FT_BBox, String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	35747	wasm_outline_operation	private	test	Result<RunOutput, String>	true	ok_result	question_operator,ok_or
@@ -4715,7 +4715,7 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	42914	rust_load_char_public_a
 pillow-rs-freetype/tests/unified_fixture_parity.rs	42941	assert_api_load_glyph_agrees	private	test	Result<(), String>	true	ok_result	question_operator,map_err,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	43002	checks_api_load_glyph_agreement	private	test	Result<bool, String>	true	ok_result	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	43006	reset_autohint_coverage_if_requested	private	test	Result<Option<Vec<u32>>, String>	true	ok_result	question_operator,result_ctor
-pillow-rs-freetype/tests/unified_fixture_parity.rs	43021	assert_autohint_coverage_bits	private	test	Result<(), String>	true	ok_result	question_operator,result_ctor
+pillow-rs-freetype/tests/unified_fixture_parity.rs	43021	assert_autohint_coverage_bits	private	test	Result<(), String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	43042	autohint_coverage_bits_param	private	test	Result<Option<Vec<u32>>, String>	true	ok_result	question_operator,map_err,ok_or,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	43080	rust_render_glyph_public_api	private	test	Result<RunOutput, String>	true	ok_result	question_operator,map_err,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	43163	assert_font_render_mode_agrees	private	test	Result<(), String>	true	ok_result	question_operator,map_err,ok_or,result_ctor
@@ -5585,7 +5585,7 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	63598	fixed_math_rows	private
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63618	fixed_math_unary_rows	private	test	Result<Vec<Vec<i64>>, String>	true	ok_result	question_operator
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63625	fixed_math_tuple_rows	private	test	Result<Vec<Vec<i64>>, String>	true	ok_result	question_operator,ok_or,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63650	fixed_math_json	private	test	Result<Value, String>	true	ok_result	question_operator
-pillow-rs-freetype/tests/unified_fixture_parity.rs	63664	fixed_math_result	private	test	Result<i64, String>	true	ok_result	question_operator,result_ctor
+pillow-rs-freetype/tests/unified_fixture_parity.rs	63664	fixed_math_result	private	test	Result<i64, String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63710	is_trigon_runtime_operation	private	test	bool	false	likely_infallible	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63726	trigon_oracle_op	private	test	Result<&'static str, String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	63742	trigon_rows_arg	private	test	Result<String, String>	true	ok_result	question_operator
@@ -5648,7 +5648,7 @@ pillow-rs-freetype/tests/unified_fixture_parity.rs	65246	u64_value	private	test	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65260	i64_value	private	test	Result<i64, String>	true	ok_result	map_err,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65273	symbolic_i64	private	test	Result<i64, String>	true	ok_result	question_operator,result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65302	new	private	test	Result<Self, String>	true	ok_result	question_operator
-pillow-rs-freetype/tests/unified_fixture_parity.rs	65309	finish	private	test	Result<(), String>	true	ok_result	question_operator,result_ctor
+pillow-rs-freetype/tests/unified_fixture_parity.rs	65309	finish	private	test	Result<(), String>	true	ok_result	result_ctor
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65320	parse_expression	private	test	Result<i64, String>	true	ok_result	
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65324	parse_or	private	test	Result<i64, String>	true	ok_result	question_operator
 pillow-rs-freetype/tests/unified_fixture_parity.rs	65332	parse_shift	private	test	Result<i64, String>	true	ok_result	question_operator,checked_arithmetic,map_err,ok_or
@@ -5847,7 +5847,7 @@ pillow-rs-js/src/lib.rs	1628	blend	pub	production	Result<Image, JsValue>	true	ok
 pillow-rs-js/src/lib.rs	1634	composite	pub	production	Result<Image, JsValue>	true	ok_result	map_err
 pillow-rs-js/src/lib.rs	1642	enable_backend	pub	production	Result<bool, JsValue>	true	ok_result	question_operator,map_err,ok_or
 pillow-rs-js/src/lib.rs	1653	disable_backend	pub	production	Result<bool, JsValue>	true	ok_result	question_operator,map_err,ok_or
-pillow-rs-js/src/lib.rs	1664	available_backends	pub	production	Vec<String>	false	parser_review	question_operator
+pillow-rs-js/src/lib.rs	1664	available_backends	pub	production	Vec<String>	false	likely_infallible	
 pillow-rs-js/src/lib.rs	1673	active_backends	pub	production	Result<Vec<String>, JsValue>	true	ok_result	question_operator,map_err
 pillow-rs-js/src/lib.rs	1683	backend_enabled	pub	production	Result<bool, JsValue>	true	ok_result	question_operator,map_err,ok_or
 pillow-rs-js/src/lib.rs	1695	set_log_level	pub	production	()	false	likely_infallible	
@@ -5991,7 +5991,7 @@ pillow-rs-py/src/lib.rs	1150	height	private	production	PyResult<u32>	true	ok_res
 pillow-rs-py/src/lib.rs	1156	mode	private	production	PyResult<String>	true	ok_result	map_err
 pillow-rs-py/src/lib.rs	1160	explicit_mode	private	production	PyResult<Option<String>>	true	ok_result	
 pillow-rs-py/src/lib.rs	1165	format	private	production	Option<String>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1169	__repr__	private	production	String	false	parser_review	question_operator,result_ctor
+pillow-rs-py/src/lib.rs	1169	__repr__	private	production	String	false	parser_review	result_ctor
 pillow-rs-py/src/lib.rs	1181	palette_transform_fill_type_error	private	production	PyErr	false	likely_infallible	
 pillow-rs-py/src/lib.rs	1185	clamp_palette_transform_index	private	production	PyResult<u8>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	1196	validate_palette_transform_color	private	production	PyResult<Option<u8>>	true	ok_result	question_operator,map_err,result_ctor
@@ -6002,7 +6002,7 @@ pillow-rs-py/src/lib.rs	1291	validate_transposed_font_length	private	production	
 pillow-rs-py/src/lib.rs	1296	resolve_array_layout	private	production	PyResult<(String, String, usize, usize, usize, bool)>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	1315	enable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
 pillow-rs-py/src/lib.rs	1327	disable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	1339	available_backends	private	production	Vec<String>	false	parser_review	question_operator
+pillow-rs-py/src/lib.rs	1339	available_backends	private	production	Vec<String>	false	likely_infallible	
 pillow-rs-py/src/lib.rs	1348	active_backends	private	production	PyResult<Vec<String>>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	1358	backend_enabled	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
 pillow-rs-py/src/lib.rs	1374	align_row_to_32	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
