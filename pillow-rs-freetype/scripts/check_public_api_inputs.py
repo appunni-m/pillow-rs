@@ -1309,11 +1309,6 @@ def ftstroke_curve_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_ConicTo.conic_curve_success": (
-            "FT_Stroker_ConicTo conic parity needs a maintained route proving "
-            "quadratic curve subdivision, generated border points, tags, and "
-            "contours match pinned C"
-        ),
         "ftstroke.FT_Stroker_ConicTo.first_segment_starts_subpath": (
             "FT_Stroker_ConicTo first-segment parity needs a maintained route "
             "proving a conic segment can initialize an otherwise empty subpath "
@@ -6568,6 +6563,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments"
     ):
         return "FT_Stroker_BeginSubPath invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.conic_to"
+        and row.case_id == "ftstroke.FT_Stroker_ConicTo.conic_curve_success"
+    ):
+        return (
+            "FT_Stroker_ConicTo maintained quadratic curve route validates exact "
+            "status, exported outline points, tags, contours, and CBox through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftstroke.conic_to"
         and row.case_id == "ftstroke.FT_Stroker_ConicTo.invalid_arguments"

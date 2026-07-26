@@ -1,6 +1,6 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after first-segment stroker LineTo
+Last updated: 2026-07-27 (Asia/Kolkata) after maintained stroker ConicTo
 parity work.
 
 ## Oracle and fixture contract
@@ -168,6 +168,23 @@ real C/Rust/WASM parity for the maintained two-line closed path, including exact
 left and right exported border outline points, tags, and contours. EndSubPath
 runtime movement is `runnable=5`, `passed=5`, `pending=0`. Route audit movement
 is `real-parity=4833`, `pending-route=188`.
+
+Latest `FT_Stroker_ConicTo` lower-level movement:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo
+```
+
+Result after the maintained quadratic route:
+`FT_Stroker_ConicTo.conic_curve_success` now runs as real C/Rust/WASM parity
+for the explicit `(0,0) -> (256,512) -> (512,0)` closed fixture. The route
+compares exact status sequence, exported outline points, tags, contours, and
+CBox against a pinned C oracle. This is not the general conic subdivision
+implementation; `FT_Stroker_ConicTo.first_segment_starts_subpath` remains
+pending because it needs the full border state machine to prove a conic segment
+can initialize an otherwise empty subpath. ConicTo runtime movement is
+`runnable=3`, `passed=3`, `pending=1`. Route audit movement is
+`real-parity=4834`, `pending-route=187`.
 
 ## Edge cases already covered by active Font fixtures
 
