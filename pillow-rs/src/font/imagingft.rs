@@ -92,7 +92,7 @@ fn ft_error_to_pil(error: i32) -> PilError {
 
 // ── Public API ───────────────────────────────────────────────────────
 
-pub fn getname(font: &Font) -> (&str, &str) {
+pub(crate) fn getname(font: &Font) -> (&str, &str) {
     (
         font.engine.family_name.as_deref().unwrap_or("Unknown"),
         font.engine.style_name.as_deref().unwrap_or("Regular"),
@@ -112,7 +112,7 @@ pub(crate) fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
 /// Pillow moves the top-left to the origin and swaps the extents only for
 /// `ROTATE_90` and `ROTATE_270`. Other transpose methods retain the extents.
 #[must_use]
-pub fn transposed_bbox(
+pub(crate) fn transposed_bbox(
     (left, top, right, bottom): (i32, i32, i32, i32),
     orientation: Option<&str>,
 ) -> (i32, i32, i32, i32) {
@@ -130,7 +130,7 @@ pub fn transposed_bbox(
 /// # Errors
 ///
 /// Returns Pillow's exact [`PilError::ValueError`] for 90° and 270° rotation.
-pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilError> {
+pub(crate) fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilError> {
     if transposed_swaps_axes(orientation) {
         return Err(PilError::ValueError(
             "text length is undefined for text rotated by 90 or 270 degrees".into(),
@@ -149,7 +149,7 @@ fn transposed_swaps_axes(orientation: Option<&str>) -> bool {
 ///
 /// Returns [`PilError`] when the requested transpose is invalid or the mask
 /// pipeline cannot be materialized.
-pub fn get_transposed_mask(
+pub(crate) fn get_transposed_mask(
     font: &Font,
     text: &str,
     orientation: Option<&str>,
@@ -165,7 +165,7 @@ pub fn get_transposed_mask(
     Ok((width, height, transformed.tobytes_unpacked()?))
 }
 
-pub fn getmetrics(font: &Font) -> (u32, u32) {
+pub(crate) fn getmetrics(font: &Font) -> (u32, u32) {
     (
         pixel(font.engine.metrics.ascender) as u32,
         (-pixel(font.engine.metrics.descender)) as u32,
@@ -173,15 +173,15 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
 }
 
 /// Return whether the loaded face exposes OpenType or Type 1 variation axes.
-pub fn has_variations(font: &Font) -> bool {
+pub(crate) fn has_variations(font: &Font) -> bool {
     font.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
 }
 
-pub fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
+pub(crate) fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
-pub fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub(crate) fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run(font, text)
 }
 
@@ -189,12 +189,15 @@ pub(crate) fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, 
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
-pub fn getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+pub(crate) fn getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
-pub fn getmask2(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+pub(crate) fn getmask2(
+    font: &Font,
+    text: &str,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     getmask2_with_start(font, text, (0.0, 0.0))
 }
 
@@ -202,7 +205,7 @@ pub fn getmask2(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32
 ///
 /// Pillow applies `start` to the mask canvas and glyph origin while leaving
 /// the returned BASIC-layout offset unchanged.
-pub fn getmask2_with_start(
+pub(crate) fn getmask2_with_start(
     font: &Font,
     text: &str,
     start: (f64, f64),
@@ -212,7 +215,7 @@ pub fn getmask2_with_start(
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
-pub fn render_text(
+pub(crate) fn render_text(
     font: &Font,
     text: &str,
     fill: (u8, u8, u8, u8),
