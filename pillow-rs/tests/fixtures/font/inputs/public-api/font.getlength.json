@@ -134,6 +134,23 @@
       }
     },
     {
+      "case_id": "font.getlength.empty_features_basic_layout",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "features": []
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.language_without_raqm_error",
       "operation": "getlength",
       "inputs": {

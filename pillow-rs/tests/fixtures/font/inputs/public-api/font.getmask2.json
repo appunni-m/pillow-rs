@@ -260,6 +260,26 @@
       }
     },
     {
+      "case_id": "font.getmask2.options_start_fractional",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "start": [
+            1.25,
+            2.5
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.mode_rgba_error",
       "operation": "getmask2",
       "inputs": {

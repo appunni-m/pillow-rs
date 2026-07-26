@@ -365,13 +365,7 @@ pub(crate) fn render_text_binary(
 }
 
 fn validate_basic_layout_options(options: &FontTextOptions) -> Result<(), PilError> {
-    if options.direction.is_some()
-        || options
-            .features
-            .as_ref()
-            .is_some_and(|features| !features.is_empty())
-        || options.language.is_some()
-    {
+    if options.direction.is_some() || options.features.is_some() || options.language.is_some() {
         return Err(PilError::KeyError(
             "'setting text direction, language or font features is not supported without libraqm'"
                 .into(),

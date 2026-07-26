@@ -213,6 +213,74 @@
       }
     },
     {
+      "case_id": "font.getbbox.anchor_left_top",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "lt"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.anchor_left_ascender",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "la"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.anchor_left_baseline",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "ls"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.anchor_left_bottom",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "lb"
+        }
+      }
+    },
+    {
       "case_id": "font.getbbox.stroke_width_one",
       "operation": "getbbox",
       "inputs": {
