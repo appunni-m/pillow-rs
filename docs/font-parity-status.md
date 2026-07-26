@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `c11491dc-758f-4b40-b0d7-959f6b27e255`
-- Snapshot: `5776c2cf-ae72-4650-8376-901db6f19f25`
+- Run: `da320c5e-b734-40d4-8ffe-f3536ed8599b`
+- Snapshot: `871af3b8-9fba-443b-8db6-4471768d08af`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `f0d39fd260123a3b86371c542dce7ed2af0b38a2`
+- Commit measured: `db2cd984c7119c8c1b02ebcdc3be1200daea5b50`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `825/848` (`97.29%`) | `137/154` (`88.96%`) | `78/85` (`91.76%`) | `1336/1413` (`94.55%`) |
+| `pillow-rs/src/font/imagingft.rs` | `813/833` (`97.60%`) | `130/142` (`91.55%`) | `79/86` (`91.86%`) | `1277/1345` (`94.94%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -302,9 +302,9 @@ Current full-module scope note:
   repo-local `load`/`load_path` PILfont assets, so `pilfont.rs` is now part of
   the coverage target.
 - Coverage is not 100% yet for the full `PIL.ImageFont` target because
-  `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps and
-  newly introduced stroked-mask placement branches that need either shared
-  compositor refactoring or additional honest Pillow-oracle rows.
+  `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps.
+  The shared bitmap compositor refactor removed duplicate normal/stroked paste
+  branches, but it did not make unsupported stroke/variation routes complete.
 - `pilfont.rs` now has no uncovered executable lines and no partial branches in
   the active Font coverage snapshot. Its branch coverage is `70/70`
   (`100.00%`). The remaining function/region deltas are LLVM function/region
