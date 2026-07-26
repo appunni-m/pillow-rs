@@ -1,7 +1,91 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font variation conversion
-edges at commit `9316c899`
+Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
+stroke implementation blocker at commit `9316c899`
+
+## Current checkpoint: live Pillow Font surface comparison
+
+Pillow comparison result:
+
+- The pinned oracle is repo-local Pillow `11.3.0`, loaded from
+  `.oracle-venv`, and `PIL.ImageFont.FreeTypeFont` exposes exactly these public
+  methods in the comparison surface: `font_variant`, `get_variation_axes`,
+  `get_variation_names`, `getbbox`, `getlength`, `getmask`, `getmask2`,
+  `getmetrics`, `getname`, `set_variation_by_axes`, and
+  `set_variation_by_name`.
+- `font_manifest.yaml` represents every live public method through the active
+  Font public-API operations and classifies every live public signature
+  parameter. No new Pillow public method is missing from the manifest.
+- The input JSON corpus remains input-only. Expected values and expected errors
+  are generated at runtime by `pillow-rs/scripts/font_oracle.py`, which asserts
+  that the Python methods delegate into the native `_imagingft` font core before
+  producing oracle payloads.
+
+Missing implementation / blocker:
+
+- `getmask.stroke_width` and `getmask2.stroke_width` are the only public Font
+  parameters still blocked in the manifest. Pillow's Python layer passes
+  `stroke_width`, `stroke_filled`, `anchor`, `ink`, and `start` directly to
+  `self.font.render(...)`; the Rust side currently returns
+  `NotImplementedError` for non-zero `stroke_width` in
+  `imagingft.rs::getmask2_with_options`.
+- This cannot be fixed honestly in the Font adapter alone. The existing
+  pure-Rust FreeType stroker in `pillow-rs-freetype/src/ffi/handles.rs` is not
+  a complete glyph stroker: `FT_Stroker_ParseOutline` documents that real
+  segment parsing/export remains pending and returns
+  `FT_Err_Unimplemented_Feature` for normal multi-point glyph contours. Exact
+  Pillow parity for visible stroked glyph masks requires completing real
+  FreeType-compatible stroker geometry/export and then rendering the stroked
+  outline through the same bitmap composition path as Pillow.
+- I did not add `stroke_width` fixture rows as active cases because Pillow
+  succeeds for visible glyph strokes and Rust still errors. Adding those rows
+  before the stroker exists would create known failing parity rows, not 100%
+  coverage. Adding fake empty/space-only stroke rows would cover the branch
+  without testing the missing feature and would violate the oracle requirement.
+
+Coverage MCP status:
+
+- Latest managed command: `font-tests-coverage-with-freetype`
+- run `5ab8d75c-6497-475f-9030-68c3e9b9e2e4`
+- snapshot `634e9c3a-f061-4243-b1b0-898f46f771d4`
+- status `passed`, coverage artifact ingested
+
+Target metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `684/697` (`98.13%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+
+Remaining targeted gaps from Coverage MCP snapshot
+`634e9c3a-f061-4243-b1b0-898f46f771d4`:
+
+- `imagingft.rs:90-91` — generic FreeType error fallback; no public Font input
+  has been found that reaches an unknown FreeType error without manufacturing
+  invalid internal state.
+- `imagingft.rs:241,246` — `FT_Set_Named_Instance` failure after a valid name
+  lookup; public Pillow short-circuits repeated names and missing names before
+  this path.
+- `imagingft.rs:263,267` — `FT_Set_Var_Design_Coordinates` failure after
+  variation-face validation; current public malformed-font rows hit Pillow's
+  visible `invalid argument` surface before this post-validation setter failure.
+- `imagingft.rs:366-367` — real `stroke_width != 0` mask rendering path,
+  blocked on complete pure-Rust FreeType stroker support.
+
+Next required implementation step:
+
+1. Implement complete pure-Rust FreeType stroker geometry/export in
+   `pillow-rs-freetype` for real glyph outlines, including conic/cubic
+   contours and closed contours.
+2. Expose the safe owned outline-to-stroked-bitmap route needed by
+   `pillow-rs/src/font/imagingft.rs`.
+3. Replace the current `NotImplementedError` branch with Pillow-compatible
+   stroked mask rendering and composition.
+4. Move `getmask.stroke_width` and `getmask2.stroke_width` from `blocked` to
+   `covered` in `font_manifest.yaml`.
+5. Add minimal active input-only rows for visible glyph strokes, at least one
+   `getmask` row and one `getmask2` row, then rerun Font tests and Coverage
+   MCP. Only then can the target claim 100% region coverage honestly.
 
 ## Current checkpoint: variation-name bytes and C fixed-coordinate conversion
 
