@@ -1000,6 +1000,31 @@ fn assert_manifest_covers_required_public_parameter_values(
     }
 }
 
+fn assert_documented_blocked_public_parameters() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let status_path = repo_root.join("docs/font-parity-status.md");
+    let status =
+        fs::read_to_string(&status_path).expect("Font parity status document must be readable");
+
+    assert!(
+        status.contains("pure-Rust FreeType stroker"),
+        "{} must document the implementation dependency for currently blocked Font public parameters",
+        status_path.display()
+    );
+
+    for (method, parameter) in EXPECTED_BLOCKED_PUBLIC_PARAMETERS {
+        let needle = format!("{method}.{parameter}");
+        assert!(
+            status.contains(&needle),
+            "{} must explicitly document blocked public Font parameter `{needle}`",
+            status_path.display()
+        );
+    }
+}
+
 fn assert_manifest_covers_pillow_public_signatures(
     manifest: &FontManifest,
     cases: &[Value],
@@ -1120,6 +1145,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let pillow_signatures = pillow_freetypefont_public_signatures();
     assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
+    assert_documented_blocked_public_parameters();
 
     let observed = cases
         .iter()
