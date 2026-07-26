@@ -1,5 +1,68 @@
 # Font Public-API Parity Status (Current Worktree)
 
+Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
+coverage cleanup at commit `fc2dbe619`
+
+## Current checkpoint: Font manifest value coverage + mask-copy branch cleanup
+
+New commits:
+
+- `d0302b7df` — hardens `font_public_api.rs` so parameters marked covered in
+  `font_manifest.yaml` also exercise required independent values for the
+  high-risk `mode` branch. The input JSON corpus remains input-only; no
+  expected output, pixel hash, status, or error payload is embedded in fixtures.
+- `fc2dbe619` — removes redundant defensive clipping branches from
+  `imagingft.rs::mask_from_run_with_start`. The remaining copy math still
+  clips public Pillow inputs safely and was verified against the live Pillow
+  oracle.
+
+Pillow comparison result:
+
+- Live `PIL.ImageFont.FreeTypeFont` public methods in the pinned oracle are
+  still exactly:
+  `font_variant`, `get_variation_axes`, `get_variation_names`, `getbbox`,
+  `getlength`, `getmask`, `getmask2`, `getmetrics`, `getname`,
+  `set_variation_by_axes`, and `set_variation_by_name`.
+- `font_manifest.yaml` classifies every live public signature parameter. The
+  only still-blocked public parameters are `getmask.stroke_width` and
+  `getmask2.stroke_width`.
+- The harness proves the oracle path uses repo-local Pillow
+  `PIL._imagingft` at runtime, then compares complete Rust `Result`-style
+  status/value/error payloads against the live Pillow result.
+
+Verification:
+
+- `make -C pillow-rs font-tests` — passed for both commits.
+- `make -C pillow-rs fmt` — passed after implementation cleanup.
+- Coverage MCP command `font-tests-coverage-with-freetype`
+  - run `0ec4ea36-3bc3-49b1-af50-cde71dab7f3e`
+  - snapshot `abb8c9b6-dc85-4e79-b89b-5eee1200b556`
+  - commit `fc2dbe61925a950271a7ca6f04da5423f952c144`
+  - status `passed`, coverage artifact ingested
+
+Target metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `670/692` (`96.82%`) | `113/126` (`89.68%`) | `74/80` (`92.50%`) | `1050/1099` (`95.54%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
+
+Remaining blockers/gaps:
+
+- Honest public parity for visible-glyph `stroke_width` remains blocked on a
+  real pure-Rust FreeType stroker implementation in `pillow-rs-freetype`.
+  Pillow returns successful stroked masks for visible glyphs through
+  `_imagingft`; returning an approximation or synthetic error would violate
+  the oracle rule.
+- Remaining `imagingft.rs` gaps are FreeType request/load/setter error
+  branches, `stroke_width != 0`, RGBA dimension overflow, invalid advance
+  overflow, and one unsupported bitmap pixel-mode fallback. These are not
+  closed by adding duplicate public rows; they need either real malformed-font
+  oracle fixtures or implementation cleanup when an invariant proves a branch
+  unreachable.
+- `font/mod.rs` has no reported uncovered source lines. The two missed regions
+  are LLVM/source-map regions without line gaps in the MCP file query.
+
 Last updated: 2026-07-26 (Asia/Kolkata) — binary layout mode parity at commit
 `d6acbe1ce`
 
