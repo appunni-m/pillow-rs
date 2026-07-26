@@ -1,6 +1,6 @@
 # ImagingFT Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata)
+Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
 
 ## Scope
 
@@ -20,13 +20,13 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - `make -C pillow-rs imagingft-tests`  
   Result: `1` passed, `0` failed
 - Coverage evidence:
-  - Local coverage command: `make -C pillow-rs imagingft-tests-coverage`
+  - Local coverage command: `make -C pillow-rs imagingft-tests-coverage` (delegates to `imagingft-tests-coverage-fixed`)
   - Test result from command output: `1` passed, `0` failed
-  - MCP-managed run: `9d7bdbda-5c15-4eda-9a6b-50889a9a945b`
+  - MCP-managed run: `04d6bbf5-7755-4cd9-889c-9054f7a2f59c`
   - Coverage MCP run command: `imagingft-tests-coverage-fixed`
   - Coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
-  - Snapshot id: `8c36e664-1acd-4dba-a52b-f31098913e95`
-  - Prior suite snapshot for comparison: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
+  - Snapshot id: `f60679b1-88b3-4408-804b-addc0b45989e`
+  - Prior suite snapshot for comparison: `f92a4b48-6dd2-4b0b-a07e-7acb541f911e`
 
 ## Corpus state
 
@@ -95,14 +95,15 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ### Coverage delta
 
-- Baseline checked: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
-- Net movement vs baseline: no measured suite-level or imagingft-file-level metric improvement (`all metrics unchanged`).
+- Baseline checked: `f92a4b48-6dd2-4b0b-a07e-7acb541f911e`
+- Net movement vs baseline: suite- and file-level metrics are unchanged (`imagingft.rs` line/branch/region/function coverage still unchanged).
 
 ## Remaining explicit gaps
 
 - Suite is not coverage-complete by objective definition:
 - `coverage`:
-  - ImagingFT public-api suite executes all 58 rows but does not close all lines/branches in `pillow-rs/src/font/imagingft.rs` yet.
-  - Imagingft core file still has uncovered lines/branches, so end-state is **not 100% parity-coverage complete**.
+  - ImagingFT public-api suite executes all 58 rows and reports zero parity mismatches.
+  - `pillow-rs/src/font/imagingft.rs` still has unresolved lines/branch lines: `uncovered_line_count=80`, `partial_branch_line_count=41`.
+  - End-state is therefore **not 100% parity-coverage complete** until these gaps are intentionally resolved.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
