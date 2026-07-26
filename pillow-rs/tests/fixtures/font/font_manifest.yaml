@@ -4,10 +4,12 @@ input_dir: inputs/public-api
 oracle:
   expected_runtime: python_pillow_font
   expected_path: PIL.ImageFont
-  native_core: PIL._imagingft for FreeTypeFont rows; PIL.ImageFont.ImageFont for bitmap PILfont rows
+  native_core: PIL.ImageFont public module; PIL._imagingft is asserted only for FreeTypeFont-backed rows
   rust_runtime: pillow_rs::ImageFont
   rust_contract: Result-style status payload
   comparison: exact payload match after runtime oracle generation
+out_of_scope:
+  - libraqm successful shaping; direction/features/language rows must match Pillow's no-libraqm errors
 required_operations:
   - ImageFont.getbbox
   - ImageFont.info
