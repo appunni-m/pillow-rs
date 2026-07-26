@@ -224,11 +224,11 @@ remains pending. CubicTo runtime movement is `runnable=3`, `passed=3`,
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `203aeeb7-cf3b-4a76-9cdd-03fb4d39be6d`
-- Snapshot: `90438af9-b907-45b4-9a1f-f7f5be2d0c77`
+- Run: `a81f8dae-70b3-46bb-aa44-31238b6c1bfd`
+- Snapshot: `078b5f99-68ab-469a-9374-911a1b1b7e8c`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `983670e44fa61f27daf1b32ffd697ad947a82de4`
+- Commit measured: `782050e4dc934a7981b928a34d24b2feff0d22cd`
 
 Target file metrics:
 
