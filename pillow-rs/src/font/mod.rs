@@ -36,20 +36,15 @@ impl Font {
     }
 
     /// Return the non-negative text mask extent for Pillow-style text layout.
-    pub fn text_bbox(&self, text: &str) -> (u32, u32) {
-        self.text_bbox_result(text).unwrap_or((0, 0))
-    }
-
-    /// Fallible variant of [`Font::text_bbox`].
-    pub fn text_bbox_result(&self, text: &str) -> Result<(u32, u32), PilError> {
-        let bbox = imagingft::getbbox_result(self, text)?;
+    pub fn text_bbox(&self, text: &str) -> Result<(u32, u32), PilError> {
+        let bbox = imagingft::getbbox(self, text)?;
         let w = (bbox.2 - bbox.0).max(0) as u32;
         let h = (bbox.3 - bbox.1).max(0) as u32;
         Ok((w, h))
     }
 
     /// Return the Pillow-compatible grayscale text mask.
-    pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
+    pub fn getmask(&self, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::getmask(self, text)
     }
 
@@ -69,13 +64,8 @@ impl Font {
     }
 
     /// Return Pillow's public text length in pixels.
-    pub fn getlength(&self, text: &str) -> f32 {
+    pub fn getlength(&self, text: &str) -> Result<f32, PilError> {
         imagingft::getlength(self, text)
-    }
-
-    /// Fallible variant of [`Font::getlength`].
-    pub fn getlength_result(&self, text: &str) -> Result<f32, PilError> {
-        imagingft::getlength_result(self, text)
     }
 
     /// Return whether the font exposes variation axes.
@@ -84,47 +74,27 @@ impl Font {
     }
 
     /// Return Pillow's public text bounding box.
-    pub fn getbbox(&self, text: &str) -> (i32, i32, i32, i32) {
+    pub fn getbbox(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
         imagingft::getbbox(self, text)
     }
 
-    /// Fallible variant of [`Font::getbbox`].
-    pub fn getbbox_result(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
-        imagingft::getbbox_result(self, text)
-    }
-
     /// Return Pillow's public binary-mode text bounding box.
-    pub fn getbbox_binary(&self, text: &str) -> (i32, i32, i32, i32) {
+    pub fn getbbox_binary(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
         imagingft::getbbox_binary(self, text)
     }
 
-    /// Fallible variant of [`Font::getbbox_binary`].
-    pub fn getbbox_binary_result(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
-        imagingft::getbbox_binary_result(self, text)
-    }
-
-    /// Fallible variant of [`Font::getmask`].
-    pub fn getmask_result(&self, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
-        imagingft::getmask_result(self, text)
-    }
-
     /// Return Pillow's public `getmask2` mask and offset tuple.
-    pub fn getmask2(&self, text: &str) -> (u32, u32, Vec<u8>, (i32, i32)) {
+    pub fn getmask2(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         imagingft::getmask2(self, text)
     }
 
-    /// Fallible variant of [`Font::getmask2`].
-    pub fn getmask2_result(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-        imagingft::getmask2_result(self, text)
-    }
-
-    /// Fallible `getmask2` variant with Pillow's fractional start parameter.
-    pub fn getmask2_with_start_result(
+    /// `getmask2` variant with Pillow's fractional start parameter.
+    pub fn getmask2_with_start(
         &self,
         text: &str,
         start: (f64, f64),
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-        imagingft::getmask2_with_start_result(self, text, start)
+        imagingft::getmask2_with_start(self, text, start)
     }
 
     /// Return a transposed Pillow-compatible grayscale text mask.
@@ -137,13 +107,13 @@ impl Font {
     }
 
     /// Return Pillow-compatible binary-mode RGBA text rendering.
-    pub fn render_text_binary_result(
+    pub fn render_text_binary(
         &self,
         text: &str,
         fill: (u8, u8, u8, u8),
         spacing: f32,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        imagingft::render_text_binary_result(self, text, fill, spacing)
+        imagingft::render_text_binary(self, text, fill, spacing)
     }
 }
 
@@ -178,9 +148,9 @@ mod tests {
 
         assert_eq!(imagingft::getname(&font), ("Aileron", "Regular"));
         assert_eq!(imagingft::getmetrics(&font), (10, 3));
-        assert_eq!(imagingft::getbbox(&font, "Hello"), (0, 2, 25, 10));
+        assert_eq!(imagingft::getbbox(&font, "Hello").unwrap(), (0, 2, 25, 10));
 
-        let (width, height, mask) = imagingft::getmask(&font, "Hello");
+        let (width, height, mask) = imagingft::getmask(&font, "Hello").unwrap();
         let digest: [u8; 32] = Sha256::digest(&mask).into();
         assert_eq!((width, height), (25, 8));
         assert_eq!(
@@ -193,13 +163,16 @@ mod tests {
         );
 
         let (width, height, rgba) =
-            imagingft::render_text_binary(&font, "Hello", (255, 255, 255, 255), 0.0);
+            imagingft::render_text_binary(&font, "Hello", (255, 255, 255, 255), 0.0).unwrap();
         let mask = rgba
             .chunks_exact(4)
             .map(|pixel| pixel[3])
             .collect::<Vec<_>>();
         let digest: [u8; 32] = Sha256::digest(&mask).into();
-        assert_eq!(imagingft::getbbox_binary(&font, "Hello"), (0, 2, 28, 10));
+        assert_eq!(
+            imagingft::getbbox_binary(&font, "Hello").unwrap(),
+            (0, 2, 28, 10)
+        );
         assert_eq!((width, height), (28, 8));
         assert_eq!(
             digest,

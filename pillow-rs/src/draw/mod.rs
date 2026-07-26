@@ -1037,17 +1037,17 @@ impl Draw {
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, pixels) = if binary {
-            crate::font::imagingft::render_text_binary_result(font, text, render_fill, 0.0)?
+            crate::font::imagingft::render_text_binary(font, text, render_fill, 0.0)?
         } else {
-            crate::font::imagingft::render_text_result(font, text, render_fill, 0.0)?
+            crate::font::imagingft::render_text(font, text, render_fill, 0.0)?
         };
         if w == 0 || h == 0 {
             return Ok(());
         }
         let bbox = if binary {
-            crate::font::imagingft::getbbox_binary_result(font, text)?
+            crate::font::imagingft::getbbox_binary(font, text)?
         } else {
-            crate::font::imagingft::getbbox_result(font, text)?
+            crate::font::imagingft::getbbox(font, text)?
         };
         let draw_x = x.saturating_add(bbox.0);
         let draw_y = y.saturating_add(bbox.1);

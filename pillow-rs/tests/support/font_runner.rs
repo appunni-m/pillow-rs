@@ -46,26 +46,25 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": font.getlength_result(text(params)?)?,
+            "value": font.getlength(text(params)?)?,
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
             "value": font.has_variations(),
         })),
-        "getbbox" => Ok(bbox_value(font.getbbox_result(text(params)?)?)),
-        "getbbox_binary" => Ok(bbox_value(font.getbbox_binary_result(text(params)?)?)),
+        "getbbox" => Ok(bbox_value(font.getbbox(text(params)?)?)),
+        "getbbox_binary" => Ok(bbox_value(font.getbbox_binary(text(params)?)?)),
         "getmask" => {
-            let (width, height, pixels) = font.getmask_result(text(params)?)?;
+            let (width, height, pixels) = font.getmask(text(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = font.getmask2_result(text(params)?)?;
+            let (width, height, pixels, offset) = font.getmask2(text(params)?)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
-            let (width, height, pixels, offset) =
-                font.getmask2_with_start_result(text(params)?, start)?;
+            let (width, height, pixels, offset) = font.getmask2_with_start(text(params)?, start)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
@@ -74,14 +73,14 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(font_api::transposed_bbox(
-            font.getbbox_result(text(params)?)?,
+            font.getbbox(text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
             font_api::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": font.getlength_result(text(params)?)?,
+                "value": font.getlength(text(params)?)?,
             }))
         }
         "draw_text" => draw_text(&font, params),
@@ -91,8 +90,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .as_f64()
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
-            let (width, height, pixels) =
-                font.render_text_binary_result(text(params)?, fill, spacing)?;
+            let (width, height, pixels) = font.render_text_binary(text(params)?, fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(

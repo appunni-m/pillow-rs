@@ -46,29 +46,29 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": imagingft::getlength(&font, text(params)?),
+            "value": imagingft::getlength(&font, text(params)?)?,
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
             "value": imagingft::has_variations(&font),
         })),
-        "getbbox" => Ok(bbox_value(imagingft::getbbox_result(&font, text(params)?)?)),
-        "getbbox_binary" => Ok(bbox_value(imagingft::getbbox_binary_result(
+        "getbbox" => Ok(bbox_value(imagingft::getbbox(&font, text(params)?)?)),
+        "getbbox_binary" => Ok(bbox_value(imagingft::getbbox_binary(
             &font,
             text(params)?,
         )?)),
         "getmask" => {
-            let (width, height, pixels) = imagingft::getmask_result(&font, text(params)?)?;
+            let (width, height, pixels) = imagingft::getmask(&font, text(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = imagingft::getmask2_result(&font, text(params)?)?;
+            let (width, height, pixels, offset) = imagingft::getmask2(&font, text(params)?)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
             let (width, height, pixels, offset) =
-                imagingft::getmask2_with_start_result(&font, text(params)?, start)?;
+                imagingft::getmask2_with_start(&font, text(params)?, start)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
@@ -77,14 +77,14 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(imagingft::transposed_bbox(
-            imagingft::getbbox(&font, text(params)?),
+            imagingft::getbbox(&font, text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
             imagingft::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": imagingft::getlength(&font, text(params)?),
+                "value": imagingft::getlength(&font, text(params)?)?,
             }))
         }
         "draw_text" => draw_text(&font, params),
@@ -95,7 +95,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
             let (width, height, pixels) =
-                imagingft::render_text_binary_result(&font, text(params)?, fill, spacing)?;
+                imagingft::render_text_binary(&font, text(params)?, fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(
