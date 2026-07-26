@@ -610,33 +610,13 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
         else {
             continue;
         };
-        observed
+        let entry = observed
             .entry(operation.to_owned())
-            .or_insert_with(BTreeSet::new)
-            .extend(params.keys().filter(|key| key.as_str() != "size").cloned());
-        if operation == "font_variant" && params.contains_key("variant_size") {
-            observed
-                .entry(operation.to_owned())
-                .or_insert_with(BTreeSet::new)
-                .insert("size".to_owned());
-        }
-        if operation == "font_variant" && params.contains_key("variant_index") {
-            observed
-                .entry(operation.to_owned())
-                .or_insert_with(BTreeSet::new)
-                .insert("index".to_owned());
-        }
-        if operation == "font_variant" && params.contains_key("variant_encoding") {
-            observed
-                .entry(operation.to_owned())
-                .or_insert_with(BTreeSet::new)
-                .insert("encoding".to_owned());
-        }
-        if operation == "font_variant" && params.contains_key("variant_layout_engine") {
-            observed
-                .entry(operation.to_owned())
-                .or_insert_with(BTreeSet::new)
-                .insert("layout_engine".to_owned());
+            .or_insert_with(BTreeSet::new);
+        for key in params.keys() {
+            if let Some(parameter) = canonical_pillow_parameter(operation, key) {
+                entry.insert(parameter);
+            }
         }
         if operation == "font_variant"
             && case
@@ -645,13 +625,28 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
                 .and_then(|assets| assets.get("variant_font"))
                 .is_some()
         {
-            observed
-                .entry(operation.to_owned())
-                .or_insert_with(BTreeSet::new)
-                .insert("font".to_owned());
+            entry.insert("font".to_owned());
         }
     }
     observed
+}
+
+fn canonical_pillow_parameter(operation: &str, fixture_key: &str) -> Option<String> {
+    let parameter = match fixture_key {
+        "size" => return None,
+        "text" | "text_bytes_hex"
+            if matches!(operation, "getbbox" | "getlength" | "getmask" | "getmask2") =>
+        {
+            "text"
+        }
+        "text" | "text_bytes_hex" => return None,
+        "variant_size" if operation == "font_variant" => "size",
+        "variant_index" if operation == "font_variant" => "index",
+        "variant_encoding" if operation == "font_variant" => "encoding",
+        "variant_layout_engine" if operation == "font_variant" => "layout_engine",
+        other => other,
+    };
+    Some(parameter.to_owned())
 }
 
 fn assert_manifest_covers_pillow_public_signatures(
@@ -688,6 +683,11 @@ fn assert_manifest_covers_pillow_public_signatures(
         );
 
         let observed = observed_parameters.get(method).cloned().unwrap_or_default();
+        let non_pillow_observed = observed.difference(pillow_parameters).collect::<Vec<_>>();
+        assert!(
+            non_pillow_observed.is_empty(),
+            "{method}: active input rows contain canonical parameters that are not in the live Pillow public signature: {non_pillow_observed:?}"
+        );
         let missing_rows = coverage.covered.difference(&observed).collect::<Vec<_>>();
         assert!(
             missing_rows.is_empty(),
