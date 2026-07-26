@@ -352,6 +352,19 @@ def main() -> None:
         json.dump(public_methods, sys.stdout, separators=(",", ":"), sort_keys=True)
         return
 
+    if len(sys.argv) == 2 and sys.argv[1] == "--public-signatures":
+        signatures = {}
+        for name, value in ImageFont.FreeTypeFont.__dict__.items():
+            if name.startswith("_") or not callable(value):
+                continue
+            signatures[name] = [
+                parameter.name
+                for parameter in inspect.signature(value).parameters.values()
+                if parameter.name != "self"
+            ]
+        json.dump(signatures, sys.stdout, separators=(",", ":"), sort_keys=True)
+        return
+
     cases = json.load(sys.stdin)
     results = {
         case["case_id"]: outcome(case, (PIL, _imagingft, Image, ImageDraw, ImageFont))

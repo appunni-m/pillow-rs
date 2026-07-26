@@ -34,6 +34,79 @@ required_operations:
   - render_text_binary
 negative_operations:
   - unsupported_magic
+public_method_parameters:
+  font_variant:
+    covered:
+      - size
+    blocked:
+      - font
+      - index
+      - encoding
+      - layout_engine
+  get_variation_axes:
+    covered: []
+    blocked: []
+  get_variation_names:
+    covered: []
+    blocked: []
+  getbbox:
+    covered:
+      - text
+      - mode
+      - direction
+      - features
+      - language
+      - stroke_width
+      - anchor
+    blocked: []
+  getlength:
+    covered:
+      - text
+      - mode
+      - direction
+      - features
+      - language
+    blocked: []
+  getmask:
+    covered:
+      - text
+      - mode
+      - direction
+      - features
+      - language
+      - anchor
+      - start
+    blocked:
+      - stroke_width
+      - ink
+  getmask2:
+    covered:
+      - text
+      - mode
+      - direction
+      - features
+      - language
+      - anchor
+      - start
+    blocked:
+      - stroke_width
+      - ink
+      - args
+      - kwargs
+  getmetrics:
+    covered: []
+    blocked: []
+  getname:
+    covered: []
+    blocked: []
+  set_variation_by_axes:
+    covered:
+      - axes
+    blocked: []
+  set_variation_by_name:
+    covered:
+      - name
+    blocked: []
 input_files:
   - font.constructor.json
   - font.get_transposed_mask.json

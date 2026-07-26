@@ -28,7 +28,14 @@ struct FontManifest {
     input_dir: String,
     input_files: BTreeSet<String>,
     negative_operations: BTreeSet<String>,
+    public_method_parameters: BTreeMap<String, ParameterCoverage>,
     required_operations: BTreeSet<String>,
+}
+
+#[derive(Debug)]
+struct ParameterCoverage {
+    blocked: BTreeSet<String>,
+    covered: BTreeSet<String>,
 }
 
 const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
@@ -134,6 +141,7 @@ fn load_manifest(root: &Path) -> FontManifest {
         .unwrap_or_else(|| panic!("{} must define input_dir", path.display()));
     let input_files = manifest_list(&text, "input_files");
     let negative_operations = manifest_list(&text, "negative_operations");
+    let public_method_parameters = manifest_nested_list_map(&text, "public_method_parameters");
     let required_operations = manifest_list(&text, "required_operations");
     let expected_operations = EXPECTED_FONT_PUBLIC_OPERATIONS
         .into_iter()
@@ -159,6 +167,7 @@ fn load_manifest(root: &Path) -> FontManifest {
         input_dir,
         input_files,
         negative_operations,
+        public_method_parameters,
         required_operations,
     }
 }
@@ -202,6 +211,97 @@ fn manifest_list(text: &str, key: &str) -> BTreeSet<String> {
             values.insert(value);
         }
     }
+    values
+}
+
+fn manifest_nested_list_map(text: &str, section: &str) -> BTreeMap<String, ParameterCoverage> {
+    let mut values: BTreeMap<String, ParameterCoverage> = BTreeMap::new();
+    let mut in_section = false;
+    let mut current_method: Option<String> = None;
+    let mut current_key: Option<String> = None;
+
+    for line in text.lines() {
+        let without_comment = line.split_once('#').map_or(line, |(line, _)| line);
+        if without_comment.trim().is_empty() {
+            continue;
+        }
+        let indent = without_comment
+            .chars()
+            .take_while(|character| *character == ' ')
+            .count();
+        let trimmed = without_comment.trim();
+        if trimmed == format!("{section}:") {
+            in_section = true;
+            current_method = None;
+            current_key = None;
+            continue;
+        }
+        if in_section && indent == 0 && !trimmed.starts_with('-') {
+            break;
+        }
+        if !in_section {
+            continue;
+        }
+        if indent == 2 && trimmed.ends_with(':') {
+            let method = trimmed.trim_end_matches(':').to_owned();
+            values
+                .entry(method.clone())
+                .or_insert_with(|| ParameterCoverage {
+                    blocked: BTreeSet::new(),
+                    covered: BTreeSet::new(),
+                });
+            current_method = Some(method);
+            current_key = None;
+            continue;
+        }
+        if indent == 4 && trimmed.ends_with(':') {
+            current_key = Some(trimmed.trim_end_matches(':').to_owned());
+            continue;
+        }
+        if indent == 4 && trimmed.ends_with("[]") {
+            let Some(method) = current_method.as_ref() else {
+                panic!("{section} list key without method: {trimmed}");
+            };
+            let key = trimmed
+                .split_once(':')
+                .map(|(key, _)| key.trim())
+                .unwrap_or_else(|| panic!("{section} malformed inline empty list: {trimmed}"));
+            match key {
+                "blocked" | "covered" => {}
+                other => panic!("{section}.{method} has unsupported key {other}"),
+            }
+            current_key = None;
+            continue;
+        }
+        if indent == 6 && trimmed.starts_with('-') {
+            let Some(method) = current_method.as_ref() else {
+                panic!("{section} list item without method: {trimmed}");
+            };
+            let Some(key) = current_key.as_deref() else {
+                panic!("{section}.{method} list item without key: {trimmed}");
+            };
+            let value = trimmed
+                .strip_prefix('-')
+                .expect("nested manifest list item starts with dash")
+                .trim()
+                .trim_matches('"')
+                .to_owned();
+            assert!(!value.is_empty(), "{section}.{method}.{key} item is empty");
+            let coverage = values
+                .get_mut(method)
+                .expect("current method must have parameter coverage");
+            match key {
+                "blocked" => {
+                    coverage.blocked.insert(value);
+                }
+                "covered" => {
+                    coverage.covered.insert(value);
+                }
+                other => panic!("{section}.{method} has unsupported key {other}"),
+            }
+        }
+    }
+
     values
 }
 
@@ -382,6 +482,109 @@ fn pillow_freetypefont_public_methods() -> BTreeSet<String> {
         .collect()
 }
 
+fn pillow_freetypefont_public_signatures() -> BTreeMap<String, BTreeSet<String>> {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
+    let oracle = oracle_python();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let venv_root = repo_root.join(".oracle-venv");
+    let mut command = Command::new(oracle.as_os_str());
+    command
+        .arg(script)
+        .arg("--public-signatures")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .env("VIRTUAL_ENV", venv_root)
+        .env("PYTHONNOUSERSITE", "1")
+        .env(
+            "PYTHONPATH",
+            env::join_paths(oracle_site_packages()).expect("valid PYTHONPATH join"),
+        );
+    let output = command
+        .output()
+        .expect("the pinned Pillow font oracle signature query must finish");
+    assert!(
+        output.status.success(),
+        "Pillow font oracle signature query failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice::<BTreeMap<String, Vec<String>>>(&output.stdout)
+        .expect("oracle public signature output must be a method-to-parameter map")
+        .into_iter()
+        .map(|(method, parameters)| (method, parameters.into_iter().collect()))
+        .collect()
+}
+
+fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeSet<String>> {
+    let mut observed = BTreeMap::new();
+    for case in cases {
+        let operation = font_runner::operation(case).expect("case operation must be valid");
+        let Some(params) = case
+            .get("inputs")
+            .and_then(|inputs| inputs.get("params"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        observed
+            .entry(operation.to_owned())
+            .or_insert_with(BTreeSet::new)
+            .extend(params.keys().filter(|key| key.as_str() != "size").cloned());
+        if operation == "font_variant" && params.contains_key("variant_size") {
+            observed
+                .entry(operation.to_owned())
+                .or_insert_with(BTreeSet::new)
+                .insert("size".to_owned());
+        }
+    }
+    observed
+}
+
+fn assert_manifest_covers_pillow_public_signatures(
+    manifest: &FontManifest,
+    cases: &[Value],
+    pillow_signatures: &BTreeMap<String, BTreeSet<String>>,
+) {
+    let observed_parameters = observed_public_method_parameters(cases);
+    assert_eq!(
+        manifest
+            .public_method_parameters
+            .keys()
+            .collect::<BTreeSet<_>>(),
+        pillow_signatures.keys().collect::<BTreeSet<_>>(),
+        "font_manifest.yaml public_method_parameters must enumerate every live Pillow FreeTypeFont public method exactly"
+    );
+    for (method, pillow_parameters) in pillow_signatures {
+        let coverage = manifest
+            .public_method_parameters
+            .get(method)
+            .unwrap_or_else(|| panic!("{method}: missing public_method_parameters entry"));
+        assert!(
+            coverage.covered.is_disjoint(&coverage.blocked),
+            "{method}: covered and blocked parameter sets must be disjoint"
+        );
+        let classified = coverage
+            .covered
+            .union(&coverage.blocked)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            &classified, pillow_parameters,
+            "{method}: manifest must classify every live Pillow public parameter as covered or blocked"
+        );
+
+        let observed = observed_parameters.get(method).cloned().unwrap_or_default();
+        let missing_rows = coverage.covered.difference(&observed).collect::<Vec<_>>();
+        assert!(
+            missing_rows.is_empty(),
+            "{method}: manifest marks parameters as covered but active input rows do not exercise them: {missing_rows:?}"
+        );
+    }
+}
+
 fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
     let expected_status = expected
         .get("status")
@@ -423,6 +626,8 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
         missing_pillow_methods.is_empty(),
         "font_manifest.yaml required_operations must include every live Pillow FreeTypeFont public method: {missing_pillow_methods:?}"
     );
+    let pillow_signatures = pillow_freetypefont_public_signatures();
+    assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
 
     let observed = cases
         .iter()

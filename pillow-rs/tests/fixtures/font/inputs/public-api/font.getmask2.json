@@ -297,6 +297,40 @@
       }
     },
     {
+      "case_id": "font.getmask2.features_without_raqm_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "features": []
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.language_without_raqm_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "language": "en"
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.direction_without_raqm_error",
       "operation": "getmask2",
       "inputs": {
