@@ -10,7 +10,6 @@
 #![allow(unused_variables)]
 
 //! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs.
-use pillow_rs::bitmap_font;
 use pillow_rs::color;
 use pillow_rs::draw;
 use pillow_rs::image;
@@ -2015,27 +2014,6 @@ pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
         }
     }
     Ok(arr.into())
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ImageFont — font operations
-// ══════════════════════════════════════════════════════════════════════════════
-
-#[wasm_bindgen(js_name = "fontDefaultBbox")]
-pub fn font_default_bbox(text: &str) -> Vec<i32> {
-    let bbox = bitmap_font::font_default_bbox(text);
-    vec![bbox.0, bbox.1, bbox.2, bbox.3]
-}
-
-#[wasm_bindgen(js_name = "fontDefaultLength")]
-pub fn font_default_length(text: &str) -> u32 {
-    bitmap_font::font_default_length(text)
-}
-
-#[wasm_bindgen(js_name = "fontDefaultMaskSize")]
-pub fn font_default_mask_size(text: &str) -> Vec<u32> {
-    let (w, h) = bitmap_font::font_default_mask_size(text);
-    vec![w, h]
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

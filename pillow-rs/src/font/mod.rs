@@ -4,25 +4,21 @@
 //! through the `_imagingft` adapter so this public module does not expose
 //! FreeType-core helper APIs.
 
-use crate::bitmap_font::BitmapFont;
 use crate::error::PilError;
 
 mod default_aileron;
 pub mod imagingft;
 pub mod pilfont;
 
-pub enum Font {
-    TrueType(TrueTypeFont),
-    Bitmap(BitmapFont),
-}
-
-pub struct TrueTypeFont {
+/// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
+pub struct Font {
     engine: imagingft::TrueTypeEngine,
 }
 
 impl Font {
+    /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        imagingft::load_truetype(data, size).map(Font::TrueType)
+        imagingft::load_truetype(data, size)
     }
 
     /// Loads the same embedded Aileron Regular subset as Pillow 12.2.0.
@@ -34,13 +30,12 @@ impl Font {
         Self::from_bytes(default_aileron::decode()?, size)
     }
 
+    /// Return the requested Pillow point size for this FreeType font.
     pub fn font_size(&self) -> f32 {
-        match self {
-            Font::TrueType(ttf) => ttf.engine.size_pt,
-            Font::Bitmap(bf) => bf.font_size(),
-        }
+        self.engine.size_pt
     }
 
+    /// Return the non-negative text mask extent for Pillow-style text layout.
     pub fn text_bbox(&self, text: &str) -> (u32, u32) {
         let bbox = imagingft::getbbox(self, text);
         let w = (bbox.2 - bbox.0).max(0) as u32;
@@ -48,6 +43,7 @@ impl Font {
         (w, h)
     }
 
+    /// Return the Pillow-compatible grayscale text mask.
     pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
         imagingft::getmask(self, text)
     }
@@ -55,10 +51,7 @@ impl Font {
 
 impl std::fmt::Debug for Font {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Font::TrueType(_) => write!(f, "Font::TrueType({}px)", self.font_size()),
-            Font::Bitmap(_) => write!(f, "Font::Bitmap({}px)", self.font_size()),
-        }
+        write!(f, "Font::FreeType({}px)", self.font_size())
     }
 }
 
@@ -72,7 +65,6 @@ mod tests {
     fn load_default_uses_pillow_aileron_through_truetype() {
         let font = Font::load_default(10.0).expect("the pinned Pillow Aileron subset must load");
 
-        assert!(matches!(font, Font::TrueType(_)));
         assert_eq!(imagingft::getname(&font), ("Aileron", "Regular"));
         assert_eq!(imagingft::getmetrics(&font), (10, 3));
         assert_eq!(imagingft::getbbox(&font, "Hello"), (0, 2, 25, 10));

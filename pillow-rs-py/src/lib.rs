@@ -1514,11 +1514,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(palette_save_to_file, m)?)?;
     m.add_function(wrap_pyfunction!(palette_to_text, m)?)?;
 
-    // ImageFont module helpers
-    m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
-
     // ImageDraw helpers
     m.add_function(wrap_pyfunction!(outline_curve, m)?)?;
 
@@ -1546,9 +1541,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
     m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
     m.add_function(wrap_pyfunction!(kernel_prepare, m)?)?;
 
@@ -2994,24 +2986,6 @@ fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> 
     std::fs::write(fp, text).map_err(|error| {
         pyo3::exceptions::PyOSError::new_err(format!("Cannot write palette file: {error}"))
     })
-}
-
-/// Compute default bitmap font bounding box (6x11 px per char).
-#[pyfunction]
-fn font_default_bbox(text: &str) -> (i32, i32, i32, i32) {
-    pillow_rs::bitmap_font::font_default_bbox(text)
-}
-
-/// Compute default bitmap font text length (6 px per char).
-#[pyfunction]
-fn font_default_length(text: &str) -> u32 {
-    pillow_rs::bitmap_font::font_default_length(text)
-}
-
-/// Compute default bitmap font mask size with min(1) for each dimension.
-#[pyfunction]
-fn font_default_mask_size(text: &str) -> (u32, u32) {
-    pillow_rs::bitmap_font::font_default_mask_size(text)
 }
 
 /// Compute cubic Bezier curve subdivision points for Outline.
