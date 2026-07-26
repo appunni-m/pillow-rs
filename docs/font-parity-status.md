@@ -153,15 +153,18 @@ Latest `FT_Stroker_EndSubPath` lower-level movement:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_EndSubPath
 ```
 
-Result after degenerate ParseOutline no-segment routing:
+Result after open-path routing:
 `FT_Stroker_EndSubPath.no_segment_after_begin` now runs as real C/Rust/WASM
 parity through the maintained ParseOutline degenerate route. The route emits
 only the fixture-declared `single_point_contour` and `empty_outline` rows and
 compares `parse_status` plus zero `counts_after` against the pinned C oracle.
 Direct EndSubPath no-segment remains status-only because the pinned C build
-segfaults if counts are queried after that direct unfinished state. EndSubPath
-runtime movement is `runnable=3`, `passed=3`, `pending=2`. Route audit movement
-is `real-parity=4831`, `pending-route=190`.
+segfaults if counts are queried after that direct unfinished state.
+`FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border` also now runs
+as real C/Rust/WASM parity for radius-128 butt, round, and square caps using
+exact exported outline points, tags, contours, empty right border, and combined
+export. EndSubPath runtime movement is `runnable=4`, `passed=4`, `pending=1`.
+Route audit movement is `real-parity=4832`, `pending-route=189`.
 
 ## Edge cases already covered by active Font fixtures
 

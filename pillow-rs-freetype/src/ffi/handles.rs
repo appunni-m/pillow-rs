@@ -3190,6 +3190,9 @@ impl StrokerState {
         let end_x = self.center.x;
         let y = self.subpath_start.y;
         let radius = self.radius;
+        let round_control =
+            FT_Pos::try_from((i64::from(radius) * 55_228_475 + 50_000_000) / 100_000_000)
+                .unwrap_or(radius);
         let points = match self.line_cap {
             x if x == FT_STROKER_LINECAP_BUTT as FT_Int => vec![
                 FT_Vector {
@@ -3239,7 +3242,7 @@ impl StrokerState {
                     y: y - radius,
                 },
             ],
-            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => vec![
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int => vec![
                 FT_Vector {
                     x: start_x,
                     y: y + radius,
@@ -3249,12 +3252,12 @@ impl StrokerState {
                     y: y + radius,
                 },
                 FT_Vector {
-                    x: end_x + 53,
+                    x: end_x + round_control,
                     y: y + radius,
                 },
                 FT_Vector {
                     x: end_x + radius,
-                    y: y + 53,
+                    y: y + round_control,
                 },
                 FT_Vector {
                     x: end_x + radius,
@@ -3262,10 +3265,10 @@ impl StrokerState {
                 },
                 FT_Vector {
                     x: end_x + radius,
-                    y: y - 53,
+                    y: y - round_control,
                 },
                 FT_Vector {
-                    x: end_x + 53,
+                    x: end_x + round_control,
                     y: y - radius,
                 },
                 FT_Vector {
@@ -3281,12 +3284,12 @@ impl StrokerState {
                     y: y - radius,
                 },
                 FT_Vector {
-                    x: start_x - 53,
+                    x: start_x - round_control,
                     y: y - radius,
                 },
                 FT_Vector {
                     x: start_x - radius,
-                    y: y - 53,
+                    y: y - round_control,
                 },
                 FT_Vector {
                     x: start_x - radius,
@@ -3294,10 +3297,10 @@ impl StrokerState {
                 },
                 FT_Vector {
                     x: start_x - radius,
-                    y: y + 53,
+                    y: y + round_control,
                 },
                 FT_Vector {
-                    x: start_x - 53,
+                    x: start_x - round_control,
                     y: y + radius,
                 },
             ],
@@ -3307,7 +3310,7 @@ impl StrokerState {
             return;
         }
         let tags = match self.line_cap {
-            x if x == FT_STROKER_LINECAP_ROUND as FT_Int && radius == 96 => {
+            x if x == FT_STROKER_LINECAP_ROUND as FT_Int => {
                 vec![1, 1, 2, 2, 1, 2, 2, 1, 1, 1, 2, 2, 1, 2, 2]
             }
             _ => vec![1; points.len()],

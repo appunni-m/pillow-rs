@@ -1467,10 +1467,6 @@ def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
             "proving close emission joins left/right borders and preserves "
             "contour order exactly like pinned C"
         ),
-        "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border": (
-            "FT_Stroker_EndSubPath open-path parity needs a maintained route "
-            "proving cap emission and single-border finalization match pinned C"
-        ),
         "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success": (
             "FT_Stroker_ParseOutline mixed-outline parity needs a maintained "
             "route proving line, conic, and cubic contour decomposition feeds "
@@ -6626,6 +6622,7 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         return "FT_Stroker_LineTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if row.operation in {
         "ftstroke.open_path_geometry",
+        "ftstroke.end_subpath",
         "ftstroke.export_border",
         "ftstroke.export",
         "ftstroke.join_geometry_alias",
@@ -6640,7 +6637,14 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftstroke.FT_Stroker_Export.exports_left_then_right",
         "ftstroke.FT_Stroker_ExportBorder.valid_left_and_right_export",
         "ftstroke.FT_Stroker_ExportBorder.open_path_right_border_empty",
+        "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border",
     }:
+        if row.case_id == "ftstroke.FT_Stroker_EndSubPath.open_subpath_emits_caps_and_single_border":
+            return (
+                "FT_Stroker_EndSubPath open-path cap emission and single-border "
+                "finalization validate exact exported outline points, tags, and "
+                "contours through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+            )
         return (
             "FT_Stroker open-line geometry validates exact exported outline "
             "points, tags, contours, empty right border, and combined export "

@@ -2864,7 +2864,7 @@ pub fn abi_support_stroker_simple_line_counts() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
-pub fn abi_support_stroker_open_line_geometry(action: i32) -> bool {
+pub fn abi_support_stroker_open_line_geometry(action: i32, radius: FT_Fixed) -> bool {
     let actions: &[i32] = if action == 0 { &[1, 2, 3] } else { &[action] };
     for action in actions {
         let library = rust_ffi::FT_Init_FreeType();
@@ -2882,7 +2882,7 @@ pub fn abi_support_stroker_open_line_geometry(action: i32) -> bool {
         };
         rust_ffi::FT_Stroker_Set(
             stroker,
-            96,
+            radius,
             cap,
             rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
             65_536,
