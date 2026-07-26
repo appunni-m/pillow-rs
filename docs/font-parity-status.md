@@ -85,19 +85,24 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ### Suite summary (`imagingft` compatibility coverage suite)
 
-- Current artifact metrics (`target/coverage/imagingft/imagingft-rust.json`, latest run):
-  - `total_lines: 17412`, `covered_lines: 1557` (`line_rate 0.0894210889`)
-  - `total_branches: 3048`, `covered_branches: 135` (`branch_rate 0.0442913386`)
-  - `total_functions: 1171`, `covered_functions: 127` (`function_rate 0.1084543126`)
-  - `total_regions: 30400`, `covered_regions: 2342` (`region_rate 0.0770394737`)
+- Current Coverage MCP snapshot: `b32145da-5c19-4af1-afd0-f0d4d5adca61`
+  - Run: `c4d112ab-4fda-430f-aa16-bddb95a24519`
+  - Commit: `5d53f106786e96887bde7fb47f2b2d2849e52003`
+  - Command: `imagingft-tests-coverage-fixed`
+  - Result: passed, ingested
+  - Suite totals: `total_lines: 25929`, `covered_lines: 2519` (`line_rate 0.0971499094`)
+  - Suite totals: `total_branches: 4566`, `covered_branches: 225` (`branch_rate 0.0492772668`)
+  - Suite totals: `total_functions: 1801`, `covered_functions: 203` (`function_rate 0.1127151582`)
+  - Suite totals: `total_regions: 45426`, `covered_regions: 3953` (`region_rate 0.0870206490`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
-- `covered_lines: 394/432` (`line_rate 0.9120370370`)
-- `covered_functions: 38/43` (`function_rate 0.8837209302`)
-- `covered_branches: 86/108` (`branch_rate 0.7962962963`)
-- `covered_regions: 687/762` (`region_rate 0.9015748031`)
+- `covered_lines: 677/732` (`line_rate 0.9248633880`)
+- `covered_functions: 65/71` (`function_rate 0.9154929577`)
+- `covered_branches: 148/184` (`branch_rate 0.8043478261`)
+- `covered_regions: 1183/1294` (`region_rate 0.9142194745`)
 - Gaps remain in FreeType load/error branches, glyph render fallback, clipping guards, and uncommon bitmap coverage modes. The previous Rust-only bitmap-font blocker has been removed from this file.
+- Manifest completeness is now enforced in `pillow-rs/tests/font_public_api.rs`: `font_manifest.yaml` must exactly enumerate the current implemented Font public parity surface and every input operation must be classified as required or negative.
 
 ### `pillow-rs/src/font/mod.rs`
 
