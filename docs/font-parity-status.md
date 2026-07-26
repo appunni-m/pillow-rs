@@ -1,6 +1,73 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `45a654881`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `0bb991430`
+
+## Current checkpoint: Pillow byte-text compatibility + coverage sweep
+
+New commits:
+
+- `9e84725d3` — hardened the Font public fixture runner so case IDs are unique
+  and referenced font assets are real files under the fixture root. The only
+  allowed missing asset remains the explicit load-failure case.
+- `3b747c7df` — added explicit root byte-text Font APIs and input-only fixture
+  support for Pillow `FreeTypeFont` methods that accept `text: str | bytes`.
+  The live oracle now passes real Python `bytes` when `text_bytes_hex` is
+  present; Rust maps each byte to the matching Latin-1 codepoint before
+  entering the pure-Rust font path.
+- `0bb991430` — added focused byte-text rows for the option and no-option
+  byte paths so the new runtime code is covered by live Pillow oracle parity.
+
+Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
+repo-local oracle remains:
+
+`font_variant`, `get_variation_axes`, `get_variation_names`, `getbbox`,
+`getlength`, `getmask`, `getmask2`, `getmetrics`, `getname`,
+`set_variation_by_axes`, `set_variation_by_name`.
+
+Newly covered edge cases:
+
+- `text_bytes_hex` input rows for `getlength`, `getbbox`,
+  `getbbox_binary`, `getmask`, `getmask2`, `getmask2_with_start`, and
+  `text_bbox`.
+- Byte text with options for `getlength(mode=...)`, `getbbox(anchor=...)`,
+  `getmask(mode="L")`, and `getmask2(mode="L")`.
+- No expected output or error payload is stored in input JSON; output is still
+  generated at runtime from the repo-local Pillow native `_imagingft` oracle.
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `f98e6c2a-2cbf-47c6-b4c7-8641cf1b7ec1`
+  - snapshot `5ff53889-c7ce-40dd-bb7f-311faffcd39f`
+  - commit `0bb991430ada5916b20ee2e1d318499aff66e863`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `955/1040` (`91.83%`) | `185/238` (`77.73%`) | `95/110` (`86.36%`) | `1594/1746` (`91.29%`) |
+| `pillow-rs/src/font/mod.rs` | `258/282` (`91.49%`) | n/a | `57/64` (`89.06%`) | `331/373` (`88.74%`) |
+
+Remaining blockers/gaps to honest 100% region coverage:
+
+- Runtime blocker: `getmask/getmask2(stroke_width != 0)` still requires exact
+  stroked glyph-mask rendering. Pillow supports this through native
+  `_imagingft`/FreeType stroking. The current pure-Rust FreeType stroker path
+  does not render real glyph contours exactly enough to enable this without
+  lowering parity standards.
+- `imagingft.rs` uncovered/partial regions are mostly defensive FreeType
+  error mappings, alternate `FT_Request_Size` errors, glyph-load/render
+  fallback, bitmap clipping guards, unsupported bitmap pixel modes, and
+  name-table fallback selection. These need real oracle-driving font assets or
+  implementation simplification; unit-only or Rust-self tests do not count.
+- `font/mod.rs` remaining uncovered ranges reported by LLVM are doc-comment
+  and public-field declaration source-map artifacts around
+  `FontTextOptions`/`FontVariantOptions`, plus wrapper declaration comments.
+  They are not evidence of a missing Pillow public input path, but they keep
+  raw region coverage below 100%.
 
 ## Current checkpoint: Font public-signature edge sweep
 
