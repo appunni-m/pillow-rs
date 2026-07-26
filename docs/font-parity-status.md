@@ -1,6 +1,56 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `a0eae6880`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `e5482868c`
+
+## Current checkpoint: root Font API runner-reference gate
+
+New commit:
+
+- `e5482868c` — added a source-level Font runner gate requiring
+  `tests/support/font_runner.rs` to reference every root
+  `pillow_rs::font_*` public API function exactly. The existing manifest gate
+  proves every root function maps to a manifest operation; this new gate proves
+  the live Pillow-oracle runner still calls the root API surface directly
+  instead of leaving a mapped function unreachable from fixtures.
+
+What this closes:
+
+- A root Font public function can no longer be listed in
+  `font_manifest.yaml` only through the static map while the active runner
+  bypasses or omits that exact root API function.
+- The comparison test still has no embedded output, hash, status, or error
+  expectation. It continues to generate output at runtime from the repo-local
+  Pillow native `_imagingft` oracle and compares the Rust `Result`-style
+  payload exactly.
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `cdddddb0-a84c-4aad-8ab2-d0c7488cdf27`
+  - snapshot `28834545-2726-4d0a-ad9b-bc8f1ecdcee6`
+  - commit `e5482868cf3f52816cfdff53d1a8193e93bc88d3`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `955/1040` (`91.83%`) | `185/238` (`77.73%`) | `95/110` (`86.36%`) | `1594/1746` (`91.29%`) |
+| `pillow-rs/src/font/mod.rs` | `258/282` (`91.49%`) | n/a | `57/64` (`89.06%`) | `331/373` (`88.74%`) |
+
+Remaining blocker to honest 100% region coverage:
+
+- Runtime blocker remains `getmask/getmask2(stroke_width != 0)`. Pillow
+  supports stroked glyph masks through native `_imagingft`/FreeType stroking,
+  but the current pure-Rust FreeType stroker path still does not render real
+  glyph contours exactly enough to enable this without lowering parity
+  standards.
+- The remaining `font/mod.rs` reported gaps are source-map lines on public
+  option declarations/doc comments, not uncovered public method bodies. They
+  do not remove the need for 100% region coverage, but adding duplicate JSON
+  rows would not honestly cover them.
 
 ## Current checkpoint: Font case-id/operation manifest gate
 
