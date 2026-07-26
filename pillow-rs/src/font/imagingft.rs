@@ -92,14 +92,6 @@ fn ft_error_to_pil(error: i32) -> PilError {
 
 // ── Public API ───────────────────────────────────────────────────────
 
-pub(crate) fn getname(font: &Font) -> (&str, &str) {
-    (
-        font.engine.family_name.as_deref().unwrap_or("Unknown"),
-        font.engine.style_name.as_deref().unwrap_or("Regular"),
-    )
-}
-
-#[cfg(feature = "test-api")]
 pub(crate) fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
     (
         font.engine.family_name.as_deref(),
