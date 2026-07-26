@@ -63,6 +63,23 @@
       }
     },
     {
+      "case_id": "font.getmask2.dejavusans20_a_getmask2_1",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "mode": "1"
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.positional_args_ignored_after_start",
       "operation": "getmask2",
       "inputs": {
