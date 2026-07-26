@@ -9,6 +9,10 @@ oracle:
   rust_contract: Result-style status payload
   comparison: exact payload match after runtime oracle generation
 required_operations:
+  - load_default
+  - truetype
+  - font_size
+  - text_bbox
   - getname
   - getmetrics
   - getlength
@@ -23,7 +27,10 @@ required_operations:
   - validate_transposed_length
   - draw_text
   - render_text_binary
+negative_operations:
+  - unsupported_magic
 input_files:
+  - font.constructor.json
   - font.get_transposed_mask.json
   - font.getbbox.json
   - font.getbbox_binary.json
@@ -38,6 +45,7 @@ input_files:
   - font.load_failure.json
   - font.render_text.json
   - font.render_text_binary.json
+  - font.text_bbox.json
   - font.transposed_bbox.json
   - font.unsupported_operation.json
   - font.validate_transposed_length.json
