@@ -78,6 +78,51 @@
       }
     },
     {
+      "case_id": "font.load.p4_crlf_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/p4_crlf.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.missing_p4_raster_crlf_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/missing_p4_raster_crlf.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.truncated_p4_crlf_raster_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/truncated_p4_crlf_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
       "case_id": "font.load.clipped_success_pilfont",
       "operation": "load",
       "inputs": {
@@ -108,6 +153,21 @@
       }
     },
     {
+      "case_id": "font.load.truncated_p1_raster_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/truncated_p1_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
       "case_id": "font.load.truncated_p4_raster_error",
       "operation": "load",
       "inputs": {
@@ -130,6 +190,21 @@
           "font": {
             "kind": "pilfont_ref",
             "id": "input/pilfont/missing_p4_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.unterminated_pbm_comment_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/unterminated_pbm_comment.pil"
           }
         },
         "params": {

@@ -1297,6 +1297,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
+        PilError::SystemError(msg) => pyo3::exceptions::PySystemError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
         PilError::ImageError(err) => pyo3::exceptions::PyException::new_err(err.to_string()),
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
@@ -1794,10 +1795,10 @@ fn load_pilfont_from_path(
         let Ok(bitmap) = std::fs::read(&candidate) else {
             continue;
         };
-        let Ok(image) = pillow_rs::PilFont::open_glyph_image(bitmap) else {
+        let Ok(image) = pillow_rs::PilFont::open_pilfont_glyph_image(bitmap) else {
             continue;
         };
-        match pillow_rs::PilFont::from_pilfont_data(&metrics, image) {
+        match pillow_rs::PilFont::from_pilfont_glyph_data(&metrics, image) {
             Ok(font) => return Ok((font, candidate.to_string_lossy().into_owned())),
             Err(PilError::TypeError(message)) if message == "invalid font image mode" => continue,
             Err(error) => return Err(error),

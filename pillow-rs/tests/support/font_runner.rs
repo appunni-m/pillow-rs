@@ -650,15 +650,19 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;
             match load_pilfont_glyph_image(&metrics_path)? {
-                GlyphImageCandidate::Valid(image) => PilFont::from_pilfont_data(&metrics, image),
-                GlyphImageCandidate::InvalidMode(image) => {
-                    PilFont::from_pilfont_data(&metrics, image).or_else(|error| match error {
-                        PilError::TypeError(message) if message == "invalid font image mode" => {
-                            Err(cannot_find_glyph_data_error(&metrics_path))
-                        }
-                        other => Err(other),
-                    })
+                GlyphImageCandidate::Valid(image) => {
+                    PilFont::from_pilfont_glyph_data(&metrics, image)
                 }
+                GlyphImageCandidate::InvalidMode(image) => PilFont::from_pilfont_glyph_data(
+                    &metrics,
+                    pillow_rs::PilFontGlyphImage::Image(image),
+                )
+                .or_else(|error| match error {
+                    PilError::TypeError(message) if message == "invalid font image mode" => {
+                        Err(cannot_find_glyph_data_error(&metrics_path))
+                    }
+                    other => Err(other),
+                }),
             }
         }
         other => Err(PilError::ValueError(format!(
@@ -668,7 +672,7 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
 }
 
 enum GlyphImageCandidate {
-    Valid(Image),
+    Valid(pillow_rs::PilFontGlyphImage),
     InvalidMode(Image),
 }
 
@@ -679,16 +683,23 @@ fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<GlyphImageCandidate, 
         let Ok(bitmap) = fs::read(&bitmap_path) else {
             continue;
         };
-        let image = match PilFont::open_glyph_image(bitmap.clone()) {
+        let image = match PilFont::open_pilfont_glyph_image(bitmap.clone()) {
             Ok(image) => image,
             Err(error) if should_surface_pilfont_image_load_error(&error) => return Err(error),
             Err(_) => continue,
         };
-        let mode = image.mode()?;
+        let mode = match &image {
+            pillow_rs::PilFontGlyphImage::Image(image) => image.mode()?,
+            pillow_rs::PilFontGlyphImage::DeferredRenderError { mode, .. } => {
+                mode.as_str().to_string()
+            }
+        };
         if matches!(mode.as_str(), "1" | "L") {
             return Ok(GlyphImageCandidate::Valid(image));
         }
-        last_invalid_mode_image = Some(image);
+        if let pillow_rs::PilFontGlyphImage::Image(image) = image {
+            last_invalid_mode_image = Some(image);
+        }
     }
     if let Some(image) = last_invalid_mode_image {
         return Ok(GlyphImageCandidate::InvalidMode(image));
@@ -698,7 +709,10 @@ fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<GlyphImageCandidate, 
 
 fn should_surface_pilfont_image_load_error(error: &PilError) -> bool {
     match error {
-        PilError::ValueError(message) => message.starts_with("b'Invalid token for this mode: "),
+        PilError::ValueError(message) => {
+            message.starts_with("b'Invalid token for this mode: ")
+                || message == "not enough image data"
+        }
         PilError::IOError(message) => message == "image file is truncated (0 bytes not processed)",
         _ => false,
     }
@@ -826,6 +840,7 @@ fn error_kind(error: &PilError) -> &'static str {
         PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
         PilError::ValueError(_) | PilError::DimensionError(_) => "ValueError",
         PilError::SyntaxError(_) => "SyntaxError",
+        PilError::SystemError(_) => "SystemError",
         PilError::TypeError(_) => "TypeError",
         PilError::NotImplementedError(_) => "NotImplementedError",
         PilError::ImageError(_)

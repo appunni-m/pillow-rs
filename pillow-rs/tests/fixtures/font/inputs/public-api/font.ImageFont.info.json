@@ -28,6 +28,21 @@
           "loader": "load"
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.info.metadata_line_bitmap",
+      "operation": "ImageFont.info",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/info_line.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
     }
   ]
 }

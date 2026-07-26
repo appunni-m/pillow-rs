@@ -149,6 +149,7 @@ pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxis;
 pub use crate::font::pilfont::PilFont;
+pub use crate::font::pilfont::PilFontGlyphImage;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
 pub use crate::font::transposed_bbox;
