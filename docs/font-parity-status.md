@@ -168,11 +168,11 @@ counts preflight is not a valid oracle comparison. LineTo runtime movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `43bd4c58-e3e7-4227-9098-747135e7986f`
-- Snapshot: `f01f8763-eaf1-4473-afe7-b172fa48784a`
+- Run: `5a95b484-d517-4d87-9287-b8e2c0cd83a6`
+- Snapshot: `3c63fe0d-5725-473c-9f65-bddb3b1453f1`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `e406f7de5ee9988e0902381e338afadf1cf4c14c`
+- Commit measured: `d281b5858c2c251669c7e27b18f402a5e1447393`
 
 Target file metrics:
 
