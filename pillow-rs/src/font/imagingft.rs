@@ -187,9 +187,7 @@ pub(crate) fn get_variation_axes(font: &Font) -> Result<Vec<FontVariationAxis>, 
             minimum: fixed_16_16_to_pillow_int(axis.min_value),
             default: fixed_16_16_to_pillow_int(axis.default_value),
             maximum: fixed_16_16_to_pillow_int(axis.max_value),
-            name: standard_variation_axis_name(axis.tag)
-                .map(|name| name.as_bytes().to_vec())
-                .or_else(|| name_bytes(&name_table, axis.name_id))
+            name: name_bytes(&name_table, axis.name_id)
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|byte| *byte != 0)
@@ -217,7 +215,7 @@ pub(crate) fn set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), 
     let names = get_variation_names(font)?;
     let Some(index) = names.iter().position(|candidate| candidate == name) else {
         return Err(PilError::ValueError(format!(
-            "{} is not in list",
+            "b'{}' is not in list",
             String::from_utf8_lossy(name)
         )));
     };
@@ -225,6 +223,7 @@ pub(crate) fn set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), 
         ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), (index + 1) as ffi::FT_UInt);
     if error == ffi::FT_Err_Ok {
         refresh_engine_metadata(font);
+        font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
         Ok(())
     } else {
         Err(ft_error_to_pil(error))
@@ -686,9 +685,6 @@ fn variation_tables(font: &Font) -> Result<(tt::fvar::FvarTable, tt::name::NameT
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
     let directory = tt::parse_table_directory_at(data, face_offset)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
-    let font_data = data
-        .get(face_offset..)
-        .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
     let fvar = directory
         .find(data, tag(b"fvar"))
         .ok_or_else(|| PilError::OsError("invalid argument".into()))
@@ -701,7 +697,6 @@ fn variation_tables(font: &Font) -> Result<(tt::fvar::FvarTable, tt::name::NameT
         .and_then(|bytes| {
             tt::name::parse_name(bytes).map_err(|_| PilError::OsError("invalid argument".into()))
         })?;
-    let _ = font_data;
     Ok((fvar, name_table))
 }
 
@@ -711,17 +706,6 @@ fn tag(bytes: &[u8; 4]) -> u32 {
 
 fn fixed_16_16_to_pillow_int(value: i32) -> i32 {
     value / 65536
-}
-
-fn standard_variation_axis_name(tag: u32) -> Option<&'static str> {
-    match tag {
-        0x7767_6874 => Some("Weight"),
-        0x7764_7468 => Some("Width"),
-        0x6F70_737A => Some("OpticalSize"),
-        0x736C_6E74 => Some("Slant"),
-        0x6974_616C => Some("Italic"),
-        _ => None,
-    }
 }
 
 fn name_bytes(table: &tt::name::NameTable, name_id: u16) -> Option<Vec<u8>> {

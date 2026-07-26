@@ -80,6 +80,57 @@
       }
     },
     {
+      "case_id": "font.variations.set_variation_by_name.thin",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Thin",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.condensed_bold",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Condensed Bold",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.missing_error",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Nope",
+          "text": "AV"
+        }
+      }
+    },
+    {
       "case_id": "font.variations.set_variation_by_name.non_variable_error",
       "operation": "set_variation_by_name",
       "inputs": {
@@ -109,6 +160,57 @@
         "params": {
           "size": 20,
           "axes": [400],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.width_weight_min",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [75, 100],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.width_weight_out_of_range",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [50, 900],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.empty_reset",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [],
           "text": "AV"
         }
       }
