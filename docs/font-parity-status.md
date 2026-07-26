@@ -1,6 +1,53 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `226b8e748`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `4acdc4012`
+
+## Current checkpoint: positive-start mask clipping parity rows
+
+New commit:
+
+- `4acdc4012` — added three input-only `getmask2_with_start` rows for large
+  positive X, large positive Y, and combined positive XY starts. These are
+  valid Pillow public inputs and compare exactly against the live oracle.
+
+What this closes:
+
+- The public Font fixture corpus now explicitly contains positive-start
+  clipping/offset rows, complementing the existing negative-start clipping and
+  bad-image-size rows.
+- Coverage MCP showed these rows are coverage-neutral for current
+  `imagingft.rs`; they are kept as real parity inputs, not reported as runtime
+  coverage movement.
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `92a58850-42a3-4084-97ca-ccad22173773`
+  - snapshot `bbb335d6-0d49-4d13-9108-57220cf0052c`
+  - commit `4acdc4012a502776b2313b3a18feb2f6876d1042`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `970/1036` (`93.63%`) | `193/238` (`81.09%`) | `99/110` (`90.00%`) | `1610/1740` (`92.53%`) |
+| `pillow-rs/src/font/mod.rs` | `258/282` (`91.49%`) | n/a | `57/64` (`89.06%`) | `331/373` (`88.74%`) |
+
+Remaining blocker to honest 100% region coverage:
+
+- Runtime blocker remains `getmask/getmask2(stroke_width != 0)`. Pillow
+  supports stroked glyph masks through native `_imagingft`/FreeType stroking,
+  but the current pure-Rust FreeType stroker path still does not render real
+  glyph contours exactly enough to enable this without lowering parity
+  standards.
+- Remaining `imagingft.rs` gaps include FreeType error mappings,
+  request-size error/fallback branches, render clipping/bitmap guard branches,
+  and stroked mask rendering.
+- Remaining `font/mod.rs` reported gaps are source-map lines on public option
+  declarations/doc comments, not uncovered public method bodies.
 
 ## Current checkpoint: Platform 1 variation-name fallback coverage
 
