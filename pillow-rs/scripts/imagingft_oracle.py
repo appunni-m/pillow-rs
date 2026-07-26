@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import sys
 from pathlib import Path
 from typing import Any
@@ -54,7 +55,27 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
             f"imagingft oracle runtime mismatch: PIL._imagingft must be a native extension; got {core_file}"
         )
 
+    assert_python_calls_into_c_layer(ImageFont)
     return PIL, _imagingft, Image, ImageDraw, ImageFont
+
+
+def assert_python_calls_into_c_layer(ImageFont: Any) -> None:
+    """Prove that the public Python methods we test are thin wrappers over C calls."""
+    font_methods = {
+        "getmask2": ("self.font.render",),
+        "getmask": ("self.getmask2(",),
+        "getbbox": ("self.font.getsize",),
+        "getlength": ("self.font.getlength",),
+        "getname": ("self.font.family",),
+    }
+
+    for method, expected in font_methods.items():
+        source = inspect.getsource(getattr(ImageFont.FreeTypeFont, method))
+        if not any(needle in source for needle in expected):
+            raise RuntimeError(
+                f"imagingft oracle invariant broken: FreeTypeFont.{method} is not"
+                f" delegated to PIL._imagingft C layer"
+            )
 
 
 def ensure_c_font_path(font: Any) -> None:
