@@ -38,8 +38,9 @@ struct ParameterCoverage {
     covered: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 32] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 33] = [
     "ImageFont.getbbox",
+    "ImageFont.info",
     "ImageFont.getlength",
     "ImageFont.getmask",
     "TransposedFont.getbbox",

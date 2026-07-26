@@ -10,6 +10,7 @@ oracle:
   comparison: exact payload match after runtime oracle generation
 required_operations:
   - ImageFont.getbbox
+  - ImageFont.info
   - ImageFont.getlength
   - ImageFont.getmask
   - TransposedFont.getbbox
@@ -50,6 +51,9 @@ public_method_parameters:
     blocked:
       - args
       - kwargs
+  ImageFont.info:
+    covered: []
+    blocked: []
   ImageFont.getlength:
     covered:
       - text
@@ -179,6 +183,7 @@ public_method_parameters:
       - layout_engine
 input_files:
   - font.ImageFont.getbbox.json
+  - font.ImageFont.info.json
   - font.ImageFont.getlength.json
   - font.ImageFont.getmask.json
   - font.TransposedFont.getbbox.json
