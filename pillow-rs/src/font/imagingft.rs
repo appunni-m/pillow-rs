@@ -455,17 +455,12 @@ fn pack_rgba(
     if w == 0 || h == 0 {
         return Ok((w, h, mask));
     }
-    let len = match (w as usize)
-        .checked_mul(h as usize)
-        .and_then(|v| v.checked_mul(4))
-    {
-        Some(v) => v,
-        None => {
-            return Err(PilError::DimensionError(
-                "text RGBA mask dimensions overflow".into(),
-            ));
-        }
-    };
+    debug_assert_eq!(
+        mask.len(),
+        (w as usize) * (h as usize),
+        "text mask dimensions are produced by mask_from_run_with_start"
+    );
+    let len = mask.len() * 4;
     let mut canvas = vec![0u8; len];
     for (i, cov) in mask.into_iter().enumerate() {
         if cov == 0 {
@@ -549,7 +544,7 @@ fn length_from_basic_layout_with_flags(
 }
 
 fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
-    if advance >= 0x8000 * 64 || advance <= -(0x8000 * 64) {
+    if advance.unsigned_abs() >= (0x8000 * 64) as u64 {
         Err(PilError::OsError("invalid argument".into()))
     } else {
         Ok(())
@@ -677,7 +672,9 @@ fn mask_from_run_with_start(
     let base_h = bbox.3 - bbox.1;
     let adjusted_w = base_w.saturating_add(start_width);
     let adjusted_h = base_h.saturating_add(start_height);
-    if (base_w > 0 && adjusted_w <= 0) || (base_h > 0 && adjusted_h <= 0) {
+    if positive_dimension_collapsed(base_w, adjusted_w)
+        || positive_dimension_collapsed(base_h, adjusted_h)
+    {
         return Err(PilError::ValueError("bad image size".into()));
     }
     let w = adjusted_w.max(0) as u32;
@@ -736,14 +733,11 @@ fn mask_from_run_with_start(
         let dx = px + *bitmap_left;
         let dy = -(py + *bitmap_top);
         let source_x = if dx < 0 { (-dx) as usize } else { 0 };
-        let target_x = dx.max(0) as usize;
+        let target_x = (dx.max(0) as usize).min(wu);
         if source_x >= sx {
             continue;
         }
         let cw = (sx - source_x).min(wu.saturating_sub(target_x));
-        if cw == 0 {
-            continue;
-        }
         let source_y = if dy < 0 { (-dy) as usize } else { 0 };
         if source_y >= sy {
             continue;
@@ -769,6 +763,10 @@ fn mask_from_run_with_start(
     Ok((w, h, canvas))
 }
 
+fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {
+    base > 0 && adjusted <= 0
+}
+
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
     let pitch = bitmap.pitch.unsigned_abs() as usize;
     let row_start = row * pitch;
@@ -785,8 +783,14 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
                 0
             }
         }
-        ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied().unwrap_or(0),
-        _ => 0,
+        _ => {
+            debug_assert_eq!(
+                bitmap.pixel_mode,
+                ffi::FT_PIXEL_MODE_GRAY,
+                "Pillow Font BASIC rendering reaches imagingft as MONO or GRAY"
+            );
+            bitmap.buffer.get(row_start + column).copied().unwrap_or(0)
+        }
     }
 }
 

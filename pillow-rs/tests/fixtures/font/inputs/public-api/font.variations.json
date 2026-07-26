@@ -174,6 +174,24 @@
       }
     },
     {
+      "case_id": "font.variations.set_variation_by_name.repeat_same_name",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Regular",
+          "repeat_count": 2,
+          "text": "AV"
+        }
+      }
+    },
+    {
       "case_id": "font.variations.set_variation_by_name.missing_error",
       "operation": "set_variation_by_name",
       "inputs": {

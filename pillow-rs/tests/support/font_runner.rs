@@ -78,7 +78,9 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let name = required(params, "name")?
                 .as_str()
                 .ok_or_else(|| PilError::TypeError("name must be a string".into()))?;
-            pillow_rs::font_set_variation_by_name(&mut font, name.as_bytes())?;
+            for _ in 0..repeat_count(params)? {
+                pillow_rs::font_set_variation_by_name(&mut font, name.as_bytes())?;
+            }
             Ok(json!({
                 "type": "font_after_variation",
                 "name": pillow_rs::font_getname(&font),
@@ -193,6 +195,19 @@ fn text_bytes(params: &Value) -> Result<Option<Vec<u8>>, PilError> {
                 .and_then(hex_to_bytes)
         })
         .transpose()
+}
+
+fn repeat_count(params: &Value) -> Result<usize, PilError> {
+    params
+        .get("repeat_count")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| PilError::TypeError("repeat_count must be an integer".into()))
+        })
+        .transpose()
+        .map(|value| value.unwrap_or(1))
 }
 
 fn hex_to_bytes(value: &str) -> Result<Vec<u8>, PilError> {
