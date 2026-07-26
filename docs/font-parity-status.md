@@ -66,6 +66,9 @@ surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 exclusion is successful libraqm shaping; `direction`, `features`, and
 `language` no-libraqm error rows remain active parity rows.
+The test also queries the live `PIL.ImageFont.Layout` enum and requires exactly
+`BASIC` and `RAQM`; active `font_variant` rows must exercise both values while
+successful RAQM shaping remains the only layout behavior outside the target.
 
 The repo also keeps additional public test operations around this surface:
 `font_size`, `text_bbox`, `getbbox_binary`, `getmask2_with_start`,
@@ -290,11 +293,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `6b7c077c-b337-4424-8d34-1e245ba7157e`
-- Snapshot: `584f273f-269a-46bd-bf3a-a1e522dda55d`
+- Run: `5678cf31-df81-4999-8a27-fc749cbc58e3`
+- Snapshot: `7b58a45b-b049-47b9-99af-5652105be437`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `3722ab92e2a931f893684892fc74b170f151e62b`
+- Commit measured: `24b1e8cd49721258e36aac0b3b499dc04d0d4206`
 
 Target file metrics:
 
