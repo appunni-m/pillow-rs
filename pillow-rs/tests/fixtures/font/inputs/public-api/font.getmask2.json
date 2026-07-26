@@ -350,6 +350,66 @@
       }
     },
     {
+      "case_id": "font.getmask2.options_start_negative_x_clips",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            -10,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.options_start_negative_y_clips",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            0,
+            -10
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.options_start_collapses_height_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            0,
+            -100
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.mode_rgba_error",
       "operation": "getmask2",
       "inputs": {

@@ -296,6 +296,66 @@
       }
     },
     {
+      "case_id": "font.getmask.options_start_negative_x_clips",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            -10,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.options_start_negative_y_clips",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            0,
+            -10
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.options_start_collapses_width_error",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "start": [
+            -100,
+            0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.mode_rgba_error",
       "operation": "getmask",
       "inputs": {
