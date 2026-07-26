@@ -5,37 +5,37 @@
 //! reaching into these modules directly.
 
 /// Analysis and statistics operations.
-pub mod analysis;
+pub(crate) mod analysis;
 /// Array-interface descriptor resolution.
-pub mod array;
+pub(crate) mod array;
 /// Pillow `ImageChops`-style channel arithmetic operations.
-pub mod chops;
+pub(crate) mod chops;
 /// Pillow mode conversion operations.
-pub mod convert;
+pub(crate) mod convert;
 /// Cropping and rectangular extraction operations.
-pub mod crop;
+pub(crate) mod crop;
 /// Brightness, contrast, color, and sharpness enhancement operations.
-pub mod enhance;
+pub(crate) mod enhance;
 /// Image filter operations and convolution helpers.
-pub mod filter;
+pub(crate) mod filter;
 /// Pillow `ImageOps`-style convenience operations.
-pub mod imageops;
+pub(crate) mod imageops;
 /// Module-level Pillow function implementations.
-pub mod module_fns;
+pub(crate) mod module_fns;
 /// Parameterized convolution filter helpers.
-pub mod param_filters;
-pub mod paste;
-pub mod pil_resize;
-pub mod quantize;
+pub(crate) mod param_filters;
+pub(crate) mod paste;
+pub(crate) mod pil_resize;
+pub(crate) mod quantize;
 /// Resize operations and resampling helpers.
-pub mod resize;
+pub(crate) mod resize;
 /// Rotation operations.
-pub mod rotate;
+pub(crate) mod rotate;
 /// Band splitting and channel extraction operations.
-pub mod split;
+pub(crate) mod split;
 /// Geometric transform operations.
-pub mod transform;
+pub(crate) mod transform;
 /// Transpose and flip operations.
-pub mod transpose;
+pub(crate) mod transpose;
 /// Shared operation helper functions.
-pub mod utils;
+pub(crate) mod utils;

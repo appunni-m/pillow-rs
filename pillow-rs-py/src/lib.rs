@@ -6,6 +6,7 @@
 
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
+use pyo3::ToPyObject;
 use pyo3::exceptions::{
     PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
 };
@@ -18,6 +19,10 @@ use pyo3::prelude::PyObject;
 use pyo3::prelude::PyRefMut;
 use pyo3::prelude::PyResult;
 use pyo3::prelude::Python;
+use pyo3::pyclass;
+use pyo3::pyfunction;
+use pyo3::pymethods;
+use pyo3::pymodule;
 use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
@@ -30,12 +35,7 @@ use pyo3::types::PyTuple;
 use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
-use pyo3::pyclass;
-use pyo3::pyfunction;
-use pyo3::pymethods;
-use pyo3::pymodule;
 use pyo3::wrap_pyfunction;
-use pyo3::ToPyObject;
 use std::path::PathBuf;
 
 #[pyclass(name = "Image")]
@@ -1327,8 +1327,7 @@ fn resolve_array_layout(
     typestr: &str,
     mode: Option<&str>,
 ) -> PyResult<(String, String, usize, usize, usize, bool)> {
-    let layout =
-        pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(map_error)?;
+    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(map_error)?;
     Ok((
         layout.mode,
         layout.raw_mode,
@@ -1640,12 +1639,9 @@ impl PyFont {
         text: &str,
         start: Option<(f64, f64)>,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) = pillow_rs::font_getmask2_with_start(
-            &self.inner,
-            text,
-            start.unwrap_or((0.0, 0.0)),
-        )
-        .map_err(map_error)?;
+        let (width, height, pixels, offset) =
+            pillow_rs::font_getmask2_with_start(&self.inner, text, start.unwrap_or((0.0, 0.0)))
+                .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }
@@ -2250,9 +2246,7 @@ impl PyDraw {
         font: Option<&Bound<'_, PyFont>>,
     ) -> PyResult<(i32, i32, i32, i32)> {
         let bbox = match font {
-            Some(f) => {
-                pillow_rs::font_getbbox(&f.borrow().inner, text).map_err(map_error)?
-            }
+            Some(f) => pillow_rs::font_getbbox(&f.borrow().inner, text).map_err(map_error)?,
             None => {
                 let font = pillow_rs::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font_getbbox(&font, text).map_err(map_error)?
@@ -2265,9 +2259,7 @@ impl PyDraw {
     #[pyo3(signature = (text, font=None))]
     fn textlength(&mut self, text: &str, font: Option<&Bound<'_, PyFont>>) -> PyResult<f64> {
         let w = match font {
-            Some(f) => {
-                pillow_rs::font_getlength(&f.borrow().inner, text).map_err(map_error)?
-            }
+            Some(f) => pillow_rs::font_getlength(&f.borrow().inner, text).map_err(map_error)?,
             None => {
                 let font = pillow_rs::Font::load_default(10.0).map_err(map_error)?;
                 pillow_rs::font_getlength(&font, text).map_err(map_error)?
@@ -2304,10 +2296,7 @@ impl PyDraw {
         // Pillow ImageText.Text::_split advances by the bottom of "A"'s
         // FreeType bbox, then unions each line's full bbox. Using only mask
         // width/height here loses the ascender bearing (and italic overhang).
-        let line_height = spacing
-            + pillow_rs::font_getbbox(f, "A")
-                .map_err(map_error)?
-                .3;
+        let line_height = spacing + pillow_rs::font_getbbox(f, "A").map_err(map_error)?.3;
         let widths: Vec<f32> = lines
             .iter()
             .map(|line| pillow_rs::font_getlength(f, line))
@@ -2446,10 +2435,9 @@ fn parse_draw_color(
 fn ops_autocontrast(image: &Bound<'_, PyImage>, cutoff: Option<f64>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let c = cutoff.unwrap_or(0.0);
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_autocontrast(&inner, c))
-    })
-    .map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_autocontrast(&inner, c)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2464,9 +2452,8 @@ fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_invert(&inner)))
-            .map_err(map_error)?;
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_invert(&inner)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2489,10 +2476,9 @@ fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
 #[pyfunction]
 fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_posterize(&inner, bits))
-    })
-    .map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_posterize(&inner, bits)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2500,18 +2486,16 @@ fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
 fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let t = threshold.unwrap_or(128);
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_solarize(&inner, t)))
-            .map_err(map_error)?;
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_solarize(&inner, t)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_grayscale(&inner)))
-            .map_err(map_error)?;
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_grayscale(&inner)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2537,9 +2521,7 @@ fn ops_contain(
 ) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| {
-            pillow_rs::imageops_contain(&inner, size.0, size.1, filter.as_deref())
-        })
+        py.allow_threads(|| pillow_rs::imageops_contain(&inner, size.0, size.1, filter.as_deref()))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -2553,9 +2535,7 @@ fn ops_cover(
 ) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| {
-            pillow_rs::imageops_cover(&inner, size.0, size.1, filter.as_deref())
-        })
+        py.allow_threads(|| pillow_rs::imageops_cover(&inner, size.0, size.1, filter.as_deref()))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -2677,9 +2657,8 @@ fn ops_expand(
 #[pyfunction]
 fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_crop(&inner, border)))
-            .map_err(map_error)?;
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_crop(&inner, border)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2707,10 +2686,9 @@ fn chops_add(
 ) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::chops_add(&b1, &b2, scale, offset))
-    })
-    .map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_add(&b1, &b2, scale, offset)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2771,9 +2749,8 @@ fn chops_lighter(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> Py
 fn chops_difference(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_difference(&b1, &b2)))
-            .map_err(map_error)?;
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_difference(&b1, &b2)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2918,8 +2895,7 @@ fn image_composite(
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
-    let rs = pillow_rs::image_composite(&b1.inner, &b2.inner, &bm.inner)
-        .map_err(map_error)?;
+    let rs = pillow_rs::image_composite(&b1.inner, &b2.inner, &bm.inner).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2944,8 +2920,7 @@ fn image_effect_mandelbrot(
     extent: (f64, f64, f64, f64),
     quality: i32,
 ) -> PyResult<PyImage> {
-    let rs =
-        pillow_rs::image_effect_mandelbrot(size, extent, quality).map_err(map_error)?;
+    let rs = pillow_rs::image_effect_mandelbrot(size, extent, quality).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -2974,8 +2949,7 @@ fn palette_getcolor_append(
     mode: &str,
 ) -> PyResult<usize> {
     let mut pal = palette;
-    pillow_rs::palette_getcolor_append(&mut pal, r, g, b, a, mode)
-        .map_err(PyValueError::new_err)
+    pillow_rs::palette_getcolor_append(&mut pal, r, g, b, a, mode).map_err(PyValueError::new_err)
 }
 
 /// Format palette as PIL-compatible text (header + 256-entry table).

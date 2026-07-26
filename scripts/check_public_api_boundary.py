@@ -100,6 +100,12 @@ def main() -> int:
 
     for path in collect_rust_files():
         text = path.read_text()
+        if path != LIB_RS:
+            for match in PUBLIC_MOD_RE.finditer(text):
+                errors.append(
+                    f"{rel(path)}:{line_number(text, match.start())}: "
+                    "non-root modules must be private or pub(crate), not pub mod"
+                )
         for match in WILDCARD_USE_RE.finditer(text):
             errors.append(
                 f"{rel(path)}:{line_number(text, match.start())}: "

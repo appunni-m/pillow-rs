@@ -7,8 +7,8 @@
 use crate::error::PilError;
 
 mod default_aileron;
-pub mod imagingft;
-pub mod pilfont;
+pub(crate) mod imagingft;
+pub(crate) mod pilfont;
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
 pub struct Font {

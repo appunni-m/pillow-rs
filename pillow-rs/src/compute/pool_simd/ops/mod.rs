@@ -7,7 +7,7 @@
 //!
 //! `scalar` is always compiled as the reference + fallback.
 
-pub mod adapters;
+pub(crate) mod adapters;
 mod scalar; // always available — reference implementation // SIMD → registry adapter wrappers
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
