@@ -8670,9 +8670,9 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
     let glyph_to_script_map = inner.font().autohint_glyph_style_map().into_boxed_slice();
-    let has_usable_sfnt_names =
-        info.face_flags & u32::try_from(FT_FACE_FLAG_SFNT).unwrap_or(0) == 0
-            || font.sfnt_name_count() != 0;
+    let has_usable_sfnt_names = info.face_flags & u32::try_from(FT_FACE_FLAG_SFNT).unwrap_or(0)
+        == 0
+        || font.sfnt_name_count() != 0;
     let inner = Rc::new(RefCell::new(inner));
     // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
     // start with `face->size == NULL`; `FT_New_Size` may allocate one later.
