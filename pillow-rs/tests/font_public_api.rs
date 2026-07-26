@@ -1015,14 +1015,62 @@ fn assert_documented_blocked_public_parameters() {
         status_path.display()
     );
 
-    for (method, parameter) in EXPECTED_BLOCKED_PUBLIC_PARAMETERS {
-        let needle = format!("{method}.{parameter}");
-        assert!(
-            status.contains(&needle),
-            "{} must explicitly document blocked public Font parameter `{needle}`",
-            status_path.display()
-        );
+    let documented = documented_current_blocked_public_parameters(&status, &status_path);
+    let expected = EXPECTED_BLOCKED_PUBLIC_PARAMETERS
+        .into_iter()
+        .map(|(method, parameter)| format!("{method}.{parameter}"))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        documented,
+        expected,
+        "{} Current blocked public parameters section must exactly match the pinned Font manifest blocker allow-list",
+        status_path.display()
+    );
+}
+
+fn documented_current_blocked_public_parameters(
+    status: &str,
+    status_path: &Path,
+) -> BTreeSet<String> {
+    let mut in_section = false;
+    let mut documented = BTreeSet::new();
+
+    for line in status.lines() {
+        let trimmed = line.trim();
+        if trimmed == "Current blocked public parameters:" {
+            in_section = true;
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if trimmed.is_empty() {
+            if documented.is_empty() {
+                continue;
+            }
+            break;
+        }
+        if !trimmed.starts_with("- `") {
+            break;
+        }
+        let value = trimmed
+            .strip_prefix("- `")
+            .and_then(|value| value.strip_suffix('`'))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{} has malformed Current blocked public parameters row: {trimmed}",
+                    status_path.display()
+                )
+            });
+        documented.insert(value.to_owned());
     }
+
+    assert!(
+        !documented.is_empty(),
+        "{} must contain a non-empty Current blocked public parameters section",
+        status_path.display()
+    );
+    documented
 }
 
 fn assert_manifest_covers_pillow_public_signatures(
