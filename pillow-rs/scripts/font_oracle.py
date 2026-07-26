@@ -249,11 +249,17 @@ def getmask2_call_args(params: dict[str, Any]) -> tuple[list[Any], dict[str, Any
     return args, kwargs
 
 
+def text_value(params: dict[str, Any]) -> str | bytes | None:
+    if "text_bytes_hex" in params:
+        return bytes.fromhex(params["text_bytes_hex"])
+    return params.get("text")
+
+
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
     operation = case["operation"].removeprefix("font.")
     params = case["inputs"]["params"]
     font = load_font(case, ImageFont)
-    text = params.get("text")
+    text = text_value(params)
 
     if operation in {"load_default", "truetype"}:
         return font_descriptor(font)

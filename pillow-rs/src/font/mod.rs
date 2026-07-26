@@ -116,9 +116,21 @@ impl Font {
         Ok((w, h))
     }
 
+    /// Return the non-negative text mask extent for a Python `bytes` text argument.
+    pub fn text_bbox_bytes(&self, text: &[u8]) -> Result<(u32, u32), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.text_bbox(&text)
+    }
+
     /// Return the Pillow-compatible grayscale text mask.
     pub fn getmask(&self, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::getmask(self, text)
+    }
+
+    /// Return the Pillow-compatible grayscale text mask for byte text.
+    pub fn getmask_bytes(&self, text: &[u8]) -> Result<(u32, u32, Vec<u8>), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getmask(&text)
     }
 
     /// Return Pillow's public `getmask` result using optional render arguments.
@@ -128,6 +140,16 @@ impl Font {
         options: &FontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::getmask_with_options(self, text, options)
+    }
+
+    /// Return Pillow's public `getmask` result for byte text using optional render arguments.
+    pub fn getmask_bytes_with_options(
+        &self,
+        text: &[u8],
+        options: &FontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getmask_with_options(&text, options)
     }
 
     /// Return Pillow's public `(family, style)` font name tuple.
@@ -152,6 +174,12 @@ impl Font {
         imagingft::getlength(self, text)
     }
 
+    /// Return Pillow's public text length for a Python `bytes` text argument.
+    pub fn getlength_bytes(&self, text: &[u8]) -> Result<f32, PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getlength(&text)
+    }
+
     /// Return Pillow's public text length using optional layout arguments.
     pub fn getlength_with_options(
         &self,
@@ -159,6 +187,16 @@ impl Font {
         options: &FontTextOptions,
     ) -> Result<f32, PilError> {
         imagingft::getlength_with_options(self, text, options)
+    }
+
+    /// Return Pillow's public text length for byte text using optional layout arguments.
+    pub fn getlength_bytes_with_options(
+        &self,
+        text: &[u8],
+        options: &FontTextOptions,
+    ) -> Result<f32, PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getlength_with_options(&text, options)
     }
 
     /// Return whether the font exposes variation axes.
@@ -191,6 +229,12 @@ impl Font {
         imagingft::getbbox(self, text)
     }
 
+    /// Return Pillow's public text bounding box for a Python `bytes` text argument.
+    pub fn getbbox_bytes(&self, text: &[u8]) -> Result<(i32, i32, i32, i32), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getbbox(&text)
+    }
+
     /// Return Pillow's public text bounding box using optional layout arguments.
     pub fn getbbox_with_options(
         &self,
@@ -200,15 +244,38 @@ impl Font {
         imagingft::getbbox_with_options(self, text, options)
     }
 
+    /// Return Pillow's public text bounding box for byte text using optional layout arguments.
+    pub fn getbbox_bytes_with_options(
+        &self,
+        text: &[u8],
+        options: &FontTextOptions,
+    ) -> Result<(f32, f32, f32, f32), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getbbox_with_options(&text, options)
+    }
+
     /// Return Pillow's public binary-mode text bounding box.
     #[cfg(feature = "test-api")]
     pub fn getbbox_binary(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
         imagingft::getbbox_binary(self, text)
     }
 
+    /// Return Pillow's public binary-mode text bounding box for byte text.
+    #[cfg(feature = "test-api")]
+    pub fn getbbox_binary_bytes(&self, text: &[u8]) -> Result<(i32, i32, i32, i32), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getbbox_binary(&text)
+    }
+
     /// Return Pillow's public `getmask2` mask and offset tuple.
     pub fn getmask2(&self, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         imagingft::getmask2(self, text)
+    }
+
+    /// Return Pillow's public `getmask2` mask and offset tuple for byte text.
+    pub fn getmask2_bytes(&self, text: &[u8]) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getmask2(&text)
     }
 
     /// Return Pillow's public `getmask2` result using optional render arguments.
@@ -220,6 +287,16 @@ impl Font {
         imagingft::getmask2_with_options(self, text, options)
     }
 
+    /// Return Pillow's public `getmask2` result for byte text using optional render arguments.
+    pub fn getmask2_bytes_with_options(
+        &self,
+        text: &[u8],
+        options: &FontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getmask2_with_options(&text, options)
+    }
+
     /// `getmask2` variant with Pillow's fractional start parameter.
     pub fn getmask2_with_start(
         &self,
@@ -227,6 +304,16 @@ impl Font {
         start: (f64, f64),
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         imagingft::getmask2_with_start(self, text, start)
+    }
+
+    /// `getmask2` byte-text variant with Pillow's fractional start parameter.
+    pub fn getmask2_bytes_with_start(
+        &self,
+        text: &[u8],
+        start: (f64, f64),
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        let text = pillow_bytes_to_text(text);
+        self.getmask2_with_start(&text, start)
     }
 
     /// Return a transposed Pillow-compatible grayscale text mask.
@@ -248,6 +335,10 @@ impl Font {
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::render_text_binary(self, text, fill, spacing)
     }
+}
+
+fn pillow_bytes_to_text(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| char::from(*byte)).collect()
 }
 
 /// Normalize a wrapped font bounding box using Pillow's `TransposedFont` rules.
