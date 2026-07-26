@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `d26aa267-960b-43ff-8289-0a927796a5cb`
-- Snapshot: `62414887-bb3b-4a1a-86a6-ba0ac921fc6d`
+- Run: `63797cd3-70ef-493d-9a40-216c12895a62`
+- Snapshot: `ecfc6209-1285-442b-ad35-1d8bbff13e05`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `3f78330e1efffb606aeede50dd67df529bf2dbb0`
+- Commit measured: `e0d7e8f9016eea3f3363ca5707bb15ebc6adcd6d`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `816/833` (`97.96%`) | `133/144` (`92.36%`) | `79/86` (`91.86%`) | `1290/1347` (`95.77%`) |
+| `pillow-rs/src/font/imagingft.rs` | `818/833` (`98.20%`) | `135/144` (`93.75%`) | `80/86` (`93.02%`) | `1298/1347` (`96.36%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -335,6 +335,11 @@ Latest Font wrapper movement:
   `getmask2` offset `(-2, -2)` for `stroke_width=1.5`, while Rust previously
   allocated `ceil(stroke_width) * 2` and rounded the negative top offset toward
   zero.
+- Added active input-only multi-glyph stroked rows for
+  `font.getmask.dejavusans24_aa_stroke_1_5_l` and
+  `font.getmask2.dejavusans24_aa_stroke_1_5_l`. They stay inside the maintained
+  DejaVuSans `"A"` stroker route while exercising real multi-glyph stroked
+  composition and the non-empty previous-glyph advance/kerning path.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
@@ -365,9 +370,9 @@ Remaining targeted gaps in `imagingft.rs`:
   malformed-font sweep can crash Pillow itself, so crash-only rows are not
   admissible parity fixtures.
 - general visible non-zero `stroke_width`; partially routed through real
-  pure-Rust `FT_Glyph_Stroke` for the maintained DejaVuSans `"A"` fixture and
-  through the Pillow-compatible empty-text allocation path, with broader visible
-  glyph coverage still blocked on complete `FT_Glyph_Stroke`/
+  pure-Rust `FT_Glyph_Stroke` for maintained DejaVuSans `"A"` single-glyph and
+  multi-glyph rows plus the Pillow-compatible empty-text allocation path, with
+  broader visible glyph coverage still blocked on complete `FT_Glyph_Stroke`/
   `FT_Glyph_StrokeBorder` implementation.
 
 Latest blocker verification:
