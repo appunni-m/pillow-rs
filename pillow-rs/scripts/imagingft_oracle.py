@@ -13,6 +13,24 @@ FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "ima
 
 def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     import PIL
+    import os
+
+    venv_root = Path(os.environ.get("VIRTUAL_ENV", "")).resolve()
+    if not venv_root.name == ".oracle-venv":
+        raise RuntimeError(
+            f"imagingft oracle must run from repo-local .oracle-venv python: VIRTUAL_ENV={venv_root}"
+        )
+
+    python_executable = Path(sys.executable)
+    if ".oracle-venv" not in str(python_executable):
+        raise RuntimeError(
+            f"imagingft oracle must run from the repo-local .oracle-venv python: {python_executable}"
+        )
+    if not PIL.__file__ or ".oracle-venv" not in str(Path(PIL.__file__).resolve()):
+        raise RuntimeError(
+            f"imagingft oracle must use Pillow from repo-local .oracle-venv site-packages: {PIL.__file__}"
+        )
+
     from PIL import Image, ImageDraw, ImageFont
     import PIL._imagingft as _imagingft  # type: ignore
 
