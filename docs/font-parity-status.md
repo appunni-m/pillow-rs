@@ -4,9 +4,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ## Scope
 
-- Public surface source: `pillow-rs/tests/fixtures/font/inputs/public-api/manifest.json` plus the raw input JSON files it lists (non-deprecated corpus only)
+- Public surface source: `pillow-rs/tests/fixtures/font/font_manifest.yaml` plus the raw input JSON files it lists under `pillow-rs/tests/fixtures/font/inputs/public-api` (non-deprecated corpus only)
 - Target suite: `make -C pillow-rs font-tests`
-- Oracle: repo-local Pillow C path via `pillow-rs/scripts/font_oracle.py` and `.oracle-venv`
+- Oracle: repo-local Python Pillow Font path via `pillow-rs/scripts/font_oracle.py` and `.oracle-venv`; the oracle verifies that Pillow Font delegates into native `PIL._imagingft`.
 - No deprecated `deprecated/imagingft/*` tests are used.
 - Current fixture/test implementation: `pillow-rs/tests/font_public_api.rs` + `pillow-rs/tests/support/font_runner.rs` using explicit `Result` paths.
 - Oracle source-of-truth proof:
@@ -35,12 +35,12 @@ Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured
 
 ## Corpus state
 
-- Input manifest: `pillow-rs/tests/fixtures/font/inputs/public-api/manifest.json`
+- Input manifest: `pillow-rs/tests/fixtures/font/font_manifest.yaml`
 - Raw input files: `17` (`pillow-rs/tests/fixtures/font/inputs/public-api/font.*.json`)
 - Total rows: `105`
 - Executed rows: `105/105`
 - Required operation coverage check is manifest-driven: no required manifest operations missing.
-- Input-only guard: active manifest and raw input documents must contain no oracle output, expected hash/raw path, expected error, or status fields; all output/error expectations are generated at runtime from the live Pillow Font oracle.
+- Input-only guard: active manifest and raw input documents must contain no oracle output, expected hash/raw path, expected error, or status fields; all output/error expectations are generated at runtime from the live Python Pillow Font oracle and compared to Rust `Result`-style status payloads.
 
 ## Required operation presence (fixture-defined)
 
