@@ -240,6 +240,15 @@ def text_kwargs(params: dict[str, Any], include_stroke: bool = False) -> dict[st
     return {key: params[key] for key in keys if key in params}
 
 
+def getmask2_call_args(params: dict[str, Any]) -> tuple[list[Any], dict[str, Any]]:
+    args = list(params.get("args", []))
+    kwargs = text_kwargs(params, include_stroke=True)
+    kwargs.update(params.get("kwargs", {}))
+    if "mode" not in kwargs and not args:
+        kwargs["mode"] = "L"
+    return args, kwargs
+
+
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
     operation = case["operation"].removeprefix("font.")
     params = case["inputs"]["params"]
@@ -308,10 +317,8 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         mask = font.getmask(text, **kwargs)
         return image_value(mask.size, "L", bytes(mask))
     if operation == "getmask2":
-        kwargs = text_kwargs(params, include_stroke=True)
-        if "mode" not in kwargs:
-            kwargs["mode"] = "L"
-        mask, offset = font.getmask2(text, **kwargs)
+        args, kwargs = getmask2_call_args(params)
+        mask, offset = font.getmask2(text, *args, **kwargs)
         return image_with_offset_value(mask.size, "L", bytes(mask), offset)
     if operation == "getmask2_with_start":
         kwargs = text_kwargs(params, include_stroke=True)

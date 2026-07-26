@@ -76,9 +76,9 @@ public_method_parameters:
       - language
       - anchor
       - start
+      - ink
     blocked:
       - stroke_width
-      - ink
   getmask2:
     covered:
       - text
@@ -88,11 +88,11 @@ public_method_parameters:
       - language
       - anchor
       - start
-    blocked:
-      - stroke_width
       - ink
       - args
       - kwargs
+    blocked:
+      - stroke_width
   getmetrics:
     covered: []
     blocked: []
