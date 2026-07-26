@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,597`
+  - `ok_result`: `2,598`
   - `likely_infallible`: `3,809`
   - `parser_review`: `302`
-  - `review_non_result_fallible`: `118`
+  - `review_non_result_fallible`: `117`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -72,6 +72,10 @@ been inspected and either:
 - Quantize histogram insertion now updates matched entries directly through
   mutable match bindings instead of using `expect` for an already-proven
   internal invariant.
+- FreeType scaled glyph loading now returns `Result<GlyphOutline, FontError>`
+  through the recursive helper and bubbles invalid `loca`, out-of-range `glyf`,
+  simple/composite parse failures, and invalid composite attachment points
+  instead of relying on `expect` after a separate validation pass.
 
 ## Next review queue
 

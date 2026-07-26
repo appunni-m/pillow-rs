@@ -171,7 +171,7 @@ pub fn load_glyph_scaled_no_hinting(
     x_scale: i32,
     y_scale: i32,
 ) -> Result<GlyphOutline, FontError> {
-    Ok(load_glyph_scaled_inner(
+    load_glyph_scaled_inner(
         glyf,
         loca,
         index_to_loc_format,
@@ -179,7 +179,7 @@ pub fn load_glyph_scaled_no_hinting(
         hmtx,
         x_scale,
         y_scale,
-    ))
+    )
 }
 
 fn load_glyph_inner(
@@ -347,7 +347,6 @@ fn load_glyph_inner(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::expect_used)] // The public scaler first validates this tree with `load_glyph`.
 fn load_glyph_scaled_inner(
     glyf: &[u8],
     loca: &[u8],
@@ -356,15 +355,20 @@ fn load_glyph_scaled_inner(
     hmtx: &crate::tt::hmtx::HmtxTable,
     x_scale: i32,
     y_scale: i32,
-) -> GlyphOutline {
+) -> Result<GlyphOutline, FontError> {
     let loc = get_glyph_location(loca, glyph_index, index_to_loc_format)
-        .expect("load_glyph validated the composite glyph location");
+        .ok_or(FontError::InvalidComposite)?;
     if loc.length == 0 {
-        return GlyphOutline::default();
+        return Ok(GlyphOutline::default());
     }
 
     let start = loc.offset as usize;
-    let bytes = &glyf[start..start + loc.length as usize];
+    let bytes = glyf
+        .get(start..start + loc.length as usize)
+        .ok_or_else(|| FontError::InvalidOutline("glyf: data out of range".into()))?;
+    if bytes.len() < 10 {
+        return Err(FontError::InvalidOutline("glyf: glyph too short".into()));
+    }
 
     let num_contours = i16::from_be_bytes([bytes[0], bytes[1]]);
     let xmin = i16::from_be_bytes([bytes[2], bytes[3]]) as i32;
@@ -373,8 +377,7 @@ fn load_glyph_scaled_inner(
     let ymax = i16::from_be_bytes([bytes[8], bytes[9]]) as i32;
 
     if num_contours >= 0 {
-        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))
-            .expect("load_glyph validated the simple glyph data");
+        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
         for point in &mut outline.points {
             point.x = crate::fixed::ft_mul_fix(point.x, x_scale);
             point.y = crate::fixed::ft_mul_fix(point.y, y_scale);
@@ -386,11 +389,10 @@ fn load_glyph_scaled_inner(
         outline.bbox_xmin = xmin;
         outline.is_composite = false;
         outline.sub_lsb = hmtx.get(glyph_index).lsb as i32;
-        return outline;
+        return Ok(outline);
     }
 
-    let composite = parse_composite_components(bytes, 10)
-        .expect("load_glyph validated the composite glyph data");
+    let composite = parse_composite_components(bytes, 10)?;
     let outline_flags = outline_flags_from_components(&composite.components);
     let mut points: Vec<OutlinePoint> = Vec::new();
     let mut end_pts: Vec<u16> = Vec::new();
@@ -407,7 +409,7 @@ fn load_glyph_scaled_inner(
             hmtx,
             x_scale,
             y_scale,
-        );
+        )?;
         last_sub_xmin = sub.xmin;
         last_sub_lsb = sub.sub_lsb;
         let base = points.len();
@@ -427,10 +429,10 @@ fn load_glyph_scaled_inner(
             let component_point = comp.arg2 as usize;
             let parent = points
                 .get(parent_point)
-                .expect("load_glyph validated the parent attachment point");
+                .ok_or(FontError::InvalidComposite)?;
             let component = transformed
                 .get(component_point)
-                .expect("load_glyph validated the component attachment point");
+                .ok_or(FontError::InvalidComposite)?;
             (parent.x - component.x, parent.y - component.y)
         };
         for pt in transformed {
@@ -447,7 +449,7 @@ fn load_glyph_scaled_inner(
         num_contours_total = num_contours_total.saturating_add(sub.num_contours);
     }
 
-    GlyphOutline {
+    Ok(GlyphOutline {
         num_contours: num_contours_total,
         end_pts_of_contours: end_pts,
         points,
@@ -463,7 +465,7 @@ fn load_glyph_scaled_inner(
         components: composite.components,
         outline_flags,
         has_cubic_tags: false,
-    }
+    })
 }
 
 /// Apply a composite component's transform + translation to a point.

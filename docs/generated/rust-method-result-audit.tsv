@@ -2968,15 +2968,15 @@ pillow-rs-freetype/src/tt/glyf.rs	129	load_glyph	pub	Result<GlyphOutline, FontEr
 pillow-rs-freetype/src/tt/glyf.rs	139	load_glyph_with_scaled_component_offsets	pub	Result<GlyphOutline, FontError>	true	ok_result	
 pillow-rs-freetype/src/tt/glyf.rs	165	load_glyph_scaled_no_hinting	pub	Result<GlyphOutline, FontError>	true	ok_result	
 pillow-rs-freetype/src/tt/glyf.rs	185	load_glyph_inner	private	Result<GlyphOutline, FontError>	true	ok_result	question_operator,ok_or,result_ctor
-pillow-rs-freetype/src/tt/glyf.rs	351	load_glyph_scaled_inner	private	GlyphOutline	false	review_non_result_fallible	expect
-pillow-rs-freetype/src/tt/glyf.rs	470	transform_point	private	OutlinePoint	false	likely_infallible	
-pillow-rs-freetype/src/tt/glyf.rs	484	transform_scaled_point	private	OutlinePoint	false	likely_infallible	
-pillow-rs-freetype/src/tt/glyf.rs	502	parse_simple_glyph	private	Result<GlyphOutline, FontError>	true	ok_result	result_ctor
-pillow-rs-freetype/src/tt/glyf.rs	651	outline_flags_from_components	private	u32	false	likely_infallible	
-pillow-rs-freetype/src/tt/glyf.rs	662	outline_flags_from_simple_tags	private	u32	false	likely_infallible	
-pillow-rs-freetype/src/tt/glyf.rs	670	parse_composite_components	private	Result<CompositeGlyph, FontError>	true	ok_result	result_ctor
-pillow-rs-freetype/src/tt/glyf.rs	777	component_xy_offset	private	(i32, i32)	false	likely_infallible	
-pillow-rs-freetype/src/tt/glyf.rs	792	rounded_offset_font_units	private	i32	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	350	load_glyph_scaled_inner	private	Result<GlyphOutline, FontError>	true	ok_result	question_operator,ok_or,result_ctor
+pillow-rs-freetype/src/tt/glyf.rs	472	transform_point	private	OutlinePoint	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	486	transform_scaled_point	private	OutlinePoint	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	504	parse_simple_glyph	private	Result<GlyphOutline, FontError>	true	ok_result	result_ctor
+pillow-rs-freetype/src/tt/glyf.rs	653	outline_flags_from_components	private	u32	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	664	outline_flags_from_simple_tags	private	u32	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	672	parse_composite_components	private	Result<CompositeGlyph, FontError>	true	ok_result	result_ctor
+pillow-rs-freetype/src/tt/glyf.rs	779	component_xy_offset	private	(i32, i32)	false	likely_infallible	
+pillow-rs-freetype/src/tt/glyf.rs	794	rounded_offset_font_units	private	i32	false	likely_infallible	
 pillow-rs-freetype/src/tt/gvar.rs	31	glyph_deltas_fixed	pub	Result<Option<Vec<(i32, i32)>>, FontError>	true	ok_result	question_operator,ok_or,result_ctor
 pillow-rs-freetype/src/tt/gvar.rs	159	glyph_deltas	pub	Result<Option<Vec<(i32, i32)>>, FontError>	true	ok_result	question_operator
 pillow-rs-freetype/src/tt/gvar.rs	184	parse_gvar	pub	Result<GvarTable, FontError>	true	ok_result	question_operator,result_ctor
