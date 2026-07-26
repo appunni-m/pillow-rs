@@ -23,12 +23,12 @@ Generated inventory:
   - `example`: `25`
   - `bench`: `12`
 - Current generated classification counts:
-  - `likely_infallible`: `2,818`
-  - `ok_result`: `2,589`
+  - `likely_infallible`: `2,815`
+  - `ok_result`: `2,593`
   - `abi_status_code`: `349`
-  - `parser_review`: `181`
-  - `review_non_result_fallible`: `86`
-  - `review_panic_path`: `72`
+  - `parser_review`: `180`
+  - `review_non_result_fallible`: `87`
+  - `review_panic_path`: `71`
   - `pillow_clip_control_flow`: `5`
   - `freetype_void_api_internal_status`: `4`
   - `iterator_exhaustion_control_flow`: `3`
@@ -122,6 +122,10 @@ been inspected and either:
 - Core `pillow-rs/src` production parser-review rows are now classified:
   Pillow draw iterator exhaustion, imagingft bitmap-coverage absence, and
   palette/transparency absence are tracked as reviewed `Option` control flow.
+- `fontdone::Font::getlength` and its private `layout_advance` helper now
+  return `Result<_, FontError>` and bubble glyph metric lookup failures instead
+  of silently keeping the accumulated advance. The unified parity test and
+  benchmark example were updated to handle the fallible API explicitly.
 
 ## Next review queue
 

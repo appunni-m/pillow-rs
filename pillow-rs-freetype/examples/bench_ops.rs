@@ -78,7 +78,8 @@ fn main() {
             fonts.insert(key, font);
         }
 
-        let output = run_row(row, font_bytes[font_id].as_slice(), fonts.get(&key));
+        let output = run_row(row, font_bytes[font_id].as_slice(), fonts.get(&key))
+            .unwrap_or_else(|err| panic!("failed to run row {}: {err}", row.id));
         println!("{}", output.to_json(row));
     }
 }
@@ -156,26 +157,31 @@ impl BenchOutput {
     }
 }
 
-fn run_row(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> BenchOutput {
+fn run_row(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> Result<BenchOutput, String> {
     let mut last = Vec::new();
     if row.operation != "load_font" {
-        run_once_into(row, font_bytes, font, &mut last);
+        run_once_into(row, font_bytes, font, &mut last)?;
         black_box(&last);
     }
     let start = Instant::now();
     for _ in 0..row.iterations {
-        run_once_into(row, font_bytes, font, &mut last);
+        run_once_into(row, font_bytes, font, &mut last)?;
         black_box(&last);
     }
-    BenchOutput {
+    Ok(BenchOutput {
         elapsed_ns: start.elapsed().as_nanos(),
         iterations: row.iterations,
         output_len: last.len(),
         output_sha256: sha256_hex(&last),
-    }
+    })
 }
 
-fn run_once_into(row: &Row, font_bytes: &[u8], font: Option<&Font>, out: &mut Vec<u8>) {
+fn run_once_into(
+    row: &Row,
+    font_bytes: &[u8],
+    font: Option<&Font>,
+    out: &mut Vec<u8>,
+) -> Result<(), String> {
     out.clear();
     match row.operation.as_str() {
         "load_font" => {
@@ -203,6 +209,7 @@ fn run_once_into(row: &Row, font_bytes: &[u8], font: Option<&Font>, out: &mut Ve
                 &font
                     .expect("font is cached")
                     .getlength(&row.text)
+                    .map_err(|err| format!("getlength failed: {err}"))?
                     .to_le_bytes(),
             );
         }
@@ -258,8 +265,9 @@ fn run_once_into(row: &Row, font_bytes: &[u8], font: Option<&Font>, out: &mut Ve
                 &bitmap.buffer,
             );
         }
-        other => panic!("unsupported benchmark operation {other}"),
+        other => return Err(format!("unsupported benchmark operation {other}")),
     }
+    Ok(())
 }
 
 fn first_char(text: &str) -> char {
