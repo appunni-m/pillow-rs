@@ -175,6 +175,35 @@
           "mode": "RGBA"
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text.invalid_maxp_too_many_instruction_defs",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "canvas_width": 32,
+          "canvas_height": 24,
+          "xy": [
+            4,
+            8
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
     }
   ]
 }

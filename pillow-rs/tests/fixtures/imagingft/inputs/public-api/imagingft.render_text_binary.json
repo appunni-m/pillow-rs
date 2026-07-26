@@ -185,6 +185,29 @@
           "spacing": 0.0
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.invalid_maxp_too_many_instruction_defs",
+      "operation": "render_text_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "spacing": 0.0
+        }
+      }
     }
   ]
 }

@@ -149,6 +149,23 @@
           "orientation": "TRANSVERSE"
         }
       }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.invalid_maxp_too_many_instruction_defs",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "orientation": null
+        }
+      }
     }
   ]
 }

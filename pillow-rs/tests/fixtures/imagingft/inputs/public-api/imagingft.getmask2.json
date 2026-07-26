@@ -181,6 +181,26 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2.invalid_maxp_too_many_instruction_defs",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }

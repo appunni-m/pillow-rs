@@ -201,6 +201,19 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         FontError::InvalidTable(_) => FT_Err_Invalid_Table,
         FontError::ArrayTooLarge => FT_Err_Array_Too_Large as FT_Error,
         FontError::RasterOverflow => FT_Err_Raster_Overflow,
+        // FreeType exposes bytecode definition table overflows as dedicated
+        // TT interpreter errors (`ttinterp.c` IDEF/FDEF handling), not as the
+        // generic Invalid_Outline bucket used for malformed outline geometry.
+        FontError::InvalidOutline(message)
+            if message == "bytecode: too many instruction definitions" =>
+        {
+            FT_Err_Too_Many_Instruction_Defs as FT_Error
+        }
+        FontError::InvalidOutline(message)
+            if message == "bytecode: too many function definitions" =>
+        {
+            FT_Err_Too_Many_Function_Defs as FT_Error
+        }
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,
         FontError::CodeOverflow => FT_Err_Code_Overflow as FT_Error,

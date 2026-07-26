@@ -58,7 +58,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             text(params)?,
         )?)),
         "getmask" => {
-            let (width, height, pixels) = imagingft::getmask(&font, text(params)?);
+            let (width, height, pixels) = imagingft::getmask_result(&font, text(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
@@ -95,7 +95,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
             let (width, height, pixels) =
-                imagingft::render_text_binary(&font, text(params)?, fill, spacing);
+                imagingft::render_text_binary_result(&font, text(params)?, fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(

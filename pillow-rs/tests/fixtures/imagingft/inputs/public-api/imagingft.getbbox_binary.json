@@ -113,6 +113,22 @@
           "text": "A"
         }
       }
+    },
+    {
+      "case_id": "imagingft.getbbox_binary.invalid_maxp_too_many_instruction_defs",
+      "operation": "getbbox_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
     }
   ]
 }
