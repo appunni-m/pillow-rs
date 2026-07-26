@@ -37,7 +37,7 @@ fn load_truetype_with_index(data: Vec<u8>, size: f32, face_index: usize) -> Resu
 
     let library = ffi::FT_Init_FreeType();
     let mut face = ffi::FT_New_Memory_Face(&library, &data, face_index as ffi::FT_Long, size)
-        .map_err(|e| PilError::ValueError(format!("FT_New_Memory_Face: error {e}")))?;
+        .map_err(ft_error_to_pil)?;
 
     // Pillow _imagingft.c:getfont requests nominal size with width/height
     // set to size * 64 after FT_New_Memory_Face.
