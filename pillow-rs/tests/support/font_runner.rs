@@ -639,7 +639,13 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
                 .as_str()
                 .ok_or_else(|| PilError::TypeError("font asset id must be a string".into()))?;
             let metrics_path = fixture_root.join(id);
-            let bitmap_path = metrics_path.with_extension("png");
+            let bitmap_path = ["png", "gif", "pbm"]
+                .into_iter()
+                .map(|extension| metrics_path.with_extension(extension))
+                .find(|path| path.is_file())
+                .ok_or_else(|| {
+                    PilError::IOError("cannot find PILfont glyph data fixture".into())
+                })?;
             let metrics = fs::read(&metrics_path).map_err(|error| {
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;

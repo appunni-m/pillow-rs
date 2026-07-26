@@ -16,6 +16,21 @@
           "loader": "load"
         }
       }
+    },
+    {
+      "case_id": "font.load.courb08_pbm_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_pbm.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
     }
   ]
 }

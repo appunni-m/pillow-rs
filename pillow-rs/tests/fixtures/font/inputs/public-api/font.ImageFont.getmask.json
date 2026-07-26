@@ -44,6 +44,21 @@
           "mode": ""
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.pbm_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_pbm.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
     }
   ]
 }

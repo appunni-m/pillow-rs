@@ -46,6 +46,21 @@
           "orientation": "FLIP_LEFT_RIGHT"
         }
       }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.empty_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "",
+          "orientation": "ROTATE_90"
+        }
+      }
     }
   ]
 }
