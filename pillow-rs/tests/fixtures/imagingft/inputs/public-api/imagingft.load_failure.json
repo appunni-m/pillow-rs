@@ -99,6 +99,22 @@
           "text": "Hello"
         }
       }
+    },
+    {
+      "case_id": "imagingft.load_failure.invalid_font_size_tiny_ppem",
+      "expect_error": true,
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 0.0001
+        }
+      }
     }
   ]
 }

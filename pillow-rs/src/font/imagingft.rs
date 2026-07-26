@@ -48,7 +48,7 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<TrueTypeFont, Pi
         let message = match size_error {
             x if x == ffi::FT_Err_Invalid_Argument as i32 => "invalid argument",
             x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => "invalid pixel size",
-            x if x == ffi::FT_Err_Invalid_PPem as i32 => "invalid ppem",
+            x if x == ffi::FT_Err_Invalid_PPem as i32 => "invalid ppem value",
             _ => "FT_Request_Size failed",
         };
         return Err(PilError::OsError(message.into()));

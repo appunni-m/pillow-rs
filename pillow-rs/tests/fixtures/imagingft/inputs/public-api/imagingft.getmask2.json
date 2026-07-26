@@ -101,6 +101,26 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2.space",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " ",
+          "start": [
+            0,
+            0
+          ]
+        }
+      }
     }
   ]
 }

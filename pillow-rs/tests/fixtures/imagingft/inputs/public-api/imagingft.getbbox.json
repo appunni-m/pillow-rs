@@ -65,6 +65,22 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "imagingft.getbbox.space",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " "
+        }
+      }
     }
   ]
 }

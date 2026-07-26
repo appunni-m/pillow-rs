@@ -117,6 +117,26 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask.space",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " ",
+          "start": [
+            0,
+            0
+          ]
+        }
+      }
     }
   ]
 }
