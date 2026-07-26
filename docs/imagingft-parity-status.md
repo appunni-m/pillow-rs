@@ -1,6 +1,6 @@
 # ImagingFT Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
+Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated (imagingft-suite)
 
 ## Scope
 
@@ -13,7 +13,8 @@ Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
   - `.oracle-venv` is ignored by git at root via `.oracle-venv/`.
   - The oracle process validates it is running from `<repo>/.oracle-venv/bin/python` and imports `PIL` from that env only.
   - Bootstrap checks assert `ImageFont.core` resolves to `PIL._imagingft`, that `PIL._imagingft` is a native extension module (shared object), and that loaded fonts expose a `builtins.Font` core object (`font.font`) for C-layer execution.
-  - Additional runtime guard now inspects `PIL.ImageFont.FreeTypeFont` source in the oracle venv and requires the tested methods (`getmask`, `getmask2`, `getbbox`, `getlength`, `getname`) to delegate through the C core (`self.font...`) so the oracle remains a thin Python veneer over `_imagingft`, not custom logic.
+  - Additional runtime guard inspects `PIL.ImageFont.FreeTypeFont` source in the oracle venv and requires tested methods (`getmask`, `getmask2`, `getbbox`, `getlength`, `getname`) to delegate through the C core (`self.font...`) so the oracle remains a thin Python veneer over `_imagingft`, not custom logic.
+  - Verified against this repo local `pillow-rs/.oracle-venv` only; this satisfies the "repo-only and gitignored oracle env" requirement.
   - This gives the strict chain: fixtures -> Python oracle -> `PIL._imagingft` C extension -> `Font` core object, no custom Python logic.
 
 ## Acceptance checks
@@ -21,13 +22,13 @@ Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
 - `make -C pillow-rs imagingft-tests`  
   Result: `1` passed, `0` failed
 - Coverage evidence:
-  - Local coverage command: `make -C pillow-rs imagingft-tests-coverage` (delegates to `imagingft-tests-coverage-fixed`)
-  - Test result from command output: `1` passed, `0` failed
-  - MCP-managed run: `b194a67c-39fc-4502-a701-7739dcc48698`
-  - Coverage MCP run command: `imagingft-tests-coverage-fixed`
-  - Coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
-  - Snapshot id: `1b28d8b2-45b3-4556-b419-7f2e6e945772`
-  - Prior suite snapshot for comparison: `f60679b1-88b3-4408-804b-addc0b45989e`
+- Local coverage command: `make -C pillow-rs imagingft-tests-coverage` (delegates to `imagingft-tests-coverage-fixed`)
+- Test result from command output: `1` passed, `0` failed
+- MCP-managed run: `db3ae8f4-3d8a-4f05-928e-74a804fe3d63`
+- Coverage MCP run command: `imagingft-tests-coverage-fixed`
+- Coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
+- Snapshot id: `8d8d3580-67ad-4cdb-8316-afb99e9e57ce`
+- Prior suite snapshot for comparison: `a4cbbf23-2879-4c5d-b5ca-0594dd16e680`
 
 ## Corpus state
 
