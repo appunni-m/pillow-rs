@@ -1028,6 +1028,64 @@ fn assert_documented_blocked_public_parameters() {
     );
 }
 
+fn assert_blocked_public_parameters_have_active_dependency_blockers() {
+    let expected = EXPECTED_BLOCKED_PUBLIC_PARAMETERS
+        .into_iter()
+        .map(|(method, parameter)| (method.to_owned(), parameter.to_owned()))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        expected,
+        BTreeSet::from([
+            ("getmask".to_owned(), "stroke_width".to_owned()),
+            ("getmask2".to_owned(), "stroke_width".to_owned()),
+        ]),
+        "this dependency check is specific to Pillow Font stroke_width rendering"
+    );
+
+    let interface_map_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../pillow-rs-freetype/tests/data/interface_map.json");
+    let interface_map_text = fs::read_to_string(&interface_map_path).unwrap_or_else(|err| {
+        panic!(
+            "{} must be readable to justify Font stroke_width blockers: {err}",
+            interface_map_path.display()
+        )
+    });
+    let interface_map: Value = serde_json::from_str(&interface_map_text).unwrap_or_else(|err| {
+        panic!(
+            "{} must be valid JSON to justify Font stroke_width blockers: {err}",
+            interface_map_path.display()
+        )
+    });
+
+    for symbol in ["FT_Glyph_Stroke", "FT_Glyph_StrokeBorder"] {
+        let entry = freetype_interface_symbol(&interface_map, symbol).unwrap_or_else(|| {
+            panic!(
+                "{} must classify {symbol}; Pillow Font stroke_width uses it through _imagingft.c",
+                interface_map_path.display()
+            )
+        });
+        let status = entry.get("status").and_then(Value::as_str);
+        let rust = entry.get("rust");
+        assert_eq!(
+            status,
+            Some("out_of_scope"),
+            "{symbol} is no longer marked out_of_scope; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        );
+        assert!(
+            rust.is_none_or(Value::is_null),
+            "{symbol} now has a Rust endpoint; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        );
+    }
+}
+
+fn freetype_interface_symbol<'a>(interface_map: &'a Value, symbol: &str) -> Option<&'a Value> {
+    interface_map
+        .get("paths")?
+        .as_array()?
+        .iter()
+        .find_map(|group| group.get("symbols")?.get(symbol))
+}
+
 fn documented_current_blocked_public_parameters(
     status: &str,
     status_path: &Path,
@@ -1194,6 +1252,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();
+    assert_blocked_public_parameters_have_active_dependency_blockers();
 
     let observed = cases
         .iter()
