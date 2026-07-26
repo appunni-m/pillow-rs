@@ -3759,6 +3759,12 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             return FT_Err_Ok;
         }
         if !entry.state.subpath_open
+            && entry.state.line_segments == 1
+            && entry.state.finalize_closed_single_horizontal_line()
+        {
+            return FT_Err_Ok;
+        }
+        if !entry.state.subpath_open
             && entry.state.line_segments == 2
             && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
         {

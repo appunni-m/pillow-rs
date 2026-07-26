@@ -19531,6 +19531,14 @@ static int emit_stroker_simple_line_counts(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_bbox_json(FT_BBox bbox) {
+    printf("{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           (long)bbox.xMin,
+           (long)bbox.yMin,
+           (long)bbox.xMax,
+           (long)bbox.yMax);
+}
+
 static void print_stroker_outline_json(FT_Outline* outline) {
     printf("{\"n_points\":%d,\"n_contours\":%d,\"points\":[",
            outline->n_points,
@@ -19552,6 +19560,59 @@ static void print_stroker_outline_json(FT_Outline* outline) {
         printf("%u", (unsigned)outline->contours[i]);
     }
     printf("],\"flags\":%d}", outline->flags);
+}
+
+static int emit_stroker_closed_line_geometry(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    FT_Error status = new_error;
+    FT_UInt point_count = 0;
+    FT_UInt contour_count = 0;
+    FT_Vector points[128] = {0};
+    unsigned char tags[128] = {0};
+    unsigned short contours[16] = {0};
+    FT_Outline exported = {0, 0, points, tags, contours, 0};
+    FT_BBox cbox = {0, 0, 0, 0};
+    if (!status && stroker) {
+        FT_Stroker_Set(
+            stroker,
+            96,
+            FT_STROKER_LINECAP_ROUND,
+            FT_STROKER_LINEJOIN_ROUND,
+            65536);
+        FT_Vector start = { 0, 0 };
+        FT_Vector to = { 640, 0 };
+        status = FT_Stroker_BeginSubPath(stroker, &start, 0);
+        if (!status) status = FT_Stroker_LineTo(stroker, &to);
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        if (!status) status = FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+        if (!status) {
+            FT_Stroker_Export(stroker, &exported);
+            FT_Outline_Get_CBox(&exported, &cbox);
+        }
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"status\":%d,", status);
+    printf("\"point_count\":%u,\"contour_count\":%u,", point_count, contour_count);
+    printf("\"exported_outline\":");
+    print_stroker_outline_json(&exported);
+    printf(",\"cbox\":");
+    print_stroker_bbox_json(cbox);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
 }
 
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
@@ -26336,6 +26397,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-simple-line-counts")) {
         return emit_stroker_simple_line_counts(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-closed-line-geometry")) {
+        return emit_stroker_closed_line_geometry(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
