@@ -1,6 +1,6 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `dcb8a73c6`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `8c6d496ab`
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
@@ -31,6 +31,11 @@ New commits:
   `font_manifest.yaml.required_operations` exactly. A manifest operation can no
   longer go stale without a runner implementation, and a runner operation can
   no longer bypass the manifest.
+- `8c6d496ab` — added input-document envelope validation for every active
+  public-api JSON file. Each file must contain only `version`, `operation`, and
+  `cases`; use version `1`; have non-empty cases; and classify its top-level
+  operation as a required operation, negative operation, or explicitly allowed
+  grouped file.
 
 Direct Pillow `ImageFont.FreeTypeFont` public callable comparison from the
 repo-local oracle remains:
@@ -57,15 +62,17 @@ Newly covered edge cases:
 - Manifest operations are now validated against explicit runner operation
   arms, closing the stale-manifest/stale-runner gap before live oracle
   execution starts.
+- Public-api input files now have a validated envelope, preventing stale or
+  unclassified grouped files from entering the corpus.
 
 Verification:
 
 - `make -C pillow-rs fmt` — passed
 - `make -C pillow-rs font-tests` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `33ec914c-c310-43ea-b85e-b51b297d5c31`
-  - snapshot `673db3fe-cb16-44c9-9336-28eeb6d5465f`
-  - commit `dcb8a73c6acf2791ea38dadec2afcd444b08e32e`
+  - run `417dbff8-d96c-452b-8b2a-322311bf9014`
+  - snapshot `27465c6d-6faa-435f-9cd3-18fc263ab051`
+  - commit `8c6d496ab336e9343f35441744e0cdf1eee61889`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:
