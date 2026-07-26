@@ -46,7 +46,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": font.getlength(text(params)?),
+            "value": font.getlength_result(text(params)?)?,
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
@@ -74,14 +74,14 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(font_api::transposed_bbox(
-            font.getbbox(text(params)?),
+            font.getbbox_result(text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
             font_api::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": font.getlength(text(params)?),
+                "value": font.getlength_result(text(params)?)?,
             }))
         }
         "draw_text" => draw_text(&font, params),

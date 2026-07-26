@@ -37,10 +37,15 @@ impl Font {
 
     /// Return the non-negative text mask extent for Pillow-style text layout.
     pub fn text_bbox(&self, text: &str) -> (u32, u32) {
-        let bbox = imagingft::getbbox(self, text);
+        self.text_bbox_result(text).unwrap_or((0, 0))
+    }
+
+    /// Fallible variant of [`Font::text_bbox`].
+    pub fn text_bbox_result(&self, text: &str) -> Result<(u32, u32), PilError> {
+        let bbox = imagingft::getbbox_result(self, text)?;
         let w = (bbox.2 - bbox.0).max(0) as u32;
         let h = (bbox.3 - bbox.1).max(0) as u32;
-        (w, h)
+        Ok((w, h))
     }
 
     /// Return the Pillow-compatible grayscale text mask.
@@ -66,6 +71,11 @@ impl Font {
     /// Return Pillow's public text length in pixels.
     pub fn getlength(&self, text: &str) -> f32 {
         imagingft::getlength(self, text)
+    }
+
+    /// Fallible variant of [`Font::getlength`].
+    pub fn getlength_result(&self, text: &str) -> Result<f32, PilError> {
+        imagingft::getlength_result(self, text)
     }
 
     /// Return whether the font exposes variation axes.
