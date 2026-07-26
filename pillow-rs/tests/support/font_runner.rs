@@ -231,7 +231,6 @@ fn has_text_options(params: &Value) -> bool {
         "language",
         "stroke_width",
         "anchor",
-        "ink",
         "start",
     ]
     .into_iter()
@@ -269,16 +268,6 @@ fn text_options(params: &Value) -> Result<FontTextOptions, PilError> {
             .transpose()?
             .unwrap_or(0.0),
         anchor: optional_string(params, "anchor")?,
-        ink: params
-            .get("ink")
-            .map(|value| {
-                value
-                    .as_i64()
-                    .and_then(|value| i32::try_from(value).ok())
-                    .ok_or_else(|| PilError::TypeError("ink must be an integer".into()))
-            })
-            .transpose()?
-            .unwrap_or(0),
         start: params
             .get("start")
             .map(|value| pair_f64(value, "start"))

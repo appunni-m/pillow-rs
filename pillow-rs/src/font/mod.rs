@@ -29,7 +29,7 @@ pub struct FontVariationAxis {
 }
 
 /// Optional Pillow `FreeTypeFont` text-layout/render arguments.
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FontTextOptions {
     /// Pillow `mode` argument. BASIC layout ignores most values, but `RGBA`
     /// changes `getmask/getmask2` allocation behavior.
@@ -44,8 +44,6 @@ pub struct FontTextOptions {
     pub stroke_width: f32,
     /// Pillow two-character anchor code.
     pub anchor: Option<String>,
-    /// Pillow ink value for RGBA rendering.
-    pub ink: i32,
     /// Pillow fractional rendering start.
     pub start: Option<(f64, f64)>,
 }
@@ -219,25 +217,4 @@ pub fn transposed_bbox(
 /// Validate whether Pillow defines text length for a transposed font.
 pub fn validate_transposed_length(orientation: Option<&str>) -> Result<(), PilError> {
     imagingft::validate_transposed_length(orientation)
-}
-
-impl std::fmt::Debug for Font {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Font::FreeType({}px)", self.font_size())
-    }
-}
-
-impl std::fmt::Debug for FontTextOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FontTextOptions")
-            .field("mode", &self.mode)
-            .field("direction", &self.direction)
-            .field("features", &self.features)
-            .field("language", &self.language)
-            .field("stroke_width", &self.stroke_width)
-            .field("anchor", &self.anchor)
-            .field("ink", &self.ink)
-            .field("start", &self.start)
-            .finish()
-    }
 }
