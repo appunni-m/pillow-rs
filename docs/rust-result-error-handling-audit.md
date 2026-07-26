@@ -16,13 +16,13 @@ python3 scripts/audit_rust_result_methods.py
 Generated inventory:
 
 - `docs/generated/rust-method-result-audit.tsv`
-- Current generated rows: `6,903`
+- Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,575`
-  - `likely_infallible`: `3,810`
+  - `ok_result`: `2,583`
+  - `likely_infallible`: `3,808`
   - `parser_review`: `307`
-  - `review_non_result_fallible`: `125`
-  - `review_panic_path`: `86`
+  - `review_non_result_fallible`: `128`
+  - `review_panic_path`: `85`
 
 ## Current interpretation
 
@@ -50,6 +50,12 @@ been inspected and either:
 - Compute backend activation, inspection, and routing now return `Result<_, PilError>` and report poisoned global backend state as `PilError::InternalError`; Python/JS bindings bubble those errors.
 - Raw byte image construction and Pillow grayscale conversion helpers now return `Result<_, PilError>` instead of using `expect` for buffer shape mismatches; Draw image restoration now returns `Result` and bindings bubble failures.
 - Legacy compute operation registration helpers now return `Result<_, PilError>` for duplicate keys and poisoned registry state; tests assert the structured error instead of `#[should_panic]`.
+- `pillow-rs-image` image buffers now expose checked Result-based APIs:
+  `try_get_pixel`, `try_get_pixel_mut`, `try_put_pixel`, `try_new`,
+  `try_from_pixel`, and `try_from_fn`. Standard `Index`, `get_pixel`,
+  `get_pixel_mut`, `put_pixel`, `new`, `from_pixel`, and `from_fn` remain
+  compatibility panic APIs and must be migrated call-by-call where callers can
+  bubble `ImageResult`.
 
 ## Next review queue
 
@@ -59,4 +65,7 @@ without boundary translation loss.
 
 Highest-priority current production rows include:
 
-- `pillow-rs-image/src/types/buffer.rs`: indexed pixel accessors panic on out-of-bounds access.
+- `pillow-rs-image/src/types/buffer.rs`: migrate internal callers from
+  compatibility panic APIs to the new `try_*` APIs where their surrounding
+  signatures can bubble `ImageResult`; leave trait `Index`/`IndexMut` as
+  documented panic semantics.

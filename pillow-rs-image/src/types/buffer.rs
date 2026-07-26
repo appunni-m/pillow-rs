@@ -9,6 +9,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 use std::slice::{ChunksExact, ChunksExactMut};
 
 use super::color::{FromColor, Luma, LumaA, Rgb, Rgba};
+use super::error::{ImageError, ImageResult};
 
 use super::traits::{GenericImage, GenericImageView, Pixel, Primitive};
 
@@ -727,6 +728,15 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice(pixel_indices))
     }
 
+    /// Gets a reference to the pixel at location `(x, y)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when `(x, y)` is out of bounds.
+    pub fn try_get_pixel(&self, x: u32, y: u32) -> ImageResult<&P> {
+        self.get_pixel_checked(x, y).ok_or(ImageError::Dimensions)
+    }
+
     fn check_image_fits(width: u32, height: u32, len: usize) -> bool {
         let checked_len = Self::image_buffer_len(width, height);
         checked_len.is_some_and(|min_len| min_len <= len)
@@ -833,6 +843,16 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice_mut(pixel_indices))
     }
 
+    /// Gets a mutable reference to the pixel at location `(x, y)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when `(x, y)` is out of bounds.
+    pub fn try_get_pixel_mut(&mut self, x: u32, y: u32) -> ImageResult<&mut P> {
+        self.get_pixel_mut_checked(x, y)
+            .ok_or(ImageError::Dimensions)
+    }
+
     /// Puts a pixel at location `(x, y)`.
     ///
     /// # Panics
@@ -842,6 +862,16 @@ where
     #[track_caller]
     pub fn put_pixel(&mut self, x: u32, y: u32, pixel: P) {
         *self.get_pixel_mut(x, y) = pixel;
+    }
+
+    /// Puts a pixel at location `(x, y)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when `(x, y)` is out of bounds.
+    pub fn try_put_pixel(&mut self, x: u32, y: u32, pixel: P) -> ImageResult<()> {
+        *self.try_get_pixel_mut(x, y)? = pixel;
+        Ok(())
     }
 }
 
@@ -856,15 +886,25 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     /// Panics when the resulting image is larger than the maximum size of a vector.
     #[must_use]
     pub fn new(width: u32, height: u32) -> ImageBuffer<P, Vec<P::Subpixel>> {
-        let Some(size) = Self::image_buffer_len(width, height) else {
-            panic!("Buffer length in `ImageBuffer::new` overflows usize");
-        };
-        ImageBuffer {
+        Self::try_new(width, height).expect("Buffer length in `ImageBuffer::new` overflows usize")
+    }
+
+    /// Creates a new image buffer based on a `Vec<P::Subpixel>`.
+    ///
+    /// All pixels have a value of zero.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when the resulting buffer length
+    /// overflows `usize`.
+    pub fn try_new(width: u32, height: u32) -> ImageResult<ImageBuffer<P, Vec<P::Subpixel>>> {
+        let size = Self::image_buffer_len(width, height).ok_or(ImageError::Dimensions)?;
+        Ok(ImageBuffer {
             data: vec![P::Subpixel::DEFAULT_MIN_VALUE; size],
             width,
             height,
             _phantom: PhantomData,
-        }
+        })
     }
 
     /// Constructs a new `ImageBuffer` by copying a pixel.
@@ -873,11 +913,26 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     ///
     /// Panics when the resulting image is larger than the maximum size of a vector.
     pub fn from_pixel(width: u32, height: u32, pixel: P) -> ImageBuffer<P, Vec<P::Subpixel>> {
-        let mut buf = ImageBuffer::new(width, height);
+        Self::try_from_pixel(width, height, pixel)
+            .expect("Buffer length in `ImageBuffer::from_pixel` overflows usize")
+    }
+
+    /// Constructs a new `ImageBuffer` by copying a pixel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when the resulting buffer length
+    /// overflows `usize`.
+    pub fn try_from_pixel(
+        width: u32,
+        height: u32,
+        pixel: P,
+    ) -> ImageResult<ImageBuffer<P, Vec<P::Subpixel>>> {
+        let mut buf = ImageBuffer::try_new(width, height)?;
         for p in buf.pixels_mut() {
             *p = pixel;
         }
-        buf
+        Ok(buf)
     }
 
     /// Constructs a new `ImageBuffer` by repeated application of the supplied function.
@@ -885,15 +940,33 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     /// # Panics
     ///
     /// Panics when the resulting image is larger than the maximum size of a vector.
-    pub fn from_fn<F>(width: u32, height: u32, mut f: F) -> ImageBuffer<P, Vec<P::Subpixel>>
+    pub fn from_fn<F>(width: u32, height: u32, f: F) -> ImageBuffer<P, Vec<P::Subpixel>>
     where
         F: FnMut(u32, u32) -> P,
     {
-        let mut buf = ImageBuffer::new(width, height);
+        Self::try_from_fn(width, height, f)
+            .expect("Buffer length in `ImageBuffer::from_fn` overflows usize")
+    }
+
+    /// Constructs a new `ImageBuffer` by repeated application of the supplied function.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImageError::Dimensions`] when the resulting buffer length
+    /// overflows `usize`.
+    pub fn try_from_fn<F>(
+        width: u32,
+        height: u32,
+        mut f: F,
+    ) -> ImageResult<ImageBuffer<P, Vec<P::Subpixel>>>
+    where
+        F: FnMut(u32, u32) -> P,
+    {
+        let mut buf = ImageBuffer::try_new(width, height)?;
         for (x, y, p) in buf.enumerate_pixels_mut() {
             *p = f(x, y);
         }
-        buf
+        Ok(buf)
     }
 
     /// Creates an image buffer out of an existing buffer.
@@ -1101,3 +1174,40 @@ where
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checked_pixel_access_reports_out_of_bounds() -> ImageResult<()> {
+        let mut img = RgbaImage::try_new(2, 2)?;
+        assert!(matches!(
+            img.try_get_pixel(3, 0),
+            Err(ImageError::Dimensions)
+        ));
+        assert!(matches!(
+            img.try_get_pixel_mut(0, 3),
+            Err(ImageError::Dimensions)
+        ));
+        assert!(matches!(
+            img.try_put_pixel(2, 2, Rgba([1, 2, 3, 4])),
+            Err(ImageError::Dimensions)
+        ));
+        img.try_put_pixel(1, 1, Rgba([5, 6, 7, 8]))?;
+        assert_eq!(img.try_get_pixel(1, 1)?.channels(), &[5, 6, 7, 8]);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_constructors_create_expected_pixels() -> ImageResult<()> {
+        let img = RgbImage::try_from_pixel(2, 1, Rgb([9, 8, 7]))?;
+        assert_eq!(img.try_get_pixel(0, 0)?.channels(), &[9, 8, 7]);
+        assert_eq!(img.try_get_pixel(1, 0)?.channels(), &[9, 8, 7]);
+
+        let img = GrayImage::try_from_fn(2, 2, |x, y| Luma([(x + y) as u8]))?;
+        assert_eq!(img.try_get_pixel(0, 0)?.channels(), &[0]);
+        assert_eq!(img.try_get_pixel(1, 1)?.channels(), &[2]);
+        Ok(())
+    }
+}
