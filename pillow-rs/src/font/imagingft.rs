@@ -191,13 +191,12 @@ pub(crate) fn font_variant_with_options(
     font: &Font,
     options: &FontVariantOptions,
 ) -> Result<Font, PilError> {
-    if let Some(layout_engine) = options.layout_engine.as_deref() {
-        if !matches!(layout_engine, "BASIC" | "0") {
-            return Err(PilError::ValueError(
-                "only BASIC FreeTypeFont layout_engine is implemented".into(),
-            ));
-        }
-    }
+    // Pillow's Python wrapper accepts non-BASIC layout_engine values even when
+    // libraqm is unavailable, then falls back to BASIC before entering
+    // `_imagingft`. The pure-Rust path currently implements that no-raqm
+    // behavior, so this option is recorded for signature parity but does not
+    // change layout.
+    let _layout_engine = options.layout_engine.as_deref();
     let _encoding = options.encoding.as_deref();
     load_truetype_with_index(
         options
