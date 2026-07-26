@@ -1028,8 +1028,8 @@ pillow-rs/tests/font_public_api.rs	33	fixture_root	private	PathBuf	false	likely_
 pillow-rs/tests/font_public_api.rs	37	oracle_site_packages	private	Vec<PathBuf>	false	parser_review	expect,result_ctor
 pillow-rs/tests/font_public_api.rs	72	oracle_python	private	PathBuf	false	review_panic_path	question_operator,expect,panic
 pillow-rs/tests/font_public_api.rs	102	load_manifest	private	FontManifest	false	review_panic_path	expect,panic
-pillow-rs/tests/font_public_api.rs	127	manifest_scalar	private	Option<String>	false	review_non_result_fallible	expect
-pillow-rs/tests/font_public_api.rs	137	manifest_list	private	BTreeSet<String>	false	review_panic_path	question_operator,expect,panic,command_spawn
+pillow-rs/tests/font_public_api.rs	127	manifest_scalar	private	Option<String>	false	likely_infallible	
+pillow-rs/tests/font_public_api.rs	137	manifest_list	private	BTreeSet<String>	false	review_non_result_fallible	expect
 pillow-rs/tests/font_public_api.rs	169	load_input_cases	private	Vec<Value>	false	review_non_result_fallible	expect
 pillow-rs/tests/font_public_api.rs	216	assert_manifest_has_no_embedded_expectations	private	()	false	likely_infallible	
 pillow-rs/tests/font_public_api.rs	244	assert_input_only_case	private	()	false	likely_infallible	
@@ -1857,7 +1857,7 @@ pillow-rs-freetype/src/autohint/latin.rs	1042	sort_pos	private	()	false	likely_i
 pillow-rs-freetype/src/autohint/latin.rs	1059	sort_and_quantize_widths	pub	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1122	metrics_init_widths	pub	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1219	extract_widths	private	(usize, [AfWidth; AF_LATIN_MAX_WIDTHS])	false	likely_infallible	
-pillow-rs-freetype/src/autohint/latin.rs	1259	metrics_init_blues_impl	pub	()	false	parser_review	question_operator,result_ctor
+pillow-rs-freetype/src/autohint/latin.rs	1259	metrics_init_blues_impl	pub	()	false	parser_review	result_ctor
 pillow-rs-freetype/src/autohint/latin.rs	1773	metrics_scale_dim	pub	(i32, i32)	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1912	compute_blue_edges	private	()	false	likely_infallible	
 pillow-rs-freetype/src/autohint/latin.rs	1993	base_glyph_blues	private	(Option<AfLatinBlue>, Option<AfLatinBlue>)	false	likely_infallible	
@@ -2415,7 +2415,7 @@ pillow-rs-freetype/src/font.rs	405	winfnt_family_name	private	String	false	likel
 pillow-rs-freetype/src/font.rs	418	winfnt_font_data	private	Arc<FontData>	false	likely_infallible	
 pillow-rs-freetype/src/font.rs	511	parse_bdf_font_bounding_box	private	Option<(i16, i16, i16, i16)>	false	parser_review	question_operator
 pillow-rs-freetype/src/font.rs	530	bdf_property_format	private	BdfPropertyFormat	false	likely_infallible	
-pillow-rs-freetype/src/font.rs	596	parse_bdf_atom	private	String	false	review_panic_path	question_operator,unwrap,panic,fs_io,checked_arithmetic,map_err,ok_or,result_ctor
+pillow-rs-freetype/src/font.rs	596	parse_bdf_atom	private	String	false	likely_infallible	
 pillow-rs-freetype/src/font.rs	600	parse_bdf_property_line	private	Option<BdfPropertyEntry>	false	parser_review	question_operator
 pillow-rs-freetype/src/font.rs	629	parse_bdf_metadata	private	Result<BdfMetadata, FontError>	true	ok_result	result_ctor
 pillow-rs-freetype/src/font.rs	676	bdf_font_data	private	Arc<FontData>	false	likely_infallible	
@@ -2471,7 +2471,7 @@ pillow-rs-freetype/src/font.rs	1888	type1_i16_value	private	Option<i16>	false	pa
 pillow-rs-freetype/src/font.rs	1892	type1_i32_value	private	Option<i32>	false	parser_review	question_operator
 pillow-rs-freetype/src/font.rs	1896	type1_bool_value	private	Option<bool>	false	parser_review	question_operator
 pillow-rs-freetype/src/font.rs	1905	type1_number_token	private	Option<&'a str>	false	parser_review	question_operator
-pillow-rs-freetype/src/font.rs	1911	type1_bbox	private	Option<BBox>	false	review_panic_path	question_operator,unwrap,panic,fs_io,checked_arithmetic,map_err,ok_or,result_ctor
+pillow-rs-freetype/src/font.rs	1911	type1_bbox	private	Option<BBox>	false	parser_review	question_operator
 pillow-rs-freetype/src/font.rs	1936	slot	private	&OnceLock<tt::hinter::exec::ExecContext>	false	likely_infallible	
 pillow-rs-freetype/src/font.rs	2136	subglyphs_from_components	private	Vec<SubGlyphInfo>	false	likely_infallible	
 pillow-rs-freetype/src/font.rs	2174	memory_face	pub	Result<Self, FontError>	true	ok_result	result_ctor
@@ -6838,7 +6838,7 @@ pillow-rs-py/src/lib.rs	1920	bitmap	private	PyResult<()>	true	ok_result	question
 pillow-rs-py/src/lib.rs	1934	regular_polygon	private	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
 pillow-rs-py/src/lib.rs	1997	polygon	private	PyResult<()>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	2029	point	private	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2035	shape	private	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2035	shape	private	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
 pillow-rs-py/src/lib.rs	2054	arc	private	PyResult<()>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	2078	chord	private	PyResult<()>	true	ok_result	map_err
 pillow-rs-py/src/lib.rs	2105	pieslice	private	PyResult<()>	true	ok_result	map_err
