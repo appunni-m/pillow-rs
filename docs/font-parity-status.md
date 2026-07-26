@@ -924,6 +924,8 @@ Source: Coverage MCP snapshot `e3c79419-67ff-4b76-ac15-17cf0822a908`, `pillow-rs
   - `font_manifest.yaml.public_method_parameters` classifies every live Pillow public parameter;
   - active input rows exercise every parameter marked covered;
   - active input rows do not exercise params still marked blocked.
+  - non-grouped input JSON files contain only cases for their declared operation;
+  - grouped input JSON files must use an explicit allowed group name.
 - Current intentionally blocked Pillow public params:
   - `getmask.stroke_width`
   - `getmask2.stroke_width`
@@ -1012,6 +1014,21 @@ Snapshot `79d9799d-9ea2-4a17-a186-329af0c3bba6`:
   - branches: `13/72` (`18.06%`)
   - functions: `13/108` (`12.04%`)
   - regions: `186/1269` (`14.66%`)
+
+### Manifest grouping verifier update
+
+- Commit `2ed062cf0` (`font: enforce grouped input operation envelopes`)
+  - Strengthened `pillow-rs/tests/font_public_api.rs` so every non-grouped input JSON document must contain only cases for its declared operation.
+  - Made `load_failure` an explicit grouped input file instead of an accidental `getname` envelope.
+  - This caught and fixed a real manifest hygiene issue: `font.load_failure.json` contained both `getname` and `getbbox` rows while declaring only `getname`.
+- Coverage MCP run:
+  - run: `1a8e192f-7f70-410f-80c0-154b88551891`
+  - commit: `2ed062cf06bbcaee789f8ca57720178a7d0e5d8e`
+  - result: passed, coverage ingested
+  - snapshot: `78089ab5-6754-45d5-9dfb-df6a59f9b1ce`
+- Snapshot `78089ab5-6754-45d5-9dfb-df6a59f9b1ce` kept the same targeted metrics:
+  - `pillow-rs/src/font/imagingft.rs` regions: `1041/1099` (`94.72%`)
+  - `pillow-rs/src/font/mod.rs` regions: `251/253` (`99.21%`)
 
 ### Prior coverage blocker resolved
 
