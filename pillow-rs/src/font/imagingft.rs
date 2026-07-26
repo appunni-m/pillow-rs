@@ -626,15 +626,12 @@ fn mask_from_run_with_start(
                 break;
             }
             let dst = target_y as usize * wu + target_x;
-            if let Some(dr) = canvas.get_mut(dst..dst + cw) {
-                for (column, dc) in dr.iter_mut().enumerate() {
-                    let Some(sc) = bitmap_coverage(bm, row, source_x + column) else {
-                        continue;
-                    };
-                    if sc > 0 {
-                        let under = crate::color::muldiv255(u32::from(*dc), u32::from(255 - sc));
-                        *dc = sc.saturating_add(under as u8);
-                    }
+            let dr = &mut canvas[dst..dst + cw];
+            for (column, dc) in dr.iter_mut().enumerate() {
+                let sc = bitmap_coverage(bm, row, source_x + column);
+                if sc > 0 {
+                    let under = crate::color::muldiv255(u32::from(*dc), u32::from(255 - sc));
+                    *dc = sc.saturating_add(under as u8);
                 }
             }
         }
@@ -642,26 +639,37 @@ fn mask_from_run_with_start(
     Ok((w, h, canvas))
 }
 
-fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> Option<u8> {
+fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
     let rows = bitmap.rows as usize;
-    let pitch = usize::try_from(bitmap.pitch.unsigned_abs()).ok()?;
+    let Ok(pitch) = usize::try_from(bitmap.pitch.unsigned_abs()) else {
+        return 0;
+    };
     let storage_row = if bitmap.pitch < 0 {
-        rows.checked_sub(row + 1)?
+        let Some(storage_row) = rows.checked_sub(row + 1) else {
+            return 0;
+        };
+        storage_row
     } else {
         row
     };
-    let row_start = storage_row.checked_mul(pitch)?;
+    let Some(row_start) = storage_row.checked_mul(pitch) else {
+        return 0;
+    };
     match bitmap.pixel_mode {
         ffi::FT_PIXEL_MODE_MONO => {
-            let byte = *bitmap.buffer.get(row_start + column / 8)?;
-            Some(if byte & (0x80 >> (column & 7)) != 0 {
+            let byte = bitmap
+                .buffer
+                .get(row_start + column / 8)
+                .copied()
+                .unwrap_or(0);
+            if byte & (0x80 >> (column & 7)) != 0 {
                 255
             } else {
                 0
-            })
+            }
         }
-        ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied(),
-        _ => None,
+        ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied().unwrap_or(0),
+        _ => 0,
     }
 }
 
