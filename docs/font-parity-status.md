@@ -308,18 +308,19 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `1adbc8fa-c8d0-4f4a-9129-5616e564890a`
-- Snapshot: `26e19999-69ff-499e-8a39-28d1a51abb93`
+- Run: `7917ef2b-6043-41f3-a3b6-d7aac1e5ff4d`
+- Snapshot: `ef0700eb-b098-4ad4-a2b0-3d741f0e7ddb`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `a8e13bdca073e893a2bf1a08aa37556bf78ba219`
+- Commit measured: `829590b313706e3e2c1e8d89a56fc55ec705b125`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
+| `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
 | `pillow-rs/src/font/imagingft.rs` | `823/836` (`98.44%`) | `133/138` (`96.38%`) | `82/88` (`93.18%`) | `1303/1349` (`96.59%`) |
-| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
+| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/252` (`100.00%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
 Current full-module scope note:
@@ -335,6 +336,10 @@ Current full-module scope note:
   the active Font coverage snapshot. Its branch coverage is `70/70`
   (`100.00%`). The remaining function/region deltas are LLVM function/region
   accounting with no line-level gaps reported by Coverage MCP.
+- `default_aileron.rs` now embeds the decoded Aileron TTF bytes directly instead
+  of validating a checked-in base64 payload at runtime. Corrupt repo data is not
+  a public `PIL.ImageFont` input, so the user-facing `Result` boundary remains
+  at `fontdone` font loading while the default-font embed path is fully covered.
 - PILfont rows now include repo-local PNG, GIF/PBM discovery behavior, valid
   `P1` and `P4` PBM, CRLF P4 raster separator behavior, CRLF short-raster lazy
   loader semantics, L-mode glyph images, clipped PILfont metrics, public
@@ -400,13 +405,8 @@ Latest Font wrapper movement:
   crosses from a valid DejaVuSans glyph into the missing-glyph route. This would
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
-- The only remaining `font/mod.rs` uncovered region is
-  `Font::load_default`'s `default_aileron::decode()?` error arm. That path is
-  not reachable through honest public inputs unless the checked-in embedded
-  default font bytes are corrupt.
-
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`26e19999-69ff-499e-8a39-28d1a51abb93`:
+`ef0700eb-b098-4ad4-a2b0-3d741f0e7ddb`:
 
 - `91-92`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
