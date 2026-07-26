@@ -897,9 +897,9 @@
           "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
         },
         "FT_Glyph_Stroke": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Outline_Glyph_Stroke; fontdone-ffi-c::FT_Glyph_Stroke",
+          "status": "partial",
+          "reason": "The maintained DejaVuSans glyph 36 full-stroke route is implemented and verified through Rust FFI, C ABI, and WASM ABI. Destroy-option coverage and general glyph stroking remain pending."
         },
         "FT_Glyph_StrokeBorder": {
           "rust": null,
