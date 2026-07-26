@@ -96,6 +96,24 @@
       }
     },
     {
+      "case_id": "font.getmask.dejavusans24_aa_stroke_1_5_l",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "AA",
+          "mode": "L",
+          "stroke_width": 1.5
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.ink_integer_ignored_l",
       "operation": "getmask",
       "inputs": {
