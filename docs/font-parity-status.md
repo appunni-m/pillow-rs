@@ -1,6 +1,68 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `15e039a29`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `a32242993`
+
+## Current checkpoint: root Font API + Pillow edge-case sweep
+
+New commits since the previous checkpoint:
+
+- `eb326cd0b` — added explicit root `pillow_rs::font_*` constructors and Font
+  wrappers, then routed the parity runner through the root public API instead
+  of calling deep/inherent methods where a root function exists.
+- `a32242993` — added input-only Pillow edge rows for anchor variants,
+  `getmask2(start=...)` through the public option path, and empty `features`.
+  This exposed and fixed a parity bug: Pillow raises the libraqm `KeyError`
+  whenever `features` is provided, even when it is an empty list.
+
+Live Pillow `ImageFont.FreeTypeFont` public callables from the repo-local
+oracle are:
+
+`font_variant`, `get_variation_axes`, `get_variation_names`, `getbbox`,
+`getlength`, `getmask`, `getmask2`, `getmetrics`, `getname`,
+`set_variation_by_axes`, `set_variation_by_name`.
+
+Current implemented/manifested status:
+
+| Pillow method | Status | Remaining implementation/edge gap |
+|---|---|---|
+| `getbbox` | Covered through live oracle for normal text, empty/space, CFF scalar/bbox, embedded strike, variable font, anchor variants, stroke-width bbox expansion, ignored `mode`, and libraqm-required errors. | Full libraqm layout remains intentionally unsupported while oracle is BASIC/no-raqm. |
+| `getlength` | Covered for normal/empty/CFF/SBIT/variable rows and exact libraqm-required errors for `features` including `[]`, and `language`. | Full libraqm layout remains unsupported. |
+| `getmask` | Covered for base masks and option path delegation (`anchor`, `mode="RGBA"`, `direction`). | Stroked mask pixels are not implemented. |
+| `getmask2` | Covered for base masks, option `start`, `anchor`, `mode="RGBA"`, and `direction`. | Stroked mask pixels are not implemented. |
+| `font_variant` | Covered for size override and same-size clone. | Alternate font source, face index, encoding, and layout-engine override are not implemented. |
+| variation methods | Covered for variable and non-variable rows, including mutation and missing-name errors. | Remaining error branches depend on lower-level FreeType failure cases not currently produced by public Pillow rows. |
+
+Coverage MCP evidence for commit `a32242993`:
+
+- Command: `imagingft-tests-coverage-fixed`
+- Run: `e3d92d05-0f5b-4a5b-b931-3ac0143469c3`
+- Snapshot: `33c1bfe0-3025-4996-9348-90a7682386b0`
+- Status: passed, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `1020/1112` (`91.73%`) | `194/250` (`77.60%`) | `103/119` (`86.55%`) | `1684/1849` (`91.08%`) |
+| `pillow-rs/src/font/mod.rs` | `172/196` (`87.76%`) | n/a | `39/46` (`84.78%`) | `209/251` (`83.27%`) |
+| `pillow-rs/src/lib.rs` | `101/200` (`50.50%`) | `0/2` (`0.00%`) | `24/39` (`61.54%`) | `120/232` (`51.72%`) |
+
+Current blockers to honest 100% region coverage:
+
+- `getmask/getmask2` with `stroke_width != 0` is real missing behavior.
+  Pillow renders stroked masks through `_imagingft`/FreeType stroking; Rust
+  currently returns `NotImplementedError`. `pillow-rs-freetype` exposes
+  `FT_Stroker*` symbols, but `pillow-rs/src/font/imagingft.rs` does not yet
+  integrate a stroked outline render path for Pillow Font masks.
+- Some uncovered `imagingft.rs` branches are defensive FreeType error mappings
+  and bitmap-storage/render fallback guards: request-size sub-errors,
+  glyph-load/render fallback, negative bitmap pitch, unsupported bitmap pixel
+  modes, and out-of-buffer guards. These need real oracle-driving font assets
+  or implementation simplification; Rust-only/unit coverage does not count.
+- `font/mod.rs` uncovered lines include derived/source-map regions around
+  public struct fields and convenience wrappers. They are not proof of missing
+  Pillow behavior by themselves, but they keep the raw region percentage below
+  100 under LLVM coverage.
 
 ## Current checkpoint: Pillow Font comparison review
 
