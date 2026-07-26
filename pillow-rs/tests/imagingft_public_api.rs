@@ -235,38 +235,6 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
         "{case_id}: status mismatch between rust and live oracle"
     );
 
-    if expected_status == "error" {
-        let expected_error = expected
-            .get("error")
-            .expect("oracle error payload must include error");
-        let actual_error = actual
-            .get("error")
-            .expect("rust error payload must include error");
-        let expected_kind = expected_error
-            .get("kind")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{case_id}: oracle error missing kind"));
-        let actual_kind = actual_error
-            .get("kind")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{case_id}: rust error missing kind"));
-        assert_eq!(expected_kind, actual_kind, "{case_id}: error kind mismatch");
-
-        let expected_message = expected_error
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{case_id}: oracle error missing message"));
-        let actual_message = actual_error
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{case_id}: rust error missing message"));
-        assert_eq!(
-            expected_message, actual_message,
-            "{case_id}: error message mismatch"
-        );
-        return;
-    }
-
     assert_eq!(
         expected, actual,
         "{case_id}: Rust result differs from live Pillow/_imagingft oracle"
