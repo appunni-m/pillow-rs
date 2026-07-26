@@ -1,7 +1,7 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after maintained stroker CubicTo
-first-segment parity work.
+Last updated: 2026-07-27 (Asia/Kolkata) after Pillow Font surface comparison
+and maintained glyph-stroke route coverage.
 
 ## Oracle and fixture contract
 
@@ -46,6 +46,12 @@ The repo also keeps additional public test operations around the Font surface:
 `draw_text`, `render_text_binary`, `text_bbox`, and explicit load/layout
 negative rows. These are not extra Pillow `FreeTypeFont` methods; they are
 parity checks for repo public APIs that consume the same Font path.
+
+The wider Pillow `ImageFont` module also exposes the legacy bitmap
+`ImageFont` class plus `load`, `load_path`, and `load_default_imagefont`.
+Those belong to `pillow-rs/src/font/pilfont.rs` and are intentionally not
+counted as `_imagingft`/`FreeTypeFont` coverage. Mixing those rows into the
+active FreeTypeFont corpus would make the coverage target less trustworthy.
 
 Current blocked public parameters:
 
@@ -263,13 +269,19 @@ Remaining targeted gaps in `imagingft.rs`:
 
 - `90-91`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
-  manufacturing invalid internal state.
+  manufacturing invalid internal state. A sweep across the tracked Font assets
+  and available FreeType fixture assets found only the already-mapped runtime
+  errors: `code overflow`, `nested DEFS`, `too many instruction definitions`,
+  and `too many function definitions`.
 - `241,246`: `FT_Set_Named_Instance` error after a valid public name match.
-  Needs a real font accepted through name discovery but rejected by the
-  lower-level named-instance setter.
+  Current tracked variable fonts accept all discovered named instances in the
+  Pillow oracle; no deterministic public input has been found that matches a
+  name and then fails only in the lower-level setter.
 - `263,267`: `FT_Set_Var_Design_Coordinates` error after variation-face
-  validation. Needs a real variable font accepted by axis discovery but rejected
-  only after applying public coordinates.
+  validation. Current tracked variable fonts accept empty, short, exact,
+  overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
+  malformed-font sweep can crash Pillow itself, so crash-only rows are not
+  admissible parity fixtures.
 - `366-367`: non-zero `stroke_width`; blocked on real pure-Rust
   `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` implementation.
 

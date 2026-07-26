@@ -16,7 +16,8 @@ unused by its own parity, ABI, or fixture workflows.
 
 ## Pillow `_imagingft.c` FreeType calls
 
-Observed in Pillow 12.2.0 `src/_imagingft.c`:
+Observed through the repo-local Pillow `11.3.0` oracle
+(`PIL.ImageFont.core == _imagingft`, FreeType `2.13.3`):
 
 | FreeType call | Pillow use | `pillow-rs` Font status |
 | --- | --- | --- |
@@ -25,7 +26,7 @@ Observed in Pillow 12.2.0 `src/_imagingft.c`:
 | `FT_New_Face` | path-based font open | binding reads bytes, core uses memory face |
 | `FT_New_Memory_Face` | bytes-based font open | used |
 | `FT_Request_Size` | nominal Pillow point size | used |
-| `FT_Select_Charmap` | explicit encoding charmap selection | missing from current Font surface |
+| `FT_Select_Charmap` | explicit encoding charmap selection | accepted at the public `font_variant`/constructor surface; current Basic Unicode rows do not prove alternate charmap behavior |
 | `FT_Get_Char_Index` | BASIC layout glyph mapping | used |
 | `FT_Load_Glyph` | layout, bbox, render | used |
 | `FT_Get_Kerning` | BASIC layout kerning | used |
@@ -36,18 +37,18 @@ Observed in Pillow 12.2.0 `src/_imagingft.c`:
 | `FT_Bitmap_Init` | conversion setup | not used |
 | `FT_Bitmap_Convert` | low-bit-depth bitmap conversion | not used |
 | `FT_Bitmap_Done` | conversion cleanup | not used |
-| `FT_Stroker_New` | stroke rendering | missing from current Font surface |
-| `FT_Stroker_Set` | stroke rendering | missing from current Font surface |
-| `FT_Glyph_Stroke` | stroke rendering | missing from current Font surface |
+| `FT_Stroker_New` | stroke rendering | lower-level stroker partially implemented; Font mask path still blocked |
+| `FT_Stroker_Set` | stroke rendering | lower-level stroker partially implemented; Font mask path still blocked |
+| `FT_Glyph_Stroke` | stroke rendering | one lower-level glyph-stroke route implemented; general Font mask path still blocked |
 | `FT_Glyph_StrokeBorder` | stroke rendering | missing from current Font surface |
-| `FT_Stroker_Done` | stroke cleanup | missing from current Font surface |
+| `FT_Stroker_Done` | stroke cleanup | implemented in lower-level stroker lifecycle; Font mask path still blocked |
 | `FT_Palette_Set_Foreground_Color` | color glyph foreground | missing from current Font surface |
-| `FT_Get_MM_Var` | variation names/axes | only `has_variations` is exposed |
+| `FT_Get_MM_Var` | variation names/axes | exposed through variation names/axes and manifest rows |
 | `FT_Done_MM_Var` | variation cleanup | not used |
-| `FT_Get_Sfnt_Name_Count` | variation display names | not used |
-| `FT_Get_Sfnt_Name` | variation display names | not used |
-| `FT_Set_Named_Instance` | set variation by name | missing from current Font surface |
-| `FT_Set_Var_Design_Coordinates` | set variation by axes | missing from current Font surface |
+| `FT_Get_Sfnt_Name_Count` | variation display names | behavior covered through parsed name-table fallback rows |
+| `FT_Get_Sfnt_Name` | variation display names | behavior covered through parsed name-table fallback rows |
+| `FT_Set_Named_Instance` | set variation by name | exposed and covered for success, repeat, byte-name, missing-name, and non-variable rows |
+| `FT_Set_Var_Design_Coordinates` | set variation by axes | exposed and covered for empty, short, exact, overlong, out-of-range, and non-variable rows |
 | `FT_Done_Face` | face cleanup | owned by Rust drop semantics |
 
 ## Current `pillow-rs` `fontdone::ffi` usage
@@ -62,6 +63,8 @@ Function endpoints used:
 - `FT_Get_Char_Index`
 - `FT_Get_Kerning`
 - `FT_Load_Glyph`
+- `FT_Set_Named_Instance`
+- `FT_Set_Var_Design_Coordinates`
 
 Constants, flags, error codes, and data structs are used only to drive those
 paths or classify their results. They are not public `pillow-rs` API.
@@ -73,16 +76,21 @@ but the corpus does not yet cover every Pillow `FreeTypeFont` behavior.
 
 Known gaps to add fixtures or implementation for:
 
-- `getlength` mode-sensitive behavior for `"1"` and `"RGBA"`.
-- `getlength` errors for unsupported `direction`, `features`, and `language`
-  when RAQM is absent.
-- `getbbox` via Pillow's `FT_Get_Glyph` + `FT_Glyph_Get_CBox` call path.
-- Bitmap conversion for `FT_PIXEL_MODE_GRAY2` and `FT_PIXEL_MODE_GRAY4`.
-- Color glyph/BGRA handling and foreground palette color.
-- Stroke rendering.
-- Variation names, axes, and setters.
-- Constructor encoding/charmap selection.
-- `font_variant`.
+- Stroked `getmask`/`getmask2` rendering for `stroke_width != 0`. Pillow
+  reaches `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder`; Rust currently blocks the
+  public Font mask path until the lower-level pure-Rust stroker can export real
+  glyph outlines and bitmaps.
+- Constructor and `font_variant` alternate encoding/charmap behavior beyond the
+  currently passing Basic Unicode-compatible rows.
+- Color glyph foreground/palette behavior beyond the current grayscale/BGRA
+  fixture rows.
+- `getbbox` still computes from the loaded slot CBox instead of exactly routing
+  through Pillow's copied-glyph `FT_Get_Glyph` + `FT_Glyph_Get_CBox` sequence.
+  Current public rows match, but this is still an implementation-shape
+  difference to remove if a divergence appears.
+- The broader Pillow `ImageFont` bitmap class and `load`/`load_path`/
+  `load_default_imagefont` APIs are separate `pilfont` scope. They should not
+  be used to claim `_imagingft`/`FreeTypeFont` coverage.
 
 ## `pillow-rs-freetype` later-audit candidates
 
