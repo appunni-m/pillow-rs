@@ -358,10 +358,15 @@ pub(crate) fn getmask2_with_options(
             "stroked FreeTypeFont mask rendering is not implemented".into(),
         ));
     }
+    let load_flags = if options.mode.as_deref() == Some("1") {
+        TGT_MONO
+    } else {
+        TGT_NORM
+    };
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
     let start = options.start.unwrap_or((0.0, 0.0));
-    let (width, height, pixels) = mask_from_run_with_start(font, text, TGT_NORM, start)?;
-    let bbox = getbbox(font, text)?;
+    let (width, height, pixels) = mask_from_run_with_start(font, text, load_flags, start)?;
+    let bbox = bbox_from_run_with_flags(font, text, load_flags)?;
     let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
     Ok((width, height, pixels, (left as i32, top as i32)))
 }
