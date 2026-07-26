@@ -412,7 +412,7 @@ fn rotate_arbitrary_generic(
     expand: bool,
     fill: Option<(u8, u8, u8, u8)>,
     nearest: bool,
-) -> DynamicImage {
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = img.dimensions();
     let sw = w as f64;
@@ -462,17 +462,7 @@ fn rotate_arbitrary_generic(
     let raw = img.as_bytes();
     let fill_color = fill.unwrap_or((0, 0, 0, 0));
 
-    let mut out = match CheckedDims::new(dw, dh, channels as u8) {
-        Ok(dims) => dims.alloc_buffer(),
-        Err(_) => {
-            return match channels {
-                1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::new(dw, dh)),
-                2 => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::new(dw, dh)),
-                3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::new(dw, dh)),
-                _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::new(dw, dh)),
-            };
-        }
-    };
+    let mut out = CheckedDims::new(dw, dh, channels as u8)?.alloc_buffer();
 
     if nearest {
         affine_nearest_fixed(
@@ -524,25 +514,7 @@ fn rotate_arbitrary_generic(
         }
     }
 
-    match channels {
-        1 => DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(dw, dh, out)
-                .expect("rotate_arbitrary: buffer size mismatch"),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(dw, dh, out)
-                .expect("rotate_arbitrary: buffer size mismatch"),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(dw, dh, out)
-                .expect("rotate_arbitrary: buffer size mismatch"),
-        ),
-        4 => DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(dw, dh, out)
-                .expect("rotate_arbitrary: buffer size mismatch"),
-        ),
-        _ => unreachable!(),
-    }
+    raw_bytes_to_image(dw, dh, out, channels)
 }
 
 #[allow(dead_code)]
@@ -560,23 +532,13 @@ fn transform_affine_generic(
     aff_f: f64,
     fill: Option<(u8, u8, u8, u8)>,
     nearest: bool,
-) -> DynamicImage {
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
 
-    let mut out = match CheckedDims::new(dst_w, dst_h, channels as u8) {
-        Ok(dims) => dims.alloc_buffer(),
-        Err(_) => {
-            return match channels {
-                1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::new(dst_w, dst_h)),
-                2 => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::new(dst_w, dst_h)),
-                3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::new(dst_w, dst_h)),
-                _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::new(dst_w, dst_h)),
-            };
-        }
-    };
+    let mut out = CheckedDims::new(dst_w, dst_h, channels as u8)?.alloc_buffer();
 
     for dy in 0..dst_h {
         for dx in 0..dst_w {
@@ -632,25 +594,7 @@ fn transform_affine_generic(
         }
     }
 
-    match channels {
-        1 => DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
-        ),
-        4 => DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
-        ),
-        _ => unreachable!(),
-    }
+    raw_bytes_to_image(dst_w, dst_h, out, channels)
 }
 
 // ── Execute geometry ops ──
@@ -748,7 +692,7 @@ fn rotate_90_non_expand(
     img: &DynamicImage,
     clockwise_270: bool,
     fill: Option<(u8, u8, u8, u8)>,
-) -> DynamicImage {
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = img.dimensions();
     let raw = img.as_bytes();
@@ -761,10 +705,7 @@ fn rotate_90_non_expand(
         3 => vec![fill_color.0, fill_color.1, fill_color.2],
         _ => vec![fill_color.0, fill_color.1, fill_color.2, fill_color.3],
     };
-    let dims = match CheckedDims::new(w, h, channels as u8) {
-        Ok(d) => d,
-        Err(_) => return img.clone(),
-    };
+    let dims = CheckedDims::new(w, h, channels as u8)?;
     let mut out = fill_pixel.repeat(dims.total_pixels());
 
     let dx_off = (w as i32 - h as i32) / 2; // center offset in x
@@ -792,14 +733,7 @@ fn rotate_90_non_expand(
     }
 
     // Create output dynamic image
-    match channels {
-        1 => DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_raw(w, h, out).unwrap()),
-        2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, out).unwrap(),
-        ),
-        3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_raw(w, h, out).unwrap()),
-        _ => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_raw(w, h, out).unwrap()),
-    }
+    raw_bytes_to_image(w, h, out, channels)
 }
 
 pub fn execute_rotate(
@@ -819,7 +753,7 @@ pub fn execute_rotate(
         if expand {
             img.rotate270() // 270° CW = 90° CCW (PIL)
         } else {
-            rotate_90_non_expand(img, false, fill)
+            rotate_90_non_expand(img, false, fill)?
         }
     } else if (deg - 180).abs() < 2 {
         img.rotate180()
@@ -827,7 +761,7 @@ pub fn execute_rotate(
         if expand {
             img.rotate90() // 90° CW = 270° CCW (PIL)
         } else {
-            rotate_90_non_expand(img, true, fill)
+            rotate_90_non_expand(img, true, fill)?
         }
     } else {
         // Multi-channel arbitrary rotation (no RGBA roundtrip)
@@ -835,7 +769,7 @@ pub fn execute_rotate(
             || explicit_mode == Some("1")
             || explicit_mode == Some("I")
             || explicit_mode == Some("F");
-        rotate_arbitrary_generic(img, angle, expand, fill, nearest)
+        rotate_arbitrary_generic(img, angle, expand, fill, nearest)?
     };
     Ok(preserve_mode(img, result))
 }

@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,589`
+  - `ok_result`: `2,594`
   - `likely_infallible`: `3,807`
-  - `parser_review`: `307`
-  - `review_non_result_fallible`: `123`
+  - `parser_review`: `304`
+  - `review_non_result_fallible`: `121`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -61,6 +61,9 @@ been inspected and either:
 - SIMD dynamic-image reconstruction helpers now return `Result<_, PilError>`;
   every SIMD adapter bubbles reconstruction failures with `?` instead of
   using `expect` on image buffer creation.
+- SIMD palette normalization and CPU effects/geometry transform/rotate helpers
+  now return `Result<_, PilError>` instead of panicking or silently returning
+  fallback images on dimension/buffer reconstruction failures.
 
 ## Next review queue
 
