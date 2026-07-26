@@ -132,6 +132,18 @@ used by C `ft_stroker_subpath_start`, `ft_stroker_process_corner`,
 can `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` produce Pillow-compatible visible
 glyph masks.
 
+Latest `FT_Stroker_LineTo` lower-level movement:
+
+```bash
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo
+```
+
+Result after closed single-line finalization: `line_segment_success` now runs as
+real C/Rust/WASM parity. LineTo runtime movement is `runnable=4`, `passed=4`,
+`pending=1`. The remaining LineTo pending row is
+`first_segment_starts_subpath`, which still needs maintained open first-segment
+state/export coverage separate from the closed finalized line route.
+
 ## Edge cases already covered by active Font fixtures
 
 - Constructor/load paths: `load_default`, `truetype`, missing asset, invalid

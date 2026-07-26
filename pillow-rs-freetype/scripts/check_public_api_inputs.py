@@ -1708,6 +1708,13 @@ def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
             "WASM ABI; finalized counts and exported border geometry remain "
             "pending"
         )
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.line_segment_success":
+        return (
+            "FT_Stroker_LineTo closed horizontal segment finalization and "
+            "exported outline geometry validate through pinned C oracle, Rust "
+            "FFI, C ABI, and WASM ABI; general line joins and curve stroking "
+            "remain pending"
+        )
     return None
 
 
