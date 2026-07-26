@@ -59,6 +59,66 @@
           "text": "Hi"
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.p1_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.l_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_l.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.p1_comments_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1_comments.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.clipped_success_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/clipped_success.pil"
+          }
+        },
+        "params": {
+          "text": "ABC"
+        }
+      }
     }
   ]
 }

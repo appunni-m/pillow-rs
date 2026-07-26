@@ -459,14 +459,26 @@ fn decode_pbm(data: &[u8]) -> Result<Image, PilError> {
                         packed[y * row_bytes + x / 8] |= 1 << (7 - x % 8);
                     }
                     Some(b"1") => {}
-                    _ => return Err(PilError::ValueError("invalid PBM raster".into())),
+                    Some(token) => {
+                        let token = String::from_utf8_lossy(token);
+                        return Err(PilError::ValueError(format!(
+                            "b'Invalid token for this mode: {token}'"
+                        )));
+                    }
+                    None => {
+                        return Err(PilError::IOError(
+                            "image file is truncated (0 bytes not processed)".into(),
+                        ));
+                    }
                 }
             }
         }
         b"P4" => {
             let raster = tokens.binary_raster()?;
             if raster.len() < packed_len {
-                return Err(PilError::ValueError("truncated PBM raster".into()));
+                return Err(PilError::IOError(
+                    "image file is truncated (0 bytes not processed)".into(),
+                ));
             }
             for (output, input) in packed.iter_mut().zip(raster) {
                 // Netpbm uses 1 for black; Pillow mode "1" uses 0 for black.
@@ -514,7 +526,9 @@ impl<'a> PbmTokens<'a> {
 
     fn binary_raster(&mut self) -> Result<&'a [u8], PilError> {
         let Some(&separator) = self.data.get(self.position) else {
-            return Err(PilError::ValueError("missing PBM raster".into()));
+            return Err(PilError::IOError(
+                "image file is truncated (0 bytes not processed)".into(),
+            ));
         };
         if !separator.is_ascii_whitespace() {
             return Err(PilError::ValueError("invalid PBM raster separator".into()));

@@ -61,6 +61,22 @@
           "orientation": "ROTATE_90"
         }
       }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.l_mode_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_l.pil"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "orientation": "FLIP_TOP_BOTTOM"
+        }
+      }
     }
   ]
 }

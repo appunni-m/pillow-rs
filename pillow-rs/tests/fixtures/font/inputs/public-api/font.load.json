@@ -31,6 +31,246 @@
           "loader": "load"
         }
       }
+    },
+    {
+      "case_id": "font.load.courb08_p1_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.courb08_l_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_l.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.courb08_p1_comments_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1_comments.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.clipped_success_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/clipped_success.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.invalid_p1_raster_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_p1_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.truncated_p4_raster_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/truncated_p4_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.missing_p4_raster_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/missing_p4_raster.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.unsupported_pbm_magic_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/unsupported_pbm_magic.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.invalid_header_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_header.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.truncated_metrics_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/truncated_metrics.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.missing_pbm_width_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/missing_pbm_width.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.zero_pbm_width_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/zero_pbm_width.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.invalid_pbm_width_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_pbm_width.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.invalid_p4_separator_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_p4_separator.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.missing_glyph_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/missing_glyph.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    },
+    {
+      "case_id": "font.load.invalid_glyph_image_mode_error",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/rgb_image_mode.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
     }
   ]
 }
