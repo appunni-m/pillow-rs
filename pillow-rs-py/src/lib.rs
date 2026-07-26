@@ -1314,7 +1314,7 @@ fn resolve_array_layout(
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs::compute::Backend::parse(name) {
-        Some(b) => Ok(pillow_rs::compute::enable_backend(b)),
+        Some(b) => pillow_rs::compute::enable_backend(b).map_err(map_error),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",
             name
@@ -1326,7 +1326,7 @@ fn enable_backend(name: &str) -> PyResult<bool> {
 #[pyfunction]
 fn disable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs::compute::Backend::parse(name) {
-        Some(b) => Ok(pillow_rs::compute::disable_backend(b)),
+        Some(b) => pillow_rs::compute::disable_backend(b).map_err(map_error),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",
             name
@@ -1345,18 +1345,19 @@ fn available_backends() -> Vec<String> {
 
 /// List currently active backends (priority order).
 #[pyfunction]
-fn active_backends() -> Vec<String> {
-    pillow_rs::compute::active_backends()
-        .iter()
+fn active_backends() -> PyResult<Vec<String>> {
+    Ok(pillow_rs::compute::active_backends()
+        .map_err(map_error)?
+        .into_iter()
         .map(|b| format!("{:?}", b).to_lowercase())
-        .collect()
+        .collect())
 }
 
 /// Check if a specific backend is active.
 #[pyfunction]
 fn backend_enabled(name: &str) -> PyResult<bool> {
     match pillow_rs::compute::Backend::parse(name) {
-        Some(b) => Ok(pillow_rs::compute::backend_enabled(b)),
+        Some(b) => pillow_rs::compute::backend_enabled(b).map_err(map_error),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",
             name

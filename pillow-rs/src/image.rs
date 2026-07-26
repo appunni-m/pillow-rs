@@ -866,7 +866,10 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        let selected = match backend {
+            Some(backend) => backend,
+            None => crate::compute::route(ops, None)?,
+        };
         crate::compute::validate_backend_support(selected, ops)?;
         Self::evaluate_pipeline_with_image(
             source,
@@ -887,7 +890,10 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        let selected = match backend {
+            Some(backend) => backend,
+            None => crate::compute::route(ops, None)?,
+        };
         crate::compute::validate_backend_support(selected, ops)?;
         Self::evaluate_pipeline_with_image(
             source,
@@ -912,7 +918,10 @@ impl Image {
         if source.has_palette_samples() {
             let all_safe = ops.iter().all(Self::is_palette_safe_op);
             if all_safe {
-                let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+                let selected = match backend {
+                    Some(backend) => backend,
+                    None => crate::compute::route(ops, None)?,
+                };
                 let palette_mode = if explicit_mode.as_deref() == Some("PA")
                     || source.explicit_mode() == Some("PA")
                 {
@@ -946,7 +955,10 @@ impl Image {
             }
         }
 
-        let selected = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+        let selected = match backend {
+            Some(backend) => backend,
+            None => crate::compute::route(ops, None)?,
+        };
         img = crate::compute::execute_batch(selected, ops, &img, explicit_mode.as_deref())?;
         Ok(Arc::new(img))
     }

@@ -22,7 +22,7 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use image_slash_star::DynamicImage;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 // ── Backend ─────────────────────────────────────────────────────────────────
 
@@ -111,29 +111,55 @@ fn active() -> &'static Mutex<HashSet<Backend>> {
     })
 }
 
+fn active_lock() -> Result<MutexGuard<'static, HashSet<Backend>>, PilError> {
+    active()
+        .lock()
+        .map_err(|_| PilError::InternalError("compute backend state mutex poisoned".to_string()))
+}
+
 /// Enables a backend for future automatic routing.
 ///
 /// Returns `true` when the backend was newly inserted into the active set.
-pub fn enable_backend(b: Backend) -> bool {
-    active().lock().expect("internal invariant").insert(b)
+///
+/// # Errors
+///
+/// Returns [`PilError::InternalError`] if the global backend state has been
+/// poisoned by a previous panic while it was being modified.
+pub fn enable_backend(b: Backend) -> Result<bool, PilError> {
+    Ok(active_lock()?.insert(b))
 }
 /// Disables a backend for future automatic routing.
 ///
 /// Returns `true` when the backend was previously active.
-pub fn disable_backend(b: Backend) -> bool {
-    active().lock().expect("internal invariant").remove(&b)
+///
+/// # Errors
+///
+/// Returns [`PilError::InternalError`] if the global backend state has been
+/// poisoned by a previous panic while it was being modified.
+pub fn disable_backend(b: Backend) -> Result<bool, PilError> {
+    Ok(active_lock()?.remove(&b))
 }
 /// Returns whether a backend is currently eligible for automatic routing.
-pub fn backend_enabled(b: Backend) -> bool {
-    active().lock().expect("internal invariant").contains(&b)
+///
+/// # Errors
+///
+/// Returns [`PilError::InternalError`] if the global backend state has been
+/// poisoned by a previous panic while it was being inspected.
+pub fn backend_enabled(b: Backend) -> Result<bool, PilError> {
+    Ok(active_lock()?.contains(&b))
 }
 
 /// Returns active backends ordered by routing preference.
-pub fn active_backends() -> Vec<Backend> {
-    let a = active().lock().expect("internal invariant");
+///
+/// # Errors
+///
+/// Returns [`PilError::InternalError`] if the global backend state has been
+/// poisoned by a previous panic while it was being inspected.
+pub fn active_backends() -> Result<Vec<Backend>, PilError> {
+    let a = active_lock()?;
     let mut v: Vec<Backend> = a.iter().copied().collect();
     v.sort_by_key(|b| std::cmp::Reverse(*b as u8));
-    v
+    Ok(v)
 }
 
 // ── Pool registry ──────────────────────────────────────────────────────────
@@ -167,17 +193,17 @@ pub fn available_backends() -> Vec<Backend> {
 /// if it is inactive or cannot support the batch; execution will report the
 /// actual backend error later. Without an explicit backend, routing prefers
 /// active backends by priority and falls back to [`Backend::Cpu`].
-pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
+pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Result<Backend, PilError> {
     if let Some(b) = explicit {
-        return b;
+        return Ok(b);
     }
-    let active_set = active().lock().expect("internal invariant");
+    let active_set = active_lock()?;
     for pool in pools() {
         if active_set.contains(&pool.name()) && ops.iter().all(|op| pool.supports(op)) {
-            return pool.name();
+            return Ok(pool.name());
         }
     }
-    Backend::Cpu // universal fallback
+    Ok(Backend::Cpu) // universal fallback
 }
 
 /// Validates that a compiled backend has native support for every operation.
