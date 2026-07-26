@@ -247,6 +247,23 @@
       }
     },
     {
+      "case_id": "font.getbbox.mode_ignored",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "bad"
+        }
+      }
+    },
+    {
       "case_id": "font.getbbox.direction_without_raqm_error",
       "operation": "getbbox",
       "inputs": {
@@ -277,6 +294,40 @@
           "size": 20,
           "text": "AV",
           "anchor": "xy"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.short_anchor_error",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "a"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.bad_vertical_anchor_error",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "anchor": "lx"
         }
       }
     }
