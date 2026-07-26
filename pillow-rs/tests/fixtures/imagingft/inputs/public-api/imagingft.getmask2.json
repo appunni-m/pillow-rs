@@ -141,6 +141,46 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2.sbit_mono_a",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-mono-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2.sbit_gray_a",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }

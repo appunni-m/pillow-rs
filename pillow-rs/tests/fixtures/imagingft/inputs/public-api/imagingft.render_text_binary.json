@@ -139,6 +139,52 @@
           "spacing": 0.0
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.sbit_mono_a",
+      "operation": "render_text_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-mono-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "spacing": 0.0
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.sbit_gray_a",
+      "operation": "render_text_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "spacing": 0.0
+        }
+      }
     }
   ]
 }

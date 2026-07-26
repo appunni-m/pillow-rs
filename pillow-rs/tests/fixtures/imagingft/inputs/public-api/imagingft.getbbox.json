@@ -113,6 +113,22 @@
           "text": "A"
         }
       }
+    },
+    {
+      "case_id": "imagingft.getbbox.variable_named_instances_a",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A"
+        }
+      }
     }
   ]
 }

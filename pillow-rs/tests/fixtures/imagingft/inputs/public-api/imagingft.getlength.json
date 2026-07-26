@@ -97,6 +97,22 @@
           "text": "A"
         }
       }
+    },
+    {
+      "case_id": "imagingft.getlength.variable_named_instances_av",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
     }
   ]
 }

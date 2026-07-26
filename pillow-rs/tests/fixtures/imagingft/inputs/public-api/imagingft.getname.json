@@ -49,6 +49,22 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "imagingft.getname.variable_named_instances",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
     }
   ]
 }
