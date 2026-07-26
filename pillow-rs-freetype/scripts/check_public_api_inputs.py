@@ -1315,11 +1315,6 @@ def ftstroke_curve_pending_reason(row: ConcreteInput) -> str | None:
             "point is treated as the same no-op or preserved-state case as "
             "pinned C"
         ),
-        "ftstroke.FT_Stroker_CubicTo.cubic_curve_success": (
-            "FT_Stroker_CubicTo cubic parity needs a maintained route proving "
-            "cubic curve subdivision, generated border points, tags, and "
-            "contours match pinned C"
-        ),
         "ftstroke.FT_Stroker_CubicTo.first_segment_starts_subpath": (
             "FT_Stroker_CubicTo first-segment parity needs a maintained route "
             "proving a cubic segment can initialize an otherwise empty subpath "
@@ -6581,6 +6576,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Stroker_ConicTo.invalid_arguments"
     ):
         return "FT_Stroker_ConicTo invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.cubic_to"
+        and row.case_id == "ftstroke.FT_Stroker_CubicTo.cubic_curve_success"
+    ):
+        return (
+            "FT_Stroker_CubicTo maintained cubic curve route validates exact "
+            "status sequence, exported outline points, tags, contours, and "
+            "CBox through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftstroke.cubic_to"
         and row.case_id == "ftstroke.FT_Stroker_CubicTo.invalid_arguments"

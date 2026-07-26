@@ -19864,6 +19864,64 @@ static int emit_stroker_conic_first_segment(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_cubic_success(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker, 96, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 65536);
+    FT_Vector start = { 0, 0 };
+    FT_Vector control1 = { 160, 640 };
+    FT_Vector control2 = { 480, 640 };
+    FT_Vector to = { 640, 0 };
+    FT_Error begin_error = FT_Stroker_BeginSubPath(stroker, &start, 0);
+    FT_Error cubic_error = begin_error ? begin_error : FT_Stroker_CubicTo(stroker, &control1, &control2, &to);
+    FT_Error end_error = cubic_error ? cubic_error : FT_Stroker_EndSubPath(stroker);
+    FT_UInt point_count = 0;
+    FT_UInt contour_count = 0;
+    FT_Error counts_error = end_error ? end_error : FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+    FT_Vector points[192] = {0};
+    unsigned char tags[192] = {0};
+    unsigned short contours[24] = {0};
+    FT_Outline exported = {0, 0, points, tags, contours, 0};
+    FT_BBox cbox = {0, 0, 0, 0};
+    if (!counts_error) {
+        FT_Stroker_Export(stroker, &exported);
+        FT_Outline_Get_CBox(&exported, &cbox);
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(counts_error);
+    printf(",\"output\":{\"status\":%d,", counts_error);
+    printf("\"status_sequence\":[%d,%d,%d],", begin_error, cubic_error, end_error);
+    printf("\"point_count\":%u,\"contour_count\":%u,", point_count, contour_count);
+    printf("\"exported_outline\":");
+    print_stroker_outline_json(&exported);
+    printf(",\"cbox\":{\"xMin\":%ld,\"yMin\":%ld,\"xMax\":%ld,\"yMax\":%ld}",
+           cbox.xMin,
+           cbox.yMin,
+           cbox.xMax,
+           cbox.yMax);
+    printf("}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
     if (argc != 4) return 2;
     const char* action = argv[2];
@@ -26666,6 +26724,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-conic-first-segment")) {
         return emit_stroker_conic_first_segment(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-cubic-success")) {
+        return emit_stroker_cubic_success(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
