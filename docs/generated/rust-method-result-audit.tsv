@@ -189,10 +189,10 @@ pillow-rs/src/compute/pool_cpu/ops/effects.rs	988	op_put_alpha	pub	production	Dy
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	1054	table_index_3d	private	production	usize	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	1058	color_lut_interpolate	private	production	i16	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	1066	op_color3dlut	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1182	transform_mesh	pub	production	Result<DynamicImage, PilError>	true	ok_result	expect
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1275	op_effect_mandelbrot	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1316	darwin_rand_matches_pillow_oracle_sequence	private	test	()	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1332	effect_noise_matches_pillow_pair_consumption_and_l_mode	private	test	()	false	test_assertion_or_fixture_harness	expect
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1182	transform_mesh	pub	production	Result<DynamicImage, PilError>	true	ok_result	ok_or
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1277	op_effect_mandelbrot	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1318	darwin_rand_matches_pillow_oracle_sequence	private	test	()	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1334	effect_noise_matches_pillow_pair_consumption_and_l_mode	private	test	()	false	test_assertion_or_fixture_harness	expect
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	8	op_enhance_brightness	pub	production	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	34	op_enhance_contrast	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	89	op_enhance_color_saturation	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
@@ -241,22 +241,22 @@ pillow-rs/src/compute/pool_cpu/ops/geometry.rs	961	execute_reduce	pub	production
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	12	bankers_round	private	production	f64	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	35	op_autocontrast	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	86	op_equalize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	123	op_invert	pub	production	Result<DynamicImage, PilError>	true	ok_result	expect
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	155	op_flip	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	160	op_mirror	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	165	op_posterize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	178	op_solarize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	193	op_grayscale	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	199	op_colorize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	224	op_contain	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	251	op_cover	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	279	op_fit	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	327	op_pad	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	433	op_crop_border	pub	production	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	445	op_scale	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	460	op_expand	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	493	op_linear_gradient	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/imageops.rs	523	op_radial_gradient	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	123	op_invert	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	161	op_flip	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	166	op_mirror	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	171	op_posterize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	184	op_solarize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	199	op_grayscale	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	205	op_colorize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	230	op_contain	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	257	op_cover	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	285	op_fit	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	333	op_pad	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	439	op_crop_border	pub	production	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	451	op_scale	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	466	op_expand	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	499	op_linear_gradient	pub	production	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/imageops.rs	529	op_radial_gradient	pub	production	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_gpu/mod.rs	34	new	private	production	Self	false	likely_infallible	
 pillow-rs/src/compute/pool_gpu/mod.rs	87	upload_rgba	private	production	Result<(), PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/compute/pool_gpu/mod.rs	111	upload_second	private	production	Result<(), PilError>	true	ok_result	question_operator,result_ctor
@@ -301,7 +301,7 @@ pillow-rs/src/compute/pool_simd/ops/adapters.rs	144	dynimg_from_put_alpha	privat
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	159	arc_to_dynimg	private	production	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	164	pixels_from_arc	private	production	Result<Vec<u32>, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	173	simd_invert	pub	production	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	185	simd_grayscale	pub	production	Result<DynamicImage, PilError>	true	ok_result	expect
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	185	simd_grayscale	pub	production	Result<DynamicImage, PilError>	true	ok_result	ok_or
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	200	simd_duplicate	pub	production	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	212	simd_invert_chops	pub	production	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	228	simd_solarize	pub	production	Result<DynamicImage, PilError>	true	ok_result	
@@ -5881,21 +5881,21 @@ pillow-rs-js/src/lib.rs	1917	crop_border	pub	production	Result<Image, JsValue>	t
 pillow-rs-js/src/lib.rs	1924	scale	pub	production	Result<Image, JsValue>	true	ok_result	map_err
 pillow-rs-js/src/lib.rs	1931	exif_orientation	pub	production	Option<u32>	false	likely_infallible	
 pillow-rs-js/src/lib.rs	1936	exif_remove_orientation	pub	production	Vec<u8>	false	likely_infallible	
-pillow-rs-js/src/lib.rs	1945	effect_mandelbrot	pub	production	Result<Image, JsValue>	true	ok_result	expect,map_err
-pillow-rs-js/src/lib.rs	1964	effect_noise	pub	production	Result<Image, JsValue>	true	ok_result	question_operator,map_err
-pillow-rs-js/src/lib.rs	1972	effect_spread	pub	production	Result<Image, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	1979	eval_fn	pub	production	Result<Image, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	1986	linear_gradient	pub	production	Result<Image, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	1993	radial_gradient	pub	production	Result<Image, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	2000	merge_fn	pub	production	Result<Image, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	2012	getcolor	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator,map_err
-pillow-rs-js/src/lib.rs	2037	palette_getcolor	pub	production	Option<usize>	false	likely_infallible	
-pillow-rs-js/src/lib.rs	2042	palette_getcolor_append	pub	production	Result<usize, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	2055	palette_getcolor_validate	pub	production	Result<usize, JsValue>	true	ok_result	map_err
-pillow-rs-js/src/lib.rs	2065	palette_to_text	pub	production	String	false	likely_infallible	
-pillow-rs-js/src/lib.rs	2074	stat_from_list	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator
-pillow-rs-js/src/lib.rs	2090	outline_curve	pub	production	Result<Vec<i32>, JsValue>	true	ok_result	question_operator,map_err
-pillow-rs-js/src/lib.rs	2107	resolve_new_color	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator,map_err
+pillow-rs-js/src/lib.rs	1945	effect_mandelbrot	pub	production	Result<Image, JsValue>	true	ok_result	question_operator,map_err
+pillow-rs-js/src/lib.rs	1965	effect_noise	pub	production	Result<Image, JsValue>	true	ok_result	question_operator,map_err
+pillow-rs-js/src/lib.rs	1973	effect_spread	pub	production	Result<Image, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	1980	eval_fn	pub	production	Result<Image, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	1987	linear_gradient	pub	production	Result<Image, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	1994	radial_gradient	pub	production	Result<Image, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	2001	merge_fn	pub	production	Result<Image, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	2013	getcolor	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator,map_err
+pillow-rs-js/src/lib.rs	2038	palette_getcolor	pub	production	Option<usize>	false	likely_infallible	
+pillow-rs-js/src/lib.rs	2043	palette_getcolor_append	pub	production	Result<usize, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	2056	palette_getcolor_validate	pub	production	Result<usize, JsValue>	true	ok_result	map_err
+pillow-rs-js/src/lib.rs	2066	palette_to_text	pub	production	String	false	likely_infallible	
+pillow-rs-js/src/lib.rs	2075	stat_from_list	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator
+pillow-rs-js/src/lib.rs	2091	outline_curve	pub	production	Result<Vec<i32>, JsValue>	true	ok_result	question_operator,map_err
+pillow-rs-js/src/lib.rs	2108	resolve_new_color	pub	production	Result<JsValue, JsValue>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	21	host_path_from_python	private	production	PyResult<Option<PathBuf>>	true	ok_result	map_err,result_ctor
 pillow-rs-py/src/lib.rs	46	python_is_sequence	private	production	bool	false	likely_infallible	
 pillow-rs-py/src/lib.rs	53	putdata_value_from_python	private	production	PyResult<PutDataValue>	true	ok_result	question_operator,result_ctor
@@ -5909,212 +5909,212 @@ pillow-rs-py/src/lib.rs	235	crop_box	private	production	PyResult<PyImage>	true	o
 pillow-rs-py/src/lib.rs	244	rotate	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	258	transpose	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
 pillow-rs-py/src/lib.rs	264	convert	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	280	paste	private	production	PyResult<()>	true	ok_result	question_operator,expect,map_err,result_ctor
-pillow-rs-py/src/lib.rs	367	split	private	production	PyResult<Vec<PyImage>>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	375	filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	380	kernel_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	394	copy	private	production	PyImage	false	likely_infallible	
-pillow-rs-py/src/lib.rs	400	tobytes	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	404	tobytes_unpacked	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	408	tobytes_formatted	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	411	tobytes_encoded	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	423	palette	private	production	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	427	getpalette_trimmed	private	production	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	431	getpalette_rgba	private	production	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	435	palette_mode	private	production	Option<String>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	439	pending_transparency_index	private	production	Option<u8>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	446	pending_transparency_table	private	production	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	453	has_transparency_data	private	production	bool	false	likely_infallible	
-pillow-rs-py/src/lib.rs	457	apply_transparency	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	462	putpalette	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	466	get_child_images	private	production	Vec<PyImage>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	474	getexif	private	production	Vec<u8>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	478	getxmp	private	production	std::collections::HashMap<String, String>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	482	getim	private	production	PyResult<String>	true	ok_result	result_ctor
-pillow-rs-py/src/lib.rs	492	thumbnail	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	499	quantize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	511	getbbox	private	production	PyResult<Option<(u32, u32, u32, u32)>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	517	getextrema	private	production	PyResult<Vec<(u8, u8)>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	521	getextrema_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	534	stat	private	production	PyResult<Vec<Vec<f64>>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	538	stat_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	569	histogram	private	production	PyResult<Vec<u32>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	573	gaussian_blur	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	581	unsharp_mask	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	598	max_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	606	min_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	614	median_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	622	box_blur	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	630	mode_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	638	rank_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	646	color3dlut	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	660	getchannel	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	665	load	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	669	putalpha	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	673	reduce	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	678	alpha_composite	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	685	getcolors	private	production	PyResult<Option<Vec<(u32, Vec<u8>)>>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	691	getcolors_formatted	private	production	PyResult<Option<PyObject>>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	721	getdata	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	725	getdata_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	747	getprojection	private	production	PyResult<(Vec<u32>, Vec<u32>)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	751	entropy	private	production	PyResult<f64>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	755	seek	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	759	tell	private	production	u32	false	likely_infallible	
-pillow-rs-py/src/lib.rs	764	point	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	771	point_replicated	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	779	point_validated	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	785	effect_spread	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	792	transform	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,ok_or,result_ctor
-pillow-rs-py/src/lib.rs	857	frombytes	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	864	remap_palette	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	875	tobitmap	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	879	effect_noise	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	886	blend	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	900	composite	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	915	merge	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	929	close	private	production	PyResult<()>	true	ok_result	
-pillow-rs-py/src/lib.rs	934	verify	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	938	enhance_brightness	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	945	enhance_contrast	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	952	enhance_color	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	959	enhance_sharpness	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	966	getpixel	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	970	getpixel_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	984	putdata	private	production	PyResult<()>	true	ok_result	
-pillow-rs-py/src/lib.rs	989	putdata_formatted	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1080	putpixel	private	production	PyResult<()>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	1097	putpixel_mode	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1139	size	private	production	PyResult<(u32, u32)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1144	width	private	production	PyResult<u32>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1150	height	private	production	PyResult<u32>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1156	mode	private	production	PyResult<String>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1160	explicit_mode	private	production	PyResult<Option<String>>	true	ok_result	
-pillow-rs-py/src/lib.rs	1165	format	private	production	Option<String>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1169	__repr__	private	production	String	false	binding_display_fallback	result_ctor
-pillow-rs-py/src/lib.rs	1181	palette_transform_fill_type_error	private	production	PyErr	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1185	clamp_palette_transform_index	private	production	PyResult<u8>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1196	validate_palette_transform_color	private	production	PyResult<Option<u8>>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1236	parse_palette_transform_fill	private	production	PyResult<Option<u8>>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1261	map_error	private	production	PyErr	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1283	transposed_font_bbox	private	production	(i32, i32, i32, i32)	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1291	validate_transposed_font_length	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1296	resolve_array_layout	private	production	PyResult<(String, String, usize, usize, usize, bool)>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1315	enable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	1327	disable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	1339	available_backends	private	production	Vec<String>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1348	active_backends	private	production	PyResult<Vec<String>>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1358	backend_enabled	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	1374	align_row_to_32	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1383	fromarray_pixel_list	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1414	mesh_flatten	private	production	PyResult<Vec<f64>>	true	ok_result	result_ctor
-pillow-rs-py/src/lib.rs	1436	make_lut	private	production	PyResult<Vec<u8>>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1454	_core	private	production	PyResult<()>	true	ok_result	question_operator
-pillow-rs-py/src/lib.rs	1566	truetype	private	production	PyResult<Self>	true	ok_result	question_operator,fs_io,map_err
-pillow-rs-py/src/lib.rs	1575	truetype_from_bytes	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1582	load_default	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1588	getbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1592	getmask_alpha	private	production	PyResult<(u32, u32, Vec<u8>)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1596	get_transposed_mask_image	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1609	getmask2_image	private	production	PyResult<(PyImage, (i32, i32))>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1624	getlength	private	production	PyResult<f32>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1628	getmetrics	private	production	(u32, u32)	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1632	has_variations	private	production	bool	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1636	get_name	private	production	(String, String)	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1641	get_size	private	production	f32	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1655	load	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1665	load_path	private	production	PyResult<Self>	true	ok_result	question_operator,result_ctor
-pillow-rs-py/src/lib.rs	1694	load_default	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1700	file	private	production	Option<&str>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1705	info	private	production	Vec<Py<PyBytes>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1713	getsize	private	production	PyResult<(i32, i32)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	1718	getmask	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1729	load_pilfont_from_path	private	production	Result<(pillow_rs::font::pilfont::PilFont, String), PilError>	true	ok_result	question_operator,fs_io,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1758	pilfont_load_path_catches	private	production	bool	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1779	new	private	production	Self	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1784	move_to	private	production	()	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1789	line	private	production	()	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1793	curve	private	production	PyResult<()>	true	ok_result	question_operator,ok_or
-pillow-rs-py/src/lib.rs	1804	close	private	production	()	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1811	_points	private	production	Vec<(i32, i32)>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	1821	extract_draw_points	private	production	PyResult<Vec<(i32, i32)>>	true	ok_result	question_operator,result_ctor
-pillow-rs-py/src/lib.rs	1841	new	private	production	PyResult<Self>	true	ok_result	
-pillow-rs-py/src/lib.rs	1847	line	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1859	rectangle	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1889	ellipse	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1919	bitmap	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	1933	regular_polygon	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	1996	polygon	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2028	point	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2034	shape	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	2053	arc	private	production	PyResult<()>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2077	chord	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2104	pieslice	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2131	circle	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2147	rounded_rectangle	private	production	PyResult<()>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2162	text	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	2182	multiline_text	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	2217	textbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2237	textlength	private	production	PyResult<f64>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2252	multiline_textbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2311	image	private	production	PyResult<PyImage>	true	ok_result	question_operator
-pillow-rs-py/src/lib.rs	2320	draw_get_image	private	production	PyResult<pillow_rs::image::Image>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2325	color	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	
-pillow-rs-py/src/lib.rs	2330	parse_draw_color	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	map_err,result_ctor
-pillow-rs-py/src/lib.rs	2417	ops_autocontrast	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2428	ops_equalize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2436	ops_invert	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2445	ops_flip	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2453	ops_mirror	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2461	ops_posterize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2471	ops_solarize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2481	ops_grayscale	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2490	ops_colorize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2504	ops_contain	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2520	ops_cover	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2536	ops_fit	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2561	ops_pad	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2603	ops_scale	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2613	ops_expand	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	2649	ops_crop_border	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2659	exif_get_orientation	private	production	Option<u32>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	2665	exif_remove_orientation	private	production	Vec<u8>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	2673	chops_add	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2690	chops_subtract	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2706	chops_multiply	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2715	chops_screen	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2724	chops_darker	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2733	chops_lighter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2742	chops_difference	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2752	chops_invert	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2759	chops_add_modulo	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2768	chops_subtract_modulo	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2780	chops_constant	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2788	chops_hard_light	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2797	chops_soft_light	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2806	chops_overlay	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2815	chops_logical_and	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2827	chops_logical_or	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2836	chops_logical_xor	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2848	chops_offset	private	production	PyResult<PyImage>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2858	image_merge	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2872	image_blend	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2884	image_composite	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2899	image_linear_gradient	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2906	image_radial_gradient	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2913	image_effect_mandelbrot	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2926	getrgb	private	production	PyResult<(u8, u8, u8)>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2933	palette_search	private	production	Option<usize>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	2939	palette_getcolor_append	private	production	PyResult<usize>	true	ok_result	map_err
-pillow-rs-py/src/lib.rs	2954	palette_to_text	private	production	String	false	likely_infallible	
-pillow-rs-py/src/lib.rs	2959	getcolor	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2978	palette_getcolor_validate	private	production	PyResult<(Vec<u8>, usize)>	true	ok_result	question_operator,map_err
-pillow-rs-py/src/lib.rs	2991	palette_save_to_file	private	production	PyResult<()>	true	ok_result	fs_io,map_err
-pillow-rs-py/src/lib.rs	3002	outline_curve	private	production	Vec<Vec<i32>>	false	likely_infallible	
-pillow-rs-py/src/lib.rs	3010	stat_from_list	private	production	PyObject	false	likely_infallible	
-pillow-rs-py/src/lib.rs	3028	color3dlut_check_size	private	production	PyResult<(u32, u32, u32)>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	3064	color3dlut_new	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator,map_err,result_ctor
-pillow-rs-py/src/lib.rs	3133	color3dlut_generate	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator
-pillow-rs-py/src/lib.rs	3169	color3dlut_transform	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator,result_ctor
-pillow-rs-py/src/lib.rs	3221	color3dlut_repr	private	production	String	false	likely_infallible	
-pillow-rs-py/src/lib.rs	3238	kernel_prepare	private	production	PyResult<(Vec<f64>, f64, i32, u32)>	true	ok_result	result_ctor
+pillow-rs-py/src/lib.rs	280	paste	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	371	split	private	production	PyResult<Vec<PyImage>>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	379	filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	384	kernel_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	398	copy	private	production	PyImage	false	likely_infallible	
+pillow-rs-py/src/lib.rs	404	tobytes	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	408	tobytes_unpacked	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	412	tobytes_formatted	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	415	tobytes_encoded	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	427	palette	private	production	Option<Vec<u8>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	431	getpalette_trimmed	private	production	Option<Vec<u8>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	435	getpalette_rgba	private	production	Option<Vec<u8>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	439	palette_mode	private	production	Option<String>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	443	pending_transparency_index	private	production	Option<u8>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	450	pending_transparency_table	private	production	Option<Vec<u8>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	457	has_transparency_data	private	production	bool	false	likely_infallible	
+pillow-rs-py/src/lib.rs	461	apply_transparency	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	466	putpalette	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	470	get_child_images	private	production	Vec<PyImage>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	478	getexif	private	production	Vec<u8>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	482	getxmp	private	production	std::collections::HashMap<String, String>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	486	getim	private	production	PyResult<String>	true	ok_result	result_ctor
+pillow-rs-py/src/lib.rs	496	thumbnail	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	503	quantize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	515	getbbox	private	production	PyResult<Option<(u32, u32, u32, u32)>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	521	getextrema	private	production	PyResult<Vec<(u8, u8)>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	525	getextrema_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	538	stat	private	production	PyResult<Vec<Vec<f64>>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	542	stat_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	573	histogram	private	production	PyResult<Vec<u32>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	577	gaussian_blur	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	585	unsharp_mask	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	602	max_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	610	min_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	618	median_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	626	box_blur	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	634	mode_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	642	rank_filter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	650	color3dlut	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	664	getchannel	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	669	load	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	673	putalpha	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	677	reduce	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	682	alpha_composite	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	689	getcolors	private	production	PyResult<Option<Vec<(u32, Vec<u8>)>>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	695	getcolors_formatted	private	production	PyResult<Option<PyObject>>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	725	getdata	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	729	getdata_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	751	getprojection	private	production	PyResult<(Vec<u32>, Vec<u32>)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	755	entropy	private	production	PyResult<f64>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	759	seek	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	763	tell	private	production	u32	false	likely_infallible	
+pillow-rs-py/src/lib.rs	768	point	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	775	point_replicated	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	783	point_validated	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	789	effect_spread	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	796	transform	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,ok_or,result_ctor
+pillow-rs-py/src/lib.rs	861	frombytes	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	868	remap_palette	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	879	tobitmap	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	883	effect_noise	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	890	blend	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	904	composite	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	919	merge	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	933	close	private	production	PyResult<()>	true	ok_result	
+pillow-rs-py/src/lib.rs	938	verify	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	942	enhance_brightness	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	949	enhance_contrast	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	956	enhance_color	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	963	enhance_sharpness	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	970	getpixel	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	974	getpixel_formatted	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	988	putdata	private	production	PyResult<()>	true	ok_result	
+pillow-rs-py/src/lib.rs	993	putdata_formatted	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1084	putpixel	private	production	PyResult<()>	true	ok_result	map_err,result_ctor
+pillow-rs-py/src/lib.rs	1101	putpixel_mode	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1143	size	private	production	PyResult<(u32, u32)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1148	width	private	production	PyResult<u32>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1154	height	private	production	PyResult<u32>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1160	mode	private	production	PyResult<String>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1164	explicit_mode	private	production	PyResult<Option<String>>	true	ok_result	
+pillow-rs-py/src/lib.rs	1169	format	private	production	Option<String>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1173	__repr__	private	production	String	false	binding_display_fallback	result_ctor
+pillow-rs-py/src/lib.rs	1185	palette_transform_fill_type_error	private	production	PyErr	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1189	clamp_palette_transform_index	private	production	PyResult<u8>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1200	validate_palette_transform_color	private	production	PyResult<Option<u8>>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1240	parse_palette_transform_fill	private	production	PyResult<Option<u8>>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1265	map_error	private	production	PyErr	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1287	transposed_font_bbox	private	production	(i32, i32, i32, i32)	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1295	validate_transposed_font_length	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1300	resolve_array_layout	private	production	PyResult<(String, String, usize, usize, usize, bool)>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1319	enable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
+pillow-rs-py/src/lib.rs	1331	disable_backend	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
+pillow-rs-py/src/lib.rs	1343	available_backends	private	production	Vec<String>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1352	active_backends	private	production	PyResult<Vec<String>>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1362	backend_enabled	private	production	PyResult<bool>	true	ok_result	map_err,result_ctor
+pillow-rs-py/src/lib.rs	1378	align_row_to_32	private	production	PyResult<Vec<u8>>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1387	fromarray_pixel_list	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1418	mesh_flatten	private	production	PyResult<Vec<f64>>	true	ok_result	result_ctor
+pillow-rs-py/src/lib.rs	1440	make_lut	private	production	PyResult<Vec<u8>>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1458	_core	private	production	PyResult<()>	true	ok_result	question_operator
+pillow-rs-py/src/lib.rs	1570	truetype	private	production	PyResult<Self>	true	ok_result	question_operator,fs_io,map_err
+pillow-rs-py/src/lib.rs	1579	truetype_from_bytes	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1586	load_default	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1592	getbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1596	getmask_alpha	private	production	PyResult<(u32, u32, Vec<u8>)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1600	get_transposed_mask_image	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1613	getmask2_image	private	production	PyResult<(PyImage, (i32, i32))>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1628	getlength	private	production	PyResult<f32>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1632	getmetrics	private	production	(u32, u32)	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1636	has_variations	private	production	bool	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1640	get_name	private	production	(String, String)	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1645	get_size	private	production	f32	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1659	load	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1669	load_path	private	production	PyResult<Self>	true	ok_result	question_operator,result_ctor
+pillow-rs-py/src/lib.rs	1698	load_default	private	production	PyResult<Self>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1704	file	private	production	Option<&str>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1709	info	private	production	Vec<Py<PyBytes>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1717	getsize	private	production	PyResult<(i32, i32)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	1722	getmask	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1733	load_pilfont_from_path	private	production	Result<(pillow_rs::font::pilfont::PilFont, String), PilError>	true	ok_result	question_operator,fs_io,map_err,result_ctor
+pillow-rs-py/src/lib.rs	1762	pilfont_load_path_catches	private	production	bool	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1783	new	private	production	Self	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1788	move_to	private	production	()	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1793	line	private	production	()	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1797	curve	private	production	PyResult<()>	true	ok_result	question_operator,ok_or
+pillow-rs-py/src/lib.rs	1808	close	private	production	()	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1815	_points	private	production	Vec<(i32, i32)>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	1825	extract_draw_points	private	production	PyResult<Vec<(i32, i32)>>	true	ok_result	question_operator,result_ctor
+pillow-rs-py/src/lib.rs	1845	new	private	production	PyResult<Self>	true	ok_result	
+pillow-rs-py/src/lib.rs	1851	line	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1863	rectangle	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1893	ellipse	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1923	bitmap	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	1937	regular_polygon	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	2000	polygon	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2032	point	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2038	shape	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	2057	arc	private	production	PyResult<()>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2081	chord	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2108	pieslice	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2135	circle	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2151	rounded_rectangle	private	production	PyResult<()>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2166	text	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	2186	multiline_text	private	production	PyResult<()>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	2221	textbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2241	textlength	private	production	PyResult<f64>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2256	multiline_textbbox	private	production	PyResult<(i32, i32, i32, i32)>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2315	image	private	production	PyResult<PyImage>	true	ok_result	question_operator
+pillow-rs-py/src/lib.rs	2324	draw_get_image	private	production	PyResult<pillow_rs::image::Image>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2329	color	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	
+pillow-rs-py/src/lib.rs	2334	parse_draw_color	private	production	PyResult<(u8, u8, u8, u8)>	true	ok_result	map_err,result_ctor
+pillow-rs-py/src/lib.rs	2421	ops_autocontrast	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2432	ops_equalize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2440	ops_invert	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2449	ops_flip	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2457	ops_mirror	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2465	ops_posterize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2475	ops_solarize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2485	ops_grayscale	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2494	ops_colorize	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2508	ops_contain	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2524	ops_cover	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2540	ops_fit	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2565	ops_pad	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2607	ops_scale	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2617	ops_expand	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	2653	ops_crop_border	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2663	exif_get_orientation	private	production	Option<u32>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	2669	exif_remove_orientation	private	production	Vec<u8>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	2677	chops_add	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2694	chops_subtract	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2710	chops_multiply	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2719	chops_screen	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2728	chops_darker	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2737	chops_lighter	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2746	chops_difference	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2756	chops_invert	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2763	chops_add_modulo	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2772	chops_subtract_modulo	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2784	chops_constant	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2792	chops_hard_light	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2801	chops_soft_light	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2810	chops_overlay	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2819	chops_logical_and	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2831	chops_logical_or	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2840	chops_logical_xor	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2852	chops_offset	private	production	PyResult<PyImage>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2862	image_merge	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2876	image_blend	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2888	image_composite	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2903	image_linear_gradient	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2910	image_radial_gradient	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2917	image_effect_mandelbrot	private	production	PyResult<PyImage>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2930	getrgb	private	production	PyResult<(u8, u8, u8)>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2937	palette_search	private	production	Option<usize>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	2943	palette_getcolor_append	private	production	PyResult<usize>	true	ok_result	map_err
+pillow-rs-py/src/lib.rs	2958	palette_to_text	private	production	String	false	likely_infallible	
+pillow-rs-py/src/lib.rs	2963	getcolor	private	production	PyResult<PyObject>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2982	palette_getcolor_validate	private	production	PyResult<(Vec<u8>, usize)>	true	ok_result	question_operator,map_err
+pillow-rs-py/src/lib.rs	2995	palette_save_to_file	private	production	PyResult<()>	true	ok_result	fs_io,map_err
+pillow-rs-py/src/lib.rs	3006	outline_curve	private	production	Vec<Vec<i32>>	false	likely_infallible	
+pillow-rs-py/src/lib.rs	3014	stat_from_list	private	production	PyObject	false	likely_infallible	
+pillow-rs-py/src/lib.rs	3032	color3dlut_check_size	private	production	PyResult<(u32, u32, u32)>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	3068	color3dlut_new	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator,map_err,result_ctor
+pillow-rs-py/src/lib.rs	3137	color3dlut_generate	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator
+pillow-rs-py/src/lib.rs	3173	color3dlut_transform	private	production	PyResult<Vec<f64>>	true	ok_result	question_operator,result_ctor
+pillow-rs-py/src/lib.rs	3225	color3dlut_repr	private	production	String	false	likely_infallible	
+pillow-rs-py/src/lib.rs	3242	kernel_prepare	private	production	PyResult<(Vec<f64>, f64, i32, u32)>	true	ok_result	result_ctor

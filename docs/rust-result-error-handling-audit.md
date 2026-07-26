@@ -163,6 +163,10 @@ been inspected and either:
   test/example/bench harness behavior. The generated inventory currently has no
   rows left in `parser_review`, `review_non_result_fallible`, or
   `review_panic_path` across any scope.
+- JS Mandelbrot quality conversion, PyDraw argument length reporting, CPU
+  transform mesh reconstruction, CPU invert reconstruction, and SIMD grayscale
+  reconstruction now bubble structured errors instead of using `expect` inside
+  production `Result`-returning functions.
 
 ## Next review queue
 

@@ -192,9 +192,9 @@ pub fn simd_grayscale(
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::grayscale(&mut pixels, mode_code);
     let luma = pixels.into_iter().map(|pixel| pixel as u8).collect();
-    Ok(DynamicImage::ImageLuma8(
-        GrayImage::from_raw(w, h, luma).expect("internal invariant"),
-    ))
+    GrayImage::from_raw(w, h, luma)
+        .map(DynamicImage::ImageLuma8)
+        .ok_or_else(|| PilError::InternalError("SIMD grayscale buffer shape mismatch".to_string()))
 }
 
 pub fn simd_duplicate(

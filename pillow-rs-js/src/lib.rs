@@ -1951,13 +1951,14 @@ pub fn effect_mandelbrot(
     y1: f64,
     quality: u32,
 ) -> Result<Image, JsValue> {
-    module_fns::effect_mandelbrot(
-        (w, h),
-        (x0, y0, x1, y1),
-        quality.try_into().expect("internal invariant"),
-    )
-    .map(|i| Image { inner: i })
-    .map_err(err)
+    let quality = quality.try_into().map_err(|_| {
+        err(pillow_rs::error::PilError::ValueError(
+            "quality exceeds supported Mandelbrot iteration range".to_string(),
+        ))
+    })?;
+    module_fns::effect_mandelbrot((w, h), (x0, y0, x1, y1), quality)
+        .map(|i| Image { inner: i })
+        .map_err(err)
 }
 
 #[wasm_bindgen(js_name = "effectNoiseFn")]
