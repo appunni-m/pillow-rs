@@ -352,6 +352,87 @@ fn load_input_cases(directory: &Path, manifest_files: &BTreeSet<String>) -> Vec<
     cases
 }
 
+fn assert_case_ids_are_unique(cases: &[Value]) {
+    let mut seen = BTreeSet::new();
+    let mut duplicates = Vec::new();
+    for case in cases {
+        let case_id = case
+            .get("case_id")
+            .and_then(Value::as_str)
+            .expect("font public-api case_id must be a string");
+        if !seen.insert(case_id.to_owned()) {
+            duplicates.push(case_id.to_owned());
+        }
+    }
+    assert!(
+        duplicates.is_empty(),
+        "font public-api case_id values must be unique: {duplicates:?}"
+    );
+}
+
+fn assert_referenced_assets_exist(fixture_root: &Path, cases: &[Value]) {
+    let canonical_root = fixture_root
+        .canonicalize()
+        .expect("font fixture root must be canonicalizable");
+    for case in cases {
+        let case_id = case
+            .get("case_id")
+            .and_then(Value::as_str)
+            .expect("font public-api case_id must be a string");
+        let Some(assets) = case
+            .get("inputs")
+            .and_then(|inputs| inputs.get("assets"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        for (asset_name, asset) in assets {
+            let Some(kind) = asset.get("kind").and_then(Value::as_str) else {
+                panic!("{case_id}.{asset_name}: font asset kind must be a string");
+            };
+            match kind {
+                "load_default" => {
+                    assert!(
+                        asset.get("id").is_none(),
+                        "{case_id}.{asset_name}: load_default assets must not have an id"
+                    );
+                }
+                "ref" => {
+                    let id = asset
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_else(|| panic!("{case_id}.{asset_name}: ref asset id missing"));
+                    let path = fixture_root.join(id);
+                    if case_id == "font.load_failure.missing_font_asset" {
+                        assert!(
+                            !path.exists(),
+                            "{case_id}.{asset_name}: missing-asset negative row must reference an absent file"
+                        );
+                        continue;
+                    }
+                    let canonical_path = path.canonicalize().unwrap_or_else(|error| {
+                        panic!(
+                            "{case_id}.{asset_name}: referenced asset `{}` must exist: {error}",
+                            path.display()
+                        )
+                    });
+                    assert!(
+                        canonical_path.starts_with(&canonical_root),
+                        "{case_id}.{asset_name}: referenced asset must stay under fixture root: {}",
+                        path.display()
+                    );
+                    assert!(
+                        canonical_path.is_file(),
+                        "{case_id}.{asset_name}: referenced asset must be a file: {}",
+                        path.display()
+                    );
+                }
+                other => panic!("{case_id}.{asset_name}: unsupported font asset kind {other}"),
+            }
+        }
+    }
+}
+
 fn assert_manifest_has_no_embedded_expectations(path: &Path, text: &str) {
     for (index, line) in text.lines().enumerate() {
         let Some((key, _)) = line.trim().split_once(':') else {
@@ -646,6 +727,8 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
         !cases.is_empty(),
         "font public-api input corpus must not be empty"
     );
+    assert_case_ids_are_unique(&cases);
+    assert_referenced_assets_exist(&root, &cases);
 
     let pillow_methods = pillow_freetypefont_public_methods();
     let missing_pillow_methods = pillow_methods
