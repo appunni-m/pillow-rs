@@ -34,21 +34,21 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "load_default" | "truetype" => font_descriptor(&font),
         "font_size" => Ok(json!({
             "type": "size",
-            "value": font.font_size(),
+            "value": pillow_rs::font_size(&font),
         })),
         "text_bbox" => {
-            let (width, height) = font.text_bbox(text(params)?)?;
+            let (width, height) = pillow_rs::font_text_bbox(&font, text(params)?)?;
             Ok(json!({
                 "type": "size",
                 "value": [width, height],
             }))
         }
         "getname" => {
-            let (family, style) = font.getname_optional();
+            let (family, style) = pillow_rs::font_getname_optional(&font);
             Ok(json!({"type": "name", "value": [family, style]}))
         }
         "getmetrics" => {
-            let (ascent, descent) = font.getmetrics();
+            let (ascent, descent) = pillow_rs::font_getmetrics(&font);
             Ok(json!({"type": "metrics", "value": [ascent, descent]}))
         }
         "getlength" => Ok(json!({
@@ -61,13 +61,14 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
-            "value": font.has_variations(),
+            "value": pillow_rs::font_has_variations(&font),
         })),
-        "get_variation_axes" => Ok(variation_axes_value(font.get_variation_axes()?)),
+        "get_variation_axes" => Ok(variation_axes_value(pillow_rs::font_get_variation_axes(
+            &font,
+        )?)),
         "get_variation_names" => Ok(json!({
             "type": "variation_names",
-            "value": font
-                .get_variation_names()?
+            "value": pillow_rs::font_get_variation_names(&font)?
                 .into_iter()
                 .map(|name| hex(&name))
                 .collect::<Vec<_>>(),
@@ -76,11 +77,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let name = required(params, "name")?
                 .as_str()
                 .ok_or_else(|| PilError::TypeError("name must be a string".into()))?;
-            font.set_variation_by_name(name.as_bytes())?;
+            pillow_rs::font_set_variation_by_name(&mut font, name.as_bytes())?;
             Ok(json!({
                 "type": "font_after_variation",
-                "name": font.getname(),
-                "length": font.getlength(text(params)?)?,
+                "name": pillow_rs::font_getname(&font),
+                "length": pillow_rs::font_getlength(&font, text(params)?)?,
             }))
         }
         "set_variation_by_axes" => {
@@ -95,11 +96,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                         .ok_or_else(|| PilError::TypeError("axis must be a number".into()))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            font.set_variation_by_axes(&axes)?;
+            pillow_rs::font_set_variation_by_axes(&mut font, &axes)?;
             Ok(json!({
                 "type": "font_after_variation",
-                "name": font.getname(),
-                "length": font.getlength(text(params)?)?,
+                "name": pillow_rs::font_getname(&font),
+                "length": pillow_rs::font_getlength(&font, text(params)?)?,
             }))
         }
         "font_variant" => {
@@ -112,7 +113,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                         .ok_or_else(|| PilError::TypeError("variant_size must be a number".into()))
                 })
                 .transpose()?;
-            font_descriptor(&font.font_variant(size)?)
+            font_descriptor(&pillow_rs::font_variant(&font, size)?)
         }
         "getbbox" => {
             if has_text_options(params) {
@@ -122,15 +123,18 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                     &text_options(params)?,
                 )?))
             } else {
-                Ok(bbox_value(font.getbbox(text(params)?)?))
+                Ok(bbox_value(pillow_rs::font_getbbox(&font, text(params)?)?))
             }
         }
-        "getbbox_binary" => Ok(bbox_value(font.getbbox_binary(text(params)?)?)),
+        "getbbox_binary" => Ok(bbox_value(pillow_rs::font_getbbox_binary(
+            &font,
+            text(params)?,
+        )?)),
         "getmask" => {
             let (width, height, pixels) = if has_text_options(params) {
                 pillow_rs::font_getmask_with_options(&font, text(params)?, &text_options(params)?)?
             } else {
-                font.getmask(text(params)?)?
+                pillow_rs::font_getmask(&font, text(params)?)?
             };
             Ok(image_value(width, height, "L", &pixels))
         }
@@ -138,29 +142,30 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let (width, height, pixels, offset) = if has_text_options(params) {
                 pillow_rs::font_getmask2_with_options(&font, text(params)?, &text_options(params)?)?
             } else {
-                font.getmask2(text(params)?)?
+                pillow_rs::font_getmask2(&font, text(params)?)?
             };
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
-            let (width, height, pixels, offset) = font.getmask2_with_start(text(params)?, start)?;
+            let (width, height, pixels, offset) =
+                pillow_rs::font_getmask2_with_start(&font, text(params)?, start)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
             let (width, height, pixels) =
-                font.get_transposed_mask(text(params)?, orientation(params)?)?;
+                pillow_rs::font_get_transposed_mask(&font, text(params)?, orientation(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(pillow_rs::transposed_bbox(
-            font.getbbox(text(params)?)?,
+            pillow_rs::font_getbbox(&font, text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
             pillow_rs::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": font.getlength(text(params)?)?,
+                "value": pillow_rs::font_getlength(&font, text(params)?)?,
             }))
         }
         "draw_text" => draw_text(&font, params),
@@ -170,7 +175,8 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .as_f64()
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
-            let (width, height, pixels) = font.render_text_binary(text(params)?, fill, spacing)?;
+            let (width, height, pixels) =
+                pillow_rs::font_render_text_binary(&font, text(params)?, fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(
@@ -357,14 +363,14 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<Font, PilError> {
         .as_str()
         .ok_or_else(|| PilError::TypeError("font kind must be a string".into()))?
     {
-        "load_default" => Font::load_default(size),
+        "load_default" => pillow_rs::font_load_default(size),
         "ref" => {
             let id = required(font, "id")?
                 .as_str()
                 .ok_or_else(|| PilError::TypeError("font id must be a string".into()))?;
             let data = fs::read(fixture_root.join(id))
                 .map_err(|_| PilError::OsError("cannot open resource".into()))?;
-            Font::from_bytes(data, size)
+            pillow_rs::font_from_bytes(data, size)
         }
         kind => Err(PilError::ValueError(format!(
             "unsupported font fixture font kind: {kind}"
@@ -389,14 +395,14 @@ fn draw_text(font: &Font, params: &Value) -> Result<Value, PilError> {
 }
 
 fn font_descriptor(font: &Font) -> Result<Value, PilError> {
-    let (family, style) = font.getname_optional();
-    let (ascent, descent) = font.getmetrics();
+    let (family, style) = pillow_rs::font_getname_optional(font);
+    let (ascent, descent) = pillow_rs::font_getmetrics(font);
     Ok(json!({
         "type": "font",
-        "size": font.font_size(),
+        "size": pillow_rs::font_size(font),
         "name": [family, style],
         "metrics": [ascent, descent],
-        "has_variations": font.has_variations(),
+        "has_variations": pillow_rs::font_has_variations(font),
     }))
 }
 
