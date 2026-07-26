@@ -6,6 +6,7 @@
 
 CARGO := cargo
 PYTHON := python3
+IMAGINGFT_ORACLE_PYTHON ?= $(abspath ../.oracle-venv/bin/python)
 MANIFEST := ../manifest.yaml
 FIXTURES_DIR := ../tests/fixtures
 
@@ -117,33 +118,32 @@ backend-support-matrix:
 
 .PHONY: imagingft-tests
 imagingft-tests:
-	$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
+	IMAGINGFT_ORACLE_PYTHON=$(IMAGINGFT_ORACLE_PYTHON) \
+		$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
 
 .PHONY: imagingft-tests-release
 imagingft-tests-release:
-	$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
+	IMAGINGFT_ORACLE_PYTHON=$(IMAGINGFT_ORACLE_PYTHON) \
+		$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
 
 .PHONY: imagingft-tests-coverage
 imagingft-tests-coverage:
 	bash ../scripts/coverage/run_imagingft_rust_coverage.sh
 
 .PHONY: test-imagingft
-test-imagingft:
-	$(PYTHON) scripts/build_imagingft_fixtures.py
-	$(CARGO) test --all-features --test imagingft_public_api --locked -- --nocapture
+test-imagingft: imagingft-tests
 
 .PHONY: test-imagingft-release
-test-imagingft-release: 
-	$(PYTHON) scripts/build_imagingft_fixtures.py
-	$(CARGO) test --release --all-features --test imagingft_public_api --locked -- --nocapture
+test-imagingft-release: imagingft-tests-release
 
 .PHONY: fixtures
 fixtures:
-	$(PYTHON) scripts/build_imagingft_fixtures.py
+	@printf "ImagingFT public-api fixtures are input-only and are not generated.\n"
 
 .PHONY: fixtures-check
 fixtures-check:
-	$(PYTHON) scripts/build_imagingft_fixtures.py --check
+	@! rg -n '"(expect_error|expectation|expected|pixels_hex|sha256|raw_path)"' \
+		tests/fixtures/imagingft/inputs/public-api
 
 .PHONY: fixtures-clean
 fixtures-clean:

@@ -18,6 +18,7 @@ coverage/report.json
 .codex-subagents/
 venv/
 .venv/
+.oracle-venv/
 libnull.rlib
 pybak/
 pillow-rs-freetype/freetype/

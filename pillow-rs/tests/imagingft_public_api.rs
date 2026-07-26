@@ -1,158 +1,17 @@
-use std::collections::BTreeSet;
-use std::{fs, path::PathBuf};
-
-use pillow_rs::{
-    draw::Draw,
-    error::PilError,
-    font::{Font, imagingft},
-    image::Image,
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
+
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
-fn crate_fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imagingft")
-}
+#[path = "support/imagingft_runner.rs"]
+mod imagingft_runner;
 
-enum ApiValue {
-    Name((String, String)),
-    Metrics((u32, u32)),
-    Length(f32),
-    Bool(bool),
-    BBox((i32, i32, i32, i32)),
-    Mask {
-        size: (u32, u32),
-        mode: String,
-        pixels: Vec<u8>,
-    },
-    MaskWithOffset {
-        size: (u32, u32),
-        mode: String,
-        pixels: Vec<u8>,
-        offset: (i32, i32),
-    },
-    Status {
-        status: String,
-        length: Option<f32>,
-    },
-}
-
-fn artifact_path(raw_path: &str) -> PathBuf {
-    let candidate = PathBuf::from(raw_path);
-    if candidate.is_relative() {
-        crate_fixture_dir().join(candidate)
-    } else {
-        candidate
-    }
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    let digest: [u8; 32] = Sha256::digest(data).into();
-    digest
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>()
-}
-
-fn to_hex(data: &[u8]) -> String {
-    data.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn parse_orientation(value: &Value) -> Option<&str> {
-    value.as_str().filter(|value| !value.is_empty())
-}
-
-fn parse_start(value: &Value) -> Result<(f64, f64), PilError> {
-    let coords = value.as_array().ok_or(PilError::ValueError(
-        "start must be an array of two numbers".into(),
-    ))?;
-    if coords.len() != 2 {
-        return Err(PilError::ValueError(
-            "start must be an array of exactly two numbers".into(),
-        ));
-    }
-    let x = coords[0]
-        .as_f64()
-        .ok_or(PilError::ValueError("start[0] must be a number".into()))?;
-    let y = coords[1]
-        .as_f64()
-        .ok_or(PilError::ValueError("start[1] must be a number".into()))?;
-    Ok((x, y))
-}
-
-fn parse_text(value: &Value) -> Result<&str, PilError> {
-    value
-        .as_str()
-        .ok_or_else(|| PilError::ValueError("text must be a string".into()))
-}
-
-fn required_field<'a>(object: &'a Value, field: &str) -> Result<&'a Value, PilError> {
-    object
-        .get(field)
-        .ok_or_else(|| PilError::ValueError(format!("missing field: {field}")))
-}
-
-fn parse_size_u32(value: &Value) -> Result<u32, PilError> {
-    let value = value.as_u64().ok_or(PilError::ValueError(
-        "size value must be an unsigned integer".into(),
-    ))?;
-    u32::try_from(value).map_err(|_| PilError::ValueError("size must fit u32".into()))
-}
-
-fn parse_u8_value(value: &Value, index: usize) -> Result<u8, PilError> {
-    value
-        .as_u64()
-        .and_then(|v| u8::try_from(v).ok())
-        .ok_or_else(|| PilError::ValueError(format!("fill[{index}] must be u8")))
-}
-
-fn parse_fill(value: &Value) -> Result<(u8, u8, u8, u8), PilError> {
-    let fill = value
-        .as_array()
-        .ok_or(PilError::ValueError("fill must be an array".into()))?;
-    if fill.len() != 3 && fill.len() != 4 {
-        return Err(PilError::ValueError(
-            "fill must be [r, g, b] or [r, g, b, a]".into(),
-        ));
-    }
-    let r = parse_u8_value(&fill[0], 0)?;
-    let g = parse_u8_value(&fill[1], 1)?;
-    let b = parse_u8_value(&fill[2], 2)?;
-    let a = if fill.len() == 4 {
-        parse_u8_value(&fill[3], 3)?
-    } else {
-        255
-    };
-    Ok((r, g, b, a))
-}
-
-fn fixture_expects_error(case: &Value) -> bool {
-    if let Some(expect_error) = case.get("expect_error").and_then(Value::as_bool) {
-        return expect_error;
-    }
-
-    let expectation = case.get("expectation").unwrap_or(&Value::Null);
-    if expectation
-        .get("status")
-        .and_then(Value::as_str)
-        .is_some_and(|status| status == "error")
-    {
-        return true;
-    }
-
-    expectation
-        .get("expected")
-        .and_then(|value| value.get("error"))
-        .is_some()
-}
-
-fn fixture_status(case: &Value) -> Option<&str> {
-    case.get("expectation")
-        .and_then(|value| value.get("status"))
-        .and_then(Value::as_str)
-}
-
-const REQUIRED_PUBLIC_OPS: [&str; 13] = [
+const REQUIRED_PUBLIC_OPS: [&str; 14] = [
     "getname",
     "getmetrics",
     "getlength",
@@ -166,687 +25,129 @@ const REQUIRED_PUBLIC_OPS: [&str; 13] = [
     "transposed_bbox",
     "validate_transposed_length",
     "draw_text",
+    "render_text_binary",
 ];
 
-fn required_public_ops() -> BTreeSet<&'static str> {
-    REQUIRED_PUBLIC_OPS.iter().copied().collect()
+fn fixture_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imagingft")
 }
 
-fn parse_xy(value: &Value) -> Result<(i32, i32), PilError> {
-    let coords = value.as_array().ok_or(PilError::ValueError(
-        "draw_text xy must be an array of two integers".into(),
-    ))?;
-    if coords.len() != 2 {
-        return Err(PilError::ValueError(
-            "draw_text xy must be an array of two integers".into(),
-        ));
-    }
-    let x = coords[0]
-        .as_i64()
-        .ok_or(PilError::ValueError("xy[0] must be integer".into()))?;
-    let y = coords[1]
-        .as_i64()
-        .ok_or(PilError::ValueError("xy[1] must be integer".into()))?;
-    Ok((
-        i32::try_from(x).map_err(|_| PilError::ValueError("xy[0] out of i32 range".into()))?,
-        i32::try_from(y).map_err(|_| PilError::ValueError("xy[1] out of i32 range".into()))?,
-    ))
+fn oracle_python() -> PathBuf {
+    std::env::var_os("IMAGINGFT_ORACLE_PYTHON")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../.oracle-venv/bin/python")
+        })
+        .canonicalize()
+        .expect("repo-local or configured IMAGINGFT_ORACLE_PYTHON must resolve")
 }
 
-fn fixture_case_inputs(case: &Value) -> Result<&Value, PilError> {
-    case.get("inputs")
-        .ok_or(PilError::ValueError("case.inputs missing".into()))
-}
+fn load_input_cases(directory: &Path) -> Vec<Value> {
+    let mut paths = fs::read_dir(directory)
+        .expect("public-api imagingft input directory must be readable")
+        .map(|entry| entry.expect("input entry must be readable").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("imagingft.") && name.ends_with(".json"))
+        })
+        .collect::<Vec<_>>();
+    paths.sort();
 
-fn fixture_case_params(case: &Value) -> Result<&Value, PilError> {
-    fixture_case_inputs(case)?
-        .get("params")
-        .ok_or(PilError::ValueError("case.inputs.params missing".into()))
-}
-
-fn fixture_case_assets(case: &Value) -> Result<&Value, PilError> {
-    fixture_case_inputs(case)?
-        .get("assets")
-        .ok_or(PilError::ValueError("case.inputs.assets missing".into()))
-}
-
-fn fixture_operation_from_case(value: &Value) -> Result<String, PilError> {
-    let case_operation = required_field(value, "operation")?
-        .as_str()
-        .ok_or(PilError::ValueError("case operation must be a string".into()))?;
-    Ok(case_operation
-        .strip_prefix("imagingft.")
-        .unwrap_or(case_operation)
-        .to_string())
-}
-
-fn required_operation_set(fixture_path: &str) -> BTreeSet<String> {
-    let mut operations = BTreeSet::new();
-    let manifest = serde_json::from_str::<Value>(
-        &fs::read_to_string(fixture_path).expect("imagingft fixture JSON must be readable"),
-    )
-    .expect("imagingft fixture JSON must parse");
-
-    for case in manifest.get("cases").and_then(Value::as_array).into_iter().flatten() {
-        if let Ok(op) = fixture_operation_from_case(case) {
-            operations.insert(op);
+    let mut cases = Vec::new();
+    for path in paths {
+        let document: Value = serde_json::from_slice(
+            &fs::read(&path).expect("imagingft public-api input must be readable"),
+        )
+        .expect("imagingft public-api input must be valid JSON");
+        let rows = document
+            .get("cases")
+            .and_then(Value::as_array)
+            .expect("imagingft public-api input must contain a cases array");
+        for case in rows {
+            let object = case
+                .as_object()
+                .expect("each imagingft public-api case must be an object");
+            let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
+            assert_eq!(
+                keys,
+                BTreeSet::from(["case_id", "inputs", "operation"]),
+                "{} must contain input fields only",
+                path.display()
+            );
+            cases.push(case.clone());
         }
     }
-
-    let manifest_operation = manifest
-        .get("operation")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    if !manifest_operation.is_empty() {
-        operations.insert(
-            manifest_operation
-                .strip_prefix("imagingft.")
-                .unwrap_or(manifest_operation)
-                .to_string(),
-        );
-    }
-    operations
+    cases
 }
 
-fn validate_min_required_ops(observed_ops: &BTreeSet<String>) {
-    let missing: Vec<String> = required_public_ops()
-        .into_iter()
-        .filter(|op| !observed_ops.contains(*op))
-        .map(ToString::to_string)
-        .collect();
+fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/imagingft_oracle.py");
+    let mut child = Command::new(oracle_python())
+        .arg(script)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the pinned Pillow imagingft oracle must start");
+
+    child
+        .stdin
+        .take()
+        .expect("oracle stdin must be available")
+        .write_all(&serde_json::to_vec(cases).expect("input-only imagingft cases must serialize"))
+        .expect("input-only imagingft cases must be sent to the oracle");
+
+    let output = child
+        .wait_with_output()
+        .expect("the Pillow imagingft oracle must finish");
     assert!(
-        missing.is_empty(),
-        "required imagingft public surface operations missing: {missing:?}"
+        output.status.success(),
+        "Pillow imagingft oracle failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn load_font_size(case: &Value) -> Result<f32, PilError> {
-    let params = fixture_case_params(case)?;
-    match params.get("size") {
-        Some(size) => size
-            .as_f64()
-            .map(|value| value as f32)
-            .ok_or(PilError::ValueError("size missing or invalid".into())),
-        None => Ok(10.0),
-    }
-}
-
-fn load_font(case: &Value) -> Result<Font, PilError> {
-    let font = fixture_case_assets(case)?
-        .get("font")
-        .and_then(Value::as_object)
-        .ok_or(PilError::ValueError("font asset must be an object".into()))?;
-    let kind = font
-        .get("kind")
-        .and_then(Value::as_str)
-        .ok_or(PilError::ValueError("font kind must be a string".into()))?;
-    let size = load_font_size(case)?;
-
-    match kind {
-        "load_default" => Font::load_default(size),
-        "ref" => {
-            let id = font
-                .get("id")
-                .and_then(Value::as_str)
-                .ok_or(PilError::ValueError("font ref requires an id string".into()))?;
-            let data = fs::read(crate_fixture_dir().join(id))
-                .map_err(|e| PilError::ValueError(e.to_string()))?;
-            Font::from_bytes(data, size)
-        }
-        other => Err(PilError::ValueError(format!(
-            "unsupported imagingft fixture font kind: {other}"
-        ))),
-    }
+    serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
 }
 
 #[test]
-fn imagingft_public_api_parity_matches_fixture_oracles() {
-    let fixture_dir = crate_fixture_dir().join("inputs/public-api");
-    let mut any_cases = 0usize;
-    let mut observed_ops = BTreeSet::new();
-
-    for entry in
-        fs::read_dir(&fixture_dir).expect("public-api imagingft directory must be readable")
-    {
-        let entry = entry.expect("fixture entry must be readable");
-        let path = entry.path();
-        let Some(stem) = path.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        if !stem.starts_with("imagingft.") || !stem.ends_with(".json") {
-            continue;
-        }
-
-        let manifest = serde_json::from_str::<Value>(
-            &fs::read_to_string(&path).expect("imagingft fixture JSON must be readable"),
-        )
-        .expect("imagingft fixture JSON must parse");
-        let manifest_operation = manifest
-            .get("operation")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .strip_prefix("imagingft.")
-            .unwrap_or("");
-        observed_ops.extend(required_operation_set(path.to_str().expect("utf-8 path")));
-        if let Some(cases) = manifest["cases"].as_array() {
-            for case in cases {
-                any_cases += 1;
-                let case_id = case["case_id"].as_str().unwrap_or("<missing case_id>");
-                let operation = fixture_operation_from_case(case)
-                    .unwrap_or_else(|_| manifest_operation.to_string());
-                let expect_error = fixture_expects_error(case);
-                let params = match fixture_case_params(case) {
-                    Ok(params) => params,
-                    Err(error) => {
-                        assert!(
-                            expect_error,
-                            "{case_id}: expected success but case inputs.params missing: {error}"
-                        );
-                        let expectation = &case["expectation"];
-                        assert_error_matches(case_id, &error, expectation);
-                        continue;
-                    }
-                };
-                let font = load_font(case);
-                let font = match font {
-                    Ok(font) => font,
-                    Err(error) => {
-                        assert!(expect_error, "{case_id}: expected success but failed to load font: {error}");
-                        let expectation = &case["expectation"];
-                        assert_error_matches(case_id, &error, expectation);
-                        continue;
-                    }
-                };
-                let expected_status = fixture_status(case);
-                let expectation = &case["expectation"];
-                let expected = &expectation["expected"];
-                let actual = run_case(&operation, &font, params);
-
-                match (actual, expect_error) {
-                    (Ok(value), false) => {
-                        let expected_has_error = expected.get("error").is_some();
-                        assert!(
-                            !expected_has_error,
-                            "{case_id}: fixture status/error requested an error path but operation returned success"
-                        );
-                        compare_output(operation.as_str(), value, expected, case_id);
-                    }
-                    (Err(error), true) => {
-                        assert!(
-                            expected_status == Some("error"),
-                            "{case_id}: error case missing expectation status"
-                        );
-                        assert_error_matches(case_id, &error, expectation);
-                    }
-                    (Ok(_), true) => {
-                        assert!(false, "{case_id}: expected error but got success")
-                    }
-                    (Err(error), false) => {
-                        assert!(false, "{case_id}: unexpected error {error}")
-                    }
-                }
-            }
-        }
-    }
-
+fn every_input_matches_the_live_pillow_imagingft_oracle_exactly() {
+    let root = fixture_root();
+    let cases = load_input_cases(&root.join("inputs/public-api"));
     assert!(
-        any_cases > 0,
-        "imagingft public-api fixture corpus must contain cases"
+        !cases.is_empty(),
+        "imagingft public-api input corpus must not be empty"
     );
 
-    assert!(
-        !observed_ops.is_empty(),
-        "imagingft public-api fixture corpus must include at least one operation"
-    );
-    validate_min_required_ops(&observed_ops);
-}
-
-fn parse_spacing(value: &Value) -> Result<f32, PilError> {
-    value
-        .as_f64()
-        .map(|v| v as f32)
-        .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))
-}
-
-fn run_case(operation: &str, font: &Font, params: &Value) -> Result<ApiValue, PilError> {
-    match operation {
-        "getname" => {
-            let (family, style) = imagingft::getname(font);
-            Ok(ApiValue::Name((family.to_string(), style.to_string())))
-        }
-        "getmetrics" => Ok(ApiValue::Metrics(imagingft::getmetrics(font))),
-        "getlength" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            Ok(ApiValue::Length(imagingft::getlength(font, text)))
-        }
-        "has_variations" => Ok(ApiValue::Bool(imagingft::has_variations(font))),
-        "getbbox" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            Ok(ApiValue::BBox(imagingft::getbbox(font, text)))
-        }
-        "getbbox_binary" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            Ok(ApiValue::BBox(imagingft::getbbox_binary(font, text)))
-        }
-        "getmask" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let (width, height, pixels) = imagingft::getmask(font, text);
-            Ok(ApiValue::Mask {
-                size: (width, height),
-                mode: "L".to_string(),
-                pixels,
-            })
-        }
-        "getmask2" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let (width, height, pixels, offset) = imagingft::getmask2(font, text);
-            Ok(ApiValue::MaskWithOffset {
-                size: (width, height),
-                mode: "L".to_string(),
-                pixels,
-                offset,
-            })
-        }
-        "getmask2_with_start" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let start = parse_start(required_field(params, "start")?)?;
-            let (width, height, pixels, offset) = imagingft::getmask2_with_start(font, text, start);
-            Ok(ApiValue::MaskWithOffset {
-                size: (width, height),
-                mode: "L".to_string(),
-                pixels,
-                offset,
-            })
-        }
-        "get_transposed_mask" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let orientation = parse_orientation(&params["orientation"]);
-            let (width, height, pixels) = imagingft::get_transposed_mask(font, text, orientation)?;
-            Ok(ApiValue::Mask {
-                size: (width, height),
-                mode: "L".to_string(),
-                pixels,
-            })
-        }
-        "transposed_bbox" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let orientation = parse_orientation(&params["orientation"]);
-            Ok(ApiValue::BBox(imagingft::transposed_bbox(
-                imagingft::getbbox(font, text),
-                orientation,
-            )))
-        }
-        "validate_transposed_length" => {
-            let orientation = parse_orientation(&params["orientation"]);
-            imagingft::validate_transposed_length(orientation)?;
-            let text = params
-                .get("text")
-                .and_then(Value::as_str)
-                .unwrap_or("Hello");
-            Ok(ApiValue::Status {
-                status: "ok".to_string(),
-                length: Some(imagingft::getlength(font, text)),
-            })
-        }
-        "draw_text" => {
-            let text = parse_text(required_field(params, "text")?)?;
-            let expected_width = parse_size_u32(&params["canvas_width"])?;
-            let expected_height = parse_size_u32(&params["canvas_height"])?;
-            let (x, y) = parse_xy(&params["xy"])?;
-            let fill = parse_fill(&params["fill"])?;
-            let mode = params
-                .get("mode")
-                .and_then(Value::as_str)
-                .ok_or(PilError::ValueError("mode must be a string".into()))?;
-            let mut image = Image::new(expected_width, expected_height, mode, (0, 0, 0, 0))
-                .map_err(|error| {
-                    PilError::ValueError(format!("draw_text canvas allocation failed: {error}"))
-                })?;
-            let mut draw = Draw::new(image.clone(), Some(mode.to_string()));
-            draw.text(x, y, text, font, fill)?;
-            image = draw.image_clone();
-            let pixels = image.tobytes()?;
-            Ok(ApiValue::Mask {
-                size: (expected_width, expected_height),
-                mode: mode.to_string(),
-                pixels,
-            })
-        }
-        "render_text_binary" => {
-            let text = parse_text(&params["text"])?;
-            let fill = parse_fill(&params["fill"])?;
-            let spacing = parse_spacing(&params["spacing"])?;
-            let (width, height, pixels) = imagingft::render_text_binary(font, text, fill, spacing);
-            Ok(ApiValue::Mask {
-                size: (width, height),
-                mode: "RGBA".to_string(),
-                pixels,
-            })
-        }
-        other => Err(PilError::NotImplementedError(format!(
-            "unsupported imagingft operation: {other}"
-        ))),
-    }
-}
-
-fn compare_image_payload(actual_pixels: &[u8], expected: &Value, case_id: &str) {
-    if let Some(path) = expected.get("raw_path").and_then(Value::as_str) {
-        let raw = fs::read(artifact_path(path)).expect("raw oracle must be readable");
-        assert_eq!(raw, actual_pixels, "{case_id}");
-        return;
-    }
-
-    if let Some(hex) = expected.get("pixels_hex").and_then(Value::as_str) {
-        assert_eq!(to_hex(actual_pixels), hex, "{case_id}");
-    }
-}
-
-fn compare_output(operation: &str, actual: ApiValue, expected: &Value, case_id: &str) {
-    match actual {
-        ApiValue::Name(actual) => {
-            let expected_name = &expected["name"];
-            assert_eq!(actual.0, expected_name[0].as_str().expect("expected name"));
-            assert_eq!(actual.1, expected_name[1].as_str().expect("expected name"));
-        }
-        ApiValue::Metrics(actual) => {
-            let expected_metrics = &expected["metrics"];
-            assert_eq!(
-                actual,
-                (
-                    expected_metrics[0].as_u64().expect("expected ascender") as u32,
-                    expected_metrics[1].as_u64().expect("expected descender") as u32,
-                )
-            );
-        }
-        ApiValue::Length(actual) => {
-            let expected_length = expected["length"].as_f64().expect("expected length") as f32;
-            assert_eq!(actual, expected_length, "{case_id}");
-        }
-        ApiValue::Bool(actual) => {
-            let expected_bool = expected["has_variations"].as_bool().expect("expected bool");
-            assert_eq!(actual, expected_bool, "{case_id}");
-        }
-        ApiValue::BBox(actual) => {
-            let expected_bbox = (
-                expected["bbox"][0].as_i64().unwrap() as i32,
-                expected["bbox"][1].as_i64().unwrap() as i32,
-                expected["bbox"][2].as_i64().unwrap() as i32,
-                expected["bbox"][3].as_i64().unwrap() as i32,
-            );
-            assert_eq!(actual, expected_bbox, "{case_id}");
-        }
-        ApiValue::Mask { size, mode, pixels } => {
-            assert_eq!(
-                size.0,
-                expected["size"][0].as_u64().unwrap() as u32,
-                "{case_id}"
-            );
-            assert_eq!(
-                size.1,
-                expected["size"][1].as_u64().unwrap() as u32,
-                "{case_id}"
-            );
-            assert_eq!(
-                mode,
-                expected["mode"].as_str().expect("expected mode"),
-                "{case_id}"
-            );
-            if let Some(sha) = expected.get("sha256").and_then(Value::as_str) {
-                assert_eq!(sha256_hex(&pixels), sha, "{case_id}");
-            }
-            compare_image_payload(&pixels, expected, case_id);
-            if operation == "get_transposed_mask" {
-                if let Some(pixels_hex) = expected.get("pixels_hex").and_then(Value::as_str) {
-                    assert_eq!(to_hex(&pixels), pixels_hex, "{case_id}");
-                }
-            }
-        }
-        ApiValue::MaskWithOffset {
-            size,
-            mode,
-            pixels,
-            offset,
-        } => {
-            assert_eq!(
-                size.0,
-                expected["size"][0].as_u64().unwrap() as u32,
-                "{case_id}"
-            );
-            assert_eq!(
-                size.1,
-                expected["size"][1].as_u64().unwrap() as u32,
-                "{case_id}"
-            );
-            assert_eq!(
-                mode,
-                expected["mode"].as_str().expect("expected mode"),
-                "{case_id}"
-            );
-            assert_eq!(
-                offset,
-                (
-                    expected["offset"][0].as_i64().unwrap() as i32,
-                    expected["offset"][1].as_i64().unwrap() as i32
-                )
-            );
-            if let Some(sha) = expected.get("sha256").and_then(Value::as_str) {
-                assert_eq!(sha256_hex(&pixels), sha, "{case_id}");
-            }
-            compare_image_payload(&pixels, expected, case_id);
-        }
-        ApiValue::Status { status, length } => {
-            assert_eq!(
-                status,
-                expected["status"].as_str().expect("expected status"),
-                "{case_id}"
-            );
-            if let Some(expected_length) = expected.get("length").and_then(Value::as_f64) {
-                assert_eq!(
-                    length.expect("status length should be present"),
-                    expected_length as f32,
-                    "{case_id}"
-                );
-            } else {
-                assert!(
-                    length.is_none(),
-                    "{case_id}: expected no status length but got one"
-                );
-            }
-        }
-    }
-}
-
-fn expected_compare_paths(expectation: &Value) -> Vec<String> {
-    let paths: Vec<String> = expectation
-        .get("compare")
-        .and_then(|value| value.get("paths"))
-        .and_then(Value::as_array)
+    let observed = cases
+        .iter()
+        .map(|case| imagingft_runner::operation(case).expect("case operation must be valid"))
+        .collect::<BTreeSet<_>>();
+    let missing = REQUIRED_PUBLIC_OPS
         .into_iter()
-        .flat_map(|paths| paths.iter())
-        .filter_map(|value| value.as_str().map(ToString::to_string))
-        .collect();
-    if paths.is_empty() {
-        let mut generated = Vec::new();
-        if let Some(expected) = expectation.get("expected").and_then(Value::as_object) {
-            for key in expected.keys() {
-                if key == "error" {
-                    if let Some(error) = expected.get("error").and_then(Value::as_object) {
-                        for error_key in error.keys() {
-                            generated.push(format!("error.{error_key}"));
-                        }
-                    }
-                } else {
-                    generated.push(key.to_string());
-                }
-            }
-        }
-        if generated.is_empty() {
-            generated.push("status".to_string());
-        }
-        generated
-    } else {
-        paths
-    }
-}
-
-fn expected_string(expectation: &Value, path: &str) -> Option<String> {
-    expectation
-        .get("expected")
-        .and_then(Value::as_object)
-        .and_then(|value| value.get("error"))
-        .and_then(Value::as_object)
-        .and_then(|value| value.get(path))
-        .and_then(Value::as_str)
-        .map(ToString::to_string)
-}
-
-fn error_expected_field_value(error: &PilError, path: &str) -> Option<String> {
-    if path.is_empty() {
-        return None;
-    }
-    if path == "type" || path == "class" || path == "category" {
-        Some(error_category(error).to_string())
-    } else if path == "message" {
-        Some(error.to_string())
-    } else if path == "message_pattern" {
-        Some(error.to_string())
-    } else {
-        None
-    }
-}
-
-fn assert_single_error_path(
-    case_id: &str,
-    path: &str,
-    error: &PilError,
-    expectation: &Value,
-    compare_mode: &str,
-) {
-    let expected = expected_string(expectation, &path.replace("error.", ""));
-    let actual = error_expected_field_value(error, &path.replace("error.", ""));
-
-    if path == "error.message" || path == "error.message_pattern" {
-        if compare_mode == "contains" {
-            let pattern = expected
-                .as_deref()
-                .or_else(|| {
-                    expectation
-                        .get("expected")
-                        .and_then(Value::as_object)
-                        .and_then(|value| value.get("error"))
-                        .and_then(Value::as_object)
-                        .and_then(|value| value.get("message"))
-                        .and_then(Value::as_str)
-                })
-                .unwrap_or("");
-            let actual_message = error.to_string();
-            assert!(
-                actual_message.contains(pattern),
-                "{case_id}: expected message to contain '{pattern}', got '{actual_message}'"
-            );
-            return;
-        }
-    }
-
-    assert_eq!(
-        expected.expect(&format!("{case_id}: fixture missing compare target '{path}' value")),
-        actual.expect(&format!("{case_id}: fixture compare target '{path}' not representable from runtime error")),
-        "{case_id}: expected '{path}' value mismatch"
+        .filter(|operation| !observed.contains(*operation))
+        .collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "required imagingft public operations missing from inputs: {missing:?}"
     );
-}
 
-fn error_category(error: &PilError) -> &'static str {
-    match error {
-        PilError::ValueError(_) => "ValueError",
-        PilError::TypeError(_) => "TypeError",
-        PilError::IOError(_) => "IOError",
-        PilError::OsError(_) => "OsError",
-        PilError::AssertionError(_) => "AssertionError",
-        PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
-        PilError::SyntaxError(_) => "SyntaxError",
-        PilError::IndexError(_) => "IndexError",
-        PilError::ImageError(_) => "ImageError",
-        PilError::NotImplementedError(_) => "NotImplementedError",
-        PilError::UnknownFormat(_) => "UnknownFormat",
-        PilError::Io(_) => "Io",
-        PilError::PaletteError(_) => "PaletteError",
-        PilError::InternalError(_) => "InternalError",
-        PilError::DimensionError(_) => "DimensionError",
-    }
-}
+    let oracle = run_oracle(&cases);
+    assert_eq!(
+        oracle.len(),
+        cases.len(),
+        "oracle must return exactly one result per input"
+    );
 
-fn compare_mode(expectation: &Value) -> &str {
-    expectation
-        .get("compare")
-        .and_then(|value| value.get("mode"))
-        .and_then(Value::as_str)
-        .unwrap_or("exact")
-}
-
-fn assert_error_matches(case_id: &str, error: &PilError, expectation: &Value) {
-    let paths = expected_compare_paths(expectation);
-    let compare_mode = compare_mode(expectation);
-
-    for path in &paths {
-        if path == "status" {
-            assert_eq!(
-                expectation["status"]
-                    .as_str()
-                    .expect("fixture status must be set"),
-                "error",
-                "{case_id}: expected status mismatch (expected error)"
-            );
-            continue;
-        }
-
-        if path == "error" {
-            let Some(expected_error) = expectation
-                .get("expected")
-                .and_then(|value| value.get("error"))
-                .and_then(Value::as_object)
-            else {
-                panic!("{case_id}: fixture compare path '{path}' requires expected.error object");
-            };
-            for (key, expected_value) in expected_error {
-                let mut key_path = String::new();
-                key_path.push_str("error.");
-                key_path.push_str(key);
-
-                expected_value.as_str().unwrap_or_else(|| {
-                    panic!("{case_id}: compare target 'error.{key}' must be string")
-                });
-
-                assert_single_error_path(case_id, &key_path, error, expectation, compare_mode);
-            }
-            continue;
-        }
-
-        if path.starts_with("error.") {
-            assert_single_error_path(case_id, path, error, expectation, compare_mode);
-            continue;
-        }
-
-        if path == "length" {
-            let expected_has_length = expectation
-                .get("expected")
-                .and_then(Value::as_object)
-                .and_then(|value| value.get("length"))
-                .is_some();
-            assert!(
-                !expected_has_length,
-                "{case_id}: expected 'length' for error path but no runtime length exists"
-            );
-            continue;
-        }
-
-        panic!("{case_id}: unsupported compare path '{path}' for error case");
-    }
-
-    if compare_mode == "contains"
-        && !paths.iter().any(|path| path.as_str() == "error.message")
-        && !paths.iter().any(|path| path.as_str() == "error.message_pattern")
-        && !paths.iter().any(|path| path.as_str() == "error")
-    {
-        assert_single_error_path(case_id, "error.message", error, expectation, compare_mode);
+    for case in &cases {
+        let case_id = case["case_id"].as_str().expect("case_id must be a string");
+        let expected = oracle
+            .get(case_id)
+            .unwrap_or_else(|| panic!("{case_id}: live Pillow oracle result missing"));
+        let actual = imagingft_runner::run(case, &root);
+        assert_eq!(
+            &actual, expected,
+            "{case_id}: Rust result differs from live Pillow/_imagingft oracle"
+        );
     }
 }

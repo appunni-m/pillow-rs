@@ -6,7 +6,7 @@
 # ── Variables ─────────────────────────────────────────────────────────────────
 MATURIN      := maturin
 PYTHON       := python3
-IMAGE_ORACLE_PYTHON ?= $(abspath ../image-slash-star/.oracle-venv/bin/python)
+IMAGE_ORACLE_PYTHON ?= $(abspath .oracle-venv/bin/python)
 NODE         := node
 CARGO        := cargo
 WASM_PACK    := wasm-pack
