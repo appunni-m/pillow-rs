@@ -20,7 +20,6 @@
     },
     {
       "case_id": "imagingft.validate_transposed_length.rotate_90",
-      "expect_error": true,
       "operation": "validate_transposed_length",
       "inputs": {
         "assets": {
