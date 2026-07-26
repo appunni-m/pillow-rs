@@ -323,7 +323,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
-.PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
+.PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
 .PHONY: pillow-rs-ci pillow-rs-clean
 
@@ -370,6 +370,9 @@ pillow-rs-imagingft-release: ## Run legacy ImagingFT matrix parity tests (releas
 
 pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
 	$(MAKE) -C $(CORE_SRC) fixtures-clean
+
+pillow-rs-public-api-boundary: ## Enforce pillow-rs explicit root public API boundary
+	$(MAKE) -C $(CORE_SRC) public-api-boundary
 
 pillow-rs-fmt: ## Check pillow-rs formatting
 	$(MAKE) -C $(CORE_SRC) fmt
@@ -568,15 +571,19 @@ fixtures-clean: ## Remove fixture outputs
 .PHONY: fmt fmt-fix clippy clippy-core lint
 
 fmt: ## Check Rust formatting
+	python3 scripts/check_public_api_boundary.py
 	$(CARGO) fmt --check
 
 fmt-fix: ## Fix Rust formatting
 	$(CARGO) fmt
+	python3 scripts/check_public_api_boundary.py
 
 clippy: ## Run clippy on all targets
+	python3 scripts/check_public_api_boundary.py
 	$(CARGO) clippy --all-targets --all-features -- -A deprecated
 
 clippy-core: ## Run clippy on core only
+	python3 scripts/check_public_api_boundary.py
 	$(CARGO) clippy -p $(CORE_SRC) -- -A deprecated
 
 lint: fmt clippy ## Run fmt + clippy

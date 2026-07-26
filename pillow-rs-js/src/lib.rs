@@ -11,8 +11,8 @@
 
 //! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs.
 use pillow_rs::Image as RsImage;
-use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::prelude::JsValue;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 fn err(e: pillow_rs::PilError) -> JsValue {
     let name = match &e {
@@ -87,8 +87,7 @@ pub fn resolve_array_layout(
     typestr: &str,
     mode: Option<String>,
 ) -> Result<ArrayDescriptorLayout, JsValue> {
-    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode.as_deref())
-        .map_err(err)?;
+    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode.as_deref()).map_err(err)?;
     Ok(ArrayDescriptorLayout {
         mode: layout.mode,
         raw_mode: layout.raw_mode,
@@ -1094,12 +1093,9 @@ impl ImageFont {
         text: &str,
         orientation: Option<String>,
     ) -> Result<ImageFontMask, JsValue> {
-        let (width, height, pixels) = pillow_rs::font_get_transposed_mask(
-            &self.font,
-            text,
-            orientation.as_deref(),
-        )
-        .map_err(err)?;
+        let (width, height, pixels) =
+            pillow_rs::font_get_transposed_mask(&self.font, text, orientation.as_deref())
+                .map_err(err)?;
         Ok(ImageFontMask {
             width,
             height,
@@ -1128,8 +1124,7 @@ impl ImageFont {
         text: &str,
         orientation: Option<String>,
     ) -> Result<f32, JsValue> {
-        pillow_rs::validate_transposed_length(orientation.as_deref())
-            .map_err(err)?;
+        pillow_rs::validate_transposed_length(orientation.as_deref()).map_err(err)?;
         pillow_rs::font_getlength(&self.font, text).map_err(err)
     }
 
@@ -2046,7 +2041,8 @@ pub fn palette_getcolor_append(
     mode: &str,
 ) -> Result<usize, JsValue> {
     let mut pal = palette;
-    pillow_rs::palette_getcolor_append(&mut pal, r, g, b, a, mode).map_err(|e| JsValue::from_str(&e))
+    pillow_rs::palette_getcolor_append(&mut pal, r, g, b, a, mode)
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 #[wasm_bindgen(js_name = "paletteGetColorValidate")]

@@ -37,17 +37,13 @@
 //! CPU execution remains the fallback path. Feature flags should not change the
 //! public Pillow-style contract of an operation.
 //!
-//! # Module Map
+//! # Public API Boundary
 //!
-//! - [`image`] contains the high-level image type and Pillow-style image
-//!   operations.
-//! - [`ops`] contains reusable image operation implementations.
-//! - [`draw`] contains drawing and text rendering helpers.
-//! - [`font`] contains Pillow-compatible font surfaces backed by
-//!   `freetype`.
-//! - [`color`] contains mode-aware color parsing and color-space conversions.
-//! - [`formats`] contains codec-facing image format handlers.
-//! - [`compute`] contains CPU/GPU/SIMD operation dispatch infrastructure.
+//! `pillow-rs/src/lib.rs` is the single public API definition for this crate.
+//! Implementation modules are private crate internals; downstream callers,
+//! including the Python and WebAssembly bindings, must use the exact root
+//! symbols re-exported below such as [`Image`], [`Font`], [`Draw`],
+//! [`imageops_grayscale`], and [`font_getbbox`].
 //!
 //! # Quick Start
 //!

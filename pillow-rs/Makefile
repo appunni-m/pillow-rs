@@ -163,17 +163,21 @@ fixtures-clean:
 	rm -rf $(FIXTURES_DIR)/outputs/
 	mkdir -p $(FIXTURES_DIR)/outputs/{jsons,images,raws}
 
+.PHONY: public-api-boundary
+public-api-boundary:
+	python3 ../scripts/check_public_api_boundary.py
+
 .PHONY: fmt
-fmt:
+fmt: public-api-boundary
 	$(CARGO) fmt -- --check
 
 .PHONY: fmt-fix
 fmt-fix:
 	$(CARGO) fmt
+	python3 ../scripts/check_public_api_boundary.py
 
 .PHONY: clippy
-clippy:
-	python3 ../scripts/check_public_api_boundary.py
+clippy: public-api-boundary
 	$(CARGO) clippy --all-targets --all-features --locked -- -D warnings
 
 .PHONY: lint
