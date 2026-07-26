@@ -23,20 +23,35 @@ Generated inventory:
   - `example`: `25`
   - `bench`: `12`
 - Current generated classification counts:
-  - `likely_infallible`: `2,815`
   - `ok_result`: `2,593`
-  - `abi_status_code`: `349`
-  - `parser_review`: `180`
-  - `review_non_result_fallible`: `87`
-  - `review_panic_path`: `71`
+  - `likely_infallible`: `2,583`
+  - `abi_status_code`: `451`
+  - `test_assertion_or_fixture_harness`: `176`
+  - `abi_optional_snapshot_or_handle`: `85`
+  - `freetype_ffi_optional_lookup_or_table`: `74`
+  - `freetype_optional_font_feature_parse`: `65`
+  - `freetype_optional_sfnt_lookup`: `48`
+  - `example_fail_fast_or_smoke_harness`: `8`
   - `pillow_clip_control_flow`: `5`
+  - `bench_fail_fast_harness`: `5`
   - `freetype_void_api_internal_status`: `4`
   - `iterator_exhaustion_control_flow`: `3`
   - `documented_invariant_panic`: `3`
+  - `freetype_metrics_lookup_absence`: `3`
   - `freetype_sentinel_arithmetic`: `3`
   - `freetype_default_value_control_flow`: `3`
   - `palette_absence_control_flow`: `2`
   - `font_bitmap_absence_control_flow`: `1`
+  - `freetype_geometry_absence_control_flow`: `1`
+  - `freetype_test_support_sample`: `1`
+  - `freetype_raster_clip_control_flow`: `1`
+  - `binding_display_fallback`: `1`
+
+Current unresolved generated classification counts:
+
+- `parser_review`: `0`
+- `review_non_result_fallible`: `0`
+- `review_panic_path`: `0`
 
 ## Current interpretation
 
@@ -48,14 +63,26 @@ The generated `classification` column is conservative:
 - `review_panic_path`: non-`Result` function contains `panic!`, `todo!`, or `unimplemented!`.
 - `parser_review`: mechanical parser found a mixed signal that requires manual review.
 - `abi_status_code`: C/WASM ABI surface returns an explicit status code such as `FT_Error` or `FontdoneWasmStatus`; internal Rust helpers should still use `Result` unless they are direct boundary-status adapters.
+- `abi_optional_snapshot_or_handle`: C/WASM ABI inspection helpers and nullable handle lookups use `Option` to model absent handles, absent snapshots, or unsupported optional ABI data.
 - `documented_invariant_panic`: the deliberately named `InfallibleExt::because` invariant mechanism; this is not a recoverable user/input error path and has no production call sites after the current audit.
+- `binding_display_fallback`: binding display/debug helpers intentionally format fallback strings instead of raising while constructing `repr`.
 - `pillow_clip_control_flow`: Pillow drawing geometry helpers use checked arithmetic to clip/skip non-renderable coordinates, matching Pillow-style draw semantics instead of raising.
 - `iterator_exhaustion_control_flow`: `Option` is used to represent iterator exhaustion, not an error.
 - `palette_absence_control_flow`: `Option` is used for Pillow-compatible palette/transparency absence.
 - `font_bitmap_absence_control_flow`: `Option` is used while reading bitmap coverage for out-of-bounds pixels or unsupported bitmap modes that should be skipped.
+- `freetype_geometry_absence_control_flow`: `Option` is used for empty-outline geometry absence.
+- `freetype_metrics_lookup_absence`: `Option` is used for absent optional metrics/style records where FreeType falls back rather than raising.
+- `freetype_ffi_optional_lookup_or_table`: FreeType FFI helpers use `Option` for nullable handle lookups, optional table/service data, and output rows where the C API communicates absence through null/zero/status.
+- `freetype_optional_font_feature_parse`: Type 1/BDF/name-feature parsers use `Option` for optional font-program features whose absence is legal and covered by fallback behavior.
+- `freetype_optional_sfnt_lookup`: SFNT table helpers use `Option` for optional or out-of-range table records that callers translate into FreeType-compatible absence/fallback.
 - `freetype_sentinel_arithmetic`: FreeType-compatible fixed-point math returns C sentinel values for cases such as division by zero, preserving oracle behavior instead of surfacing Rust errors.
 - `freetype_void_api_internal_status`: helpers under a FreeType void API path use internal success/failure booleans because the public C-compatible caller intentionally ignores those failures while preserving metric side effects.
 - `freetype_default_value_control_flow`: FreeType-compatible variation/default helpers return default vectors or empty values for absent named instances/tables, preserving public oracle behavior.
+- `freetype_test_support_sample`: feature-gated ABI test-support sampling helper; not part of the public runtime C/WASM ABI.
+- `freetype_raster_clip_control_flow`: rasterizer cell movement uses C-compatible clipping/dumpster control flow instead of reporting a recoverable error.
+- `test_assertion_or_fixture_harness`: test-only function uses fail-fast setup/assertion behavior such as `unwrap`, `expect`, `panic!`, filesystem access, or subprocess oracle execution.
+- `example_fail_fast_or_smoke_harness`: example executable uses fail-fast setup or smoke-test behavior at the executable boundary.
+- `bench_fail_fast_harness`: benchmark harness uses fail-fast setup or measurement helpers; it is not a library API boundary.
 
 The generated `scope` column separates production code from integration tests,
 unit-test modules, examples, and benchmark crates. Production rows are the
@@ -126,13 +153,30 @@ been inspected and either:
   return `Result<_, FontError>` and bubble glyph metric lookup failures instead
   of silently keeping the accumulated advance. The unified parity test and
   benchmark example were updated to handle the fallible API explicitly.
+- Remaining production parser-review rows have been classified into explicit
+  FreeType compatibility buckets: optional ABI snapshots/handles, FFI optional
+  table lookups, optional font-feature parsers, optional SFNT lookups, metrics
+  lookup absence, empty-outline geometry absence, raster clipping control flow,
+  and binding display fallback. Current production `parser_review`,
+  `review_panic_path`, and `review_non_result_fallible` counts are all `0`.
+- Remaining non-production review rows have been classified as
+  test/example/bench harness behavior. The generated inventory currently has no
+  rows left in `parser_review`, `review_non_result_fallible`, or
+  `review_panic_path` across any scope.
 
 ## Next review queue
 
-Start with public, non-test rows classified as `review_non_result_fallible` or
-`review_panic_path`, then private helpers in the same module so errors bubble
-without boundary translation loss.
+There are currently no rows in any scope classified as `parser_review`,
+`review_non_result_fallible`, or `review_panic_path`.
 
-Highest-priority current production rows are the remaining `scope=production`
-rows in `docs/generated/rust-method-result-audit.tsv` classified as
-`review_non_result_fallible` or `review_panic_path`.
+Before marking the project goal complete, run a completion audit against the
+current source tree:
+
+1. verify that production `unwrap`, `expect`, `panic!`, `todo!`,
+   `unimplemented!`, `Command::`, filesystem I/O, checked arithmetic, `?`,
+   `ok_or`, `map_err`, and `Err` signals are either `Result`-returning or
+   assigned to a documented compatibility bucket;
+2. inspect remaining non-production rows and either classify them as
+   test/example/bench setup behavior or convert any real library-style helper
+   errors to `Result`;
+3. run maintained crate tests/checks after any final changes.
