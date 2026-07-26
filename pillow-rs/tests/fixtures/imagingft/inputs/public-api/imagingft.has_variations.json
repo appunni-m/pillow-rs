@@ -17,6 +17,38 @@
           "text": "Hello"
         }
       }
+    },
+    {
+      "case_id": "imagingft.has_variations.pure_cff",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.has_variations.embedded_strike",
+      "operation": "has_variations",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
     }
   ]
 }

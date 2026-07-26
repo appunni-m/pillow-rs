@@ -116,6 +116,29 @@
           "spacing": 0.0
         }
       }
+    },
+    {
+      "case_id": "imagingft.render_text_binary.embedded_strike_a",
+      "operation": "render_text_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "spacing": 0.0
+        }
+      }
     }
   ]
 }

@@ -81,6 +81,38 @@
           "text": " "
         }
       }
+    },
+    {
+      "case_id": "imagingft.getbbox_binary.pure_cff_a",
+      "operation": "getbbox_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getbbox_binary.embedded_strike_a",
+      "operation": "getbbox_binary",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A"
+        }
+      }
     }
   ]
 }

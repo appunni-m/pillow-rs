@@ -203,6 +203,146 @@
       }
     },
     {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_left_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -8.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_full_first_glyph_left_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -20.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_top_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            -8.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_left_top_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -8.0,
+            -8.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_heavy_left_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            -40.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_heavy_top_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            -14.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.getmask2_with_start.dejavusans_almost_full_top_clip_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            -18.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "imagingft.getmask2_with_start.dejavusans_bad_image_size_negative_width",
       "operation": "getmask2_with_start",
       "inputs": {

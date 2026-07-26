@@ -121,6 +121,26 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "imagingft.getmask2.embedded_strike_a",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }
