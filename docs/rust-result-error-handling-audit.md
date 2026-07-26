@@ -19,9 +19,9 @@ Generated inventory:
 - Current generated rows: `6,911`
 - Current generated classification counts:
   - `ok_result`: `2,597`
-  - `likely_infallible`: `3,807`
+  - `likely_infallible`: `3,809`
   - `parser_review`: `302`
-  - `review_non_result_fallible`: `120`
+  - `review_non_result_fallible`: `118`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -69,6 +69,9 @@ been inspected and either:
 - P-mode quantize helpers now return `Result<_, PilError>` and bubble checked
   dimension failures instead of returning empty palette/index vectors as a
   silent success value.
+- Quantize histogram insertion now updates matched entries directly through
+  mutable match bindings instead of using `expect` for an already-proven
+  internal invariant.
 
 ## Next review queue
 
