@@ -1,6 +1,57 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `a32242993`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `1b5701b1c`
+
+## Current checkpoint: manifest public-signature gate
+
+New commit:
+
+- `1b5701b1c` — added live Pillow signature introspection to
+  `font_oracle.py`, added `public_method_parameters` to
+  `font_manifest.yaml`, and made `font_public_api.rs` fail unless every live
+  Pillow `FreeTypeFont` public parameter is classified as either covered or
+  blocked. Covered parameters must also appear in active input-only rows.
+
+This means the manifest now proves both public method-name coverage and public
+signature-parameter classification for the pinned repo-local Pillow oracle.
+The currently blocked public parameters are explicit:
+
+- `font_variant`: `font`, `index`, `encoding`, `layout_engine`
+- `getmask`: `stroke_width`, `ink`
+- `getmask2`: `stroke_width`, `ink`, `args`, `kwargs`
+
+Additional input-only rows added for already-supported parameters:
+
+- `font.getlength.direction_without_raqm_error`
+- `font.getlength.mode_ignored`
+- `font.getbbox.features_without_raqm_error`
+- `font.getbbox.language_without_raqm_error`
+- `font.getmask.options_start_fractional`
+- `font.getmask.features_without_raqm_error`
+- `font.getmask.language_without_raqm_error`
+- `font.getmask2.features_without_raqm_error`
+- `font.getmask2.language_without_raqm_error`
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed, including live Pillow method and
+  signature manifest validation
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `5f04cbf2-17aa-4486-b861-1f1d12d4d6aa`
+  - snapshot `9bf3e928-980b-4c44-9e92-8fb637b25ad3`
+  - commit `1b5701b1c2faa75f856dbe5b53f0e77e29ed611d`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `1021/1112` (`91.82%`) | `194/250` (`77.60%`) | `103/119` (`86.55%`) | `1687/1849` (`91.24%`) |
+| `pillow-rs/src/font/mod.rs` | `172/196` (`87.76%`) | n/a | `39/46` (`84.78%`) | `209/251` (`83.27%`) |
+
+The goal is still not complete: 100% region coverage is not achieved, and the
+blocked public parameters above are still real implementation gaps.
 
 ## Current checkpoint: root Font API + Pillow edge-case sweep
 

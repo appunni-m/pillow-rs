@@ -6,6 +6,44 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 Latest measured checkpoint:
 
+- Commit: `1b5701b1c`
+- Coverage MCP run: `5f04cbf2-17aa-4486-b861-1f1d12d4d6aa`
+- Snapshot: `9bf3e928-980b-4c44-9e92-8fb637b25ad3`
+- Command: `imagingft-tests-coverage-fixed`
+- Result: passed, ingested
+- `pillow-rs/src/font/imagingft.rs`:
+  - lines: `1021/1112` (`91.82%`)
+  - branches: `194/250` (`77.60%`)
+  - functions: `103/119` (`86.55%`)
+  - regions: `1687/1849` (`91.24%`)
+- `pillow-rs/src/font/mod.rs`:
+  - lines: `172/196` (`87.76%`)
+  - functions: `39/46` (`84.78%`)
+  - regions: `209/251` (`83.27%`)
+
+Latest manifest hardening:
+
+- `font_manifest.yaml` now includes `public_method_parameters`.
+- `font_public_api.rs` queries live Pillow `FreeTypeFont` signatures through
+  the repo-local oracle and fails unless every public parameter is classified
+  as either covered or blocked.
+- Covered parameters must be exercised by at least one active input-only row.
+- Currently blocked public parameters:
+  - `font_variant`: `font`, `index`, `encoding`, `layout_engine`
+  - `getmask`: `stroke_width`, `ink`
+  - `getmask2`: `stroke_width`, `ink`, `args`, `kwargs`
+
+Still required for completion:
+
+- Implement stroked `getmask/getmask2` rendering by integrating real FreeType
+  stroker support into the Font mask path. Current `pillow-rs-freetype`
+  `FT_Stroker_ParseOutline` does not yet support real glyph contours, so this
+  depends on lower-level stroker geometry completion before honest Pillow
+  pixel parity rows can be added.
+- Implement or explicitly redesign unsupported `font_variant` parameters.
+- Continue reducing/removing unreachable defensive branches only when proven by
+  oracle-backed evidence.
+
 - Commit: `a32242993`
 - Coverage MCP run: `e3d92d05-0f5b-4a5b-b931-3ac0143469c3`
 - Snapshot: `33c1bfe0-3025-4996-9348-90a7682386b0`
