@@ -71,8 +71,6 @@ Current blocked public parameters:
 - `TransposedFont.getlength.kwargs`
 - `TransposedFont.getmask.args`
 - `TransposedFont.getmask.kwargs`
-- `getmask.stroke_width`
-- `getmask2.stroke_width`
 - `truetype.encoding`
 - `truetype.index`
 - `truetype.layout_engine`
@@ -90,7 +88,10 @@ The remaining non-libraqm public parity gaps are:
   surface as a Rust public API, root `pillow-rs` needs a structured constructor
   option type that includes index/encoding/layout engine without adding path I/O
   to core.
-- `stroke_width != 0` for `getmask`/`getmask2`.
+- general `stroke_width != 0` for all visible glyph outlines. The active Font
+  corpus now includes the maintained lower-level DejaVuSans `"A"` route at
+  `stroke_width=1.5`; broader stroked glyph coverage still depends on the
+  general pure-Rust FreeType stroker.
 
 Pillow `11.3.0` passes stroke rendering from Python into `_imagingft.c`, where
 the native render path creates an `FT_Stroker`, obtains a glyph with
@@ -98,15 +99,17 @@ the native render path creates an `FT_Stroker`, obtains a glyph with
 the stroked glyph through `FT_Glyph_To_Bitmap`, and then copies that bitmap into
 the mask.
 
-The Rust Font adapter cannot honestly close this gap alone. The dependency is
-the pure-Rust FreeType stroker implementation in
+The Rust Font adapter can only close stroked glyph routes that the lower-level
+pure-Rust FreeType stroker already supports. The dependency is the pure-Rust
+FreeType stroker implementation in
 `pillow-rs-freetype/src/ffi/handles.rs`. Its current
 `FT_Stroker_ParseOutline` route is intentionally limited to empty/single-point
 contours, opened two-point horizontal lines, and a closed horizontal line after
 degenerate contour skipping. It still returns `FT_Err_Unimplemented_Feature` for
-normal line/conic/cubic glyph outlines. Visible stroked glyph masks require
-completing real FreeType-compatible stroker geometry/export and then wiring that
-route into `pillow-rs/src/font/imagingft.rs`.
+most normal line/conic/cubic glyph outlines. Broad visible stroked glyph masks
+require completing real FreeType-compatible stroker geometry/export and then
+expanding the `pillow-rs/src/font/imagingft.rs` route beyond the maintained
+DejaVuSans glyph fixture.
 
 The Font test pins this blocker to the remaining lower-level FreeType success
 rows:
@@ -259,7 +262,8 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
   mode, direction/features/language no-raqm errors.
 - Anchor options: left/top/ascender, middle/middle, right/descender, bad anchor.
 - Mask/render options: start offsets, ink, ignored `getmask2` args/kwargs,
-  binary rendering, `draw_text`.
+  binary rendering, `draw_text`, and the maintained visible DejaVuSans `"A"`
+  stroke route at `stroke_width=1.5`.
 - Variation options: axes/names, name bytes, repeated name, invalid name,
   non-variable errors, large and out-of-range coordinate values, malformed fvar
   table rows copied from maintained FreeType fixtures.
@@ -270,17 +274,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `2f9f1c18-cba3-4fae-9797-bd4c1c350691`
-- Snapshot: `45cf50af-ef87-4335-876b-122953f144a7`
+- Run: `b99095e7-5495-4ea7-a914-3acab1658548`
+- Snapshot: `02ee2a8e-e1d0-4218-8c15-39cfe53e009d`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `d9ebd43a32a3f23f854d22bc9fc8c03c6813690c`
+- Commit measured: `a13c26aa3a29bb73be17cbe0c4fdac988f796dc3`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
+| `pillow-rs/src/font/imagingft.rs` | `825/848` (`97.29%`) | `137/154` (`88.96%`) | `78/85` (`91.76%`) | `1336/1413` (`94.55%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -290,7 +294,9 @@ Current full-module scope note:
   repo-local `load`/`load_path` PILfont assets, so `pilfont.rs` is now part of
   the coverage target.
 - Coverage is not 100% yet for the full `PIL.ImageFont` target because
-  `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps.
+  `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps and
+  newly introduced stroked-mask placement branches that need either shared
+  compositor refactoring or additional honest Pillow-oracle rows.
 - `pilfont.rs` now has no uncovered executable lines and no partial branches in
   the active Font coverage snapshot. Its branch coverage is `70/70`
   (`100.00%`). The remaining function/region deltas are LLVM function/region
@@ -308,6 +314,18 @@ Latest Font wrapper movement:
   input-only row. The expected error is generated at runtime by the pinned
   Pillow oracle.
 - This covers `Font::text_bbox`'s `getbbox?` error propagation region.
+- Added active input-only visible stroke rows for
+  `font.getmask.dejavusans24_a_stroke_1_5_l`,
+  `font.getmask2.dejavusans24_a_stroke_1_5_l`, and public `start` success/error
+  variants. Expected mask bytes and errors are generated only by the live
+  Pillow oracle.
+- Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
+  lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
+  glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
+  bbox allocation rule. The visible `L`-mode rows pass exact byte comparison.
+- A attempted `mode="1"` stroked row was rejected because the current lower
+  render route does not match Pillow's monochrome stroked output exactly; it is
+  not part of the active corpus.
 - The only remaining `font/mod.rs` uncovered region is
   `Font::load_default`'s `default_aileron::decode()?` error arm. That path is
   not reachable through honest public inputs unless the checked-in embedded
@@ -330,8 +348,10 @@ Remaining targeted gaps in `imagingft.rs`:
   overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
   malformed-font sweep can crash Pillow itself, so crash-only rows are not
   admissible parity fixtures.
-- `375-376`: non-zero `stroke_width`; blocked on real pure-Rust
-  `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` implementation.
+- general non-zero `stroke_width`; partially routed through real pure-Rust
+  `FT_Glyph_Stroke` for the maintained DejaVuSans `"A"` fixture, with broader
+  coverage still blocked on complete `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder`
+  implementation.
 
 Latest blocker verification:
 
@@ -341,9 +361,9 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
 
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
 runnable rows pass (`4/4`), and the four remaining glyph-stroke success rows
-remain pending. This confirms that adding active Font `stroke_width` rows now
-would still create honest Pillow-vs-Rust failures rather than increasing
-trustworthy Font coverage.
+remain pending. The active Font corpus now promotes only this maintained
+DejaVuSans `"A"` stroke route; additional visible stroke rows must wait for the
+remaining lower-level routes to become real parity.
 
 ## Required next implementation sequence
 
@@ -351,11 +371,11 @@ trustworthy Font coverage.
    in `pillow-rs-freetype`.
 2. Make the lower-level `FT_Glyph_Stroke` and `FT_Glyph_StrokeBorder` success
    fixture rows runnable and exact.
-3. Wire stroked glyph rendering into `pillow-rs/src/font/imagingft.rs`.
-4. Move `getmask.stroke_width` and `getmask2.stroke_width` from `blocked` to
-   `covered` in `font_manifest.yaml`.
-5. Add minimal active input-only Font rows for visible glyph strokes.
-6. Rerun `make -C pillow-rs font-tests` and Coverage MCP
+3. Expand stroked glyph rendering in `pillow-rs/src/font/imagingft.rs` as each
+   lower-level stroker route becomes real parity.
+4. Add minimal active input-only Font rows for each newly supported visible
+   glyph stroke path.
+5. Rerun `make -C pillow-rs font-tests` and Coverage MCP
    `font-tests-coverage-with-freetype`.
 
 Do not add fake empty/space-only stroke rows to cover the branch. Pillow
