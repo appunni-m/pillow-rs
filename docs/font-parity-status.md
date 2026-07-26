@@ -102,6 +102,36 @@ C/Rust/WASM parity. ParseOutline runtime movement is `runnable=5`, `passed=5`,
 `pending=1`. The remaining ParseOutline pending row is the mixed
 line/conic/cubic route.
 
+### Remaining stroker first-divergence target
+
+The remaining `FT_Stroker_ParseOutline.line_conic_cubic_success` row is not a
+fixture coverage gap. The fixture explicitly requires five same-input outline
+rows: a line contour, implied conic start, implied conic midpoints, cubic
+contour, and a real loaded glyph outline. Pinned C FreeType handles those rows
+through `freetype/src/base/ftstroke.c:2048-2242`, which decomposes each contour
+and dispatches into:
+
+- `FT_Stroker_LineTo` at `freetype/src/base/ftstroke.c:1271-1345`
+- `FT_Stroker_ConicTo` at `freetype/src/base/ftstroke.c:1351-1559`
+- `FT_Stroker_CubicTo` at `freetype/src/base/ftstroke.c:1565-1757`
+- `FT_Stroker_EndSubPath` at `freetype/src/base/ftstroke.c:1874-1933`
+
+The current Rust implementation in `pillow-rs-freetype/src/ffi/handles.rs`
+matches only:
+
+- zero-length line/conic/cubic no-ops,
+- open horizontal line cap export,
+- closed horizontal line export after degenerate contour skipping,
+- count-only closed two-line corner behavior.
+
+The first real implementation unit needed for Font `stroke_width` coverage is
+not another Font input row. It is a pure-Rust port of the border state machine
+used by C `ft_stroker_subpath_start`, `ft_stroker_process_corner`,
+`ft_stroke_border_lineto`, `ft_stroke_border_conicto`, and
+`ft_stroke_border_cubicto`, with exact export order and tags. Only after that
+can `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder` produce Pillow-compatible visible
+glyph masks.
+
 ## Edge cases already covered by active Font fixtures
 
 - Constructor/load paths: `load_default`, `truetype`, missing asset, invalid
