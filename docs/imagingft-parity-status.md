@@ -22,11 +22,11 @@ Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
 - Coverage evidence:
   - Local coverage command: `make -C pillow-rs imagingft-tests-coverage` (delegates to `imagingft-tests-coverage-fixed`)
   - Test result from command output: `1` passed, `0` failed
-  - MCP-managed run: `04d6bbf5-7755-4cd9-889c-9054f7a2f59c`
+  - MCP-managed run: `b194a67c-39fc-4502-a701-7739dcc48698`
   - Coverage MCP run command: `imagingft-tests-coverage-fixed`
   - Coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
-  - Snapshot id: `f60679b1-88b3-4408-804b-addc0b45989e`
-  - Prior suite snapshot for comparison: `f92a4b48-6dd2-4b0b-a07e-7acb541f911e`
+  - Snapshot id: `1b28d8b2-45b3-4556-b419-7f2e6e945772`
+  - Prior suite snapshot for comparison: `f60679b1-88b3-4408-804b-addc0b45989e`
 
 ## Corpus state
 
@@ -95,7 +95,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — coverage MCP revalidated
 
 ### Coverage delta
 
-- Baseline checked: `f92a4b48-6dd2-4b0b-a07e-7acb541f911e`
+- Baseline checked: `f60679b1-88b3-4408-804b-addc0b45989e`
 - Net movement vs baseline: suite- and file-level metrics are unchanged (`imagingft.rs` line/branch/region/function coverage still unchanged).
 
 ## Remaining explicit gaps
