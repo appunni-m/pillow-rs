@@ -31,10 +31,13 @@ struct FontManifest {
     required_operations: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 18] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
     "draw_text",
     "font_size",
+    "font_variant",
     "get_transposed_mask",
+    "get_variation_axes",
+    "get_variation_names",
     "getbbox",
     "getbbox_binary",
     "getlength",
@@ -46,6 +49,8 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 18] = [
     "has_variations",
     "load_default",
     "render_text_binary",
+    "set_variation_by_axes",
+    "set_variation_by_name",
     "text_bbox",
     "transposed_bbox",
     "truetype",

@@ -175,6 +175,32 @@ def font_descriptor(font: Any) -> dict[str, Any]:
     }
 
 
+def bytes_hex(value: bytes) -> str:
+    return value.replace(b"\x00", b"").hex()
+
+
+def variation_axes_value(font: Any) -> dict[str, Any]:
+    return {
+        "type": "variation_axes",
+        "value": [
+            {
+                "minimum": axis["minimum"],
+                "default": axis["default"],
+                "maximum": axis["maximum"],
+                "name_hex": bytes_hex(axis["name"]),
+            }
+            for axis in font.get_variation_axes()
+        ],
+    }
+
+
+def variation_names_value(font: Any) -> dict[str, Any]:
+    return {
+        "type": "variation_names",
+        "value": [bytes_hex(name) for name in font.get_variation_names()],
+    }
+
+
 def text_bbox_value(font: Any, text: str) -> dict[str, Any]:
     left, top, right, bottom = font.getbbox(text)
     return {
@@ -219,6 +245,28 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         return {"type": "length", "value": font.getlength(text)}
     if operation == "has_variations":
         return {"type": "bool", "value": has_variations(font)}
+    if operation == "get_variation_axes":
+        return variation_axes_value(font)
+    if operation == "get_variation_names":
+        return variation_names_value(font)
+    if operation == "set_variation_by_name":
+        name = params["name"]
+        font.set_variation_by_name(name)
+        return {
+            "type": "font_after_variation",
+            "name": list(font.getname()),
+            "length": font.getlength(text),
+        }
+    if operation == "set_variation_by_axes":
+        font.set_variation_by_axes(params["axes"])
+        return {
+            "type": "font_after_variation",
+            "name": list(font.getname()),
+            "length": font.getlength(text),
+        }
+    if operation == "font_variant":
+        variant = font.font_variant(size=params.get("variant_size"))
+        return font_descriptor(variant)
     if operation == "getbbox":
         return {"type": "bbox", "value": list(font.getbbox(text))}
     if operation == "getbbox_binary":

@@ -17,6 +17,11 @@ required_operations:
   - getmetrics
   - getlength
   - has_variations
+  - get_variation_axes
+  - get_variation_names
+  - set_variation_by_axes
+  - set_variation_by_name
+  - font_variant
   - getbbox
   - getbbox_binary
   - getmask
@@ -41,6 +46,7 @@ input_files:
   - font.getmetrics.json
   - font.getname.json
   - font.has_variations.json
+  - font.variations.json
   - font.layout_failure.json
   - font.load_failure.json
   - font.render_text.json

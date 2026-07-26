@@ -15,6 +15,19 @@ pub struct Font {
     engine: imagingft::TrueTypeEngine,
 }
 
+/// One Pillow `FreeTypeFont.get_variation_axes()` axis record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontVariationAxis {
+    /// Minimum design coordinate as Pillow reports it.
+    pub minimum: i32,
+    /// Default design coordinate as Pillow reports it.
+    pub default: i32,
+    /// Maximum design coordinate as Pillow reports it.
+    pub maximum: i32,
+    /// Axis name bytes after Pillow's null-byte cleanup.
+    pub name: Vec<u8>,
+}
+
 impl Font {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
@@ -33,6 +46,11 @@ impl Font {
     /// Return the requested Pillow point size for this FreeType font.
     pub fn font_size(&self) -> f32 {
         self.engine.size_pt
+    }
+
+    /// Create a variant copy of this FreeType font, overriding the size when provided.
+    pub fn font_variant(&self, size: Option<f32>) -> Result<Self, PilError> {
+        imagingft::font_variant(self, size)
     }
 
     /// Return the non-negative text mask extent for Pillow-style text layout.
@@ -73,6 +91,26 @@ impl Font {
     /// Return whether the font exposes variation axes.
     pub fn has_variations(&self) -> bool {
         imagingft::has_variations(self)
+    }
+
+    /// Return Pillow's public variation-axis records.
+    pub fn get_variation_axes(&self) -> Result<Vec<FontVariationAxis>, PilError> {
+        imagingft::get_variation_axes(self)
+    }
+
+    /// Return Pillow's public named-variation style names.
+    pub fn get_variation_names(&self) -> Result<Vec<Vec<u8>>, PilError> {
+        imagingft::get_variation_names(self)
+    }
+
+    /// Set a named variation instance by Pillow-style name bytes.
+    pub fn set_variation_by_name(&mut self, name: &[u8]) -> Result<(), PilError> {
+        imagingft::set_variation_by_name(self, name)
+    }
+
+    /// Set variation design coordinates from Pillow-style user coordinates.
+    pub fn set_variation_by_axes(&mut self, axes: &[f32]) -> Result<(), PilError> {
+        imagingft::set_variation_by_axes(self, axes)
     }
 
     /// Return Pillow's public text bounding box.

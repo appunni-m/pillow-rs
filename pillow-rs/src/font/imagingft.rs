@@ -4,13 +4,14 @@
 //! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
 //! (4,097/4,097 unified parity).
 
-use super::Font;
+use super::{Font, FontVariationAxis};
 use crate::error::PilError;
 use crate::image::Image;
-use fontdone::ffi;
+use fontdone::{ffi, tt};
 
 pub(super) struct TrueTypeEngine {
     face: ffi::FT_Face,
+    font_bytes: Vec<u8>,
     pub(super) size_pt: f32,
     family_name: Option<String>,
     style_name: Option<String>,
@@ -61,6 +62,7 @@ pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<Font, PilError> 
     Ok(Font {
         engine: TrueTypeEngine {
             face,
+            font_bytes: data,
             size_pt: size,
             family_name,
             style_name,
@@ -167,6 +169,87 @@ pub(crate) fn getmetrics(font: &Font) -> (u32, u32) {
 /// Return whether the loaded face exposes OpenType or Type 1 variation axes.
 pub(crate) fn has_variations(font: &Font) -> bool {
     font.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
+}
+
+pub(crate) fn font_variant(font: &Font, size: Option<f32>) -> Result<Font, PilError> {
+    load_truetype(
+        font.engine.font_bytes.clone(),
+        size.unwrap_or(font.engine.size_pt),
+    )
+}
+
+pub(crate) fn get_variation_axes(font: &Font) -> Result<Vec<FontVariationAxis>, PilError> {
+    let (fvar, name_table) = variation_tables(font)?;
+    Ok(fvar
+        .axes
+        .iter()
+        .map(|axis| FontVariationAxis {
+            minimum: fixed_16_16_to_pillow_int(axis.min_value),
+            default: fixed_16_16_to_pillow_int(axis.default_value),
+            maximum: fixed_16_16_to_pillow_int(axis.max_value),
+            name: standard_variation_axis_name(axis.tag)
+                .map(|name| name.as_bytes().to_vec())
+                .or_else(|| name_bytes(&name_table, axis.name_id))
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|byte| *byte != 0)
+                .collect(),
+        })
+        .collect())
+}
+
+pub(crate) fn get_variation_names(font: &Font) -> Result<Vec<Vec<u8>>, PilError> {
+    let (fvar, name_table) = variation_tables(font)?;
+    Ok(fvar
+        .instances
+        .iter()
+        .map(|instance| {
+            name_bytes(&name_table, instance.subfamily_name_id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|byte| *byte != 0)
+                .collect()
+        })
+        .collect())
+}
+
+pub(crate) fn set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), PilError> {
+    let names = get_variation_names(font)?;
+    let Some(index) = names.iter().position(|candidate| candidate == name) else {
+        return Err(PilError::ValueError(format!(
+            "{} is not in list",
+            String::from_utf8_lossy(name)
+        )));
+    };
+    let error =
+        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), (index + 1) as ffi::FT_UInt);
+    if error == ffi::FT_Err_Ok {
+        refresh_engine_metadata(font);
+        Ok(())
+    } else {
+        Err(ft_error_to_pil(error))
+    }
+}
+
+pub(crate) fn set_variation_by_axes(font: &mut Font, axes: &[f32]) -> Result<(), PilError> {
+    if !has_variations(font) {
+        return Err(PilError::OsError("invalid argument".into()));
+    }
+    let coords = axes
+        .iter()
+        .map(|axis| (axis * 65536.0) as ffi::FT_Fixed)
+        .collect::<Vec<_>>();
+    let error = ffi::FT_Set_Var_Design_Coordinates(
+        Some(&mut font.engine.face),
+        coords.len() as ffi::FT_UInt,
+        Some(&coords),
+    );
+    if error == ffi::FT_Err_Ok {
+        refresh_engine_metadata(font);
+        Ok(())
+    } else {
+        Err(ft_error_to_pil(error))
+    }
 }
 
 pub(crate) fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
@@ -589,4 +672,95 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> Option
         ffi::FT_PIXEL_MODE_GRAY => bitmap.buffer.get(row_start + column).copied(),
         _ => None,
     }
+}
+
+fn refresh_engine_metadata(font: &mut Font) {
+    font.engine.family_name = font.engine.face.family_name.clone();
+    font.engine.style_name = font.engine.face.style_name.clone();
+    font.engine.metrics = font.engine.face.size_metrics;
+}
+
+fn variation_tables(font: &Font) -> Result<(tt::fvar::FvarTable, tt::name::NameTable), PilError> {
+    let data = &font.engine.font_bytes;
+    let (_, face_offset) = tt::resolve_face_index(data, 0)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+    let directory = tt::parse_table_directory_at(data, face_offset)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+    let font_data = data
+        .get(face_offset..)
+        .ok_or_else(|| PilError::OsError("invalid argument".into()))?;
+    let fvar = directory
+        .find(data, tag(b"fvar"))
+        .ok_or_else(|| PilError::OsError("invalid argument".into()))
+        .and_then(|bytes| {
+            tt::fvar::parse_fvar(bytes).map_err(|_| PilError::OsError("invalid argument".into()))
+        })?;
+    let name_table = directory
+        .find(data, tag(b"name"))
+        .ok_or_else(|| PilError::OsError("invalid argument".into()))
+        .and_then(|bytes| {
+            tt::name::parse_name(bytes).map_err(|_| PilError::OsError("invalid argument".into()))
+        })?;
+    let _ = font_data;
+    Ok((fvar, name_table))
+}
+
+fn tag(bytes: &[u8; 4]) -> u32 {
+    u32::from_be_bytes(*bytes)
+}
+
+fn fixed_16_16_to_pillow_int(value: i32) -> i32 {
+    value / 65536
+}
+
+fn standard_variation_axis_name(tag: u32) -> Option<&'static str> {
+    match tag {
+        0x7767_6874 => Some("Weight"),
+        0x7764_7468 => Some("Width"),
+        0x6F70_737A => Some("OpticalSize"),
+        0x736C_6E74 => Some("Slant"),
+        0x6974_616C => Some("Italic"),
+        _ => None,
+    }
+}
+
+fn name_bytes(table: &tt::name::NameTable, name_id: u16) -> Option<Vec<u8>> {
+    let preferred = table
+        .records
+        .iter()
+        .position(|record| {
+            record.name_id == name_id
+                && record.platform_id == 3
+                && matches!(record.encoding_id, 1 | 10)
+                && record.language_id == 0x0409
+        })
+        .or_else(|| {
+            table.records.iter().position(|record| {
+                record.name_id == name_id
+                    && record.platform_id == 3
+                    && matches!(record.encoding_id, 1 | 10)
+            })
+        })
+        .or_else(|| {
+            table
+                .records
+                .iter()
+                .position(|record| record.name_id == name_id && record.platform_id == 1)
+        })?;
+    let record = &table.records[preferred];
+    if record.platform_id == 3 {
+        Some(decode_utf16be_to_utf8(&record.string).into_bytes())
+    } else {
+        Some(record.string.clone())
+    }
+}
+
+fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
+    char::decode_utf16(
+        bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_be_bytes([pair[0], pair[1]])),
+    )
+    .map(|value| value.unwrap_or(char::REPLACEMENT_CHARACTER))
+    .collect()
 }

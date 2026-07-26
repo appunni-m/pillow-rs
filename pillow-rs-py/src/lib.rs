@@ -1658,6 +1658,35 @@ impl PyFont {
         pillow_rs::font_has_variations(&self.inner)
     }
 
+    fn get_variation_axes(&self) -> PyResult<Vec<(i32, i32, i32, Vec<u8>)>> {
+        pillow_rs::font_get_variation_axes(&self.inner)
+            .map(|axes| {
+                axes.into_iter()
+                    .map(|axis| (axis.minimum, axis.default, axis.maximum, axis.name))
+                    .collect()
+            })
+            .map_err(map_error)
+    }
+
+    fn get_variation_names(&self) -> PyResult<Vec<Vec<u8>>> {
+        pillow_rs::font_get_variation_names(&self.inner).map_err(map_error)
+    }
+
+    fn set_variation_by_name(&mut self, name: Vec<u8>) -> PyResult<()> {
+        pillow_rs::font_set_variation_by_name(&mut self.inner, &name).map_err(map_error)
+    }
+
+    fn set_variation_by_axes(&mut self, axes: Vec<f32>) -> PyResult<()> {
+        pillow_rs::font_set_variation_by_axes(&mut self.inner, &axes).map_err(map_error)
+    }
+
+    #[pyo3(signature = (size=None))]
+    fn font_variant(&self, size: Option<f32>) -> PyResult<Self> {
+        pillow_rs::font_variant(&self.inner, size)
+            .map(|inner| PyFont { inner })
+            .map_err(map_error)
+    }
+
     fn get_name(&self) -> (String, String) {
         let (family, style) = pillow_rs::font_getname(&self.inner);
         (family.to_owned(), style.to_owned())
