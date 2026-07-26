@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `8db0b7ec-f96c-4832-a976-86b7c8403c2d`
-- Snapshot: `73f9827d-93f3-400e-b78d-e4a7c28b630f`
+- Run: `419cffa6-3136-4ec1-8193-3e7abcec015d`
+- Snapshot: `4719c3de-5317-4790-8b27-52ac05eba086`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `2b2e6aa938c8803bed27fc19d284fe82ac265e63`
+- Commit measured: `19617be339dbbc5b8ee40b80f7154bda321c024d`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `824/838` (`98.33%`) | `136/144` (`94.44%`) | `81/87` (`93.10%`) | `1304/1352` (`96.45%`) |
+| `pillow-rs/src/font/imagingft.rs` | `825/839` (`98.33%`) | `134/140` (`95.71%`) | `82/88` (`93.18%`) | `1305/1353` (`96.45%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -350,6 +350,10 @@ Latest Font wrapper movement:
   C-style argument validation; the safe `PIL.ImageFont` adapter always supplies
   both the library and output handle, so that branch was not a recoverable
   public Font error path.
+- Centralized FreeType status handling for size requests and variation setters.
+  This keeps Result-based propagation intact while avoiding duplicate
+  status-check branches at public `PIL.ImageFont` call sites that all use the
+  same success/error contract.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
@@ -370,11 +374,11 @@ Remaining targeted gaps in `imagingft.rs`:
   and available FreeType fixture assets found only the already-mapped runtime
   errors: `code overflow`, `nested DEFS`, `too many instruction definitions`,
   and `too many function definitions`.
-- `247,252`: `FT_Set_Named_Instance` error after a valid public name match.
+- `set_variation_by_name`: `FT_Set_Named_Instance` error after a valid public name match.
   Current tracked variable fonts accept all discovered named instances in the
   Pillow oracle; no deterministic public input has been found that matches a
   name and then fails only in the lower-level setter.
-- `269,273`: `FT_Set_Var_Design_Coordinates` error after variation-face
+- `set_variation_by_axes`: `FT_Set_Var_Design_Coordinates` error after variation-face
   validation. Current tracked variable fonts accept empty, short, exact,
   overlong, and extreme finite coordinate arrays in the Pillow oracle. A broad
   malformed-font sweep can crash Pillow itself, so crash-only rows are not
