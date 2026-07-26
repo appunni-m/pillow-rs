@@ -8,17 +8,22 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Target suite: `make -C pillow-rs imagingft-tests`
 - Oracle: repo-local Pillow C path via `pillow-rs/scripts/imagingft_oracle.py` and `.oracle-venv`
 - No deprecated `deprecated/imagingft/*` tests are used.
+- Current fixture/test implementation: `pillow-rs/tests/imagingft_public_api.rs` + `pillow-rs/tests/support/imagingft_runner.rs` using explicit `Result` paths.
+- Oracle source-of-truth proof:
+  - `.oracle-venv` is ignored by git at root via `.oracle-venv/`.
+  - The oracle process validates it is running from `<repo>/.oracle-venv/bin/python` and imports `PIL` from that env only.
+  - The repo-local Pillow shows `ImageFont.core is PIL._imagingft`; `ImageFont.truetype` builds `FreeTypeFont` via `core.getfont`, and `load_font()` requires `builtins.Font` on `font.font`, confirming C-layer-backed objects.
 
 ## Acceptance checks
 
 - `make -C pillow-rs imagingft-tests`  
   Result: `1` passed, `0` failed
-- Coverage MCP sequence:
-  - `project_context` consulted
-  - `run_test` executed on `imagingft-tests-coverage-fixed` (`258e7dec-226f-4b00-9336-04df6e8c67f2`)
-  - `run_test` result: terminal `passed`, `counters:{passed:1, failed:0}`
-  - `coverage_ingest.status=ingested`
-  - `snapshot_ids=["5817fe8b-7e59-4315-82b3-fb3829feb7ec"]`
+- Coverage evidence:
+  - Local coverage command: `make -C pillow-rs imagingft-tests-coverage`
+  - Test result from command output: `1` passed, `0` failed
+  - Coverage artifact: `target/coverage/imagingft-rust.json`
+  - Coverage MCP run entry observed: `.coverage-mcp/runs/8176266a-0ff4-42da-a364-f24688e4f701`
+  - Prior MCP snapshot still linked in worktree: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
 
 ## Corpus state
 
@@ -26,6 +31,7 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - Total rows: `58`
 - Executed rows: `58/58`
 - Required operation coverage check against case-set operations: no required-manifest operations missing
+- No fixture files were added/removed in this cycle.
 
 ## Required operation presence (fixture-defined)
 
@@ -67,11 +73,11 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ### Suite summary (`imagingft`)
 
-- Current snapshot: `5817fe8b-7e59-4315-82b3-fb3829feb7ec`
-- `total_lines: 17962`, `covered_lines: 1736` (`line_rate 0.09664848012470771`)
-- `total_branches: 3166`, `covered_branches: 147` (`branch_rate 0.04643082754264056`)
-- `total_functions: 1208`, `covered_functions: 142` (`function_rate 0.11754966887417219`)
-- `total_regions: 31434`, `covered_regions: 2717` (`region_rate 0.08643507030603804`)
+- Current artifact metrics (`target/coverage/imagingft-rust.json`, latest run):
+  - `total_lines: 17962`, `covered_lines: 1736` (`line_rate 0.09664848012470771`)
+  - `total_branches: 3166`, `covered_branches: 147` (`branch_rate 0.04643082754264056`)
+  - `total_functions: 1208`, `covered_functions: 142` (`function_rate 0.11754966887417219`)
+  - `total_regions: 31434`, `covered_regions: 2717` (`region_rate 0.08643507030603804`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
@@ -80,14 +86,20 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 - `covered_branches: 102/166` (`branch_rate 0.6144578313253012`)
 - `covered_regions: 1223/1548` (`region_rate 0.7900516795865633`)
 - Gaps: `uncovered_line_count: 80`, `partial_branch_line_count: 41`, `uncovered_function_line_count: 0`
+- `coverage_query` equivalent file-level coverage confirms:
+  - weak module ranking includes `pillow-rs/src/font/imagingft.rs` among the least-covered files in this target run
+  - many uncovered paths are in non-error branches inside font layout/render internals and unexercised bitmap-font control flow.
 
 ### Coverage delta
 
 - Baseline checked: `9353fd3a-561e-4039-9eff-cf503dfe3396` (same branch, same commit)
-- Net movement vs baseline: no metric movement observed in suite totals or `pillow-rs/src/font/imagingft.rs` for this run.
+- Net movement vs baseline: no measured suite-level or imagingft-file-level metric improvement versus the previous recorded baseline.
 
 ## Remaining explicit gaps
 
 - Suite is not coverage-complete by objective definition:
-  - imagingft-targeted test only executes the imagingft public-api row set, so unrelated modules remain largely unexecuted.
+- `coverage`:
+  - ImagingFT public-api suite executes all 58 rows but does not close all lines/branches in `pillow-rs/src/font/imagingft.rs` yet.
   - Imagingft core file still has uncovered lines/branches, so end-state is **not 100% parity-coverage complete**.
+- Error/parity:
+  - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
