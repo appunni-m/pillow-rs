@@ -1,7 +1,7 @@
 #![allow(missing_docs, unused_crate_dependencies)]
 
-use pillow_rs::error::PilError;
-use pillow_rs::ops::array::resolve_array_layout;
+use pillow_rs::PilError;
+use pillow_rs::resolve_array_layout;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

@@ -1,11 +1,9 @@
 use std::{fs, path::Path};
 
-use pillow_rs::{
-    draw::Draw,
-    error::PilError,
-    font::{Font, imagingft},
-    image::Image,
-};
+use pillow_rs::Draw;
+use pillow_rs::Font;
+use pillow_rs::Image;
+use pillow_rs::PilError;
 use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
@@ -37,54 +35,54 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
 
     match operation {
         "getname" => {
-            let (family, style) = imagingft::getname_optional(&font);
+            let (family, style) = pillow_rs::font_getname_optional(&font);
             Ok(json!({"type": "name", "value": [family, style]}))
         }
         "getmetrics" => {
-            let (ascent, descent) = imagingft::getmetrics(&font);
+            let (ascent, descent) = pillow_rs::font_getmetrics(&font);
             Ok(json!({"type": "metrics", "value": [ascent, descent]}))
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": imagingft::getlength(&font, text(params)?)?,
+            "value": pillow_rs::font_getlength(&font, text(params)?)?,
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
-            "value": imagingft::has_variations(&font),
+            "value": pillow_rs::font_has_variations(&font),
         })),
-        "getbbox" => Ok(bbox_value(imagingft::getbbox(&font, text(params)?)?)),
-        "getbbox_binary" => Ok(bbox_value(imagingft::getbbox_binary(
+        "getbbox" => Ok(bbox_value(pillow_rs::font_getbbox(&font, text(params)?)?)),
+        "getbbox_binary" => Ok(bbox_value(pillow_rs::font_getbbox_binary(
             &font,
             text(params)?,
         )?)),
         "getmask" => {
-            let (width, height, pixels) = imagingft::getmask(&font, text(params)?)?;
+            let (width, height, pixels) = pillow_rs::font_getmask(&font, text(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = imagingft::getmask2(&font, text(params)?)?;
+            let (width, height, pixels, offset) = pillow_rs::font_getmask2(&font, text(params)?)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
             let (width, height, pixels, offset) =
-                imagingft::getmask2_with_start(&font, text(params)?, start)?;
+                pillow_rs::font_getmask2_with_start(&font, text(params)?, start)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
             let (width, height, pixels) =
-                imagingft::get_transposed_mask(&font, text(params)?, orientation(params)?)?;
+                pillow_rs::font_get_transposed_mask(&font, text(params)?, orientation(params)?)?;
             Ok(image_value(width, height, "L", &pixels))
         }
-        "transposed_bbox" => Ok(bbox_value(imagingft::transposed_bbox(
-            imagingft::getbbox(&font, text(params)?)?,
+        "transposed_bbox" => Ok(bbox_value(pillow_rs::transposed_bbox(
+            pillow_rs::font_getbbox(&font, text(params)?)?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
-            imagingft::validate_transposed_length(orientation(params)?)?;
+            pillow_rs::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": imagingft::getlength(&font, text(params)?)?,
+                "value": pillow_rs::font_getlength(&font, text(params)?)?,
             }))
         }
         "draw_text" => draw_text(&font, params),
@@ -95,7 +93,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
             let (width, height, pixels) =
-                imagingft::render_text_binary(&font, text(params)?, fill, spacing)?;
+                pillow_rs::font_render_text_binary(&font, text(params)?, fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(

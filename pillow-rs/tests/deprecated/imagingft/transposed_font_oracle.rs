@@ -1,6 +1,6 @@
 #![allow(missing_docs, unused_crate_dependencies)]
 
-use pillow_rs::font::{Font, imagingft};
+use pillow_rs::Font;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -77,7 +77,7 @@ fn transposed_font_matches_independent_pillow_oracle() {
     let font = Font::load_default(manifest.font.size).expect("pinned Pillow default font");
     for case in manifest.cases {
         let orientation = case.orientation.as_deref();
-        let bbox = imagingft::transposed_bbox(imagingft::getbbox(&font, &case.text), orientation);
+        let bbox = pillow_rs::transposed_bbox(pillow_rs::font_getbbox(&font, &case.text), orientation);
         assert_eq!(
             [bbox.0, bbox.1, bbox.2, bbox.3],
             case.expected.bbox,
@@ -86,13 +86,13 @@ fn transposed_font_matches_independent_pillow_oracle() {
         );
 
         match (
-            imagingft::validate_transposed_length(orientation),
+            pillow_rs::validate_transposed_length(orientation),
             case.expected.length,
             case.expected.length_error,
         ) {
             (Ok(()), Some(expected), None) => {
                 assert_eq!(
-                    imagingft::getlength(&font, &case.text),
+                    pillow_rs::font_getlength(&font, &case.text),
                     expected,
                     "{} length",
                     case.id
@@ -111,7 +111,7 @@ fn transposed_font_matches_independent_pillow_oracle() {
         }
 
         let (width, height, pixels) =
-            imagingft::get_transposed_mask(&font, &case.text, orientation)
+            pillow_rs::font_get_transposed_mask(&font, &case.text, orientation)
                 .expect("transposed mask");
         assert_eq!(case.expected.mask.mode, "L", "{} mask mode", case.id);
         assert_eq!(

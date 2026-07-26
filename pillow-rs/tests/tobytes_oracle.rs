@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pillow_rs::image::Image;
+use pillow_rs::Image;
 use serde::Deserialize;
 use serde_json::Value;
 
