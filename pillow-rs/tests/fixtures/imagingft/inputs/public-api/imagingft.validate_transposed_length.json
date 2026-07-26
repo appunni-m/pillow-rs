@@ -49,6 +49,40 @@
           "orientation": "FLIP_LEFT_RIGHT"
         }
       }
+    },
+    {
+      "case_id": "imagingft.validate_transposed_length.rotate_270",
+      "operation": "validate_transposed_length",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "ROTATE_270"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.validate_transposed_length.rotate_180",
+      "operation": "validate_transposed_length",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "ROTATE_180"
+        }
+      }
     }
   ]
 }

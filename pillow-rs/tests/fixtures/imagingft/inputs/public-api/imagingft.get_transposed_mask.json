@@ -65,6 +65,90 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.missing_orientation_defaults",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.rotate_180",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_180"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.rotate_270",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_270"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.transpose",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSPOSE"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.get_transposed_mask.transverse",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSVERSE"
+        }
+      }
     }
   ]
 }

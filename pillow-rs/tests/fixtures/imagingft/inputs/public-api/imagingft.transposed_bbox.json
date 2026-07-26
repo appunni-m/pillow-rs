@@ -49,6 +49,74 @@
           "orientation": "FLIP_LEFT_RIGHT"
         }
       }
+    },
+    {
+      "case_id": "imagingft.transposed_bbox.rotate_180",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_180"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.transposed_bbox.rotate_270",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_270"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.transposed_bbox.transpose",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSPOSE"
+        }
+      }
+    },
+    {
+      "case_id": "imagingft.transposed_bbox.transverse",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSVERSE"
+        }
+      }
     }
   ]
 }
