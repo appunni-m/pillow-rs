@@ -639,25 +639,59 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
                 .as_str()
                 .ok_or_else(|| PilError::TypeError("font asset id must be a string".into()))?;
             let metrics_path = fixture_root.join(id);
-            let bitmap_path = ["png", "gif", "pbm"]
-                .into_iter()
-                .map(|extension| metrics_path.with_extension(extension))
-                .find(|path| path.is_file())
-                .ok_or_else(|| {
-                    PilError::IOError("cannot find PILfont glyph data fixture".into())
-                })?;
             let metrics = fs::read(&metrics_path).map_err(|error| {
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;
-            let bitmap = fs::read(&bitmap_path).map_err(|error| {
-                PilError::IOError(format!("failed to read PILfont bitmap fixture: {error}"))
-            })?;
-            PilFont::from_pilfont_data(&metrics, PilFont::open_glyph_image(bitmap)?)
+            let image = load_pilfont_glyph_image(&metrics_path)?;
+            PilFont::from_pilfont_data(&metrics, image).or_else(|error| match error {
+                PilError::TypeError(message) if message == "invalid font image mode" => {
+                    Err(cannot_find_glyph_data_error(&metrics_path))
+                }
+                other => Err(other),
+            })
         }
         other => Err(PilError::ValueError(format!(
             "unsupported bitmap ImageFont asset kind: {other}"
         ))),
     }
+}
+
+fn load_pilfont_glyph_image(metrics_path: &Path) -> Result<Image, PilError> {
+    let mut last_image: Option<Image> = None;
+    for extension in ["png", "gif", "pbm"] {
+        let bitmap_path = metrics_path.with_extension(extension);
+        let Ok(bitmap) = fs::read(&bitmap_path) else {
+            continue;
+        };
+        let image = match PilFont::open_glyph_image(bitmap.clone()) {
+            Ok(image) => image,
+            Err(error) if should_surface_pilfont_image_load_error(&error) => return Err(error),
+            Err(_) => continue,
+        };
+        let mode = image.mode()?;
+        if matches!(mode.as_str(), "1" | "L") {
+            return Ok(image);
+        }
+        last_image = Some(image);
+    }
+    let _ = last_image;
+    Err(cannot_find_glyph_data_error(metrics_path))
+}
+
+fn should_surface_pilfont_image_load_error(error: &PilError) -> bool {
+    match error {
+        PilError::ValueError(message) => message.starts_with("b'Invalid token for this mode: "),
+        PilError::IOError(message) => message == "image file is truncated (0 bytes not processed)",
+        _ => false,
+    }
+}
+
+fn cannot_find_glyph_data_error(metrics_path: &Path) -> PilError {
+    let root = metrics_path.with_extension("");
+    PilError::IOError(format!(
+        "cannot find glyph data file {}.{{gif|pbm|png}}",
+        root.display()
+    ))
 }
 
 fn draw_text(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
