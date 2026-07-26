@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use pillow_rs::{Draw, Font, Image, PilError};
+use pillow_rs::{Draw, Font, FontVariationAxis, Image, PilError};
 use serde_json::{Value, json};
 
 pub fn operation(case: &Value) -> Result<&str, PilError> {
@@ -28,7 +28,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
     let params = inputs(case)?
         .get("params")
         .ok_or_else(|| PilError::ValueError("case.inputs.params missing".into()))?;
-    let font = load_font(case, fixture_root)?;
+    let mut font = load_font(case, fixture_root)?;
 
     match operation {
         "load_default" | "truetype" => font_descriptor(&font),
@@ -59,6 +59,57 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             "type": "bool",
             "value": font.has_variations(),
         })),
+        "get_variation_axes" => Ok(variation_axes_value(font.get_variation_axes()?)),
+        "get_variation_names" => Ok(json!({
+            "type": "variation_names",
+            "value": font
+                .get_variation_names()?
+                .into_iter()
+                .map(|name| hex(&name))
+                .collect::<Vec<_>>(),
+        })),
+        "set_variation_by_name" => {
+            let name = required(params, "name")?
+                .as_str()
+                .ok_or_else(|| PilError::TypeError("name must be a string".into()))?;
+            font.set_variation_by_name(name.as_bytes())?;
+            Ok(json!({
+                "type": "font_after_variation",
+                "name": font.getname(),
+                "length": font.getlength(text(params)?)?,
+            }))
+        }
+        "set_variation_by_axes" => {
+            let axes = required(params, "axes")?
+                .as_array()
+                .ok_or_else(|| PilError::TypeError("axes must be a list".into()))?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_f64()
+                        .map(|value| value as f32)
+                        .ok_or_else(|| PilError::TypeError("axis must be a number".into()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            font.set_variation_by_axes(&axes)?;
+            Ok(json!({
+                "type": "font_after_variation",
+                "name": font.getname(),
+                "length": font.getlength(text(params)?)?,
+            }))
+        }
+        "font_variant" => {
+            let size = params
+                .get("variant_size")
+                .map(|value| {
+                    value
+                        .as_f64()
+                        .map(|value| value as f32)
+                        .ok_or_else(|| PilError::TypeError("variant_size must be a number".into()))
+                })
+                .transpose()?;
+            font_descriptor(&font.font_variant(size)?)
+        }
         "getbbox" => Ok(bbox_value(font.getbbox(text(params)?)?)),
         "getbbox_binary" => Ok(bbox_value(font.getbbox_binary(text(params)?)?)),
         "getmask" => {
@@ -263,6 +314,23 @@ fn font_descriptor(font: &Font) -> Result<Value, PilError> {
         "metrics": [ascent, descent],
         "has_variations": font.has_variations(),
     }))
+}
+
+fn variation_axes_value(axes: Vec<FontVariationAxis>) -> Value {
+    json!({
+        "type": "variation_axes",
+        "value": axes
+            .into_iter()
+            .map(|axis| {
+                json!({
+                    "minimum": axis.minimum,
+                    "default": axis.default,
+                    "maximum": axis.maximum,
+                    "name_hex": hex(&axis.name),
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
 }
 
 fn bbox_value((left, top, right, bottom): (i32, i32, i32, i32)) -> Value {

@@ -1087,6 +1087,64 @@ impl ImageFont {
         vec![family.to_owned(), style.to_owned()]
     }
 
+    #[wasm_bindgen(js_name = "getVariationAxes")]
+    pub fn get_variation_axes(&self) -> Result<js_sys::Array, JsValue> {
+        let axes = pillow_rs::font_get_variation_axes(&self.font).map_err(err)?;
+        let result = js_sys::Array::new();
+        for axis in axes {
+            let object = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &object,
+                &JsValue::from_str("minimum"),
+                &JsValue::from_f64(axis.minimum as f64),
+            )?;
+            js_sys::Reflect::set(
+                &object,
+                &JsValue::from_str("default"),
+                &JsValue::from_f64(axis.default as f64),
+            )?;
+            js_sys::Reflect::set(
+                &object,
+                &JsValue::from_str("maximum"),
+                &JsValue::from_f64(axis.maximum as f64),
+            )?;
+            js_sys::Reflect::set(
+                &object,
+                &JsValue::from_str("name"),
+                &js_sys::Uint8Array::from(axis.name.as_slice()).into(),
+            )?;
+            result.push(&object);
+        }
+        Ok(result)
+    }
+
+    #[wasm_bindgen(js_name = "getVariationNames")]
+    pub fn get_variation_names(&self) -> Result<js_sys::Array, JsValue> {
+        let names = pillow_rs::font_get_variation_names(&self.font).map_err(err)?;
+        let result = js_sys::Array::new();
+        for name in names {
+            result.push(&js_sys::Uint8Array::from(name.as_slice()));
+        }
+        Ok(result)
+    }
+
+    #[wasm_bindgen(js_name = "setVariationByName")]
+    pub fn set_variation_by_name(&mut self, name: Vec<u8>) -> Result<(), JsValue> {
+        pillow_rs::font_set_variation_by_name(&mut self.font, &name).map_err(err)
+    }
+
+    #[wasm_bindgen(js_name = "setVariationByAxes")]
+    pub fn set_variation_by_axes(&mut self, axes: Vec<f32>) -> Result<(), JsValue> {
+        pillow_rs::font_set_variation_by_axes(&mut self.font, &axes).map_err(err)
+    }
+
+    #[wasm_bindgen(js_name = "fontVariant")]
+    pub fn font_variant(&self, size: Option<f32>) -> Result<ImageFont, JsValue> {
+        pillow_rs::font_variant(&self.font, size)
+            .map(|font| ImageFont { font })
+            .map_err(err)
+    }
+
     #[wasm_bindgen(js_name = "getTransposedMask")]
     pub fn get_transposed_mask(
         &self,

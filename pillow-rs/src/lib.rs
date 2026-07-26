@@ -145,6 +145,7 @@ pub use crate::draw::Draw;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::Font;
+pub use crate::font::FontVariationAxis;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
@@ -232,6 +233,31 @@ pub fn font_getlength(font: &Font, text: &str) -> Result<f32, PilError> {
 /// Return whether the font exposes variation axes.
 pub fn font_has_variations(font: &Font) -> bool {
     font.has_variations()
+}
+
+/// Create a Pillow-compatible variant font.
+pub fn font_variant(font: &Font, size: Option<f32>) -> Result<Font, PilError> {
+    font.font_variant(size)
+}
+
+/// Return Pillow's public variation-axis records.
+pub fn font_get_variation_axes(font: &Font) -> Result<Vec<FontVariationAxis>, PilError> {
+    font.get_variation_axes()
+}
+
+/// Return Pillow's public named-variation style names.
+pub fn font_get_variation_names(font: &Font) -> Result<Vec<Vec<u8>>, PilError> {
+    font.get_variation_names()
+}
+
+/// Set a named variation instance by Pillow-style name bytes.
+pub fn font_set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), PilError> {
+    font.set_variation_by_name(name)
+}
+
+/// Set variation design coordinates from Pillow-style user coordinates.
+pub fn font_set_variation_by_axes(font: &mut Font, axes: &[f32]) -> Result<(), PilError> {
+    font.set_variation_by_axes(axes)
 }
 
 /// Return Pillow's public text bounding box.
