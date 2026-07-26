@@ -343,6 +343,66 @@
       }
     },
     {
+      "case_id": "font.getmask2_with_start.dejavusans_large_positive_x_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            80.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2_with_start.dejavusans_large_positive_y_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            0.0,
+            40.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2_with_start.dejavusans_large_positive_xy_start",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "start": [
+            80.0,
+            40.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2_with_start.dejavusans_bad_image_size_negative_width",
       "operation": "getmask2_with_start",
       "inputs": {
