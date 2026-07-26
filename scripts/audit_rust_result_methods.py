@@ -33,6 +33,7 @@ class FunctionRecord:
     line: int
     name: str
     visibility: str
+    scope: str
     return_type: str
     returns_result: bool
     signals: list[str]
@@ -140,8 +141,27 @@ def classify(return_type: str, signals: list[str]) -> str:
     return "review"
 
 
+def test_cfg_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    for match in re.finditer(r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+\w+\s*\{", text):
+        open_index = text.find("{", match.end() - 1)
+        if open_index != -1:
+            ranges.append((match.start(), find_matching_brace(text, open_index)))
+    return ranges
+
+
+def function_scope(text: str, fn_start: int, test_ranges: list[tuple[int, int]]) -> str:
+    if any(start <= fn_start <= end for start, end in test_ranges):
+        return "test"
+    prefix = text[max(0, fn_start - 256) : fn_start]
+    if re.search(r"#\s*\[\s*(?:tokio::)?test(?:\([^]]*\))?\s*\]\s*$", prefix):
+        return "test"
+    return "production"
+
+
 def iter_functions(path: Path) -> list[FunctionRecord]:
     text = path.read_text()
+    test_ranges = test_cfg_ranges(text)
     records: list[FunctionRecord] = []
     for match in FN_RE.finditer(text):
         brace = text.find("{", match.end())
@@ -155,12 +175,14 @@ def iter_functions(path: Path) -> list[FunctionRecord]:
         return_type = signature_return(text, match.start(), brace if brace != -1 else body_end)
         signals = fallibility_signals(body)
         visibility = "pub" if match.group("prefix").strip().startswith("pub") else "private"
+        scope = function_scope(text, match.start(), test_ranges)
         records.append(
             FunctionRecord(
                 path=path.relative_to(ROOT),
                 line=line_number(text, match.start()),
                 name=match.group("name"),
                 visibility=visibility,
+                scope=scope,
                 return_type=return_type,
                 returns_result="Result" in return_type,
                 signals=signals,
@@ -196,6 +218,7 @@ def main() -> None:
                 "line",
                 "name",
                 "visibility",
+                "scope",
                 "return_type",
                 "returns_result",
                 "classification",
@@ -209,6 +232,7 @@ def main() -> None:
                     record.line,
                     record.name,
                     record.visibility,
+                    record.scope,
                     record.return_type,
                     str(record.returns_result).lower(),
                     record.classification,
