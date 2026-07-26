@@ -216,9 +216,35 @@ pub use crate::ops::utils::flatten_pixel_list;
 pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
 
+/// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
+pub fn font_from_bytes(data: Vec<u8>, size: f32) -> Result<Font, PilError> {
+    Font::from_bytes(data, size)
+}
+
+/// Loads the same embedded default font subset as Pillow.
+pub fn font_load_default(size: f32) -> Result<Font, PilError> {
+    Font::load_default(size)
+}
+
+/// Return the requested Pillow point size for this FreeType font.
+pub fn font_size(font: &Font) -> f32 {
+    font.font_size()
+}
+
+/// Return the non-negative text mask extent for Pillow-style text layout.
+pub fn font_text_bbox(font: &Font, text: &str) -> Result<(u32, u32), PilError> {
+    font.text_bbox(text)
+}
+
 /// Return Pillow's public `(family, style)` font name tuple.
 pub fn font_getname(font: &Font) -> (&str, &str) {
     font.getname()
+}
+
+/// Return Pillow's raw public name tuple, preserving missing face names.
+#[cfg(feature = "test-api")]
+pub fn font_getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
+    font.getname_optional()
 }
 
 /// Return Pillow's public ascent/descent metrics.
@@ -275,6 +301,12 @@ pub fn font_getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), Pil
     font.getbbox(text)
 }
 
+/// Return Pillow's public binary-mode text bounding box.
+#[cfg(feature = "test-api")]
+pub fn font_getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+    font.getbbox_binary(text)
+}
+
 /// Return Pillow's public text bounding box with optional layout arguments.
 pub fn font_getbbox_with_options(
     font: &Font,
@@ -287,6 +319,11 @@ pub fn font_getbbox_with_options(
 /// Return the Pillow-compatible grayscale text mask.
 pub fn font_getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask(text)
+}
+
+/// Render a Pillow-compatible mask with offset.
+pub fn font_getmask2(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2(text)
 }
 
 /// Return the Pillow-compatible grayscale text mask with optional render arguments.
@@ -323,6 +360,17 @@ pub fn font_get_transposed_mask(
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.get_transposed_mask(text, orientation)
+}
+
+/// Return Pillow-compatible binary-mode RGBA text rendering.
+#[cfg(feature = "test-api")]
+pub fn font_render_text_binary(
+    font: &Font,
+    text: &str,
+    fill: (u8, u8, u8, u8),
+    spacing: f32,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.render_text_binary(text, fill, spacing)
 }
 
 /// Public backend capability summary for one registered operation.
