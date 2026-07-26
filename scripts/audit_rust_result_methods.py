@@ -48,6 +48,7 @@ def find_matching_brace(text: str, open_index: int) -> int:
     in_line_comment = False
     in_block_comment = 0
     in_string = False
+    in_char = False
     escaped = False
     for i in range(open_index, len(text)):
         c = text[i]
@@ -70,6 +71,14 @@ def find_matching_brace(text: str, open_index: int) -> int:
             elif c == '"':
                 in_string = False
             continue
+        if in_char:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == "'":
+                in_char = False
+            continue
         if c == "/" and n == "/":
             in_line_comment = True
             continue
@@ -78,6 +87,9 @@ def find_matching_brace(text: str, open_index: int) -> int:
             continue
         if c == '"':
             in_string = True
+            continue
+        if c == "'":
+            in_char = True
             continue
         if c == "{":
             depth += 1

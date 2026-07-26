@@ -19,10 +19,10 @@ Generated inventory:
 - Current generated rows: `6,911`
 - Current generated classification counts:
   - `ok_result`: `2,598`
-  - `likely_infallible`: `3,809`
-  - `parser_review`: `302`
+  - `likely_infallible`: `3,811`
+  - `parser_review`: `303`
   - `review_non_result_fallible`: `117`
-  - `review_panic_path`: `85`
+  - `review_panic_path`: `82`
 
 ## Current interpretation
 
@@ -76,6 +76,9 @@ been inspected and either:
   through the recursive helper and bubbles invalid `loca`, out-of-range `glyf`,
   simple/composite parse failures, and invalid composite attachment points
   instead of relying on `expect` after a separate validation pass.
+- The generated audit scanner now handles Rust character literals, preventing
+  false panic/fs/unwrap attribution when a function contains characters such as
+  `'"'` inside char literals.
 
 ## Next review queue
 
