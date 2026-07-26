@@ -12,9 +12,9 @@ Last updated: 2026-07-26 (Asia/Kolkata)
   - Result: `1` passed, `0` failed
 - Coverage MCP flow (required sequence)
   - `project_context` consulted and latest approved command discovered: `imagingft-tests-coverage-fixed` (`258e7dec-226f-4b00-9336-04df6e8c67f2`)
-  - `run_test` submitted: `875d69a1-6607-4cd0-bf32-8d1b7a810e39`
+  - `run_test` submitted: `03b80396-ecad-4a5c-9e2e-5ed3e083747f`
   - `get_run_data` terminal status: `passed`, `counters:{passed:1,failed:0}`, `coverage_ingest.status=ingested`
-  - Snapshot: `35b18c9d-fdba-4514-ae79-f9a62f177d46`
+  - Snapshot: `18d74bbe-2ba5-4556-886d-b86b19f3d40d`
 
 ## Fixture corpus state
 - Input files: `17` under `pillow-rs/tests/fixtures/imagingft/inputs/public-api`
@@ -57,7 +57,7 @@ Global totals: `49` success rows, `7` error rows. No parity failures in fixture 
 
 ## Coverage evidence
 ### Suite-level (`imagingft`)
-- Snapshot: `35b18c9d-fdba-4514-ae79-f9a62f177d46` (commit `663a15ebc169a641e2050f522c7953601059b495`)
+- Snapshot: `18d74bbe-2ba5-4556-886d-b86b19f3d40d` (commit `1516723f2023e531d9751a739d5125c81ff9c20b`)
 - `total_lines: 17924`, `covered_lines: 1717` (`line_rate 0.09579`)
 - `total_branches: 3150`, `covered_branches: 141` (`branch_rate 0.04476`)
 - `total_functions: 1205`, `covered_functions: 141` (`function_rate 0.11701`)
@@ -71,9 +71,10 @@ Global totals: `49` success rows, `7` error rows. No parity failures in fixture 
 - Open gaps remain: `uncovered_line_count: 57`, `partial_branch_line_count: 34`
 
 ### Coverage delta
-- Baseline compared: `cb2910f6-94d8-462e-84ab-b42a256ce766` (previous snapshot)
+- Baseline compared: `b343b0f3-7e31-4ea1-a3e6-a1b066b26f56` (previous commit snapshot on `main`)
 - Delta: no metric movement for the suite or for `pillow-rs/src/font/imagingft.rs` in this re-run (same counters and same gap list)
 
 ## Remaining gaps
 - No parity gaps in fixture rows.
 - Coverage is not complete for truth-surface confidence under Coverage MCP standards because imagingft-specific lanes still have unhit lines/branches in `pillow-rs/src/font/imagingft.rs`.
+- 100% region/branch/line coverage target is still unmet: `pillow-rs/src/font/imagingft.rs` still has `uncovered_line_count: 57` and `partial_branch_line_count: 34` at snapshot `18d74bbe-2ba5-4556-886d-b86b19f3d40d`.
