@@ -1076,6 +1076,15 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
             "{symbol} now has a Rust endpoint; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
         );
     }
+
+    assert_freetype_stroke_fixture_has_success_case(
+        "ftstroke.FT_Glyph_Stroke.json",
+        "ftstroke.FT_Glyph_Stroke",
+    );
+    assert_freetype_stroke_fixture_has_success_case(
+        "ftstroke.FT_Glyph_StrokeBorder.json",
+        "ftstroke.FT_Glyph_StrokeBorder",
+    );
 }
 
 fn freetype_interface_symbol<'a>(interface_map: &'a Value, symbol: &str) -> Option<&'a Value> {
@@ -1084,6 +1093,38 @@ fn freetype_interface_symbol<'a>(interface_map: &'a Value, symbol: &str) -> Opti
         .as_array()?
         .iter()
         .find_map(|group| group.get("symbols")?.get(symbol))
+}
+
+fn assert_freetype_stroke_fixture_has_success_case(file_name: &str, subject: &str) {
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../pillow-rs-freetype/tests/fixtures/inputs/public-api")
+        .join(file_name);
+    let fixture_text = fs::read_to_string(&fixture_path).unwrap_or_else(|err| {
+        panic!(
+            "{} must be readable to prove {subject} has a lower-level parity fixture: {err}",
+            fixture_path.display()
+        )
+    });
+    let fixture: Value = serde_json::from_str(&fixture_text).unwrap_or_else(|err| {
+        panic!(
+            "{} must be valid JSON to prove {subject} has a lower-level parity fixture: {err}",
+            fixture_path.display()
+        )
+    });
+    let has_success_case = fixture
+        .get("cases")
+        .and_then(Value::as_array)
+        .is_some_and(|cases| {
+            cases.iter().any(|case| {
+                case.get("subject").and_then(Value::as_str) == Some(subject)
+                    && case.get("expect_error").and_then(Value::as_bool) == Some(false)
+            })
+        });
+    assert!(
+        has_success_case,
+        "{} must retain at least one success fixture for {subject}; otherwise Font stroke_width is blocked without a lower-level parity target",
+        fixture_path.display()
+    );
 }
 
 fn documented_current_blocked_public_parameters(
