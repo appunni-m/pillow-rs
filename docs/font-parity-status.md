@@ -1,7 +1,7 @@
 # Font Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font comparison review and
-coverage cleanup at commit `548384188`
+coverage cleanup at commit `976b01a7b`
 
 ## Current checkpoint: Font manifest value coverage + mask-copy branch cleanup
 
@@ -18,6 +18,9 @@ New commits:
 - `548384188` — tightens the mask copy range further by using the already
   computed canvas length for empty output and precomputing the vertical copy
   bound before the row loop.
+- `976b01a7b` — unifies `FT_Request_Size` failures through the same
+  `ft_error_to_pil` mapper used by glyph load and variation setter failures,
+  preserving the live Pillow oracle message for invalid ppem.
 
 Pillow comparison result:
 
@@ -38,16 +41,16 @@ Verification:
 - `make -C pillow-rs font-tests` — passed for both commits.
 - `make -C pillow-rs fmt` — passed after implementation cleanup.
 - Coverage MCP command `font-tests-coverage-with-freetype`
-  - run `eb650f98-d4e7-4337-894a-1c345738c561`
-  - snapshot `c37b7658-22e2-47e1-b4ad-2ae213a7321f`
-  - commit `5483841885b320e9bec3d6b45567a9a6df07f985`
+  - run `a2ce4ba5-4f89-4187-8b00-10684461949b`
+  - snapshot `a1aab733-c25c-4237-bc87-1568283f3db7`
+  - commit `976b01a7bab5db4a3e9b3f554c8fdfbc2aa19dbc`
   - status `passed`, coverage artifact ingested
 
 Target metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `671/692` (`96.97%`) | `113/124` (`91.13%`) | `74/80` (`92.50%`) | `1055/1103` (`95.65%`) |
+| `pillow-rs/src/font/imagingft.rs` | `668/687` (`97.23%`) | `111/118` (`94.07%`) | `74/80` (`92.50%`) | `1050/1091` (`96.24%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `251/253` (`99.21%`) |
 
 Remaining blockers/gaps:
@@ -57,12 +60,13 @@ Remaining blockers/gaps:
   Pillow returns successful stroked masks for visible glyphs through
   `_imagingft`; returning an approximation or synthetic error would violate
   the oracle rule.
-- Remaining `imagingft.rs` gaps are FreeType request/load/setter error
-  branches, `stroke_width != 0`, RGBA dimension overflow, invalid advance
-  overflow, and one unsupported bitmap pixel-mode fallback. These are not
-  closed by adding duplicate public rows; they need either real malformed-font
-  oracle fixtures or implementation cleanup when an invariant proves a branch
-  unreachable.
+- Remaining `imagingft.rs` gaps are the generic FreeType error fallback,
+  variation setter FreeType error propagation, `stroke_width != 0`, RGBA
+  dimension overflow, invalid advance overflow, a bad-image-size edge, a
+  horizontal empty-copy branch, and one unsupported bitmap pixel-mode fallback.
+  These are not closed by adding duplicate public rows; they need either real
+  malformed-font oracle fixtures, real stroker implementation, or implementation
+  cleanup when an invariant proves a branch unreachable.
 - `font/mod.rs` has no reported uncovered source lines. The two missed regions
   are LLVM/source-map regions without line gaps in the MCP file query.
 
