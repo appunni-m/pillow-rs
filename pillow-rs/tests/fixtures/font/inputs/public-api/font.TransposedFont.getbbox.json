@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "operation": "TransposedFont.getbbox",
+  "cases": [
+    {
+      "case_id": "font.TransposedFont.getbbox.rotate_90_bitmap",
+      "operation": "TransposedFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello",
+          "orientation": "ROTATE_90"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getbbox.flip_left_right_bitmap",
+      "operation": "TransposedFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello",
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      }
+    }
+  ]
+}

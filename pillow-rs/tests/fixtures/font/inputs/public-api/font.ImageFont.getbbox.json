@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "operation": "ImageFont.getbbox",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.getbbox.hello_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.empty_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": ""
+        }
+      }
+    }
+  ]
+}

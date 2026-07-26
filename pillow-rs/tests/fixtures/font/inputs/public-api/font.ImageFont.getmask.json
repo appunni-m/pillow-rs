@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "operation": "ImageFont.getmask",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.getmask.hello_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.empty_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.explicit_empty_mode_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "AV",
+          "mode": ""
+        }
+      }
+    }
+  ]
+}

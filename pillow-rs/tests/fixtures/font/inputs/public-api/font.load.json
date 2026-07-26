@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "operation": "load",
+  "cases": [
+    {
+      "case_id": "font.load.courb08_pilfont",
+      "operation": "load",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08.pil"
+          }
+        },
+        "params": {
+          "loader": "load"
+        }
+      }
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after Pillow Font surface comparison
-and maintained glyph-stroke route coverage.
+Last updated: 2026-07-27 (Asia/Kolkata) after expanding the target from
+`ImageFont.FreeTypeFont` to the full `PIL.ImageFont` module surface except
+libraqm-specific shaping.
 
 ## Oracle and fixture contract
 
-- Active Font parity fixtures live under
+- Active `PIL.ImageFont` parity fixtures live under
   `pillow-rs/tests/fixtures/font/inputs/public-api`.
 - The legacy imagingft corpus is not active; remaining imagingft files are under
   `deprecated/imagingft/`.
@@ -20,11 +21,16 @@ and maintained glyph-stroke route coverage.
   status/value/error payloads. Success payloads include exact bytes; error
   payloads include kind and message.
 
-## Pillow Font public surface comparison
+## PIL.ImageFont public surface comparison
 
-The pinned Pillow `11.3.0` oracle reports these public
-`ImageFont.FreeTypeFont` methods:
+The pinned Pillow `11.3.0` oracle reports these public `PIL.ImageFont`
+module/class surfaces in scope:
 
+- module functions: `load`, `load_path`, `load_default_imagefont`,
+  `load_default`, `truetype`
+- `ImageFont.ImageFont`: `getbbox`, `getlength`, `getmask`
+- `ImageFont.TransposedFont`: `getbbox`, `getlength`, `getmask`
+- `ImageFont.FreeTypeFont`:
 - `font_variant`
 - `get_variation_axes`
 - `get_variation_names`
@@ -37,31 +43,53 @@ The pinned Pillow `11.3.0` oracle reports these public
 - `set_variation_by_axes`
 - `set_variation_by_name`
 
-`font_manifest.yaml` currently classifies every live Pillow public signature
-parameter for those methods. The only blocked public parameters are the
-documented stroke rendering parameters below.
+`font_manifest.yaml` now classifies the full active `PIL.ImageFont` surface,
+not only `FreeTypeFont`. Bitmap `ImageFont.ImageFont` rows execute through
+`pillow-rs/src/font/pilfont.rs`; FreeType rows execute through the renamed
+`pillow_rs::ImageFont` handle and `_imagingft`-compatible path. The active
+test still compares every row against a live Pillow oracle at runtime; input
+JSON files contain only inputs.
 
-The repo also keeps additional public test operations around the Font surface:
-`load_default`, `truetype`, `font_size`, transposed font behavior,
-`draw_text`, `render_text_binary`, `text_bbox`, and explicit load/layout
-negative rows. These are not extra Pillow `FreeTypeFont` methods; they are
-parity checks for repo public APIs that consume the same Font path.
-
-The wider Pillow `ImageFont` module also exposes the legacy bitmap
-`ImageFont` class plus `load`, `load_path`, and `load_default_imagefont`.
-Those belong to `pillow-rs/src/font/pilfont.rs` and are intentionally not
-counted as `_imagingft`/`FreeTypeFont` coverage. Mixing those rows into the
-active FreeTypeFont corpus would make the coverage target less trustworthy.
+The repo also keeps additional public test operations around this surface:
+`font_size`, `text_bbox`, `getbbox_binary`, `get_transposed_mask`,
+`transposed_bbox`, `validate_transposed_length`, `draw_text`, and
+`render_text_binary`. These are repo public helpers/consumers that exercise the
+same `PIL.ImageFont` behavior.
 
 Current blocked public parameters:
 
+- `ImageFont.getbbox.args`
+- `ImageFont.getbbox.kwargs`
+- `ImageFont.getlength.args`
+- `ImageFont.getlength.kwargs`
+- `ImageFont.getmask.args`
+- `ImageFont.getmask.kwargs`
+- `TransposedFont.getbbox.args`
+- `TransposedFont.getbbox.kwargs`
+- `TransposedFont.getlength.args`
+- `TransposedFont.getlength.kwargs`
+- `TransposedFont.getmask.args`
+- `TransposedFont.getmask.kwargs`
 - `getmask.stroke_width`
 - `getmask2.stroke_width`
+- `truetype.encoding`
+- `truetype.index`
+- `truetype.layout_engine`
 
 ## Missing implementation
 
-`stroke_width != 0` for `getmask`/`getmask2` is the remaining real Font public
-parity implementation gap.
+The remaining non-libraqm public parity gaps are:
+
+- Arbitrary `*args`/`**kwargs` pass-through on bitmap `ImageFont` and
+  `TransposedFont` methods. Pillow accepts these at the Python wrapper layer;
+  Rust currently exposes only the effective text/mode/orientation behavior.
+- `truetype(index, encoding, layout_engine)` as an explicit Rust public API.
+  Rust currently exposes repo-root font loading from bytes plus size, while
+  bindings own file-path translation. To match the `PIL.ImageFont.truetype`
+  surface as a Rust public API, root `pillow-rs` needs a structured constructor
+  option type that includes index/encoding/layout engine without adding path I/O
+  to core.
+- `stroke_width != 0` for `getmask`/`getmask2`.
 
 Pillow `11.3.0` passes stroke rendering from Python into `_imagingft.c`, where
 the native render path creates an `FT_Stroker`, obtains a glyph with
@@ -241,18 +269,29 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `54817cb8-2702-4db3-842d-ccd05fd801eb`
-- Snapshot: `e97d0595-4981-4f21-aa43-b05c649775ae`
+- Run: `6ee0899a-3a5f-4dbf-b302-7965184e9b49`
+- Snapshot: `cd1ee75d-fd8a-4d84-81c5-3b1f67465481`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `409ad55d63cfceaca57bfb603d5a95faa6c22edc`
+- Commit measured: `4d0fa40e95dd19bbfcf3b28fe4589feb6a36fc1d`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `684/697` (`98.13%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
+| `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
+| `pillow-rs/src/font/pilfont.rs` | `224/370` (`60.54%`) | `39/96` (`40.62%`) | `19/42` (`45.24%`) | `352/591` (`59.56%`) |
+
+Current full-module scope note:
+
+- The active test now includes bitmap `PIL.ImageFont.ImageFont` rows and
+  repo-local `load`/`load_path` PILfont assets, so `pilfont.rs` is now part of
+  the coverage target.
+- Coverage is not 100% yet for the full `PIL.ImageFont` target. The next
+  coverage work must add input-only rows for PILfont parser/image error paths,
+  PBM fallback paths, clipped/invalid glyph rectangles, and bitmap transpose
+  branches, then rerun Coverage MCP.
 
 Latest Font wrapper movement:
 

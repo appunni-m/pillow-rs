@@ -38,7 +38,13 @@ struct ParameterCoverage {
     covered: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 32] = [
+    "ImageFont.getbbox",
+    "ImageFont.getlength",
+    "ImageFont.getmask",
+    "TransposedFont.getbbox",
+    "TransposedFont.getlength",
+    "TransposedFont.getmask",
     "draw_text",
     "font_size",
     "font_variant",
@@ -54,7 +60,10 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
     "getmetrics",
     "getname",
     "has_variations",
+    "load",
     "load_default",
+    "load_default_imagefont",
+    "load_path",
     "render_text_binary",
     "set_variation_by_axes",
     "set_variation_by_name",
@@ -74,8 +83,25 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
     "font.variations.",
 ];
 
-const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 2] =
-    [("getmask", "stroke_width"), ("getmask2", "stroke_width")];
+const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 17] = [
+    ("ImageFont.getbbox", "args"),
+    ("ImageFont.getbbox", "kwargs"),
+    ("ImageFont.getlength", "args"),
+    ("ImageFont.getlength", "kwargs"),
+    ("ImageFont.getmask", "args"),
+    ("ImageFont.getmask", "kwargs"),
+    ("TransposedFont.getbbox", "args"),
+    ("TransposedFont.getbbox", "kwargs"),
+    ("TransposedFont.getlength", "args"),
+    ("TransposedFont.getlength", "kwargs"),
+    ("TransposedFont.getmask", "args"),
+    ("TransposedFont.getmask", "kwargs"),
+    ("getmask", "stroke_width"),
+    ("getmask2", "stroke_width"),
+    ("truetype", "encoding"),
+    ("truetype", "index"),
+    ("truetype", "layout_engine"),
+];
 
 const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
     "ftstroke.FT_Glyph_Stroke.destroy_original_option",
@@ -554,13 +580,13 @@ fn assert_referenced_assets_exist(fixture_root: &Path, cases: &[Value]) {
                 panic!("{case_id}.{asset_name}: font asset kind must be a string");
             };
             match kind {
-                "load_default" => {
+                "load_default" | "pilfont_default" => {
                     assert!(
                         asset.get("id").is_none(),
-                        "{case_id}.{asset_name}: load_default assets must not have an id"
+                        "{case_id}.{asset_name}: embedded default font assets must not have an id"
                     );
                 }
-                "ref" => {
+                "ref" | "pilfont_ref" => {
                     let id = asset
                         .get("id")
                         .and_then(Value::as_str)
@@ -732,7 +758,7 @@ fn runner_public_operations() -> BTreeSet<String> {
                 .trim_end_matches(',')
                 .trim()
                 .trim_matches('"');
-            if !operation.is_empty() {
+            if !operation.is_empty() && operation != "_" {
                 operations.insert(operation.to_owned());
             }
         }
@@ -905,6 +931,27 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
         let entry = observed
             .entry(operation.to_owned())
             .or_insert_with(BTreeSet::new);
+        if matches!(operation, "load" | "load_path") {
+            if case
+                .get("inputs")
+                .and_then(|inputs| inputs.get("assets"))
+                .and_then(|assets| assets.get("font"))
+                .and_then(|font| font.get("id"))
+                .is_some()
+            {
+                entry.insert("filename".to_owned());
+            }
+        }
+        if operation == "truetype"
+            && case
+                .get("inputs")
+                .and_then(|inputs| inputs.get("assets"))
+                .and_then(|assets| assets.get("font"))
+                .and_then(|font| font.get("id"))
+                .is_some()
+        {
+            entry.insert("font".to_owned());
+        }
         for key in params.keys() {
             if let Some(parameter) = canonical_pillow_parameter(operation, key) {
                 entry.insert(parameter);
@@ -925,9 +972,23 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
 
 fn canonical_pillow_parameter(operation: &str, fixture_key: &str) -> Option<String> {
     let parameter = match fixture_key {
+        "loader" | "orientation" => return None,
+        "size" if matches!(operation, "load_default" | "truetype") => "size",
         "size" => return None,
         "text" | "text_bytes_hex"
-            if matches!(operation, "getbbox" | "getlength" | "getmask" | "getmask2") =>
+            if matches!(
+                operation,
+                "getbbox"
+                    | "getlength"
+                    | "getmask"
+                    | "getmask2"
+                    | "ImageFont.getbbox"
+                    | "ImageFont.getlength"
+                    | "ImageFont.getmask"
+                    | "TransposedFont.getbbox"
+                    | "TransposedFont.getlength"
+                    | "TransposedFont.getmask"
+            ) =>
         {
             "text"
         }
@@ -1040,6 +1101,12 @@ fn assert_documented_blocked_public_parameters() {
 fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     let expected = EXPECTED_BLOCKED_PUBLIC_PARAMETERS
         .into_iter()
+        .filter(|(method, parameter)| {
+            matches!(
+                (*method, *parameter),
+                ("getmask", "stroke_width") | ("getmask2", "stroke_width")
+            )
+        })
         .map(|(method, parameter)| (method.to_owned(), parameter.to_owned()))
         .collect::<BTreeSet<_>>();
     assert_eq!(

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "operation": "ImageFont.getlength",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.getlength.hello_default_bitmap",
+      "operation": "ImageFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getlength.nul_truncates_default_bitmap",
+      "operation": "ImageFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text_bytes_hex": "410042"
+        }
+      }
+    }
+  ]
+}

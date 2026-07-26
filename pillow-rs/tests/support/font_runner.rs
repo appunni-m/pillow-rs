@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use pillow_rs::{
     Draw, Image, ImageFont, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxis,
-    PilError,
+    PilError, PilFont,
 };
 use serde_json::{Value, json};
 
@@ -31,6 +31,82 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
     let params = inputs(case)?
         .get("params")
         .ok_or_else(|| PilError::ValueError("case.inputs.params missing".into()))?;
+
+    match operation {
+        "load" | "load_path" | "load_default_imagefont" => {
+            let font = load_pilfont(case, fixture_root)?;
+            return Ok(json!({"type": "pilfont", "mode": font.mode().as_str()}));
+        }
+        "ImageFont.getbbox" => {
+            let font = load_pilfont(case, fixture_root)?;
+            let (width, height) = match text_bytes(params)? {
+                Some(bytes) => font.getsize(&bytes)?,
+                None => font.getsize(text(params)?.as_bytes())?,
+            };
+            return Ok(json!({"type": "bbox", "value": [0, 0, width, height]}));
+        }
+        "ImageFont.getlength" => {
+            let font = load_pilfont(case, fixture_root)?;
+            let (width, _) = match text_bytes(params)? {
+                Some(bytes) => font.getsize(&bytes)?,
+                None => font.getsize(text(params)?.as_bytes())?,
+            };
+            return Ok(json!({"type": "length", "value": width}));
+        }
+        "ImageFont.getmask" => {
+            let font = load_pilfont(case, fixture_root)?;
+            let mask = match text_bytes(params)? {
+                Some(bytes) => font.getmask(&bytes)?,
+                None => font.getmask(text(params)?.as_bytes())?,
+            };
+            return Ok(image_value(
+                mask.width,
+                mask.height,
+                mask.mode.as_str(),
+                &mask.pixels,
+            ));
+        }
+        "TransposedFont.getbbox" => {
+            let font = load_pilfont(case, fixture_root)?;
+            let (width, height) = match text_bytes(params)? {
+                Some(bytes) => font.getsize(&bytes)?,
+                None => font.getsize(text(params)?.as_bytes())?,
+            };
+            return Ok(bbox_value(pillow_rs::transposed_bbox(
+                (0, 0, width, height),
+                orientation(params)?,
+            )));
+        }
+        "TransposedFont.getlength" => {
+            let font = load_pilfont(case, fixture_root)?;
+            pillow_rs::validate_transposed_length(orientation(params)?)?;
+            let (width, _) = match text_bytes(params)? {
+                Some(bytes) => font.getsize(&bytes)?,
+                None => font.getsize(text(params)?.as_bytes())?,
+            };
+            return Ok(json!({"type": "length", "value": width}));
+        }
+        "TransposedFont.getmask" => {
+            let font = load_pilfont(case, fixture_root)?;
+            let mask = match text_bytes(params)? {
+                Some(bytes) => font.getmask(&bytes)?,
+                None => font.getmask(text(params)?.as_bytes())?,
+            };
+            let mut image = mask.to_image()?;
+            if let Some(orientation) = orientation(params)? {
+                image = image.transpose(orientation)?;
+            }
+            let (width, height) = image.size()?;
+            return Ok(image_value(
+                width,
+                height,
+                image.mode()?.as_str(),
+                &image.tobytes_unpacked()?,
+            ));
+        }
+        _ => {}
+    }
+
     let mut font = load_font(case, fixture_root)?;
 
     match operation {
@@ -544,6 +620,36 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<ImageFont, PilError> {
         }
         kind => Err(PilError::ValueError(format!(
             "unsupported font fixture font kind: {kind}"
+        ))),
+    }
+}
+
+fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> {
+    let font = inputs(case)?
+        .get("assets")
+        .and_then(|assets| assets.get("font"))
+        .ok_or_else(|| PilError::ValueError("case.inputs.assets.font missing".into()))?;
+    let kind = required(font, "kind")?
+        .as_str()
+        .ok_or_else(|| PilError::TypeError("font asset kind must be a string".into()))?;
+    match kind {
+        "pilfont_default" => PilFont::load_default(),
+        "pilfont_ref" => {
+            let id = required(font, "id")?
+                .as_str()
+                .ok_or_else(|| PilError::TypeError("font asset id must be a string".into()))?;
+            let metrics_path = fixture_root.join(id);
+            let bitmap_path = metrics_path.with_extension("png");
+            let metrics = fs::read(&metrics_path).map_err(|error| {
+                PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
+            })?;
+            let bitmap = fs::read(&bitmap_path).map_err(|error| {
+                PilError::IOError(format!("failed to read PILfont bitmap fixture: {error}"))
+            })?;
+            PilFont::from_pilfont_data(&metrics, PilFont::open_glyph_image(bitmap)?)
+        }
+        other => Err(PilError::ValueError(format!(
+            "unsupported bitmap ImageFont asset kind: {other}"
         ))),
     }
 }

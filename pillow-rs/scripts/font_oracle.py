@@ -105,6 +105,22 @@ def ensure_c_font_path(font: Any) -> None:
         )
 
 
+def load_bitmap_imagefont(case: dict[str, Any], ImageFont: Any) -> Any:
+    inputs = case["inputs"]
+    params = inputs["params"]
+    font = inputs["assets"]["font"]
+
+    if font["kind"] == "pilfont_default":
+        return ImageFont.load_default_imagefont()
+    if font["kind"] == "pilfont_ref":
+        filename = FIXTURE_ROOT / font["id"]
+        if params.get("loader") == "load_path":
+            return ImageFont.load_path(str(filename))
+        return ImageFont.load(str(filename))
+
+    raise ValueError(f"unsupported bitmap ImageFont fixture font kind: {font['kind']}")
+
+
 def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
     inputs = case["inputs"]
     params = inputs["params"]
@@ -258,6 +274,35 @@ def text_value(params: dict[str, Any]) -> str | bytes | None:
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
     operation = case["operation"].removeprefix("font.")
     params = case["inputs"]["params"]
+
+    if operation in {"load", "load_path", "load_default_imagefont"}:
+        font = load_bitmap_imagefont(case, ImageFont)
+        return {"type": "pilfont", "mode": font.getmask("").mode}
+    if operation in {
+        "ImageFont.getbbox",
+        "ImageFont.getlength",
+        "ImageFont.getmask",
+        "TransposedFont.getbbox",
+        "TransposedFont.getlength",
+        "TransposedFont.getmask",
+    }:
+        font = load_bitmap_imagefont(case, ImageFont)
+        text = text_value(params)
+        if operation.startswith("TransposedFont."):
+            font = ImageFont.TransposedFont(
+                font, orientation(params.get("orientation"), Image)
+            )
+        if operation == "ImageFont.getbbox":
+            return {"type": "bbox", "value": list(font.getbbox(text))}
+        if operation == "TransposedFont.getbbox":
+            return {"type": "bbox", "value": list(font.getbbox(text))}
+        if operation == "ImageFont.getlength":
+            return {"type": "length", "value": font.getlength(text)}
+        if operation == "TransposedFont.getlength":
+            return {"type": "length", "value": font.getlength(text)}
+        mask = font.getmask(text, mode=params.get("mode", ""))
+        return image_value(mask.size, mask.mode, bytes(mask))
+
     font = load_font(case, ImageFont)
     text = text_value(params)
 
@@ -374,6 +419,63 @@ def outcome(case: dict[str, Any], modules: tuple[Any, Any, Any, Any]) -> dict[st
         }
 
 
+def public_class_signatures(cls: Any, prefix: str = "") -> dict[str, list[str]]:
+    signatures = {}
+    for name, value in cls.__dict__.items():
+        if name.startswith("_") or not callable(value):
+            continue
+        signatures[f"{prefix}{name}"] = [
+            parameter.name
+            for parameter in inspect.signature(value).parameters.values()
+            if parameter.name != "self"
+        ]
+    return signatures
+
+
+def public_signatures(ImageFont: Any) -> dict[str, list[str]]:
+    signatures: dict[str, list[str]] = {
+        "load": ["filename"],
+        "load_path": ["filename"],
+        "load_default_imagefont": [],
+        "load_default": ["size"],
+        "truetype": ["font", "size", "index", "encoding", "layout_engine"],
+    }
+    signatures.update(public_class_signatures(ImageFont.ImageFont, "ImageFont."))
+    signatures.update(public_class_signatures(ImageFont.FreeTypeFont))
+    signatures.update(public_class_signatures(ImageFont.TransposedFont, "TransposedFont."))
+    return signatures
+
+
+def public_operations(ImageFont: Any) -> list[str]:
+    return sorted(public_signatures(ImageFont))
+
+
+def public_surface(ImageFont: Any) -> dict[str, Any]:
+    module_functions = {
+        name: str(inspect.signature(getattr(ImageFont, name)))
+        for name in [
+            "load",
+            "load_path",
+            "load_default_imagefont",
+            "load_default",
+            "truetype",
+        ]
+    }
+    classes = {}
+    for class_name in ["ImageFont", "FreeTypeFont", "TransposedFont"]:
+        cls = getattr(ImageFont, class_name)
+        classes[class_name] = {
+            name: str(inspect.signature(value))
+            for name, value in cls.__dict__.items()
+            if not name.startswith("_") and callable(value)
+        }
+    return {
+        "module_functions": module_functions,
+        "classes": classes,
+        "layout": list(ImageFont.Layout.__members__.keys()),
+    }
+
+
 def main() -> None:
     PIL, _imagingft, Image, ImageDraw, ImageFont = load_pillow()
 
@@ -383,25 +485,15 @@ def main() -> None:
         )
 
     if len(sys.argv) == 2 and sys.argv[1] == "--public-methods":
-        public_methods = sorted(
-            name
-            for name, value in ImageFont.FreeTypeFont.__dict__.items()
-            if not name.startswith("_") and callable(value)
-        )
-        json.dump(public_methods, sys.stdout, separators=(",", ":"), sort_keys=True)
+        json.dump(public_operations(ImageFont), sys.stdout, separators=(",", ":"), sort_keys=True)
         return
 
     if len(sys.argv) == 2 and sys.argv[1] == "--public-signatures":
-        signatures = {}
-        for name, value in ImageFont.FreeTypeFont.__dict__.items():
-            if name.startswith("_") or not callable(value):
-                continue
-            signatures[name] = [
-                parameter.name
-                for parameter in inspect.signature(value).parameters.values()
-                if parameter.name != "self"
-            ]
-        json.dump(signatures, sys.stdout, separators=(",", ":"), sort_keys=True)
+        json.dump(public_signatures(ImageFont), sys.stdout, separators=(",", ":"), sort_keys=True)
+        return
+
+    if len(sys.argv) == 2 and sys.argv[1] == "--public-surface":
+        json.dump(public_surface(ImageFont), sys.stdout, separators=(",", ":"), sort_keys=True)
         return
 
     cases = json.load(sys.stdin)

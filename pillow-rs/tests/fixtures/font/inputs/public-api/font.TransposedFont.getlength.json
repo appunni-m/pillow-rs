@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "operation": "TransposedFont.getlength",
+  "cases": [
+    {
+      "case_id": "font.TransposedFont.getlength.flip_left_right_bitmap",
+      "operation": "TransposedFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello",
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getlength.rotate_90_bitmap_error",
+      "operation": "TransposedFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello",
+          "orientation": "ROTATE_90"
+        }
+      }
+    }
+  ]
+}

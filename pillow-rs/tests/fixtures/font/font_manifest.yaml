@@ -3,13 +3,22 @@ suite: font.public-api
 input_dir: inputs/public-api
 oracle:
   expected_runtime: python_pillow_font
-  expected_path: PIL.ImageFont.FreeTypeFont
-  native_core: PIL._imagingft
+  expected_path: PIL.ImageFont
+  native_core: PIL._imagingft for FreeTypeFont rows; PIL.ImageFont.ImageFont for bitmap PILfont rows
   rust_runtime: pillow_rs::ImageFont
   rust_contract: Result-style status payload
   comparison: exact payload match after runtime oracle generation
 required_operations:
+  - ImageFont.getbbox
+  - ImageFont.getlength
+  - ImageFont.getmask
+  - TransposedFont.getbbox
+  - TransposedFont.getlength
+  - TransposedFont.getmask
   - load_default
+  - load_default_imagefont
+  - load
+  - load_path
   - truetype
   - font_size
   - text_bbox
@@ -35,6 +44,44 @@ required_operations:
 negative_operations:
   - unsupported_magic
 public_method_parameters:
+  ImageFont.getbbox:
+    covered:
+      - text
+    blocked:
+      - args
+      - kwargs
+  ImageFont.getlength:
+    covered:
+      - text
+    blocked:
+      - args
+      - kwargs
+  ImageFont.getmask:
+    covered:
+      - text
+      - mode
+    blocked:
+      - args
+      - kwargs
+  TransposedFont.getbbox:
+    covered:
+      - text
+    blocked:
+      - args
+      - kwargs
+  TransposedFont.getlength:
+    covered:
+      - text
+    blocked:
+      - args
+      - kwargs
+  TransposedFont.getmask:
+    covered:
+      - text
+      - mode
+    blocked:
+      - args
+      - kwargs
   font_variant:
     covered:
       - font
@@ -99,6 +146,21 @@ public_method_parameters:
   getname:
     covered: []
     blocked: []
+  load:
+    covered:
+      - filename
+    blocked: []
+  load_default:
+    covered:
+      - size
+    blocked: []
+  load_default_imagefont:
+    covered: []
+    blocked: []
+  load_path:
+    covered:
+      - filename
+    blocked: []
   set_variation_by_axes:
     covered:
       - axes
@@ -107,7 +169,21 @@ public_method_parameters:
     covered:
       - name
     blocked: []
+  truetype:
+    covered:
+      - font
+      - size
+    blocked:
+      - index
+      - encoding
+      - layout_engine
 input_files:
+  - font.ImageFont.getbbox.json
+  - font.ImageFont.getlength.json
+  - font.ImageFont.getmask.json
+  - font.TransposedFont.getbbox.json
+  - font.TransposedFont.getlength.json
+  - font.TransposedFont.getmask.json
   - font.constructor.json
   - font.get_transposed_mask.json
   - font.getbbox.json
@@ -121,7 +197,10 @@ input_files:
   - font.has_variations.json
   - font.variations.json
   - font.layout_failure.json
+  - font.load.json
+  - font.load_default_imagefont.json
   - font.load_failure.json
+  - font.load_path.json
   - font.render_text.json
   - font.render_text_binary.json
   - font.text_bbox.json
