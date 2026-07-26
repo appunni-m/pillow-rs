@@ -25,16 +25,20 @@ pub mod ops;
 /// Executes only operations with a registered SIMD implementation.
 pub struct SimdPool;
 
-fn normalize_palette_result(result: DynamicImage, mode: Option<&str>) -> DynamicImage {
+fn normalize_palette_result(
+    result: DynamicImage,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     match mode {
         Some("P") => {
             let rgba = result.to_rgba8();
             let (width, height) = rgba.dimensions();
             let indices = rgba.pixels().map(|pixel| pixel[0]).collect();
-            DynamicImage::ImageLuma8(
-                image_slash_star::GrayImage::from_raw(width, height, indices)
-                    .expect("SIMD P-mode dimensions already validated"),
-            )
+            image_slash_star::GrayImage::from_raw(width, height, indices)
+                .map(DynamicImage::ImageLuma8)
+                .ok_or_else(|| {
+                    PilError::InternalError("SIMD P-mode buffer shape mismatch".to_string())
+                })
         }
         Some("PA") => {
             let rgba = result.to_rgba8();
@@ -43,12 +47,13 @@ fn normalize_palette_result(result: DynamicImage, mode: Option<&str>) -> Dynamic
                 .pixels()
                 .flat_map(|pixel| [pixel[0], pixel[3]])
                 .collect();
-            DynamicImage::ImageLumaA8(
-                image_slash_star::GrayAlphaImage::from_raw(width, height, samples)
-                    .expect("SIMD PA-mode dimensions already validated"),
-            )
+            image_slash_star::GrayAlphaImage::from_raw(width, height, samples)
+                .map(DynamicImage::ImageLumaA8)
+                .ok_or_else(|| {
+                    PilError::InternalError("SIMD PA-mode buffer shape mismatch".to_string())
+                })
         }
-        _ => result,
+        _ => Ok(result),
     }
 }
 
@@ -91,6 +96,6 @@ impl BackendImpl for SimdPool {
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
             current = f(&current, op, mode)?;
         }
-        Ok(normalize_palette_result(current, mode))
+        normalize_palette_result(current, mode)
     }
 }

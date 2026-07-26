@@ -181,18 +181,18 @@ pillow-rs/src/compute/pool_cpu/ops/effects.rs	516	op_composite_module	pub	Result
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	629	op_eval	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	669	op_effect_noise	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/effects.rs	713	op_point	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	755	transform_affine_generic	private	DynamicImage	false	review_non_result_fallible	expect
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	847	op_transform	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	902	op_put_pixel	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	941	op_put_data	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	989	op_put_alpha	pub	DynamicImage	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1055	table_index_3d	private	usize	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1059	color_lut_interpolate	private	i16	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1067	op_color3dlut	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1183	transform_mesh	pub	Result<DynamicImage, PilError>	true	ok_result	expect
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1276	op_effect_mandelbrot	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1317	darwin_rand_matches_pillow_oracle_sequence	private	()	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/effects.rs	1333	effect_noise_matches_pillow_pair_consumption_and_l_mode	private	()	false	review_non_result_fallible	expect
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	755	transform_affine_generic	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	846	op_transform	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	901	op_put_pixel	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	940	op_put_data	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	988	op_put_alpha	pub	DynamicImage	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1054	table_index_3d	private	usize	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1058	color_lut_interpolate	private	i16	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1066	op_color3dlut	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or,result_ctor
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1182	transform_mesh	pub	Result<DynamicImage, PilError>	true	ok_result	expect
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1275	op_effect_mandelbrot	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1316	darwin_rand_matches_pillow_oracle_sequence	private	()	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/effects.rs	1332	effect_noise_matches_pillow_pair_consumption_and_l_mode	private	()	false	review_non_result_fallible	expect
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	8	op_enhance_brightness	pub	Result<DynamicImage, PilError>	true	ok_result	
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	34	op_enhance_contrast	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/enhance.rs	89	op_enhance_color_saturation	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
@@ -227,17 +227,17 @@ pillow-rs/src/compute/pool_cpu/ops/geometry.rs	93	raw_bytes_to_image	pub	Result<
 pillow-rs/src/compute/pool_cpu/ops/geometry.rs	128	resize_f	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_cpu/ops/geometry.rs	237	resize_i	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_cpu/ops/geometry.rs	351	affine_nearest_fixed	private	()	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	409	rotate_arbitrary_generic	private	DynamicImage	false	parser_review	expect,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	551	transform_affine_generic	private	DynamicImage	false	parser_review	expect,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	661	execute_resize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	701	execute_crop	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	747	rotate_90_non_expand	private	DynamicImage	false	parser_review	unwrap,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	805	execute_rotate	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	844	execute_transpose	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	885	round_aspect	private	f64) -> u32	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	901	execute_thumbnail	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	1004	raw_to_dynimage	private	DynamicImage	false	likely_infallible	
-pillow-rs/src/compute/pool_cpu/ops/geometry.rs	1027	execute_reduce	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	409	rotate_arbitrary_generic	private	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	523	transform_affine_generic	private	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	605	execute_resize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	645	execute_crop	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	691	rotate_90_non_expand	private	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	739	execute_rotate	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	778	execute_transpose	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	819	round_aspect	private	f64) -> u32	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	835	execute_thumbnail	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	938	raw_to_dynimage	private	DynamicImage	false	likely_infallible	
+pillow-rs/src/compute/pool_cpu/ops/geometry.rs	961	execute_reduce	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	12	bankers_round	private	f64	false	likely_infallible	
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	35	op_autocontrast	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_cpu/ops/imageops.rs	86	op_equalize	pub	Result<DynamicImage, PilError>	true	ok_result	
@@ -284,11 +284,11 @@ pillow-rs/src/compute/pool_gpu/mod.rs	1083	name	private	Backend	false	likely_inf
 pillow-rs/src/compute/pool_gpu/mod.rs	1087	priority	private	u8	false	likely_infallible	
 pillow-rs/src/compute/pool_gpu/mod.rs	1091	supports	private	bool	false	likely_infallible	
 pillow-rs/src/compute/pool_gpu/mod.rs	1095	execute_batch	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,map_err
-pillow-rs/src/compute/pool_simd/mod.rs	28	normalize_palette_result	private	DynamicImage	false	review_non_result_fallible	expect
-pillow-rs/src/compute/pool_simd/mod.rs	56	name	private	Backend	false	likely_infallible	
-pillow-rs/src/compute/pool_simd/mod.rs	60	priority	private	u8	false	likely_infallible	
-pillow-rs/src/compute/pool_simd/mod.rs	64	supports	private	bool	false	likely_infallible	
-pillow-rs/src/compute/pool_simd/mod.rs	68	execute_batch	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
+pillow-rs/src/compute/pool_simd/mod.rs	28	normalize_palette_result	private	Result<DynamicImage, PilError>	true	ok_result	ok_or
+pillow-rs/src/compute/pool_simd/mod.rs	61	name	private	Backend	false	likely_infallible	
+pillow-rs/src/compute/pool_simd/mod.rs	65	priority	private	u8	false	likely_infallible	
+pillow-rs/src/compute/pool_simd/mod.rs	69	supports	private	bool	false	likely_infallible	
+pillow-rs/src/compute/pool_simd/mod.rs	73	execute_batch	private	Result<DynamicImage, PilError>	true	ok_result	question_operator,ok_or
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	21	mode_to_u32	private	u32	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	32	color_mode_to_u32	private	u32	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	43	filter_to_u32	private	u32	false	likely_infallible	

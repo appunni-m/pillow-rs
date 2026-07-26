@@ -764,7 +764,7 @@ fn transform_affine_generic(
     aff_f: f64,
     fill: Option<(u8, u8, u8, u8)>,
     nearest: bool,
-) -> DynamicImage {
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
@@ -826,22 +826,21 @@ fn transform_affine_generic(
         }
     }
 
-    match channels {
-        1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
-        ),
-        4 => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
-        ),
+    Ok(match channels {
+        1 => DynamicImage::ImageLuma8(GrayImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform_affine L buffer shape mismatch".to_string())
+        })?),
+        2 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(dst_w, dst_h, out).ok_or_else(
+            || PilError::InternalError("transform_affine LA buffer shape mismatch".to_string()),
+        )?),
+        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform_affine RGB buffer shape mismatch".to_string())
+        })?),
+        4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform_affine RGBA buffer shape mismatch".to_string())
+        })?),
         _ => unreachable!(),
-    }
+    })
 }
 
 pub fn op_transform(
@@ -879,7 +878,7 @@ pub fn op_transform(
                 aff_f,
                 fill,
                 use_nearest,
-            );
+            )?;
             Ok(preserve_mode(img, result))
         }
         &TransformMethod::Mesh => {
