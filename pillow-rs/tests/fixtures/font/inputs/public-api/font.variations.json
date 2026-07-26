@@ -299,6 +299,22 @@
       }
     },
     {
+      "case_id": "font.variations.font_variant.index_out_of_range_error",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_index": 1
+        }
+      }
+    },
+    {
       "case_id": "font.variations.font_variant.encoding_unic",
       "operation": "font_variant",
       "inputs": {
