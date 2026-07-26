@@ -135,18 +135,24 @@ pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
         }
     }
     let result = match channels {
-        1 => DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
-        ),
-        _ => DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
-        ),
+        1 => image_slash_star::GrayImage::from_raw(w, h, out)
+            .map(DynamicImage::ImageLuma8)
+            .ok_or_else(|| PilError::InternalError("invert L buffer shape mismatch".to_string()))?,
+        2 => image_slash_star::GrayAlphaImage::from_raw(w, h, out)
+            .map(DynamicImage::ImageLumaA8)
+            .ok_or_else(|| {
+                PilError::InternalError("invert LA buffer shape mismatch".to_string())
+            })?,
+        3 => image_slash_star::RgbImage::from_raw(w, h, out)
+            .map(DynamicImage::ImageRgb8)
+            .ok_or_else(|| {
+                PilError::InternalError("invert RGB buffer shape mismatch".to_string())
+            })?,
+        _ => image_slash_star::RgbaImage::from_raw(w, h, out)
+            .map(DynamicImage::ImageRgba8)
+            .ok_or_else(|| {
+                PilError::InternalError("invert RGBA buffer shape mismatch".to_string())
+            })?,
     };
     Ok(result)
 }

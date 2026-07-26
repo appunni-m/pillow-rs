@@ -334,7 +334,11 @@ impl PyImage {
             && parsed_region.is_none()
             && parsed_position.is_none()
         {
-            let length = box_coords.expect("checked above").len()?;
+            let length = if let Some(box_coords) = box_coords {
+                box_coords.len()?
+            } else {
+                0
+            };
             return Err(PyTypeError::new_err(format!(
                 "argument 2 must be sequence of length 4, not {length}"
             )));

@@ -1264,9 +1264,11 @@ pub fn transform_mesh(
         }
     }
 
-    Ok(DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(dst_w, dst_h, out).expect("transform_mesh: buffer size mismatch"),
-    ))
+    RgbaImage::from_raw(dst_w, dst_h, out)
+        .map(DynamicImage::ImageRgba8)
+        .ok_or_else(|| {
+            PilError::InternalError("transform_mesh RGBA buffer shape mismatch".to_string())
+        })
 }
 
 /// Generate a Mandelbrot set fractal image.
