@@ -552,11 +552,15 @@ Specific functions containing logic that should be in `pillow-rs/src/`:
 
 ## 5. Dependency & Supply Chain Issues
 
-### 5.1 [HIGH] Duplicate `png` Versions (0.17.16 + 0.18.1)
+### 5.1 [RESOLVED] Historical Duplicate `png` Versions
 
-**Description:** `pillow-rs-image` depends on `png = "0.17.16"`, while `pillow-rs` depends on `png = "0.18.1"`. Both are compiled. `pillow-rs/src/image.rs` directly uses `png::ColorType` for palette detection, bypassing `pillow-rs-image`'s abstraction.
+**Description:** This applied while the historical `pillow-rs-image` crate
+lived in this repository. Codec ownership has moved to the sibling
+`image-slash-star` package and the `pillow-rs-image` directory has been
+removed.
 
-**Recommendation:** Align on `png = "0.18"`. Either remove `png` from `pillow-rs` and delegate paletted PNG decoding through `pillow-rs-image`, or bump `pillow-rs-image` to 0.18.
+**Recommendation:** Keep codec version alignment in `image-slash-star`; do not
+restore a downstream `pillow-rs-image` codec crate in this repo.
 
 ---
 
@@ -571,13 +575,14 @@ Specific functions containing logic that should be in `pillow-rs/src/`:
 
 ---
 
-### 5.3 [HIGH] Deprecated `serde_yaml` in Dev-Dependencies
+### 5.3 [RESOLVED] Historical `serde_yaml` in Removed Dev-Dependencies
 
-**Location:** `pillow-rs-image/Cargo.toml` (dev-dependencies)
+**Location:** removed `pillow-rs-image/Cargo.toml` (dev-dependencies)
 
-**Description:** `serde_yaml = "0.9.34+deprecated"` — the `+deprecated` marker in the version string indicates the crate is abandoned. Dev-only, so no production risk, but should be replaced.
+**Description:** This applied only to the historical `pillow-rs-image` crate,
+which has been removed from this repository.
 
-**Recommendation:** Replace with `serde_yml = "0.1"`.
+**Recommendation:** No downstream action remains in this repo.
 
 ---
 
@@ -593,7 +598,8 @@ Specific functions containing logic that should be in `pillow-rs/src/`:
 
 **Location:** All `Cargo.toml` files
 
-None of the crates set: `repository`, `homepage`, `documentation`, `authors`, `keywords`, `categories`, `readme`. `pillow-rs-image` omits `license` entirely.
+None of the remaining crates set: `repository`, `homepage`, `documentation`,
+`authors`, `keywords`, `categories`, or `readme`.
 
 **Recommendation:** Add workspace-level metadata fields, especially `repository` and `documentation` for crates.io discoverability potential.
 

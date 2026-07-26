@@ -1,8 +1,0 @@
-{
-  "format_version": 2,
-  "operation": {
-    "module": "Decode",
-    "target": "avif"
-  },
-  "cases": []
-}

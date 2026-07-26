@@ -34,9 +34,6 @@ ROOT_FILES = {
 INCLUDED_PREFIXES = (
     ".claude/skills/",
     "pillow-rs/src/",
-    "pillow-rs-image/scripts/",
-    "pillow-rs-image/src/",
-    "pillow-rs-image/tests/",
     "pillow-rs-js/bench_page/",
     "pillow-rs-js/src/",
     "pillow-rs-js/tests/",
@@ -64,8 +61,6 @@ INCLUDED_EXACT = {
     "pillow-rs-freetype/PROJECT_GOALS.md",
     "pillow-rs-freetype/README.md",
     "pillow-rs-freetype/deny.toml",
-    "pillow-rs-image/Cargo.toml",
-    "pillow-rs-image/manifest.yaml",
     "pillow-rs-js/Cargo.toml",
     "pillow-rs-js/package.json",
     "pillow-rs-js/package-lock.json",
@@ -76,7 +71,6 @@ INCLUDED_EXACT = {
 EXCLUDED_PREFIXES = (
     "pillow-rs-freetype/freetype/",
     "pillow-rs-freetype/tests/fixtures/",
-    "pillow-rs-image/tests/fixtures/",
     "scripts/bench/bench_reference_images/",
     "tests/coverage/",
     "tests/fixtures/",

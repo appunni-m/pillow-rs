@@ -40,8 +40,6 @@ and refreshed with `make repo-map-update`.
 - `pillow-rs/`: pure Rust image operations and shared image model.
   `src/image.rs`, `src/pipeline.rs`, `src/ops/`, `src/draw/`, and
   `src/font/imagingft.rs` are the primary implementation paths.
-- `pillow-rs-image/`: format encode/decode crate. The fixtures under
-  `tests/fixtures/` are oracle data, not implementation code.
 - `pillow-rs-py/`: PyO3 binding crate. `src/lib.rs` exposes Rust to Python;
   `python/pillow_rs/` must stay a thin Python surface.
 - `pillow-rs-js/`: wasm-bindgen binding crate plus browser/node test runners.
@@ -92,7 +90,6 @@ and refreshed with `make repo-map-update`.
 - `scripts/coverage/`: manifest coverage computation and validation.
 - `scripts/bench/`: root benchmark specification, runners, aggregation, and
   baseline comparison.
-- `pillow-rs-image/tests/coverage_matrix_tests.rs`: image format matrix runner.
 - `pillow-rs-freetype/tests/coverage_matrix_tests.rs`: FreeType matrix runner.
 
 ## Cleanup Rules
@@ -435,80 +432,6 @@ generated reports, build outputs, and package installs.
 |       |-- support/
 |       |   `-- generated_constant_lookup.rs
 |       `-- unified_fixture_parity.rs
-|-- pillow-rs-image/
-|   |-- Cargo.toml
-|   |-- manifest.yaml
-|   |-- scripts/
-|   |   |-- generate_decode_refs.py
-|   |   `-- generate_test_assets.py
-|   |-- src/
-|   |   |-- decode/
-|   |   |   |-- avif.rs
-|   |   |   |-- bmp.rs
-|   |   |   |-- gif.rs
-|   |   |   |-- ico.rs
-|   |   |   |-- jpeg/
-|   |   |   |   |-- bit_reader.rs
-|   |   |   |   |-- decode.rs
-|   |   |   |   |-- huffman.rs
-|   |   |   |   |-- idct.rs
-|   |   |   |   |-- mod.rs
-|   |   |   |   |-- parser.rs
-|   |   |   |   |-- progressive.rs
-|   |   |   |   `-- upsample.rs
-|   |   |   |-- mod.rs
-|   |   |   |-- png.rs
-|   |   |   |-- tiff.rs
-|   |   |   `-- webp.rs
-|   |   |-- encode/
-|   |   |   |-- avif.rs
-|   |   |   |-- bmp.rs
-|   |   |   |-- gif.rs
-|   |   |   |-- ico.rs
-|   |   |   |-- jpeg/
-|   |   |   |   |-- fdct.rs
-|   |   |   |   |-- huffman.rs
-|   |   |   |   |-- marker.rs
-|   |   |   |   |-- mod.rs
-|   |   |   |   `-- quant.rs
-|   |   |   |-- mod.rs
-|   |   |   |-- png.rs
-|   |   |   |-- tiff.rs
-|   |   |   `-- webp/
-|   |   |       |-- mod.rs
-|   |   |       `-- vp8/
-|   |   |           |-- bool_enc.rs
-|   |   |           |-- dct.rs
-|   |   |           |-- encoder.rs
-|   |   |           |-- loopfilter.rs
-|   |   |           |-- mod.rs
-|   |   |           |-- predict.rs
-|   |   |           |-- quant.rs
-|   |   |           |-- segmentation.rs
-|   |   |           `-- tokenize.rs
-|   |   |-- encode_options.rs
-|   |   |-- lib.rs
-|   |   `-- types/
-|   |       |-- buffer.rs
-|   |       |-- color/
-|   |       |   |-- blend.rs
-|   |       |   |-- from_color.rs
-|   |       |   |-- from_primitive.rs
-|   |       |   |-- invert.rs
-|   |       |   |-- mod.rs
-|   |       |   |-- pixel_luma.rs
-|   |       |   |-- pixel_rgb.rs
-|   |       |   `-- types.rs
-|   |       |-- dynamic.rs
-|   |       |-- error.rs
-|   |       |-- mod.rs
-|   |       `-- traits/
-|   |           |-- mod.rs
-|   |           |-- pixel.rs
-|   |           |-- primitive.rs
-|   |           `-- view.rs
-|   `-- tests/
-|       `-- coverage_matrix_tests.rs
 |-- pillow-rs-js/
 |   |-- Cargo.toml
 |   |-- bench_page/
@@ -562,6 +485,7 @@ generated reports, build outputs, and package installs.
 |-- rustfmt.toml
 |-- scripts/
 |   |-- analyze_palette_rotate.py
+|   |-- audit_rust_result_methods.py
 |   |-- bench/
 |   |   |-- bench_aggregate.py
 |   |   |-- bench_all.sh

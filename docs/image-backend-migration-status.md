@@ -14,8 +14,8 @@ in `../image-slash-star/docs/lazy-loading-correctness-proposal.md`.
 
 ## Dependency And Feature Boundary
 
-- The historical `pillow-rs-image` directory is excluded from the workspace
-  and retained only as a reference.
+- The historical `pillow-rs-image` directory has been removed from this repo;
+  codec ownership moved to the sibling `image-slash-star` package.
 - `pillow-rs` depends directly on package `image-slash-star` with
   `default-features = false`; Rust imports use `image_slash_star`.
 - `image-slash-star` exclusively owns signature detection, header inspection,
