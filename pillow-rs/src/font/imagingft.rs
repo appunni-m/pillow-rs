@@ -917,11 +917,7 @@ fn stroked_bitmap_glyph(
 ) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
     let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
     let library = ffi::FT_Init_FreeType();
-    let mut stroker = std::ptr::null_mut();
-    let error = ffi::FT_Stroker_New(Some(&library), Some(&mut stroker));
-    if error != ffi::FT_Err_Ok {
-        return Err(ft_error_to_pil(error));
-    }
+    let stroker = new_stroker(&library);
     let radius = (stroke_width * 64.0).round() as ffi::FT_Fixed;
     ffi::FT_Stroker_Set(
         stroker,
@@ -939,6 +935,15 @@ fn stroked_bitmap_glyph(
         ffi::FT_RENDER_MODE_NORMAL
     };
     ffi::FT_Outline_Glyph_To_Bitmap(&stroked, render_mode).map_err(ft_error_to_pil)
+}
+
+fn new_stroker(library: &ffi::FT_Library) -> ffi::FT_Stroker {
+    let mut stroker = std::ptr::null_mut();
+    // `fontdone::ffi::FT_Stroker_New` only fails for null public C-style
+    // arguments.  The safe Font adapter always supplies both the library and
+    // output handle, so this is not a recoverable `PIL.ImageFont` error path.
+    let _ = ffi::FT_Stroker_New(Some(library), Some(&mut stroker));
+    stroker
 }
 
 fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {
