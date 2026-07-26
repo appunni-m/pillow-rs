@@ -145,14 +145,6 @@ pub use crate::draw::Draw;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::Font;
-pub use crate::font::imagingft::get_transposed_mask as font_get_transposed_mask;
-pub use crate::font::imagingft::getbbox as font_getbbox;
-pub use crate::font::imagingft::getlength as font_getlength;
-pub use crate::font::imagingft::getmask as font_getmask;
-pub use crate::font::imagingft::getmask2_with_start as font_getmask2_with_start;
-pub use crate::font::imagingft::getmetrics as font_getmetrics;
-pub use crate::font::imagingft::getname as font_getname;
-pub use crate::font::imagingft::has_variations as font_has_variations;
 pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
@@ -221,6 +213,54 @@ pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
 pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
+
+/// Return Pillow's public `(family, style)` font name tuple.
+pub fn font_getname(font: &Font) -> (&str, &str) {
+    font.getname()
+}
+
+/// Return Pillow's public ascent/descent metrics.
+pub fn font_getmetrics(font: &Font) -> (u32, u32) {
+    font.getmetrics()
+}
+
+/// Return Pillow's public text length in pixels.
+pub fn font_getlength(font: &Font, text: &str) -> Result<f32, PilError> {
+    font.getlength(text)
+}
+
+/// Return whether the font exposes variation axes.
+pub fn font_has_variations(font: &Font) -> bool {
+    font.has_variations()
+}
+
+/// Return Pillow's public text bounding box.
+pub fn font_getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+    font.getbbox(text)
+}
+
+/// Return the Pillow-compatible grayscale text mask.
+pub fn font_getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.getmask(text)
+}
+
+/// Render a Pillow-compatible mask with a fractional raster start.
+pub fn font_getmask2_with_start(
+    font: &Font,
+    text: &str,
+    start: (f64, f64),
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_with_start(text, start)
+}
+
+/// Render a font mask and apply Pillow's optional transpose operation.
+pub fn font_get_transposed_mask(
+    font: &Font,
+    text: &str,
+    orientation: Option<&str>,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.get_transposed_mask(text, orientation)
+}
 
 /// Public backend capability summary for one registered operation.
 #[cfg(feature = "test-api")]

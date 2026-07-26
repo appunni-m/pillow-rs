@@ -25,6 +25,7 @@ RUST_GLOBS = [
     "pillow-rs-py/src/**/*.rs",
     "pillow-rs-js/src/**/*.rs",
 ]
+FONTDONE_ADAPTER = ROOT / "pillow-rs" / "src" / "font" / "imagingft.rs"
 
 DEEP_MODULES = {
     "checked_dims",
@@ -52,6 +53,8 @@ ROOT_DEEP_USE_RE = re.compile(
     + "|".join(sorted(DEEP_MODULES))
     + r")(?:::|\b)"
 )
+FONTDONE_USE_RE = re.compile(r"\bfontdone::")
+ROOT_FT_EXPORT_RE = re.compile(r"^\s*pub\s+(?:use|fn|struct|enum|type|const)\s+.*\bFT_[A-Za-z0-9_]*", re.MULTILINE)
 
 
 def rel(path: Path) -> str:
@@ -111,6 +114,18 @@ def main() -> int:
                 f"{rel(path)}:{line_number(text, match.start())}: "
                 "wildcard use/export is forbidden"
             )
+        if path != FONTDONE_ADAPTER:
+            for match in FONTDONE_USE_RE.finditer(text):
+                errors.append(
+                    f"{rel(path)}:{line_number(text, match.start())}: "
+                    "fontdone access must stay isolated to pillow-rs/src/font/imagingft.rs"
+                )
+
+    for match in ROOT_FT_EXPORT_RE.finditer(lib_text):
+        errors.append(
+            f"{rel(LIB_RS)}:{line_number(lib_text, match.start())}: "
+            "raw FreeType-shaped FT_* symbols must not be part of pillow-rs root API"
+        )
 
     for path in BINDING_FILES:
         text = path.read_text()
