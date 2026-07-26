@@ -18,6 +18,9 @@ New commits:
   `getmask/getmask2`.
 - `45a654881` — removed a one-use private constant and an unreachable
   bitmap-pitch conversion failure branch; no public behavior changed.
+- `aa64f706b` — added exact Pillow parity rows for additional SBIT mask
+  formats. Coverage MCP confirmed these rows do not change `imagingft.rs`
+  region metrics, so they are coverage-neutral for the remaining Font target.
 
 What changed:
 
@@ -39,9 +42,9 @@ Verification:
 - `make -C pillow-rs font-tests` — passed
 - `make -C pillow-rs fmt` — passed
 - Coverage MCP command `imagingft-tests-coverage-fixed`
-  - run `f7c271cc-063f-452a-8f1f-b7f851e1c6f0`
-  - snapshot `7da02b92-d1bf-436d-b0b2-a137e4f11539`
-  - commit `45a65488175057ef7bdf2feb0f2026c1ae96dc6c`
+  - run `6ef4cedf-4fff-4e0f-8461-f7e4fd998cb8`
+  - snapshot `62ff34a2-15f0-4821-adb3-2fa73c1c9593`
+  - commit `aa64f706b21114e2452d2b1450911ead26112c7c`
   - status `passed`, coverage artifact ingested
 
 Target file metrics:

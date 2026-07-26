@@ -37,6 +37,14 @@ Latest manifest movement:
 - Removed two private non-behavioral coverage-noise branches: a one-use
   advance-limit constant and an unreachable bitmap-pitch conversion failure
   path on the supported target.
+- Added exact Pillow parity rows for additional SBIT mask formats
+  (`sbit-gray2-format1.ttf`, `sbit-gray4-format1.ttf`,
+  `sbit-bgra-format1.ttf`). Coverage MCP run
+  `6ef4cedf-4fff-4e0f-8461-f7e4fd998cb8` ingested snapshot
+  `62ff34a2-15f0-4821-adb3-2fa73c1c9593` at commit `aa64f706b`; the
+  `imagingft.rs` metrics did not move (`1594/1746` regions), so equivalent
+  SBIT-format fixture expansion is not expected to close the remaining
+  `imagingft.rs` gaps.
 - Remaining blocked public parameters are now only:
   - `getmask`: `stroke_width`
   - `getmask2`: `stroke_width`
