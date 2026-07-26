@@ -295,67 +295,67 @@ pillow-rs/src/compute/pool_simd/ops/adapters.rs	43	filter_to_u32	private	u32	fal
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	51	pack_rgba	private	u32	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	57	dynimg_mode	private	u32	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/adapters.rs	70	pixels_from_dynimg	private	Vec<u32>	false	likely_infallible	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	80	dynimg_from_rgba	private	DynamicImage	false	review_non_result_fallible	expect
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	96	dynimg_from_pixel_mode	private	DynamicImage	false	review_non_result_fallible	expect
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	131	dynimg_from_put_alpha	private	DynamicImage	false	likely_infallible	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	141	arc_to_dynimg	private	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	146	pixels_from_arc	private	Result<Vec<u32>, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	155	simd_invert	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	167	simd_grayscale	pub	Result<DynamicImage, PilError>	true	ok_result	expect
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	182	simd_duplicate	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	194	simd_invert_chops	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	210	simd_solarize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	224	simd_posterize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	238	simd_brightness	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	252	simd_contrast	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	266	simd_color_saturation	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	280	simd_sharpness	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	294	simd_colorize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	310	simd_constant	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	326	simd_offset	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	346	simd_flip	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	358	simd_mirror	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	370	simd_equalize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	382	simd_autocontrast	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	400	simd_median_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	414	simd_max_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	428	simd_min_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	442	simd_rank_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	456	simd_filter_3x3	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	475	simd_filter_5x5	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	494	simd_box_blur	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	508	simd_gaussian_blur	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	522	simd_quantize	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	590	simd_add	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	616	simd_subtract	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	642	simd_blend	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	657	simd_blend_module	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	672	simd_composite	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	688	simd_composite_module	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	739	simd_transpose	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	770	simd_resize	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	793	simd_thumbnail	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	809	simd_contain	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	825	simd_cover	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	841	simd_fit	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	873	simd_scale	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	889	simd_pad	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	915	simd_expand	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	932	simd_crop_border	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	948	simd_crop	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	971	simd_rotate	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	997	simd_reduce	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1013	simd_convert	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1032	simd_remap_palette	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1052	simd_transform	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1094	simd_put_pixel	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1109	simd_put_data	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1123	simd_put_alpha	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1137	simd_eval	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1160	simd_point_op	pub	Result<DynamicImage, PilError>	true	ok_result	
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1183	simd_paste	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1240	simd_alpha_composite	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
-pillow-rs/src/compute/pool_simd/ops/adapters.rs	1273	simd_merge	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	80	dynimg_from_rgba	private	Result<DynamicImage, PilError>	true	ok_result	ok_or
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	98	dynimg_from_pixel_mode	private	Result<DynamicImage, PilError>	true	ok_result	ok_or
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	144	dynimg_from_put_alpha	private	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	159	arc_to_dynimg	private	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	164	pixels_from_arc	private	Result<Vec<u32>, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	173	simd_invert	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	185	simd_grayscale	pub	Result<DynamicImage, PilError>	true	ok_result	expect
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	200	simd_duplicate	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	212	simd_invert_chops	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	228	simd_solarize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	242	simd_posterize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	256	simd_brightness	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	270	simd_contrast	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	284	simd_color_saturation	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	298	simd_sharpness	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	312	simd_colorize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	328	simd_constant	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	344	simd_offset	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	364	simd_flip	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	376	simd_mirror	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	388	simd_equalize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	400	simd_autocontrast	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	418	simd_median_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	432	simd_max_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	446	simd_min_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	460	simd_rank_filter	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	474	simd_filter_3x3	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	493	simd_filter_5x5	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	512	simd_box_blur	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	526	simd_gaussian_blur	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	540	simd_quantize	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	608	simd_add	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	634	simd_subtract	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	660	simd_blend	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	675	simd_blend_module	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	690	simd_composite	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	706	simd_composite_module	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	757	simd_transpose	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	788	simd_resize	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	811	simd_thumbnail	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	827	simd_contain	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	843	simd_cover	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	859	simd_fit	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	891	simd_scale	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	907	simd_pad	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	933	simd_expand	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	950	simd_crop_border	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	966	simd_crop	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	989	simd_rotate	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1015	simd_reduce	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1031	simd_convert	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1050	simd_remap_palette	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1070	simd_transform	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1112	simd_put_pixel	pub	Result<DynamicImage, PilError>	true	ok_result	
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1127	simd_put_data	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1141	simd_put_alpha	pub	Result<DynamicImage, PilError>	true	ok_result	result_ctor
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1155	simd_eval	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1178	simd_point_op	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1201	simd_paste	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1258	simd_alpha_composite	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
+pillow-rs/src/compute/pool_simd/ops/adapters.rs	1291	simd_merge	pub	Result<DynamicImage, PilError>	true	ok_result	question_operator
 pillow-rs/src/compute/pool_simd/ops/scalar.rs	11	invert	pub	()	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/scalar.rs	37	grayscale	pub	()	false	likely_infallible	
 pillow-rs/src/compute/pool_simd/ops/scalar.rs	61	solarize	pub	()	false	likely_infallible	

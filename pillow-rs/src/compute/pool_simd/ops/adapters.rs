@@ -77,7 +77,7 @@ fn pixels_from_dynimg(img: &DynamicImage) -> Vec<u32> {
 }
 
 /// Reconstruct a DynamicImage from packed u32 RGBA pixels.
-fn dynimg_from_rgba(pixels: Vec<u32>, w: u32, h: u32) -> DynamicImage {
+fn dynimg_from_rgba(pixels: Vec<u32>, w: u32, h: u32) -> Result<DynamicImage, PilError> {
     let rgba_bytes: Vec<u8> = pixels
         .iter()
         .flat_map(|&p| {
@@ -89,24 +89,33 @@ fn dynimg_from_rgba(pixels: Vec<u32>, w: u32, h: u32) -> DynamicImage {
             ]
         })
         .collect();
-    DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, rgba_bytes).expect("internal invariant"))
+    RgbaImage::from_raw(w, h, rgba_bytes)
+        .map(DynamicImage::ImageRgba8)
+        .ok_or_else(|| PilError::InternalError("SIMD RGBA buffer shape mismatch".to_string()))
 }
 
 /// Reconstruct the logical sample layout used by a mode-preserving mutator.
-fn dynimg_from_pixel_mode(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> DynamicImage {
+fn dynimg_from_pixel_mode(
+    pixels: Vec<u32>,
+    w: u32,
+    h: u32,
+    mode: PixelMode,
+) -> Result<DynamicImage, PilError> {
     match mode {
         PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
             let bytes = pixels.iter().map(|pixel| (*pixel & 0xFF) as u8).collect();
-            DynamicImage::ImageLuma8(GrayImage::from_raw(w, h, bytes).expect("internal invariant"))
+            GrayImage::from_raw(w, h, bytes)
+                .map(DynamicImage::ImageLuma8)
+                .ok_or_else(|| PilError::InternalError("SIMD L buffer shape mismatch".to_string()))
         }
         PixelMode::LA | PixelMode::PA => {
             let bytes = pixels
                 .iter()
                 .flat_map(|pixel| [(*pixel & 0xFF) as u8, ((*pixel >> 24) & 0xFF) as u8])
                 .collect();
-            DynamicImage::ImageLumaA8(
-                GrayAlphaImage::from_raw(w, h, bytes).expect("internal invariant"),
-            )
+            GrayAlphaImage::from_raw(w, h, bytes)
+                .map(DynamicImage::ImageLumaA8)
+                .ok_or_else(|| PilError::InternalError("SIMD LA buffer shape mismatch".to_string()))
         }
         PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
             let bytes = pixels
@@ -119,7 +128,11 @@ fn dynimg_from_pixel_mode(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> 
                     ]
                 })
                 .collect();
-            DynamicImage::ImageRgb8(RgbImage::from_raw(w, h, bytes).expect("internal invariant"))
+            RgbImage::from_raw(w, h, bytes)
+                .map(DynamicImage::ImageRgb8)
+                .ok_or_else(|| {
+                    PilError::InternalError("SIMD RGB buffer shape mismatch".to_string())
+                })
         }
         PixelMode::RGBA | PixelMode::CMYK | PixelMode::I | PixelMode::F => {
             dynimg_from_rgba(pixels, w, h)
@@ -128,7 +141,12 @@ fn dynimg_from_pixel_mode(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> 
 }
 
 /// Reconstruct the promoted result of `Image.putalpha`.
-fn dynimg_from_put_alpha(pixels: Vec<u32>, w: u32, h: u32, mode: PixelMode) -> DynamicImage {
+fn dynimg_from_put_alpha(
+    pixels: Vec<u32>,
+    w: u32,
+    h: u32,
+    mode: PixelMode,
+) -> Result<DynamicImage, PilError> {
     match mode {
         PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => {
             dynimg_from_pixel_mode(pixels, w, h, PixelMode::LA)
@@ -161,7 +179,7 @@ pub fn simd_invert(
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::invert(&mut pixels, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_grayscale(
@@ -188,7 +206,7 @@ pub fn simd_duplicate(
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::duplicate(&mut pixels, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_invert_chops(
@@ -200,7 +218,7 @@ pub fn simd_invert_chops(
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::invert_chops(&mut pixels, mode_code);
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)))
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -218,7 +236,7 @@ pub fn simd_solarize(
     if let PipelineOp::Solarize { threshold } = op {
         super::scalar::solarize(&mut pixels, mode_code, *threshold);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_posterize(
@@ -232,7 +250,7 @@ pub fn simd_posterize(
     if let PipelineOp::Posterize { bits } = op {
         super::scalar::posterize(&mut pixels, mode_code, *bits as u32);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_brightness(
@@ -246,7 +264,7 @@ pub fn simd_brightness(
     if let PipelineOp::Brightness { factor } = op {
         super::scalar::brightness(&mut pixels, mode_code, (factor * 1000.0) as u32);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_contrast(
@@ -260,7 +278,7 @@ pub fn simd_contrast(
     if let PipelineOp::Contrast { factor } = op {
         super::scalar::contrast(&mut pixels, mode_code, (factor * 1000.0) as u32);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_color_saturation(
@@ -274,7 +292,7 @@ pub fn simd_color_saturation(
     if let PipelineOp::ColorSaturation { factor } = op {
         super::scalar::color_saturation(&mut pixels, mode_code, (factor * 1000.0) as u32);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_sharpness(
@@ -288,7 +306,7 @@ pub fn simd_sharpness(
     if let PipelineOp::Sharpness { factor } = op {
         super::scalar::sharpness(&mut pixels, w, h, mode_code, (factor * 1000.0) as u32);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_colorize(
@@ -304,7 +322,7 @@ pub fn simd_colorize(
         let white_rgb = (white.0 as u32) | ((white.1 as u32) << 8) | ((white.2 as u32) << 16);
         super::scalar::colorize(&mut pixels, mode_code, black_rgb, white_rgb);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_constant(
@@ -320,7 +338,7 @@ pub fn simd_constant(
             (*value as u32) | ((*value as u32) << 8) | ((*value as u32) << 16) | 0xFF00_0000;
         super::scalar::constant(&mut pixels, mode_code, packed);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_offset(
@@ -336,7 +354,7 @@ pub fn simd_offset(
         let dy = y.rem_euclid(256) as u32;
         super::scalar::offset(&mut pixels, mode_code, dx, dy);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -352,7 +370,7 @@ pub fn simd_flip(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::flip(&mut pixels, w, h, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_mirror(
@@ -364,7 +382,7 @@ pub fn simd_mirror(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::mirror(&mut pixels, w, h, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_equalize(
@@ -376,7 +394,7 @@ pub fn simd_equalize(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::equalize(&mut pixels, w, h, mode_code);
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_autocontrast(
@@ -390,7 +408,7 @@ pub fn simd_autocontrast(
     if let PipelineOp::Autocontrast { cutoff } = op {
         super::scalar::autocontrast(&mut pixels, w, h, mode_code, (*cutoff as u32).max(1));
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -408,7 +426,7 @@ pub fn simd_median_filter(
     if let PipelineOp::MedianFilter { size } = op {
         super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_max_filter(
@@ -422,7 +440,7 @@ pub fn simd_max_filter(
     if let PipelineOp::MaxFilter { size } = op {
         super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_min_filter(
@@ -436,7 +454,7 @@ pub fn simd_min_filter(
     if let PipelineOp::MinFilter { size } = op {
         super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_rank_filter(
@@ -450,7 +468,7 @@ pub fn simd_rank_filter(
     if let PipelineOp::RankFilter { size, rank } = op {
         super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_filter_3x3(
@@ -469,7 +487,7 @@ pub fn simd_filter_3x3(
     {
         super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_filter_5x5(
@@ -488,7 +506,7 @@ pub fn simd_filter_5x5(
     {
         super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_box_blur(
@@ -502,7 +520,7 @@ pub fn simd_box_blur(
     if let PipelineOp::BoxBlur { radius } = op {
         super::scalar::box_blur(&mut pixels, w, h, mode_code, *radius);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_gaussian_blur(
@@ -516,7 +534,7 @@ pub fn simd_gaussian_blur(
     if let PipelineOp::GaussianBlur { sigma } = op {
         super::scalar::gaussian_blur(&mut pixels, w, h, mode_code, *sigma);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_quantize(
@@ -530,7 +548,7 @@ pub fn simd_quantize(
     if let PipelineOp::Quantize { colors, .. } = op {
         super::scalar::quantize(&mut pixels, w, h, mode_code, *colors);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -568,7 +586,7 @@ macro_rules! dual_op_adapter {
                 }
             };
             $scalar_fn(&mut pixels, mode_code, &other_pixels);
-            Ok(dynimg_from_rgba(pixels, w, h))
+            dynimg_from_rgba(pixels, w, h)
         }
     };
 }
@@ -610,7 +628,7 @@ pub fn simd_add(
             *offset as f32,
         );
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_subtract(
@@ -636,7 +654,7 @@ pub fn simd_subtract(
             *offset as f32,
         );
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_blend(
@@ -651,7 +669,7 @@ pub fn simd_blend(
         let other_pixels = pixels_from_arc(other)?;
         super::scalar::blend(&mut pixels, mode_code, &other_pixels, *alpha);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_blend_module(
@@ -666,7 +684,7 @@ pub fn simd_blend_module(
         let other_pixels = pixels_from_arc(other)?;
         super::scalar::blend_module(&mut pixels, mode_code, &other_pixels, *alpha);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_composite(
@@ -682,7 +700,7 @@ pub fn simd_composite(
         let mask_pixels = pixels_from_arc(mask)?;
         super::scalar::composite(&mut pixels, mode_code, &other_pixels, &mask_pixels);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_composite_module(
@@ -724,7 +742,7 @@ pub fn simd_composite_module(
         );
         return Ok(preserve_mode(
             &other_img,
-            dynimg_from_rgba(result, other_w, other_h),
+            dynimg_from_rgba(result, other_w, other_h)?,
         ));
     }
     Err(PilError::ValueError(
@@ -760,7 +778,7 @@ pub fn simd_transpose(
     let mut pixels = pixels_from_dynimg(img);
     let (result, nw, nh) = super::scalar::transpose(&mut pixels, w, h, mode_code, method_code);
     let final_pixels = if result.is_empty() { pixels } else { result };
-    Ok(dynimg_from_rgba(final_pixels, nw, nh))
+    dynimg_from_rgba(final_pixels, nw, nh)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -784,7 +802,7 @@ pub fn simd_resize(
         let f = filter_to_u32(filter);
         let (result, new_w, new_h) =
             super::scalar::resize(&pixels, w, h, *dst_w, *dst_h, mode_code, f);
-        Ok(dynimg_from_rgba(result, new_w, new_h))
+        dynimg_from_rgba(result, new_w, new_h)
     } else {
         Err(PilError::ValueError("expected Resize op".into()))
     }
@@ -800,7 +818,7 @@ pub fn simd_thumbnail(
     if let PipelineOp::Thumbnail { w: dw, h: dh, .. } = op {
         let mode_code = dynimg_mode(img);
         let (result, nw, nh) = super::scalar::thumbnail(&pixels, w, h, mode_code, *dw, *dh);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Thumbnail op".into()))
     }
@@ -816,7 +834,7 @@ pub fn simd_contain(
     if let PipelineOp::Contain { w: dw, h: dh, .. } = op {
         let mode_code = dynimg_mode(img);
         let (result, nw, nh) = super::scalar::contain(&pixels, w, h, mode_code, *dw, *dh);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Contain op".into()))
     }
@@ -832,7 +850,7 @@ pub fn simd_cover(
     if let PipelineOp::Cover { w: dw, h: dh, .. } = op {
         let mode_code = dynimg_mode(img);
         let (result, nw, nh) = super::scalar::cover(&pixels, w, h, mode_code, *dw, *dh);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Cover op".into()))
     }
@@ -864,7 +882,7 @@ pub fn simd_fit(
             *bleed as f32,
             (centering.0 as f32, centering.1 as f32),
         );
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Fit op".into()))
     }
@@ -880,7 +898,7 @@ pub fn simd_scale(
     if let PipelineOp::Scale { factor, .. } = op {
         let mode_code = dynimg_mode(img);
         let (result, nw, nh) = super::scalar::scale(&pixels, w, h, mode_code, *factor);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Scale op".into()))
     }
@@ -906,7 +924,7 @@ pub fn simd_pad(
             None => 0xFF00_0000u32,
         };
         let (result, nw, nh) = super::scalar::pad(&pixels, w, h, mode_code, *dw, *dh, fill);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Pad op".into()))
     }
@@ -923,7 +941,7 @@ pub fn simd_expand(
     if let PipelineOp::Expand { border, fill } = op {
         let fill_rgba = pack_rgba(*fill);
         let (result, nw, nh) = super::scalar::expand(&pixels, w, h, mode_code, *border, fill_rgba);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Expand op".into()))
     }
@@ -939,7 +957,7 @@ pub fn simd_crop_border(
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::CropBorder { border } = op {
         let (result, nw, nh) = super::scalar::crop_border(&pixels, w, h, mode_code, *border);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected CropBorder op".into()))
     }
@@ -962,7 +980,7 @@ pub fn simd_crop(
     {
         let (result, nw, nh) =
             super::scalar::crop(&pixels, w, h, mode_code, *left, *top, *right, *bottom);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Crop op".into()))
     }
@@ -988,7 +1006,7 @@ pub fn simd_rotate(
         };
         let (result, nw, nh) =
             super::scalar::rotate(&pixels, w, h, mode_code, *angle, *expand, fill_rgba);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Rotate op".into()))
     }
@@ -1004,7 +1022,7 @@ pub fn simd_reduce(
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Reduce { factor } = op {
         let (result, nw, nh) = super::scalar::reduce(&pixels, w, h, mode_code, *factor);
-        Ok(dynimg_from_rgba(result, nw, nh))
+        dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Reduce op".into()))
     }
@@ -1022,7 +1040,7 @@ pub fn simd_convert(
         let target_mode = color_mode_to_u32(cm);
         let (result, _nw, _nh) = super::scalar::convert(&pixels, w, h, src_mode, target_mode);
         // Reconstruct with proper mode based on target
-        let rgba = dynimg_from_rgba(result, w, h);
+        let rgba = dynimg_from_rgba(result, w, h)?;
         Ok(rgba)
     } else {
         Err(PilError::ValueError("expected Convert op".into()))
@@ -1043,7 +1061,7 @@ pub fn simd_remap_palette(
             inverse[usize::from(old_index)] = new_index as u8;
         }
         let result = super::scalar::remap_palette(&pixels, mode_code, &inverse);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, w, h)))
+        Ok(preserve_mode(img, dynimg_from_rgba(result, w, h)?))
     } else {
         Err(PilError::ValueError("expected RemapPalette op".into()))
     }
@@ -1081,7 +1099,7 @@ pub fn simd_transform(
         };
         let (result, nw, nh) =
             super::scalar::transform(&pixels, w, h, mode_code, *dw, *dh, &matrix, f, fill_rgba);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)))
+        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
     } else {
         Err(PilError::ValueError("expected Transform op".into()))
     }
@@ -1103,7 +1121,7 @@ pub fn simd_put_pixel(
         let packed = pack_rgba(*color);
         super::scalar::put_pixel(&mut pixels, w, mode_code, *x, *y, packed);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 pub fn simd_put_data(
@@ -1115,7 +1133,7 @@ pub fn simd_put_data(
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::PutData { data, mode } = op {
         super::scalar::put_data(&mut pixels, mode.code(), data);
-        return Ok(dynimg_from_pixel_mode(pixels, w, h, *mode));
+        return dynimg_from_pixel_mode(pixels, w, h, *mode);
     }
     Err(PilError::ValueError("expected PutData op".into()))
 }
@@ -1129,7 +1147,7 @@ pub fn simd_put_alpha(
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::PutAlpha { alpha, mode } = op {
         super::scalar::put_alpha(&mut pixels, mode.code(), *alpha);
-        return Ok(dynimg_from_put_alpha(pixels, w, h, *mode));
+        return dynimg_from_put_alpha(pixels, w, h, *mode);
     }
     Err(PilError::ValueError("expected PutAlpha op".into()))
 }
@@ -1153,7 +1171,7 @@ pub fn simd_eval(
     }
     Ok(crate::image::preserve_mode(
         img,
-        dynimg_from_rgba(pixels, w, h),
+        dynimg_from_rgba(pixels, w, h)?,
     ))
 }
 
@@ -1176,7 +1194,7 @@ pub fn simd_point_op(
     }
     Ok(crate::image::preserve_mode(
         img,
-        dynimg_from_rgba(pixels, w, h),
+        dynimg_from_rgba(pixels, w, h)?,
     ))
 }
 
@@ -1233,7 +1251,7 @@ pub fn simd_paste(
     }
     Ok(crate::image::preserve_mode(
         img,
-        dynimg_from_rgba(pixels, w, h),
+        dynimg_from_rgba(pixels, w, h)?,
     ))
 }
 
@@ -1263,7 +1281,7 @@ pub fn simd_alpha_composite(
             src.1,
         );
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1289,5 +1307,5 @@ pub fn simd_merge(
         let band_refs: Vec<&[u32]> = band_pixels.iter().map(|v| v.as_slice()).collect();
         super::scalar::merge(&mut pixels, mode_code, &band_refs);
     }
-    Ok(dynimg_from_rgba(pixels, w, h))
+    dynimg_from_rgba(pixels, w, h)
 }

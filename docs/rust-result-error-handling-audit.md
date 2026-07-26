@@ -18,10 +18,10 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,586`
-  - `likely_infallible`: `3,808`
+  - `ok_result`: `2,589`
+  - `likely_infallible`: `3,807`
   - `parser_review`: `307`
-  - `review_non_result_fallible`: `125`
+  - `review_non_result_fallible`: `123`
   - `review_panic_path`: `85`
 
 ## Current interpretation
@@ -58,6 +58,9 @@ been inspected and either:
   bubble `ImageResult`.
 - CPU ImageChops invert and auxiliary GPU registry helpers now return
   `Result<_, PilError>` instead of panicking on buffer shape or mutex poisoning.
+- SIMD dynamic-image reconstruction helpers now return `Result<_, PilError>`;
+  every SIMD adapter bubbles reconstruction failures with `?` instead of
+  using `expect` on image buffer creation.
 
 ## Next review queue
 
