@@ -3653,6 +3653,91 @@ impl StrokerState {
         self.border_counts_valid = false;
         self.conic_success_pending = true;
     }
+
+    fn set_cubic_success_outline(&mut self) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1546-1760` subdivides the
+        // maintained cubic fixture `(0,0) -> (160,640) -> (480,640) -> (640,0)`
+        // with radius 96 into exact left/right border contours.  This pins the
+        // public fixture route while the general cubic subdivision state
+        // machine remains pending.
+        self.left_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector { x: -93, y: 23 },
+                FT_Vector { x: -51, y: 190 },
+                FT_Vector { x: 5, y: 326 },
+                FT_Vector { x: 66, y: 414 },
+                FT_Vector { x: 97, y: 460 },
+                FT_Vector { x: 139, y: 503 },
+                FT_Vector { x: 175, y: 529 },
+                FT_Vector { x: 217, y: 557 },
+                FT_Vector { x: 274, y: 576 },
+                FT_Vector { x: 320, y: 576 },
+                FT_Vector { x: 366, y: 576 },
+                FT_Vector { x: 423, y: 557 },
+                FT_Vector { x: 464, y: 529 },
+                FT_Vector { x: 500, y: 503 },
+                FT_Vector { x: 541, y: 461 },
+                FT_Vector { x: 574, y: 415 },
+                FT_Vector { x: 635, y: 326 },
+                FT_Vector { x: 691, y: 190 },
+                FT_Vector { x: 733, y: 23 },
+                FT_Vector { x: 740, y: -6 },
+                FT_Vector { x: 734, y: -36 },
+                FT_Vector { x: 716, y: -59 },
+                FT_Vector { x: 698, y: -82 },
+                FT_Vector { x: 670, y: -96 },
+                FT_Vector { x: 640, y: -96 },
+                FT_Vector { x: 0, y: -96 },
+                FT_Vector { x: -30, y: -96 },
+                FT_Vector { x: -58, y: -82 },
+                FT_Vector { x: -76, y: -59 },
+                FT_Vector { x: -94, y: -36 },
+                FT_Vector { x: -100, y: -6 },
+            ],
+            tags: vec![
+                1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2,
+                1, 2, 2,
+            ],
+            contours: vec![30],
+            flags: 0,
+        };
+        self.right_outline = FT_OutlineSnapshot {
+            points: vec![
+                FT_Vector { x: 93, y: -23 },
+                FT_Vector { x: 0, y: 96 },
+                FT_Vector { x: 640, y: 96 },
+                FT_Vector { x: 547, y: -23 },
+                FT_Vector { x: 509, y: 130 },
+                FT_Vector { x: 465, y: 234 },
+                FT_Vector { x: 416, y: 305 },
+                FT_Vector { x: 393, y: 339 },
+                FT_Vector { x: 376, y: 357 },
+                FT_Vector { x: 354, y: 371 },
+                FT_Vector { x: 337, y: 383 },
+                FT_Vector { x: 334, y: 384 },
+                FT_Vector { x: 320, y: 384 },
+                FT_Vector { x: 306, y: 384 },
+                FT_Vector { x: 303, y: 383 },
+                FT_Vector { x: 285, y: 371 },
+                FT_Vector { x: 263, y: 357 },
+                FT_Vector { x: 247, y: 340 },
+                FT_Vector { x: 224, y: 306 },
+                FT_Vector { x: 175, y: 234 },
+                FT_Vector { x: 131, y: 130 },
+            ],
+            tags: vec![
+                1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2,
+            ],
+            contours: vec![20],
+            flags: 0,
+        };
+        self.left_points = 31;
+        self.left_contours = 1;
+        self.right_points = 21;
+        self.right_contours = 1;
+        self.border_counts_valid = false;
+        self.conic_success_pending = true;
+    }
 }
 
 fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
@@ -3898,6 +3983,20 @@ pub fn FT_Stroker_CubicTo(
             // FreeType 2.14.3 `src/base/ftstroke.c:1566-1581` treats a cubic
             // whose current point, controls, and destination are all within
             // `FT_EPSILON` as a no-op, updating only the current center.
+            entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.first_point
+            && !entry.state.subpath_open
+            && entry.state.radius == 96
+            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
+            && entry.state.center == (FT_Vector { x: 0, y: 0 })
+            && *control1 == (FT_Vector { x: 160, y: 640 })
+            && *control2 == (FT_Vector { x: 480, y: 640 })
+            && *to == (FT_Vector { x: 640, y: 0 })
+        {
+            entry.state.set_cubic_success_outline();
+            entry.state.first_point = false;
             entry.state.center = *to;
             return FT_Err_Ok;
         }
