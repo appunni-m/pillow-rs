@@ -21,9 +21,12 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 
 - `make -C pillow-rs imagingft-tests`  
   Result: `1` passed, `0` failed
-- Coverage evidence:
-- Local coverage command: `make -C pillow-rs imagingft-tests-coverage` (delegates to `imagingft-tests-coverage-fixed`)
-- Test result from command output: `1` passed, `0` failed
+- Coverage MCP evidence:
+  - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
+  - Run id: `80a0b357-fc22-4c1b-8a17-9fbaa1594176` (first submission `submission_reused=false`)
+  - Terminal status: `passed`, `1` passed, `0` failed
+  - Diagnostics/ingest: `f822764e-34d5-4c39-86b5-6622a0a2a8e8` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Search log checks (`FAILED`, `error:`, `panic`) returned zero matches
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
 ## Corpus state
@@ -87,6 +90,12 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 - `covered_branches: 105/166` (`branch_rate 0.6325301205`)
 - `covered_regions: 1228/1548` (`region_rate 0.7935897436`)
 - Gaps remain in non-error branches and layout branches not yet covered by this public-input subset.
+
+### Coverage delta
+
+- Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
+- Current: `f822764e-34d5-4c39-86b5-6622a0a2a8e8`
+- Net movement: `+0` lines, `+0` branches, `+0` functions, `+0` regions.
 
 ## Remaining explicit gaps
 
