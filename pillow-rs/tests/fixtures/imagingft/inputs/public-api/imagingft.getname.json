@@ -65,6 +65,22 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "imagingft.getname.name_table_missing",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/name-table-missing.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
     }
   ]
 }

@@ -37,7 +37,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
 
     match operation {
         "getname" => {
-            let (family, style) = imagingft::getname(&font);
+            let (family, style) = imagingft::getname_optional(&font);
             Ok(json!({"type": "name", "value": [family, style]}))
         }
         "getmetrics" => {
