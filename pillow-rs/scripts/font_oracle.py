@@ -165,6 +165,24 @@ def has_variations(font: Any) -> bool:
     return True
 
 
+def font_descriptor(font: Any) -> dict[str, Any]:
+    return {
+        "type": "font",
+        "size": float(font.size),
+        "name": list(font.getname()),
+        "metrics": list(font.getmetrics()),
+        "has_variations": has_variations(font),
+    }
+
+
+def text_bbox_value(font: Any, text: str) -> dict[str, Any]:
+    left, top, right, bottom = font.getbbox(text)
+    return {
+        "type": "size",
+        "value": [max(0, right - left), max(0, bottom - top)],
+    }
+
+
 def binary_bbox(font: Any, text: str) -> list[int]:
     size, offset = font.font.getsize(text, "1", None, None, None, None)
     return [offset[0], offset[1], offset[0] + size[0], offset[1] + size[1]]
@@ -187,6 +205,12 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
     font = load_font(case, ImageFont)
     text = params.get("text")
 
+    if operation in {"load_default", "truetype"}:
+        return font_descriptor(font)
+    if operation == "font_size":
+        return {"type": "size", "value": float(font.size)}
+    if operation == "text_bbox":
+        return text_bbox_value(font, text)
     if operation == "getname":
         return {"type": "name", "value": list(font.getname())}
     if operation == "getmetrics":

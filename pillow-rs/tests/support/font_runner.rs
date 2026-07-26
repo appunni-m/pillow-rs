@@ -31,6 +31,18 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
     let font = load_font(case, fixture_root)?;
 
     match operation {
+        "load_default" | "truetype" => font_descriptor(&font),
+        "font_size" => Ok(json!({
+            "type": "size",
+            "value": font.font_size(),
+        })),
+        "text_bbox" => {
+            let (width, height) = font.text_bbox(text(params)?)?;
+            Ok(json!({
+                "type": "size",
+                "value": [width, height],
+            }))
+        }
         "getname" => {
             let (family, style) = font.getname_optional();
             Ok(json!({"type": "name", "value": [family, style]}))
@@ -239,6 +251,18 @@ fn draw_text(font: &Font, params: &Value) -> Result<Value, PilError> {
     draw.text(x, y, text(params)?, font, fill(params)?)?;
     let pixels = draw.image_clone()?.tobytes()?;
     Ok(image_value(width, height, mode, &pixels))
+}
+
+fn font_descriptor(font: &Font) -> Result<Value, PilError> {
+    let (family, style) = font.getname_optional();
+    let (ascent, descent) = font.getmetrics();
+    Ok(json!({
+        "type": "font",
+        "size": font.font_size(),
+        "name": [family, style],
+        "metrics": [ascent, descent],
+        "has_variations": font.has_variations(),
+    }))
 }
 
 fn bbox_value((left, top, right, bottom): (i32, i32, i32, i32)) -> Value {

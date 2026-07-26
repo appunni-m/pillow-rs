@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "operation": "constructor",
+  "cases": [
+    {
+      "case_id": "font.constructor.load_default_size_10",
+      "operation": "load_default",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default"
+          }
+        },
+        "params": {
+          "size": 10
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.load_default_size_20",
+      "operation": "load_default",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.truetype_dejavusans_size_20",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.truetype_variable_size_20",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.font_size_default_10",
+      "operation": "font_size",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default"
+          }
+        },
+        "params": {
+          "size": 10
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.font_size_dejavusans_fractional",
+      "operation": "font_size",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 12.5
+        }
+      }
+    }
+  ]
+}

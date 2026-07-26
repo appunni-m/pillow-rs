@@ -27,8 +27,30 @@ const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
 struct FontManifest {
     input_dir: String,
     input_files: BTreeSet<String>,
+    negative_operations: BTreeSet<String>,
     required_operations: BTreeSet<String>,
 }
+
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 18] = [
+    "draw_text",
+    "font_size",
+    "get_transposed_mask",
+    "getbbox",
+    "getbbox_binary",
+    "getlength",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "getmetrics",
+    "getname",
+    "has_variations",
+    "load_default",
+    "render_text_binary",
+    "text_bbox",
+    "transposed_bbox",
+    "truetype",
+    "validate_transposed_length",
+];
 
 fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/font")
@@ -106,7 +128,18 @@ fn load_manifest(root: &Path) -> FontManifest {
     let input_dir = manifest_scalar(&text, "input_dir")
         .unwrap_or_else(|| panic!("{} must define input_dir", path.display()));
     let input_files = manifest_list(&text, "input_files");
+    let negative_operations = manifest_list(&text, "negative_operations");
     let required_operations = manifest_list(&text, "required_operations");
+    let expected_operations = EXPECTED_FONT_PUBLIC_OPERATIONS
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        required_operations,
+        expected_operations,
+        "{} required_operations must exactly enumerate the current implemented Font public parity surface",
+        path.display()
+    );
     assert!(
         !input_files.is_empty(),
         "{} input_files must not be empty",
@@ -120,6 +153,7 @@ fn load_manifest(root: &Path) -> FontManifest {
     FontManifest {
         input_dir,
         input_files,
+        negative_operations,
         required_operations,
     }
 }
@@ -352,6 +386,19 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert!(
         missing.is_empty(),
         "required font public operations missing from inputs: {missing:?}"
+    );
+    let allowed_operations = manifest
+        .required_operations
+        .union(&manifest.negative_operations)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let unclassified = observed
+        .iter()
+        .filter(|operation| !allowed_operations.contains(**operation))
+        .collect::<Vec<_>>();
+    assert!(
+        unclassified.is_empty(),
+        "font public-api inputs contain operations missing from required_operations/negative_operations: {unclassified:?}"
     );
 
     let oracle = run_oracle(&cases);

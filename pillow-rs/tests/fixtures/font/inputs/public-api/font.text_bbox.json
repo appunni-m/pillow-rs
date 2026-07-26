@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "operation": "text_bbox",
+  "cases": [
+    {
+      "case_id": "font.text_bbox.default_hello",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default"
+          }
+        },
+        "params": {
+          "size": 10,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_empty",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_space",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " "
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_jq",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ"
+        }
+      }
+    }
+  ]
+}
