@@ -1,7 +1,7 @@
 # Font Public-API Parity Status (Current Worktree)
 
 Last updated: 2026-07-27 (Asia/Kolkata) — Pillow Font variation conversion
-edges at commit `6808ec78` + current working diff
+edges at commit `9316c899`
 
 ## Current checkpoint: variation-name bytes and C fixed-coordinate conversion
 
@@ -44,8 +44,8 @@ Verification:
 - `make -C pillow-rs font-tests` — passed.
 - `make -C pillow-rs fmt` — passed, including public API boundary check.
 - Coverage MCP command `font-tests-coverage-with-freetype`
-  - run `08eea829-536e-487c-afb8-03fd944c6e9c`
-  - snapshot `8dd0417c-ebeb-4c70-9dd4-b2f4a7a979c7`
+  - run `5ab8d75c-6497-475f-9030-68c3e9b9e2e4`
+  - snapshot `634e9c3a-f061-4243-b1b0-898f46f771d4`
   - status `passed`, coverage artifact ingested
 
 Target metrics:
