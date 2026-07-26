@@ -48,6 +48,12 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
             "Pillow oracle runtime mismatch: PIL.ImageFont.core is not _imagingft"
         )
 
+    core_file = Path(getattr(_imagingft, "__file__", "")).resolve()
+    if not core_file.is_file() or core_file.suffix not in {".so", ".dylib", ".dll", ".pyd"}:
+        raise RuntimeError(
+            f"imagingft oracle runtime mismatch: PIL._imagingft must be a native extension; got {core_file}"
+        )
+
     return PIL, _imagingft, Image, ImageDraw, ImageFont
 
 
