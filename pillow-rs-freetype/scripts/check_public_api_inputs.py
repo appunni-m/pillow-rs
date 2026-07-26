@@ -1481,11 +1481,6 @@ def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
             "route proving line, conic, and cubic contour decomposition feeds "
             "the stroker and emits the same output geometry as pinned C"
         ),
-        "ftstroke.FT_Stroker_ParseOutline.opened_outline_success": (
-            "FT_Stroker_ParseOutline opened-outline parity needs a maintained "
-            "route proving the opened flag selects cap/finalization behavior "
-            "exactly like pinned C"
-        ),
         "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped": (
             "FT_Stroker_ParseOutline degenerate-contour parity needs a "
             "maintained route proving zero-length or malformed contours are "

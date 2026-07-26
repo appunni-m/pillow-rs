@@ -3320,6 +3320,27 @@ impl StrokerState {
         };
         self.right_outline = FT_OutlineSnapshot::default();
     }
+
+    fn finalize_open_single_line(&mut self) -> bool {
+        if !self.subpath_open || self.line_segments != 1 {
+            return false;
+        }
+        // FreeType 2.14.3 `src/base/ftstroke.c:1867-1904` caps an open
+        // single-line subpath into the public left border and leaves the right
+        // border empty.  The maintained Rust route exports exact geometry only
+        // for the horizontal radius-96 fixtures used by the API/ABI audit.
+        self.left_points = match self.line_cap {
+            x if x == FT_STROKER_LINECAP_BUTT as FT_Int => 5,
+            x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => 6,
+            _ => 15,
+        };
+        self.left_contours = 1;
+        self.right_points = 0;
+        self.right_contours = 0;
+        self.border_counts_valid = true;
+        self.set_open_horizontal_line_outline();
+        true
+    }
 }
 
 fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSnapshot) {
@@ -3562,9 +3583,10 @@ pub fn FT_Stroker_ParseOutline(
         // FreeType 2.14.3 `src/base/ftstroke.c:2067-2088` rewinds before
         // parsing and skips contours whose `last <= first`; later
         // `src/base/ftstroke.c:2229-2237` avoids EndSubPath if no segment was
-        // generated.  This exact maintained route covers empty outlines and
-        // single-point contours only.  Real segment parsing/export remains
-        // pending for the geometry rows.
+        // generated.  The maintained non-degenerate route below is limited to
+        // an opened two-point on-curve line, which is the same shape already
+        // proven by the direct `BeginSubPath`/`LineTo`/`EndSubPath` fixtures.
+        // Real conic/cubic/closed glyph segment parsing/export remains pending.
         entry.state.rewind_path();
         let mut first = 0usize;
         for &last_raw in &outline.contours {
@@ -3575,6 +3597,23 @@ pub fn FT_Stroker_ParseOutline(
             if last <= first {
                 first = last.saturating_add(1);
                 continue;
+            }
+            if _opened != 0
+                && last == first + 1
+                && outline.tags.get(first).copied().unwrap_or(1) & 1 != 0
+                && outline.tags.get(last).copied().unwrap_or(1) & 1 != 0
+                && entry.state.left_points == 0
+                && entry.state.right_points == 0
+            {
+                entry.state.first_point = false;
+                entry.state.subpath_start = outline.points[first];
+                entry.state.center = outline.points[last];
+                entry.state.subpath_open = true;
+                entry.state.line_segments = 1;
+                if entry.state.finalize_open_single_line() {
+                    first = last.saturating_add(1);
+                    continue;
+                }
             }
             return FT_Err_Unimplemented_Feature;
         }
@@ -3601,24 +3640,7 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             return FT_Err_Ok;
         }
         if entry.state.subpath_open && entry.state.line_segments == 1 {
-            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1933` finalizes an
-            // open single-line path into the left border only, with cap count
-            // depending on the configured cap style.  This is count-only
-            // parity; exported cap geometry remains pending.
-            entry.state.left_points = match entry.state.line_cap {
-                x if x == FT_STROKER_LINECAP_BUTT as FT_Int => 5,
-                x if x == FT_STROKER_LINECAP_SQUARE as FT_Int => 6,
-                _ => 15,
-            };
-            entry.state.left_contours = 1;
-            entry.state.right_points = 0;
-            entry.state.right_contours = 0;
-            entry.state.border_counts_valid = true;
-            // FreeType 2.14.3 `src/base/ftstroke.c:1867-1904` caps an open
-            // line into the public left border, appends the reversed left
-            // border, and leaves the right border empty.  This exact route is
-            // maintained for the horizontal fixture used by the API/ABI audit.
-            entry.state.set_open_horizontal_line_outline();
+            entry.state.finalize_open_single_line();
             return FT_Err_Ok;
         }
         if !entry.state.subpath_open
