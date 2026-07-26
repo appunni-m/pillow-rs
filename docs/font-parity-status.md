@@ -282,17 +282,17 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `63797cd3-70ef-493d-9a40-216c12895a62`
-- Snapshot: `ecfc6209-1285-442b-ad35-1d8bbff13e05`
+- Run: `c1b6148b-abdf-4fe3-ba9e-ee5e4636a52a`
+- Snapshot: `9f812cc7-fd39-4f27-a26e-69afa3c8196b`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `e0d7e8f9016eea3f3363ca5707bb15ebc6adcd6d`
+- Commit measured: `f1a08f04d964a3eadb7d01d59598eed0630e5031`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
-| `pillow-rs/src/font/imagingft.rs` | `818/833` (`98.20%`) | `135/144` (`93.75%`) | `80/86` (`93.02%`) | `1298/1347` (`96.36%`) |
+| `pillow-rs/src/font/imagingft.rs` | `822/837` (`98.21%`) | `137/146` (`93.84%`) | `80/86` (`93.02%`) | `1302/1351` (`96.37%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
 | `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
 
@@ -340,6 +340,11 @@ Latest Font wrapper movement:
   `font.getmask2.dejavusans24_aa_stroke_1_5_l`. They stay inside the maintained
   DejaVuSans `"A"` stroker route while exercising real multi-glyph stroked
   composition and the non-empty previous-glyph advance/kerning path.
+- Added active input-only negative empty stroked text rows for
+  `font.getmask.dejavusans24_empty_negative_stroke_l` and
+  `font.getmask2.dejavusans24_empty_negative_stroke_l`. Pillow raises
+  `ValueError("bad image size")` for these public inputs; Rust previously
+  clamped the empty negative allocation to a zero-size success.
 - Wired `pillow-rs/src/font/imagingft.rs` through the existing pure-Rust
   lower-level `FT_Outline_Glyph_Stroke` route for the maintained DejaVuSans
   glyph fixture, then `FT_Outline_Glyph_To_Bitmap`, and reused Pillow's stroked
@@ -374,6 +379,11 @@ Remaining targeted gaps in `imagingft.rs`:
   multi-glyph rows plus the Pillow-compatible empty-text allocation path, with
   broader visible glyph coverage still blocked on complete `FT_Glyph_Stroke`/
   `FT_Glyph_StrokeBorder` implementation.
+- stroked `.notdef` glyph and negative non-empty stroke rows. Pillow succeeds
+  for inputs such as a missing Unicode scalar followed by `"A"` and for
+  `text="A", stroke_width=-1.5`; Rust currently errors because the lower-level
+  pure-Rust stroker only supports the maintained positive-radius DejaVuSans
+  `"A"` route.
 
 Latest blocker verification:
 
