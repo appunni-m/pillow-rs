@@ -16,6 +16,16 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     from PIL import Image, ImageDraw, ImageFont
     import PIL._imagingft as _imagingft  # type: ignore
 
+    core = ImageFont.core
+    if not getattr(core, "getfont", None):
+        raise RuntimeError(
+            "Pillow oracle runtime mismatch: PIL.ImageFont.core must provide getfont"
+        )
+    if core.__name__ not in {"_imagingft", "PIL._imagingft"}:
+        raise RuntimeError(
+            "Pillow oracle runtime mismatch: PIL.ImageFont.core is not _imagingft"
+        )
+
     return PIL, _imagingft, Image, ImageDraw, ImageFont
 
 
