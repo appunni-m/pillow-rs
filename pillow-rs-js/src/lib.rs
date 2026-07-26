@@ -1640,18 +1640,18 @@ pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
 
 /// Activate a compute backend. Returns true if the backend exists.
 #[wasm_bindgen]
-pub fn enable_backend(name: &str) -> bool {
-    pillow_rs::compute::Backend::parse(name)
-        .map(pillow_rs::compute::enable_backend)
-        .unwrap_or(false)
+pub fn enable_backend(name: &str) -> Result<bool, JsValue> {
+    let backend = pillow_rs::compute::Backend::parse(name)
+        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    pillow_rs::compute::enable_backend(backend).map_err(err)
 }
 
 /// Deactivate a compute backend. Returns true if it was active.
 #[wasm_bindgen]
-pub fn disable_backend(name: &str) -> bool {
-    pillow_rs::compute::Backend::parse(name)
-        .map(pillow_rs::compute::disable_backend)
-        .unwrap_or(false)
+pub fn disable_backend(name: &str) -> Result<bool, JsValue> {
+    let backend = pillow_rs::compute::Backend::parse(name)
+        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    pillow_rs::compute::disable_backend(backend).map_err(err)
 }
 
 /// List backends that exist on this machine.
@@ -1665,19 +1665,20 @@ pub fn available_backends() -> Vec<String> {
 
 /// List currently active backends (priority order).
 #[wasm_bindgen]
-pub fn active_backends() -> Vec<String> {
-    pillow_rs::compute::active_backends()
-        .iter()
+pub fn active_backends() -> Result<Vec<String>, JsValue> {
+    Ok(pillow_rs::compute::active_backends()
+        .map_err(err)?
+        .into_iter()
         .map(|b| format!("{:?}", b).to_lowercase())
-        .collect()
+        .collect())
 }
 
 /// Check if a specific backend is active.
 #[wasm_bindgen]
-pub fn backend_enabled(name: &str) -> bool {
-    pillow_rs::compute::Backend::parse(name)
-        .map(pillow_rs::compute::backend_enabled)
-        .unwrap_or(false)
+pub fn backend_enabled(name: &str) -> Result<bool, JsValue> {
+    let backend = pillow_rs::compute::Backend::parse(name)
+        .ok_or_else(|| err(pillow_rs::error::PilError::ValueError(format!("unknown backend: {name}"))))?;
+    pillow_rs::compute::backend_enabled(backend).map_err(err)
 }
 
 /// Set the maximum log level shown in the browser console.
