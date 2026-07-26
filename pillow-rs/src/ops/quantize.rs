@@ -118,7 +118,7 @@ impl QuantHash {
         let mut idx = (hash as usize) & self.mask;
 
         loop {
-            match &self.entries[idx] {
+            match &mut self.entries[idx] {
                 None => {
                     self.entries[idx] = Some(HistEntry {
                         r: sr,
@@ -136,11 +136,10 @@ impl QuantHash {
                     return;
                 }
                 Some(e) if e.r == sr && e.g == sg && e.b == sb => {
-                    let entry = self.entries[idx].as_mut().expect("internal invariant");
-                    entry.count += 1;
-                    entry.r_sum += r as u64;
-                    entry.g_sum += g as u64;
-                    entry.b_sum += b as u64;
+                    e.count += 1;
+                    e.r_sum += r as u64;
+                    e.g_sum += g as u64;
+                    e.b_sum += b as u64;
                     return;
                 }
                 Some(_) => {
@@ -172,7 +171,7 @@ impl QuantHash {
         let mut idx = (hash as usize) & self.mask;
 
         loop {
-            match &self.entries[idx] {
+            match &mut self.entries[idx] {
                 None => {
                     self.entries[idx] = Some(HistEntry {
                         r: new_r,
@@ -187,11 +186,10 @@ impl QuantHash {
                     return;
                 }
                 Some(e) if e.r == new_r && e.g == new_g && e.b == new_b => {
-                    let existing = self.entries[idx].as_mut().expect("internal invariant");
-                    existing.count += entry.count;
-                    existing.r_sum += entry.r_sum;
-                    existing.g_sum += entry.g_sum;
-                    existing.b_sum += entry.b_sum;
+                    e.count += entry.count;
+                    e.r_sum += entry.r_sum;
+                    e.g_sum += entry.g_sum;
+                    e.b_sum += entry.b_sum;
                     return;
                 }
                 Some(_) => {

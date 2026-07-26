@@ -842,45 +842,45 @@ pillow-rs/src/ops/pil_resize.rs	789	raw_to_dynamic	private	DynamicImage	false	li
 pillow-rs/src/ops/quantize.rs	36	new	private	Self	false	likely_infallible	
 pillow-rs/src/ops/quantize.rs	59	pixel_hash	private	u32	false	likely_infallible	
 pillow-rs/src/ops/quantize.rs	102	new	private	Self	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	112	add_pixel	private	()	false	review_non_result_fallible	expect
-pillow-rs/src/ops/quantize.rs	153	rebuild	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	167	reinsert	private	()	false	review_non_result_fallible	expect
-pillow-rs/src/ops/quantize.rs	204	collect_entries	private	Vec<HistEntry>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	222	median_cut_quantize_rgb	pub	(Vec<u8>, Vec<[u8; 3]>)	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	345	collect_tree_leaves	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	389	vbox_contains	private	bool	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	400	find_initial_bounds	private	Option<(u8, u8, u8, u8, u8, u8)>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	420	try_split	private	Option<(VBox, VBox)>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	513	box_volume	private	u32	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	649	compute_palette	private	Vec<[u8; 3]>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	689	map_pixels_to_palette	private	Vec<u8>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	822	add_color	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	829	add_bucket	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	836	average	private	[u8; 4]	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	860	new	private	Self	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	879	offset_position	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	886	offset	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	894	add_color	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	899	used	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	907	copy_octree_cube	private	OctreeCube	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	939	octree_bucket_order	private	std::cmp::Ordering	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	943	median_octree_bucket	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	961	insertion_sort_octree_buckets	private	bool	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	979	swap_octree_bucket_ranges	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	990	apple_qsort_octree_buckets	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1110	sorted_octree_buckets	private	Vec<OctreeBucket>	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1116	subtract_octree_buckets	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1127	add_octree_lookup	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1139	quantize_octree_rgba	private	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
-pillow-rs/src/ops/quantize.rs	1266	web_palette_quantize	pub	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
-pillow-rs/src/ops/quantize.rs	1284	clip8	private	u8	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1372	new	private	Self	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1380	cell_index	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1384	sub_index	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1391	get_or_build	private	u8	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1405	build_cell_cache	private	[u8; 512]	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1491	find_nearest_web	private	(u8, u8, u8, u8)	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1519	quantize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/ops/quantize.rs	112	add_pixel	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	152	rebuild	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	166	reinsert	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	202	collect_entries	private	Vec<HistEntry>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	220	median_cut_quantize_rgb	pub	(Vec<u8>, Vec<[u8; 3]>)	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	343	collect_tree_leaves	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	387	vbox_contains	private	bool	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	398	find_initial_bounds	private	Option<(u8, u8, u8, u8, u8, u8)>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	418	try_split	private	Option<(VBox, VBox)>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	511	box_volume	private	u32	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	647	compute_palette	private	Vec<[u8; 3]>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	687	map_pixels_to_palette	private	Vec<u8>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	820	add_color	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	827	add_bucket	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	834	average	private	[u8; 4]	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	858	new	private	Self	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	877	offset_position	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	884	offset	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	892	add_color	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	897	used	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	905	copy_octree_cube	private	OctreeCube	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	937	octree_bucket_order	private	std::cmp::Ordering	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	941	median_octree_bucket	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	959	insertion_sort_octree_buckets	private	bool	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	977	swap_octree_bucket_ranges	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	988	apple_qsort_octree_buckets	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1108	sorted_octree_buckets	private	Vec<OctreeBucket>	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1114	subtract_octree_buckets	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1125	add_octree_lookup	private	()	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1137	quantize_octree_rgba	private	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
+pillow-rs/src/ops/quantize.rs	1264	web_palette_quantize	pub	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
+pillow-rs/src/ops/quantize.rs	1282	clip8	private	u8	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1370	new	private	Self	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1378	cell_index	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1382	sub_index	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1389	get_or_build	private	u8	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1403	build_cell_cache	private	[u8; 512]	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1489	find_nearest_web	private	(u8, u8, u8, u8)	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1517	quantize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/ops/resize.rs	13	parse_resample	pub	Result<ResampleFilter, PilError>	true	ok_result	result_ctor
 pillow-rs/src/ops/resize.rs	37	resize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/ops/resize.rs	60	thumbnail	pub	Result<(), PilError>	true	ok_result	result_ctor
