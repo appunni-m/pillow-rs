@@ -849,9 +849,6 @@ fn stroked_mask_from_run_with_start(
         .checked_mul(hu)
         .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
     let mut canvas = vec![0u8; canvas_len];
-    if canvas_len == 0 {
-        return Ok((w, h, canvas));
-    }
 
     let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
     let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
