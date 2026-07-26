@@ -4,6 +4,30 @@ Last updated: 2026-07-26 (Asia/Kolkata)
 
 ## Execution status update: 2026-07-26
 
+Latest checkpoint after Pillow Font comparison review:
+
+- `15e039a29` is the current measured commit.
+- Coverage MCP run `200762a0-9e2e-4c9d-93ec-8cb7a8d4519e` passed and ingested
+  snapshot `2010d398-5db4-479a-b747-91439a5d2160`.
+- Current target coverage:
+  - `pillow-rs/src/font/imagingft.rs`: regions `1660/1829` (`90.76%`)
+  - `pillow-rs/src/font/mod.rs`: regions `194/232` (`83.62%`)
+- Newly implemented/covered Pillow option paths:
+  - `getbbox` anchor, bad-anchor, integer/fractional stroke width, ignored
+    `mode`, and libraqm-required error rows.
+  - `getlength` libraqm-required error rows for `features` and `language`.
+  - `getmask2` anchor offset, `mode="RGBA"` TypeError, and libraqm-required
+    error row.
+- Current high-confidence blockers:
+  - Stroked mask pixel parity needs a real outline-stroking implementation.
+    Do not add a `stroke_width` `getmask/getmask2` row until Rust renders the
+    same pixels as Pillow.
+  - `getmask` still needs the same parameterized option path as `getmask2`.
+  - `font_variant` still lacks alternate font source, index, encoding, and
+    layout-engine override parity.
+  - Remaining FreeType error/fallback/bitmap-storage branches need real
+    oracle-driving font assets.
+
 Current committed checkpoint:
 
 - `e7db8f817` — added Pillow `FreeTypeFont` variation public APIs to the
