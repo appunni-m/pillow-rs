@@ -219,7 +219,7 @@ pub fn render_text(
     fill: (u8, u8, u8, u8),
     _spacing: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    Ok(pack_rgba(getmask(font, text)?, fill))
+    pack_rgba(getmask(font, text)?, fill)
 }
 
 pub fn render_text_binary(
@@ -229,22 +229,29 @@ pub fn render_text_binary(
     spacing: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     let _ = spacing;
-    Ok(pack_rgba(
+    pack_rgba(
         mask_from_run_with_start(font, text, TGT_MONO, (0.0, 0.0))?,
         fill,
-    ))
+    )
 }
 
-fn pack_rgba((w, h, mask): (u32, u32, Vec<u8>), fill: (u8, u8, u8, u8)) -> (u32, u32, Vec<u8>) {
+fn pack_rgba(
+    (w, h, mask): (u32, u32, Vec<u8>),
+    fill: (u8, u8, u8, u8),
+) -> Result<(u32, u32, Vec<u8>), PilError> {
     if w == 0 || h == 0 {
-        return (w, h, mask);
+        return Ok((w, h, mask));
     }
     let len = match (w as usize)
         .checked_mul(h as usize)
         .and_then(|v| v.checked_mul(4))
     {
         Some(v) => v,
-        None => return (0, 0, vec![]),
+        None => {
+            return Err(PilError::DimensionError(
+                "text RGBA mask dimensions overflow".into(),
+            ));
+        }
     };
     let mut canvas = vec![0u8; len];
     for (i, cov) in mask.into_iter().enumerate() {
@@ -257,7 +264,7 @@ fn pack_rgba((w, h, mask): (u32, u32, Vec<u8>), fill: (u8, u8, u8, u8)) -> (u32,
         canvas[o + 2] = fill.2;
         canvas[o + 3] = cov;
     }
-    (w, h, canvas)
+    Ok((w, h, canvas))
 }
 
 // ── FFI helpers ──────────────────────────────────────────────────────
@@ -466,7 +473,10 @@ fn mask_from_run_with_start(
     let h = adjusted_h.max(0) as u32;
     let wu = w as usize;
     let hu = h as usize;
-    let mut canvas = vec![0u8; wu.checked_mul(hu).unwrap_or(0)];
+    let canvas_len = wu
+        .checked_mul(hu)
+        .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
+    let mut canvas = vec![0u8; canvas_len];
     if w == 0 || h == 0 {
         return Ok((w, h, canvas));
     }
