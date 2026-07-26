@@ -269,11 +269,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `a267a8af-3150-47f0-befb-918d27dedce2`
-- Snapshot: `608a8f41-7f1b-47a1-9624-038373f1e905`
+- Run: `ab51e2d6-b10c-430e-bf90-c239a2a6a7cd`
+- Snapshot: `f2bf96ee-e8f4-4f24-8706-5bd0505a9e72`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `9627505bb796d6b1cf6045fe4d8de8e585dc1cf7`
+- Commit measured: `f69f1beaae1a7dd74b0726e76f804bd26bf5692a`
 
 Target file metrics:
 
@@ -281,7 +281,7 @@ Target file metrics:
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/imagingft.rs` | `695/708` (`98.16%`) | `116/120` (`96.67%`) | `76/81` (`93.83%`) | `1072/1108` (`96.75%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/253` (`99.60%`) |
-| `pillow-rs/src/font/pilfont.rs` | `347/381` (`91.08%`) | `73/96` (`76.04%`) | `30/42` (`71.43%`) | `524/596` (`87.92%`) |
+| `pillow-rs/src/font/pilfont.rs` | `307/328` (`93.60%`) | `62/80` (`77.50%`) | `28/38` (`73.68%`) | `455/505` (`90.10%`) |
 
 Current full-module scope note:
 
@@ -292,9 +292,10 @@ Current full-module scope note:
   repo-local PBM-backed PILfont loading/masking, zero-sized transposed masks,
   valid `P1` PBM, L-mode glyph images, clipped PILfont metrics, public
   `ImageFont.info`, and matching malformed PBM loader errors moved
-  invalid PNG glyph-image discovery, no-newline metrics errors, and invalid
-  glyph-image mode mapping moved `pilfont.rs` regions from `352/591`
-  (`59.56%`) to `524/596` (`87.92%`).
+  invalid PNG glyph-image discovery, no-newline metrics errors, invalid
+  glyph-image mode mapping, and removal of unreachable embedded-asset base64
+  decoding moved `pilfont.rs` regions from `352/591` (`59.56%`) to `455/505`
+  (`90.10%`).
   The next coverage work must handle the remaining public-reachable
   PBM/image-load errors exactly and decide whether root-public `PilFont` raw
   constructor helpers remain in scope or should become implementation details

@@ -13,10 +13,8 @@ const GLYPH_COUNT: usize = 256;
 const GLYPH_RECORD_LEN: usize = 20;
 const METRICS_LEN: usize = GLYPH_COUNT * GLYPH_RECORD_LEN;
 
-const DEFAULT_METRICS: &[u8] = include_bytes!("courb08.pil.b64");
-const DEFAULT_BITMAP: &[u8] = include_bytes!("courb08.png.b64");
-const DEFAULT_METRICS_LEN: usize = 5_143;
-const DEFAULT_BITMAP_LEN: usize = 1_273;
+const DEFAULT_METRICS: &[u8] = include_bytes!("courb08.pil");
+const DEFAULT_BITMAP: &[u8] = include_bytes!("courb08.png");
 
 /// Native storage mode of a PILfont glyph image and its rendered masks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,9 +217,10 @@ impl PilFont {
     /// - PNG bytes: 1,273; SHA-256
     ///   `afdc82adb778486c71c5cc9c6f88623b3c7e5044e80ff7b32d973663eff31ed0`
     pub fn load_default() -> Result<Self, PilError> {
-        let metrics = decode_base64(DEFAULT_METRICS, DEFAULT_METRICS_LEN, "courB08 metrics")?;
-        let bitmap = decode_base64(DEFAULT_BITMAP, DEFAULT_BITMAP_LEN, "courB08 bitmap")?;
-        Self::from_pilfont_data(&metrics, Self::open_glyph_image(bitmap)?)
+        Self::from_pilfont_data(
+            DEFAULT_METRICS,
+            Self::open_glyph_image(DEFAULT_BITMAP.to_vec())?,
+        )
     }
 
     /// Returns the metadata lines between the PILfont descriptor and `DATA`.
@@ -370,69 +369,6 @@ fn read_line(data: &[u8]) -> (&[u8], &[u8]) {
 
 fn signed_be(record: &[u8], offset: usize) -> i32 {
     i16::from_be_bytes([record[offset], record[offset + 1]]) as i32
-}
-
-fn decode_base64(data: &[u8], expected_len: usize, label: &str) -> Result<Vec<u8>, PilError> {
-    let mut decoded = Vec::with_capacity(expected_len);
-    let mut quartet = [0u8; 4];
-    let mut quartet_len = 0usize;
-    let mut padding_seen = false;
-
-    for &byte in data {
-        if byte.is_ascii_whitespace() {
-            continue;
-        }
-        if padding_seen {
-            return Err(invalid_embedded(label, "data follows base64 padding"));
-        }
-        quartet[quartet_len] = if byte == b'=' {
-            64
-        } else {
-            decode_digit(byte).ok_or_else(|| invalid_embedded(label, "invalid base64 digit"))?
-        };
-        quartet_len += 1;
-        if quartet_len != 4 {
-            continue;
-        }
-        if quartet[0] == 64 || quartet[1] == 64 {
-            return Err(invalid_embedded(label, "invalid base64 padding"));
-        }
-
-        decoded.push((quartet[0] << 2) | (quartet[1] >> 4));
-        match (quartet[2], quartet[3]) {
-            (64, 64) => padding_seen = true,
-            (64, _) => return Err(invalid_embedded(label, "invalid base64 padding")),
-            (third, 64) => {
-                decoded.push((quartet[1] << 4) | (third >> 2));
-                padding_seen = true;
-            }
-            (third, fourth) => {
-                decoded.push((quartet[1] << 4) | (third >> 2));
-                decoded.push((third << 6) | fourth);
-            }
-        }
-        quartet_len = 0;
-    }
-
-    if quartet_len != 0 || decoded.len() != expected_len {
-        return Err(invalid_embedded(label, "decoded length does not match"));
-    }
-    Ok(decoded)
-}
-
-fn decode_digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'A'..=b'Z' => Some(byte - b'A'),
-        b'a'..=b'z' => Some(byte - b'a' + 26),
-        b'0'..=b'9' => Some(byte - b'0' + 52),
-        b'+' => Some(62),
-        b'/' => Some(63),
-        _ => None,
-    }
-}
-
-fn invalid_embedded(label: &str, reason: &str) -> PilError {
-    PilError::InternalError(format!("embedded {label} payload is invalid: {reason}"))
 }
 
 fn decode_pbm(data: &[u8]) -> Result<Image, PilError> {
