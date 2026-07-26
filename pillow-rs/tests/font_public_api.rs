@@ -537,6 +537,62 @@ fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
     );
 }
 
+fn runner_public_operations() -> BTreeSet<String> {
+    let runner = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/support/font_runner.rs");
+    let text = fs::read_to_string(&runner).expect("font runner must be readable");
+    let mut operations = BTreeSet::new();
+    let mut in_operation_match = false;
+
+    for line in text.lines() {
+        let indent = line
+            .chars()
+            .take_while(|character| *character == ' ')
+            .count();
+        let trimmed = line.trim();
+        if trimmed == "match operation {" {
+            in_operation_match = true;
+            continue;
+        }
+        if !in_operation_match {
+            continue;
+        }
+        if indent == 8 && trimmed.starts_with("other =>") {
+            break;
+        }
+        if indent != 8 || !trimmed.contains("=>") {
+            continue;
+        }
+
+        let Some((patterns, _)) = trimmed.split_once("=>") else {
+            continue;
+        };
+        for pattern in patterns.split('|') {
+            let operation = pattern
+                .trim()
+                .trim_end_matches(',')
+                .trim()
+                .trim_matches('"');
+            if !operation.is_empty() {
+                operations.insert(operation.to_owned());
+            }
+        }
+    }
+
+    assert!(
+        !operations.is_empty(),
+        "font runner public operation match must be discoverable"
+    );
+    operations
+}
+
+fn assert_manifest_operations_have_runner_arms(manifest: &FontManifest) {
+    let runner_operations = runner_public_operations();
+    assert_eq!(
+        runner_operations, manifest.required_operations,
+        "font_manifest.yaml required_operations must exactly match explicit font_runner public operation arms"
+    );
+}
+
 fn assert_input_only_case(path: &Path, value: &Value) {
     match value {
         Value::Object(object) => {
@@ -811,6 +867,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_case_ids_are_unique(&cases);
     assert_referenced_assets_exist(&root, &cases);
     assert_manifest_covers_root_font_api(&manifest);
+    assert_manifest_operations_have_runner_arms(&manifest);
 
     let pillow_methods = pillow_freetypefont_public_methods();
     let missing_pillow_methods = pillow_methods
