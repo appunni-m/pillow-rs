@@ -5555,6 +5555,16 @@ impl SizeMetrics {
             // (`src/truetype/ttdriver.c:349-410`, `ttobjs.c:1247-1248`).
             return Err(SizeRequestError::InvalidPpem);
         }
+        if data.sbit.as_ref().is_some_and(|sbit| {
+            sbit.kind() == tt::sbit::SbitTableKind::Cblc
+                && sbit.strike_count() != 0
+                && !sbit.has_strike(x_ppem, y_ppem)
+        }) {
+            // Pillow's `_imagingft.c` creates the face through FreeType, and the
+            // TrueType/SFNT bitmap driver rejects CBLC/CBDT color bitmap size
+            // requests that do not match an available strike before rendering.
+            return Err(SizeRequestError::InvalidPixelSize);
+        }
         Ok(SizeMetrics {
             x_ppem,
             y_ppem,

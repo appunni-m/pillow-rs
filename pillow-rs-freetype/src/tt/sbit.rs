@@ -136,6 +136,12 @@ impl SbitTable {
         })
     }
 
+    pub(crate) fn has_strike(&self, x_ppem: u16, y_ppem: u16) -> bool {
+        self.strikes
+            .iter()
+            .any(|strike| u16::from(strike.x_ppem) == x_ppem && u16::from(strike.y_ppem) == y_ppem)
+    }
+
     pub fn load_glyph(
         &self,
         glyph_index: u16,
