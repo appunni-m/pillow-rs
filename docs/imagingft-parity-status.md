@@ -13,7 +13,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
   - `.oracle-venv` is ignored by git at root via `.oracle-venv/`.
   - The oracle process validates it is running from `<repo>/.oracle-venv/bin/python` and imports `PIL` from that env only.
   - Bootstrap checks assert `ImageFont.core` resolves to `PIL._imagingft`, that `PIL._imagingft` is a native extension module (shared object), and that loaded fonts expose a `builtins.Font` core object (`font.font`) for C-layer execution.
-  - Runtime guard inspects `PIL.ImageFont.FreeTypeFont` source in the oracle venv and requires tested methods (`getmask`, `getmask2`, `getbbox`, `getlength`, `getname`) to delegate through the C core (`self.font...`).
+- Runtime guard inspects `PIL.ImageFont.FreeTypeFont` and `PIL.ImageFont.TransposedFont` source in the oracle venv and requires tested methods (`getmask`, `getmask2`, `getbbox`, `getlength`, `getname`, `get_variation_axes`, and transposed `getmask/getbbox/getlength`) to delegate through the C core.
   - Verified against this repo local `pillow-rs/.oracle-venv` only; this satisfies the "repo-only and gitignored oracle env" requirement.
   - This gives the strict chain: fixtures -> Python oracle -> `PIL._imagingft` C extension -> `Font` core object.
 
@@ -23,9 +23,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `80a0b357-fc22-4c1b-8a17-9fbaa1594176` (first submission `submission_reused=false`)
+  - Run id: `2699e813-7b0a-4184-9aaf-43b3f3e37c8c` (first submission `submission_reused=false`)
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `f822764e-34d5-4c39-86b5-6622a0a2a8e8` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `016fdf85-c4b9-4ada-88f0-d9f9f558a0dd` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Search log checks (`FAILED`, `error:`, `panic`) returned zero matches
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
