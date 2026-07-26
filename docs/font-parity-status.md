@@ -190,11 +190,11 @@ is `real-parity=4833`, `pending-route=188`.
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `1cd9776a-aa2f-42ab-8e2b-63fecab6ff22`
-- Snapshot: `4d6f50e7-75f6-4ea3-90de-be544b965c7c`
+- Run: `9b1273b4-f9eb-41d8-9c79-eba82957488b`
+- Snapshot: `5d0f75e7-dd0e-45db-a8f0-5fe2799a54a7`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `3144d07370c8557753577677581142cc37c22696`
+- Commit measured: `e364c231310d703848d5f766a055fdb4423c81d3`
 
 Target file metrics:
 
