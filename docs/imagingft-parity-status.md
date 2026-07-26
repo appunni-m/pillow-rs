@@ -24,17 +24,17 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `63efb1d4-a110-492c-bb5f-f7123a9f1301` (first submission `submission_reused=false`)
+  - Run id: `f3aaca70-52c3-4e36-9f7e-d9d0543f66b9` (first submission `submission_reused=false`)
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `27d14363-1512-48c6-8a77-6849c6b14113` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `2539a252-b938-4ab2-ae8e-002114dba958` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Search log checks (`FAILED`, `error:`, `panic`) returned no failure context; only the normal `0 failed` summary line matched.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
 ## Corpus state
 
 - Input files: `17` (`pillow-rs/tests/fixtures/imagingft/inputs/public-api/*.json`)
-- Total rows: `63`
-- Executed rows: `63/63`
+- Total rows: `75`
+- Executed rows: `75/75`
 - Required operation coverage check against case-set operations: no required manifest operations missing
 
 ## Required operation presence (fixture-defined)
@@ -42,23 +42,23 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 | Operation | OK | Error | Total |
 |---|---:|---:|---:|
 | `draw_text` | 4 | 0 | 4 |
-| `get_transposed_mask` | 4 | 1 | 5 |
+| `get_transposed_mask` | 9 | 1 | 10 |
 | `getbbox` | 5 | 2 | 7 |
 | `getbbox_binary` | 5 | 0 | 5 |
 | `getlength` | 4 | 0 | 4 |
 | `getmask` | 7 | 0 | 7 |
 | `getmask2` | 6 | 0 | 6 |
-| `getmask2_with_start` | 6 | 0 | 6 |
+| `getmask2_with_start` | 7 | 0 | 7 |
 | `getmetrics` | 1 | 0 | 1 |
 | `getname` | 1 | 5 | 6 |
 | `has_variations` | 1 | 0 | 1 |
 | `render_text_binary` | 4 | 0 | 4 |
-| `transposed_bbox` | 3 | 0 | 3 |
+| `transposed_bbox` | 7 | 0 | 7 |
 | `unsupported_magic` | 0 | 1 | 1 |
-| `validate_transposed_length` | 2 | 1 | 3 |
+| `validate_transposed_length` | 4 | 1 | 5 |
 
-- Total success rows: `53`
-- Total error rows: `10`
+- Total success rows: `64`
+- Total error rows: `11`
 - Error rows are classified only from live oracle output; input JSON carries no expected output, pixel hash, or expected-error metadata.
 
 ## Error-category matrix (oracle-defined)
@@ -67,7 +67,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 - `ValueError: font size must be greater than 0, not 0` — `1`
 - `ValueError: font size must be greater than 0, not -1` — `1`
 - `ValueError: font size must be greater than 0, not -5.5` — `1`
-- `ValueError: text length is undefined for text rotated by 90 or 270 degrees` — `1`
+- `ValueError: text length is undefined for text rotated by 90 or 270 degrees` — `2`
 - `OSError: cannot open resource` — `1`
 - `OSError: invalid argument` — `1`
 - `OSError: invalid pixel size` — `1`
@@ -79,10 +79,10 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 ### Suite summary (`imagingft`)
 
 - Current artifact metrics (`target/coverage/imagingft/imagingft-rust.json`, latest run):
-  - `total_lines: 17962`, `covered_lines: 1738` (`line_rate 0.0967598263`)
-  - `total_branches: 3166`, `covered_branches: 150` (`branch_rate 0.0473783954`)
-  - `total_functions: 1208`, `covered_functions: 142` (`function_rate 0.1175496689`)
-  - `total_regions: 31434`, `covered_regions: 2722` (`region_rate 0.0865941337`)
+  - `total_lines: 18520`, `covered_lines: 1792` (`line_rate 0.0967602592`)
+  - `total_branches: 3266`, `covered_branches: 154` (`branch_rate 0.0471524801`)
+  - `total_functions: 1274`, `covered_functions: 146` (`function_rate 0.1145996860`)
+  - `total_regions: 32288`, `covered_regions: 2813` (`region_rate 0.0871221506`)
 
 ### `pillow-rs/src/font/imagingft.rs`
 
@@ -95,13 +95,15 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `27d14363-1512-48c6-8a77-6849c6b14113`
-- Net movement: `+0` lines, `+0` branches, `+0` functions, `+0` regions.
+- Current: `2539a252-b938-4ab2-ae8e-002114dba958`
+- Sweep movement against previous committed comparator snapshot `27d14363-1512-48c6-8a77-6849c6b14113`: suite covered metrics moved `+54` lines, `+4` branches, `+4` functions, `+91` regions. `pillow-rs/src/font/imagingft.rs` itself remained unchanged.
 
 ## Remaining explicit gaps
 
 - Suite-level coverage is not complete by the 100% objective:
-  - ImagingFT public-api suite executes all 63 rows and reports zero parity mismatches.
+  - ImagingFT public-api suite executes all 75 rows and reports zero parity mismatches.
   - `pillow-rs/src/font/imagingft.rs` remains with uncovered lines/branch paths outside this minimal public corpus.
+- Sweep finding:
+  - A tried `getmask2_with_start` case with DejaVuSans `text="Hello"` and negative fractional `start=[-1.25, -0.5]` exposed a real Pillow/Rust pixel mismatch and was not added to the passing corpus. This is a concrete next implementation gap in the start/clipping path.
 - Error/parity:
   - No parity mismatches were observed in this run; error rows are all matched and classified correctly against oracle rows.
