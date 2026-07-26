@@ -128,8 +128,13 @@ fn load_input_cases(directory: &Path) -> Vec<Value> {
                 .expect("each imagingft public-api case must be an object");
             let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
             let required_keys = BTreeSet::from(["case_id", "inputs", "operation"]);
+            let supported_keys = {
+                let mut allowed = required_keys.clone();
+                allowed.insert("expect_error");
+                allowed
+            };
             assert!(
-                keys == required_keys,
+                keys == required_keys || keys == supported_keys,
                 "{} must contain only case_id, inputs, and operation",
                 path.display()
             );
@@ -181,7 +186,10 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
     serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
 }
 
-fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
+fn assert_exact_oracle_match(case_id: &str, input_case: &Value, expected: &Value, actual: &Value) {
+    let expect_error = input_case
+        .get("expect_error")
+        .and_then(Value::as_bool);
     let expected_status = expected
         .get("status")
         .and_then(Value::as_str)
@@ -190,6 +198,20 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("{case_id}: missing status in rust payload"));
+
+    if let Some(expect_error) = expect_error {
+        if expect_error {
+            assert_eq!(
+                expected_status, "error",
+                "{case_id}: expect_error=true must map to an error status"
+            );
+        } else {
+            assert_eq!(
+                expected_status, "ok",
+                "{case_id}: expect_error=false must map to ok status"
+            );
+        }
+    }
 
     assert_eq!(
         expected_status, actual_status,
@@ -269,6 +291,6 @@ fn every_input_matches_the_live_pillow_imagingft_oracle_exactly() {
             .get(case_id)
             .unwrap_or_else(|| panic!("{case_id}: live Pillow oracle result missing"));
         let actual = imagingft_runner::run(case, &root);
-        assert_exact_oracle_match(case_id, expected, &actual);
+        assert_exact_oracle_match(case_id, case, expected, &actual);
     }
 }

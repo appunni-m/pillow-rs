@@ -29,6 +29,40 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     return PIL, _imagingft, Image, ImageDraw, ImageFont
 
 
+def ensure_c_font_path(font: Any) -> None:
+    core_font = getattr(font, "font", None)
+    if core_font is None:
+        raise RuntimeError("imagingft oracle requires an ImageFont object with a native core font")
+
+    if core_font.__class__.__name__ != "Font" or core_font.__class__.__module__ != "builtins":
+        raise RuntimeError(
+            "imagingft oracle requires Pillow's native C Font object backend"
+        )
+
+
+def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
+    inputs = case["inputs"]
+    params = inputs["params"]
+    font = inputs["assets"]["font"]
+    size = params.get("size", 10.0)
+
+    if font["kind"] == "load_default":
+        value = ImageFont.load_default(size)
+        ensure_c_font_path(value)
+        return value
+
+    if font["kind"] == "ref":
+        loaded = ImageFont.truetype(
+            FIXTURE_ROOT / font["id"],
+            size,
+            layout_engine=ImageFont.Layout.BASIC,
+        )
+        ensure_c_font_path(loaded)
+        return loaded
+
+    raise ValueError(f"unsupported imagingft fixture font kind: {font['kind']}")
+
+
 def image_value(size: tuple[int, int], mode: str, pixels: bytes) -> dict[str, Any]:
     return {
         "type": "image",
@@ -56,22 +90,6 @@ def orientation(value: str | None, Image: Any) -> Any:
     if value in Image.Transpose.__members__:
         return Image.Transpose[value]
     return value
-
-
-def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
-    inputs = case["inputs"]
-    params = inputs["params"]
-    font = inputs["assets"]["font"]
-    size = params.get("size", 10.0)
-    if font["kind"] == "load_default":
-        return ImageFont.load_default(size)
-    if font["kind"] == "ref":
-        return ImageFont.truetype(
-            FIXTURE_ROOT / font["id"],
-            size,
-            layout_engine=ImageFont.Layout.BASIC,
-        )
-    raise ValueError(f"unsupported imagingft fixture font kind: {font['kind']}")
 
 
 def has_variations(font: Any) -> bool:

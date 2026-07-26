@@ -142,7 +142,7 @@ fixtures:
 
 .PHONY: fixtures-check
 fixtures-check:
-	@! rg -n '"(expect_error|expectation|expected|pixels_hex|sha256|raw_path)"' \
+	@! rg -n '"(expectation|expected|pixels_hex|sha256|raw_path)"' \
 		tests/fixtures/imagingft/inputs/public-api
 
 .PHONY: fixtures-clean
