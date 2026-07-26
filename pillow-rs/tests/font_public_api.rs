@@ -693,6 +693,11 @@ fn assert_manifest_covers_pillow_public_signatures(
             missing_rows.is_empty(),
             "{method}: manifest marks parameters as covered but active input rows do not exercise them: {missing_rows:?}"
         );
+        let blocked_rows = coverage.blocked.intersection(&observed).collect::<Vec<_>>();
+        assert!(
+            blocked_rows.is_empty(),
+            "{method}: active input rows exercise parameters still marked blocked in font_manifest.yaml: {blocked_rows:?}"
+        );
     }
 }
 
