@@ -8,7 +8,7 @@ use std::{
 
 use serde_json::Value;
 
-#[path = "support/imagingft_runner.rs"]
+#[path = "imagingft_runner.rs"]
 mod imagingft_runner;
 
 const REQUIRED_PUBLIC_OPS: [&str; 14] = [
@@ -41,7 +41,7 @@ const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
 ];
 
 fn fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imagingft")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/deprecated/imagingft/current-public-api/fixtures")
 }
 
 fn oracle_site_packages() -> Vec<PathBuf> {
@@ -174,7 +174,7 @@ fn assert_input_only_case(path: &Path, value: &Value) {
 }
 
 fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
-    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/imagingft_oracle.py");
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/deprecated/imagingft/current-public-api/imagingft_oracle.py");
     let oracle = oracle_python();
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")

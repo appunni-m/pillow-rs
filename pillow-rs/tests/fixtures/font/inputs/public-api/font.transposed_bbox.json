@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "operation": "transposed_bbox",
+  "cases": [
+    {
+      "case_id": "font.transposed_bbox.untransposed",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": null
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.rotate_90",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": "ROTATE_90"
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.flip_left_right",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default",
+            "kind_detail": "system_default"
+          }
+        },
+        "params": {
+          "text": "Parity",
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.rotate_180",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_180"
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.rotate_270",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "orientation": "ROTATE_270"
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.transpose",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSPOSE"
+        }
+      }
+    },
+    {
+      "case_id": "font.transposed_bbox.transverse",
+      "operation": "transposed_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "orientation": "TRANSVERSE"
+        }
+      }
+    }
+  ]
+}

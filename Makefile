@@ -71,12 +71,13 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
-	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs ImagingFT + fontdone unified parity\n"
+	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
 	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
-	@printf "  $(CYAN)make imagingft-tests$(NC)              Run ImagingFT public API parity tests\n"
-	@printf "  $(CYAN)make imagingft-tests-release$(NC)        Run ImagingFT public API parity tests (release)\n"
+	@printf "  $(CYAN)make font-tests$(NC)                  Run Font public API parity tests\n"
+	@printf "  $(CYAN)make font-tests-release$(NC)          Run Font public API parity tests (release)\n"
+	@printf "  $(CYAN)make imagingft-tests$(NC)              Compatibility alias for font-tests\n"
 	@printf "  $(CYAN)make pillow-rs-imagingft$(NC)           Run legacy ImagingFT matrix parity tests\n"
 	@printf "  $(CYAN)make pillow-rs-imagingft-release$(NC)  Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
@@ -231,7 +232,7 @@ test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
 		-k "getdata or get_flattened_data"
 
-test-core: ## Run Rust core tests (pillow-rs unit + imagingft)
+test-core: ## Run Rust core tests (pillow-rs unit + Font public API)
 	$(MAKE) -C $(CORE_SRC) test
 
 rust-color3dlut-oracle: color3dlut-fixtures ## Run Color3DLUT corpus through Rust API
@@ -303,7 +304,7 @@ fromarray-descriptor-oracle: build-wasm-core ## Run exact Pillow fromarray descr
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
 .PHONY: parity
-parity: imagingft-tests fontdone-parity ## Run pillow-rs ImagingFT + fontdone unified parity
+parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified parity
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
 .PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
@@ -320,7 +321,7 @@ parity: imagingft-tests fontdone-parity ## Run pillow-rs ImagingFT + fontdone un
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
+.PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -349,10 +350,16 @@ image-backend-feature-test: ## Verify disabled image codec feature forwarding
 pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
 
-imagingft-tests: ## Run ImagingFT public API parity tests
+font-tests: ## Run Font public API parity tests
+	$(MAKE) -C $(CORE_SRC) font-tests
+
+font-tests-release: ## Run Font public API parity tests (release)
+	$(MAKE) -C $(CORE_SRC) font-tests-release
+
+imagingft-tests: ## Compatibility alias for Font public API parity tests
 	$(MAKE) -C $(CORE_SRC) imagingft-tests
 
-imagingft-tests-release: ## Run ImagingFT public API parity tests (release)
+imagingft-tests-release: ## Compatibility alias for Font public API parity tests (release)
 	$(MAKE) -C $(CORE_SRC) imagingft-tests-release
 
 pillow-rs-imagingft: ## Run legacy ImagingFT matrix parity tests
@@ -577,7 +584,7 @@ lint: fmt clippy ## Run fmt + clippy
 # ── Coverage ──────────────────────────────────────────────────────────────────
 .PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
 .PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust coverage-transposed-font-rust
-.PHONY: coverage-imagingft-rust imagingft-tests-coverage
+.PHONY: coverage-font-rust coverage-imagingft-rust font-tests-coverage imagingft-tests-coverage
 .PHONY: coverage-validate coverage-report coverage-wasm
 
 coverage: ## Run tests + compute coverage
@@ -607,10 +614,16 @@ coverage-drawing-rust: ## Run ImageDraw parity and export Rust LLVM branch cover
 coverage-imagefont-getmask2-rust: ## Run ImageFont.getmask2 parity and export Rust LLVM branch coverage
 	bash scripts/coverage/run_imagefont_getmask2_rust_coverage.sh
 
-coverage-imagingft-rust: ## Run ImagingFT public API parity and export Rust LLVM branch coverage
+coverage-font-rust: ## Run Font public API parity and export Rust LLVM branch coverage
+	bash scripts/coverage/run_font_rust_coverage.sh
+
+coverage-imagingft-rust: ## Compatibility alias for Font public API Rust coverage
 	bash scripts/coverage/run_imagingft_rust_coverage.sh
 
-imagingft-tests-coverage: ## Run ImagingFT public API parity via coverage and export Rust LLVM branch coverage
+font-tests-coverage: ## Run Font public API parity via coverage and export Rust LLVM branch coverage
+	bash scripts/coverage/run_font_rust_coverage.sh
+
+imagingft-tests-coverage: ## Compatibility alias for Font public API Rust coverage
 	bash scripts/coverage/run_imagingft_rust_coverage.sh
 
 coverage-transposed-font-rust: ## Run TransposedFont parity and export Rust LLVM branch coverage
@@ -656,7 +669,7 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy pillow-rs-test-core imagingft-tests test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy pillow-rs-test-core font-tests test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci fontdone-parity ## Full workspace CI plus FreeType parity

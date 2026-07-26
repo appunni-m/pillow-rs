@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "operation": "font.unsupported_magic",
+  "cases": [
+    {
+      "case_id": "font.unsupported_operation.unsupported_magic",
+      "operation": "font.unsupported_magic",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello"
+        }
+      }
+    }
+  ]
+}
