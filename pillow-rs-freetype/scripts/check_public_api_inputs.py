@@ -1715,6 +1715,13 @@ def ftstroke_zero_line_real_parity_reason(row: ConcreteInput) -> str | None:
             "FFI, C ABI, and WASM ABI; general line joins and curve stroking "
             "remain pending"
         )
+    if row.case_id == "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath":
+        return (
+            "FT_Stroker_LineTo first-segment BeginSubPath/LineTo/EndSubPath "
+            "status sequence and exported open-line outline validate through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI; general line joins "
+            "and curve stroking remain pending"
+        )
     return None
 
 

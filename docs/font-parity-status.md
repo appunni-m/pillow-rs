@@ -1,7 +1,7 @@
 # Font Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after degenerate-contour stroker
-ParseOutline parity work.
+Last updated: 2026-07-27 (Asia/Kolkata) after first-segment stroker LineTo
+parity work.
 
 ## Oracle and fixture contract
 
@@ -138,11 +138,14 @@ Latest `FT_Stroker_LineTo` lower-level movement:
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo
 ```
 
-Result after closed single-line finalization: `line_segment_success` now runs as
-real C/Rust/WASM parity. LineTo runtime movement is `runnable=4`, `passed=4`,
-`pending=1`. The remaining LineTo pending row is
-`first_segment_starts_subpath`, which still needs maintained open first-segment
-state/export coverage separate from the closed finalized line route.
+Result after first-segment routing: `line_segment_success` and
+`first_segment_starts_subpath` now run as real C/Rust/WASM parity. The
+first-segment route explicitly mirrors C FreeType's required
+`FT_Stroker_BeginSubPath` → `FT_Stroker_LineTo` → `FT_Stroker_EndSubPath` →
+`FT_Stroker_GetCounts` → `FT_Stroker_Export` sequence; export without the
+counts preflight is not a valid oracle comparison. LineTo runtime movement is
+`runnable=5`, `passed=5`, `pending=0`. Route audit movement is
+`real-parity=4830`, `pending-route=191`.
 
 ## Edge cases already covered by active Font fixtures
 

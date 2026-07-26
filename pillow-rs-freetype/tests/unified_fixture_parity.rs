@@ -25387,6 +25387,10 @@ fn is_stroker_line_segment_success_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.line_segment_success"
 }
 
+fn is_stroker_first_segment_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineTo.first_segment_starts_subpath"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -25926,6 +25930,150 @@ fn wasm_stroker_closed_line_geometry(case: &InputCase) -> Result<RunOutput, Stri
         rust_stroker_closed_line_geometry(case)
     } else {
         Err("unsupported stroker closed-line geometry route".to_string())
+    }
+}
+
+fn stroker_first_segment_output(
+    status_sequence: [FT_Error; 3],
+    exported_outline: Value,
+) -> RunOutput {
+    ok(json!({
+        "status_sequence": status_sequence,
+        "exported_outline": exported_outline
+    }))
+}
+
+fn rust_stroker_first_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_first_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained first-segment stroker route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let to = FT_Vector { x: 640, y: 0 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 1);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&to))
+    } else {
+        begin_error
+    };
+    let end_error = if line_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line_error
+    };
+    let mut count_points = 0;
+    let mut count_contours = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut count_points), Some(&mut count_contours))
+    } else {
+        end_error
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    if counts_error == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_first_segment_output(
+        [begin_error, line_error, end_error],
+        outline_snapshot_json(&exported),
+    ))
+}
+
+fn c_stroker_first_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_first_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained first-segment stroker route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let to = c_abi::FT_Vector { x: 640, y: 0 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 1);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &to)
+    } else {
+        begin_error
+    };
+    let end_error = if line_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line_error
+    };
+    let mut count_points = 0;
+    let mut count_contours = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut count_points, &mut count_contours)
+    } else {
+        end_error
+    };
+    let mut exported_points = [c_abi::FT_Vector::default(); 128];
+    let mut exported_tags = [0u8; 128];
+    let mut exported_contours = [0u16; 16];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if counts_error == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_first_segment_output(
+        [begin_error, line_error, end_error],
+        c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        ),
+    ))
+}
+
+fn wasm_stroker_first_segment(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_first_segment_case(case) {
+        return Err(format!(
+            "{} is not the maintained first-segment stroker route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_first_segment() {
+        rust_stroker_first_segment(case)
+    } else {
+        Err("unsupported stroker first-segment route".to_string())
     }
 }
 
@@ -30993,6 +31141,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.line_to" if is_stroker_line_segment_success_case(case) => {
             Ok(vec!["--stroker-closed-line-geometry".to_string()])
         }
+        "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
+            Ok(vec!["--stroker-first-segment".to_string()])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.export_border"
         | "ftstroke.export"
@@ -32574,6 +32725,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_line_segment_success_case(case) => {
             rust_stroker_closed_line_geometry(case)
         }
+        "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
+            rust_stroker_first_segment(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.export_border"
         | "ftstroke.export"
@@ -33750,6 +33904,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_line_segment_success_case(case) => {
             c_stroker_closed_line_geometry(case)
         }
+        "ftstroke.line_to" if is_stroker_first_segment_case(case) => c_stroker_first_segment(case),
         "ftstroke.open_path_geometry"
         | "ftstroke.export_border"
         | "ftstroke.export"
@@ -34816,6 +34971,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.line_to" if is_stroker_zero_line_case(case) => wasm_stroker_zero_line(case),
         "ftstroke.line_to" if is_stroker_line_segment_success_case(case) => {
             wasm_stroker_closed_line_geometry(case)
+        }
+        "ftstroke.line_to" if is_stroker_first_segment_case(case) => {
+            wasm_stroker_first_segment(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.export_border"
