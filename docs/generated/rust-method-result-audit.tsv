@@ -6060,92 +6060,100 @@ pillow-rs-image/src/lib.rs	27	detect_format	pub	Option<ImageFormat>	false	likely
 pillow-rs-image/src/lib.rs	59	decode	pub	Option<DecodedImage>	false	parser_review	question_operator
 pillow-rs-image/src/lib.rs	65	encode	pub	Option<Vec<u8>>	false	likely_infallible	
 pillow-rs-image/src/lib.rs	70	encode_default	pub	Option<Vec<u8>>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	34	next	private	Option<&'a P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	39	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	49	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	59	next_back	private	Option<&'a P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	65	clone	private	Self	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	76	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	102	next	private	Option<&'a mut P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	107	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	117	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	127	next_back	private	Option<&'a mut P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	138	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	158	with_image	private	Self	false	review_panic_path	panic
-pillow-rs-image/src/types/buffer.rs	182	next	private	Option<Pixels<'a, P>>	false	parser_review	question_operator
-pillow-rs-image/src/types/buffer.rs	190	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	200	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	210	next_back	private	Option<Pixels<'a, P>>	false	parser_review	question_operator
-pillow-rs-image/src/types/buffer.rs	219	clone	private	Self	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	230	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	250	with_image	private	Self	false	review_panic_path	panic
-pillow-rs-image/src/types/buffer.rs	274	next	private	Option<PixelsMut<'a, P>>	false	parser_review	question_operator
-pillow-rs-image/src/types/buffer.rs	282	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	292	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	302	next_back	private	Option<PixelsMut<'a, P>>	false	parser_review	question_operator
-pillow-rs-image/src/types/buffer.rs	314	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	343	next	private	Option<(u32, u32, &'a P)>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	354	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	364	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	370	clone	private	Self	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	382	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	414	next	private	Option<(u32, u32, &'a mut P)>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	425	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	435	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	444	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	475	next	private	Option<(u32, EnumeratePixels<'a, P>)>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	492	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	502	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	508	clone	private	Self	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	520	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	550	next	private	Option<(u32, EnumeratePixelsMut<'a, P>)>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	567	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	577	len	private	usize	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	586	fmt	private	fmt::Result	true	ok_result	
-pillow-rs-image/src/types/buffer.rs	617	from_raw	pub	Option<ImageBuffer<P, Container>>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	631	into_raw	pub	Container	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	636	as_raw	pub	&Container	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	641	dimensions	pub	(u32, u32)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	646	width	pub	u32	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	651	height	pub	u32	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	655	inner_pixels	private	&[P::Subpixel]	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	661	pixels	pub	Pixels<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	670	rows	pub	Rows<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	675	enumerate_pixels	pub	EnumeratePixels<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	685	enumerate_rows	pub	EnumerateRows<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	700	get_pixel	pub	&P	false	review_panic_path	question_operator,panic
-pillow-rs-image/src/types/buffer.rs	715	get_pixel_checked	pub	Option<&P>	false	parser_review	question_operator,checked_arithmetic
-pillow-rs-image/src/types/buffer.rs	730	check_image_fits	private	bool	false	review_non_result_fallible	checked_arithmetic
-pillow-rs-image/src/types/buffer.rs	735	image_buffer_len	private	Option<usize>	false	review_non_result_fallible	checked_arithmetic
-pillow-rs-image/src/types/buffer.rs	742	pixel_indices	private	Option<Range<usize>>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	750	pixel_indices_unchecked	private	Range<usize>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	763	inner_pixels_mut	private	&mut [P::Subpixel]	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	769	pixels_mut	pub	PixelsMut<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	778	rows_mut	pub	RowsMut<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	783	enumerate_pixels_mut	pub	EnumeratePixelsMut<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	794	enumerate_rows_mut	pub	EnumerateRowsMut<'_, P>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	806	get_pixel_mut	pub	&mut P	false	review_panic_path	question_operator,panic
-pillow-rs-image/src/types/buffer.rs	821	get_pixel_mut_checked	pub	Option<&mut P>	false	parser_review	question_operator,checked_arithmetic
-pillow-rs-image/src/types/buffer.rs	843	put_pixel	pub	()	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	858	new	pub	ImageBuffer<P, Vec<P::Subpixel>>	false	review_panic_path	panic
-pillow-rs-image/src/types/buffer.rs	875	from_pixel	pub	ImageBuffer<P, Vec<P::Subpixel>>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	888	from_fn	pub	ImageBuffer<P, Vec<P::Subpixel>> where F: FnMut(u32, u32) -> P,	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	902	from_vec	pub	Option<ImageBuffer<P, Vec<P::Subpixel>>>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	912	into_vec	pub	Vec<P::Subpixel>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	923	default	private	Self	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	941	deref	private	&<Self as Deref>::Target	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	951	deref_mut	private	&mut <Self as Deref>::Target	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	964	index	private	&P	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	974	index_mut	private	&mut P	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	985	clone	private	ImageBuffer<P, Container>	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	994	clone_from	private	()	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1009	dimensions	private	(u32, u32)	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1013	get_pixel	private	P	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1024	get_pixel_mut	private	&mut P	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1028	put_pixel	private	()	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1032	blend_pixel	private	()	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1082	convert	private	T; } impl<Container, FromType: Pixel, ToType: Pixel> ConvertBuffer<ImageBuffer<ToType, Vec<ToType::Subpixel>>> for ImageBuffer<FromType, Container> where Container: Deref<Target = [FromType::Subpixel]>, ToType: FromColor<FromType>,	false	likely_infallible	
-pillow-rs-image/src/types/buffer.rs	1091	convert	private	ImageBuffer<ToType, Vec<ToType::Subpixel>>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	35	next	private	Option<&'a P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	40	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	50	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	60	next_back	private	Option<&'a P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	66	clone	private	Self	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	77	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	103	next	private	Option<&'a mut P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	108	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	118	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	128	next_back	private	Option<&'a mut P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	139	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	159	with_image	private	Self	false	review_panic_path	panic
+pillow-rs-image/src/types/buffer.rs	183	next	private	Option<Pixels<'a, P>>	false	parser_review	question_operator
+pillow-rs-image/src/types/buffer.rs	191	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	201	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	211	next_back	private	Option<Pixels<'a, P>>	false	parser_review	question_operator
+pillow-rs-image/src/types/buffer.rs	220	clone	private	Self	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	231	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	251	with_image	private	Self	false	review_panic_path	panic
+pillow-rs-image/src/types/buffer.rs	275	next	private	Option<PixelsMut<'a, P>>	false	parser_review	question_operator
+pillow-rs-image/src/types/buffer.rs	283	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	293	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	303	next_back	private	Option<PixelsMut<'a, P>>	false	parser_review	question_operator
+pillow-rs-image/src/types/buffer.rs	315	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	344	next	private	Option<(u32, u32, &'a P)>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	355	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	365	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	371	clone	private	Self	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	383	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	415	next	private	Option<(u32, u32, &'a mut P)>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	426	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	436	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	445	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	476	next	private	Option<(u32, EnumeratePixels<'a, P>)>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	493	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	503	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	509	clone	private	Self	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	521	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	551	next	private	Option<(u32, EnumeratePixelsMut<'a, P>)>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	568	size_hint	private	(usize, Option<usize>)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	578	len	private	usize	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	587	fmt	private	fmt::Result	true	ok_result	
+pillow-rs-image/src/types/buffer.rs	618	from_raw	pub	Option<ImageBuffer<P, Container>>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	632	into_raw	pub	Container	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	637	as_raw	pub	&Container	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	642	dimensions	pub	(u32, u32)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	647	width	pub	u32	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	652	height	pub	u32	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	656	inner_pixels	private	&[P::Subpixel]	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	662	pixels	pub	Pixels<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	671	rows	pub	Rows<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	676	enumerate_pixels	pub	EnumeratePixels<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	686	enumerate_rows	pub	EnumerateRows<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	701	get_pixel	pub	&P	false	review_panic_path	question_operator,panic
+pillow-rs-image/src/types/buffer.rs	716	get_pixel_checked	pub	Option<&P>	false	parser_review	question_operator,checked_arithmetic
+pillow-rs-image/src/types/buffer.rs	736	try_get_pixel	pub	ImageResult<&P>	true	ok_result	ok_or
+pillow-rs-image/src/types/buffer.rs	740	check_image_fits	private	bool	false	review_non_result_fallible	checked_arithmetic
+pillow-rs-image/src/types/buffer.rs	745	image_buffer_len	private	Option<usize>	false	review_non_result_fallible	checked_arithmetic
+pillow-rs-image/src/types/buffer.rs	752	pixel_indices	private	Option<Range<usize>>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	760	pixel_indices_unchecked	private	Range<usize>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	773	inner_pixels_mut	private	&mut [P::Subpixel]	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	779	pixels_mut	pub	PixelsMut<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	788	rows_mut	pub	RowsMut<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	793	enumerate_pixels_mut	pub	EnumeratePixelsMut<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	804	enumerate_rows_mut	pub	EnumerateRowsMut<'_, P>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	816	get_pixel_mut	pub	&mut P	false	review_panic_path	question_operator,panic
+pillow-rs-image/src/types/buffer.rs	831	get_pixel_mut_checked	pub	Option<&mut P>	false	parser_review	question_operator,checked_arithmetic
+pillow-rs-image/src/types/buffer.rs	851	try_get_pixel_mut	pub	ImageResult<&mut P>	true	ok_result	ok_or
+pillow-rs-image/src/types/buffer.rs	863	put_pixel	pub	()	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	872	try_put_pixel	pub	ImageResult<()>	true	ok_result	question_operator
+pillow-rs-image/src/types/buffer.rs	888	new	pub	ImageBuffer<P, Vec<P::Subpixel>>	false	review_non_result_fallible	expect
+pillow-rs-image/src/types/buffer.rs	900	try_new	pub	ImageResult<ImageBuffer<P, Vec<P::Subpixel>>>	true	ok_result	question_operator,ok_or
+pillow-rs-image/src/types/buffer.rs	915	from_pixel	pub	ImageBuffer<P, Vec<P::Subpixel>>	false	review_non_result_fallible	expect
+pillow-rs-image/src/types/buffer.rs	926	try_from_pixel	pub	ImageResult<ImageBuffer<P, Vec<P::Subpixel>>>	true	ok_result	question_operator
+pillow-rs-image/src/types/buffer.rs	943	from_fn	pub	ImageBuffer<P, Vec<P::Subpixel>> where F: FnMut(u32, u32) -> P,	false	review_non_result_fallible	expect
+pillow-rs-image/src/types/buffer.rs	957	try_from_fn	pub	ImageResult<ImageBuffer<P, Vec<P::Subpixel>>> where F: FnMut(u32, u32) -> P,	true	ok_result	question_operator
+pillow-rs-image/src/types/buffer.rs	975	from_vec	pub	Option<ImageBuffer<P, Vec<P::Subpixel>>>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	985	into_vec	pub	Vec<P::Subpixel>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	996	default	private	Self	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1014	deref	private	&<Self as Deref>::Target	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1024	deref_mut	private	&mut <Self as Deref>::Target	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1037	index	private	&P	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1047	index_mut	private	&mut P	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1058	clone	private	ImageBuffer<P, Container>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1067	clone_from	private	()	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1082	dimensions	private	(u32, u32)	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1086	get_pixel	private	P	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1097	get_pixel_mut	private	&mut P	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1101	put_pixel	private	()	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1105	blend_pixel	private	()	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1155	convert	private	T; } impl<Container, FromType: Pixel, ToType: Pixel> ConvertBuffer<ImageBuffer<ToType, Vec<ToType::Subpixel>>> for ImageBuffer<FromType, Container> where Container: Deref<Target = [FromType::Subpixel]>, ToType: FromColor<FromType>,	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1164	convert	private	ImageBuffer<ToType, Vec<ToType::Subpixel>>	false	likely_infallible	
+pillow-rs-image/src/types/buffer.rs	1183	checked_pixel_access_reports_out_of_bounds	private	ImageResult<()>	true	ok_result	question_operator,result_ctor
+pillow-rs-image/src/types/buffer.rs	1203	checked_constructors_create_expected_pixels	private	ImageResult<()>	true	ok_result	question_operator
 pillow-rs-image/src/types/color/blend.rs	7	blend	private	()	false	likely_infallible	
 pillow-rs-image/src/types/color/blend.rs	11	blend	private	()	false	likely_infallible	
 pillow-rs-image/src/types/color/blend.rs	47	blend	private	()	false	likely_infallible	
