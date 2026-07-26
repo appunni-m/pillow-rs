@@ -227,7 +227,7 @@ fn load_manifest(root: &Path) -> FontManifest {
     assert_eq!(
         required_operations,
         expected_operations,
-        "{} required_operations must exactly enumerate the current implemented Font public parity surface",
+        "{} required_operations must exactly enumerate the current implemented ImageFont public parity surface",
         path.display()
     );
     assert!(
@@ -633,7 +633,9 @@ fn root_font_public_functions() -> BTreeSet<String> {
             let name = suffix
                 .split_once('(')
                 .map(|(name, _)| name)
-                .unwrap_or_else(|| panic!("malformed root Font API line in {}", lib_rs.display()));
+                .unwrap_or_else(|| {
+                    panic!("malformed root ImageFont API line in {}", lib_rs.display())
+                });
             format!("font_{name}")
         })
         .collect()
@@ -647,7 +649,7 @@ fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
         .collect::<BTreeSet<_>>();
     assert_eq!(
         observed, expected,
-        "Font manifest test must explicitly map every root pillow_rs::font_* public function to a manifest operation"
+        "ImageFont manifest test must explicitly map every root pillow_rs::font_* public function to a manifest operation"
     );
 
     let missing_operations = ROOT_FONT_API_TO_OPERATION
@@ -1013,12 +1015,12 @@ fn assert_documented_blocked_public_parameters() {
         .canonicalize()
         .expect("repo root for font tests must be discoverable");
     let status_path = repo_root.join("docs/font-parity-status.md");
-    let status =
-        fs::read_to_string(&status_path).expect("Font parity status document must be readable");
+    let status = fs::read_to_string(&status_path)
+        .expect("ImageFont parity status document must be readable");
 
     assert!(
         status.contains("pure-Rust FreeType stroker"),
-        "{} must document the implementation dependency for currently blocked Font public parameters",
+        "{} must document the implementation dependency for currently blocked ImageFont public parameters",
         status_path.display()
     );
 
@@ -1030,7 +1032,7 @@ fn assert_documented_blocked_public_parameters() {
     assert_eq!(
         documented,
         expected,
-        "{} Current blocked public parameters section must exactly match the pinned Font manifest blocker allow-list",
+        "{} Current blocked public parameters section must exactly match the pinned ImageFont manifest blocker allow-list",
         status_path.display()
     );
 }
@@ -1046,20 +1048,20 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
             ("getmask".to_owned(), "stroke_width".to_owned()),
             ("getmask2".to_owned(), "stroke_width".to_owned()),
         ]),
-        "this dependency check is specific to Pillow Font stroke_width rendering"
+        "this dependency check is specific to Pillow ImageFont stroke_width rendering"
     );
 
     let interface_map_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../pillow-rs-freetype/tests/data/interface_map.json");
     let interface_map_text = fs::read_to_string(&interface_map_path).unwrap_or_else(|err| {
         panic!(
-            "{} must be readable to justify Font stroke_width blockers: {err}",
+            "{} must be readable to justify ImageFont stroke_width blockers: {err}",
             interface_map_path.display()
         )
     });
     let interface_map: Value = serde_json::from_str(&interface_map_text).unwrap_or_else(|err| {
         panic!(
-            "{} must be valid JSON to justify Font stroke_width blockers: {err}",
+            "{} must be valid JSON to justify ImageFont stroke_width blockers: {err}",
             interface_map_path.display()
         )
     });
@@ -1067,35 +1069,35 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     let glyph_stroke = freetype_interface_symbol(&interface_map, "FT_Glyph_Stroke")
         .unwrap_or_else(|| {
             panic!(
-                "{} must classify FT_Glyph_Stroke; Pillow Font stroke_width uses it through _imagingft.c",
+                "{} must classify FT_Glyph_Stroke; Pillow ImageFont stroke_width uses it through _imagingft.c",
                 interface_map_path.display()
             )
         });
     assert_eq!(
         glyph_stroke.get("status").and_then(Value::as_str),
         Some("partial"),
-        "FT_Glyph_Stroke is now partially implemented; keep Font stroke_width blocked until the remaining lower-level success cases pass"
+        "FT_Glyph_Stroke is now partially implemented; keep ImageFont stroke_width blocked until the remaining lower-level success cases pass"
     );
     assert!(
         glyph_stroke.get("rust").is_some_and(|rust| !rust.is_null()),
-        "FT_Glyph_Stroke must name its partial Rust endpoint while Font stroke_width remains blocked"
+        "FT_Glyph_Stroke must name its partial Rust endpoint while ImageFont stroke_width remains blocked"
     );
 
     let stroke_border = freetype_interface_symbol(&interface_map, "FT_Glyph_StrokeBorder")
         .unwrap_or_else(|| {
             panic!(
-                "{} must classify FT_Glyph_StrokeBorder; Pillow Font stroke_width uses it through _imagingft.c",
+                "{} must classify FT_Glyph_StrokeBorder; Pillow ImageFont stroke_width uses it through _imagingft.c",
                 interface_map_path.display()
             )
         });
     assert_eq!(
         stroke_border.get("status").and_then(Value::as_str),
         Some("out_of_scope"),
-        "FT_Glyph_StrokeBorder is no longer marked out_of_scope; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        "FT_Glyph_StrokeBorder is no longer marked out_of_scope; implement Pillow ImageFont stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
     );
     assert!(
         stroke_border.get("rust").is_none_or(Value::is_null),
-        "FT_Glyph_StrokeBorder now has a Rust endpoint; implement Pillow Font stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        "FT_Glyph_StrokeBorder now has a Rust endpoint; implement Pillow ImageFont stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
     );
 
     assert_freetype_stroke_fixture_has_success_case(
@@ -1144,7 +1146,7 @@ fn assert_freetype_stroke_fixture_has_success_case(file_name: &str, subject: &st
         });
     assert!(
         has_success_case,
-        "{} must retain at least one success fixture for {subject}; otherwise Font stroke_width is blocked without a lower-level parity target",
+        "{} must retain at least one success fixture for {subject}; otherwise ImageFont stroke_width is blocked without a lower-level parity target",
         fixture_path.display()
     );
 }
@@ -1163,7 +1165,7 @@ fn assert_freetype_stroke_blocking_cases_are_exact() {
         .collect::<BTreeSet<_>>();
     assert_eq!(
         observed, expected,
-        "Font stroke_width blockers must stay tied to the exact lower-level FreeType glyph-stroke success rows that currently need implementation"
+        "ImageFont stroke_width blockers must stay tied to the exact lower-level FreeType glyph-stroke success rows that currently need implementation"
     );
 }
 
@@ -1173,13 +1175,13 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
         .join(file_name);
     let fixture_text = fs::read_to_string(&fixture_path).unwrap_or_else(|err| {
         panic!(
-            "{} must be readable to classify lower-level Font stroke blockers: {err}",
+            "{} must be readable to classify lower-level ImageFont stroke blockers: {err}",
             fixture_path.display()
         )
     });
     let fixture: Value = serde_json::from_str(&fixture_text).unwrap_or_else(|err| {
         panic!(
-            "{} must be valid JSON to classify lower-level Font stroke blockers: {err}",
+            "{} must be valid JSON to classify lower-level ImageFont stroke blockers: {err}",
             fixture_path.display()
         )
     });
@@ -1200,9 +1202,7 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
                 })
                 .to_owned()
         })
-        .filter(|case_id| {
-            case_id != "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
-        })
+        .filter(|case_id| case_id != "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success")
         .collect()
 }
 
@@ -1273,7 +1273,7 @@ fn assert_manifest_covers_pillow_public_signatures(
         .collect::<BTreeSet<_>>();
     assert_eq!(
         actual_blocked, expected_blocked,
-        "font_manifest.yaml must not hide public Font parity gaps; update EXPECTED_BLOCKED_PUBLIC_PARAMETERS only with a documented implementation blocker"
+        "font_manifest.yaml must not hide public ImageFont parity gaps; update EXPECTED_BLOCKED_PUBLIC_PARAMETERS only with a documented implementation blocker"
     );
     assert_eq!(
         manifest
@@ -1338,7 +1338,7 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
 
     assert_eq!(
         expected, actual,
-        "{case_id}: Rust result differs from live Pillow Font oracle"
+        "{case_id}: Rust result differs from live Pillow ImageFont oracle"
     );
 }
 

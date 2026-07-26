@@ -11,13 +11,13 @@ pub(crate) mod imagingft;
 pub(crate) mod pilfont;
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
-pub struct Font {
+pub struct ImageFont {
     engine: imagingft::TrueTypeEngine,
 }
 
 /// One Pillow `FreeTypeFont.get_variation_axes()` axis record.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FontVariationAxis {
+pub struct ImageFontVariationAxis {
     /// Minimum design coordinate as Pillow reports it.
     pub minimum: i32,
     /// Default design coordinate as Pillow reports it.
@@ -30,7 +30,7 @@ pub struct FontVariationAxis {
 
 /// Optional Pillow `FreeTypeFont` text-layout/render arguments.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct FontTextOptions {
+pub struct ImageFontTextOptions {
     /// Pillow `mode` argument. BASIC layout ignores most values, but `RGBA`
     /// changes `getmask/getmask2` allocation behavior.
     pub mode: Option<String>,
@@ -60,7 +60,7 @@ pub struct FontTextOptions {
 
 /// Optional Pillow `FreeTypeFont.font_variant()` override arguments.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct FontVariantOptions {
+pub struct ImageFontVariantOptions {
     /// Replacement font bytes for Pillow's `font` argument.
     pub font_bytes: Option<Vec<u8>>,
     /// Replacement point size for Pillow's `size` argument.
@@ -75,7 +75,7 @@ pub struct FontVariantOptions {
     pub layout_engine: Option<String>,
 }
 
-impl Font {
+impl ImageFont {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         imagingft::load_truetype(data, size)
@@ -103,7 +103,7 @@ impl Font {
     /// Create a variant copy of this FreeType font with Pillow-style overrides.
     pub fn font_variant_with_options(
         &self,
-        options: &FontVariantOptions,
+        options: &ImageFontVariantOptions,
     ) -> Result<Self, PilError> {
         imagingft::font_variant_with_options(self, options)
     }
@@ -137,7 +137,7 @@ impl Font {
     pub fn getmask_with_options(
         &self,
         text: &str,
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::getmask_with_options(self, text, options)
     }
@@ -146,7 +146,7 @@ impl Font {
     pub fn getmask_bytes_with_options(
         &self,
         text: &[u8],
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         let text = pillow_bytes_to_text(text);
         self.getmask_with_options(&text, options)
@@ -184,7 +184,7 @@ impl Font {
     pub fn getlength_with_options(
         &self,
         text: &str,
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
         imagingft::getlength_with_options(self, text, options)
     }
@@ -193,7 +193,7 @@ impl Font {
     pub fn getlength_bytes_with_options(
         &self,
         text: &[u8],
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
         let text = pillow_bytes_to_text(text);
         self.getlength_with_options(&text, options)
@@ -205,7 +205,7 @@ impl Font {
     }
 
     /// Return Pillow's public variation-axis records.
-    pub fn get_variation_axes(&self) -> Result<Vec<FontVariationAxis>, PilError> {
+    pub fn get_variation_axes(&self) -> Result<Vec<ImageFontVariationAxis>, PilError> {
         imagingft::get_variation_axes(self)
     }
 
@@ -239,7 +239,7 @@ impl Font {
     pub fn getbbox_with_options(
         &self,
         text: &str,
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
         imagingft::getbbox_with_options(self, text, options)
     }
@@ -248,7 +248,7 @@ impl Font {
     pub fn getbbox_bytes_with_options(
         &self,
         text: &[u8],
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
         let text = pillow_bytes_to_text(text);
         self.getbbox_with_options(&text, options)
@@ -282,7 +282,7 @@ impl Font {
     pub fn getmask2_with_options(
         &self,
         text: &str,
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         imagingft::getmask2_with_options(self, text, options)
     }
@@ -291,7 +291,7 @@ impl Font {
     pub fn getmask2_bytes_with_options(
         &self,
         text: &[u8],
-        options: &FontTextOptions,
+        options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
         let text = pillow_bytes_to_text(text);
         self.getmask2_with_options(&text, options)

@@ -5,7 +5,7 @@ oracle:
   expected_runtime: python_pillow_font
   expected_path: PIL.ImageFont.FreeTypeFont
   native_core: PIL._imagingft
-  rust_runtime: pillow_rs::font::Font
+  rust_runtime: pillow_rs::ImageFont
   rust_contract: Result-style status payload
   comparison: exact payload match after runtime oracle generation
 required_operations:

@@ -4,7 +4,7 @@
 //! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
 //! (4,097/4,097 unified parity).
 
-use super::{Font, FontTextOptions, FontVariantOptions, FontVariationAxis};
+use super::{ImageFont, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxis};
 use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
@@ -19,11 +19,15 @@ pub(super) struct TrueTypeEngine {
     metrics: ffi::FT_Size_Metrics,
 }
 
-pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<Font, PilError> {
+pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<ImageFont, PilError> {
     load_truetype_with_index(data, size, 0)
 }
 
-fn load_truetype_with_index(data: Vec<u8>, size: f32, face_index: usize) -> Result<Font, PilError> {
+fn load_truetype_with_index(
+    data: Vec<u8>,
+    size: f32,
+    face_index: usize,
+) -> Result<ImageFont, PilError> {
     if !(size > 0.0) {
         return Err(PilError::ValueError(format!(
             "font size must be greater than 0, not {}",
@@ -58,7 +62,7 @@ fn load_truetype_with_index(data: Vec<u8>, size: f32, face_index: usize) -> Resu
     let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
 
-    Ok(Font {
+    Ok(ImageFont {
         engine: TrueTypeEngine {
             face,
             font_bytes: data,
@@ -94,7 +98,7 @@ fn ft_error_to_pil(error: i32) -> PilError {
 
 // ── Public API ───────────────────────────────────────────────────────
 
-pub(crate) fn getname_optional(font: &Font) -> (Option<&str>, Option<&str>) {
+pub(crate) fn getname_optional(font: &ImageFont) -> (Option<&str>, Option<&str>) {
     (
         font.engine.family_name.as_deref(),
         font.engine.style_name.as_deref(),
@@ -144,7 +148,7 @@ fn transposed_swaps_axes(orientation: Option<&str>) -> bool {
 /// Returns [`PilError`] when the requested transpose is invalid or the mask
 /// pipeline cannot be materialized.
 pub(crate) fn get_transposed_mask(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -159,7 +163,7 @@ pub(crate) fn get_transposed_mask(
     Ok((width, height, transformed.tobytes_unpacked()?))
 }
 
-pub(crate) fn getmetrics(font: &Font) -> (u32, u32) {
+pub(crate) fn getmetrics(font: &ImageFont) -> (u32, u32) {
     (
         pixel(font.engine.metrics.ascender) as u32,
         (-pixel(font.engine.metrics.descender)) as u32,
@@ -167,24 +171,24 @@ pub(crate) fn getmetrics(font: &Font) -> (u32, u32) {
 }
 
 /// Return whether the loaded face exposes OpenType or Type 1 variation axes.
-pub(crate) fn has_variations(font: &Font) -> bool {
+pub(crate) fn has_variations(font: &ImageFont) -> bool {
     font.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
 }
 
-pub(crate) fn font_variant(font: &Font, size: Option<f32>) -> Result<Font, PilError> {
+pub(crate) fn font_variant(font: &ImageFont, size: Option<f32>) -> Result<ImageFont, PilError> {
     font_variant_with_options(
         font,
-        &FontVariantOptions {
+        &ImageFontVariantOptions {
             size,
-            ..FontVariantOptions::default()
+            ..ImageFontVariantOptions::default()
         },
     )
 }
 
 pub(crate) fn font_variant_with_options(
-    font: &Font,
-    options: &FontVariantOptions,
-) -> Result<Font, PilError> {
+    font: &ImageFont,
+    options: &ImageFontVariantOptions,
+) -> Result<ImageFont, PilError> {
     load_truetype_with_index(
         options
             .font_bytes
@@ -195,12 +199,14 @@ pub(crate) fn font_variant_with_options(
     )
 }
 
-pub(crate) fn get_variation_axes(font: &Font) -> Result<Vec<FontVariationAxis>, PilError> {
+pub(crate) fn get_variation_axes(
+    font: &ImageFont,
+) -> Result<Vec<ImageFontVariationAxis>, PilError> {
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .axes
         .iter()
-        .map(|axis| FontVariationAxis {
+        .map(|axis| ImageFontVariationAxis {
             minimum: fixed_16_16_to_pillow_int(axis.min_value),
             default: fixed_16_16_to_pillow_int(axis.default_value),
             maximum: fixed_16_16_to_pillow_int(axis.max_value),
@@ -213,7 +219,7 @@ pub(crate) fn get_variation_axes(font: &Font) -> Result<Vec<FontVariationAxis>, 
         .collect())
 }
 
-pub(crate) fn get_variation_names(font: &Font) -> Result<Vec<Vec<u8>>, PilError> {
+pub(crate) fn get_variation_names(font: &ImageFont) -> Result<Vec<Vec<u8>>, PilError> {
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .instances
@@ -228,7 +234,7 @@ pub(crate) fn get_variation_names(font: &Font) -> Result<Vec<Vec<u8>>, PilError>
         .collect())
 }
 
-pub(crate) fn set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), PilError> {
+pub(crate) fn set_variation_by_name(font: &mut ImageFont, name: &[u8]) -> Result<(), PilError> {
     let names = get_variation_names(font)?;
     let Some(index) = names.iter().position(|candidate| candidate == name) else {
         return Err(PilError::ValueError(format!(
@@ -247,7 +253,7 @@ pub(crate) fn set_variation_by_name(font: &mut Font, name: &[u8]) -> Result<(), 
     }
 }
 
-pub(crate) fn set_variation_by_axes(font: &mut Font, axes: &[f32]) -> Result<(), PilError> {
+pub(crate) fn set_variation_by_axes(font: &mut ImageFont, axes: &[f32]) -> Result<(), PilError> {
     if !has_variations(font) {
         return Err(PilError::OsError("invalid argument".into()));
     }
@@ -284,27 +290,27 @@ fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
     fixed as ffi::FT_Fixed
 }
 
-pub(crate) fn getlength(font: &Font, text: &str) -> Result<f32, PilError> {
+pub(crate) fn getlength(font: &ImageFont, text: &str) -> Result<f32, PilError> {
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
 pub(crate) fn getlength_with_options(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
-    options: &FontTextOptions,
+    options: &ImageFontTextOptions,
 ) -> Result<f32, PilError> {
     validate_basic_layout_options(options)?;
     Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
 }
 
-pub(crate) fn getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub(crate) fn getbbox(font: &ImageFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run(font, text)
 }
 
 pub(crate) fn getbbox_with_options(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
-    options: &FontTextOptions,
+    options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
     validate_basic_layout_options(options)?;
     let bbox = bbox_from_run_with_flags(font, text, text_load_flags(options))?;
@@ -313,18 +319,21 @@ pub(crate) fn getbbox_with_options(
     Ok((left - stroke, top - stroke, right + stroke, bottom + stroke))
 }
 
-pub(crate) fn getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub(crate) fn getbbox_binary(
+    font: &ImageFont,
+    text: &str,
+) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
-pub(crate) fn getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+pub(crate) fn getmask(font: &ImageFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
 pub(crate) fn getmask_with_options(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
-    options: &FontTextOptions,
+    options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     let (width, height, pixels, _) = getmask2_with_options(font, text, options)?;
     Ok((width, height, pixels))
@@ -332,7 +341,7 @@ pub(crate) fn getmask_with_options(
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
 pub(crate) fn getmask2(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     getmask2_with_start(font, text, (0.0, 0.0))
@@ -343,7 +352,7 @@ pub(crate) fn getmask2(
 /// Pillow applies `start` to the mask canvas and glyph origin while leaving
 /// the returned BASIC-layout offset unchanged.
 pub(crate) fn getmask2_with_start(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
@@ -353,9 +362,9 @@ pub(crate) fn getmask2_with_start(
 }
 
 pub(crate) fn getmask2_with_options(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
-    options: &FontTextOptions,
+    options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     validate_basic_layout_options(options)?;
     if options.mode.as_deref() == Some("RGBA") {
@@ -377,7 +386,7 @@ pub(crate) fn getmask2_with_options(
     Ok((width, height, pixels, (left as i32, top as i32)))
 }
 
-fn text_load_flags(options: &FontTextOptions) -> i32 {
+fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
     if options.mode.as_deref() == Some("1") {
         TGT_MONO
     } else {
@@ -386,7 +395,7 @@ fn text_load_flags(options: &FontTextOptions) -> i32 {
 }
 
 pub(crate) fn render_text(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
     fill: (u8, u8, u8, u8),
     _spacing: f32,
@@ -395,7 +404,7 @@ pub(crate) fn render_text(
 }
 
 pub(crate) fn render_text_binary(
-    font: &Font,
+    font: &ImageFont,
     text: &str,
     fill: (u8, u8, u8, u8),
     spacing: f32,
@@ -407,7 +416,7 @@ pub(crate) fn render_text_binary(
     )
 }
 
-fn validate_basic_layout_options(options: &FontTextOptions) -> Result<(), PilError> {
+fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), PilError> {
     if options.direction.is_some() || options.features.is_some() || options.language.is_some() {
         return Err(PilError::KeyError(
             "'setting text direction, language or font features is not supported without libraqm'"
@@ -418,7 +427,7 @@ fn validate_basic_layout_options(options: &FontTextOptions) -> Result<(), PilErr
 }
 
 fn anchored_bbox(
-    font: &Font,
+    font: &ImageFont,
     (left, top, right, bottom): (i32, i32, i32, i32),
     anchor: Option<&str>,
 ) -> Result<(f32, f32, f32, f32), PilError> {
@@ -530,12 +539,12 @@ fn ceil26(x: i64) -> i32 {
     (((x + 63) & -64) >> 6) as i32
 }
 
-fn length_from_basic_layout(ttf: &Font, text: &str) -> Result<i32, PilError> {
+fn length_from_basic_layout(ttf: &ImageFont, text: &str) -> Result<i32, PilError> {
     length_from_basic_layout_with_flags(ttf, text, 0)
 }
 
 fn length_from_basic_layout_with_flags(
-    ttf: &Font,
+    ttf: &ImageFont,
     text: &str,
     load_flags: i32,
 ) -> Result<i32, PilError> {
@@ -581,7 +590,7 @@ struct RunGlyph {
 }
 
 /// Load each glyph WITHOUT rendering, collect advances and metrics.
-fn glyph_run(ttf: &Font, text: &str, load_flags: i32) -> Result<GlyphRun, PilError> {
+fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, PilError> {
     if text.is_empty() {
         return Ok(GlyphRun {
             glyphs: vec![],
@@ -623,12 +632,12 @@ fn glyph_run(ttf: &Font, text: &str, load_flags: i32) -> Result<GlyphRun, PilErr
     })
 }
 
-fn bbox_from_run(ttf: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+fn bbox_from_run(ttf: &ImageFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     bbox_from_run_with_flags(ttf, text, TGT_NORM)
 }
 
 fn bbox_from_run_with_flags(
-    ttf: &Font,
+    ttf: &ImageFont,
     text: &str,
     load_flags: i32,
 ) -> Result<(i32, i32, i32, i32), PilError> {
@@ -667,7 +676,7 @@ fn bbox_from_run_with_flags(
 // ── Mask render ──────────────────────────────────────────────────────
 
 fn mask_from_run_with_start(
-    ttf: &Font,
+    ttf: &ImageFont,
     text: &str,
     load_flags: i32,
     start: (f64, f64),
@@ -803,20 +812,22 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
             debug_assert_eq!(
                 bitmap.pixel_mode,
                 ffi::FT_PIXEL_MODE_GRAY,
-                "Pillow Font BASIC rendering reaches imagingft as MONO or GRAY"
+                "Pillow ImageFont BASIC rendering reaches imagingft as MONO or GRAY"
             );
             bitmap.buffer.get(row_start + column).copied().unwrap_or(0)
         }
     }
 }
 
-fn refresh_engine_metadata(font: &mut Font) {
+fn refresh_engine_metadata(font: &mut ImageFont) {
     font.engine.family_name = font.engine.face.family_name.clone();
     font.engine.style_name = font.engine.face.style_name.clone();
     font.engine.metrics = font.engine.face.size_metrics;
 }
 
-fn variation_tables(font: &Font) -> Result<(tt::fvar::FvarTable, tt::name::NameTable), PilError> {
+fn variation_tables(
+    font: &ImageFont,
+) -> Result<(tt::fvar::FvarTable, tt::name::NameTable), PilError> {
     let data = &font.engine.font_bytes;
     let (_, face_offset) = tt::resolve_face_index(data, 0)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
