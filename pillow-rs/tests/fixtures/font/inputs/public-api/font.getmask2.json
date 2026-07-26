@@ -43,6 +43,26 @@
       }
     },
     {
+      "case_id": "font.getmask2.dejavusans20_trailing_space",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A ",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.positional_args_ignored_after_start",
       "operation": "getmask2",
       "inputs": {
