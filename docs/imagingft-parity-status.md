@@ -24,9 +24,9 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
   Result: `1` passed, `0` failed
 - Coverage MCP evidence:
   - `mcp__coverage_mcp.run_test` target: `imagingft-tests-coverage-fixed`
-  - Run id: `6cb07cd2-c703-4471-813c-758220f5b415` (first submission `submission_reused=false`)
+  - Run id: `63efb1d4-a110-492c-bb5f-f7123a9f1301` (first submission `submission_reused=false`)
   - Terminal status: `passed`, `1` passed, `0` failed
-  - Diagnostics/ingest: `e514a79f-dff5-40cc-b074-f365f8842bd9` ingested with `target/coverage/imagingft/imagingft-rust.json`
+  - Diagnostics/ingest: `27d14363-1512-48c6-8a77-6849c6b14113` ingested with `target/coverage/imagingft/imagingft-rust.json`
   - Search log checks (`FAILED`, `error:`, `panic`) returned no failure context; only the normal `0 failed` summary line matched.
 - Local coverage artifact: `target/coverage/imagingft/imagingft-rust.json`
 
@@ -95,7 +95,7 @@ Last updated: 2026-07-26 (Asia/Kolkata) — latest local imagingft coverage run 
 ### Coverage delta
 
 - Baseline: `19162f0c-7d00-47d9-9a69-a7f59e1d8678`
-- Current: `e514a79f-dff5-40cc-b074-f365f8842bd9`
+- Current: `27d14363-1512-48c6-8a77-6849c6b14113`
 - Net movement: `+0` lines, `+0` branches, `+0` functions, `+0` regions.
 
 ## Remaining explicit gaps
