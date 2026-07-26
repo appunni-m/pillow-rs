@@ -1136,11 +1136,13 @@ fn add_octree_lookup(cube: &mut OctreeCube, palette: &[OctreeBucket], offset: us
 ///
 /// `pixels` is flat RGBA byte data (4 bytes per pixel).
 /// Returns (palette_indices, palette_bytes_rgba).
-fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<u8>, Vec<u8>) {
-    let dimensions = match CheckedDims::new(w, h, 1) {
-        Ok(dimensions) => dimensions,
-        Err(_) => return (Vec::new(), Vec::new()),
-    };
+fn quantize_octree_rgba(
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+    n_colors: usize,
+) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    let dimensions = CheckedDims::new(w, h, 1)?;
     let fine_bits = [
         CUBE_LEVELS_RGBA[0],
         CUBE_LEVELS_RGBA[1],
@@ -1201,7 +1203,7 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
         .iter()
         .flat_map(OctreeBucket::average)
         .collect::<Vec<_>>();
-    (indices, palette_bytes)
+    Ok((indices, palette_bytes))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1261,11 +1263,13 @@ const WEB_PALETTE: [u8; 678] = [
 /// # Returns
 ///
 /// A tuple of palette index bytes and flat RGB palette bytes.
-pub fn web_palette_quantize(pixels: &[u8], w: u32, h: u32, dither: bool) -> (Vec<u8>, Vec<u8>) {
-    let dims_pixels = match CheckedDims::new(w, h, 1) {
-        Ok(d) => d,
-        Err(_) => return (vec![], vec![]),
-    };
+pub fn web_palette_quantize(
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+    dither: bool,
+) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    let dims_pixels = CheckedDims::new(w, h, 1)?;
     let mut out = dims_pixels.alloc_buffer();
 
     if dither {
@@ -1349,7 +1353,7 @@ pub fn web_palette_quantize(pixels: &[u8], w: u32, h: u32, dither: bool) -> (Vec
         }
     }
 
-    (out, WEB_PALETTE.to_vec())
+    Ok((out, WEB_PALETTE.to_vec()))
 }
 
 /// Number of colors in the WEB palette (11 reserved + 215 web-safe cube).
@@ -1534,7 +1538,7 @@ impl Image {
             // Use FASTOCTREE (octree) algorithm for RGBA
             let rgba = img.to_rgba8();
             let rgba_raw = rgba.into_raw();
-            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors);
+            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors)?;
             // Pillow's FASTOCTREE result owns an RGBA palette. Core represents
             // that interleaved layout as RGB triples plus an alpha sidecar.
             let pal_rgb = pal
