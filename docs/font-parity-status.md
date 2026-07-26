@@ -1,6 +1,50 @@
 # Font Public-API Parity Status (Current Worktree)
 
-Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `cc3d1dd9a`
+Last updated: 2026-07-26 (Asia/Kolkata) — Font public-api harness measured at commit `a0eae6880`
+
+## Current checkpoint: Font case-id/operation manifest gate
+
+New commit:
+
+- `a0eae6880` — fixed stale `font.render_text.*` case IDs in the active
+  `draw_text` fixture file and added a test gate requiring each active case ID
+  to match its normalized operation prefix, except for explicitly grouped
+  public-api fixture families (`constructor`, `variations`, `load_failure`,
+  `layout_failure`, and `unsupported_operation`).
+
+What this closes:
+
+- A stale or misfiled row can no longer masquerade as public Font coverage
+  only because its `operation` field is correct. The case identity and
+  operation now have to agree before oracle execution starts.
+- The input corpus remains input-only. No expected output, hash, status, or
+  error expectation was added to JSON; output is still generated at runtime
+  from the repo-local Pillow native `_imagingft` oracle.
+
+Verification:
+
+- `make -C pillow-rs fmt` — passed
+- `make -C pillow-rs font-tests` — passed
+- Coverage MCP command `imagingft-tests-coverage-fixed`
+  - run `e67b7638-b719-4565-a469-d556e2b1426a`
+  - snapshot `69d4289b-2dca-4182-bf15-5ac931081826`
+  - commit `a0eae6880ff4d2a000769018efc3528a76ad5443`
+  - status `passed`, coverage artifact ingested
+
+Target file metrics:
+
+| File | Lines | Branches | Functions | Regions |
+|---|---:|---:|---:|---:|
+| `pillow-rs/src/font/imagingft.rs` | `955/1040` (`91.83%`) | `185/238` (`77.73%`) | `95/110` (`86.36%`) | `1594/1746` (`91.29%`) |
+| `pillow-rs/src/font/mod.rs` | `258/282` (`91.49%`) | n/a | `57/64` (`89.06%`) | `331/373` (`88.74%`) |
+
+Remaining blocker to honest 100% region coverage:
+
+- Runtime blocker remains `getmask/getmask2(stroke_width != 0)`. Pillow
+  supports stroked glyph masks through native `_imagingft`/FreeType stroking,
+  but the current pure-Rust FreeType stroker path still does not render real
+  glyph contours exactly enough to enable this without lowering parity
+  standards.
 
 ## Current checkpoint: Pillow byte-text compatibility + coverage sweep
 
