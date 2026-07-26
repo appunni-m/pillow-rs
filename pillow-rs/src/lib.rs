@@ -113,8 +113,6 @@ use rayon as _;
 //   - compute::op_def: Declarative op registration (no parallel match arms)
 // ============================================================================
 
-/// Legacy pre-rendered bitmap font data and rendering helpers.
-pub mod bitmap_font;
 /// Validated image dimensions and allocation-size helpers.
 pub mod checked_dims;
 /// Pillow-compatible color parsing and color-space conversion.

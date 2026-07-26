@@ -157,9 +157,6 @@ generated reports, build outputs, and package installs.
 |-- pillow-rs/
 |   |-- Cargo.toml
 |   `-- src/
-|       |-- bitmap_font/
-|       |   `-- data.rs
-|       |-- bitmap_font.rs
 |       |-- checked_dims.rs
 |       |-- color.rs
 |       |-- compute/
@@ -294,6 +291,7 @@ generated reports, build outputs, and package installs.
 |       |-- lib.rs
 |       |-- ops/
 |       |   |-- analysis.rs
+|       |   |-- array.rs
 |       |   |-- chops.rs
 |       |   |-- convert.rs
 |       |   |-- crop.rs
@@ -531,14 +529,13 @@ generated reports, build outputs, and package installs.
 |       |-- drawing_oracle.mjs
 |       |-- eval_oracle.mjs
 |       |-- execution_engine.mjs
+|       |-- fromarray_descriptor_oracle.mjs
 |       |-- image_open_oracle.mjs
-|       |-- imagefont_getmask2_oracle.mjs
 |       |-- oracle_contract.mjs
 |       |-- oracle_corpus.mjs
 |       |-- paste_oracle.mjs
 |       |-- run_wasm_test.mjs
 |       |-- tobytes_oracle.mjs
-|       |-- transposed_font_oracle.mjs
 |       `-- wasm_backend.mjs
 |-- pillow-rs-py/
 |   |-- Cargo.toml
@@ -564,6 +561,7 @@ generated reports, build outputs, and package installs.
 |-- rust-toolchain.toml
 |-- rustfmt.toml
 |-- scripts/
+|   |-- analyze_palette_rotate.py
 |   |-- bench/
 |   |   |-- bench_aggregate.py
 |   |   |-- bench_all.sh
@@ -598,21 +596,20 @@ generated reports, build outputs, and package installs.
 |   |   |-- run_drawing_rust_coverage.sh
 |   |   |-- run_image_backend_rust_coverage.sh
 |   |   |-- run_image_open_rust_coverage.sh
-|   |   |-- run_imagefont_getmask2_rust_coverage.sh
+|   |   |-- run_imagingft_rust_coverage.sh
 |   |   |-- run_paste_rust_coverage.sh
 |   |   |-- run_point_rust_coverage.sh
 |   |   |-- run_python_abi_rust_coverage.sh
 |   |   |-- run_python_wrapper_coverage.sh
-|   |   |-- run_transposed_font_rust_coverage.sh
 |   |   `-- validate_coverage.py
+|   |-- generate_eval_error_oracle.py
 |   |-- generate_fixtures.py
+|   |-- generate_fromarray_descriptor_oracle.py
 |   |-- generate_image_backend_operation_fixtures.py
-|   |-- generate_imagefont_getmask2_fixture_inputs.py
 |   |-- generate_palette_save_fixture_inputs.py
 |   |-- generate_point_fixture_inputs.py
 |   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
-|   |-- generate_transposed_font_oracle.py
 |   |-- lint.sh
 |   `-- migrate_fixtures.py
 `-- tests/
@@ -623,11 +620,11 @@ generated reports, build outputs, and package installs.
     |   `-- image_open_inputs.json
     |-- test_apply_transparency_oracle.py
     |-- test_drawing_oracle.py
-    |-- test_imagefont_oracle.py
+    |-- test_eval_errors.py
+    |-- test_fromarray_descriptor_oracle.py
     |-- test_pa_mutations.py
     |-- test_parity.py
     |-- test_paste_oracle.py
-    |-- test_putdata_parity.py
-    `-- test_transposed_font_oracle.py
+    `-- test_putdata_parity.py
 ```
 <!-- END GENERATED CODE TREE -->
