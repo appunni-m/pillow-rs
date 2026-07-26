@@ -62,19 +62,35 @@ def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
 def assert_python_calls_into_c_layer(ImageFont: Any) -> None:
     """Prove that the public Python methods we test are thin wrappers over C calls."""
     font_methods = {
-        "getmask2": ("self.font.render",),
-        "getmask": ("self.getmask2(",),
-        "getbbox": ("self.font.getsize",),
-        "getlength": ("self.font.getlength",),
-        "getname": ("self.font.family",),
+        "FreeTypeFont.getmask2": ("self.font.render",),
+        "FreeTypeFont.getmask": ("self.getmask2(",),
+        "FreeTypeFont.getbbox": ("self.font.getsize",),
+        "FreeTypeFont.getlength": ("self.font.getlength",),
+        "FreeTypeFont.getname": ("self.font.family", "self.font.style"),
+        "FreeTypeFont.get_variation_axes": ("self.font.getvaraxes",),
+    }
+    transposed_methods = {
+        "TransposedFont.getmask": ("self.font.getmask(", "im.transpose("),
+        "TransposedFont.getbbox": ("self.font.getbbox(",),
+        "TransposedFont.getlength": ("self.font.getlength(",),
     }
 
-    for method, expected in font_methods.items():
-        source = inspect.getsource(getattr(ImageFont.FreeTypeFont, method))
+    for target, expected in font_methods.items():
+        name = target.split(".", 1)[1]
+        source = inspect.getsource(getattr(ImageFont.FreeTypeFont, name))
         if not any(needle in source for needle in expected):
             raise RuntimeError(
-                f"imagingft oracle invariant broken: FreeTypeFont.{method} is not"
+                f"imagingft oracle invariant broken: {target} is not"
                 f" delegated to PIL._imagingft C layer"
+            )
+
+    for target, expected in transposed_methods.items():
+        cls_name, name = target.split(".", 1)
+        source = inspect.getsource(getattr(getattr(ImageFont, cls_name), name))
+        if not any(needle in source for needle in expected):
+            raise RuntimeError(
+                f"imagingft oracle invariant broken: {target} is not"
+                f" delegating correctly into Pillow font core path"
             )
 
 
