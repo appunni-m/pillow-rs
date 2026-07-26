@@ -214,6 +214,9 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         {
             FT_Err_Too_Many_Function_Defs as FT_Error
         }
+        FontError::InvalidOutline(message) if message == "bytecode: nested FDEF/IDEF" => {
+            FT_Err_Nested_DEFS as FT_Error
+        }
         FontError::InvalidOutline(_) => FT_Err_Invalid_Outline,
         FontError::ExecutionTooLong => FT_Err_Execution_Too_Long as FT_Error,
         FontError::CodeOverflow => FT_Err_Code_Overflow as FT_Error,
