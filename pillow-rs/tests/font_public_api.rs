@@ -64,7 +64,7 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 23] = [
     "validate_transposed_length",
 ];
 
-const ALLOWED_FONT_INPUT_GROUPS: [&str; 2] = ["constructor", "variations"];
+const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
 
 const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
     "font.constructor.",
@@ -389,6 +389,11 @@ fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
         )
         .expect("font public-api input must be valid JSON");
         assert_input_document_envelope(&path, &document, &allowed_document_operations);
+        let document_operation = document
+            .get("operation")
+            .and_then(Value::as_str)
+            .map(normalize_font_operation)
+            .expect("font public-api input operation must be a string");
         assert_input_only_case(&path, &document);
         let rows = document
             .get("cases")
@@ -406,6 +411,14 @@ fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
                 path.display()
             );
             assert_input_only_case(&path, case);
+            let case_operation = font_runner::operation(case)
+                .expect("font public-api case operation must be a string");
+            assert!(
+                document_operation == case_operation
+                    || ALLOWED_FONT_INPUT_GROUPS.contains(&document_operation),
+                "{} declares operation `{document_operation}` but contains case operation `{case_operation}`; only explicit grouped files may mix operations",
+                path.display()
+            );
             cases.push(case.clone());
         }
     }

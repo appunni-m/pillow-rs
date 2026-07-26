@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "operation": "getname",
+  "operation": "load_failure",
   "cases": [
     {
       "case_id": "font.load_failure.missing_font_asset",
