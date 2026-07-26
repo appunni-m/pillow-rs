@@ -39,7 +39,10 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             "value": pillow_rs::font_size(&font),
         })),
         "text_bbox" => {
-            let (width, height) = pillow_rs::font_text_bbox(&font, text(params)?)?;
+            let (width, height) = match text_bytes(params)? {
+                Some(bytes) => pillow_rs::font_text_bbox_bytes(&font, &bytes)?,
+                None => pillow_rs::font_text_bbox(&font, text(params)?)?,
+            };
             Ok(json!({
                 "type": "size",
                 "value": [width, height],
@@ -55,11 +58,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         }
         "getlength" => Ok(json!({
             "type": "length",
-            "value": if has_text_options(params) {
-                pillow_rs::font_getlength_with_options(&font, text(params)?, &text_options(params)?)?
-            } else {
-                pillow_rs::font_getlength(&font, text(params)?)?
-            },
+            "value": getlength(&font, params)?,
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
@@ -83,7 +82,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(json!({
                 "type": "font_after_variation",
                 "name": pillow_rs::font_getname(&font),
-                "length": pillow_rs::font_getlength(&font, text(params)?)?,
+                "length": getlength(&font, params)?,
             }))
         }
         "set_variation_by_axes" => {
@@ -102,7 +101,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(json!({
                 "type": "font_after_variation",
                 "name": pillow_rs::font_getname(&font),
-                "length": pillow_rs::font_getlength(&font, text(params)?)?,
+                "length": getlength(&font, params)?,
             }))
         }
         "font_variant" => {
@@ -113,41 +112,25 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 font_descriptor(&pillow_rs::font_variant(&font, options.size)?)
             }
         }
-        "getbbox" => {
-            if has_text_options(params) {
-                Ok(bbox_float_value(pillow_rs::font_getbbox_with_options(
-                    &font,
-                    text(params)?,
-                    &text_options(params)?,
-                )?))
-            } else {
-                Ok(bbox_value(pillow_rs::font_getbbox(&font, text(params)?)?))
-            }
-        }
-        "getbbox_binary" => Ok(bbox_value(pillow_rs::font_getbbox_binary(
-            &font,
-            text(params)?,
-        )?)),
+        "getbbox" => Ok(getbbox(&font, params)?),
+        "getbbox_binary" => Ok(bbox_value(match text_bytes(params)? {
+            Some(bytes) => pillow_rs::font_getbbox_binary_bytes(&font, &bytes)?,
+            None => pillow_rs::font_getbbox_binary(&font, text(params)?)?,
+        })),
         "getmask" => {
-            let (width, height, pixels) = if has_text_options(params) {
-                pillow_rs::font_getmask_with_options(&font, text(params)?, &text_options(params)?)?
-            } else {
-                pillow_rs::font_getmask(&font, text(params)?)?
-            };
+            let (width, height, pixels) = getmask(&font, params)?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "getmask2" => {
-            let (width, height, pixels, offset) = if has_text_options(params) {
-                pillow_rs::font_getmask2_with_options(&font, text(params)?, &text_options(params)?)?
-            } else {
-                pillow_rs::font_getmask2(&font, text(params)?)?
-            };
+            let (width, height, pixels, offset) = getmask2(&font, params)?;
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
-            let (width, height, pixels, offset) =
-                pillow_rs::font_getmask2_with_start(&font, text(params)?, start)?;
+            let (width, height, pixels, offset) = match text_bytes(params)? {
+                Some(bytes) => pillow_rs::font_getmask2_bytes_with_start(&font, &bytes, start)?,
+                None => pillow_rs::font_getmask2_with_start(&font, text(params)?, start)?,
+            };
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
@@ -163,7 +146,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             pillow_rs::validate_transposed_length(orientation(params)?)?;
             Ok(json!({
                 "type": "length",
-                "value": pillow_rs::font_getlength(&font, text(params)?)?,
+                "value": getlength(&font, params)?,
             }))
         }
         "draw_text" => draw_text(&font, params),
@@ -198,6 +181,100 @@ fn text(params: &Value) -> Result<&str, PilError> {
     required(params, "text")?
         .as_str()
         .ok_or_else(|| PilError::TypeError("text must be a string".into()))
+}
+
+fn text_bytes(params: &Value) -> Result<Option<Vec<u8>>, PilError> {
+    params
+        .get("text_bytes_hex")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| PilError::TypeError("text_bytes_hex must be a string".into()))
+                .and_then(hex_to_bytes)
+        })
+        .transpose()
+}
+
+fn hex_to_bytes(value: &str) -> Result<Vec<u8>, PilError> {
+    if value.len() % 2 != 0 {
+        return Err(PilError::ValueError(
+            "text_bytes_hex must contain an even number of hex digits".into(),
+        ));
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = hex_digit(pair[0])?;
+            let low = hex_digit(pair[1])?;
+            Ok((high << 4) | low)
+        })
+        .collect()
+}
+
+fn hex_digit(value: u8) -> Result<u8, PilError> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err(PilError::ValueError(
+            "text_bytes_hex must contain only hex digits".into(),
+        )),
+    }
+}
+
+fn getlength(font: &Font, params: &Value) -> Result<f32, PilError> {
+    match (text_bytes(params)?, has_text_options(params)) {
+        (Some(bytes), true) => {
+            pillow_rs::font_getlength_bytes_with_options(font, &bytes, &text_options(params)?)
+        }
+        (Some(bytes), false) => pillow_rs::font_getlength_bytes(font, &bytes),
+        (None, true) => {
+            pillow_rs::font_getlength_with_options(font, text(params)?, &text_options(params)?)
+        }
+        (None, false) => pillow_rs::font_getlength(font, text(params)?),
+    }
+}
+
+fn getbbox(font: &Font, params: &Value) -> Result<Value, PilError> {
+    match (text_bytes(params)?, has_text_options(params)) {
+        (Some(bytes), true) => Ok(bbox_float_value(
+            pillow_rs::font_getbbox_bytes_with_options(font, &bytes, &text_options(params)?)?,
+        )),
+        (Some(bytes), false) => Ok(bbox_value(pillow_rs::font_getbbox_bytes(font, &bytes)?)),
+        (None, true) => Ok(bbox_float_value(pillow_rs::font_getbbox_with_options(
+            font,
+            text(params)?,
+            &text_options(params)?,
+        )?)),
+        (None, false) => Ok(bbox_value(pillow_rs::font_getbbox(font, text(params)?)?)),
+    }
+}
+
+fn getmask(font: &Font, params: &Value) -> Result<(u32, u32, Vec<u8>), PilError> {
+    match (text_bytes(params)?, has_text_options(params)) {
+        (Some(bytes), true) => {
+            pillow_rs::font_getmask_bytes_with_options(font, &bytes, &text_options(params)?)
+        }
+        (Some(bytes), false) => pillow_rs::font_getmask_bytes(font, &bytes),
+        (None, true) => {
+            pillow_rs::font_getmask_with_options(font, text(params)?, &text_options(params)?)
+        }
+        (None, false) => pillow_rs::font_getmask(font, text(params)?),
+    }
+}
+
+fn getmask2(font: &Font, params: &Value) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    match (text_bytes(params)?, has_text_options(params)) {
+        (Some(bytes), true) => {
+            pillow_rs::font_getmask2_bytes_with_options(font, &bytes, &text_options(params)?)
+        }
+        (Some(bytes), false) => pillow_rs::font_getmask2_bytes(font, &bytes),
+        (None, true) => {
+            pillow_rs::font_getmask2_with_options(font, text(params)?, &text_options(params)?)
+        }
+        (None, false) => pillow_rs::font_getmask2(font, text(params)?),
+    }
 }
 
 fn orientation(params: &Value) -> Result<Option<&str>, PilError> {

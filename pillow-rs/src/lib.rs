@@ -237,6 +237,11 @@ pub fn font_text_bbox(font: &Font, text: &str) -> Result<(u32, u32), PilError> {
     font.text_bbox(text)
 }
 
+/// Return the non-negative text mask extent for Pillow byte text.
+pub fn font_text_bbox_bytes(font: &Font, text: &[u8]) -> Result<(u32, u32), PilError> {
+    font.text_bbox_bytes(text)
+}
+
 /// Return Pillow's public `(family, style)` font name tuple.
 pub fn font_getname(font: &Font) -> (&str, &str) {
     font.getname()
@@ -258,6 +263,11 @@ pub fn font_getlength(font: &Font, text: &str) -> Result<f32, PilError> {
     font.getlength(text)
 }
 
+/// Return Pillow's public text length for byte text.
+pub fn font_getlength_bytes(font: &Font, text: &[u8]) -> Result<f32, PilError> {
+    font.getlength_bytes(text)
+}
+
 /// Return Pillow's public text length with optional layout arguments.
 pub fn font_getlength_with_options(
     font: &Font,
@@ -265,6 +275,15 @@ pub fn font_getlength_with_options(
     options: &FontTextOptions,
 ) -> Result<f32, PilError> {
     font.getlength_with_options(text, options)
+}
+
+/// Return Pillow's public text length for byte text with optional layout arguments.
+pub fn font_getlength_bytes_with_options(
+    font: &Font,
+    text: &[u8],
+    options: &FontTextOptions,
+) -> Result<f32, PilError> {
+    font.getlength_bytes_with_options(text, options)
 }
 
 /// Return whether the font exposes variation axes.
@@ -310,10 +329,24 @@ pub fn font_getbbox(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), Pil
     font.getbbox(text)
 }
 
+/// Return Pillow's public text bounding box for byte text.
+pub fn font_getbbox_bytes(font: &Font, text: &[u8]) -> Result<(i32, i32, i32, i32), PilError> {
+    font.getbbox_bytes(text)
+}
+
 /// Return Pillow's public binary-mode text bounding box.
 #[cfg(feature = "test-api")]
 pub fn font_getbbox_binary(font: &Font, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
     font.getbbox_binary(text)
+}
+
+/// Return Pillow's public binary-mode text bounding box for byte text.
+#[cfg(feature = "test-api")]
+pub fn font_getbbox_binary_bytes(
+    font: &Font,
+    text: &[u8],
+) -> Result<(i32, i32, i32, i32), PilError> {
+    font.getbbox_binary_bytes(text)
 }
 
 /// Return Pillow's public text bounding box with optional layout arguments.
@@ -325,14 +358,36 @@ pub fn font_getbbox_with_options(
     font.getbbox_with_options(text, options)
 }
 
+/// Return Pillow's public text bounding box for byte text with optional layout arguments.
+pub fn font_getbbox_bytes_with_options(
+    font: &Font,
+    text: &[u8],
+    options: &FontTextOptions,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    font.getbbox_bytes_with_options(text, options)
+}
+
 /// Return the Pillow-compatible grayscale text mask.
 pub fn font_getmask(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask(text)
 }
 
+/// Return the Pillow-compatible grayscale text mask for byte text.
+pub fn font_getmask_bytes(font: &Font, text: &[u8]) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.getmask_bytes(text)
+}
+
 /// Render a Pillow-compatible mask with offset.
 pub fn font_getmask2(font: &Font, text: &str) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.getmask2(text)
+}
+
+/// Render a Pillow-compatible mask with offset for byte text.
+pub fn font_getmask2_bytes(
+    font: &Font,
+    text: &[u8],
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_bytes(text)
 }
 
 /// Return the Pillow-compatible grayscale text mask with optional render arguments.
@@ -344,6 +399,15 @@ pub fn font_getmask_with_options(
     font.getmask_with_options(text, options)
 }
 
+/// Return the Pillow-compatible grayscale text mask for byte text with optional render arguments.
+pub fn font_getmask_bytes_with_options(
+    font: &Font,
+    text: &[u8],
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.getmask_bytes_with_options(text, options)
+}
+
 /// Render a Pillow-compatible mask with a fractional raster start.
 pub fn font_getmask2_with_start(
     font: &Font,
@@ -353,6 +417,15 @@ pub fn font_getmask2_with_start(
     font.getmask2_with_start(text, start)
 }
 
+/// Render a Pillow-compatible byte-text mask with a fractional raster start.
+pub fn font_getmask2_bytes_with_start(
+    font: &Font,
+    text: &[u8],
+    start: (f64, f64),
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_bytes_with_start(text, start)
+}
+
 /// Render a Pillow-compatible mask with optional render arguments.
 pub fn font_getmask2_with_options(
     font: &Font,
@@ -360,6 +433,15 @@ pub fn font_getmask2_with_options(
     options: &FontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.getmask2_with_options(text, options)
+}
+
+/// Render a Pillow-compatible byte-text mask with optional render arguments.
+pub fn font_getmask2_bytes_with_options(
+    font: &Font,
+    text: &[u8],
+    options: &FontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_bytes_with_options(text, options)
 }
 
 /// Render a font mask and apply Pillow's optional transpose operation.

@@ -381,6 +381,26 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "font.getmask2_with_start.bytes_latin1_c3a9_fractional",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9",
+          "start": [
+            0.25,
+            0.75
+          ]
+        }
+      }
     }
   ]
 }

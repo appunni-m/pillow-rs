@@ -482,6 +482,23 @@
           "direction": "rtl"
         }
       }
+    },
+    {
+      "case_id": "font.getmask.bytes_latin1_c3a9_l",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9",
+          "mode": "L"
+        }
+      }
     }
   ]
 }
