@@ -261,7 +261,7 @@ impl Image {
                 let rgb = img.to_rgb8();
                 let rgb_raw = rgb.into_raw();
                 let dither = !matches!(dither_enum, Some(DitherMethod::None));
-                web_palette_quantize(&rgb_raw, w, h, dither)
+                web_palette_quantize(&rgb_raw, w, h, dither)?
             };
             let mut out = image_slash_star::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate() {

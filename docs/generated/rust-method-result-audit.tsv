@@ -871,16 +871,16 @@ pillow-rs/src/ops/quantize.rs	990	apple_qsort_octree_buckets	private	()	false	li
 pillow-rs/src/ops/quantize.rs	1110	sorted_octree_buckets	private	Vec<OctreeBucket>	false	likely_infallible	
 pillow-rs/src/ops/quantize.rs	1116	subtract_octree_buckets	private	()	false	likely_infallible	
 pillow-rs/src/ops/quantize.rs	1127	add_octree_lookup	private	()	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1139	quantize_octree_rgba	private	(Vec<u8>, Vec<u8>)	false	parser_review	result_ctor
-pillow-rs/src/ops/quantize.rs	1264	web_palette_quantize	pub	(Vec<u8>, Vec<u8>)	false	parser_review	result_ctor
-pillow-rs/src/ops/quantize.rs	1280	clip8	private	u8	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1368	new	private	Self	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1376	cell_index	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1380	sub_index	private	usize	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1387	get_or_build	private	u8	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1401	build_cell_cache	private	[u8; 512]	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1487	find_nearest_web	private	(u8, u8, u8, u8)	false	likely_infallible	
-pillow-rs/src/ops/quantize.rs	1515	quantize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
+pillow-rs/src/ops/quantize.rs	1139	quantize_octree_rgba	private	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
+pillow-rs/src/ops/quantize.rs	1266	web_palette_quantize	pub	Result<(Vec<u8>, Vec<u8>), PilError>	true	ok_result	question_operator
+pillow-rs/src/ops/quantize.rs	1284	clip8	private	u8	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1372	new	private	Self	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1380	cell_index	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1384	sub_index	private	usize	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1391	get_or_build	private	u8	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1405	build_cell_cache	private	[u8; 512]	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1491	find_nearest_web	private	(u8, u8, u8, u8)	false	likely_infallible	
+pillow-rs/src/ops/quantize.rs	1519	quantize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/ops/resize.rs	13	parse_resample	pub	Result<ResampleFilter, PilError>	true	ok_result	result_ctor
 pillow-rs/src/ops/resize.rs	37	resize	pub	Result<Image, PilError>	true	ok_result	question_operator,result_ctor
 pillow-rs/src/ops/resize.rs	60	thumbnail	pub	Result<(), PilError>	true	ok_result	result_ctor

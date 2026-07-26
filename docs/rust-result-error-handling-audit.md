@@ -18,9 +18,9 @@ Generated inventory:
 - `docs/generated/rust-method-result-audit.tsv`
 - Current generated rows: `6,911`
 - Current generated classification counts:
-  - `ok_result`: `2,595`
+  - `ok_result`: `2,597`
   - `likely_infallible`: `3,807`
-  - `parser_review`: `304`
+  - `parser_review`: `302`
   - `review_non_result_fallible`: `120`
   - `review_panic_path`: `85`
 
@@ -66,6 +66,9 @@ been inspected and either:
   fallback images on dimension/buffer reconstruction failures.
 - GPU putalpha output reconstruction now returns `Result<_, PilError>` instead
   of using `expect` when converting the readback image into LA output.
+- P-mode quantize helpers now return `Result<_, PilError>` and bubble checked
+  dimension failures instead of returning empty palette/index vectors as a
+  silent success value.
 
 ## Next review queue
 
