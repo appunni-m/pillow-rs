@@ -87,24 +87,125 @@ fn load_truetype_with_index(
 }
 
 fn ft_error_to_pil(error: i32) -> PilError {
-    match error {
-        x if x == ffi::FT_Err_Invalid_Argument as i32 => {
-            PilError::OsError("invalid argument".into())
-        }
-        x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => {
-            PilError::OsError("invalid pixel size".into())
-        }
-        x if x == ffi::FT_Err_Invalid_PPem as i32 => PilError::OsError("invalid ppem value".into()),
+    // Pillow 12.2.0 `_imagingft.c::geterror` includes FreeType's
+    // `fterrdef.h` through `FT_ERRORS_H`, raises `OSError` for every listed
+    // code, and uses `unknown freetype error` for table misses.
+    let message = match error {
+        x if x == ffi::FT_Err_Cannot_Open_Resource as i32 => "cannot open resource",
+        x if x == ffi::FT_Err_Unknown_File_Format as i32 => "unknown file format",
+        x if x == ffi::FT_Err_Invalid_File_Format as i32 => "broken file",
+        x if x == ffi::FT_Err_Invalid_Version as i32 => "invalid FreeType version",
+        x if x == ffi::FT_Err_Lower_Module_Version as i32 => "module version is too low",
+        x if x == ffi::FT_Err_Invalid_Argument as i32 => "invalid argument",
+        x if x == ffi::FT_Err_Unimplemented_Feature as i32 => "unimplemented feature",
+        x if x == ffi::FT_Err_Invalid_Table as i32 => "broken table",
+        x if x == ffi::FT_Err_Invalid_Offset as i32 => "broken offset within table",
+        x if x == ffi::FT_Err_Array_Too_Large as i32 => "array allocation size too large",
+        x if x == ffi::FT_Err_Missing_Module as i32 => "missing module",
+        x if x == ffi::FT_Err_Missing_Property as i32 => "missing property",
+        x if x == ffi::FT_Err_Invalid_Glyph_Index as i32 => "invalid glyph index",
+        x if x == ffi::FT_Err_Invalid_Character_Code as i32 => "invalid character code",
+        x if x == ffi::FT_Err_Invalid_Glyph_Format as i32 => "unsupported glyph image format",
+        x if x == ffi::FT_Err_Cannot_Render_Glyph as i32 => "cannot render this glyph format",
+        x if x == ffi::FT_Err_Invalid_Outline as i32 => "invalid outline",
+        x if x == ffi::FT_Err_Invalid_Composite as i32 => "invalid composite glyph",
+        x if x == ffi::FT_Err_Too_Many_Hints as i32 => "too many hints",
+        x if x == ffi::FT_Err_Invalid_Pixel_Size as i32 => "invalid pixel size",
+        x if x == ffi::FT_Err_Invalid_SVG_Document as i32 => "invalid SVG document",
+        x if x == ffi::FT_Err_Invalid_Handle as i32 => "invalid object handle",
+        x if x == ffi::FT_Err_Invalid_Library_Handle as i32 => "invalid library handle",
+        x if x == ffi::FT_Err_Invalid_Driver_Handle as i32 => "invalid module handle",
+        x if x == ffi::FT_Err_Invalid_Face_Handle as i32 => "invalid face handle",
+        x if x == ffi::FT_Err_Invalid_Size_Handle as i32 => "invalid size handle",
+        x if x == ffi::FT_Err_Invalid_Slot_Handle as i32 => "invalid glyph slot handle",
+        x if x == ffi::FT_Err_Invalid_CharMap_Handle as i32 => "invalid charmap handle",
+        x if x == ffi::FT_Err_Invalid_Cache_Handle as i32 => "invalid cache manager handle",
+        x if x == ffi::FT_Err_Invalid_Stream_Handle as i32 => "invalid stream handle",
+        x if x == ffi::FT_Err_Too_Many_Drivers as i32 => "too many modules",
+        x if x == ffi::FT_Err_Too_Many_Extensions as i32 => "too many extensions",
+        x if x == ffi::FT_Err_Out_Of_Memory as i32 => "out of memory",
+        x if x == ffi::FT_Err_Unlisted_Object as i32 => "unlisted object",
+        x if x == ffi::FT_Err_Cannot_Open_Stream as i32 => "cannot open stream",
+        x if x == ffi::FT_Err_Invalid_Stream_Seek as i32 => "invalid stream seek",
+        x if x == ffi::FT_Err_Invalid_Stream_Skip as i32 => "invalid stream skip",
+        x if x == ffi::FT_Err_Invalid_Stream_Read as i32 => "invalid stream read",
+        x if x == ffi::FT_Err_Invalid_Stream_Operation as i32 => "invalid stream operation",
+        x if x == ffi::FT_Err_Invalid_Frame_Operation as i32 => "invalid frame operation",
+        x if x == ffi::FT_Err_Nested_Frame_Access as i32 => "nested frame access",
+        x if x == ffi::FT_Err_Invalid_Frame_Read as i32 => "invalid frame read",
+        x if x == ffi::FT_Err_Raster_Uninitialized as i32 => "raster uninitialized",
+        x if x == ffi::FT_Err_Raster_Corrupted as i32 => "raster corrupted",
+        x if x == ffi::FT_Err_Raster_Overflow as i32 => "raster overflow",
+        x if x == ffi::FT_Err_Raster_Negative_Height as i32 => "negative height while rastering",
+        x if x == ffi::FT_Err_Too_Many_Caches as i32 => "too many registered caches",
+        x if x == ffi::FT_Err_Invalid_Opcode as i32 => "invalid opcode",
+        x if x == ffi::FT_Err_Too_Few_Arguments as i32 => "too few arguments",
+        x if x == ffi::FT_Err_Stack_Overflow as i32 => "stack overflow",
+        x if x == ffi::FT_Err_Code_Overflow as i32 => "code overflow",
+        x if x == ffi::FT_Err_Bad_Argument as i32 => "bad argument",
+        x if x == ffi::FT_Err_Divide_By_Zero as i32 => "division by zero",
+        x if x == ffi::FT_Err_Invalid_Reference as i32 => "invalid reference",
+        x if x == ffi::FT_Err_Debug_OpCode as i32 => "found debug opcode",
+        x if x == ffi::FT_Err_ENDF_In_Exec_Stream as i32 => "found ENDF opcode in execution stream",
+        x if x == ffi::FT_Err_Nested_DEFS as i32 => "nested DEFS",
+        x if x == ffi::FT_Err_Invalid_CodeRange as i32 => "invalid code range",
+        x if x == ffi::FT_Err_Execution_Too_Long as i32 => "execution context too long",
+        x if x == ffi::FT_Err_Too_Many_Function_Defs as i32 => "too many function definitions",
         x if x == ffi::FT_Err_Too_Many_Instruction_Defs as i32 => {
-            PilError::OsError("too many instruction definitions".into())
+            "too many instruction definitions"
         }
-        x if x == ffi::FT_Err_Too_Many_Function_Defs as i32 => {
-            PilError::OsError("too many function definitions".into())
+        x if x == ffi::FT_Err_Table_Missing as i32 => "SFNT font table missing",
+        x if x == ffi::FT_Err_Horiz_Header_Missing as i32 => {
+            "horizontal header (hhea) table missing"
         }
-        x if x == ffi::FT_Err_Code_Overflow as i32 => PilError::OsError("code overflow".into()),
-        x if x == ffi::FT_Err_Nested_DEFS as i32 => PilError::OsError("nested DEFS".into()),
-        other => PilError::ValueError(format!("FreeType error {other}")),
-    }
+        x if x == ffi::FT_Err_Locations_Missing as i32 => "locations (loca) table missing",
+        x if x == ffi::FT_Err_Name_Table_Missing as i32 => "name table missing",
+        x if x == ffi::FT_Err_CMap_Table_Missing as i32 => "character map (cmap) table missing",
+        x if x == ffi::FT_Err_Hmtx_Table_Missing as i32 => {
+            "horizontal metrics (hmtx) table missing"
+        }
+        x if x == ffi::FT_Err_Post_Table_Missing as i32 => "PostScript (post) table missing",
+        x if x == ffi::FT_Err_Invalid_Horiz_Metrics as i32 => "invalid horizontal metrics",
+        x if x == ffi::FT_Err_Invalid_CharMap_Format as i32 => {
+            "invalid character map (cmap) format"
+        }
+        x if x == ffi::FT_Err_Invalid_PPem as i32 => "invalid ppem value",
+        x if x == ffi::FT_Err_Invalid_Vert_Metrics as i32 => "invalid vertical metrics",
+        x if x == ffi::FT_Err_Could_Not_Find_Context as i32 => "could not find context",
+        x if x == ffi::FT_Err_Invalid_Post_Table_Format as i32 => {
+            "invalid PostScript (post) table format"
+        }
+        x if x == ffi::FT_Err_Invalid_Post_Table as i32 => "invalid PostScript (post) table",
+        x if x == ffi::FT_Err_DEF_In_Glyf_Bytecode as i32 => {
+            "found FDEF or IDEF opcode in glyf bytecode"
+        }
+        x if x == ffi::FT_Err_Missing_Bitmap as i32 => "missing bitmap in strike",
+        x if x == ffi::FT_Err_Missing_SVG_Hooks as i32 => "SVG hooks have not been set",
+        x if x == ffi::FT_Err_Syntax_Error as i32 => "opcode syntax error",
+        x if x == ffi::FT_Err_Stack_Underflow as i32 => "argument stack underflow",
+        x if x == ffi::FT_Err_Ignore as i32 => "ignore",
+        x if x == ffi::FT_Err_No_Unicode_Glyph_Name as i32 => "no Unicode glyph name found",
+        x if x == ffi::FT_Err_Glyph_Too_Big as i32 => "glyph too big for hinting",
+        x if x == ffi::FT_Err_Missing_Startfont_Field as i32 => "`STARTFONT' field missing",
+        x if x == ffi::FT_Err_Missing_Font_Field as i32 => "`FONT' field missing",
+        x if x == ffi::FT_Err_Missing_Size_Field as i32 => "`SIZE' field missing",
+        x if x == ffi::FT_Err_Missing_Fontboundingbox_Field as i32 => {
+            "`FONTBOUNDINGBOX' field missing"
+        }
+        x if x == ffi::FT_Err_Missing_Chars_Field as i32 => "`CHARS' field missing",
+        x if x == ffi::FT_Err_Missing_Startchar_Field as i32 => "`STARTCHAR' field missing",
+        x if x == ffi::FT_Err_Missing_Encoding_Field as i32 => "`ENCODING' field missing",
+        x if x == ffi::FT_Err_Missing_Bbx_Field as i32 => "`BBX' field missing",
+        x if x == ffi::FT_Err_Bbx_Too_Big as i32 => "`BBX' too big",
+        x if x == ffi::FT_Err_Corrupted_Font_Header as i32 => {
+            "Font header corrupted or missing fields"
+        }
+        x if x == ffi::FT_Err_Corrupted_Font_Glyphs as i32 => {
+            "Font glyphs corrupted or missing fields"
+        }
+        _ => "unknown freetype error",
+    };
+    PilError::OsError(message.into())
 }
 
 fn check_ft_error(error: i32) -> Result<(), PilError> {
