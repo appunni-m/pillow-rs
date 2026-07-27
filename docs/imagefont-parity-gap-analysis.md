@@ -637,3 +637,18 @@ Current request classification for `imagingft.rs` region coverage:
   implementation gap if it is fixed by porting the exact lower stroker
   geometry/export behavior, but it is not a reason to chase 100%
   `pillow-rs-freetype` coverage or to move stroke math into `imagingft.rs`.
+- Lower stroker progress after `8a6cd50ef`: `StrokeBorderState::close` now
+  mirrors FreeType 2.14.3 `src/base/ftstroke.c:374-408` by reversing the
+  closed-border interior range through the final interior point inclusively.
+  Rust previously used an exclusive Rust range and left that point/tag in the
+  wrong order when closing reversed borders. Maintained verification passes:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`,
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`,
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`,
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`, and
+  `make -C pillow-rs font-tests`. A temporary diagnostic that promoted only
+  `pending_stroked_mono_target_outline_to_bitmap` and bypassed only the
+  unverified closed/conic guard still fails on `/bitmap/buffer_hex`, but the
+  actual bytes changed materially compared with the prior bypass run. Keep the
+  pending row and guard: the inclusive reversal is a real lower C-alignment fix,
+  not complete mono-target stroked bitmap parity.

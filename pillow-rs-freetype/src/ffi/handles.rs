@@ -3579,8 +3579,13 @@ impl StrokeBorderState {
             let end = self.points.len() - 1;
 
             if reverse && start + 1 < end {
-                self.points[start + 1..end].reverse();
-                self.tags[start + 1..end].reverse();
+                // FreeType 2.14.3 `src/base/ftstroke.c:374-408` reverses the
+                // interior closed-border range from `start + 1` through
+                // `count - 1` inclusive after moving the adjusted last point
+                // to `start`.  Keep the final interior point in the reversal;
+                // excluding it changes exported stroke geometry.
+                self.points[start + 1..=end].reverse();
+                self.tags[start + 1..=end].reverse();
             }
 
             self.tags[start] |= FT_STROKE_TAG_BEGIN;
