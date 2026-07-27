@@ -320,12 +320,13 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 | `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. Active row `font.getbbox.dejavusans20_a_grave_negative_top` now covers a real Pillow 12.2.0 negative-top bbox for `"À"` without stored expected output. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
 | `829` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. Active row `font.getbbox.dejavusans20_a_grave_negative_top` now covers a real Pillow 12.2.0 negative-top bbox for `"À"` without stored expected output. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
 | `928` | partial branch on `glyph_run(...)?` inside `bbox_from_run_with_flags` | Current snapshot `3ce9480d-ef4f-4476-a975-fccc15551087` shows line `928` hit 495 times and the following success line `929` hit 477 times, so 18 live-oracle calls already return through the error side. | No duplicate bbox error rows; both success and error outcomes are already represented. |
-Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
-temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
-bbox/mask and an `A\uFFFFV` missing-glyph kerning guard. The run passed and
-ingested snapshot `cb8a44e6-cdc2-4faa-8c75-ab75a1b8ff1d`, but
-`imagingft.rs` stayed at `2621/2720` regions with the same 16 gap lines. Those
-temporary rows were not kept because they do not advance the 100% region target.
+Exploratory-to-active note: earlier Coverage MCP run
+`46f8b0bb-b94a-4eaa-8d8d-70b527901b7c` showed DejaVuSans `"À"` negative-top
+bbox/mask and an `A\uFFFFV` missing-glyph kerning guard pass live Pillow oracle
+parity without moving direct region totals. The public bbox row is now active
+as `font.getbbox.dejavusans20_a_grave_negative_top` because it represents a
+distinct Pillow-visible geometry case. The mask and duplicate missing-glyph
+variants should still stay out unless they expose a distinct public behavior.
 
 ## Other ImageFont-related files where coverage is missing
 
