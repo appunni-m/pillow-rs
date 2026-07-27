@@ -61,6 +61,14 @@ def _none_if_empty(value):
     return None if value == "" else value
 
 
+def _pillow_bbox_value(value):
+    return int(value) if isinstance(value, float) and value.is_integer() else value
+
+
+def _pillow_bbox_tuple(bbox):
+    return tuple(_pillow_bbox_value(value) for value in bbox)
+
+
 def _wrap_pilfont(font):
     wrapped = ImageFont()
     wrapped.font = font
@@ -96,10 +104,10 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
-        return self._rust_font.getbbox_with_options(
+        return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
             str(text), _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor
-        )
+        ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
         return self._rust_font.getlength_with_options(
